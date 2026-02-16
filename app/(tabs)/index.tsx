@@ -1,98 +1,259 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from "expo-router";
+import React, { useMemo, useState } from "react";
+import {
+  FlatList,
+  ImageBackground,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { titles } from "../data/titles";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const ACCENT = "#DC143C"; // Chillywood crimson
+const BG = require("../../assets/images/chicago-skyline.jpg");
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+type ChipKey = "all" | "trending" | "new";
+
+export default function Index() {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [chip, setChip] = useState<ChipKey>("all");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+
+    return titles.filter((t) => {
+      const matchesChip = chip === "all" ? true : t.category === chip;
+      const matchesQuery =
+        q.length === 0
+          ? true
+          : `${t.title} ${t.synopsis ?? ""}`.toLowerCase().includes(q);
+
+      return matchesChip && matchesQuery;
+    });
+  }, [query, chip]);
+
+  const trending = useMemo(
+    () => filtered.filter((t) => t.category === "trending"),
+    [filtered]
+  );
+  const newReleases = useMemo(
+    () => filtered.filter((t) => t.category === "new"),
+    [filtered]
+  );
+
+  const openTitle = (id: string) => {
+    router.push(`/title/${id}`);
+  };
+
+  const Chip = ({
+    label,
+    value,
+  }: {
+    label: string;
+    value: ChipKey;
+  }) => {
+    const active = chip === value;
+    return (
+      <Pressable
+        onPress={() => setChip(value)}
+        style={[styles.chip, active && styles.chipActive]}
+      >
+        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  const PosterCard = ({ item }: any) => (
+    <Pressable onPress={() => openTitle(item.id)} style={styles.poster}>
+      <ImageBackground
+        source={item.poster}
+        style={styles.posterArt}
+        imageStyle={styles.posterArtImg}
+      >
+        <View style={styles.posterFade} />
+        <Text numberOfLines={2} style={styles.posterTitle}>
+          {item.title}
+        </Text>
+      </ImageBackground>
+    </Pressable>
+  );
+
+  const Row = ({
+    title,
+    data,
+  }: {
+    title: string;
+    data: any[];
+  }) => {
+    if (!data || data.length === 0) return null;
+
+    return (
+      <View style={styles.row}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <FlatList
+          data={data}
+          keyExtractor={(item) => item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingRight: 18 }}
+          renderItem={({ item }) => <PosterCard item={item} />}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+      </View>
+    );
+  };
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
+      <View style={styles.overlay} />
+
+      <FlatList
+        data={[]} // we’re using ListHeaderComponent as the whole screen
+        renderItem={null as any}
+        ListHeaderComponent={
+          <View style={styles.screen}>
+            {/* Brand */}
+            <Text style={styles.brand}>CHILLYWOOD</Text>
+            <Text style={styles.tagline}>Stream the City</Text>
+
+            {/* Search */}
+            <View style={styles.searchWrap}>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search titles, stories, vibes..."
+                placeholderTextColor="rgba(255,255,255,0.55)"
+                style={styles.search}
+                autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+              />
+            </View>
+
+            {/* Chips */}
+            <View style={styles.chips}>
+              <Chip label="All" value="all" />
+              <Chip label="Trending" value="trending" />
+              <Chip label="New" value="new" />
+            </View>
+
+            {/* Rows */}
+            <Row title="Trending in Chicago" data={trending} />
+            <Row title="New Releases" data={newReleases} />
+
+            {/* If search returns mixed results */}
+            {query.trim().length > 0 && (
+              <View style={styles.row}>
+                <Text style={styles.rowTitle}>Search Results</Text>
+                <FlatList
+                  data={filtered}
+                  keyExtractor={(item) => item.id}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingRight: 18 }}
+                  renderItem={({ item }) => <PosterCard item={item} />}
+                />
+              </View>
+            )}
+
+            {/* Spacer bottom */}
+            <View style={{ height: 40 }} />
+          </View>
+        }
+      />
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  bg: { flex: 1 },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.72)",
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  screen: { paddingTop: 52, paddingHorizontal: 18 },
+
+  brand: {
+    color: ACCENT,
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 1,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  tagline: {
+    color: "white",
+    fontSize: 42,
+    fontWeight: "900",
+    marginTop: 6,
+    marginBottom: 14,
+  },
+
+  searchWrap: { marginBottom: 12 },
+  search: {
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    color: "white",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    fontSize: 16,
+  },
+
+  chips: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 18,
+  },
+  chip: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  chipActive: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  chipText: {
+    color: "rgba(255,255,255,0.85)",
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  chipTextActive: { color: "white" },
+
+  row: { marginBottom: 18 },
+  rowTitle: {
+    color: "white",
+    fontSize: 22,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+
+  poster: { width: 150, marginRight: 12 },
+  posterArt: {
+    height: 210,
+    borderRadius: 18,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  posterArtImg: { borderRadius: 18 },
+  posterFade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  posterTitle: {
+    color: "white",
+    fontWeight: "900",
+    fontSize: 16,
+    padding: 12,
+    textShadowColor: "rgba(0,0,0,0.7)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
   },
 });
