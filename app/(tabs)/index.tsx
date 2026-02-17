@@ -1,259 +1,248 @@
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
-  ImageBackground,
+  Image,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { titles } from "../data/titles";
+import { supabase } from "../lib/supabase";
 
-const ACCENT = "#DC143C"; // Chillywood crimson
-const BG = require("../../assets/images/chicago-skyline.jpg");
+type TitleRow = {
+  id: string;
+  created_at?: string;
+  title: string;
+  category?: string | null;
+  year?: number | null;
+  runtime?: string | null;
+  synopsis?: string | null;
+  poster_url?: string | null;
+  video_url?: string | null;
+};
 
-type ChipKey = "all" | "trending" | "new";
-
-export default function Index() {
+export default function HomeScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [chip, setChip] = useState<ChipKey>("all");
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [titles, setTitles] = useState<TitleRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-    return titles.filter((t) => {
-      const matchesChip = chip === "all" ? true : t.category === chip;
-      const matchesQuery =
-        q.length === 0
-          ? true
-          : `${t.title} ${t.synopsis ?? ""}`.toLowerCase().includes(q);
+  async function fetchTitles() {
+    setError(null);
 
-      return matchesChip && matchesQuery;
-    });
-  }, [query, chip]);
+    const { data, error } = await supabase
+      .from("titles")
+      .select("id, title, category, year, runtime, synopsis, poster_url, video_url, created_at")
+      .order("created_at", { ascending: false });
 
-  const trending = useMemo(
-    () => filtered.filter((t) => t.category === "trending"),
-    [filtered]
-  );
-  const newReleases = useMemo(
-    () => filtered.filter((t) => t.category === "new"),
-    [filtered]
-  );
+    if (error) {
+      setTitles([]);
+      setError(error.message);
+      return;
+    }
 
-  const openTitle = (id: string) => {
-    router.push(`/title/${id}`);
-  };
+    setTitles((data as TitleRow[]) ?? []);
+  }
 
-  const Chip = ({
-    label,
-    value,
-  }: {
-    label: string;
-    value: ChipKey;
-  }) => {
-    const active = chip === value;
-    return (
-      <Pressable
-        onPress={() => setChip(value)}
-        style={[styles.chip, active && styles.chipActive]}
-      >
-        <Text style={[styles.chipText, active && styles.chipTextActive]}>
-          {label}
-        </Text>
-      </Pressable>
-    );
-  };
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      await fetchTitles();
+      setLoading(false);
+    })();
+  }, []);
 
-  const PosterCard = ({ item }: any) => (
-    <Pressable onPress={() => openTitle(item.id)} style={styles.poster}>
-      <ImageBackground
-        source={item.poster}
-        style={styles.posterArt}
-        imageStyle={styles.posterArtImg}
-      >
-        <View style={styles.posterFade} />
-        <Text numberOfLines={2} style={styles.posterTitle}>
-          {item.title}
-        </Text>
-      </ImageBackground>
-    </Pressable>
-  );
+  async function onRefresh() {
+    setRefreshing(true);
+    await fetchTitles();
+    setRefreshing(false);
+  }
 
-  const Row = ({
-    title,
-    data,
-  }: {
-    title: string;
-    data: any[];
-  }) => {
-    if (!data || data.length === 0) return null;
-
-    return (
-      <View style={styles.row}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <FlatList
-          data={data}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingRight: 18 }}
-          renderItem={({ item }) => <PosterCard item={item} />}
-        />
-      </View>
-    );
-  };
+  const count = titles.length;
 
   return (
-    <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
-      <View style={styles.overlay} />
+    <View style={styles.container}>
+      <Text style={styles.brand}>Chillywood</Text>
+      <Text style={styles.count}>Titles Count: {count}</Text>
 
-      <FlatList
-        data={[]} // we’re using ListHeaderComponent as the whole screen
-        renderItem={null as any}
-        ListHeaderComponent={
-          <View style={styles.screen}>
-            {/* Brand */}
-            <Text style={styles.brand}>CHILLYWOOD</Text>
-            <Text style={styles.tagline}>Stream the City</Text>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator />
+          <Text style={styles.muted}>Loading titles…</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.errorTitle}>Couldn’t load titles</Text>
+          <Text style={styles.errorMsg}>{error}</Text>
 
-            {/* Search */}
-            <View style={styles.searchWrap}>
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search titles, stories, vibes..."
-                placeholderTextColor="rgba(255,255,255,0.55)"
-                style={styles.search}
-                autoCapitalize="none"
-                autoCorrect={false}
-                clearButtonMode="while-editing"
-              />
+          <Pressable style={styles.retryBtn} onPress={onRefresh}>
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={titles}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingTop: 16, paddingBottom: 28 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Text style={styles.muted}>No titles yet.</Text>
+              <Text style={styles.mutedSmall}>
+                When you add titles later, they’ll show up here automatically.
+              </Text>
             </View>
-
-            {/* Chips */}
-            <View style={styles.chips}>
-              <Chip label="All" value="all" />
-              <Chip label="Trending" value="trending" />
-              <Chip label="New" value="new" />
-            </View>
-
-            {/* Rows */}
-            <Row title="Trending in Chicago" data={trending} />
-            <Row title="New Releases" data={newReleases} />
-
-            {/* If search returns mixed results */}
-            {query.trim().length > 0 && (
-              <View style={styles.row}>
-                <Text style={styles.rowTitle}>Search Results</Text>
-                <FlatList
-                  data={filtered}
-                  keyExtractor={(item) => item.id}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingRight: 18 }}
-                  renderItem={({ item }) => <PosterCard item={item} />}
-                />
+          }
+          renderItem={({ item }) => (
+            <Pressable
+              style={styles.card}
+              onPress={() => router.push({ pathname: "/title/[id]", params: { id: item.id } })}
+            >
+              <View style={styles.posterWrap}>
+                {item.poster_url ? (
+                  <Image source={{ uri: item.poster_url }} style={styles.poster} />
+                ) : (
+                  <View style={styles.posterPlaceholder}>
+                    <Text style={styles.posterPlaceholderText}>
+                      {item.title?.slice(0, 1)?.toUpperCase() ?? "T"}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.posterFade} />
+                <Text style={styles.posterTitle} numberOfLines={1}>
+                  {item.title}
+                </Text>
               </View>
-            )}
 
-            {/* Spacer bottom */}
-            <View style={{ height: 40 }} />
-          </View>
-        }
-      />
-    </ImageBackground>
+              <View style={styles.metaRow}>
+                <Text style={styles.meta}>
+                  {(item.category ?? "title").toString().toUpperCase()}
+                </Text>
+                <Text style={styles.meta}>
+                  {item.year ? String(item.year) : "—"}
+                </Text>
+                <Text style={styles.meta}>
+                  {item.runtime ? item.runtime : "—"}
+                </Text>
+              </View>
+
+              {!!item.synopsis && (
+                <Text style={styles.synopsis} numberOfLines={3}>
+                  {item.synopsis}
+                </Text>
+              )}
+            </Pressable>
+          )}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.72)",
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+    paddingHorizontal: 18,
+    paddingTop: 20,
   },
-  screen: { paddingTop: 52, paddingHorizontal: 18 },
-
   brand: {
-    color: ACCENT,
-    fontSize: 30,
+    fontSize: 34,
     fontWeight: "900",
-    letterSpacing: 1,
+    color: "#b30000", // crimson
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
-  tagline: {
-    color: "white",
-    fontSize: 42,
-    fontWeight: "900",
-    marginTop: 6,
-    marginBottom: 14,
+  count: {
+    color: "#999",
+    marginBottom: 6,
   },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 18,
+  },
+  muted: { color: "#aaa", marginTop: 10 },
+  mutedSmall: { color: "#777", marginTop: 6, textAlign: "center" },
 
-  searchWrap: { marginBottom: 12 },
-  search: {
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    color: "white",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    fontSize: 16,
-  },
-
-  chips: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 18,
-  },
-  chip: {
+  errorTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
+  errorMsg: { color: "#ff6b6b", marginTop: 8, textAlign: "center" },
+  retryBtn: {
+    marginTop: 14,
+    backgroundColor: "#b30000",
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    borderRadius: 10,
+  },
+  retryText: { color: "#fff", fontWeight: "700" },
+
+  card: {
+    backgroundColor: "#0f0f0f",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  chipActive: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
-  },
-  chipText: {
-    color: "rgba(255,255,255,0.85)",
-    fontWeight: "800",
-    fontSize: 13,
-  },
-  chipTextActive: { color: "white" },
-
-  row: { marginBottom: 18 },
-  rowTitle: {
-    color: "white",
-    fontSize: 22,
-    fontWeight: "900",
-    marginBottom: 10,
+    borderColor: "#1c1c1c",
   },
 
-  poster: { width: 150, marginRight: 12 },
-  posterArt: {
-    height: 210,
-    borderRadius: 18,
+  posterWrap: {
+    borderRadius: 16,
     overflow: "hidden",
+    height: 210,
+    backgroundColor: "#111",
     justifyContent: "flex-end",
   },
-  posterArtImg: { borderRadius: 18 },
+  poster: { width: "100%", height: "100%" },
+  posterPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#141414",
+  },
+  posterPlaceholderText: {
+    fontSize: 56,
+    color: "#b30000",
+    fontWeight: "900",
+  },
   posterFade: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.25)",
   },
   posterTitle: {
-    color: "white",
+    color: "#fff",
     fontWeight: "900",
-    fontSize: 16,
+    fontSize: 18,
     padding: 12,
     textShadowColor: "rgba(0,0,0,0.7)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 10,
+  },
+
+  metaRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  meta: {
+    color: "#bbb",
+    fontSize: 12,
+    backgroundColor: "#151515",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#222",
+  },
+  synopsis: {
+    color: "#cfcfcf",
+    marginTop: 10,
+    lineHeight: 18,
   },
 });
