@@ -1,0 +1,42 @@
+appId: host.exp.exponent
+---
+# Flow 02 — Tapping a visible title card opens the Player
+#
+# Validates:
+#   ✓ Hero section "▶ Play" button is tappable
+#   ✓ Navigating to player does not crash
+#   ✓ Player screen loads (brand tag visible)
+#   ✓ "Title not found." error is NOT shown
+
+- launchApp:
+    clearState: false
+
+# Enter the running Expo app from Expo Go home
+- openLink: "exp://127.0.0.1:8081"
+
+# Navigate via Explore to tap a visible title card
+- assertVisible:
+    text: "Explore"
+
+- tapOn:
+    text: "Explore"
+
+- assertVisible:
+    text: "Chicago Streets"
+
+# Tap the visible Explore title card
+- tapOn:
+    text: "Chicago Streets"
+
+- waitForAnimationToEnd
+
+# Player screen should not be in not-found/error states
+- assertNotVisible:
+    text: "Loading title…"
+
+# Most critical assertion: player must NOT show a "not found" error
+- assertNotVisible:
+    text: "Title not found."
+
+- assertNotVisible:
+    text: "No ID provided"

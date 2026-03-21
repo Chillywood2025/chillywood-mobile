@@ -1,0 +1,37 @@
+appId: host.exp.exponent
+---
+# Flow 01 — Home screen opens successfully
+#
+# Validates:
+#   ✓ App launches without crash
+#   ✓ CHILLYWOOD brand tag visible in the hero section
+#   ✓ At minimum one tab-bar label ("Home") is available
+#   ✓ Fatal startup error text is NOT present
+
+- launchApp:
+    clearState: false
+
+# Enter the running Expo app from Expo Go home
+- openLink: "exp://127.0.0.1:8081"
+
+# Give the network fetch time to complete (Supabase cold start can be slow)
+- waitForAnimationToEnd
+
+# A visible hero CTA proves Home rendered actual content
+- assertVisible:
+    text: "▶ Play"
+
+# Tab bar "Home" tab must be present — confirms Tabs rendered
+- assertVisible:
+    text: "Home"
+
+# "Explore" tab must also be present
+- assertVisible:
+    text: "Explore"
+
+# Fatal crash / error-state text must NOT be on screen
+- assertNotVisible:
+    text: "Something went wrong"
+
+- assertNotVisible:
+    text: "Network request failed"

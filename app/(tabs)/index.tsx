@@ -1,19 +1,21 @@
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 
 type TitleRow = {
   id: string;
+  slug?: string | null;
   created_at?: string;
   title: string;
   category?: string | null;
@@ -25,8 +27,6 @@ type TitleRow = {
 };
 
 export default function HomeScreen() {
-  const router = useRouter();
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [titles, setTitles] = useState<TitleRow[]>([]);
@@ -99,9 +99,14 @@ export default function HomeScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <Pressable
+            <TouchableOpacity
               style={styles.card}
-              onPress={() => router.push({ pathname: "/title/[id]", params: { id: item.id } })}
+              activeOpacity={0.9}
+              onPress={() => {
+                const safeId = item.id || item.slug || item.title;
+                console.log("NAVIGATING WITH ID:", safeId);
+                router.push(`/player/${safeId}`);
+              }}
             >
               <View style={styles.posterWrap}>
                 {item.poster_url ? (
@@ -136,7 +141,7 @@ export default function HomeScreen() {
                   {item.synopsis}
                 </Text>
               )}
-            </Pressable>
+            </TouchableOpacity>
           )}
         />
       )}

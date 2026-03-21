@@ -1,0 +1,17 @@
+# Maestro workspace config
+# Runs all flows in the flows/ directory
+flows:
+  - "flows/*.yaml"
+
+# ── Environment variables (override via .env or CLI --env flags) ──────────────
+#
+#  CHILLYWOOD_APP_ID   – App bundle ID when running against a dev build.
+#                        Defaults to Expo Go (host.exp.exponent).
+#
+#  PARTY_ROOM_ID       – Optional: supply a live room ID to run
+#                        04-watch-party-room.yaml against a real party room.
+#                        When absent, flow 04 tests the Watch Party index screen only.
+#
+# Override example:
+#   maestro test maestro/flows/04-watch-party-screen.yaml \
+#     --env PARTY_ROOM_ID=ABC123

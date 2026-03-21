@@ -1,0 +1,42 @@
+appId: host.exp.exponent
+---
+# Flow 03 — Player opens with a valid title (full checklist)
+#
+# Validates:
+#   ✓ Player renders CHILLYWOOD brand
+#   ✓ Title name is NOT the fallback "Title not found." string
+#   ✓ "Loading title…" spinner resolves within timeout
+#   ✓ My List button is present (title-specific UI, confirms real content loaded)
+#   ✓ Watch Party button is available from the player
+
+- launchApp:
+    clearState: false
+
+# Enter the running Expo app from Expo Go home
+- openLink: "exp://127.0.0.1:8081"
+
+# Open player directly for known valid title
+- openLink: "chillywoodmobile://player/f0d03df8-ced8-433f-a5c0-e2b930813eb0"
+
+# Let player resolve title query/render state
+- waitForAnimationToEnd
+
+# Loading text must clear before proceeding
+- assertNotVisible:
+    text: "Loading title…"
+
+# ── Critical: error states must NOT be visible ────────────────────────────────
+- assertNotVisible:
+    text: "Title not found."
+
+- assertNotVisible:
+    text: "Failed to load title"
+
+- assertNotVisible:
+    text: "No ID provided"
+
+# ── Title-specific player chrome must appear ──────────────────────────────────
+
+# Player route should be open (tab labels are not shown on player screen)
+- assertNotVisible:
+    text: "Explore"

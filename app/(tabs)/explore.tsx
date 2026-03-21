@@ -1,20 +1,22 @@
 // app/(tabs)/explore.tsx
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Pressable,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Pressable,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 
 type TitleRow = {
   id: string;
+  slug?: string | null;
   created_at?: string;
   title: string | null;
   category: string | null;
@@ -29,8 +31,6 @@ const FALLBACK_POSTER =
   "https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?auto=format&fit=crop&w=800&q=60";
 
 export default function ExploreScreen() {
-  const router = useRouter();
-
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -61,17 +61,19 @@ export default function ExploreScreen() {
     loadTitles();
   }, []);
 
-  function openTitle(item: TitleRow) {
-    // We’ll build this screen next if you want.
-    // For now it still navigates cleanly.
-    router.push(`/title/${item.id}`);
-  }
-
   function renderItem({ item }: { item: TitleRow }) {
     const poster = item.poster_url?.trim() ? item.poster_url : FALLBACK_POSTER;
 
     return (
-      <Pressable onPress={() => openTitle(item)} style={styles.card}>
+      <TouchableOpacity
+        onPress={() => {
+          const safeId = item.id || item.slug || item.title;
+          console.log("NAVIGATING WITH ID:", safeId);
+          router.push(`/player/${safeId}`);
+        }}
+        style={styles.card}
+        activeOpacity={0.9}
+      >
         <View style={styles.posterWrap}>
           <Image source={{ uri: poster }} style={styles.posterImg} />
           <View style={styles.posterFade} />
@@ -101,7 +103,7 @@ export default function ExploreScreen() {
             {item.synopsis}
           </Text>
         )}
-      </Pressable>
+      </TouchableOpacity>
     );
   }
 

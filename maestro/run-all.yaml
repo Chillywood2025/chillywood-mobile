@@ -1,0 +1,18 @@
+appId: host.exp.exponent
+---
+# run-all.yaml — Executes all critical-path flows in order.
+#
+# Run with:
+#   maestro test maestro/run-all.yaml
+#
+# Or run individual flows:
+#   maestro test maestro/flows/01-home-opens.yaml
+#
+# Set a custom app ID (dev build):
+#   maestro test maestro/run-all.yaml --env CHILLYWOOD_APP_ID=com.yourorg.chillywood
+
+- runFlow: "./flows/01-home-opens.yaml"
+- runFlow: "./flows/02-tap-title-to-player.yaml"
+- runFlow: "./flows/03-player-valid.yaml"
+- runFlow: "./flows/04-watch-party-screen.yaml"
+- runFlow: "./flows/05-debug-snapshot.yaml"

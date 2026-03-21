@@ -1,0 +1,64 @@
+appId: host.exp.exponent
+---
+# Flow 04 — Watch Party: hub screen renders and room-code entry works
+#
+# Part A: Watch Party index screen renders correctly (no auth required)
+# Part B: Entering an invalid room code shows the expected error — not a crash
+#
+# Validates:
+#   ✓ Watch Party hub opens via deeplink without crash
+#   ✓ CHILLYWOOD brand, "Watch Party" headline, and "JOIN A ROOM" section are visible
+#   ✓ Typing a bogus code and tapping "Find Room" shows "Room not found" error
+#   ✓ App remains usable after the error (screen does not crash)
+
+# ── Part A: hub screen renders ────────────────────────────────────────────────
+
+- launchApp:
+    clearState: false
+
+# Enter the running Expo app from Expo Go home
+- openLink: "exp://127.0.0.1:8081"
+
+# Navigate directly to the Watch Party hub via Expo deep-link
+- openLink: "chillywoodmobile://watch-party"
+
+- waitForAnimationToEnd
+
+- assertVisible:
+    text: "CHILLYWOOD"
+
+- assertVisible:
+    text: "Watch Party"
+
+- assertVisible:
+    text: "Watch together, in sync, from anywhere."
+
+- assertVisible:
+    text: "JOIN A ROOM"
+
+# ── Part B: invalid code → readable error ─────────────────────────────────────
+
+# Tap the room code input (targeted by placeholder text)
+- tapOn:
+    text: "Enter room code"
+
+# Type a clearly invalid random code
+- inputText: "ZZZINVALID99"
+
+- hideKeyboard
+
+# "Find Room" button triggers the lookup
+- tapOn:
+    text: "Find Room"
+
+# Wait for the network round-trip; error must appear — NOT a crash
+- assertVisible:
+    text: "Room not found"
+
+# Screen must still be functional — headline still present
+- assertVisible:
+    text: "Watch Party"
+
+# Crash/fatal error text must not appear
+- assertNotVisible:
+    text: "Something went wrong"

@@ -36,7 +36,7 @@ export default function TitleDetails() {
         <View style={styles.actions}>
           <Pressable
             style={styles.btnPrimary}
-            onPress={() => router.push(`/player/${title.id}`)}
+            onPress={() => router.push({ pathname: "/player/[id]", params: { id: String(title.id) } })}
           >
             <Text style={styles.btnPrimaryText}>Play</Text>
           </Pressable>
