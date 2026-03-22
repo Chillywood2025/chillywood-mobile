@@ -49,7 +49,7 @@ const PARTY_HOST_SYNC_WRITE_INTERVAL_MILLIS = 600;
 const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
 const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
-const PARTY_LOCAL_MAX_REACTIONS = 6;
+const PARTY_LOCAL_MAX_REACTIONS = 8;
 const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
@@ -1480,13 +1480,13 @@ export default function PlayerScreen() {
     const maxRightOffset = Math.max(minRightOffset, videoWidth - 56);
     const rightOffset =
       minRightOffset + Math.floor(Math.random() * (maxRightOffset - minRightOffset + 1));
-    const floatDistance = -(34 + Math.floor(Math.random() * 26));
-    const floatDuration = 480 + Math.floor(Math.random() * 180);
-    const fadeDelay = 170 + Math.floor(Math.random() * 100);
-    const fadeDuration = 180 + Math.floor(Math.random() * 90);
-    const horizontalDrift = (Math.random() < 0.5 ? -1 : 1) * (8 + Math.floor(Math.random() * 11));
+    const floatDistance = -(42 + Math.floor(Math.random() * 34));
+    const floatDuration = 420 + Math.floor(Math.random() * 170);
+    const fadeDelay = 120 + Math.floor(Math.random() * 90);
+    const fadeDuration = 160 + Math.floor(Math.random() * 80);
+    const horizontalDrift = (Math.random() < 0.5 ? -1 : 1) * (12 + Math.floor(Math.random() * 15));
 
-    const scale = new Animated.Value(0.72);
+    const scale = new Animated.Value(0.66);
     const translateY = new Animated.Value(0);
     const translateX = new Animated.Value(0);
     const opacity = new Animated.Value(1);
@@ -1500,14 +1500,14 @@ export default function PlayerScreen() {
     Animated.parallel([
       Animated.sequence([
         Animated.timing(scale, {
-          toValue: 1.18,
-          duration: 95,
+          toValue: 1.26,
+          duration: 90,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(scale, {
           toValue: 1,
-          duration: 105,
+          duration: 95,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
@@ -2102,11 +2102,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.24)",
     backgroundColor: "rgba(6,6,10,0.74)",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
   partyLocalReactionText: {
-    fontSize: 19,
+    fontSize: 21,
     fontWeight: "900",
   },
   partyChatDrawer: {
