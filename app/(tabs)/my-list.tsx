@@ -112,10 +112,10 @@ export default function MyListScreen() {
     setRefreshing(false);
   }, [loadMyList]);
 
-  const openPlayer = useCallback((item: TitleRow) => {
+  const openTitleDetails = useCallback((item: TitleRow) => {
     const safeId = String(item.id).trim();
     if (!safeId) return;
-    router.push(`/player/${safeId}`);
+    router.push(`/title/${safeId}`);
   }, []);
 
   if (loading) {
@@ -144,7 +144,7 @@ export default function MyListScreen() {
         renderItem={({ item }) => {
           const source = getImageSource(item);
           return (
-            <TouchableOpacity style={styles.card} onPress={() => openPlayer(item)} activeOpacity={0.9}>
+            <TouchableOpacity style={styles.card} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
               {source ? (
                 <Image source={source} style={styles.poster} />
               ) : (

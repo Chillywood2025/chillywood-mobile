@@ -34,6 +34,8 @@ const MIN_ZOOM = 1;
 const PROGRESS_WRITE_INTERVAL = 4_000;
 const CONTROLS_AUTO_HIDE_MILLIS = 3_000;
 const NEXT_AUTOPLAY_DELAY_MILLIS = 1_500;
+const UP_NEXT_TRIGGER_MILLIS = 12_000;
+const UP_NEXT_COUNTDOWN_SECONDS = 5;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
@@ -112,6 +114,9 @@ export default function PlayerScreen() {
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
+  const [showUpNext, setShowUpNext] = useState(false);
+  const [upNextCountdown, setUpNextCountdown] = useState(UP_NEXT_COUNTDOWN_SECONDS);
+  const [upNextCanceled, setUpNextCanceled] = useState(false);
   const seekFeedbackOpacity = useRef(new Animated.Value(0)).current;
 
   const zoomScale = useRef(new Animated.Value(1)).current;
@@ -132,7 +137,9 @@ export default function PlayerScreen() {
   const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideControlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextAutoplayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const upNextIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shouldAutoplayNextRef = useRef(false);
+  const hasNavigatedToNextRef = useRef(false);
   const lastTapRef = useRef(0);
   const videoWidthRef = useRef(0);
   const panScrubStartPositionRef = useRef(0);
@@ -319,11 +326,22 @@ export default function PlayerScreen() {
       if (singleTapTimeoutRef.current) clearTimeout(singleTapTimeoutRef.current);
       if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
       if (nextAutoplayTimeoutRef.current) clearTimeout(nextAutoplayTimeoutRef.current);
+      if (upNextIntervalRef.current) clearInterval(upNextIntervalRef.current);
     };
   }, []);
 
   useEffect(() => {
     shouldAutoplayNextRef.current = false;
+    hasNavigatedToNextRef.current = false;
+    setShowUpNext(false);
+    setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
+    setUpNextCanceled(false);
+
+    if (upNextIntervalRef.current) {
+      clearInterval(upNextIntervalRef.current);
+      upNextIntervalRef.current = null;
+    }
+
     if (nextAutoplayTimeoutRef.current) {
       clearTimeout(nextAutoplayTimeoutRef.current);
       nextAutoplayTimeoutRef.current = null;
@@ -331,6 +349,11 @@ export default function PlayerScreen() {
 
     return () => {
       shouldAutoplayNextRef.current = false;
+      hasNavigatedToNextRef.current = false;
+      if (upNextIntervalRef.current) {
+        clearInterval(upNextIntervalRef.current);
+        upNextIntervalRef.current = null;
+      }
       if (nextAutoplayTimeoutRef.current) {
         clearTimeout(nextAutoplayTimeoutRef.current);
         nextAutoplayTimeoutRef.current = null;
@@ -715,6 +738,72 @@ export default function PlayerScreen() {
     [isPlaying, persistProgress, resetAutoHideTimer],
   );
 
+  const navigateToNext = useCallback(() => {
+    if (!nextTitleId || hasNavigatedToNextRef.current) return;
+
+    hasNavigatedToNextRef.current = true;
+    shouldAutoplayNextRef.current = false;
+
+    if (upNextIntervalRef.current) {
+      clearInterval(upNextIntervalRef.current);
+      upNextIntervalRef.current = null;
+    }
+
+    if (nextAutoplayTimeoutRef.current) {
+      clearTimeout(nextAutoplayTimeoutRef.current);
+      nextAutoplayTimeoutRef.current = null;
+    }
+
+    setShowUpNext(false);
+    setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
+    router.replace({ pathname: "/player/[id]", params: { id: nextTitleId } });
+  }, [nextTitleId]);
+
+  const startUpNextCountdown = useCallback(() => {
+    if (!nextTitleId || upNextCanceled || hasNavigatedToNextRef.current) return;
+
+    shouldAutoplayNextRef.current = true;
+    setShowUpNext(true);
+
+    setUpNextCountdown((current) => {
+      if (current > 0) return current;
+      return UP_NEXT_COUNTDOWN_SECONDS;
+    });
+
+    if (upNextIntervalRef.current) return;
+
+    upNextIntervalRef.current = setInterval(() => {
+      setUpNextCountdown((current) => {
+        if (current <= 1) {
+          if (upNextIntervalRef.current) {
+            clearInterval(upNextIntervalRef.current);
+            upNextIntervalRef.current = null;
+          }
+          navigateToNext();
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+  }, [navigateToNext, nextTitleId, upNextCanceled]);
+
+  const cancelUpNext = useCallback(() => {
+    setUpNextCanceled(true);
+    setShowUpNext(false);
+    setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
+    shouldAutoplayNextRef.current = false;
+
+    if (upNextIntervalRef.current) {
+      clearInterval(upNextIntervalRef.current);
+      upNextIntervalRef.current = null;
+    }
+
+    if (nextAutoplayTimeoutRef.current) {
+      clearTimeout(nextAutoplayTimeoutRef.current);
+      nextAutoplayTimeoutRef.current = null;
+    }
+  }, []);
+
   const onPlaybackStatusUpdate = useCallback(
     (status: AVPlaybackStatus) => {
       if (!status.isLoaded) {
@@ -735,6 +824,27 @@ export default function PlayerScreen() {
 
       if (duration > 0 && position < duration - 1500) {
         didJustFinishRef.current = false;
+      }
+
+      const remainingMillis = duration > 0 ? Math.max(0, duration - position) : 0;
+      const shouldShowUpNext =
+        !!nextTitleId &&
+        !upNextCanceled &&
+        !didJustFinishRef.current &&
+        duration > 0 &&
+        remainingMillis > 0 &&
+        remainingMillis <= UP_NEXT_TRIGGER_MILLIS;
+
+      if (shouldShowUpNext) {
+        startUpNextCountdown();
+      } else if (!didJustFinishRef.current && remainingMillis > UP_NEXT_TRIGGER_MILLIS) {
+        if (upNextIntervalRef.current) {
+          clearInterval(upNextIntervalRef.current);
+          upNextIntervalRef.current = null;
+        }
+        setShowUpNext(false);
+        setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
+        shouldAutoplayNextRef.current = false;
       }
 
       if (titleId && duration > 0) {
@@ -760,17 +870,20 @@ export default function PlayerScreen() {
         if (titleId) clearProgressForTitle(titleId).catch(() => {});
 
         if (nextTitleId) {
-          shouldAutoplayNextRef.current = true;
-          if (nextAutoplayTimeoutRef.current) clearTimeout(nextAutoplayTimeoutRef.current);
-          nextAutoplayTimeoutRef.current = setTimeout(() => {
-            nextAutoplayTimeoutRef.current = null;
-            shouldAutoplayNextRef.current = false;
-            router.replace({ pathname: "/player/[id]", params: { id: nextTitleId } });
-          }, NEXT_AUTOPLAY_DELAY_MILLIS);
+          if (!upNextCanceled && !hasNavigatedToNextRef.current) {
+            shouldAutoplayNextRef.current = true;
+            if (nextAutoplayTimeoutRef.current) clearTimeout(nextAutoplayTimeoutRef.current);
+            nextAutoplayTimeoutRef.current = setTimeout(() => {
+              nextAutoplayTimeoutRef.current = null;
+              if (!upNextCanceled && !hasNavigatedToNextRef.current) {
+                navigateToNext();
+              }
+            }, NEXT_AUTOPLAY_DELAY_MILLIS);
+          }
         }
       }
     },
-    [nextTitleId, persistProgress, titleId],
+    [navigateToNext, nextTitleId, persistProgress, startUpNextCountdown, titleId, upNextCanceled],
   );
 
   const onVideoLoad = useCallback(
@@ -1001,6 +1114,22 @@ export default function PlayerScreen() {
                 <Text style={styles.seekFeedbackText}>{seekFeedback}</Text>
               </Animated.View>
             ) : null}
+
+            {showUpNext && nextTitle ? (
+              <View style={styles.upNextOverlay}>
+                <Text style={styles.upNextLabel}>Up Next</Text>
+                <Text style={styles.upNextTitle} numberOfLines={1}>{String(nextTitle.title ?? "Next Title")}</Text>
+                <Text style={styles.upNextCountdown}>Playing in {upNextCountdown}s</Text>
+                <View style={styles.upNextActions}>
+                  <TouchableOpacity style={styles.upNextPrimaryBtn} onPress={navigateToNext} activeOpacity={0.9}>
+                    <Text style={styles.upNextPrimaryBtnText}>Play Now</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.upNextSecondaryBtn} onPress={cancelUpNext} activeOpacity={0.85}>
+                    <Text style={styles.upNextSecondaryBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
           </View>
         ) : (
           <Text style={styles.text}>No video attached</Text>
@@ -1094,18 +1223,20 @@ export default function PlayerScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
-  container: { flex: 1, padding: 16 },
-  header: { color: "white", fontSize: 24, fontWeight: "900", marginBottom: 12 },
+  container: { flex: 1, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 },
+  header: { color: "white", fontSize: 24, fontWeight: "900", marginBottom: 14 },
   text: { color: "#D6D6D6", fontSize: 14, marginBottom: 10 },
 
   videoWrap: {
     width: "100%",
-    height: 260,
-    borderRadius: 14,
+    height: 268,
+    borderRadius: 16,
     backgroundColor: "black",
-    marginBottom: 12,
+    marginBottom: 14,
     overflow: "hidden",
     position: "relative",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   videoAnimatedWrap: {
     width: "100%",
@@ -1133,10 +1264,69 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.2,
   },
+  upNextOverlay: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 12,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "rgba(10,10,14,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  upNextLabel: {
+    color: "#D7DAE2",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  upNextTitle: {
+    marginTop: 4,
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  upNextCountdown: {
+    marginTop: 4,
+    color: "#BFC3CF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  upNextActions: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 8,
+  },
+  upNextPrimaryBtn: {
+    backgroundColor: ACCENT,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  upNextPrimaryBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  upNextSecondaryBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  upNextSecondaryBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+  },
 
   progressMetaRow: {
     marginTop: 2,
-    marginBottom: 6,
+    marginBottom: 8,
     flexDirection: "row",
     justifyContent: "space-between",
   },
@@ -1146,11 +1336,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   progressTrack: {
-    height: 6,
+    height: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.14)",
     overflow: "hidden",
-    marginBottom: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   progressFill: {
     height: "100%",
@@ -1178,12 +1370,12 @@ const styles = StyleSheet.create({
   },
 
   speedWrap: {
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 10,
-    marginBottom: 12,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 12,
+    marginBottom: 14,
     gap: 8,
   },
   speedLabel: {
@@ -1223,16 +1415,19 @@ const styles = StyleSheet.create({
 
   actionRow: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 10,
   },
   secondaryBtn: {
-    backgroundColor: "rgba(255,255,255,0.08)",
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.09)",
     borderRadius: 999,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.2)",
   },
   secondaryBtnDisabled: {
     opacity: 0.6,
@@ -1253,6 +1448,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
+    marginTop: 4,
   },
   backText: { color: "white", fontWeight: "900" },
 });

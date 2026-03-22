@@ -45,6 +45,13 @@ type PresenceParticipant = {
 
 const REACTIONS = ["🔥", "😂", "😮", "❤️", "👏", "💀"];
 
+const formatPartyTime = (millis: number) => {
+  const totalSeconds = Math.max(0, Math.floor((millis || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+};
+
 export default function WatchPartyRoomScreen() {
   const { partyId: partyIdParam, titleId: titleIdParam } = useLocalSearchParams<{
     partyId?: string;
@@ -476,6 +483,10 @@ export default function WatchPartyRoomScreen() {
   const isHost = myRole === "host";
   const isPlaying = room.playbackState === "playing";
   const chatCount = messages.filter((m) => m.kind === "chat").length;
+  const roleStatusTitle = isHost ? "Host Controls Active" : "Guest Synced to Host";
+  const roleStatusBody = isHost
+    ? `You control room playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.positionMillis ?? 0)}`
+    : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.positionMillis ?? 0)}`;
 
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
@@ -513,6 +524,11 @@ export default function WatchPartyRoomScreen() {
               {isHost ? "Host" : "Viewer"}
             </Text>
           </View>
+        </View>
+
+        <View style={styles.syncStatusCard}>
+          <Text style={styles.syncStatusTitle}>{roleStatusTitle}</Text>
+          <Text style={styles.syncStatusBody}>{roleStatusBody}</Text>
         </View>
 
         {/* ── Title card ─────────────────────────────────────────────── */}
@@ -741,6 +757,17 @@ const styles = StyleSheet.create({
   },
   rolePillText: { color: "#aaa", fontSize: 10, fontWeight: "800" },
   rolePillTextHost: { color: "#F7D6DD" },
+  syncStatusCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 3,
+  },
+  syncStatusTitle: { color: "#ECECEC", fontSize: 12, fontWeight: "800" },
+  syncStatusBody: { color: "#909090", fontSize: 12, fontWeight: "600" },
 
   // Cards
   card: {
