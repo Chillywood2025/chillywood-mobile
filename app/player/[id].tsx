@@ -50,6 +50,7 @@ const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
 const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
 const PARTY_LOCAL_MAX_REACTIONS = 6;
+const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
@@ -1693,7 +1694,10 @@ export default function PlayerScreen() {
 
                       <TouchableOpacity
                         style={styles.partyOverlayChip}
-                        onPress={() => triggerLocalPartyReaction("🔥")}
+                        onPress={() => {
+                          const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
+                          triggerLocalPartyReaction(emoji);
+                        }}
                         activeOpacity={0.85}
                       >
                         <Text style={styles.partyOverlayChipText}>🔥</Text>
