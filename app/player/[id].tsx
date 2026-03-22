@@ -49,6 +49,7 @@ const PARTY_HOST_SYNC_WRITE_INTERVAL_MILLIS = 600;
 const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
 const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
+const PARTY_LOCAL_MAX_REACTIONS = 6;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
@@ -139,6 +140,7 @@ export default function PlayerScreen() {
   const [partyChatOpen, setPartyChatOpen] = useState(false);
   const [partyOverlayMessages, setPartyOverlayMessages] = useState<Array<{ id: string; author: string; body: string }>>([]);
   const [partyReactionBursts, setPartyReactionBursts] = useState<Array<{ id: string; emoji: string }>>([]);
+  const [partyLocalReactions, setPartyLocalReactions] = useState<Array<{ id: string; emoji: string; rightOffset: number }>>([]);
   const seekFeedbackOpacity = useRef(new Animated.Value(0)).current;
 
   const zoomScale = useRef(new Animated.Value(1)).current;
@@ -185,6 +187,10 @@ export default function PlayerScreen() {
   const partyReactionScaleMapRef = useRef<Record<string, Animated.Value>>({});
   const partyReactionTranslateMapRef = useRef<Record<string, Animated.Value>>({});
   const partyReactionOpacityMapRef = useRef<Record<string, Animated.Value>>({});
+  const partyLocalReactionScaleMapRef = useRef<Record<string, Animated.Value>>({});
+  const partyLocalReactionTranslateMapRef = useRef<Record<string, Animated.Value>>({});
+  const partyLocalReactionTranslateXMapRef = useRef<Record<string, Animated.Value>>({});
+  const partyLocalReactionOpacityMapRef = useRef<Record<string, Animated.Value>>({});
   const compactControlsOpacity = useRef(new Animated.Value(1)).current;
   const compactControlsTranslateY = useRef(new Animated.Value(0)).current;
 
@@ -1464,6 +1470,73 @@ export default function PlayerScreen() {
     }
   }, [resetAutoHideTimer]);
 
+  const triggerLocalPartyReaction = useCallback((emoji: string) => {
+    if (!inWatchParty) return;
+
+    const id = `party-local-react-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const rightOffset = 10 + Math.floor(Math.random() * 84);
+    const floatDistance = -(34 + Math.floor(Math.random() * 26));
+    const floatDuration = 480 + Math.floor(Math.random() * 180);
+    const fadeDelay = 170 + Math.floor(Math.random() * 100);
+    const fadeDuration = 180 + Math.floor(Math.random() * 90);
+    const horizontalDrift = (Math.random() < 0.5 ? -1 : 1) * (8 + Math.floor(Math.random() * 11));
+
+    const scale = new Animated.Value(0.72);
+    const translateY = new Animated.Value(0);
+    const translateX = new Animated.Value(0);
+    const opacity = new Animated.Value(1);
+    partyLocalReactionScaleMapRef.current[id] = scale;
+    partyLocalReactionTranslateMapRef.current[id] = translateY;
+    partyLocalReactionTranslateXMapRef.current[id] = translateX;
+    partyLocalReactionOpacityMapRef.current[id] = opacity;
+
+    setPartyLocalReactions((prev) => [...prev.slice(-(PARTY_LOCAL_MAX_REACTIONS - 1)), { id, emoji, rightOffset }]);
+
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.18,
+          duration: 95,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 105,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.timing(translateY, {
+        toValue: floatDistance,
+        duration: floatDuration,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateX, {
+        toValue: horizontalDrift,
+        duration: floatDuration,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(fadeDelay),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: fadeDuration,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start(() => {
+      setPartyLocalReactions((prev) => prev.filter((entry) => entry.id !== id));
+      delete partyLocalReactionScaleMapRef.current[id];
+      delete partyLocalReactionTranslateMapRef.current[id];
+      delete partyLocalReactionTranslateXMapRef.current[id];
+      delete partyLocalReactionOpacityMapRef.current[id];
+    });
+  }, [inWatchParty]);
+
   const progressPercent = useMemo(() => {
     if (!durationMillis || durationMillis <= 0) return 0;
     return clamp((positionMillis / durationMillis) * 100, 0, 100);
@@ -1617,6 +1690,14 @@ export default function PlayerScreen() {
                       >
                         <Text style={styles.partyOverlayChipText}>💬</Text>
                       </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.partyOverlayChip}
+                        onPress={() => triggerLocalPartyReaction("🔥")}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.partyOverlayChipText}>🔥</Text>
+                      </TouchableOpacity>
                     </Animated.View>
                 </View>
 
@@ -1641,6 +1722,27 @@ export default function PlayerScreen() {
                     ))}
                   </View>
                 ) : null}
+
+                {partyLocalReactions.map((entry) => (
+                  <Animated.View
+                    key={entry.id}
+                    pointerEvents="none"
+                    style={[
+                      styles.partyLocalReactionBubble,
+                      {
+                        right: entry.rightOffset,
+                        opacity: partyLocalReactionOpacityMapRef.current[entry.id] ?? 1,
+                        transform: [
+                          { translateY: partyLocalReactionTranslateMapRef.current[entry.id] ?? 0 },
+                          { translateX: partyLocalReactionTranslateXMapRef.current[entry.id] ?? 0 },
+                          { scale: partyLocalReactionScaleMapRef.current[entry.id] ?? 1 },
+                        ],
+                      },
+                    ]}
+                  >
+                    <Text style={styles.partyLocalReactionText}>{entry.emoji}</Text>
+                  </Animated.View>
+                ))}
 
                 {partyChatOpen ? (
                   <View style={styles.partyChatDrawer}>
@@ -1733,7 +1835,7 @@ export default function PlayerScreen() {
           </View>
         </View>
 
-        {zoomLevel > 1.01 ? (
+        {zoomLevel > 1.01 && !inWatchParty ? (
           <View style={styles.controlsRow}>
             <TouchableOpacity style={styles.controlBtn} onPress={() => animateZoomTo(1)}>
               <Text style={styles.controlBtnText}>Reset Zoom</Text>
@@ -1741,25 +1843,27 @@ export default function PlayerScreen() {
           </View>
         ) : null}
 
-        <Animated.View
-          pointerEvents={controlsVisible ? "auto" : "none"}
-          style={[
-            styles.compactControlsShell,
-            {
-              opacity: compactControlsOpacity,
-              transform: [{ translateY: compactControlsTranslateY }],
-            },
-          ]}
-        >
-          <View style={styles.compactActionRow}>
-            <TouchableOpacity style={styles.compactActionBtn} onPress={replayFromStart}>
-              <Text style={styles.compactActionBtnText}>Replay</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.compactActionBtn} onPress={() => router.back()}>
-              <Text style={styles.compactActionBtnText}>Back</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+        {!inWatchParty ? (
+          <Animated.View
+            pointerEvents={controlsVisible ? "auto" : "none"}
+            style={[
+              styles.compactControlsShell,
+              {
+                opacity: compactControlsOpacity,
+                transform: [{ translateY: compactControlsTranslateY }],
+              },
+            ]}
+          >
+            <View style={styles.compactActionRow}>
+              <TouchableOpacity style={styles.compactActionBtn} onPress={replayFromStart}>
+                <Text style={styles.compactActionBtnText}>Replay</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.compactActionBtn} onPress={() => router.back()}>
+                <Text style={styles.compactActionBtnText}>Back</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -1980,6 +2084,21 @@ const styles = StyleSheet.create({
   },
   partyReactionBurstText: {
     fontSize: 16,
+    fontWeight: "900",
+  },
+  partyLocalReactionBubble: {
+    position: "absolute",
+    right: 16,
+    bottom: 120,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(6,6,10,0.74)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  partyLocalReactionText: {
+    fontSize: 19,
     fontWeight: "900",
   },
   partyChatDrawer: {
