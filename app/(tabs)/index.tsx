@@ -157,6 +157,11 @@ export default function HomeScreen() {
     router.push(`/player/${safeId}`);
   }
 
+  function openTitleDetails(item: TitleRow) {
+    const safeId = String(item.id || item.slug || item.title);
+    router.push(`/title/${safeId}`);
+  }
+
   const heroItem = titles[0];
   const continueItem = titles[1] ?? titles[0];
   const heroImageSource = getImageUri(heroItem);
@@ -277,7 +282,7 @@ export default function HomeScreen() {
                   const cardImage = getImageUri(item);
                   return (
                     <View style={styles.myListCard}>
-                      <TouchableOpacity style={styles.myListPosterWrap} onPress={() => openPlayer(item)} activeOpacity={0.9}>
+                      <TouchableOpacity style={styles.myListPosterWrap} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
                         {cardImage ? (
                           <Image source={cardImage} style={styles.myListImage} />
                         ) : (
@@ -306,7 +311,7 @@ export default function HomeScreen() {
                 const dramaImageSource = getImageUri(item);
 
                 return (
-                  <TouchableOpacity style={styles.dramaCard} onPress={() => openPlayer(item)} activeOpacity={0.9}>
+                  <TouchableOpacity style={styles.dramaCard} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
                     {dramaImageSource ? (
                       <Image source={dramaImageSource} style={styles.dramaImage} />
                     ) : (
