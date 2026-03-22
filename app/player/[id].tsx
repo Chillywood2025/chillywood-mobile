@@ -7,8 +7,10 @@ import {
   Easing,
   PanResponder,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   type GestureResponderEvent,
@@ -51,6 +53,11 @@ const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
 const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
 const PARTY_LOCAL_MAX_REACTIONS = 8;
 const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
+const PARTY_MOCK_COMMENTS = [
+  { id: "mock-comment-1", username: "Mia", text: "This scene is wild 🔥" },
+  { id: "mock-comment-2", username: "Noah", text: "Pause after this for theories" },
+  { id: "mock-comment-3", username: "Ava", text: "Soundtrack is perfect here" },
+] as const;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
@@ -139,6 +146,11 @@ export default function PlayerScreen() {
   const [partyViewerCount, setPartyViewerCount] = useState(0);
   const [partyParticipantPreview, setPartyParticipantPreview] = useState<string[]>([]);
   const [partyChatOpen, setPartyChatOpen] = useState(false);
+  const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
+  const [partyCommentDraft, setPartyCommentDraft] = useState("");
+  const [partyComments, setPartyComments] = useState<Array<{ id: string; username: string; text: string }>>(() =>
+    PARTY_MOCK_COMMENTS.map((entry) => ({ ...entry })),
+  );
   const [partyOverlayMessages, setPartyOverlayMessages] = useState<Array<{ id: string; author: string; body: string }>>([]);
   const [partyReactionBursts, setPartyReactionBursts] = useState<Array<{ id: string; emoji: string }>>([]);
   const [partyLocalReactions, setPartyLocalReactions] = useState<Array<{ id: string; emoji: string; rightOffset: number }>>([]);
@@ -1550,6 +1562,14 @@ export default function PlayerScreen() {
     triggerLocalPartyReaction(emoji);
   }, [inWatchParty, partyTapReactionTick, triggerLocalPartyReaction]);
 
+  const onSendPartyComment = useCallback(() => {
+    const text = partyCommentDraft.trim();
+    if (!text) return;
+    const id = `local-comment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setPartyComments((prev) => [...prev, { id, username: "You", text }]);
+    setPartyCommentDraft("");
+  }, [partyCommentDraft]);
+
   const progressPercent = useMemo(() => {
     if (!durationMillis || durationMillis <= 0) return 0;
     return clamp((positionMillis / durationMillis) * 100, 0, 100);
@@ -1709,6 +1729,14 @@ export default function PlayerScreen() {
 
                       <TouchableOpacity
                         style={styles.partyOverlayChip}
+                        onPress={() => setPartyCommentsOpen((value) => !value)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.partyOverlayChipText}>🗨️</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.partyOverlayChip}
                         onPress={() => {
                           const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
                           triggerLocalPartyReaction(emoji);
@@ -1776,6 +1804,34 @@ export default function PlayerScreen() {
                         </Text>
                       ))
                     )}
+                  </View>
+                ) : null}
+
+                {partyCommentsOpen ? (
+                  <View style={styles.partyCommentsDrawer}>
+                    <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
+                    <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
+                      {partyComments.map((comment) => (
+                        <Text key={comment.id} style={styles.partyCommentsLine}>
+                          <Text style={styles.partyCommentsAuthor}>{comment.username}: </Text>
+                          {comment.text}
+                        </Text>
+                      ))}
+                    </ScrollView>
+                    <View style={styles.partyCommentsInputRow}>
+                      <TextInput
+                        value={partyCommentDraft}
+                        onChangeText={setPartyCommentDraft}
+                        placeholder="Add a comment"
+                        placeholderTextColor="#8B90A0"
+                        style={styles.partyCommentsInput}
+                        returnKeyType="send"
+                        onSubmitEditing={onSendPartyComment}
+                      />
+                      <TouchableOpacity style={styles.partyCommentsSendBtn} onPress={onSendPartyComment} activeOpacity={0.85}>
+                        <Text style={styles.partyCommentsSendBtnText}>Send</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ) : null}
               </>
@@ -2166,6 +2222,74 @@ const styles = StyleSheet.create({
   },
   partyChatDrawerAuthor: {
     color: "#F2D8DF",
+    fontWeight: "900",
+  },
+  partyCommentsDrawer: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    bottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(8,8,12,0.84)",
+    paddingHorizontal: 10,
+    paddingTop: 9,
+    paddingBottom: 8,
+    maxHeight: 148,
+  },
+  partyCommentsDrawerTitle: {
+    color: "#E8EBF3",
+    fontSize: 10.5,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  partyCommentsList: {
+    maxHeight: 76,
+  },
+  partyCommentsListContent: {
+    gap: 3,
+    paddingBottom: 6,
+  },
+  partyCommentsLine: {
+    color: "#D4D8E2",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  partyCommentsAuthor: {
+    color: "#F2D8DF",
+    fontWeight: "900",
+  },
+  partyCommentsInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  partyCommentsInput: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    color: "#EEF1F8",
+    fontSize: 11,
+    fontWeight: "600",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  partyCommentsSendBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.7)",
+    backgroundColor: "rgba(220,20,60,0.26)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  partyCommentsSendBtnText: {
+    color: "#fff",
+    fontSize: 11,
     fontWeight: "900",
   },
 
