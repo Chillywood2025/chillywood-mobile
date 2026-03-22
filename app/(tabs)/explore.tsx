@@ -1,10 +1,12 @@
-// app/(tabs)/explore.tsx
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
     Image,
+    ImageBackground,
+    type ImageSourcePropType,
+    ListRenderItem,
     Pressable,
     SafeAreaView,
     StyleSheet,
@@ -12,6 +14,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { titles as localTitles } from "../../_data/titles";
 import { supabase } from "../lib/supabase";
 
 type TitleRow = {
@@ -26,9 +29,6 @@ type TitleRow = {
   poster_url: string | null;
   video_url: string | null;
 };
-
-const FALLBACK_POSTER =
-  "https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?auto=format&fit=crop&w=800&q=60";
 
 export default function ExploreScreen() {
   const [titles, setTitles] = useState<TitleRow[]>([]);
@@ -61,13 +61,29 @@ export default function ExploreScreen() {
     loadTitles();
   }, []);
 
-  function renderItem({ item }: { item: TitleRow }) {
-    const poster = item.poster_url?.trim() ? item.poster_url : FALLBACK_POSTER;
+  function getExploreImageSource(item?: TitleRow | null): ImageSourcePropType | null {
+    if (!item) return null;
+
+    const localMatch = localTitles.find(
+      (t) =>
+        String(t.id) === String(item.id) ||
+        String(t.title ?? "").trim().toLowerCase() === String(item.title ?? "").trim().toLowerCase(),
+    );
+
+    const imageSource = (localMatch as any)?.image || localMatch?.poster || null;
+    return imageSource;
+  }
+
+  const heroItem = titles[0] ?? null;
+  const backgroundSource = getExploreImageSource(heroItem);
+
+  const renderItem: ListRenderItem<TitleRow> = ({ item }) => {
+    const imageSource = getExploreImageSource(item);
 
     return (
       <TouchableOpacity
         onPress={() => {
-          const safeId = item.id || item.slug || item.title;
+          const safeId = String(item.id || item.slug || item.title);
           console.log("NAVIGATING WITH ID:", safeId);
           router.push(`/player/${safeId}`);
         }}
@@ -75,7 +91,15 @@ export default function ExploreScreen() {
         activeOpacity={0.9}
       >
         <View style={styles.posterWrap}>
-          <Image source={{ uri: poster }} style={styles.posterImg} />
+          {imageSource ? (
+            <Image source={imageSource} style={styles.posterImg} />
+          ) : (
+            <View style={styles.posterPlaceholder}>
+              <Text style={styles.posterPlaceholderText}>
+                {(item.title || "U").slice(0, 1).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={styles.posterFade} />
           <Text numberOfLines={1} style={styles.posterTitle}>
             {item.title || "Untitled"}
@@ -83,19 +107,11 @@ export default function ExploreScreen() {
         </View>
 
         <View style={styles.metaRow}>
-          <Text style={styles.metaText}>
-            {item.category || "Uncategorized"}
-          </Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.metaText}>
-            {item.year ? String(item.year) : "Year ?"}
-          </Text>
-          {!!item.runtime && (
-            <>
-              <Text style={styles.dot}>•</Text>
-              <Text style={styles.metaText}>{item.runtime}</Text>
-            </>
-          )}
+          <Text style={styles.metaText}>{item.category || "Uncategorized"}</Text>
+          {(item.year || item.runtime) ? <Text style={styles.dot}>•</Text> : null}
+          {item.year ? <Text style={styles.metaText}>{String(item.year)}</Text> : null}
+          {item.year && item.runtime ? <Text style={styles.dot}>•</Text> : null}
+          {item.runtime ? <Text style={styles.metaText}>{item.runtime}</Text> : null}
         </View>
 
         {!!item.synopsis && (
@@ -105,77 +121,126 @@ export default function ExploreScreen() {
         )}
       </TouchableOpacity>
     );
-  }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.brand}>Chillywood</Text>
-        <Text style={styles.count}>Titles: {titlesCount}</Text>
-      </View>
-
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-          <Text style={styles.muted}>Loading titles…</Text>
-        </View>
-      ) : errorMsg ? (
-        <View style={styles.center}>
-          <Text style={styles.errorTitle}>Couldn’t load titles</Text>
-          <Text style={styles.errorText}>{errorMsg}</Text>
-
-          <Pressable onPress={loadTitles} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FlatList
-          data={titles}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          renderItem={renderItem}
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={styles.muted}>No titles yet.</Text>
-              <Text style={styles.mutedSmall}>
-                Add rows in Supabase → table “titles”.
-              </Text>
-            </View>
-          }
+    <View style={styles.container}>
+      {backgroundSource ? (
+        <ImageBackground
+          source={backgroundSource}
+          style={styles.fullBackground}
+          resizeMode="cover"
+          pointerEvents="none"
         />
+      ) : (
+        <View style={styles.fullBackgroundFallback} pointerEvents="none" />
       )}
-    </SafeAreaView>
+      <View style={styles.fullBackgroundOverlay} pointerEvents="none" />
+
+      <SafeAreaView style={styles.safeArea}>
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color="#E50914" />
+            <Text style={styles.muted}>Loading titles…</Text>
+          </View>
+        ) : errorMsg ? (
+          <View style={styles.center}>
+            <Text style={styles.errorTitle}>Couldn’t load titles</Text>
+            <Text style={styles.errorText}>{errorMsg}</Text>
+
+            <Pressable onPress={loadTitles} style={styles.retryBtn}>
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <FlatList
+            data={titles}
+            keyExtractor={(item) => item.id}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            renderItem={renderItem}
+            ListHeaderComponent={
+              <View style={styles.headerBlock}>
+                <Text style={styles.exploreTitle}>Explore</Text>
+                <Text style={styles.count}>Titles: {titlesCount}</Text>
+              </View>
+            }
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <Text style={styles.muted}>No titles yet.</Text>
+                <Text style={styles.mutedSmall}>Add rows in Supabase → table “titles”.</Text>
+              </View>
+            }
+          />
+        )}
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
+  container: { flex: 1 },
+  fullBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  fullBackgroundFallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0B0B10",
+  },
+  fullBackgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
 
-  header: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
-  brand: { color: "#b30000", fontSize: 40, fontWeight: "900", letterSpacing: 0.4 },
-  count: { color: "#888", marginTop: 6, fontSize: 16 },
+  headerBlock: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 },
+  exploreTitle: { color: "#fff", fontSize: 38, fontWeight: "900", letterSpacing: 0.3 },
+  count: { color: "#D6D6D6", marginTop: 6, fontSize: 13, fontWeight: "700" },
 
-  listContent: { paddingHorizontal: 18, paddingBottom: 24 },
+  list: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    backgroundColor: "transparent",
+  },
 
   card: {
-    backgroundColor: "#0b0b0b",
-    borderRadius: 18,
+    backgroundColor: "#0D0D11",
+    borderRadius: 16,
     padding: 12,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#151515",
+    borderColor: "#1f1f26",
   },
 
   posterWrap: {
     height: 210,
-    borderRadius: 18,
+    borderRadius: 14,
     overflow: "hidden",
     justifyContent: "flex-end",
+    backgroundColor: "#111",
   },
   posterImg: { width: "100%", height: "100%" },
+  posterPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1A1A1A",
+  },
+  posterPlaceholderText: {
+    color: "#E50914",
+    fontSize: 48,
+    fontWeight: "900",
+  },
   posterFade: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.28)",
+    backgroundColor: "rgba(0,0,0,0.34)",
   },
   posterTitle: {
     color: "#fff",
@@ -187,22 +252,22 @@ const styles = StyleSheet.create({
     textShadowRadius: 10,
   },
 
-  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 10 },
-  metaText: { color: "#bbb", fontSize: 12 },
-  dot: { color: "#444", marginHorizontal: 8 },
+  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 10, flexWrap: "wrap" },
+  metaText: { color: "#D0D0D0", fontSize: 12, fontWeight: "700" },
+  dot: { color: "#E50914", marginHorizontal: 8, fontWeight: "900" },
 
-  synopsis: { color: "#cfcfcf", marginTop: 10, lineHeight: 18 },
+  synopsis: { color: "#CFCFCF", marginTop: 10, lineHeight: 18 },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
-  muted: { color: "#aaa", marginTop: 10, fontSize: 14 },
-  mutedSmall: { color: "#666", marginTop: 6, fontSize: 12 },
+  muted: { color: "#AAA", marginTop: 10, fontSize: 14 },
+  mutedSmall: { color: "#666", marginTop: 6, fontSize: 12, textAlign: "center" },
 
   errorTitle: { color: "#fff", fontSize: 18, fontWeight: "800" },
   errorText: { color: "#ff6666", marginTop: 8, textAlign: "center" },
 
   retryBtn: {
     marginTop: 14,
-    backgroundColor: "#b30000",
+    backgroundColor: "#E50914",
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 14,
