@@ -34,6 +34,8 @@ const MIN_ZOOM = 1;
 const PROGRESS_WRITE_INTERVAL = 4_000;
 const CONTROLS_AUTO_HIDE_MILLIS = 3_000;
 const NEXT_AUTOPLAY_DELAY_MILLIS = 1_500;
+const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
+const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
 const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -133,6 +135,11 @@ export default function PlayerScreen() {
   const shouldAutoplayNextRef = useRef(false);
   const lastTapRef = useRef(0);
   const videoWidthRef = useRef(0);
+  const panScrubStartPositionRef = useRef(0);
+  const panScrubLastSeekAtRef = useRef(0);
+  const panScrubSeekInFlightRef = useRef(false);
+  const panIsScrubbingRef = useRef(false);
+  const panWasPlayingBeforeScrubRef = useRef(false);
 
   const titleId = useMemo(
     () => String(item?.id ?? (localTitle as any)?.id ?? (fallbackTitle as any)?.id ?? cleanId).trim(),
@@ -509,6 +516,10 @@ export default function PlayerScreen() {
           resetAutoHideTimer();
           swipeLastAppliedStepRef.current = 0;
           pinchStartDistanceRef.current = null;
+          panScrubStartPositionRef.current = currentPositionRef.current;
+          panScrubLastSeekAtRef.current = 0;
+          panIsScrubbingRef.current = false;
+          panWasPlayingBeforeScrubRef.current = false;
         },
         onPanResponderMove: (event: GestureResponderEvent, gestureState) => {
           const touches = event.nativeEvent.touches;
@@ -530,16 +541,64 @@ export default function PlayerScreen() {
           }
 
           pinchStartDistanceRef.current = null;
-          const step = Math.trunc(gestureState.dx / SWIPE_PIXELS_PER_STEP);
-          if (step === swipeLastAppliedStepRef.current || step === 0) return;
+          const duration = durationRef.current;
+          if (duration <= 0) return;
+          if (Math.abs(gestureState.dx) < PAN_SCRUB_MIN_DRAG_PIXELS) return;
+          if (Math.abs(gestureState.dx) < Math.abs(gestureState.dy)) return;
 
-          const deltaStep = step - swipeLastAppliedStepRef.current;
-          swipeLastAppliedStepRef.current = step;
-          applySeekDelta(deltaStep * STEP_MILLIS).catch(() => {});
+          if (!panIsScrubbingRef.current) {
+            panIsScrubbingRef.current = true;
+            panWasPlayingBeforeScrubRef.current = isPlaying;
+            if (isPlaying) {
+              videoRef.current?.pauseAsync().catch(() => {});
+            }
+          }
+
+          const positionFromDelta = panScrubStartPositionRef.current + (gestureState.dx / SWIPE_PIXELS_PER_STEP) * STEP_MILLIS;
+          const nextPosition = clamp(positionFromDelta, 0, duration);
+
+          currentPositionRef.current = nextPosition;
+          setPositionMillis(nextPosition);
+
+          const now = Date.now();
+          if (panScrubSeekInFlightRef.current) return;
+          if (now - panScrubLastSeekAtRef.current < PAN_SCRUB_SEEK_THROTTLE_MILLIS) return;
+
+          panScrubLastSeekAtRef.current = now;
+          panScrubSeekInFlightRef.current = true;
+
+          videoRef.current
+            ?.setPositionAsync(nextPosition)
+            .catch(() => {})
+            .finally(() => {
+              panScrubSeekInFlightRef.current = false;
+            });
         },
         onPanResponderRelease: (event, gestureState) => {
           resetAutoHideTimer();
-          const isTap = Math.abs(gestureState.dx) < 6 && Math.abs(gestureState.dy) < 6;
+          if (panIsScrubbingRef.current) {
+            const finalPosition = currentPositionRef.current;
+            videoRef.current
+              ?.setPositionAsync(finalPosition)
+              .then(() => {
+                persistProgress(finalPosition, durationRef.current);
+                if (panWasPlayingBeforeScrubRef.current) {
+                  return videoRef.current?.playAsync();
+                }
+              })
+              .catch(() => {});
+
+            panIsScrubbingRef.current = false;
+            panWasPlayingBeforeScrubRef.current = false;
+
+            if (zoomScaleValueRef.current <= 1.05) {
+              animateZoomTo(1);
+            }
+            resetGestureState();
+            return;
+          }
+
+          const isTap = Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10;
 
           if (isTap && isVideoReady) {
             const now = Date.now();
@@ -571,13 +630,39 @@ export default function PlayerScreen() {
         },
         onPanResponderTerminate: () => {
           resetAutoHideTimer();
+          if (panIsScrubbingRef.current) {
+            const finalPosition = currentPositionRef.current;
+            videoRef.current
+              ?.setPositionAsync(finalPosition)
+              .then(() => {
+                persistProgress(finalPosition, durationRef.current);
+                if (panWasPlayingBeforeScrubRef.current) {
+                  return videoRef.current?.playAsync();
+                }
+              })
+              .catch(() => {});
+
+            panIsScrubbingRef.current = false;
+            panWasPlayingBeforeScrubRef.current = false;
+          }
+
           if (zoomScaleValueRef.current <= 1.05) {
             animateZoomTo(1);
           }
           resetGestureState();
         },
       }),
-    [animateZoomTo, applySeekDelta, handleSingleTap, isVideoReady, resetAutoHideTimer, resetGestureState, zoomScale],
+    [
+      animateZoomTo,
+      applySeekDelta,
+      handleSingleTap,
+      isPlaying,
+      isVideoReady,
+      persistProgress,
+      resetAutoHideTimer,
+      resetGestureState,
+      zoomScale,
+    ],
   );
 
   const progressScrubResponder = useMemo(
