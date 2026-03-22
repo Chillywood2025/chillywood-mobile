@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -12,19 +12,92 @@ import {
     View,
 } from "react-native";
 import { supabase } from "../../_lib/supabase";
-import { getPartyRoom, type WatchPartyState } from "../../_lib/watchParty";
+import { getPartyRoom, getSafePartyUserId, type WatchPartyState } from "../../_lib/watchParty";
 
 type RoomPreview = {
   room: WatchPartyState;
   titleName: string | null;
 };
 
+type IncomingHandoff = {
+  roomCode: string;
+  titleId: string | null;
+};
+
 export default function WatchPartyIndexScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    roomId?: string;
+    roomCode?: string;
+    titleId?: string;
+    partyId?: string;
+  }>();
   const [joinCode, setJoinCode] = useState("");
   const [looking, setLooking] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [preview, setPreview] = useState<RoomPreview | null>(null);
+  const [incomingHandoff, setIncomingHandoff] = useState<IncomingHandoff | null>(null);
+  const [hostLabel, setHostLabel] = useState("Viewer");
+  const handoffLoadedRef = useRef(false);
+
+  useEffect(() => {
+    console.log("WATCH PARTY SCREEN: received params", params);
+  }, [params]);
+
+  useEffect(() => {
+    if (handoffLoadedRef.current) return;
+
+    const rawRoomCode = Array.isArray(params.roomCode) ? params.roomCode[0] : params.roomCode;
+    const rawRoomId = Array.isArray(params.roomId) ? params.roomId[0] : params.roomId;
+    const rawPartyId = Array.isArray(params.partyId) ? params.partyId[0] : params.partyId;
+    const rawTitleId = Array.isArray(params.titleId) ? params.titleId[0] : params.titleId;
+    const incomingCode = String(rawRoomCode ?? rawRoomId ?? rawPartyId ?? "").trim().toUpperCase();
+    const incomingTitleId = String(rawTitleId ?? "").trim();
+
+    if (!incomingCode) return;
+    handoffLoadedRef.current = true;
+    setJoinCode(incomingCode);
+    setHostLabel("Connecting room…");
+    setIncomingHandoff({ roomCode: incomingCode, titleId: incomingTitleId || null });
+    console.log("WATCH PARTY SCREEN: parsed handoff", { incomingCode, incomingTitleId });
+
+    const loadIncomingRoom = async () => {
+      setLooking(true);
+      setJoinError(null);
+      try {
+        const room = await getPartyRoom(incomingCode);
+        if (!room) {
+          console.log("WATCH PARTY SCREEN: handoff lookup returned null", { incomingCode });
+          setJoinError("Room handoff failed. Please try the room code manually.");
+          return;
+        }
+
+        let titleName: string | null = null;
+        try {
+          const { data } = await supabase
+            .from("titles")
+            .select("title")
+            .eq("id", room.titleId)
+            .maybeSingle();
+          titleName = data?.title ? String(data.title) : null;
+        } catch {
+          // cosmetic only
+        }
+
+        const safeUserId = await getSafePartyUserId();
+        setHostLabel(safeUserId === room.hostUserId ? "You are hosting" : "You joined as viewer");
+        setJoinCode(room.roomCode);
+        setIncomingHandoff({ roomCode: room.roomCode, titleId: room.titleId });
+        setPreview({ room, titleName });
+      } catch {
+        setJoinError("Couldn't load room from handoff.");
+      } finally {
+        setLooking(false);
+      }
+    };
+
+    loadIncomingRoom();
+  }, [params.partyId, params.roomCode, params.roomId]);
 
   const onLookup = async () => {
     const code = joinCode.trim().toUpperCase();
@@ -68,7 +141,12 @@ export default function WatchPartyIndexScreen() {
   const onClearPreview = () => {
     setPreview(null);
     setJoinCode("");
+    setIncomingHandoff(null);
   };
+
+  const topRoomCode = preview?.room.roomCode ?? incomingHandoff?.roomCode ?? "";
+  const topRoomTitle = preview?.titleName ?? preview?.room.titleId ?? incomingHandoff?.titleId ?? "";
+  const topHostLabel = preview ? hostLabel : incomingHandoff ? "Connecting room…" : "";
 
   return (
     <KeyboardAvoidingView
@@ -96,6 +174,15 @@ export default function WatchPartyIndexScreen() {
         </View>
 
         {/* ── Join a room ─────────────────────────────────────────────── */}
+        {topRoomCode ? (
+          <View style={styles.roomCard}>
+            <Text style={styles.roomLabel}>ROOM CODE</Text>
+            <Text style={styles.roomCode}>{topRoomCode}</Text>
+            <Text style={styles.roomTitle}>{topRoomTitle || "Loading room…"}</Text>
+            <Text style={styles.hostStatus}>{topHostLabel || ""}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.joinCard}>
           <Text style={styles.joinLabel}>JOIN A ROOM</Text>
 
@@ -111,7 +198,7 @@ export default function WatchPartyIndexScreen() {
               <Text style={styles.previewTitle} numberOfLines={2}>
                 {preview.titleName ?? preview.room.titleId}
               </Text>
-              <Text style={styles.previewCode}>Room  {preview.room.partyId}</Text>
+              <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
               <View style={styles.previewActions}>
                 <TouchableOpacity style={styles.joinNowBtn} onPress={onConfirmJoin} activeOpacity={0.88}>
                   <Text style={styles.joinNowBtnText}>Join Now →</Text>
@@ -209,6 +296,19 @@ const styles = StyleSheet.create({
   howHighlight: { color: "#F7D6DD", fontWeight: "800" },
 
   // Join card
+  roomCard: {
+    backgroundColor: "rgba(18,18,18,0.96)",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    padding: 16,
+    gap: 6,
+  },
+  roomLabel: { color: "#555", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
+  roomCode: { color: "#F7D6DD", fontSize: 24, fontWeight: "900", letterSpacing: 2.2 },
+  roomTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  hostStatus: { color: "#bbb", fontSize: 12, fontWeight: "700" },
+
   joinCard: {
     backgroundColor: "rgba(18,18,18,0.96)",
     borderRadius: 18,

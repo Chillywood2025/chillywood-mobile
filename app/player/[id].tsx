@@ -22,7 +22,7 @@ import {
   toggleMyListTitle,
   writeProgressForTitle,
 } from "../../_lib/userData";
-import { createPartyRoom } from "../../_lib/watchParty";
+import { createPartyRoom, getSafePartyUserId } from "../../_lib/watchParty";
 
 const ACCENT = "#DC143C";
 const BG = "#0B0B10";
@@ -34,6 +34,7 @@ const PROGRESS_WRITE_INTERVAL = 4_000;
 const CONTROLS_AUTO_HIDE_MILLIS = 3_000;
 const NEXT_AUTOPLAY_DELAY_MILLIS = 1_500;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type TitleRow = {
   id: string;
@@ -750,27 +751,61 @@ export default function PlayerScreen() {
 
   const onWatchParty = useCallback(async () => {
     if (!titleId) {
+      console.log("WATCH PARTY: missing titleId, fallback to /watch-party");
       router.push("/watch-party");
       return;
     }
 
     try {
-      const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-      const hostUserId = data?.session?.user?.id ?? null;
-      if (!hostUserId) {
-        router.push("/watch-party");
-        return;
+      const hostUserId = await getSafePartyUserId();
+      const preferredRawId = String(item?.id ?? "").trim();
+      const fallbackRawId = String(titleId ?? "").trim();
+
+      let createTitleId = preferredRawId || fallbackRawId;
+
+      if (!UUID_LIKE_REGEX.test(createTitleId)) {
+        const titleNameCandidate = String(item?.title ?? (title as any)?.title ?? "").trim();
+        if (titleNameCandidate) {
+          try {
+            const byName = await supabase
+              .from("titles")
+              .select("id")
+              .eq("title", titleNameCandidate)
+              .maybeSingle();
+
+            const dbTitleId = String(byName.data?.id ?? "").trim();
+            if (dbTitleId) createTitleId = dbTitleId;
+          } catch {
+            // keep existing createTitleId
+          }
+        }
       }
 
-      const room = await createPartyRoom(titleId, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused");
-      if (room?.partyId) {
-        router.push({ pathname: "/watch-party/[partyId]", params: { partyId: room.partyId, titleId } });
+      console.log("WATCH PARTY: creating room", {
+        titleId: createTitleId,
+        hostUserId,
+        positionMillis: currentPositionRef.current,
+        playbackState: isPlaying ? "playing" : "paused",
+      });
+
+      const room = await createPartyRoom(createTitleId, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused");
+      console.log("WATCH PARTY: createPartyRoom returned", room);
+
+      if (room && "partyId" in room && room.partyId) {
+        const navParams = {
+          roomId: room.partyId,
+          roomCode: room.roomCode,
+          titleId: room.titleId || createTitleId,
+        };
+        console.log("WATCH PARTY: navigating with params", navParams);
+        router.push({ pathname: "/watch-party", params: navParams });
         return;
       }
     } catch {
       // fallback navigation below
     }
 
+    console.log("WATCH PARTY: room creation failed, fallback to /watch-party");
     router.push("/watch-party");
   }, [isPlaying, titleId]);
 

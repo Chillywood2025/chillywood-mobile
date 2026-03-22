@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
 
 // ─── Role & State Types ───────────────────────────────────────────────────────
@@ -8,6 +9,7 @@ export type WatchPartyPlaybackState = "playing" | "paused" | "buffering";
 
 export type WatchPartyState = {
   partyId: string;
+  roomCode: string;
   titleId: string;
   hostUserId: string;
   playbackPositionMillis: number;
@@ -57,6 +59,20 @@ export type WatchPartyRoomDraft = {
   playbackState?: WatchPartyPlaybackState;
 };
 
+export type WatchPartyCreateError = {
+  code: string | null;
+  message: string;
+  details?: string | null;
+  hint?: string | null;
+  payload?: Record<string, unknown>;
+};
+
+export type WatchPartyCreateResult =
+  | WatchPartyState
+  | {
+      error: WatchPartyCreateError;
+    };
+
 // ─── Table Constants ──────────────────────────────────────────────────────────
 
 export const PARTY_ROOMS_TABLE = "watch_party_rooms";
@@ -75,10 +91,202 @@ export const createPartyId = () => {
   return `${stamp}${random}`.toUpperCase();
 };
 
+const PARTY_ID_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const GUEST_USER_STORAGE_KEY = "watch_party_guest_user_id_v1";
+const GUEST_AUTH_EMAIL_STORAGE_KEY = "watch_party_guest_auth_email_v1";
+const GUEST_AUTH_PASSWORD_STORAGE_KEY = "watch_party_guest_auth_password_v1";
+let cachedGuestUserId: string | null = null;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const createPartyIdentifier = (length = 6) => {
+  let out = "";
+  for (let i = 0; i < length; i += 1) {
+    const idx = Math.floor(Math.random() * PARTY_ID_CHARS.length);
+    out += PARTY_ID_CHARS[idx];
+  }
+  return out;
+};
+
+const randomHex = (size: number) => {
+  let out = "";
+  const chars = "0123456789abcdef";
+  for (let i = 0; i < size; i += 1) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+};
+
+const createGuestUuid = () => {
+  return `${randomHex(8)}-${randomHex(4)}-4${randomHex(3)}-${["8", "9", "a", "b"][Math.floor(Math.random() * 4)]}${randomHex(3)}-${randomHex(12)}`;
+};
+
+const createGuestAuthEmail = () => `watchparty-${randomHex(12)}@chillywood.local`;
+const createGuestAuthPassword = () => `${randomHex(16)}A!7${randomHex(16)}`;
+
+const looksLikeUuid = (value: string) => UUID_REGEX.test(value);
+
+const isMissingPartyIdColumnError = (error: unknown) => {
+  const message =
+    typeof error === "object" && error && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  return /party_id/i.test(message) && /column/i.test(message);
+};
+
+const isConflictError = (error: unknown) => {
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  return code === "23505";
+};
+
+const isForeignKeyError = (error: unknown) => {
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  return code === "23503";
+};
+
+const isRlsError = (error: unknown) => {
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  return code === "42501";
+};
+
+const toCreateError = (
+  error: unknown,
+  payload?: Record<string, unknown>,
+  fallbackMessage = "Failed to create watch party room",
+): WatchPartyCreateError => {
+  const raw = (error ?? {}) as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  return {
+    code: raw.code ? String(raw.code) : null,
+    message: raw.message ? String(raw.message) : fallbackMessage,
+    details: raw.details ? String(raw.details) : null,
+    hint: raw.hint ? String(raw.hint) : null,
+    payload,
+  };
+};
+
+async function ensurePersistentGuestAuthUserId(): Promise<string | null> {
+  try {
+    let email = (await AsyncStorage.getItem(GUEST_AUTH_EMAIL_STORAGE_KEY))?.trim() || "";
+    let password = (await AsyncStorage.getItem(GUEST_AUTH_PASSWORD_STORAGE_KEY))?.trim() || "";
+
+    if (!email || !password) {
+      email = createGuestAuthEmail();
+      password = createGuestAuthPassword();
+      await AsyncStorage.multiSet([
+        [GUEST_AUTH_EMAIL_STORAGE_KEY, email],
+        [GUEST_AUTH_PASSWORD_STORAGE_KEY, password],
+      ]);
+    }
+
+    const signIn = await supabase.auth.signInWithPassword({ email, password });
+    const signInUserId = String(signIn.data?.user?.id ?? signIn.data?.session?.user?.id ?? "").trim();
+    if (signInUserId && looksLikeUuid(signInUserId)) return signInUserId;
+
+    const signUp = await supabase.auth.signUp({ email, password });
+    const signUpUserId = String(signUp.data?.user?.id ?? signUp.data?.session?.user?.id ?? "").trim();
+    if (signUpUserId && looksLikeUuid(signUpUserId)) return signUpUserId;
+
+    const retrySignIn = await supabase.auth.signInWithPassword({ email, password });
+    const retrySignInUserId = String(retrySignIn.data?.user?.id ?? retrySignIn.data?.session?.user?.id ?? "").trim();
+    if (retrySignInUserId && looksLikeUuid(retrySignInUserId)) return retrySignInUserId;
+  } catch {
+    // fall through
+  }
+
+  return null;
+}
+
+async function getAuthBackedUserId(): Promise<string | null> {
+  try {
+    const userResult = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+    const authUserId = String(userResult.data?.user?.id ?? "").trim();
+    if (authUserId && looksLikeUuid(authUserId)) return authUserId;
+  } catch {
+    // fall through
+  }
+
+  try {
+    const sessionResult = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    const sessionUserId = String(sessionResult.data?.session?.user?.id ?? "").trim();
+    if (sessionUserId && looksLikeUuid(sessionUserId)) return sessionUserId;
+  } catch {
+    // fall through
+  }
+
+  try {
+    const anonymous = await supabase.auth.signInAnonymously();
+    const anonymousUserId = String(anonymous.data?.user?.id ?? "").trim();
+    if (anonymousUserId && looksLikeUuid(anonymousUserId)) return anonymousUserId;
+
+    const anonymousSessionUserId = String(anonymous.data?.session?.user?.id ?? "").trim();
+    if (anonymousSessionUserId && looksLikeUuid(anonymousSessionUserId)) return anonymousSessionUserId;
+  } catch {
+    // anonymous auth may be disabled
+  }
+
+  const persistentGuestUserId = await ensurePersistentGuestAuthUserId();
+  if (persistentGuestUserId) return persistentGuestUserId;
+
+  return null;
+}
+
+export async function getSafePartyUserId(): Promise<string> {
+  const authBackedId = await getAuthBackedUserId();
+  if (authBackedId) return authBackedId;
+
+  try {
+    const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    const authUserId = data?.session?.user?.id;
+    if (authUserId) return String(authUserId);
+  } catch {
+    // fall through to guest id
+  }
+
+  if (cachedGuestUserId) return cachedGuestUserId;
+
+  try {
+    const stored = await AsyncStorage.getItem(GUEST_USER_STORAGE_KEY);
+    if (stored && stored.trim()) {
+      const normalized = stored.trim();
+      if (looksLikeUuid(normalized)) {
+        cachedGuestUserId = normalized;
+        return cachedGuestUserId;
+      }
+
+      const migrated = createGuestUuid();
+      cachedGuestUserId = migrated;
+      await AsyncStorage.setItem(GUEST_USER_STORAGE_KEY, migrated);
+      return cachedGuestUserId;
+    }
+  } catch {
+    // fall through to create
+  }
+
+  const generated = createGuestUuid();
+  cachedGuestUserId = generated;
+  try {
+    await AsyncStorage.setItem(GUEST_USER_STORAGE_KEY, generated);
+  } catch {
+    // non-fatal
+  }
+  return generated;
+}
+
 export const createWatchPartyDraft = (draft: WatchPartyRoomDraft): WatchPartyState => {
   const now = new Date().toISOString();
+  const partyId = createPartyId();
   return {
-    partyId: createPartyId(),
+    partyId,
+    roomCode: partyId,
     titleId: draft.titleId,
     hostUserId: draft.hostUserId,
     playbackPositionMillis: Math.max(0, Math.floor(draft.playbackPositionMillis ?? 0)),
@@ -91,7 +299,7 @@ export const createWatchPartyDraft = (draft: WatchPartyRoomDraft): WatchPartySta
 // ─── Row shape from watch_party_rooms ────────────────────────────────────────
 // Exported so consumers (e.g. realtime handlers) can type payload.new directly
 export type PartyRoomRow = {
-  id?: string | null;
+  party_id?: string | null;
   host_user_id?: string | null;
   title_id?: string | null;
   playback_position_millis?: number | null;
@@ -101,9 +309,11 @@ export type PartyRoomRow = {
 };
 
 function rowToState(row: PartyRoomRow): WatchPartyState | null {
-  if (!row.id || !row.host_user_id || !row.title_id) return null;
+  const primaryId = String(row.party_id ?? "").trim();
+  if (!primaryId || !row.host_user_id || !row.title_id) return null;
   return {
-    partyId: String(row.id),
+    partyId: primaryId,
+    roomCode: primaryId,
     hostUserId: String(row.host_user_id),
     titleId: String(row.title_id),
     playbackPositionMillis: Math.max(0, Number(row.playback_position_millis ?? 0)),
@@ -121,6 +331,32 @@ export function parsePartyRoomPayload(row: PartyRoomRow): WatchPartyState | null
   return rowToState(row);
 }
 
+async function resolvePartyTitleId(inputTitleId: string): Promise<string | null> {
+  const raw = String(inputTitleId ?? "").trim();
+  if (!raw) return null;
+
+  try {
+    const direct = await supabase.from("titles").select("id").eq("id", raw).maybeSingle();
+    if (!direct.error && direct.data?.id) return String(direct.data.id);
+
+    const fallbackAny = await supabase.from("titles").select("id").limit(1).maybeSingle();
+    if (!fallbackAny.error && fallbackAny.data?.id) return String(fallbackAny.data.id);
+  } catch {
+    // fall through
+  }
+
+  return null;
+}
+
+async function resolvePartyHostUserId(inputHostUserId: string): Promise<string | null> {
+  const raw = String(inputHostUserId ?? "").trim();
+  const authBackedId = await getAuthBackedUserId();
+  if (authBackedId) return authBackedId;
+
+  if (raw && looksLikeUuid(raw)) return null;
+  return null;
+}
+
 // ─── Backend Operations ───────────────────────────────────────────────────────
 
 /**
@@ -132,29 +368,136 @@ export async function createPartyRoom(
   hostUserId: string,
   positionMillis: number,
   state: "playing" | "paused",
-): Promise<WatchPartyState | null> {
+): Promise<WatchPartyCreateResult> {
+  const requestedTitleId = String(titleId ?? "").trim();
+  const resolvedTitleId = await resolvePartyTitleId(requestedTitleId);
+  const requestedHostUserId = String(hostUserId ?? "").trim();
+  const resolvedHostUserId = await resolvePartyHostUserId(requestedHostUserId);
+  const titleIdCandidates = Array.from(
+    new Set([resolvedTitleId, requestedTitleId].filter(Boolean) as string[]),
+  );
+  const hostUserIdCandidates = Array.from(
+    new Set([resolvedHostUserId].filter(Boolean) as string[]),
+  );
+  if (!hostUserIdCandidates.length) {
+    const explicitError = toCreateError(
+      { message: "Unable to resolve valid hostUserId for watch party room" },
+      { requestedHostUserId, resolvedHostUserId, titleId: requestedTitleId },
+    );
+    console.log("WATCH PARTY: createPartyRoom error", explicitError);
+    return { error: explicitError };
+  }
+
+  if (!titleIdCandidates.length) {
+    const explicitError = toCreateError(
+      { message: "Unable to resolve valid titleId for watch party room" },
+      { requestedTitleId, resolvedTitleId },
+    );
+    console.log("WATCH PARTY: createPartyRoom error", explicitError);
+    return { error: explicitError };
+  }
+
+  let lastError: WatchPartyCreateError | null = null;
+
   try {
-    const partyId = createPartyId();
-    const now = new Date().toISOString();
+    for (const safeTitleId of titleIdCandidates) {
+      for (const safeHostUserId of hostUserIdCandidates) {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const generatedPartyId = createPartyIdentifier();
+          const now = new Date().toISOString();
+          const payload = {
+            party_id: generatedPartyId,
+            host_user_id: safeHostUserId,
+            title_id: safeTitleId,
+            playback_position_millis: Math.max(0, Math.floor(positionMillis)),
+            playback_state: state,
+            started_at: now,
+            updated_at: now,
+          };
 
-    const { data, error } = await supabase
-      .from(PARTY_ROOMS_TABLE)
-      .insert({
-        id: partyId,
-        host_user_id: hostUserId,
-        title_id: titleId,
-        playback_position_millis: Math.max(0, Math.floor(positionMillis)),
-        playback_state: state,
-        started_at: now,
-        updated_at: now,
-      })
-      .select()
-      .single();
+          console.log("WATCH PARTY: final create payload", payload);
 
-    if (error || !data) return null;
-    return rowToState(data as PartyRoomRow);
-  } catch {
-    return null;
+          const { data, error } = await supabase
+            .from(PARTY_ROOMS_TABLE)
+            .insert(payload)
+            .select("party_id,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at")
+            .single();
+
+          if (!error && data) return rowToState(data as PartyRoomRow);
+          if (error) {
+            lastError = toCreateError(error, payload);
+            console.log("WATCH PARTY: createPartyRoom error", lastError);
+          }
+
+          if (error && isConflictError(error)) continue;
+          if (error && isForeignKeyError(error)) break;
+          if (error && isMissingPartyIdColumnError(error)) {
+            for (let legacyAttempt = 0; legacyAttempt < 5; legacyAttempt += 1) {
+              const legacyNow = new Date().toISOString();
+              const legacyPayload = {
+                party_id: generatedPartyId,
+                host_user_id: safeHostUserId,
+                title_id: safeTitleId,
+                playback_position_millis: Math.max(0, Math.floor(positionMillis)),
+                playback_state: state,
+                started_at: legacyNow,
+                updated_at: legacyNow,
+              };
+
+              console.log("WATCH PARTY: final create payload", legacyPayload);
+
+              const legacy = await supabase
+                .from(PARTY_ROOMS_TABLE)
+                .insert(legacyPayload)
+                .select("party_id,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at")
+                .single();
+
+              if (!legacy.error && legacy.data) return rowToState(legacy.data as PartyRoomRow);
+              if (legacy.error) {
+                lastError = toCreateError(legacy.error, legacyPayload);
+                console.log("WATCH PARTY: createPartyRoom error", lastError);
+              }
+              if (legacy.error && isConflictError(legacy.error)) continue;
+              if (legacy.error && isForeignKeyError(legacy.error)) break;
+              break;
+            }
+            break;
+          }
+          break;
+        }
+      }
+    }
+
+    return {
+      error:
+        lastError ??
+        toCreateError(
+          { message: "Room creation failed without a Supabase error payload" },
+          {
+            requestedTitleId,
+            resolvedTitleId,
+            titleIdCandidates,
+            requestedHostUserId,
+            resolvedHostUserId,
+            hostUserIdCandidates,
+            state,
+            positionMillis,
+          },
+        ),
+    };
+  } catch (error) {
+    const explicitError = toCreateError(error, {
+      requestedTitleId,
+      resolvedTitleId,
+      titleIdCandidates,
+      requestedHostUserId,
+      resolvedHostUserId,
+      hostUserIdCandidates,
+      state,
+      positionMillis,
+    });
+    console.log("WATCH PARTY: createPartyRoom error", explicitError);
+    return { error: explicitError };
   }
 }
 
@@ -163,15 +506,31 @@ export async function createPartyRoom(
  * Returns null if the room does not exist or request fails.
  */
 export async function getPartyRoom(partyId: string): Promise<WatchPartyState | null> {
+  const lookupRaw = String(partyId ?? "").trim();
+  const lookupPartyId = lookupRaw.toUpperCase();
+  if (!lookupRaw) return null;
+
   try {
-    const { data, error } = await supabase
+    const byPartyId = await supabase
       .from(PARTY_ROOMS_TABLE)
-      .select("id,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at")
-      .eq("id", partyId)
+      .select("party_id,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at")
+      .eq("party_id", lookupPartyId)
       .maybeSingle();
 
-    if (error || !data) return null;
-    return rowToState(data as PartyRoomRow);
+    if (!byPartyId.error && byPartyId.data) return rowToState(byPartyId.data as PartyRoomRow);
+    if (byPartyId.error && !isMissingPartyIdColumnError(byPartyId.error)) return null;
+
+    if (lookupPartyId !== lookupRaw) {
+      const byRawPartyId = await supabase
+        .from(PARTY_ROOMS_TABLE)
+        .select("party_id,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at")
+        .eq("party_id", lookupRaw)
+        .maybeSingle();
+
+      if (!byRawPartyId.error && byRawPartyId.data) return rowToState(byRawPartyId.data as PartyRoomRow);
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -185,6 +544,9 @@ export async function updateRoomPlayback(
   positionMillis: number,
   state: "playing" | "paused",
 ): Promise<void> {
+  const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
+  if (!normalizedPartyId) return;
+
   try {
     await supabase
       .from(PARTY_ROOMS_TABLE)
@@ -193,7 +555,7 @@ export async function updateRoomPlayback(
         playback_state: state,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", partyId);
+      .eq("party_id", normalizedPartyId);
   } catch {
     // silent – local playback continues unaffected
   }

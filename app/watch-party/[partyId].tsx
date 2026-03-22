@@ -19,6 +19,7 @@ import { getAvatarEmoji, readUserProfile, saveLastPartySession, type UserProfile
 import {
     fetchPartyMessages,
     getPartyRoom,
+    getSafePartyUserId,
     sendPartyMessage,
     type WatchPartyMessage,
     type WatchPartyState,
@@ -107,8 +108,7 @@ export default function WatchPartyRoomScreen() {
         const profile = await readUserProfile();
 
         // Get session
-        const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-        const userId = sessionData?.session?.user?.id ?? null;
+        const userId = await getSafePartyUserId();
         if (cancelled) return;
 
         myUserIdRef.current = userId;
@@ -406,11 +406,12 @@ export default function WatchPartyRoomScreen() {
 
   // ── Share / invite ───────────────────────────────────────────────────────────
   const onShareCode = useCallback(() => {
+    const roomCode = room?.roomCode ?? partyId;
     Share.share({
-      message: `Join my Chillywood Watch Party!\n\nRoom code: ${partyId}\n\nOpen Chillywood → Watch Party → enter the code to join.`,
+      message: `Join my Chillywood Watch Party!\n\nRoom code: ${roomCode}\n\nOpen Chillywood → Watch Party → enter the code to join.`,
       title: "Watch Party Invite",
     }).catch(() => {});
-  }, [partyId]);
+  }, [partyId, room?.roomCode]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(() => {
@@ -514,7 +515,7 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.inviteCard}>
           <View style={styles.inviteLeft}>
             <Text style={styles.inviteLabel}>ROOM CODE</Text>
-            <Text style={styles.inviteCode} selectable>{partyId}</Text>
+            <Text style={styles.inviteCode} selectable>{room.roomCode}</Text>
           </View>
           <TouchableOpacity style={styles.shareBtn} onPress={onShareCode} activeOpacity={0.8}>
             <Text style={styles.shareBtnText}>Share invite ↗</Text>
