@@ -1,5 +1,10 @@
-import { router } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+    readMyListIds,
+    toggleMyListTitle,
+} from "../../_lib/userData";
+
 import {
     ActivityIndicator,
     FlatList,
@@ -36,6 +41,9 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [myListIds, setMyListIds] = useState<string[]>([]);
+  const [myListTitles, setMyListTitles] = useState<TitleRow[]>([]);
+  const [myListLoading, setMyListLoading] = useState(true);
 
   async function fetchTitles() {
     setError(null);
@@ -54,18 +62,83 @@ export default function HomeScreen() {
     setTitles((data as TitleRow[]) ?? []);
   }
 
+  async function fetchMyList() {
+    setMyListLoading(true);
+
+    const ids = await readMyListIds().catch(() => [] as string[]);
+    setMyListIds(ids);
+
+    if (!ids.length) {
+      setMyListTitles([]);
+      setMyListLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("titles")
+        .select("id, title, category, year, runtime, synopsis, poster_url, created_at")
+        .in("id", ids);
+
+      if (!error && data) {
+        const byId = new Map((data as TitleRow[]).map((item) => [String(item.id), item]));
+        const ordered = ids.map((id) => byId.get(id)).filter((item): item is TitleRow => !!item);
+        setMyListTitles(ordered);
+        setMyListLoading(false);
+        return;
+      }
+    } catch {
+      // fall through to local fallback
+    }
+
+    const fallbackLocal = ids
+      .map((id) => {
+        const localMatch = localTitles.find((item: any) => String(item.id) === id);
+        if (!localMatch) return null;
+        return {
+          id,
+          title: String((localMatch as any).title ?? "Untitled"),
+          category: (localMatch as any).genre ?? null,
+          year: (localMatch as any).year ?? null,
+          runtime: (localMatch as any).runtime ?? null,
+          synopsis: (localMatch as any).description ?? null,
+          poster_url: null,
+        } as TitleRow;
+      })
+      .filter((item): item is TitleRow => !!item);
+
+    setMyListTitles(fallbackLocal);
+    setMyListLoading(false);
+  }
+
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await fetchTitles();
+      await Promise.all([fetchTitles(), fetchMyList()]);
       setLoading(false);
     })();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyList().catch(() => {});
+    }, []),
+  );
+
   async function onRefresh() {
     setRefreshing(true);
-    await fetchTitles();
+    await Promise.all([fetchTitles(), fetchMyList()]);
     setRefreshing(false);
+  }
+
+  async function removeFromMyList(item: TitleRow) {
+    const nextIds = await toggleMyListTitle(String(item.id), {
+      title: item.title ?? undefined,
+      posterUrl: item.poster_url ?? undefined,
+    }).catch(() => myListIds);
+
+    setMyListIds(nextIds);
+    setMyListTitles((prev) => prev.filter((entry) => String(entry.id) !== String(item.id)));
   }
 
   function getImageUri(item?: TitleRow | null): ImageSourcePropType | null {
@@ -182,6 +255,44 @@ export default function HomeScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Browse</Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>My List</Text>
+
+            {myListLoading ? (
+              <View style={styles.myListLoadingWrap}>
+                <ActivityIndicator color="#E50914" />
+              </View>
+            ) : !myListTitles.length ? (
+              <Text style={styles.myListEmpty}>No saved titles yet.</Text>
+            ) : (
+              <FlatList
+                horizontal
+                data={myListTitles}
+                keyExtractor={(item, idx) => `${item.id}-${idx}`}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.myListRow}
+                renderItem={({ item }) => {
+                  const cardImage = getImageUri(item);
+                  return (
+                    <View style={styles.myListCard}>
+                      <TouchableOpacity style={styles.myListPosterWrap} onPress={() => openPlayer(item)} activeOpacity={0.9}>
+                        {cardImage ? (
+                          <Image source={cardImage} style={styles.myListImage} />
+                        ) : (
+                          <View style={styles.myListFallback} />
+                        )}
+                      </TouchableOpacity>
+                      <Text style={styles.myListTitle} numberOfLines={1}>{item.title}</Text>
+                      <TouchableOpacity style={styles.myListRemoveBtn} onPress={() => removeFromMyList(item)} activeOpacity={0.85}>
+                        <Text style={styles.myListRemoveText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }}
+              />
+            )}
           </View>
 
           <View style={styles.section}>
@@ -445,5 +556,61 @@ const styles = StyleSheet.create({
     color: "#c3c3c3",
     fontSize: 12,
     marginTop: 4,
+  },
+
+  myListLoadingWrap: {
+    height: 80,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  myListEmpty: {
+    color: "#b5b5b5",
+    fontSize: 13,
+    marginTop: 4,
+  },
+  myListRow: {
+    paddingRight: 8,
+  },
+  myListCard: {
+    width: 150,
+    marginRight: 12,
+  },
+  myListPosterWrap: {
+    width: "100%",
+    height: 170,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#1f1f1f",
+    backgroundColor: "#111",
+  },
+  myListImage: {
+    width: "100%",
+    height: "100%",
+  },
+  myListFallback: {
+    flex: 1,
+    backgroundColor: "#1A1A1A",
+  },
+  myListTitle: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 8,
+  },
+  myListRemoveBtn: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(229,9,20,0.18)",
+    borderColor: "rgba(229,9,20,0.45)",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  myListRemoveText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "800",
   },
 });
