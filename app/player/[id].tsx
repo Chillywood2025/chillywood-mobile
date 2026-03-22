@@ -5,15 +5,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Animated,
   Easing,
+  LayoutAnimation,
   PanResponder,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
-  type GestureResponderEvent,
+  type GestureResponderEvent
 } from "react-native";
 
 import { titles } from "../../_data/titles";
@@ -97,9 +100,17 @@ const touchDistance = (touches: readonly { pageX: number; pageY: number }[]) => 
 };
 
 export default function PlayerScreen() {
-  const { id, partyId: partyIdParam } = useLocalSearchParams<{ id?: string; partyId?: string | string[] }>();
+  const { id, partyId: partyIdParam, liveMode: liveModeParam } = useLocalSearchParams<{
+    id?: string;
+    partyId?: string | string[];
+    liveMode?: string | string[];
+  }>();
   const partyId = Array.isArray(partyIdParam) ? String(partyIdParam[0] ?? "").trim() : String(partyIdParam ?? "").trim();
   const inWatchParty = !!partyId;
+  const liveModeRaw = Array.isArray(liveModeParam)
+    ? String(liveModeParam[0] ?? "").trim().toLowerCase()
+    : String(liveModeParam ?? "").trim().toLowerCase();
+  const isLiveModeFlag = liveModeRaw === "1" || liveModeRaw === "true" || liveModeRaw === "yes" || liveModeRaw === "live";
   let rawId = id;
   if (typeof rawId !== "string") rawId = String(rawId ?? "");
   const cleanId = rawId.replace(/["']/g, "").trim();
@@ -148,8 +159,27 @@ export default function PlayerScreen() {
   const [partyParticipantPreview, setPartyParticipantPreview] = useState<string[]>([]);
   const [partyChatOpen, setPartyChatOpen] = useState(false);
   const [partyMessages, setPartyMessages] = useState([
-    { id: "1", text: "Room started" },
+    { id: "1", text: "Host started the room" },
+    { id: "2", text: "Welcome to the watch party" },
   ]);
+  const [partyParticipants, setPartyParticipants] = useState<
+    Array<{
+      id: string;
+      name: string;
+      role: "host" | "viewer";
+      muted: boolean;
+      canSpeak: boolean;
+      isSpeaking: boolean;
+      isRequestingToSpeak: boolean;
+    }>
+  >([
+    { id: "p1", name: "Kai", role: "host", muted: false, canSpeak: true, isSpeaking: true, isRequestingToSpeak: false },
+    { id: "p2", name: "Mia", role: "viewer", muted: true, canSpeak: false, isSpeaking: false, isRequestingToSpeak: false },
+    { id: "p3", name: "Noah", role: "viewer", muted: false, canSpeak: true, isSpeaking: false, isRequestingToSpeak: false },
+    { id: "p4", name: "Ava", role: "viewer", muted: false, canSpeak: false, isSpeaking: false, isRequestingToSpeak: false },
+  ]);
+  const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
+  const [activeParticipantIds, setActiveParticipantIds] = useState<string[]>([]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [partyComments, setPartyComments] = useState<Array<{ id: string; username: string; text: string }>>(() =>
@@ -158,8 +188,27 @@ export default function PlayerScreen() {
   const [partyOverlayMessages, setPartyOverlayMessages] = useState<Array<{ id: string; author: string; body: string }>>([]);
   const [partyReactionBursts, setPartyReactionBursts] = useState<Array<{ id: string; emoji: string }>>([]);
   const [partyLocalReactions, setPartyLocalReactions] = useState<Array<{ id: string; emoji: string; rightOffset: number }>>([]);
+  const [partyParticipantReactions, setPartyParticipantReactions] = useState<
+    Array<{ id: string; participantId: string; participantName: string; emoji: string; isSpeaking: boolean; createdAt: number }>
+  >([]);
   const [partyTapReactionTick, setPartyTapReactionTick] = useState(0);
+  const [livePresenceEvent, setLivePresenceEvent] = useState<string | null>(null);
+  const [participantReactionBoostIds, setParticipantReactionBoostIds] = useState<string[]>([]);
   const seekFeedbackOpacity = useRef(new Animated.Value(0)).current;
+  const participantActivityPulse = useRef(new Animated.Value(0)).current;
+  const participantActiveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const lastParticipantActivityAtRef = useRef(Date.now());
+  const speakingOrderRef = useRef<string[]>(["p1"]);
+  const livePresenceEventTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousParticipantsRef = useRef<Array<{ id: string; name: string; isSpeaking: boolean }>>([]);
+  const suppressNextSpeakingEventRef = useRef<Record<string, "start" | "stop" | undefined>>({});
+  const participantReactionScaleMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantReactionTranslateYMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantReactionOpacityMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantReactionTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const participantIdleScaleMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantIdleTranslateXMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantReactionBoostTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const zoomScale = useRef(new Animated.Value(1)).current;
   const zoomScaleValueRef = useRef(1);
@@ -1489,8 +1538,175 @@ export default function PlayerScreen() {
     }
   }, [resetAutoHideTimer]);
 
+  const showLivePresenceEvent = useCallback((message: string) => {
+    setLivePresenceEvent(message);
+    if (livePresenceEventTimeoutRef.current) {
+      clearTimeout(livePresenceEventTimeoutRef.current);
+    }
+    livePresenceEventTimeoutRef.current = setTimeout(() => {
+      setLivePresenceEvent(null);
+      livePresenceEventTimeoutRef.current = null;
+    }, 2600);
+  }, []);
+
+  const triggerParticipantReactionBoost = useCallback((participantId: string, duration = 900) => {
+    if (!participantId) return;
+    setParticipantReactionBoostIds((prev) => (prev.includes(participantId) ? prev : [...prev, participantId]));
+    const existing = participantReactionBoostTimersRef.current[participantId];
+    if (existing) clearTimeout(existing);
+    participantReactionBoostTimersRef.current[participantId] = setTimeout(() => {
+      setParticipantReactionBoostIds((prev) => prev.filter((id) => id !== participantId));
+      delete participantReactionBoostTimersRef.current[participantId];
+    }, duration);
+  }, []);
+
+  const animateOutParticipantReaction = useCallback((reactionId: string, removeDelay = 170) => {
+    const opacity = participantReactionOpacityMapRef.current[reactionId];
+    const scale = participantReactionScaleMapRef.current[reactionId];
+    const translateY = participantReactionTranslateYMapRef.current[reactionId];
+
+    if (opacity || scale || translateY) {
+      Animated.parallel([
+        opacity
+          ? Animated.timing(opacity, {
+              toValue: 0,
+              duration: 150,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            })
+          : Animated.timing(new Animated.Value(0), { toValue: 0, duration: 0, useNativeDriver: true }),
+        scale
+          ? Animated.timing(scale, {
+              toValue: 0.75,
+              duration: 150,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            })
+          : Animated.timing(new Animated.Value(0), { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]).start();
+    }
+
+    const existingTimer = participantReactionTimersRef.current[reactionId];
+    if (existingTimer) clearTimeout(existingTimer);
+    participantReactionTimersRef.current[reactionId] = setTimeout(() => {
+      setPartyParticipantReactions((prev) => prev.filter((entry) => entry.id !== reactionId));
+      delete participantReactionScaleMapRef.current[reactionId];
+      delete participantReactionTranslateYMapRef.current[reactionId];
+      delete participantReactionOpacityMapRef.current[reactionId];
+      delete participantReactionTimersRef.current[reactionId];
+    }, removeDelay);
+  }, []);
+
+  const triggerParticipantLinkedReaction = useCallback(
+    (participantId: string, participantName: string, emoji: string, isSpeaking = false) => {
+      if (!participantId) return;
+
+      const reactionId = `participant-react-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const createdAt = Date.now();
+
+      const scale = new Animated.Value(isSpeaking ? 0.86 : 0.76);
+      const translateY = new Animated.Value(0);
+      const opacity = new Animated.Value(1);
+
+      participantReactionScaleMapRef.current[reactionId] = scale;
+      participantReactionTranslateYMapRef.current[reactionId] = translateY;
+      participantReactionOpacityMapRef.current[reactionId] = opacity;
+
+      setPartyParticipantReactions((prev) => {
+        const sameParticipant = prev.filter((entry) => entry.participantId === participantId);
+        let next = prev;
+        if (sameParticipant.length >= 2) {
+          const oldest = sameParticipant.sort((a, b) => a.createdAt - b.createdAt)[0];
+          if (oldest) {
+            animateOutParticipantReaction(oldest.id, 140);
+            next = prev.filter((entry) => entry.id !== oldest.id);
+          }
+        }
+
+        return [...next, { id: reactionId, participantId, participantName, emoji, isSpeaking, createdAt }];
+      });
+
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(scale, {
+            toValue: isSpeaking ? 1.34 : 1.22,
+            duration: 110,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scale, {
+            toValue: isSpeaking ? 1.12 : 1,
+            duration: 130,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(translateY, {
+          toValue: isSpeaking ? -30 : -22,
+          duration: 1300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.sequence([
+          Animated.delay(950),
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 520,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start(() => {
+        setPartyParticipantReactions((prev) => prev.filter((entry) => entry.id !== reactionId));
+        delete participantReactionScaleMapRef.current[reactionId];
+        delete participantReactionTranslateYMapRef.current[reactionId];
+        delete participantReactionOpacityMapRef.current[reactionId];
+        const timer = participantReactionTimersRef.current[reactionId];
+        if (timer) {
+          clearTimeout(timer);
+          delete participantReactionTimersRef.current[reactionId];
+        }
+      });
+
+      if (isSpeaking) {
+        triggerParticipantReactionBoost(participantId, 950);
+      }
+
+      showLivePresenceEvent(`${emoji} ${participantName} reacted`);
+    },
+    [animateOutParticipantReaction, showLivePresenceEvent, triggerParticipantReactionBoost],
+  );
+
+  const markParticipantActive = useCallback((participantId: string, duration = 2400) => {
+    if (!participantId) return;
+
+    lastParticipantActivityAtRef.current = Date.now();
+    setActiveParticipantIds((prev) => (prev.includes(participantId) ? prev : [...prev, participantId]));
+
+    const existingTimeout = participantActiveTimeoutsRef.current[participantId];
+    if (existingTimeout) clearTimeout(existingTimeout);
+
+    participantActiveTimeoutsRef.current[participantId] = setTimeout(() => {
+      setActiveParticipantIds((prev) => prev.filter((id) => id !== participantId));
+      delete participantActiveTimeoutsRef.current[participantId];
+    }, duration);
+  }, []);
+
   const triggerLocalPartyReaction = useCallback((emoji: string) => {
     if (!inWatchParty) return;
+
+    const participantId =
+      activeParticipantId ?? partyParticipants.find((entry) => entry.role === "host")?.id ?? partyParticipants[0]?.id ?? "";
+    const reactingParticipant = partyParticipants.find((entry) => entry.id === participantId) ?? null;
+    if (participantId) {
+      markParticipantActive(participantId, 2400);
+      triggerParticipantLinkedReaction(
+        participantId,
+        reactingParticipant?.name ?? "Someone",
+        emoji,
+        !!(reactingParticipant?.isSpeaking && reactingParticipant?.canSpeak),
+      );
+    }
 
     setPartyMessages((prev) => [
       ...prev,
@@ -1566,7 +1782,7 @@ export default function PlayerScreen() {
       delete partyLocalReactionTranslateXMapRef.current[id];
       delete partyLocalReactionOpacityMapRef.current[id];
     });
-  }, [inWatchParty]);
+  }, [activeParticipantId, inWatchParty, markParticipantActive, partyParticipants, triggerParticipantLinkedReaction]);
 
   useEffect(() => {
     if (!inWatchParty || partyTapReactionTick === 0) return;
@@ -1581,18 +1797,202 @@ export default function PlayerScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      Object.values(participantActiveTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
+      participantActiveTimeoutsRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!inWatchParty || partyParticipants.length === 0) {
+      setActiveParticipantIds([]);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const idleFor = Date.now() - lastParticipantActivityAtRef.current;
+      if (idleFor < 7000) return;
+      if (activeParticipantIds.length > 0) return;
+
+      const fallbackParticipant = partyParticipants[Math.floor(Math.random() * partyParticipants.length)];
+      if (fallbackParticipant?.id) {
+        markParticipantActive(fallbackParticipant.id, 1800);
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [activeParticipantIds.length, inWatchParty, markParticipantActive, partyParticipants]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(participantActivityPulse, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(participantActivityPulse, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, [participantActivityPulse]);
+
   const onSendPartyComment = useCallback(() => {
     const text = partyCommentDraft.trim();
     if (!text) return;
+
+    const participantId =
+      activeParticipantId ?? partyParticipants.find((entry) => entry.role === "host")?.id ?? partyParticipants[0]?.id ?? "";
+    if (participantId) markParticipantActive(participantId, 2300);
+
     const id = `local-comment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setPartyComments((prev) => [...prev, { id, username: "You", text }]);
     setPartyCommentDraft("");
-  }, [partyCommentDraft]);
+  }, [activeParticipantId, markParticipantActive, partyCommentDraft, partyParticipants]);
 
   const progressPercent = useMemo(() => {
     if (!durationMillis || durationMillis <= 0) return 0;
     return clamp((positionMillis / durationMillis) * 100, 0, 100);
   }, [durationMillis, positionMillis]);
+
+  const participantPulseScale = participantActivityPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.14],
+  });
+  const participantPulseOpacity = participantActivityPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.34, 0.04],
+  });
+  const speakingParticipantIds = useMemo(
+    () => partyParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).map((participant) => participant.id),
+    [partyParticipants],
+  );
+  const primaryActiveParticipantIds = useMemo(() => {
+    const merged = [...speakingParticipantIds, ...activeParticipantIds.filter((id) => !speakingParticipantIds.includes(id))];
+    return merged.slice(0, 2);
+  }, [activeParticipantIds, speakingParticipantIds]);
+  const orderedPartyParticipants = useMemo(() => {
+    if (primaryActiveParticipantIds.length === 0) return partyParticipants;
+    const activeIdSet = new Set(primaryActiveParticipantIds);
+    const active = partyParticipants.filter((participant) => activeIdSet.has(participant.id));
+    const inactive = partyParticipants.filter((participant) => !activeIdSet.has(participant.id));
+    return [...active, ...inactive];
+  }, [partyParticipants, primaryActiveParticipantIds]);
+  const localParticipantId = useMemo(() => {
+    if (partySyncRole === "host") {
+      return partyParticipants.find((participant) => participant.role === "host")?.id ?? "";
+    }
+    return partyParticipants.find((participant) => participant.role === "viewer")?.id ?? "";
+  }, [partyParticipants, partySyncRole]);
+  const livePrimarySpeakers = useMemo(
+    () => orderedPartyParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
+    [orderedPartyParticipants],
+  );
+  const liveSpeakingLabel = useMemo(() => {
+    if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
+    if (livePrimarySpeakers.length === 1) return `🎤 ${livePrimarySpeakers[0].name} speaking`;
+    return `🎤 ${livePrimarySpeakers[0].name} +1 speaking`;
+  }, [livePrimarySpeakers]);
+
+  useEffect(() => {
+    return () => {
+      if (livePresenceEventTimeoutRef.current) {
+        clearTimeout(livePresenceEventTimeoutRef.current);
+        livePresenceEventTimeoutRef.current = null;
+      }
+
+      Object.values(participantReactionTimersRef.current).forEach((timerId) => clearTimeout(timerId));
+      participantReactionTimersRef.current = {};
+      Object.values(participantReactionBoostTimersRef.current).forEach((timerId) => clearTimeout(timerId));
+      participantReactionBoostTimersRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!inWatchParty) return;
+    LayoutAnimation.configureNext({
+      duration: 220,
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.scaleXY },
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+  }, [inWatchParty, partyParticipants.length]);
+
+  useEffect(() => {
+    partyParticipants.forEach((participant) => {
+      if (!participantIdleScaleMapRef.current[participant.id]) {
+        participantIdleScaleMapRef.current[participant.id] = new Animated.Value(1);
+      }
+      if (!participantIdleTranslateXMapRef.current[participant.id]) {
+        participantIdleTranslateXMapRef.current[participant.id] = new Animated.Value(0);
+      }
+    });
+  }, [partyParticipants]);
+
+  useEffect(() => {
+    if (!inWatchParty) return;
+
+    const interval = setInterval(() => {
+      const idleCandidates = partyParticipants.filter((participant) => !(participant.isSpeaking && participant.canSpeak));
+      if (idleCandidates.length === 0) return;
+
+      const picked = idleCandidates[Math.floor(Math.random() * idleCandidates.length)];
+      if (!picked) return;
+
+      const scale = participantIdleScaleMapRef.current[picked.id];
+      const translateX = participantIdleTranslateXMapRef.current[picked.id];
+      if (!scale || !translateX) return;
+
+      const horizontalShift = (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random());
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(scale, {
+            toValue: 1.05,
+            duration: 180,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scale, {
+            toValue: 1,
+            duration: 180,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(translateX, {
+            toValue: horizontalShift,
+            duration: 180,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateX, {
+            toValue: 0,
+            duration: 180,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    }, 3200);
+
+    return () => clearInterval(interval);
+  }, [inWatchParty, partyParticipants]);
 
   const displayItem = useMemo<TitleRow | null>(() => {
     if (item) return item;
@@ -1614,6 +2014,369 @@ export default function PlayerScreen() {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo]);
+  const isLiveMode = inWatchParty && (isLiveModeFlag || !source);
+
+  useEffect(() => {
+    if (!isLiveMode) return;
+
+    const previous = previousParticipantsRef.current;
+    if (previous.length === 0) {
+      previousParticipantsRef.current = partyParticipants.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        isSpeaking: entry.isSpeaking,
+      }));
+      return;
+    }
+
+    const previousById = new Map(previous.map((entry) => [entry.id, entry]));
+    const currentById = new Map(partyParticipants.map((entry) => [entry.id, entry]));
+
+    let eventText: string | null = null;
+
+    const joined = partyParticipants.find((entry) => !previousById.has(entry.id));
+    if (joined) {
+      eventText = `👤 ${joined.name} joined`;
+    }
+
+    if (!eventText) {
+      const left = previous.find((entry) => !currentById.has(entry.id));
+      if (left) {
+        eventText = `👤 ${left.name} left`;
+      }
+    }
+
+    if (!eventText) {
+      const startedSpeaking = partyParticipants.find((entry) => {
+        const prior = previousById.get(entry.id);
+        return !!prior && !prior.isSpeaking && entry.isSpeaking;
+      });
+      if (startedSpeaking) {
+        const suppressed = suppressNextSpeakingEventRef.current[startedSpeaking.id] === "start";
+        if (suppressed) {
+          delete suppressNextSpeakingEventRef.current[startedSpeaking.id];
+        } else {
+          eventText = startedSpeaking.id === localParticipantId ? "🎤 You are now speaking" : `🎤 ${startedSpeaking.name} started speaking`;
+        }
+      }
+    }
+
+    if (!eventText) {
+      const stoppedSpeaking = partyParticipants.find((entry) => {
+        const prior = previousById.get(entry.id);
+        return !!prior && prior.isSpeaking && !entry.isSpeaking;
+      });
+      if (stoppedSpeaking) {
+        const suppressed = suppressNextSpeakingEventRef.current[stoppedSpeaking.id] === "stop";
+        if (suppressed) {
+          delete suppressNextSpeakingEventRef.current[stoppedSpeaking.id];
+        } else {
+          eventText = stoppedSpeaking.id === localParticipantId ? "🔇 You are muted" : `🔇 ${stoppedSpeaking.name} stopped speaking`;
+        }
+      }
+    }
+
+    if (eventText) {
+      showLivePresenceEvent(eventText);
+    }
+
+    previousParticipantsRef.current = partyParticipants.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      isSpeaking: entry.isSpeaking,
+    }));
+  }, [isLiveMode, localParticipantId, partyParticipants, showLivePresenceEvent]);
+
+  const renderParticipantPanel = (liveLayout = false) => (
+    <View style={[styles.partyFeedCard, liveLayout && styles.partyFeedCardLive]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[styles.participantBubbleScroll, liveLayout && styles.participantBubbleScrollLive]}
+      >
+        {orderedPartyParticipants.map((participant) => {
+          const isHost = partySyncRole === "host";
+          const isExpanded = isHost && activeParticipantId === participant.id;
+          const isSpeaking = participant.isSpeaking && participant.canSpeak;
+          const isActive = primaryActiveParticipantIds.includes(participant.id);
+          const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
+          const shouldDim = primaryActiveParticipantIds.length > 0 && !isActive;
+          const isReactionBoosted = participantReactionBoostIds.includes(participant.id);
+          const participantReactions = partyParticipantReactions
+            .filter((entry) => entry.participantId === participant.id)
+            .slice(-2);
+          const idleScale = !isSpeaking ? (participantIdleScaleMapRef.current[participant.id] ?? 1) : 1;
+          const idleTranslateX = !isSpeaking ? (participantIdleTranslateXMapRef.current[participant.id] ?? 0) : 0;
+          const initials = participant.name
+            .split(" ")
+            .map((part) => part[0] ?? "")
+            .join("")
+            .slice(0, 2)
+            .toUpperCase();
+
+          return (
+            <View
+              key={participant.id}
+              style={[
+                styles.participantBubbleItem,
+                liveLayout && styles.participantBubbleItemLive,
+                isSpeaking && styles.participantBubbleSpeaking,
+                isActive && styles.participantBubbleActive,
+                shouldDim && styles.participantBubbleInactive,
+                isReactionBoosted && styles.participantBubbleReactionBoost,
+                isExpanded && styles.partyParticipantCardExpanded,
+                {
+                  transform: [{ scale: idleScale }, { translateX: idleTranslateX }],
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.partyParticipantBubbleTap}
+                onPress={() => {
+                  markParticipantActive(participant.id, 2400);
+                  if (!isHost && participant.id === localParticipantId && !participant.canSpeak) {
+                    setPartyParticipants((prev) =>
+                      prev.map((entry) =>
+                        entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
+                      ),
+                    );
+                  }
+                  if (!isHost) return;
+                  setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.partyParticipantAvatarWrap}>
+                  {isActive ? (
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        styles.participantActivePulse,
+                        isSpeaking && styles.participantSpeakingPulse,
+                        {
+                          opacity: participantPulseOpacity,
+                          transform: [{ scale: participantPulseScale }],
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  <View
+                    style={[
+                      styles.participantAvatar,
+                      liveLayout && styles.participantAvatarLive,
+                      participant.muted && styles.participantAvatarMuted,
+                    ]}
+                  >
+                    <Text style={[styles.participantInitials, liveLayout && styles.participantInitialsLive]}>{initials}</Text>
+                  </View>
+                  {isActive ? <View pointerEvents="none" style={[styles.participantActiveRing, isSpeaking && styles.participantSpeakingRing, isReactionBoosted && styles.participantReactionBoostRing]} /> : null}
+                  {isRequesting ? <View pointerEvents="none" style={styles.participantRequestRing} /> : null}
+                  {isSpeaking ? (
+                    <View style={styles.participantSpeakingBadge}>
+                      <Text style={styles.participantSpeakingBadgeText}>LIVE</Text>
+                    </View>
+                  ) : null}
+                  {participant.role === "host" ? (
+                    <View style={styles.participantHostBadge}>
+                      <Text style={styles.participantHostBadgeText}>HOST</Text>
+                    </View>
+                  ) : null}
+                  {isRequesting ? (
+                    <View style={styles.participantRequestBadge}>
+                      <Text style={styles.participantRequestBadgeText}>✋</Text>
+                    </View>
+                  ) : null}
+
+                  {participantReactions.map((reaction, reactionIndex) => (
+                    <Animated.View
+                      key={reaction.id}
+                      pointerEvents="none"
+                      style={[
+                        styles.participantLinkedReaction,
+                        reaction.isSpeaking && styles.participantLinkedReactionSpeaking,
+                        {
+                          right: reactionIndex * 14 - 2,
+                          opacity: participantReactionOpacityMapRef.current[reaction.id] ?? 1,
+                          transform: [
+                            { translateY: participantReactionTranslateYMapRef.current[reaction.id] ?? 0 },
+                            { scale: participantReactionScaleMapRef.current[reaction.id] ?? 1 },
+                          ],
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.participantLinkedReactionText, reaction.isSpeaking && styles.participantLinkedReactionTextSpeaking]}>
+                        {reaction.emoji}
+                      </Text>
+                    </Animated.View>
+                  ))}
+                </View>
+                <Text style={[styles.participantName, liveLayout && styles.participantNameLive]} numberOfLines={1}>
+                  {participant.name}
+                </Text>
+                <Text style={styles.partyParticipantStatus}>
+                  {isSpeaking ? "🎤 Speaking" : isRequesting ? "✋ Requesting" : participant.muted ? "🔇 Muted" : "🔊 Live"}
+                </Text>
+              </TouchableOpacity>
+
+              {isExpanded ? (
+                <View style={styles.participantExpandedControls}>
+                  {isRequesting ? (
+                    <>
+                      <TouchableOpacity
+                        style={styles.partyParticipantControlBtn}
+                        onPress={() => {
+                          suppressNextSpeakingEventRef.current[participant.id] = "start";
+                          setPartyParticipants((prev) => {
+                            let nextParticipants = prev.map((entry) =>
+                              entry.id === participant.id
+                                ? { ...entry, canSpeak: true, isSpeaking: true, isRequestingToSpeak: false }
+                                : entry,
+                            );
+
+                            speakingOrderRef.current = [
+                              ...speakingOrderRef.current.filter((id) => id !== participant.id),
+                              participant.id,
+                            ];
+
+                            const currentlySpeakingIds = nextParticipants
+                              .filter((entry) => entry.canSpeak && entry.isSpeaking)
+                              .map((entry) => entry.id);
+
+                            if (currentlySpeakingIds.length > 2) {
+                              const orderedSpeaking = speakingOrderRef.current.filter((id) => currentlySpeakingIds.includes(id));
+                              const toDropCount = orderedSpeaking.length - 2;
+                              const dropIds = new Set(orderedSpeaking.slice(0, toDropCount));
+
+                              nextParticipants = nextParticipants.map((entry) =>
+                                dropIds.has(entry.id) ? { ...entry, isSpeaking: false } : entry,
+                              );
+                              speakingOrderRef.current = orderedSpeaking.slice(toDropCount);
+                            }
+
+                            return nextParticipants;
+                          });
+                          showLivePresenceEvent(`✅ ${participant.name} is now allowed to speak`);
+                          markParticipantActive(participant.id, 2400);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.partyParticipantControlBtnText}>Approve</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.partyParticipantControlBtn}
+                        onPress={() => {
+                          setPartyParticipants((prev) =>
+                            prev.map((entry) =>
+                              entry.id === participant.id ? { ...entry, isRequestingToSpeak: false } : entry,
+                            ),
+                          );
+                          showLivePresenceEvent(`❌ ${participant.name} request denied`);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.partyParticipantControlBtnText}>Deny</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={styles.partyParticipantControlBtn}
+                    onPress={() => {
+                      setPartyParticipants((prev) => {
+                        const target = prev.find((entry) => entry.id === participant.id);
+                        if (!target) return prev;
+
+                        if (!target.canSpeak) {
+                          return prev;
+                        }
+
+                        const enablingSpeak = !target.isSpeaking;
+                        let nextParticipants = prev.map((entry) =>
+                          entry.id === participant.id ? { ...entry, isSpeaking: enablingSpeak } : entry,
+                        );
+
+                        if (enablingSpeak) {
+                          speakingOrderRef.current = [
+                            ...speakingOrderRef.current.filter((id) => id !== participant.id),
+                            participant.id,
+                          ];
+                        } else {
+                          speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
+                        }
+
+                        const currentlySpeakingIds = nextParticipants
+                          .filter((entry) => entry.canSpeak && entry.isSpeaking)
+                          .map((entry) => entry.id);
+
+                        if (currentlySpeakingIds.length > 2) {
+                          const orderedSpeaking = speakingOrderRef.current.filter((id) => currentlySpeakingIds.includes(id));
+                          const toDropCount = orderedSpeaking.length - 2;
+                          const dropIds = new Set(orderedSpeaking.slice(0, toDropCount));
+
+                          nextParticipants = nextParticipants.map((entry) =>
+                            dropIds.has(entry.id) ? { ...entry, isSpeaking: false } : entry,
+                          );
+                          speakingOrderRef.current = orderedSpeaking.slice(toDropCount);
+                        }
+
+                        return nextParticipants;
+                      });
+                    }}
+                    disabled={!participant.canSpeak}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.partyParticipantControlBtnText}>
+                      {participant.canSpeak ? (participant.isSpeaking ? "Stop Speaking" : "Start Speaking") : "No Mic Access"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.partyParticipantControlBtn}
+                    onPress={() => {
+                      setPartyParticipants((prev) =>
+                        prev.map((entry) => {
+                          if (entry.id !== participant.id) return entry;
+                          const nextCanSpeak = !entry.canSpeak;
+                          return {
+                            ...entry,
+                            canSpeak: nextCanSpeak,
+                            isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
+                            isRequestingToSpeak: nextCanSpeak ? false : entry.isRequestingToSpeak,
+                          };
+                        }),
+                      );
+
+                      if (participant.canSpeak) {
+                        speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
+                      }
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.partyParticipantControlBtnText}>{participant.canSpeak ? "Revoke Mic" : "Grant Mic"}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.partyParticipantControlBtn}
+                    onPress={() => {
+                      setPartyParticipants((prev) =>
+                        prev.map((entry) =>
+                          entry.id === participant.id ? { ...entry, muted: !entry.muted } : entry,
+                        ),
+                      );
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.partyParticipantControlBtnText}>{participant.muted ? "Unmute" : "Mute"}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 
   useEffect(() => {
     const sourceLabel = source
@@ -1642,6 +2405,7 @@ export default function PlayerScreen() {
         <View style={styles.topSection}>
           <Text style={styles.kicker}>CHILLYWOOD · PLAYER</Text>
           <Text style={styles.header}>{displayItem?.title ?? "Now Playing"}</Text>
+          {inWatchParty && isLiveMode ? <Text style={styles.liveModeTopLabel}>LIVE SESSION</Text> : null}
           {inWatchParty && partySyncRole ? (
             <View style={styles.partySyncPill}>
               <Text style={styles.partySyncPillText}>
@@ -1652,7 +2416,187 @@ export default function PlayerScreen() {
           ) : null}
         </View>
 
-        {source ? (
+        {isLiveMode ? (
+          <View style={[styles.videoWrap, styles.liveRoomWrap]}>
+            {livePrimarySpeakers.length > 0 ? <Animated.View pointerEvents="none" style={styles.liveSpeakingBackdrop} /> : null}
+
+            <Text style={styles.liveSpeakingLabel}>{liveSpeakingLabel}</Text>
+
+            {livePrimarySpeakers.length > 0 ? (
+              <View style={[styles.liveSpeakerStage, livePrimarySpeakers.length === 1 ? styles.liveSpeakerStageSolo : styles.liveSpeakerStageDual]}>
+                {livePrimarySpeakers.map((participant) => {
+                  const isSpeaking = participant.isSpeaking && participant.canSpeak;
+                  const isActive = primaryActiveParticipantIds.includes(participant.id);
+                  const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
+                  const isReactionBoosted = participantReactionBoostIds.includes(participant.id);
+                  const participantReactions = partyParticipantReactions
+                    .filter((entry) => entry.participantId === participant.id)
+                    .slice(-2);
+                  const initials = participant.name
+                    .split(" ")
+                    .map((part) => part[0] ?? "")
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase();
+
+                  return (
+                    <TouchableOpacity
+                      key={`live-focused-${participant.id}`}
+                      style={[styles.liveSpeakerCard, livePrimarySpeakers.length === 1 ? styles.liveSpeakerCardSolo : styles.liveSpeakerCardDual]}
+                      onPress={() => {
+                        const isHost = partySyncRole === "host";
+                        markParticipantActive(participant.id, 2400);
+                        if (!isHost && participant.id === localParticipantId && !participant.canSpeak) {
+                          setPartyParticipants((prev) =>
+                            prev.map((entry) =>
+                              entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
+                            ),
+                          );
+                        }
+                        if (!isHost) return;
+                        setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <View style={styles.liveSpeakerAvatarWrap}>
+                        {isActive ? (
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              styles.participantActivePulse,
+                              isSpeaking && styles.participantSpeakingPulse,
+                              {
+                                opacity: participantPulseOpacity,
+                                transform: [{ scale: participantPulseScale }],
+                              },
+                            ]}
+                          />
+                        ) : null}
+                        <View style={[styles.participantAvatar, styles.participantAvatarLive, styles.liveSpeakerAvatar, participant.muted && styles.participantAvatarMuted]}>
+                          <Text style={[styles.participantInitials, styles.participantInitialsLive, styles.liveSpeakerInitials]}>{initials}</Text>
+                        </View>
+                        {isActive ? <View pointerEvents="none" style={[styles.participantActiveRing, isSpeaking && styles.participantSpeakingRing, styles.liveSpeakerRing, isReactionBoosted && styles.participantReactionBoostRing]} /> : null}
+                        {isSpeaking ? (
+                          <View style={[styles.participantSpeakingBadge, styles.liveSpeakerBadge]}>
+                            <Text style={styles.participantSpeakingBadgeText}>LIVE</Text>
+                          </View>
+                        ) : null}
+                        {isRequesting ? <View pointerEvents="none" style={[styles.participantRequestRing, styles.liveSpeakerRequestRing]} /> : null}
+
+                        {participantReactions.map((reaction, reactionIndex) => (
+                          <Animated.View
+                            key={reaction.id}
+                            pointerEvents="none"
+                            style={[
+                              styles.participantLinkedReaction,
+                              styles.liveSpeakerLinkedReaction,
+                              reaction.isSpeaking && styles.participantLinkedReactionSpeaking,
+                              {
+                                right: reactionIndex * 18,
+                                opacity: participantReactionOpacityMapRef.current[reaction.id] ?? 1,
+                                transform: [
+                                  { translateY: participantReactionTranslateYMapRef.current[reaction.id] ?? 0 },
+                                  { scale: participantReactionScaleMapRef.current[reaction.id] ?? 1 },
+                                ],
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.participantLinkedReactionText, reaction.isSpeaking && styles.participantLinkedReactionTextSpeaking]}>
+                              {reaction.emoji}
+                            </Text>
+                          </Animated.View>
+                        ))}
+                      </View>
+                      <Text style={[styles.participantName, styles.participantNameLive, styles.liveSpeakerName]} numberOfLines={1}>
+                        {participant.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {livePresenceEvent ? (
+              <View style={styles.livePresenceEventToast}>
+                <Text style={styles.livePresenceEventText} numberOfLines={1}>
+                  {livePresenceEvent}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.liveModeParticipantsWrap}>{renderParticipantPanel(true)}</View>
+
+            <View style={styles.liveModeActionRow}>
+              <TouchableOpacity
+                style={styles.partyOverlayChip}
+                onPress={() => setPartyCommentsOpen((value) => !value)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.partyOverlayChipText}>🗨️</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.partyOverlayChip}
+                onPress={() => {
+                  const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
+                  triggerLocalPartyReaction(emoji);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.partyOverlayChipText}>🔥</Text>
+              </TouchableOpacity>
+            </View>
+
+            {partyLocalReactions.map((entry) => (
+              <Animated.View
+                key={entry.id}
+                pointerEvents="none"
+                style={[
+                  styles.partyLocalReactionBubble,
+                  {
+                    right: entry.rightOffset,
+                    opacity: partyLocalReactionOpacityMapRef.current[entry.id] ?? 1,
+                    transform: [
+                      { translateY: partyLocalReactionTranslateMapRef.current[entry.id] ?? 0 },
+                      { translateX: partyLocalReactionTranslateXMapRef.current[entry.id] ?? 0 },
+                      { scale: partyLocalReactionScaleMapRef.current[entry.id] ?? 1 },
+                    ],
+                  },
+                ]}
+              >
+                <Text style={styles.partyLocalReactionText}>{entry.emoji}</Text>
+              </Animated.View>
+            ))}
+
+            {partyCommentsOpen ? (
+              <View style={styles.partyCommentsDrawer}>
+                <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
+                <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
+                  {partyComments.map((comment) => (
+                    <Text key={comment.id} style={styles.partyCommentsLine}>
+                      <Text style={styles.partyCommentsAuthor}>{comment.username}: </Text>
+                      {comment.text}
+                    </Text>
+                  ))}
+                </ScrollView>
+                <View style={styles.partyCommentsInputRow}>
+                  <TextInput
+                    value={partyCommentDraft}
+                    onChangeText={setPartyCommentDraft}
+                    placeholder="Add a comment"
+                    placeholderTextColor="#8B90A0"
+                    style={styles.partyCommentsInput}
+                    returnKeyType="send"
+                    onSubmitEditing={onSendPartyComment}
+                  />
+                  <TouchableOpacity style={styles.partyCommentsSendBtn} onPress={onSendPartyComment} activeOpacity={0.85}>
+                    <Text style={styles.partyCommentsSendBtnText}>Send</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ) : source ? (
           <View
             style={styles.videoWrap}
             {...panResponder.panHandlers}
@@ -1906,21 +2850,25 @@ export default function PlayerScreen() {
           <Text style={styles.text}>No video attached</Text>
         )}
 
-        <View style={styles.progressCard}>
-          <View style={styles.progressMetaRow}>
-            <Text style={styles.progressTime}>{formatTime(positionMillis)}</Text>
-            <Text style={styles.progressTime}>{formatTime(durationMillis)}</Text>
+        {!isLiveMode ? (
+          <View style={styles.progressCard}>
+            <View style={styles.progressMetaRow}>
+              <Text style={styles.progressTime}>{formatTime(positionMillis)}</Text>
+              <Text style={styles.progressTime}>{formatTime(durationMillis)}</Text>
+            </View>
+            <View
+              style={styles.progressTrack}
+              {...progressScrubResponder.panHandlers}
+              onLayout={(event) => {
+                progressTrackLayoutRef.current = { width: event.nativeEvent.layout.width };
+              }}
+            >
+              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            </View>
           </View>
-          <View
-            style={styles.progressTrack}
-            {...progressScrubResponder.panHandlers}
-            onLayout={(event) => {
-              progressTrackLayoutRef.current = { width: event.nativeEvent.layout.width };
-            }}
-          >
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-          </View>
-        </View>
+        ) : null}
+
+        {inWatchParty && !isLiveMode ? renderParticipantPanel(false) : null}
 
         {zoomLevel > 1.01 && !inWatchParty ? (
           <View style={styles.controlsRow}>
@@ -1962,6 +2910,12 @@ const styles = StyleSheet.create({
   topSection: { marginBottom: 10, gap: 6 },
   kicker: { color: "#5B5B5B", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.1 },
   header: { color: "white", fontSize: 25, fontWeight: "900", lineHeight: 30 },
+  liveModeTopLabel: {
+    color: "#FFCCD7",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
   partySyncPill: {
     alignSelf: "flex-start",
     marginTop: 2,
@@ -1989,6 +2943,111 @@ const styles = StyleSheet.create({
     position: "relative",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
+  },
+  liveRoomWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  liveSpeakingBackdrop: {
+    position: "absolute",
+    top: 24,
+    alignSelf: "center",
+    width: 210,
+    height: 210,
+    borderRadius: 120,
+    backgroundColor: "rgba(220,20,60,0.16)",
+  },
+  liveSpeakingLabel: {
+    color: "#F6DDE4",
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+  liveSpeakerStage: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  liveSpeakerStageSolo: {
+    justifyContent: "center",
+  },
+  liveSpeakerStageDual: {
+    justifyContent: "center",
+    gap: 16,
+  },
+  liveSpeakerCard: {
+    alignItems: "center",
+  },
+  liveSpeakerCardSolo: {
+    minWidth: 130,
+  },
+  liveSpeakerCardDual: {
+    minWidth: 112,
+  },
+  liveSpeakerAvatarWrap: {
+    position: "relative",
+    marginBottom: 6,
+  },
+  liveSpeakerAvatar: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+  },
+  liveSpeakerInitials: {
+    fontSize: 20,
+  },
+  liveSpeakerRing: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    top: -4,
+    left: -4,
+  },
+  liveSpeakerBadge: {
+    top: -8,
+    right: -9,
+  },
+  liveSpeakerRequestRing: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    top: -2,
+    left: -2,
+  },
+  liveSpeakerLinkedReaction: {
+    bottom: -10,
+  },
+  liveSpeakerName: {
+    fontSize: 13,
+  },
+  livePresenceEventToast: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(9,9,14,0.8)",
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    marginBottom: 8,
+    maxWidth: "92%",
+  },
+  livePresenceEventText: {
+    color: "#EEF2FA",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  liveModeParticipantsWrap: {
+    width: "100%",
+    justifyContent: "flex-end",
+  },
+  liveModeActionRow: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    flexDirection: "row",
+    gap: 6,
   },
   videoAnimatedWrap: {
     width: "100%",
@@ -2445,6 +3504,257 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: ACCENT,
     borderRadius: 999,
+  },
+  partyFeedCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.11)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    minHeight: 96,
+    maxHeight: 170,
+  },
+  partyFeedCardLive: {
+    minHeight: 108,
+    maxHeight: 138,
+    marginBottom: 0,
+    alignSelf: "stretch",
+  },
+  participantBubbleScroll: {
+    gap: 10,
+    paddingRight: 4,
+  },
+  participantBubbleScrollLive: {
+    gap: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexGrow: 1,
+  },
+  participantBubbleItem: {
+    width: 82,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(8,8,12,0.56)",
+    paddingHorizontal: 7,
+    paddingVertical: 8,
+  },
+  participantBubbleItemLive: {
+    width: 108,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  participantBubbleActive: {
+    borderColor: "rgba(220,20,60,0.58)",
+    backgroundColor: "rgba(220,20,60,0.18)",
+    transform: [{ scale: 1.1 }],
+  },
+  participantBubbleSpeaking: {
+    borderColor: "rgba(220,20,60,0.9)",
+    backgroundColor: "rgba(220,20,60,0.24)",
+    transform: [{ scale: 1.16 }],
+  },
+  participantBubbleInactive: {
+    opacity: 0.58,
+  },
+  participantBubbleReactionBoost: {
+    borderColor: "rgba(255,96,128,0.92)",
+    backgroundColor: "rgba(220,20,60,0.22)",
+  },
+  partyParticipantCardExpanded: {
+    width: 232,
+  },
+  partyParticipantBubbleTap: {
+    alignItems: "center",
+  },
+  partyParticipantAvatarWrap: {
+    position: "relative",
+    marginBottom: 6,
+  },
+  participantAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.09)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  participantAvatarLive: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+  },
+  participantActiveRing: {
+    position: "absolute",
+    top: -4,
+    left: -4,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2.5,
+    borderColor: "rgba(220,20,60,0.98)",
+  },
+  participantSpeakingRing: {
+    borderWidth: 3,
+    borderColor: "rgba(255,98,130,0.98)",
+  },
+  participantReactionBoostRing: {
+    borderColor: "rgba(255,128,156,1)",
+    borderWidth: 3.2,
+  },
+  participantRequestRing: {
+    position: "absolute",
+    top: -2,
+    left: -2,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "rgba(122,196,255,0.9)",
+  },
+  participantActivePulse: {
+    position: "absolute",
+    top: -5,
+    left: -5,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: "rgba(220,20,60,0.36)",
+  },
+  participantSpeakingPulse: {
+    backgroundColor: "rgba(255,90,120,0.46)",
+  },
+  participantRequestBadge: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(122,196,255,0.9)",
+    backgroundColor: "rgba(19,51,75,0.95)",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  participantRequestBadgeText: {
+    color: "#D8EEFF",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  participantLinkedReaction: {
+    position: "absolute",
+    bottom: -8,
+    right: -2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.26)",
+    backgroundColor: "rgba(6,6,10,0.78)",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  participantLinkedReactionSpeaking: {
+    backgroundColor: "rgba(220,20,60,0.3)",
+    borderColor: "rgba(255,132,160,0.9)",
+  },
+  participantLinkedReactionText: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  participantLinkedReactionTextSpeaking: {
+    fontSize: 13,
+  },
+  participantAvatarMuted: {
+    opacity: 0.45,
+  },
+  participantInitials: {
+    color: "#EEF1F8",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  participantInitialsLive: {
+    fontSize: 16,
+  },
+  partyParticipantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  partyParticipantNameWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  participantName: {
+    color: "#F1F3F9",
+    fontSize: 10.5,
+    fontWeight: "800",
+    maxWidth: "100%",
+  },
+  participantNameLive: {
+    fontSize: 12,
+  },
+  participantHostBadge: {
+    position: "absolute",
+    left: -8,
+    top: -7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.65)",
+    backgroundColor: "rgba(220,20,60,0.24)",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  participantHostBadgeText: {
+    color: "#FFF2F5",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+  participantSpeakingBadge: {
+    position: "absolute",
+    right: -8,
+    top: -7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.95)",
+    backgroundColor: "rgba(220,20,60,0.92)",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  participantSpeakingBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 7.5,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+  partyParticipantStatus: {
+    color: "#D8DCE7",
+    fontSize: 9.5,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  participantExpandedControls: {
+    marginTop: 7,
+    flexDirection: "row",
+    gap: 6,
+  },
+  partyParticipantControlBtn: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  partyParticipantControlBtnText: {
+    color: "#EEF1F8",
+    fontSize: 10.5,
+    fontWeight: "800",
   },
 
   controlsSection: {
