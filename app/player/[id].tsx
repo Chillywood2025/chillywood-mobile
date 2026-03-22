@@ -142,6 +142,7 @@ export default function PlayerScreen() {
   const [partyOverlayMessages, setPartyOverlayMessages] = useState<Array<{ id: string; author: string; body: string }>>([]);
   const [partyReactionBursts, setPartyReactionBursts] = useState<Array<{ id: string; emoji: string }>>([]);
   const [partyLocalReactions, setPartyLocalReactions] = useState<Array<{ id: string; emoji: string; rightOffset: number }>>([]);
+  const [partyTapReactionTick, setPartyTapReactionTick] = useState(0);
   const seekFeedbackOpacity = useRef(new Animated.Value(0)).current;
 
   const zoomScale = useRef(new Animated.Value(1)).current;
@@ -908,6 +909,7 @@ export default function PlayerScreen() {
 
     if (!isVideoReady) return;
     if (shouldAutoplayNextRef.current && nextTitleId) return;
+    if (inWatchParty) setPartyTapReactionTick((value) => value + 1);
 
     const reachedEnd =
       didJustFinishRef.current ||
@@ -933,7 +935,7 @@ export default function PlayerScreen() {
     } else {
       videoRef.current?.playAsync().catch(() => {});
     }
-  }, [isPlaying, isVideoReady, nextTitleId, titleId]);
+  }, [inWatchParty, isPlaying, isVideoReady, nextTitleId, titleId]);
 
   const resetGestureState = useCallback(() => {
     swipeLastAppliedStepRef.current = 0;
@@ -1542,6 +1544,12 @@ export default function PlayerScreen() {
     });
   }, [inWatchParty]);
 
+  useEffect(() => {
+    if (!inWatchParty || partyTapReactionTick === 0) return;
+    const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
+    triggerLocalPartyReaction(emoji);
+  }, [inWatchParty, partyTapReactionTick, triggerLocalPartyReaction]);
+
   const progressPercent = useMemo(() => {
     if (!durationMillis || durationMillis <= 0) return 0;
     return clamp((positionMillis / durationMillis) * 100, 0, 100);
@@ -1653,7 +1661,10 @@ export default function PlayerScreen() {
               <>
                 <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
                   <Animated.View style={[styles.partyPresencePill, { opacity: partyPresenceOpacity }]}> 
-                    <Text style={styles.partyPresencePillText}>👥 {Math.max(1, partyViewerCount)}</Text>
+                    <View style={styles.partyPresenceRow}>
+                      <Text style={styles.partyPresenceIcon}>👥</Text>
+                      <Text style={styles.partyPresenceCount}>{partyViewerCount}</Text>
+                    </View>
                     {partyParticipantPreview.length > 0 ? (
                       <Text style={styles.partyPresenceHint} numberOfLines={1}>
                         {partyParticipantPreview.join(" · ")}
@@ -2016,9 +2027,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     maxWidth: "58%",
   },
-  partyPresencePillText: {
+  partyPresenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  partyPresenceIcon: {
     color: "#F0F3FA",
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  partyPresenceCount: {
+    color: "#F0F3FA",
+    fontSize: 12.5,
     fontWeight: "900",
   },
   partyPresenceHint: {
