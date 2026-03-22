@@ -144,8 +144,12 @@ export default function PlayerScreen() {
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
   const [partyViewerCount, setPartyViewerCount] = useState(0);
+  const [viewerCount, setViewerCount] = useState(1);
   const [partyParticipantPreview, setPartyParticipantPreview] = useState<string[]>([]);
   const [partyChatOpen, setPartyChatOpen] = useState(false);
+  const [partyMessages, setPartyMessages] = useState([
+    { id: "1", text: "Room started" },
+  ]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [partyComments, setPartyComments] = useState<Array<{ id: string; username: string; text: string }>>(() =>
@@ -1488,6 +1492,14 @@ export default function PlayerScreen() {
   const triggerLocalPartyReaction = useCallback((emoji: string) => {
     if (!inWatchParty) return;
 
+    setPartyMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        text: `Someone reacted ${emoji}`,
+      },
+    ]);
+
     const id = `party-local-react-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const videoWidth = Math.max(220, Math.floor(videoWidthRef.current || 320));
     const minRightOffset = 10;
@@ -1561,6 +1573,13 @@ export default function PlayerScreen() {
     const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
     triggerLocalPartyReaction(emoji);
   }, [inWatchParty, partyTapReactionTick, triggerLocalPartyReaction]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setViewerCount((v) => v + 1);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const onSendPartyComment = useCallback(() => {
     const text = partyCommentDraft.trim();
@@ -1683,7 +1702,7 @@ export default function PlayerScreen() {
                   <Animated.View style={[styles.partyPresencePill, { opacity: partyPresenceOpacity }]}> 
                     <View style={styles.partyPresenceRow}>
                       <Text style={styles.partyPresenceIcon}>👥</Text>
-                      <Text style={styles.partyPresenceCount}>{partyViewerCount}</Text>
+                      <Text style={styles.partyPresenceCount}>{viewerCount}</Text>
                     </View>
                     {partyParticipantPreview.length > 0 ? (
                       <Text style={styles.partyPresenceHint} numberOfLines={1}>
@@ -1717,14 +1736,6 @@ export default function PlayerScreen() {
                         activeOpacity={0.85}
                       >
                         <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.partyOverlayChip}
-                        onPress={() => setPartyChatOpen((value) => !value)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>💬</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -1794,16 +1805,17 @@ export default function PlayerScreen() {
                 {partyChatOpen ? (
                   <View style={styles.partyChatDrawer}>
                     <Text style={styles.partyChatDrawerTitle}>Live Chat</Text>
-                    {partyOverlayMessages.length === 0 ? (
-                      <Text style={styles.partyChatDrawerEmpty}>No messages yet</Text>
-                    ) : (
-                      partyOverlayMessages.slice(-4).map((msg) => (
-                        <Text key={msg.id} style={styles.partyChatDrawerLine} numberOfLines={1}>
-                          <Text style={styles.partyChatDrawerAuthor}>{msg.author}: </Text>
-                          {msg.body}
+                    <ScrollView
+                      style={{ maxHeight: 140 }}
+                      contentContainerStyle={{ paddingVertical: 8 }}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      {partyMessages.map((msg) => (
+                        <Text key={msg.id} style={styles.partyMessageText}>
+                          {msg.text}
                         </Text>
-                      ))
-                    )}
+                      ))}
+                    </ScrollView>
                   </View>
                 ) : null}
 
@@ -2223,6 +2235,11 @@ const styles = StyleSheet.create({
   partyChatDrawerAuthor: {
     color: "#F2D8DF",
     fontWeight: "900",
+  },
+  partyMessageText: {
+    color: "#fff",
+    fontSize: 13,
+    marginBottom: 6,
   },
   partyCommentsDrawer: {
     position: "absolute",
