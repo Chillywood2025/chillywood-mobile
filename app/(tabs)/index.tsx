@@ -167,7 +167,7 @@ export default function HomeScreen() {
   const heroImageSource = getImageUri(heroItem);
   const continueImageSource = getImageUri(continueItem);
 
-  const dramaTitles = useMemo(() => {
+  const browseTitles = useMemo(() => {
     const drama = titles.filter((item) => (item.category ?? "").toLowerCase().includes("drama"));
     return drama.length ? drama : titles.slice(0, 8);
   }, [titles]);
@@ -260,6 +260,37 @@ export default function HomeScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Browse</Text>
+
+            <FlatList
+              horizontal
+              data={browseTitles}
+              keyExtractor={(item, idx) => `${item.id}-${idx}`}
+              renderItem={({ item }) => {
+                const dramaImageSource = getImageUri(item);
+
+                return (
+                  <TouchableOpacity style={styles.dramaCard} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
+                    {dramaImageSource ? (
+                      <Image source={dramaImageSource} style={styles.dramaImage} />
+                    ) : (
+                      <View style={styles.dramaFallback} />
+                    )}
+                    <View style={styles.dramaOverlay} />
+
+                    <View style={styles.dramaMeta}>
+                      <Text style={styles.dramaTitle} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.dramaRuntime} numberOfLines={1}>
+                        {item.runtime || "—"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dramaRow}
+            />
           </View>
 
           <View style={styles.section}>
@@ -300,40 +331,6 @@ export default function HomeScreen() {
             )}
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Drama</Text>
-
-            <FlatList
-              horizontal
-              data={dramaTitles}
-              keyExtractor={(item, idx) => `${item.id}-${idx}`}
-              renderItem={({ item }) => {
-                const dramaImageSource = getImageUri(item);
-
-                return (
-                  <TouchableOpacity style={styles.dramaCard} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
-                    {dramaImageSource ? (
-                      <Image source={dramaImageSource} style={styles.dramaImage} />
-                    ) : (
-                      <View style={styles.dramaFallback} />
-                    )}
-                    <View style={styles.dramaOverlay} />
-
-                    <View style={styles.dramaMeta}>
-                      <Text style={styles.dramaTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.dramaRuntime} numberOfLines={1}>
-                        {item.runtime || "—"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dramaRow}
-            />
-          </View>
         </ScrollView>
       )}
     </View>
@@ -350,6 +347,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   scrollContent: {
+    paddingTop: 8,
     paddingBottom: 28,
     backgroundColor: "transparent",
   },
@@ -394,7 +392,7 @@ const styles = StyleSheet.create({
     height: 460,
     marginHorizontal: 16,
     marginTop: 12,
-    marginBottom: 24,
+    marginBottom: 18,
     borderRadius: 20,
     overflow: "hidden",
     justifyContent: "flex-end",
@@ -452,13 +450,13 @@ const styles = StyleSheet.create({
 
   section: {
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 18,
   },
   sectionTitle: {
     color: "#fff",
     fontSize: 22,
     fontWeight: "800",
-    marginBottom: 12,
+    marginBottom: 10,
   },
 
   continueCard: {
