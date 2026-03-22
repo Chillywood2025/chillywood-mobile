@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { titles } from "../../_data/titles";
+import { getVideoSource } from "../../_lib/mediaSources";
 import { supabase } from "../../_lib/supabase";
 import {
   clearProgressForTitle,
@@ -77,17 +78,22 @@ export default function PlayerScreen() {
 
   console.log("PLAYER ID:", cleanId);
 
-  let title =
-    titles.find((t: any) => String(t.id) === cleanId) ||
-    titles.find((t: any) => String(t.slug) === cleanId) ||
-    titles.find((t: any) => String(t.title).toLowerCase() === cleanId.toLowerCase());
-
-  if (!title) {
-    console.warn("FALLBACK TRIGGERED – ID NOT FOUND:", cleanId);
-    title = titles[0] as any;
-  }
-
-  const fallbackVideo = (title as any)?.video ?? (titles[0] as any)?.video;
+  const localExactIdMatch = titles.find((t: any) => String(t.id) === cleanId);
+  const localSlugMatch = localExactIdMatch ? null : titles.find((t: any) => String(t.slug) === cleanId);
+  const localTitleMatch =
+    localExactIdMatch || localSlugMatch
+      ? null
+      : titles.find((t: any) => String(t.title).toLowerCase() === cleanId.toLowerCase());
+  const localTitle = (localExactIdMatch ?? localSlugMatch ?? localTitleMatch ?? null) as any;
+  const localMatchSource = localExactIdMatch
+    ? "local:id"
+    : localSlugMatch
+      ? "local:slug"
+      : localTitleMatch
+        ? "local:title"
+        : "none";
+  const fallbackTitle = (titles[0] as any) ?? null;
+  const fallbackVideo = getVideoSource(localTitle ?? fallbackTitle ?? {});
 
   const videoRef = useRef<Video>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
@@ -128,7 +134,10 @@ export default function PlayerScreen() {
   const lastTapRef = useRef(0);
   const videoWidthRef = useRef(0);
 
-  const titleId = useMemo(() => String(item?.id ?? (title as any)?.id ?? cleanId).trim(), [item?.id, title, cleanId]);
+  const titleId = useMemo(
+    () => String(item?.id ?? (localTitle as any)?.id ?? (fallbackTitle as any)?.id ?? cleanId).trim(),
+    [item?.id, localTitle, fallbackTitle, cleanId],
+  );
   const inMyList = useMemo(() => (titleId ? myListIds.includes(titleId) : false), [myListIds, titleId]);
   const nextTitle = useMemo(() => {
     const index = titles.findIndex((entry) => String(entry.id) === titleId);
@@ -155,19 +164,21 @@ export default function PlayerScreen() {
     let active = true;
 
     const loadTitle = async () => {
-      const routeId = cleanId || String((title as any)?.id ?? "").trim();
+      const routeId = cleanId || String((localTitle as any)?.id ?? (fallbackTitle as any)?.id ?? "").trim();
       setTitleLoading(true);
       setItem(null);
 
       if (!routeId) {
-        if (title && active) {
+        if ((localTitle || fallbackTitle) && active) {
+          const chosen = (localTitle ?? fallbackTitle) as any;
+          console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
           setItem({
-            id: String((title as any).id),
-            title: String((title as any).title),
-            runtime: (title as any).runtime,
-            synopsis: (title as any).description,
-            category: (title as any).genre,
-            video: (title as any).video,
+            id: String(chosen.id),
+            title: String(chosen.title),
+            runtime: chosen.runtime,
+            synopsis: chosen.description,
+            category: chosen.genre,
+            video: chosen.video,
           });
         }
         setTitleLoading(false);
@@ -183,6 +194,7 @@ export default function PlayerScreen() {
 
         if (primary.data && !primary.error) {
           if (active) {
+            console.log("PLAYER MATCH SOURCE: matched from", "db:advanced:id");
             setItem(primary.data as TitleRow);
             setTitleLoading(false);
           }
@@ -197,20 +209,23 @@ export default function PlayerScreen() {
 
         if (fallback.data && !fallback.error) {
           if (active) {
+            console.log("PLAYER MATCH SOURCE: matched from", "db:base:id");
             setItem(fallback.data as TitleRow);
             setTitleLoading(false);
           }
           return;
         }
 
-        if (title && active) {
+        if ((localTitle || fallbackTitle) && active) {
+          const chosen = (localTitle ?? fallbackTitle) as any;
+          console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
           setItem({
-            id: String((title as any).id),
-            title: String((title as any).title),
-            runtime: (title as any).runtime,
-            synopsis: (title as any).description,
-            category: (title as any).genre,
-            video: (title as any).video,
+            id: String(chosen.id),
+            title: String(chosen.title),
+            runtime: chosen.runtime,
+            synopsis: chosen.description,
+            category: chosen.genre,
+            video: chosen.video,
           });
           setTitleLoading(false);
           return;
@@ -224,14 +239,16 @@ export default function PlayerScreen() {
         }
       } catch {
         if (active) {
-          if (title) {
+          if (localTitle || fallbackTitle) {
+            const chosen = (localTitle ?? fallbackTitle) as any;
+            console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
             setItem({
-              id: String((title as any).id),
-              title: String((title as any).title),
-              runtime: (title as any).runtime,
-              synopsis: (title as any).description,
-              category: (title as any).genre,
-              video: (title as any).video,
+              id: String(chosen.id),
+              title: String(chosen.title),
+              runtime: chosen.runtime,
+              synopsis: chosen.description,
+              category: chosen.genre,
+              video: chosen.video,
             });
           }
           setTitleLoading(false);
@@ -244,7 +261,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [cleanId, title]);
+  }, [cleanId, localMatchSource, localTitle, fallbackTitle]);
 
   useEffect(() => {
     let active = true;
@@ -764,7 +781,7 @@ export default function PlayerScreen() {
       let createTitleId = preferredRawId || fallbackRawId;
 
       if (!UUID_LIKE_REGEX.test(createTitleId)) {
-        const titleNameCandidate = String(item?.title ?? (title as any)?.title ?? "").trim();
+        const titleNameCandidate = String(item?.title ?? (localTitle as any)?.title ?? (fallbackTitle as any)?.title ?? "").trim();
         if (titleNameCandidate) {
           try {
             const byName = await supabase
@@ -807,7 +824,7 @@ export default function PlayerScreen() {
 
     console.log("WATCH PARTY: room creation failed, fallback to /watch-party");
     router.push("/watch-party");
-  }, [isPlaying, titleId]);
+  }, [isPlaying, titleId, item?.title, localTitle, fallbackTitle]);
 
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
@@ -827,22 +844,35 @@ export default function PlayerScreen() {
 
   const displayItem = useMemo<TitleRow | null>(() => {
     if (item) return item;
-    if (!title) return null;
+    if (!localTitle && !fallbackTitle) return null;
+
+    const chosen = (localTitle ?? fallbackTitle) as any;
 
     return {
-      id: String((title as any).id ?? ""),
-      title: String((title as any).title ?? "Now Playing"),
-      runtime: (title as any).runtime,
-      synopsis: (title as any).description,
-      category: (title as any).genre,
-      video: (title as any).video,
+      id: String(chosen.id ?? ""),
+      title: String(chosen.title ?? "Now Playing"),
+      runtime: chosen.runtime,
+      synopsis: chosen.description,
+      category: chosen.genre,
+      video: chosen.video,
     };
-  }, [item, title]);
+  }, [item, localTitle, fallbackTitle]);
 
   const source = useMemo(() => {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
-    return displayItem?.video || (title as any)?.video || fallbackVideo;
-  }, [displayItem?.video, displayItem?.video_url, title, fallbackVideo]);
+    return displayItem?.video || fallbackVideo;
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo]);
+
+  useEffect(() => {
+    const sourceLabel = source
+      ? typeof source === "number"
+        ? "bundle:require"
+        : typeof source === "object" && source && "uri" in source
+          ? `remote:${String((source as { uri?: unknown }).uri ?? "")}`
+          : "object:unknown"
+      : "none";
+    console.log("PLAYER VIDEO SOURCE:", sourceLabel);
+  }, [source]);
 
   if (titleLoading) {
     return (

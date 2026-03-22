@@ -414,11 +414,23 @@ export default function WatchPartyRoomScreen() {
   }, [partyId, room?.roomCode]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
-  const onWatchTogether = useCallback(() => {
-    const targetTitleId = room?.titleId ?? titleIdHint;
+  const onWatchTogether = useCallback(async () => {
+    let targetTitleId = String(room?.titleId ?? "").trim();
+
+    if (!targetTitleId && partyId) {
+      const latestRoom = await getPartyRoom(partyId).catch(() => null);
+      targetTitleId = String(latestRoom?.titleId ?? "").trim();
+    }
+
+    if (!targetTitleId) {
+      targetTitleId = String(titleIdHint ?? "").trim();
+    }
+
     if (!targetTitleId || !partyId) return;
+
+    console.log("WATCH PARTY OPEN PLAYER: navigating with titleId", targetTitleId);
     router.push({ pathname: "/player/[id]", params: { id: targetTitleId, partyId } });
-  }, [room, titleIdHint, partyId, router]);
+  }, [room?.titleId, titleIdHint, partyId, router]);
 
   // ── Connection display helpers ───────────────────────────────────────────────
   const connLabel: Record<ConnState, string> = {
