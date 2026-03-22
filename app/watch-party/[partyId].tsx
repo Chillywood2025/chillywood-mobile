@@ -17,10 +17,12 @@ import { reportDebugError, reportDebugParty, reportDebugQuery } from "../../_lib
 import { supabase } from "../../_lib/supabase";
 import { getAvatarEmoji, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
 import {
+    emitSyncEvent,
     fetchPartyMessages,
     getPartyRoom,
     getSafePartyUserId,
     sendPartyMessage,
+    updateRoomPlayback,
     type WatchPartyMessage,
     type WatchPartyState,
 } from "../../_lib/watchParty";
@@ -44,6 +46,7 @@ type PresenceParticipant = {
 };
 
 const REACTIONS = ["🔥", "😂", "😮", "❤️", "👏", "💀"];
+const HOST_SEEK_STEP_MILLIS = 10_000;
 
 const formatPartyTime = (millis: number) => {
   const totalSeconds = Math.max(0, Math.floor((millis || 0) / 1000));
@@ -98,6 +101,8 @@ export default function WatchPartyRoomScreen() {
     setMessages((prev) => [...prev.slice(-199), msg]);
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 60);
   }, []);
+
+  const clampMillis = useCallback((value: number) => Math.max(0, Math.floor(value || 0)), []);
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -439,6 +444,57 @@ export default function WatchPartyRoomScreen() {
     router.push({ pathname: "/player/[id]", params: { id: targetTitleId, partyId } });
   }, [room?.titleId, titleIdHint, partyId, router]);
 
+  const onHostTogglePlayPause = useCallback(async () => {
+    if (myRoleRef.current !== "host" || !room || !partyId) return;
+
+    const nextState = room.playbackState === "playing" ? "paused" : "playing";
+    const nextPosition = clampMillis(room.playbackPositionMillis ?? 0);
+    const nowIso = new Date().toISOString();
+
+    setRoom((prev) =>
+      prev
+        ? {
+            ...prev,
+            playbackState: nextState,
+            playbackPositionMillis: nextPosition,
+            updatedAt: nowIso,
+          }
+        : prev,
+    );
+
+    await updateRoomPlayback(partyId, nextPosition, nextState).catch(() => {});
+    if (myUserIdRef.current) {
+      await emitSyncEvent(partyId, myUserIdRef.current, nextState === "playing" ? "play" : "pause", nextPosition).catch(() => {});
+    }
+  }, [clampMillis, partyId, room]);
+
+  const onHostSeek = useCallback(
+    async (deltaMillis: number) => {
+      if (myRoleRef.current !== "host" || !room || !partyId) return;
+
+      const nextPosition = clampMillis((room.playbackPositionMillis ?? 0) + deltaMillis);
+      const nextState = room.playbackState === "playing" ? "playing" : "paused";
+      const nowIso = new Date().toISOString();
+
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              playbackPositionMillis: nextPosition,
+              playbackState: nextState,
+              updatedAt: nowIso,
+            }
+          : prev,
+      );
+
+      await updateRoomPlayback(partyId, nextPosition, nextState).catch(() => {});
+      if (myUserIdRef.current) {
+        await emitSyncEvent(partyId, myUserIdRef.current, "seek", nextPosition).catch(() => {});
+      }
+    },
+    [clampMillis, partyId, room],
+  );
+
   // ── Connection display helpers ───────────────────────────────────────────────
   const connLabel: Record<ConnState, string> = {
     loading: "Loading",
@@ -521,7 +577,7 @@ export default function WatchPartyRoomScreen() {
           <View style={{ flex: 1 }} />
           <View style={[styles.rolePill, isHost && styles.rolePillHost]}>
             <Text style={[styles.rolePillText, isHost && styles.rolePillTextHost]}>
-              {isHost ? "Host" : "Viewer"}
+              {isHost ? "Host" : "Guest"}
             </Text>
           </View>
         </View>
@@ -529,6 +585,7 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.syncStatusCard}>
           <Text style={styles.syncStatusTitle}>{roleStatusTitle}</Text>
           <Text style={styles.syncStatusBody}>{roleStatusBody}</Text>
+          {!isHost ? <Text style={styles.syncedBadge}>Synced to Host</Text> : null}
         </View>
 
         {/* ── Title card ─────────────────────────────────────────────── */}
@@ -603,6 +660,17 @@ export default function WatchPartyRoomScreen() {
         {isHost && (
           <View style={styles.hostSection}>
             <Text style={styles.hostSectionLabel}>HOST CONTROLS</Text>
+            <View style={styles.hostPlaybackRow}>
+              <TouchableOpacity style={styles.hostPlaybackBtn} onPress={() => onHostSeek(-HOST_SEEK_STEP_MILLIS)} activeOpacity={0.8}>
+                <Text style={styles.hostPlaybackBtnText}>-10s</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.hostPlaybackBtn, styles.hostPlaybackBtnPrimary]} onPress={onHostTogglePlayPause} activeOpacity={0.8}>
+                <Text style={[styles.hostPlaybackBtnText, styles.hostPlaybackBtnTextPrimary]}>{isPlaying ? "Pause" : "Play"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.hostPlaybackBtn} onPress={() => onHostSeek(HOST_SEEK_STEP_MILLIS)} activeOpacity={0.8}>
+                <Text style={styles.hostPlaybackBtnText}>+10s</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.hostBtnRow}>
               <TouchableOpacity
                 style={[styles.hostBtn, reactionsGloballyMuted && styles.hostBtnOn]}
@@ -768,6 +836,17 @@ const styles = StyleSheet.create({
   },
   syncStatusTitle: { color: "#ECECEC", fontSize: 12, fontWeight: "800" },
   syncStatusBody: { color: "#909090", fontSize: 12, fontWeight: "600" },
+  syncedBadge: {
+    marginTop: 2,
+    alignSelf: "flex-start",
+    color: "#BFDAC4",
+    fontSize: 10,
+    fontWeight: "800",
+    backgroundColor: "rgba(46,204,64,0.16)",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
 
   // Cards
   card: {
@@ -872,6 +951,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   hostSectionLabel: { color: "#555", fontSize: 9.5, fontWeight: "800", letterSpacing: 1 },
+  hostPlaybackRow: { flexDirection: "row", gap: 8 },
+  hostPlaybackBtn: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingVertical: 9,
+    alignItems: "center",
+  },
+  hostPlaybackBtnPrimary: {
+    borderColor: "rgba(220,20,60,0.45)",
+    backgroundColor: "rgba(220,20,60,0.2)",
+  },
+  hostPlaybackBtnText: { color: "#ddd", fontSize: 12, fontWeight: "800" },
+  hostPlaybackBtnTextPrimary: { color: "#fff" },
   hostBtnRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   hostBtn: {
     borderRadius: 999,
