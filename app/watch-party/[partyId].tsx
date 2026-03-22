@@ -45,7 +45,12 @@ type PresenceParticipant = {
   avatarIndex?: number;
 };
 
-const REACTIONS = ["🔥", "😂", "😮", "❤️", "👏", "💀"];
+type ParticipantReaction = {
+  emoji: string;
+  ts: number;
+};
+
+const REACTIONS = ["👍", "😂", "🔥"];
 const HOST_SEEK_STEP_MILLIS = 10_000;
 
 const formatPartyTime = (millis: number) => {
@@ -83,6 +88,8 @@ export default function WatchPartyRoomScreen() {
   const [messages, setMessages] = useState<LocalMsg[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [floatingReaction, setFloatingReaction] = useState<string | null>(null);
+  const [participantReactions, setParticipantReactions] = useState<Record<string, ParticipantReaction>>({});
   const chatScrollRef = useRef<ScrollView>(null);
 
   // ── Host controls (broadcast-driven) ────────────────────────────────────────
@@ -93,13 +100,50 @@ export default function WatchPartyRoomScreen() {
   const lastRoomUpdatedAtRef = useRef<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatChannelRef = useRef<RealtimeChannel | null>(null);
+  const roomRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const myUserIdRef = useRef<string | null>(null);
   const myRoleRef = useRef<"host" | "viewer" | null>(null);
+  const floatingReactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const participantReactionTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // ── Helper: append message ───────────────────────────────────────────────────
   const addMsg = useCallback((msg: LocalMsg) => {
     setMessages((prev) => [...prev.slice(-199), msg]);
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 60);
+  }, []);
+
+  const flashReaction = useCallback((emoji: string) => {
+    if (floatingReactionTimeoutRef.current) {
+      clearTimeout(floatingReactionTimeoutRef.current);
+      floatingReactionTimeoutRef.current = null;
+    }
+    setFloatingReaction(emoji);
+    floatingReactionTimeoutRef.current = setTimeout(() => {
+      setFloatingReaction(null);
+      floatingReactionTimeoutRef.current = null;
+    }, 1100);
+  }, []);
+
+  const attachReactionToParticipant = useCallback((userId: string, emoji: string) => {
+    const safeUserId = String(userId || "").trim();
+    if (!safeUserId) return;
+
+    const existing = participantReactionTimeoutsRef.current[safeUserId];
+    if (existing) clearTimeout(existing);
+
+    setParticipantReactions((prev) => ({
+      ...prev,
+      [safeUserId]: { emoji, ts: Date.now() },
+    }));
+
+    participantReactionTimeoutsRef.current[safeUserId] = setTimeout(() => {
+      setParticipantReactions((prev) => {
+        const next = { ...prev };
+        delete next[safeUserId];
+        return next;
+      });
+      delete participantReactionTimeoutsRef.current[safeUserId];
+    }, 1400);
   }, []);
 
   const clampMillis = useCallback((value: number) => Math.max(0, Math.floor(value || 0)), []);
@@ -188,6 +232,9 @@ export default function WatchPartyRoomScreen() {
 
         // Start chat / presence channel
         startChatChannel(userId, role, fetchedRoom, profile);
+
+        // Start realtime room sync (poll remains as fallback)
+        startRoomRealtimeSync();
       } catch {
         if (!cancelled) {
           setNotFound(true);
@@ -205,6 +252,16 @@ export default function WatchPartyRoomScreen() {
         supabase.removeChannel(chatChannelRef.current);
         chatChannelRef.current = null;
       }
+      if (roomRealtimeChannelRef.current) {
+        supabase.removeChannel(roomRealtimeChannelRef.current);
+        roomRealtimeChannelRef.current = null;
+      }
+      if (floatingReactionTimeoutRef.current) {
+        clearTimeout(floatingReactionTimeoutRef.current);
+        floatingReactionTimeoutRef.current = null;
+      }
+      Object.values(participantReactionTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
+      participantReactionTimeoutsRef.current = {};
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyId]);
@@ -278,10 +335,14 @@ export default function WatchPartyRoomScreen() {
       // Incoming reactions (for chat display + floating overlay)
       channel.on("broadcast", { event: "reaction" }, ({ payload }: { payload: Record<string, unknown> }) => {
         if (!payload?.emoji) return;
+        const emoji = String(payload.emoji);
+        const reactionUserId = String(payload.userId ?? "").trim();
+        flashReaction(emoji);
+        if (reactionUserId) attachReactionToParticipant(reactionUserId, emoji);
         addMsg({
           id: `react-${Date.now()}-${Math.random()}`,
           kind: "reaction",
-          body: String(payload.emoji),
+          body: emoji,
           authorLabel: String(payload.authorLabel ?? "?"),
           isMe: payload.userId === myUserIdRef.current,
           ts: Date.now(),
@@ -322,8 +383,67 @@ export default function WatchPartyRoomScreen() {
 
       chatChannelRef.current = channel;
     },
-    [partyId, addMsg],
+    [partyId, addMsg, attachReactionToParticipant, flashReaction],
   );
+
+  const startRoomRealtimeSync = useCallback(() => {
+    if (!partyId) return;
+
+    if (roomRealtimeChannelRef.current) {
+      supabase.removeChannel(roomRealtimeChannelRef.current);
+      roomRealtimeChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`party-room-${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "watch_party_rooms",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          const row = payload.new as {
+            party_id?: string | null;
+            host_user_id?: string | null;
+            title_id?: string | null;
+            playback_position_millis?: number | null;
+            playback_state?: "playing" | "paused" | "buffering" | null;
+            started_at?: string | null;
+            updated_at?: string | null;
+          };
+
+          const normalizedPartyId = String(row.party_id ?? "").trim();
+          const hostUserId = String(row.host_user_id ?? "").trim();
+          const titleId = String(row.title_id ?? "").trim();
+          if (!normalizedPartyId || !hostUserId || !titleId) return;
+
+          const nextUpdatedAt = String(row.updated_at ?? "").trim();
+          if (nextUpdatedAt && nextUpdatedAt <= lastRoomUpdatedAtRef.current) return;
+          if (nextUpdatedAt) lastRoomUpdatedAtRef.current = nextUpdatedAt;
+
+          setRoom({
+            partyId: normalizedPartyId,
+            roomCode: normalizedPartyId,
+            titleId,
+            hostUserId,
+            playbackPositionMillis: Math.max(0, Number(row.playback_position_millis ?? 0)),
+            playbackState: row.playback_state === "playing" ? "playing" : "paused",
+            startedAt: String(row.started_at ?? new Date().toISOString()),
+            updatedAt: nextUpdatedAt || new Date().toISOString(),
+          });
+        },
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setConnState("reconnecting");
+        }
+      });
+
+    roomRealtimeChannelRef.current = channel;
+  }, [partyId]);
 
   useEffect(() => {
     reportDebugParty({
@@ -388,12 +508,14 @@ export default function WatchPartyRoomScreen() {
     async (emoji: string) => {
       if (!chatChannelRef.current || !myUserIdRef.current || reactionsGloballyMuted) return;
       const authorLabel = myRoleRef.current === "host" ? "Host" : `User·${myUserIdRef.current.slice(-4)}`;
+      flashReaction(emoji);
+      attachReactionToParticipant(myUserIdRef.current, emoji);
       await chatChannelRef.current
         .send({ type: "broadcast", event: "reaction", payload: { emoji, userId: myUserIdRef.current, authorLabel } })
         .catch(() => {});
       addMsg({ id: `react-${Date.now()}`, kind: "reaction", body: emoji, authorLabel: "You", isMe: true, ts: Date.now() });
     },
-    [reactionsGloballyMuted, addMsg],
+    [reactionsGloballyMuted, addMsg, attachReactionToParticipant, flashReaction],
   );
 
   // ── Host: toggle mute reactions ──────────────────────────────────────────────
@@ -511,6 +633,16 @@ export default function WatchPartyRoomScreen() {
     error: "#DC143C",
   };
 
+  const isPlaying = room?.playbackState === "playing";
+  const getParticipantStatus = useCallback(
+    (participant: PresenceParticipant): "watching" | "paused" | "syncing" => {
+      if (connState === "connecting" || connState === "reconnecting") return "syncing";
+      if (participant.role === "host") return isPlaying ? "watching" : "paused";
+      return isPlaying ? "watching" : "paused";
+    },
+    [connState, isPlaying],
+  );
+
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -537,12 +669,17 @@ export default function WatchPartyRoomScreen() {
   }
 
   const isHost = myRole === "host";
-  const isPlaying = room.playbackState === "playing";
   const chatCount = messages.filter((m) => m.kind === "chat").length;
+  const isSyncUnstable = connState === "reconnecting" || connState === "connecting";
+  const isWaitingForHost = !isHost && !participants.some((p) => p.role === "host");
   const roleStatusTitle = isHost ? "Host Controls Active" : "Guest Synced to Host";
   const roleStatusBody = isHost
     ? `You control room playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.positionMillis ?? 0)}`
-    : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.positionMillis ?? 0)}`;
+    : isWaitingForHost
+      ? "Waiting for host…"
+      : isSyncUnstable
+        ? `Resyncing with host · ${isPlaying ? "Playing" : "Paused"}`
+        : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.positionMillis ?? 0)}`;
 
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
@@ -609,7 +746,9 @@ export default function WatchPartyRoomScreen() {
 
         {/* ── Participant list ────────────────────────────────────────── */}
         {participants.length > 0 && (
-          <View style={styles.participantsCard}>
+          <View style={styles.participantsWrap}>
+            <Text style={styles.sectionKicker}>PRESENCE</Text>
+            <View style={styles.participantsCard}>
             <Text style={styles.participantsLabel}>
               <Text style={styles.viewerCount}>👥 {participants.length}</Text>
               {participants.length === 1 ? " person" : " people"} watching
@@ -618,10 +757,29 @@ export default function WatchPartyRoomScreen() {
             <View style={styles.chips}>
               {participants.slice(0, 7).map((p) => (
                 <View key={p.userId} style={[styles.chip, p.role === "host" && styles.chipHost]}>
-                  <Text style={styles.chipAvatar}>{getAvatarEmoji(p.avatarIndex ?? 0)}</Text>
-                  <Text style={[styles.chipText, p.role === "host" && styles.chipTextHost]}>
-                    {p.role === "host" ? "👑 " : ""}{p.displayName}
-                  </Text>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.chipAvatar}>{getAvatarEmoji(p.avatarIndex ?? 0)}</Text>
+                    {participantReactions[p.userId] ? (
+                      <View style={styles.participantReactionBadge}>
+                        <Text style={styles.participantReactionText}>{participantReactions[p.userId].emoji}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={styles.participantMeta}>
+                    <Text style={[styles.chipText, p.role === "host" && styles.chipTextHost]} numberOfLines={1}>
+                      {p.role === "host" ? "👑 " : ""}{p.displayName}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.participantStatus,
+                        getParticipantStatus(p) === "watching" && styles.participantStatusWatching,
+                        getParticipantStatus(p) === "paused" && styles.participantStatusPaused,
+                        getParticipantStatus(p) === "syncing" && styles.participantStatusSyncing,
+                      ]}
+                    >
+                      {getParticipantStatus(p)}
+                    </Text>
+                  </View>
                 </View>
               ))}
               {participants.length > 7 && (
@@ -629,6 +787,7 @@ export default function WatchPartyRoomScreen() {
                   <Text style={styles.chipText}>+{participants.length - 7}</Text>
                 </View>
               )}
+            </View>
             </View>
           </View>
         )}
@@ -639,26 +798,38 @@ export default function WatchPartyRoomScreen() {
         </TouchableOpacity>
 
         {/* ── Reaction bar ───────────────────────────────────────────── */}
-        <View style={styles.reactionsRow}>
-          {REACTIONS.map((emoji) => (
-            <TouchableOpacity
-              key={emoji}
-              style={[styles.reactionBtn, reactionsGloballyMuted && styles.reactionBtnMuted]}
-              onPress={() => onSendReaction(emoji)}
-              disabled={reactionsGloballyMuted}
-              activeOpacity={0.72}
-            >
-              <Text style={styles.reactionEmoji}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.interactionWrap}>
+          <Text style={styles.sectionKicker}>REACTIONS & CHAT</Text>
+          <View style={styles.reactionsPanel}>
+            <View style={styles.reactionsRow}>
+              {REACTIONS.map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={[styles.reactionBtn, reactionsGloballyMuted && styles.reactionBtnMuted]}
+                  onPress={() => onSendReaction(emoji)}
+                  disabled={reactionsGloballyMuted}
+                  activeOpacity={0.72}
+                >
+                  <Text style={styles.reactionEmoji}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {reactionsGloballyMuted && (
+              <Text style={styles.mutedNotice}>Reactions muted by host</Text>
+            )}
+          </View>
         </View>
-        {reactionsGloballyMuted && (
-          <Text style={styles.mutedNotice}>Reactions muted by host</Text>
-        )}
+        {floatingReaction ? (
+          <View pointerEvents="none" style={styles.reactionOverlay}>
+            <Text style={styles.reactionOverlayEmoji}>{floatingReaction}</Text>
+          </View>
+        ) : null}
 
         {/* ── Host controls ──────────────────────────────────────────── */}
         {isHost && (
-          <View style={styles.hostSection}>
+          <View style={styles.hostWrap}>
+            <Text style={styles.sectionKicker}>CONTROLS</Text>
+            <View style={styles.hostSection}>
             <Text style={styles.hostSectionLabel}>HOST CONTROLS</Text>
             <View style={styles.hostPlaybackRow}>
               <TouchableOpacity style={styles.hostPlaybackBtn} onPress={() => onHostSeek(-HOST_SEEK_STEP_MILLIS)} activeOpacity={0.8}>
@@ -690,6 +861,7 @@ export default function WatchPartyRoomScreen() {
                   {roomLocked ? "🔓  Unlock room" : "🔒  Lock room"}
                 </Text>
               </TouchableOpacity>
+            </View>
             </View>
           </View>
         )}
@@ -765,8 +937,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050505" },
   center: { flex: 1, backgroundColor: "#050505", alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1, width: "100%" },
-  content: { paddingTop: 56, paddingBottom: 52, paddingHorizontal: 18, gap: 12 },
+  content: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 18, gap: 14 },
   loadingText: { color: "#888", marginTop: 14, fontSize: 14 },
+  sectionKicker: { color: "#5B5B5B", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.1, marginBottom: 6 },
 
   // Error
   errorCard: {
@@ -808,7 +981,7 @@ const styles = StyleSheet.create({
   connLabel: { fontSize: 9.5, fontWeight: "800", letterSpacing: 0.4 },
 
   // Live row
-  liveRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  liveRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
   liveDot: { width: 7, height: 7, borderRadius: 999 },
   liveText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
   rolePill: {
@@ -826,18 +999,18 @@ const styles = StyleSheet.create({
   rolePillText: { color: "#aaa", fontSize: 10, fontWeight: "800" },
   rolePillTextHost: { color: "#F7D6DD" },
   syncStatusCard: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.09)",
-    backgroundColor: "rgba(255,255,255,0.03)",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 3,
+    borderColor: "rgba(255,255,255,0.11)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    gap: 4,
   },
   syncStatusTitle: { color: "#ECECEC", fontSize: 12, fontWeight: "800" },
   syncStatusBody: { color: "#909090", fontSize: 12, fontWeight: "600" },
   syncedBadge: {
-    marginTop: 2,
+    marginTop: 4,
     alignSelf: "flex-start",
     color: "#BFDAC4",
     fontSize: 10,
@@ -885,85 +1058,167 @@ const styles = StyleSheet.create({
   shareBtnText: { color: "#F7D6DD", fontSize: 11, fontWeight: "800" },
 
   // Participants
+  participantsWrap: { gap: 0 },
   participantsCard: {
-    backgroundColor: "rgba(18,18,18,0.96)",
-    borderRadius: 14,
+    backgroundColor: "rgba(16,16,16,0.97)",
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
-    padding: 12,
-    gap: 8,
+    borderColor: "rgba(255,255,255,0.09)",
+    padding: 14,
+    gap: 10,
   },
-  participantsLabel: { color: "#666", fontSize: 10, fontWeight: "700" },
+  participantsLabel: { color: "#7A7A7A", fontSize: 10.5, fontWeight: "700" },
   viewerCount: { color: "#F7D6DD", fontWeight: "900", fontSize: 11 },
   trendingBadge: { color: "#FF6B35", fontWeight: "800", fontSize: 10 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
-    borderRadius: 999,
+    minWidth: 134,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 8,
   },
   chipHost: {
-    borderColor: "rgba(220,20,60,0.3)",
-    backgroundColor: "rgba(220,20,60,0.1)",
+    borderColor: "rgba(220,20,60,0.52)",
+    backgroundColor: "rgba(220,20,60,0.16)",
   },
-  chipAvatar: { fontSize: 13, fontWeight: "600" },
-  chipText: { color: "#bbb", fontSize: 11, fontWeight: "600" },
+  avatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    position: "relative",
+  },
+  chipAvatar: { fontSize: 14, fontWeight: "600" },
+  participantMeta: { flex: 1, minWidth: 0 },
+  chipText: { color: "#CACACA", fontSize: 11, fontWeight: "700" },
   chipTextHost: { color: "#F7D6DD" },
+  participantStatus: {
+    marginTop: 4,
+    fontSize: 9.5,
+    fontWeight: "800",
+    textTransform: "capitalize",
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  participantStatusWatching: {
+    color: "#9BE3B1",
+    borderColor: "rgba(46,204,64,0.35)",
+    backgroundColor: "rgba(46,204,64,0.16)",
+  },
+  participantStatusPaused: {
+    color: "#E4CB92",
+    borderColor: "rgba(181,137,0,0.35)",
+    backgroundColor: "rgba(181,137,0,0.16)",
+  },
+  participantStatusSyncing: {
+    color: "#A7C4FF",
+    borderColor: "rgba(104,149,255,0.4)",
+    backgroundColor: "rgba(104,149,255,0.16)",
+  },
+  participantReactionBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(0,0,0,0.75)",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  participantReactionText: { fontSize: 11, fontWeight: "800" },
 
   // Watch CTA
   watchCTA: {
     backgroundColor: "#DC143C",
-    borderRadius: 14,
-    paddingVertical: 15,
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: "center",
+    shadowColor: "#DC143C",
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
   watchCTAText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
 
   // Reactions
-  reactionsRow: { flexDirection: "row", gap: 8, paddingVertical: 4 },
-  reactionBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "rgba(255,255,255,0.06)",
+  interactionWrap: { gap: 0 },
+  reactionsPanel: {
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(12,12,12,0.92)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  reactionsRow: { flexDirection: "row", gap: 10, paddingVertical: 2 },
+  reactionBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
   reactionBtnMuted: { opacity: 0.3 },
   reactionEmoji: { fontSize: 22 },
+  reactionOverlay: {
+    alignSelf: "center",
+    marginTop: 4,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  reactionOverlayEmoji: { fontSize: 24, fontWeight: "800" },
   mutedNotice: { color: "#555", fontSize: 11, textAlign: "center", marginTop: -4 },
 
   // Host controls
+  hostWrap: { gap: 0 },
   hostSection: {
-    backgroundColor: "rgba(18,18,18,0.96)",
-    borderRadius: 14,
+    backgroundColor: "rgba(15,15,15,0.97)",
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderColor: "rgba(255,255,255,0.1)",
     padding: 14,
-    gap: 10,
+    gap: 11,
   },
   hostSectionLabel: { color: "#555", fontSize: 9.5, fontWeight: "800", letterSpacing: 1 },
   hostPlaybackRow: { flexDirection: "row", gap: 8 },
   hostPlaybackBtn: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingVertical: 9,
+    borderColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingVertical: 11,
     alignItems: "center",
   },
   hostPlaybackBtnPrimary: {
-    borderColor: "rgba(220,20,60,0.45)",
-    backgroundColor: "rgba(220,20,60,0.2)",
+    borderColor: "rgba(220,20,60,0.56)",
+    backgroundColor: "rgba(220,20,60,0.28)",
+    shadowColor: "#DC143C",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   hostPlaybackBtnText: { color: "#ddd", fontSize: 12, fontWeight: "800" },
   hostPlaybackBtnTextPrimary: { color: "#fff" },
@@ -971,10 +1226,10 @@ const styles = StyleSheet.create({
   hostBtn: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    borderColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    paddingHorizontal: 13,
+    paddingVertical: 8,
   },
   hostBtnOn: {
     borderColor: "rgba(220,20,60,0.4)",
@@ -983,8 +1238,16 @@ const styles = StyleSheet.create({
   hostBtnText: { color: "#ccc", fontSize: 12, fontWeight: "700" },
 
   // Chat toggle
-  chatToggle: { paddingVertical: 10 },
-  chatToggleText: { color: "#888", fontSize: 13, fontWeight: "700" },
+  chatToggle: {
+    marginTop: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  chatToggleText: { color: "#999", fontSize: 13, fontWeight: "800" },
   chatCount: { color: "#555", fontWeight: "600" },
 
   // Chat section
