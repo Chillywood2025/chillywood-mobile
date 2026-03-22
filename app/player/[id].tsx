@@ -1475,7 +1475,11 @@ export default function PlayerScreen() {
     if (!inWatchParty) return;
 
     const id = `party-local-react-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const rightOffset = 10 + Math.floor(Math.random() * 84);
+    const videoWidth = Math.max(220, Math.floor(videoWidthRef.current || 320));
+    const minRightOffset = 10;
+    const maxRightOffset = Math.max(minRightOffset, videoWidth - 56);
+    const rightOffset =
+      minRightOffset + Math.floor(Math.random() * (maxRightOffset - minRightOffset + 1));
     const floatDistance = -(34 + Math.floor(Math.random() * 26));
     const floatDuration = 480 + Math.floor(Math.random() * 180);
     const fadeDelay = 170 + Math.floor(Math.random() * 100);
