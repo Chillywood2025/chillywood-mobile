@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Animated,
   Easing,
+  Image,
   LayoutAnimation,
   PanResponder,
   Platform,
@@ -167,14 +168,33 @@ export default function PlayerScreen() {
       id: string;
       name: string;
       role: "host" | "viewer";
+      avatarUrl?: string;
       muted: boolean;
       canSpeak: boolean;
       isSpeaking: boolean;
       isRequestingToSpeak: boolean;
     }>
   >([
-    { id: "p1", name: "Kai", role: "host", muted: false, canSpeak: true, isSpeaking: true, isRequestingToSpeak: false },
-    { id: "p2", name: "Mia", role: "viewer", muted: true, canSpeak: false, isSpeaking: false, isRequestingToSpeak: false },
+    {
+      id: "p1",
+      name: "Kai",
+      role: "host",
+      avatarUrl: "https://i.pravatar.cc/120?img=12",
+      muted: false,
+      canSpeak: true,
+      isSpeaking: true,
+      isRequestingToSpeak: false,
+    },
+    {
+      id: "p2",
+      name: "Mia",
+      role: "viewer",
+      avatarUrl: "https://i.pravatar.cc/120?img=32",
+      muted: true,
+      canSpeak: false,
+      isSpeaking: false,
+      isRequestingToSpeak: false,
+    },
     { id: "p3", name: "Noah", role: "viewer", muted: false, canSpeak: true, isSpeaking: false, isRequestingToSpeak: false },
     { id: "p4", name: "Ava", role: "viewer", muted: false, canSpeak: false, isSpeaking: false, isRequestingToSpeak: false },
   ]);
@@ -194,8 +214,12 @@ export default function PlayerScreen() {
   const [partyTapReactionTick, setPartyTapReactionTick] = useState(0);
   const [livePresenceEvent, setLivePresenceEvent] = useState<string | null>(null);
   const [participantReactionBoostIds, setParticipantReactionBoostIds] = useState<string[]>([]);
+  const [entryBoostActive, setEntryBoostActive] = useState(false);
+  const [roomEnergy, setRoomEnergy] = useState(0);
   const seekFeedbackOpacity = useRef(new Animated.Value(0)).current;
   const participantActivityPulse = useRef(new Animated.Value(0)).current;
+  const entryPulseOpacity = useRef(new Animated.Value(0)).current;
+  const roomEnergyAnim = useRef(new Animated.Value(0)).current;
   const participantActiveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const lastParticipantActivityAtRef = useRef(Date.now());
   const speakingOrderRef = useRef<string[]>(["p1"]);
@@ -209,6 +233,14 @@ export default function PlayerScreen() {
   const participantIdleScaleMapRef = useRef<Record<string, Animated.Value>>({});
   const participantIdleTranslateXMapRef = useRef<Record<string, Animated.Value>>({});
   const participantReactionBoostTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const participantFocusScaleMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantFocusOpacityMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantPressScaleMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantVoiceLevelMapRef = useRef<Record<string, Animated.Value>>({});
+  const participantJoinScaleMapRef = useRef<Record<string, Animated.Value>>({});
+  const entryBoostTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastJoinToastAtRef = useRef(0);
+  const roomEnergyRef = useRef(0);
 
   const zoomScale = useRef(new Animated.Value(1)).current;
   const zoomScaleValueRef = useRef(1);
@@ -1549,6 +1581,45 @@ export default function PlayerScreen() {
     }, 2600);
   }, []);
 
+  const bumpRoomEnergy = useCallback((delta: number) => {
+    setRoomEnergy((current) => clamp(current + delta, 0, 1));
+  }, []);
+
+  useEffect(() => {
+    roomEnergyRef.current = roomEnergy;
+    Animated.timing(roomEnergyAnim, {
+      toValue: roomEnergy,
+      duration: 260,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [roomEnergy, roomEnergyAnim]);
+
+  useEffect(() => {
+    if (!inWatchParty) return;
+
+    const interval = setInterval(() => {
+      setRoomEnergy((current) => {
+        if (current <= 0.01) return 0;
+        return clamp(current - 0.02, 0, 1);
+      });
+    }, 600);
+
+    return () => clearInterval(interval);
+  }, [inWatchParty]);
+
+  useEffect(() => {
+    if (!inWatchParty) return;
+
+    const interval = setInterval(() => {
+      const speakingCount = partyParticipants.filter((entry) => entry.isSpeaking && entry.canSpeak).length;
+      if (speakingCount <= 0) return;
+      bumpRoomEnergy(0.012 * Math.min(2, speakingCount));
+    }, 780);
+
+    return () => clearInterval(interval);
+  }, [bumpRoomEnergy, inWatchParty, partyParticipants]);
+
   const triggerParticipantReactionBoost = useCallback((participantId: string, duration = 900) => {
     if (!participantId) return;
     setParticipantReactionBoostIds((prev) => (prev.includes(participantId) ? prev : [...prev, participantId]));
@@ -1598,8 +1669,12 @@ export default function PlayerScreen() {
   }, []);
 
   const triggerParticipantLinkedReaction = useCallback(
-    (participantId: string, participantName: string, emoji: string, isSpeaking = false) => {
+    (participantId: string, participantName: string, emoji: string, isSpeaking = false, showToast = true) => {
       if (!participantId) return;
+
+      const currentEnergy = roomEnergyRef.current;
+      const energyScaleBoost = currentEnergy * 0.22;
+      const highEnergy = currentEnergy > 0.7;
 
       const reactionId = `participant-react-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const createdAt = Date.now();
@@ -1629,29 +1704,29 @@ export default function PlayerScreen() {
       Animated.parallel([
         Animated.sequence([
           Animated.timing(scale, {
-            toValue: isSpeaking ? 1.34 : 1.22,
+            toValue: (isSpeaking ? 1.42 : 1.22) + energyScaleBoost,
             duration: 110,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
           Animated.timing(scale, {
-            toValue: isSpeaking ? 1.12 : 1,
+            toValue: (isSpeaking ? 1.18 : 1) + energyScaleBoost * 0.45,
             duration: 130,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
         ]),
         Animated.timing(translateY, {
-          toValue: isSpeaking ? -30 : -22,
-          duration: 1300,
+          toValue: (isSpeaking ? -36 : -22) - (highEnergy ? 9 : 0),
+          duration: (isSpeaking ? 1550 : 1300) + (highEnergy ? 240 : 0),
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.sequence([
-          Animated.delay(950),
+          Animated.delay((isSpeaking ? 1200 : 950) + (highEnergy ? 150 : 0)),
           Animated.timing(opacity, {
             toValue: 0,
-            duration: 520,
+            duration: (isSpeaking ? 650 : 520) + (highEnergy ? 140 : 0),
             easing: Easing.in(Easing.quad),
             useNativeDriver: true,
           }),
@@ -1672,9 +1747,13 @@ export default function PlayerScreen() {
         triggerParticipantReactionBoost(participantId, 950);
       }
 
-      showLivePresenceEvent(`${emoji} ${participantName} reacted`);
+      if (showToast) {
+        showLivePresenceEvent(`${emoji} ${participantName} reacted`);
+      }
+
+      bumpRoomEnergy(isSpeaking ? 0.12 : 0.08);
     },
-    [animateOutParticipantReaction, showLivePresenceEvent, triggerParticipantReactionBoost],
+    [animateOutParticipantReaction, bumpRoomEnergy, showLivePresenceEvent, triggerParticipantReactionBoost],
   );
 
   const markParticipantActive = useCallback((participantId: string, duration = 2400) => {
@@ -1694,6 +1773,10 @@ export default function PlayerScreen() {
 
   const triggerLocalPartyReaction = useCallback((emoji: string) => {
     if (!inWatchParty) return;
+
+    const currentEnergy = roomEnergyRef.current;
+    const highEnergy = currentEnergy > 0.7;
+    const energyScaleBoost = currentEnergy * 0.24;
 
     const participantId =
       activeParticipantId ?? partyParticipants.find((entry) => entry.role === "host")?.id ?? partyParticipants[0]?.id ?? "";
@@ -1722,13 +1805,13 @@ export default function PlayerScreen() {
     const maxRightOffset = Math.max(minRightOffset, videoWidth - 56);
     const rightOffset =
       minRightOffset + Math.floor(Math.random() * (maxRightOffset - minRightOffset + 1));
-    const floatDistance = -(42 + Math.floor(Math.random() * 34));
-    const floatDuration = 420 + Math.floor(Math.random() * 170);
-    const fadeDelay = 120 + Math.floor(Math.random() * 90);
-    const fadeDuration = 160 + Math.floor(Math.random() * 80);
+    const floatDistance = -(42 + Math.floor(Math.random() * 34) + (highEnergy ? 9 : 0));
+    const floatDuration = 420 + Math.floor(Math.random() * 170) + (highEnergy ? 90 : 0);
+    const fadeDelay = 120 + Math.floor(Math.random() * 90) + (highEnergy ? 70 : 0);
+    const fadeDuration = 160 + Math.floor(Math.random() * 80) + (highEnergy ? 80 : 0);
     const horizontalDrift = (Math.random() < 0.5 ? -1 : 1) * (12 + Math.floor(Math.random() * 15));
 
-    const scale = new Animated.Value(0.66);
+    const scale = new Animated.Value(0.66 + energyScaleBoost * 0.28);
     const translateY = new Animated.Value(0);
     const translateX = new Animated.Value(0);
     const opacity = new Animated.Value(1);
@@ -1742,13 +1825,13 @@ export default function PlayerScreen() {
     Animated.parallel([
       Animated.sequence([
         Animated.timing(scale, {
-          toValue: 1.26,
+          toValue: 1.26 + energyScaleBoost,
           duration: 90,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(scale, {
-          toValue: 1,
+          toValue: 1 + energyScaleBoost * 0.42,
           duration: 95,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
@@ -1782,7 +1865,8 @@ export default function PlayerScreen() {
       delete partyLocalReactionTranslateXMapRef.current[id];
       delete partyLocalReactionOpacityMapRef.current[id];
     });
-  }, [activeParticipantId, inWatchParty, markParticipantActive, partyParticipants, triggerParticipantLinkedReaction]);
+    bumpRoomEnergy(0.07);
+  }, [activeParticipantId, bumpRoomEnergy, inWatchParty, markParticipantActive, partyParticipants, triggerParticipantLinkedReaction]);
 
   useEffect(() => {
     if (!inWatchParty || partyTapReactionTick === 0) return;
@@ -1856,8 +1940,9 @@ export default function PlayerScreen() {
 
     const id = `local-comment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setPartyComments((prev) => [...prev, { id, username: "You", text }]);
+    bumpRoomEnergy(0.09);
     setPartyCommentDraft("");
-  }, [activeParticipantId, markParticipantActive, partyCommentDraft, partyParticipants]);
+  }, [activeParticipantId, bumpRoomEnergy, markParticipantActive, partyCommentDraft, partyParticipants]);
 
   const progressPercent = useMemo(() => {
     if (!durationMillis || durationMillis <= 0) return 0;
@@ -1866,11 +1951,19 @@ export default function PlayerScreen() {
 
   const participantPulseScale = participantActivityPulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.14],
+    outputRange: [1, 1.12 + roomEnergy * 0.14],
   });
   const participantPulseOpacity = participantActivityPulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.34, 0.04],
+    outputRange: [0.26 + roomEnergy * 0.18, 0.03 + roomEnergy * 0.05],
+  });
+  const roomEnergyAuraOpacity = roomEnergyAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.05, 0.34],
+  });
+  const roomEnergyAuraScale = roomEnergyAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.09],
   });
   const speakingParticipantIds = useMemo(
     () => partyParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).map((participant) => participant.id),
@@ -1941,8 +2034,127 @@ export default function PlayerScreen() {
       if (!participantIdleTranslateXMapRef.current[participant.id]) {
         participantIdleTranslateXMapRef.current[participant.id] = new Animated.Value(0);
       }
+      if (!participantFocusScaleMapRef.current[participant.id]) {
+        participantFocusScaleMapRef.current[participant.id] = new Animated.Value(1);
+      }
+      if (!participantFocusOpacityMapRef.current[participant.id]) {
+        participantFocusOpacityMapRef.current[participant.id] = new Animated.Value(1);
+      }
+      if (!participantPressScaleMapRef.current[participant.id]) {
+        participantPressScaleMapRef.current[participant.id] = new Animated.Value(1);
+      }
+      if (!participantVoiceLevelMapRef.current[participant.id]) {
+        participantVoiceLevelMapRef.current[participant.id] = new Animated.Value(0);
+      }
+      if (!participantJoinScaleMapRef.current[participant.id]) {
+        participantJoinScaleMapRef.current[participant.id] = new Animated.Value(1);
+      }
     });
   }, [partyParticipants]);
+
+  useEffect(() => {
+    if (!inWatchParty) return;
+
+    setEntryBoostActive(true);
+    if (entryBoostTimeoutRef.current) clearTimeout(entryBoostTimeoutRef.current);
+    entryBoostTimeoutRef.current = setTimeout(() => {
+      setEntryBoostActive(false);
+      entryBoostTimeoutRef.current = null;
+    }, 2600);
+
+    const speakingNow = partyParticipants
+      .filter((participant) => participant.isSpeaking && participant.canSpeak)
+      .slice(0, 2);
+    speakingNow.forEach((participant) => {
+      triggerParticipantReactionBoost(participant.id, 1500);
+      markParticipantActive(participant.id, 1500);
+    });
+
+    return () => {
+      if (entryBoostTimeoutRef.current) {
+        clearTimeout(entryBoostTimeoutRef.current);
+        entryBoostTimeoutRef.current = null;
+      }
+      setEntryBoostActive(false);
+    };
+  }, [inWatchParty, markParticipantActive, partyParticipants, triggerParticipantReactionBoost]);
+
+  useEffect(() => {
+    if (!inWatchParty || !entryBoostActive) {
+      entryPulseOpacity.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(entryPulseOpacity, {
+          toValue: 0.28,
+          duration: 420,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(entryPulseOpacity, {
+          toValue: 0.05,
+          duration: 520,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      entryPulseOpacity.setValue(0);
+    };
+  }, [entryBoostActive, entryPulseOpacity, inWatchParty]);
+
+  useEffect(() => {
+    if (!inWatchParty || !entryBoostActive) return;
+
+    const interval = setInterval(() => {
+      if (partyParticipants.length === 0) return;
+      const pool = partyParticipants.filter((participant) => participant.canSpeak || participant.isSpeaking);
+      const chosen = (pool.length > 0 ? pool : partyParticipants)[Math.floor(Math.random() * (pool.length > 0 ? pool.length : partyParticipants.length))];
+      if (!chosen) return;
+
+      const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
+      triggerParticipantLinkedReaction(chosen.id, chosen.name, emoji, !!(chosen.isSpeaking && chosen.canSpeak), false);
+    }, 820);
+
+    return () => clearInterval(interval);
+  }, [entryBoostActive, inWatchParty, partyParticipants, triggerParticipantLinkedReaction]);
+
+  useEffect(() => {
+    if (!inWatchParty) return;
+
+    const speakingParticipants = partyParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak);
+    const speakingCount = speakingParticipants.length;
+
+    partyParticipants.forEach((participant) => {
+      const isSpeaking = participant.isSpeaking && participant.canSpeak;
+      const targetScale = isSpeaking ? (speakingCount === 1 ? 1.15 : 1.1) : 1;
+      const targetOpacity = speakingCount > 0 && !isSpeaking ? 0.72 : 1;
+
+      const focusScale = participantFocusScaleMapRef.current[participant.id];
+      const focusOpacity = participantFocusOpacityMapRef.current[participant.id];
+      if (!focusScale || !focusOpacity) return;
+
+      Animated.parallel([
+        Animated.timing(focusScale, {
+          toValue: targetScale,
+          duration: 220,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(focusOpacity, {
+          toValue: targetOpacity,
+          duration: 220,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  }, [inWatchParty, partyParticipants]);
 
   useEffect(() => {
     if (!inWatchParty) return;
@@ -1958,18 +2170,21 @@ export default function PlayerScreen() {
       const translateX = participantIdleTranslateXMapRef.current[picked.id];
       if (!scale || !translateX) return;
 
-      const horizontalShift = (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random());
+      const roomMotionBoost = 1 + roomEnergyRef.current * 0.88;
+      const motionScale = (entryBoostActive ? 1.45 : 1) * roomMotionBoost;
+      const motionDuration = Math.max(120, (entryBoostActive ? 170 : 180) - Math.round(roomEnergyRef.current * 46));
+      const horizontalShift = ((Math.random() < 0.5 ? -1 : 1) * (1 + Math.random())) * motionScale;
       Animated.parallel([
         Animated.sequence([
           Animated.timing(scale, {
-            toValue: 1.05,
-            duration: 180,
+            toValue: (entryBoostActive ? 1.07 : 1.05) + roomEnergyRef.current * 0.03,
+            duration: motionDuration,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
           Animated.timing(scale, {
             toValue: 1,
-            duration: 180,
+            duration: motionDuration,
             easing: Easing.in(Easing.quad),
             useNativeDriver: true,
           }),
@@ -1977,19 +2192,42 @@ export default function PlayerScreen() {
         Animated.sequence([
           Animated.timing(translateX, {
             toValue: horizontalShift,
-            duration: 180,
+            duration: motionDuration,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
           Animated.timing(translateX, {
             toValue: 0,
-            duration: 180,
+            duration: motionDuration,
             easing: Easing.in(Easing.quad),
             useNativeDriver: true,
           }),
         ]),
       ]).start();
     }, 3200);
+
+    return () => clearInterval(interval);
+  }, [entryBoostActive, inWatchParty, partyParticipants]);
+
+  useEffect(() => {
+    if (!inWatchParty) return;
+
+    const interval = setInterval(() => {
+      partyParticipants.forEach((participant) => {
+        const voiceLevel = participantVoiceLevelMapRef.current[participant.id];
+        if (!voiceLevel) return;
+
+        const isSpeaking = participant.isSpeaking && participant.canSpeak;
+        const energy = roomEnergyRef.current;
+        const targetLevel = isSpeaking ? Math.min(1, 0.16 + energy * 0.12 + Math.random() * (0.7 + energy * 0.2)) : 0;
+        Animated.timing(voiceLevel, {
+          toValue: targetLevel,
+          duration: isSpeaking ? Math.max(140, 220 - Math.round(energy * 70)) : 240,
+          easing: isSpeaking ? Easing.out(Easing.quad) : Easing.in(Easing.quad),
+          useNativeDriver: false,
+        }).start();
+      });
+    }, 190);
 
     return () => clearInterval(interval);
   }, [inWatchParty, partyParticipants]);
@@ -2017,7 +2255,7 @@ export default function PlayerScreen() {
   const isLiveMode = inWatchParty && (isLiveModeFlag || !source);
 
   useEffect(() => {
-    if (!isLiveMode) return;
+    if (!inWatchParty) return;
 
     const previous = previousParticipantsRef.current;
     if (previous.length === 0) {
@@ -2036,7 +2274,34 @@ export default function PlayerScreen() {
 
     const joined = partyParticipants.find((entry) => !previousById.has(entry.id));
     if (joined) {
-      eventText = `👤 ${joined.name} joined`;
+      const joinScale = participantJoinScaleMapRef.current[joined.id];
+      if (joinScale) {
+        joinScale.setValue(0.8);
+        Animated.sequence([
+          Animated.timing(joinScale, {
+            toValue: 1.06,
+            duration: 150,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(joinScale, {
+            toValue: 1,
+            duration: 170,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+
+      triggerParticipantReactionBoost(joined.id, 1250);
+      markParticipantActive(joined.id, 1400);
+      bumpRoomEnergy(0.16);
+
+      const now = Date.now();
+      if (now - lastJoinToastAtRef.current > 1200) {
+        eventText = `👤 ${joined.name} joined`;
+        lastJoinToastAtRef.current = now;
+      }
     }
 
     if (!eventText) {
@@ -2058,6 +2323,7 @@ export default function PlayerScreen() {
         } else {
           eventText = startedSpeaking.id === localParticipantId ? "🎤 You are now speaking" : `🎤 ${startedSpeaking.name} started speaking`;
         }
+        bumpRoomEnergy(0.1);
       }
     }
 
@@ -2085,7 +2351,15 @@ export default function PlayerScreen() {
       name: entry.name,
       isSpeaking: entry.isSpeaking,
     }));
-  }, [isLiveMode, localParticipantId, partyParticipants, showLivePresenceEvent]);
+  }, [
+    inWatchParty,
+    localParticipantId,
+    markParticipantActive,
+    partyParticipants,
+    bumpRoomEnergy,
+    showLivePresenceEvent,
+    triggerParticipantReactionBoost,
+  ]);
 
   const renderParticipantPanel = (liveLayout = false) => (
     <View style={[styles.partyFeedCard, liveLayout && styles.partyFeedCardLive]}>
@@ -2105,8 +2379,14 @@ export default function PlayerScreen() {
           const participantReactions = partyParticipantReactions
             .filter((entry) => entry.participantId === participant.id)
             .slice(-2);
+          const voiceLevel = participantVoiceLevelMapRef.current[participant.id] ?? new Animated.Value(0);
+          const focusScale = participantFocusScaleMapRef.current[participant.id] ?? 1;
+          const focusOpacity = participantFocusOpacityMapRef.current[participant.id] ?? 1;
           const idleScale = !isSpeaking ? (participantIdleScaleMapRef.current[participant.id] ?? 1) : 1;
           const idleTranslateX = !isSpeaking ? (participantIdleTranslateXMapRef.current[participant.id] ?? 0) : 0;
+          const pressScale = participantPressScaleMapRef.current[participant.id] ?? 1;
+          const joinScale = participantJoinScaleMapRef.current[participant.id] ?? 1;
+          const isOnlineActive = isSpeaking || isActive;
           const initials = participant.name
             .split(" ")
             .map((part) => part[0] ?? "")
@@ -2115,7 +2395,7 @@ export default function PlayerScreen() {
             .toUpperCase();
 
           return (
-            <View
+            <Animated.View
               key={participant.id}
               style={[
                 styles.participantBubbleItem,
@@ -2126,14 +2406,42 @@ export default function PlayerScreen() {
                 isReactionBoosted && styles.participantBubbleReactionBoost,
                 isExpanded && styles.partyParticipantCardExpanded,
                 {
-                  transform: [{ scale: idleScale }, { translateX: idleTranslateX }],
+                  opacity: focusOpacity,
+                  transform: [
+                    { scale: focusScale },
+                    { scale: joinScale },
+                    { scale: idleScale },
+                    { scale: pressScale },
+                    { translateX: idleTranslateX },
+                  ],
                 },
               ]}
             >
               <TouchableOpacity
                 style={styles.partyParticipantBubbleTap}
+                onPressIn={() => {
+                  const press = participantPressScaleMapRef.current[participant.id];
+                  if (!press) return;
+                  Animated.timing(press, {
+                    toValue: 0.95,
+                    duration: 90,
+                    easing: Easing.out(Easing.quad),
+                    useNativeDriver: true,
+                  }).start();
+                }}
+                onPressOut={() => {
+                  const press = participantPressScaleMapRef.current[participant.id];
+                  if (!press) return;
+                  Animated.timing(press, {
+                    toValue: 1,
+                    duration: 120,
+                    easing: Easing.out(Easing.quad),
+                    useNativeDriver: true,
+                  }).start();
+                }}
                 onPress={() => {
                   markParticipantActive(participant.id, 2400);
+                  bumpRoomEnergy(0.03);
                   if (!isHost && participant.id === localParticipantId && !participant.canSpeak) {
                     setPartyParticipants((prev) =>
                       prev.map((entry) =>
@@ -2153,6 +2461,20 @@ export default function PlayerScreen() {
                       style={[
                         styles.participantActivePulse,
                         isSpeaking && styles.participantSpeakingPulse,
+                        isSpeaking && {
+                          opacity: voiceLevel.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.14, 0.5],
+                          }),
+                          transform: [
+                            {
+                              scale: voiceLevel.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [1.02, 1.16],
+                              }),
+                            },
+                          ],
+                        },
                         {
                           opacity: participantPulseOpacity,
                           transform: [{ scale: participantPulseScale }],
@@ -2167,10 +2489,33 @@ export default function PlayerScreen() {
                       participant.muted && styles.participantAvatarMuted,
                     ]}
                   >
-                    <Text style={[styles.participantInitials, liveLayout && styles.participantInitialsLive]}>{initials}</Text>
+                    {participant.avatarUrl ? (
+                      <Image source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
+                    ) : (
+                      <Text style={[styles.participantInitials, liveLayout && styles.participantInitialsLive]}>{initials}</Text>
+                    )}
                   </View>
-                  {isActive ? <View pointerEvents="none" style={[styles.participantActiveRing, isSpeaking && styles.participantSpeakingRing, isReactionBoosted && styles.participantReactionBoostRing]} /> : null}
+                  {isActive ? (
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        styles.participantActiveRing,
+                        isSpeaking && styles.participantSpeakingRing,
+                        isReactionBoosted && styles.participantReactionBoostRing,
+                        isSpeaking && {
+                          borderWidth: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [2.4 + roomEnergy * 0.8, 4.6 + roomEnergy * 1.2] }),
+                          opacity: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [0.72 + roomEnergy * 0.18, 1] }),
+                          transform: [
+                            {
+                              scale: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07 + roomEnergy * 0.05] }),
+                            },
+                          ],
+                        },
+                      ]}
+                    />
+                  ) : null}
                   {isRequesting ? <View pointerEvents="none" style={styles.participantRequestRing} /> : null}
+                  <View style={[styles.participantPresenceDot, isOnlineActive ? styles.participantPresenceDotActive : styles.participantPresenceDotIdle]} />
                   {isSpeaking ? (
                     <View style={styles.participantSpeakingBadge}>
                       <Text style={styles.participantSpeakingBadgeText}>LIVE</Text>
@@ -2184,6 +2529,11 @@ export default function PlayerScreen() {
                   {isRequesting ? (
                     <View style={styles.participantRequestBadge}>
                       <Text style={styles.participantRequestBadgeText}>✋</Text>
+                    </View>
+                  ) : null}
+                  {participant.muted ? (
+                    <View style={styles.participantMutedOverlay}>
+                      <Text style={styles.participantMutedOverlayText}>🔇</Text>
                     </View>
                   ) : null}
 
@@ -2256,6 +2606,7 @@ export default function PlayerScreen() {
                             return nextParticipants;
                           });
                           showLivePresenceEvent(`✅ ${participant.name} is now allowed to speak`);
+                          bumpRoomEnergy(0.11);
                           markParticipantActive(participant.id, 2400);
                         }}
                         activeOpacity={0.85}
@@ -2272,6 +2623,7 @@ export default function PlayerScreen() {
                             ),
                           );
                           showLivePresenceEvent(`❌ ${participant.name} request denied`);
+                          bumpRoomEnergy(0.04);
                         }}
                         activeOpacity={0.85}
                       >
@@ -2320,6 +2672,8 @@ export default function PlayerScreen() {
                           speakingOrderRef.current = orderedSpeaking.slice(toDropCount);
                         }
 
+                        bumpRoomEnergy(enablingSpeak ? 0.08 : 0.03);
+
                         return nextParticipants;
                       });
                     }}
@@ -2350,6 +2704,7 @@ export default function PlayerScreen() {
                       if (participant.canSpeak) {
                         speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
                       }
+                      bumpRoomEnergy(participant.canSpeak ? 0.04 : 0.07);
                     }}
                     activeOpacity={0.85}
                   >
@@ -2364,6 +2719,7 @@ export default function PlayerScreen() {
                           entry.id === participant.id ? { ...entry, muted: !entry.muted } : entry,
                         ),
                       );
+                      bumpRoomEnergy(0.03);
                     }}
                     activeOpacity={0.85}
                   >
@@ -2371,7 +2727,7 @@ export default function PlayerScreen() {
                   </TouchableOpacity>
                 </View>
               ) : null}
-            </View>
+            </Animated.View>
           );
         })}
       </ScrollView>
@@ -2418,7 +2774,19 @@ export default function PlayerScreen() {
 
         {isLiveMode ? (
           <View style={[styles.videoWrap, styles.liveRoomWrap]}>
-            {livePrimarySpeakers.length > 0 ? <Animated.View pointerEvents="none" style={styles.liveSpeakingBackdrop} /> : null}
+            {livePrimarySpeakers.length > 0 ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.liveSpeakingBackdrop,
+                  {
+                    opacity: roomEnergyAuraOpacity,
+                    transform: [{ scale: roomEnergyAuraScale }],
+                  },
+                ]}
+              />
+            ) : null}
+            {entryBoostActive ? <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} /> : null}
 
             <Text style={styles.liveSpeakingLabel}>{liveSpeakingLabel}</Text>
 
@@ -2432,6 +2800,12 @@ export default function PlayerScreen() {
                   const participantReactions = partyParticipantReactions
                     .filter((entry) => entry.participantId === participant.id)
                     .slice(-2);
+                  const voiceLevel = participantVoiceLevelMapRef.current[participant.id] ?? new Animated.Value(0);
+                  const focusScale = participantFocusScaleMapRef.current[participant.id] ?? 1;
+                  const focusOpacity = participantFocusOpacityMapRef.current[participant.id] ?? 1;
+                  const pressScale = participantPressScaleMapRef.current[participant.id] ?? 1;
+                  const joinScale = participantJoinScaleMapRef.current[participant.id] ?? 1;
+                  const isOnlineActive = isSpeaking || isActive;
                   const initials = participant.name
                     .split(" ")
                     .map((part) => part[0] ?? "")
@@ -2440,31 +2814,69 @@ export default function PlayerScreen() {
                     .toUpperCase();
 
                   return (
-                    <TouchableOpacity
+                    <Animated.View
                       key={`live-focused-${participant.id}`}
-                      style={[styles.liveSpeakerCard, livePrimarySpeakers.length === 1 ? styles.liveSpeakerCardSolo : styles.liveSpeakerCardDual]}
-                      onPress={() => {
-                        const isHost = partySyncRole === "host";
-                        markParticipantActive(participant.id, 2400);
-                        if (!isHost && participant.id === localParticipantId && !participant.canSpeak) {
-                          setPartyParticipants((prev) =>
-                            prev.map((entry) =>
-                              entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
-                            ),
-                          );
-                        }
-                        if (!isHost) return;
-                        setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
-                      }}
-                      activeOpacity={0.9}
+                      style={{ opacity: focusOpacity, transform: [{ scale: focusScale }, { scale: joinScale }, { scale: pressScale }] }}
                     >
-                      <View style={styles.liveSpeakerAvatarWrap}>
+                      <TouchableOpacity
+                        style={[styles.liveSpeakerCard, livePrimarySpeakers.length === 1 ? styles.liveSpeakerCardSolo : styles.liveSpeakerCardDual]}
+                        onPressIn={() => {
+                          const press = participantPressScaleMapRef.current[participant.id];
+                          if (!press) return;
+                          Animated.timing(press, {
+                            toValue: 0.95,
+                            duration: 90,
+                            easing: Easing.out(Easing.quad),
+                            useNativeDriver: true,
+                          }).start();
+                        }}
+                        onPressOut={() => {
+                          const press = participantPressScaleMapRef.current[participant.id];
+                          if (!press) return;
+                          Animated.timing(press, {
+                            toValue: 1,
+                            duration: 120,
+                            easing: Easing.out(Easing.quad),
+                            useNativeDriver: true,
+                          }).start();
+                        }}
+                        onPress={() => {
+                          const isHost = partySyncRole === "host";
+                          markParticipantActive(participant.id, 2400);
+                          bumpRoomEnergy(0.03);
+                          if (!isHost && participant.id === localParticipantId && !participant.canSpeak) {
+                            setPartyParticipants((prev) =>
+                              prev.map((entry) =>
+                                entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
+                              ),
+                            );
+                          }
+                          if (!isHost) return;
+                          setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <View style={styles.liveSpeakerAvatarWrap}>
                         {isActive ? (
                           <Animated.View
                             pointerEvents="none"
                             style={[
                               styles.participantActivePulse,
                               isSpeaking && styles.participantSpeakingPulse,
+                              isSpeaking && {
+                                opacity: voiceLevel.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0.16, 0.56],
+                                }),
+                                transform: [
+                                  {
+                                    scale: voiceLevel.interpolate({
+                                      inputRange: [0, 1],
+                                      outputRange: [1.03, 1.19],
+                                    }),
+                                  },
+                                ],
+                              },
                               {
                                 opacity: participantPulseOpacity,
                                 transform: [{ scale: participantPulseScale }],
@@ -2473,15 +2885,44 @@ export default function PlayerScreen() {
                           />
                         ) : null}
                         <View style={[styles.participantAvatar, styles.participantAvatarLive, styles.liveSpeakerAvatar, participant.muted && styles.participantAvatarMuted]}>
-                          <Text style={[styles.participantInitials, styles.participantInitialsLive, styles.liveSpeakerInitials]}>{initials}</Text>
+                          {participant.avatarUrl ? (
+                            <Image source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
+                          ) : (
+                            <Text style={[styles.participantInitials, styles.participantInitialsLive, styles.liveSpeakerInitials]}>{initials}</Text>
+                          )}
                         </View>
-                        {isActive ? <View pointerEvents="none" style={[styles.participantActiveRing, isSpeaking && styles.participantSpeakingRing, styles.liveSpeakerRing, isReactionBoosted && styles.participantReactionBoostRing]} /> : null}
+                        {isActive ? (
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              styles.participantActiveRing,
+                              isSpeaking && styles.participantSpeakingRing,
+                              styles.liveSpeakerRing,
+                              isReactionBoosted && styles.participantReactionBoostRing,
+                              isSpeaking && {
+                                borderWidth: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [2.8 + roomEnergy * 0.9, 5.1 + roomEnergy * 1.3] }),
+                                opacity: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [0.78 + roomEnergy * 0.16, 1] }),
+                                transform: [
+                                  {
+                                    scale: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [1, 1.09 + roomEnergy * 0.05] }),
+                                  },
+                                ],
+                              },
+                            ]}
+                          />
+                        ) : null}
                         {isSpeaking ? (
                           <View style={[styles.participantSpeakingBadge, styles.liveSpeakerBadge]}>
                             <Text style={styles.participantSpeakingBadgeText}>LIVE</Text>
                           </View>
                         ) : null}
                         {isRequesting ? <View pointerEvents="none" style={[styles.participantRequestRing, styles.liveSpeakerRequestRing]} /> : null}
+                        <View style={[styles.participantPresenceDot, styles.liveSpeakerPresenceDot, isOnlineActive ? styles.participantPresenceDotActive : styles.participantPresenceDotIdle]} />
+                        {participant.muted ? (
+                          <View style={[styles.participantMutedOverlay, styles.liveSpeakerMutedOverlay]}>
+                            <Text style={styles.participantMutedOverlayText}>🔇</Text>
+                          </View>
+                        ) : null}
 
                         {participantReactions.map((reaction, reactionIndex) => (
                           <Animated.View
@@ -2506,11 +2947,31 @@ export default function PlayerScreen() {
                             </Text>
                           </Animated.View>
                         ))}
-                      </View>
-                      <Text style={[styles.participantName, styles.participantNameLive, styles.liveSpeakerName]} numberOfLines={1}>
-                        {participant.name}
-                      </Text>
-                    </TouchableOpacity>
+                        </View>
+                        <Text style={[styles.participantName, styles.participantNameLive, styles.liveSpeakerName]} numberOfLines={1}>
+                          {participant.name}
+                        </Text>
+                        {isSpeaking ? (
+                          <View style={styles.liveSpeakerVoiceTrack}>
+                            <Animated.View
+                              style={[
+                                styles.liveSpeakerVoiceFill,
+                                {
+                                  width: voiceLevel.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [16, 74 + roomEnergy * 12],
+                                  }),
+                                  opacity: voiceLevel.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [0.45 + roomEnergy * 0.14, 1],
+                                  }),
+                                },
+                              ]}
+                            />
+                          </View>
+                        ) : null}
+                      </TouchableOpacity>
+                    </Animated.View>
                   );
                 })}
               </View>
@@ -2604,6 +3065,21 @@ export default function PlayerScreen() {
               videoWidthRef.current = event.nativeEvent.layout.width;
             }}
           >
+            {inWatchParty ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.roomEnergyAura,
+                  {
+                    opacity: roomEnergyAuraOpacity,
+                    transform: [{ scale: roomEnergyAuraScale }],
+                  },
+                ]}
+              />
+            ) : null}
+            {inWatchParty && entryBoostActive ? (
+              <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
+            ) : null}
             <Animated.View style={[styles.videoAnimatedWrap, { transform: [{ scale: zoomScale }] }]}> 
               <Video
                 ref={videoRef}
@@ -2868,6 +3344,14 @@ export default function PlayerScreen() {
           </View>
         ) : null}
 
+        {inWatchParty && !isLiveMode && livePresenceEvent ? (
+          <View style={styles.livePresenceEventToast}>
+            <Text style={styles.livePresenceEventText} numberOfLines={1}>
+              {livePresenceEvent}
+            </Text>
+          </View>
+        ) : null}
+
         {inWatchParty && !isLiveMode ? renderParticipantPanel(false) : null}
 
         {zoomLevel > 1.01 && !inWatchParty ? (
@@ -3017,11 +3501,37 @@ const styles = StyleSheet.create({
     top: -2,
     left: -2,
   },
+  liveSpeakerPresenceDot: {
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+    bottom: -5,
+    left: -5,
+  },
+  liveSpeakerMutedOverlay: {
+    right: 19,
+    bottom: -7,
+  },
   liveSpeakerLinkedReaction: {
     bottom: -10,
   },
   liveSpeakerName: {
     fontSize: 13,
+  },
+  liveSpeakerVoiceTrack: {
+    marginTop: 4,
+    width: 78,
+    height: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  liveSpeakerVoiceFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,112,142,0.95)",
   },
   livePresenceEventToast: {
     borderRadius: 999,
@@ -3037,6 +3547,24 @@ const styles = StyleSheet.create({
     color: "#EEF2FA",
     fontSize: 11,
     fontWeight: "800",
+  },
+  entryEnergyPulse: {
+    position: "absolute",
+    top: "20%",
+    alignSelf: "center",
+    width: 220,
+    height: 220,
+    borderRadius: 120,
+    backgroundColor: "rgba(255,70,110,0.22)",
+  },
+  roomEnergyAura: {
+    position: "absolute",
+    top: "10%",
+    alignSelf: "center",
+    width: 250,
+    height: 250,
+    borderRadius: 130,
+    backgroundColor: "rgba(220,20,60,0.16)",
   },
   liveModeParticipantsWrap: {
     width: "100%",
@@ -3549,12 +4077,10 @@ const styles = StyleSheet.create({
   participantBubbleActive: {
     borderColor: "rgba(220,20,60,0.58)",
     backgroundColor: "rgba(220,20,60,0.18)",
-    transform: [{ scale: 1.1 }],
   },
   participantBubbleSpeaking: {
     borderColor: "rgba(220,20,60,0.9)",
     backgroundColor: "rgba(220,20,60,0.24)",
-    transform: [{ scale: 1.16 }],
   },
   participantBubbleInactive: {
     opacity: 0.58,
@@ -3582,6 +4108,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.09)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  participantAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
   },
   participantAvatarLive: {
     width: 58,
@@ -3644,6 +4175,38 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "900",
   },
+  participantPresenceDot: {
+    position: "absolute",
+    bottom: -4,
+    left: -4,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    borderWidth: 1,
+    borderColor: "rgba(6,6,10,0.9)",
+  },
+  participantPresenceDotActive: {
+    backgroundColor: "#4ADE80",
+  },
+  participantPresenceDotIdle: {
+    backgroundColor: "#7A808F",
+  },
+  participantMutedOverlay: {
+    position: "absolute",
+    bottom: -6,
+    right: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(7,7,11,0.88)",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  participantMutedOverlayText: {
+    color: "#F0F3FB",
+    fontSize: 8,
+    fontWeight: "900",
+  },
   participantLinkedReaction: {
     position: "absolute",
     bottom: -8,
@@ -3698,20 +4261,20 @@ const styles = StyleSheet.create({
   },
   participantHostBadge: {
     position: "absolute",
-    left: -8,
-    top: -7,
+    left: -6,
+    top: -6,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(220,20,60,0.65)",
     backgroundColor: "rgba(220,20,60,0.24)",
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 1,
   },
   participantHostBadgeText: {
     color: "#FFF2F5",
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: "900",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   participantSpeakingBadge: {
     position: "absolute",
