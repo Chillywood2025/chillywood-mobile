@@ -155,7 +155,7 @@ export default function PlayerScreen() {
   const [upNextCanceled, setUpNextCanceled] = useState(false);
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
-  const [partyViewerCount, setPartyViewerCount] = useState(0);
+  const [, setPartyViewerCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(1);
   const [partyParticipantPreview, setPartyParticipantPreview] = useState<string[]>([]);
   const [partyChatOpen, setPartyChatOpen] = useState(false);
@@ -164,7 +164,7 @@ export default function PlayerScreen() {
     { id: "2", text: "Welcome to the watch party" },
   ]);
   const [partyParticipants, setPartyParticipants] = useState<
-    Array<{
+    {
       id: string;
       name: string;
       role: "host" | "viewer";
@@ -173,7 +173,7 @@ export default function PlayerScreen() {
       canSpeak: boolean;
       isSpeaking: boolean;
       isRequestingToSpeak: boolean;
-    }>
+    }[]
   >([
     {
       id: "p1",
@@ -202,14 +202,14 @@ export default function PlayerScreen() {
   const [activeParticipantIds, setActiveParticipantIds] = useState<string[]>([]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
-  const [partyComments, setPartyComments] = useState<Array<{ id: string; username: string; text: string }>>(() =>
+  const [partyComments, setPartyComments] = useState<{ id: string; username: string; text: string }[]>(() =>
     PARTY_MOCK_COMMENTS.map((entry) => ({ ...entry })),
   );
-  const [partyOverlayMessages, setPartyOverlayMessages] = useState<Array<{ id: string; author: string; body: string }>>([]);
-  const [partyReactionBursts, setPartyReactionBursts] = useState<Array<{ id: string; emoji: string }>>([]);
-  const [partyLocalReactions, setPartyLocalReactions] = useState<Array<{ id: string; emoji: string; rightOffset: number }>>([]);
+  const [, setPartyOverlayMessages] = useState<{ id: string; author: string; body: string }[]>([]);
+  const [partyReactionBursts, setPartyReactionBursts] = useState<{ id: string; emoji: string }[]>([]);
+  const [partyLocalReactions, setPartyLocalReactions] = useState<{ id: string; emoji: string; rightOffset: number }[]>([]);
   const [partyParticipantReactions, setPartyParticipantReactions] = useState<
-    Array<{ id: string; participantId: string; participantName: string; emoji: string; isSpeaking: boolean; createdAt: number }>
+    { id: string; participantId: string; participantName: string; emoji: string; isSpeaking: boolean; createdAt: number }[]
   >([]);
   const [partyTapReactionTick, setPartyTapReactionTick] = useState(0);
   const [livePresenceEvent, setLivePresenceEvent] = useState<string | null>(null);
@@ -224,7 +224,7 @@ export default function PlayerScreen() {
   const lastParticipantActivityAtRef = useRef(Date.now());
   const speakingOrderRef = useRef<string[]>(["p1"]);
   const livePresenceEventTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previousParticipantsRef = useRef<Array<{ id: string; name: string; isSpeaking: boolean }>>([]);
+  const previousParticipantsRef = useRef<{ id: string; name: string; isSpeaking: boolean }[]>([]);
   const suppressNextSpeakingEventRef = useRef<Record<string, "start" | "stop" | undefined>>({});
   const participantReactionScaleMapRef = useRef<Record<string, Animated.Value>>({});
   const participantReactionTranslateYMapRef = useRef<Record<string, Animated.Value>>({});
@@ -1453,21 +1453,6 @@ export default function PlayerScreen() {
     [playbackRate],
   );
 
-  const togglePlayPause = useCallback(async () => {
-    if (!isVideoReady) return;
-
-    try {
-      if (isPlaying) {
-        await videoRef.current?.pauseAsync();
-        persistProgress(currentPositionRef.current, durationRef.current);
-      } else {
-        await videoRef.current?.playAsync();
-      }
-    } catch {
-      // ignore transient player errors
-    }
-  }, [isPlaying, isVideoReady, persistProgress]);
-
   const replayFromStart = useCallback(async () => {
     try {
       await videoRef.current?.setPositionAsync(0);
@@ -1557,7 +1542,7 @@ export default function PlayerScreen() {
 
     console.log("WATCH PARTY: room creation failed, fallback to /watch-party");
     router.push("/watch-party");
-  }, [isPlaying, titleId, item?.title, localTitle, fallbackTitle]);
+  }, [isPlaying, titleId, item?.id, item?.title, localTitle, fallbackTitle]);
 
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
