@@ -6,6 +6,7 @@ import {
   Animated,
   Easing,
   Image,
+  ImageBackground,
   LayoutAnimation,
   PanResponder,
   Platform,
@@ -17,7 +18,8 @@ import {
   TouchableOpacity,
   UIManager,
   View,
-  type GestureResponderEvent
+  type GestureResponderEvent,
+  type ImageSourcePropType
 } from "react-native";
 
 import { titles } from "../../_data/titles";
@@ -78,6 +80,17 @@ type TitleRow = {
   thumbnail_url?: string | null;
   video_url?: string | null;
   video?: any;
+};
+
+type PartyParticipant = {
+  id: string;
+  name: string;
+  role: "host" | "co-host" | "viewer";
+  avatarUrl?: string;
+  muted: boolean;
+  canSpeak: boolean;
+  isSpeaking: boolean;
+  isRequestingToSpeak: boolean;
 };
 
 const BASE_SELECT = "id,title,category,year,runtime,synopsis,poster_url,thumbnail_url,video_url";
@@ -149,55 +162,23 @@ export default function PlayerScreen() {
   const [myListBusy, setMyListBusy] = useState(false);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
+  const [titleParticipantPresentationById, setTitleParticipantPresentationById] = useState<
+    Record<string, "compact" | "expanded" | "minimized">
+  >({});
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
   const [showUpNext, setShowUpNext] = useState(false);
   const [upNextCountdown, setUpNextCountdown] = useState(UP_NEXT_COUNTDOWN_SECONDS);
   const [upNextCanceled, setUpNextCanceled] = useState(false);
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
+  const [partyUserId, setPartyUserId] = useState("");
   const [, setPartyViewerCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(1);
   const [partyParticipantPreview, setPartyParticipantPreview] = useState<string[]>([]);
   const [partyChatOpen, setPartyChatOpen] = useState(false);
-  const [partyMessages, setPartyMessages] = useState([
-    { id: "1", text: "Host started the room" },
-    { id: "2", text: "Welcome to the watch party" },
-  ]);
-  const [partyParticipants, setPartyParticipants] = useState<
-    {
-      id: string;
-      name: string;
-      role: "host" | "viewer";
-      avatarUrl?: string;
-      muted: boolean;
-      canSpeak: boolean;
-      isSpeaking: boolean;
-      isRequestingToSpeak: boolean;
-    }[]
-  >([
-    {
-      id: "p1",
-      name: "Kai",
-      role: "host",
-      avatarUrl: "https://i.pravatar.cc/120?img=12",
-      muted: false,
-      canSpeak: true,
-      isSpeaking: true,
-      isRequestingToSpeak: false,
-    },
-    {
-      id: "p2",
-      name: "Mia",
-      role: "viewer",
-      avatarUrl: "https://i.pravatar.cc/120?img=32",
-      muted: true,
-      canSpeak: false,
-      isSpeaking: false,
-      isRequestingToSpeak: false,
-    },
-    { id: "p3", name: "Noah", role: "viewer", muted: false, canSpeak: true, isSpeaking: false, isRequestingToSpeak: false },
-    { id: "p4", name: "Ava", role: "viewer", muted: false, canSpeak: false, isSpeaking: false, isRequestingToSpeak: false },
-  ]);
+  const [partyMessages, setPartyMessages] = useState<{ id: string; text: string }[]>([]);
+  const [partyParticipants, setPartyParticipants] = useState<PartyParticipant[]>([]);
   const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
   const [activeParticipantIds, setActiveParticipantIds] = useState<string[]>([]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
@@ -628,7 +609,10 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (!inWatchParty || !partyId) {
       setPartyViewerCount(0);
+      setViewerCount(1);
       setPartyParticipantPreview([]);
+      setPartyParticipants([]);
+      setPartyUserId("");
       setPartyChatOpen(false);
       setPartyOverlayMessages([]);
       setPartyReactionBursts([]);
@@ -705,6 +689,19 @@ export default function PlayerScreen() {
     const bootstrapPartySocial = async () => {
       const userId = (partySyncUserIdRef.current || (await getSafePartyUserId().catch(() => "")) || `anon-${Date.now()}`).trim();
       if (!active) return;
+      setPartyUserId(userId);
+
+      let displayName = partySyncRoleRef.current === "host" ? "Host" : "Guest";
+      try {
+        const authUser = await supabase.auth.getUser();
+        const metadata = authUser.data.user?.user_metadata as Record<string, unknown> | undefined;
+        const metadataName = String(metadata?.full_name ?? metadata?.name ?? "").trim();
+        if (metadataName) {
+          displayName = metadataName || displayName || "Guest";
+        }
+      } catch {
+        // keep fallback displayName
+      }
 
       const history = await fetchPartyMessages(partyId, 30).catch(() => []);
       if (!active) return;
@@ -713,7 +710,7 @@ export default function PlayerScreen() {
         .slice(-8)
         .map((m) => ({
           id: m.id,
-          author: m.userId === userId ? "You" : `User·${String(m.userId).slice(-4)}`,
+          author: m.userId === userId ? "You" : String((m as any).authorLabel ?? "").trim() || "Guest",
           body: String(m.body ?? ""),
         }));
       setPartyOverlayMessages(chatHistory);
@@ -728,16 +725,88 @@ export default function PlayerScreen() {
       });
 
       channel.on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<{ displayName?: string }>();
+        const state = channel.presenceState<{
+          role?: string;
+          displayName?: string;
+          avatarIndex?: number;
+          avatarUrl?: string;
+          muted?: boolean;
+          canSpeak?: boolean;
+          isSpeaking?: boolean;
+          isRequestingToSpeak?: boolean;
+        }>();
         const entries = Object.entries(state);
         setPartyViewerCount(entries.length);
+        setViewerCount(entries.length);
         const preview = entries
           .slice(0, 3)
           .map(([key, presArr]) => {
-            const first = Array.isArray(presArr) ? (presArr[0] as { displayName?: string }) : undefined;
-            return String(first?.displayName ?? `User·${key.slice(-4)}`);
+            const first = Array.isArray(presArr)
+              ? (presArr[0] as {
+                  role?: string;
+                  displayName?: string;
+                  avatarIndex?: number;
+                      avatarUrl?: string;
+                  muted?: boolean;
+                  canSpeak?: boolean;
+                  isSpeaking?: boolean;
+                  isRequestingToSpeak?: boolean;
+                })
+              : undefined;
+            return String(first?.displayName ?? (key === userId ? displayName : "") ?? "").trim() || "Guest";
           });
         setPartyParticipantPreview(preview);
+
+        setPartyParticipants((prev) => {
+          const previousById = new Map(prev.map((entry) => [entry.id, entry]));
+          const next = entries.map(([key, presArr]) => {
+            const presence = Array.isArray(presArr)
+              ? (presArr[0] as {
+                  role?: string;
+                  displayName?: string;
+                  avatarIndex?: number;
+                  avatarUrl?: string;
+                  muted?: boolean;
+                  canSpeak?: boolean;
+                  isSpeaking?: boolean;
+                  isRequestingToSpeak?: boolean;
+                })
+              : undefined;
+            const existing = previousById.get(key);
+            const rawRole = String(presence?.role ?? existing?.role ?? "").trim().toLowerCase();
+            const role: "host" | "co-host" | "viewer" =
+              rawRole === "host" ? "host" : rawRole === "co-host" || rawRole === "cohost" ? "co-host" : "viewer";
+            const canSpeakFromPresence =
+              typeof presence?.canSpeak === "boolean"
+                ? presence.canSpeak
+                : typeof existing?.canSpeak === "boolean"
+                  ? existing.canSpeak
+                  : role === "host" || role === "co-host";
+
+            return {
+              id: key,
+              name: String(presence?.displayName ?? existing?.name ?? (key === userId ? displayName : "") ?? "").trim() || "Guest",
+              role,
+              avatarUrl: existing?.avatarUrl ?? (String(presence?.avatarUrl ?? "").trim() || undefined),
+              muted: typeof presence?.muted === "boolean" ? presence.muted : existing?.muted ?? false,
+              canSpeak: canSpeakFromPresence,
+              isSpeaking: typeof presence?.isSpeaking === "boolean" ? presence.isSpeaking : existing?.isSpeaking ?? false,
+              isRequestingToSpeak:
+                typeof presence?.isRequestingToSpeak === "boolean"
+                  ? presence.isRequestingToSpeak
+                  : existing?.isRequestingToSpeak ?? false,
+            };
+          });
+
+          next.sort((a, b) => {
+            const rank = (role: "host" | "co-host" | "viewer") => (role === "host" ? 0 : role === "co-host" ? 1 : 2);
+            const roleDiff = rank(a.role) - rank(b.role);
+            if (roleDiff !== 0) return roleDiff;
+            return a.name.localeCompare(b.name);
+          });
+
+          return next;
+        });
       });
 
       channel.on("broadcast", { event: "reaction" }, ({ payload }: { payload: Record<string, unknown> }) => {
@@ -761,7 +830,8 @@ export default function PlayerScreen() {
         if (status === "SUBSCRIBED") {
           await channel.track({
             role: partySyncRoleRef.current === "host" ? "host" : "viewer",
-            displayName: partySyncRoleRef.current === "host" ? "Host" : `Viewer·${userId.slice(-4)}`,
+            displayName,
+            avatarIndex: Number.parseInt(userId.slice(-3), 16) % 70,
           });
         }
       });
@@ -1523,7 +1593,10 @@ export default function PlayerScreen() {
         playbackState: isPlaying ? "playing" : "paused",
       });
 
-      const room = await createPartyRoom(createTitleId, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused");
+      const roomType = createTitleId ? "title" : "live";
+      const room = await createPartyRoom(createTitleId || null, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused", {
+        roomType,
+      });
       console.log("WATCH PARTY: createPartyRoom returned", room);
 
       if (room && "partyId" in room && room.partyId) {
@@ -1860,13 +1933,6 @@ export default function PlayerScreen() {
   }, [inWatchParty, partyTapReactionTick, triggerLocalPartyReaction]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setViewerCount((v) => v + 1);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     return () => {
       Object.values(participantActiveTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
       participantActiveTimeoutsRef.current = {};
@@ -1966,11 +2032,14 @@ export default function PlayerScreen() {
     return [...active, ...inactive];
   }, [partyParticipants, primaryActiveParticipantIds]);
   const localParticipantId = useMemo(() => {
+    if (partyUserId && partyParticipants.some((participant) => participant.id === partyUserId)) {
+      return partyUserId;
+    }
     if (partySyncRole === "host") {
       return partyParticipants.find((participant) => participant.role === "host")?.id ?? "";
     }
     return partyParticipants.find((participant) => participant.role === "viewer")?.id ?? "";
-  }, [partyParticipants, partySyncRole]);
+  }, [partyParticipants, partySyncRole, partyUserId]);
   const livePrimarySpeakers = useMemo(
     () => orderedPartyParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
     [orderedPartyParticipants],
@@ -1980,6 +2049,12 @@ export default function PlayerScreen() {
     if (livePrimarySpeakers.length === 1) return `🎤 ${livePrimarySpeakers[0].name} speaking`;
     return `🎤 ${livePrimarySpeakers[0].name} +1 speaking`;
   }, [livePrimarySpeakers]);
+
+  useEffect(() => {
+    if (!activeParticipantId) return;
+    if (partyParticipants.some((participant) => participant.id === activeParticipantId)) return;
+    setActiveParticipantId(null);
+  }, [activeParticipantId, partyParticipants]);
 
   useEffect(() => {
     return () => {
@@ -2237,7 +2312,26 @@ export default function PlayerScreen() {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo]);
+  const frameworkBackgroundSource = useMemo<ImageSourcePropType | null>(() => {
+    const poster = String((displayItem as any)?.poster_url ?? "").trim();
+    if (poster) return { uri: poster };
+    const thumb = String((displayItem as any)?.thumbnail_url ?? "").trim();
+    if (thumb) return { uri: thumb };
+    const localVisual = (localTitle ?? fallbackTitle) as any;
+    return localVisual?.image || localVisual?.poster || null;
+  }, [displayItem, localTitle, fallbackTitle]);
   const isLiveMode = inWatchParty && (isLiveModeFlag || !source);
+
+  useEffect(() => {
+    if (inWatchParty || isLiveMode) {
+      setIsStandaloneFullscreen(false);
+    }
+  }, [inWatchParty, isLiveMode]);
+
+  const hasActiveRailParticipants = useMemo(
+    () => orderedPartyParticipants.some((entry) => entry.isSpeaking || primaryActiveParticipantIds.includes(entry.id)),
+    [orderedPartyParticipants, primaryActiveParticipantIds],
+  );
 
   useEffect(() => {
     if (!inWatchParty) return;
@@ -2347,15 +2441,19 @@ export default function PlayerScreen() {
   ]);
 
   const renderParticipantPanel = (liveLayout = false) => (
-    <View style={[styles.partyFeedCard, liveLayout && styles.partyFeedCardLive]}>
+    <View style={[styles.partyFeedCard, liveLayout && styles.partyFeedCardLive, !liveLayout && styles.partyFeedCardTitleCompact]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.participantBubbleScroll, liveLayout && styles.participantBubbleScrollLive]}
+        contentContainerStyle={[
+          styles.participantBubbleScroll,
+          liveLayout && styles.participantBubbleScrollLive,
+          !liveLayout && styles.participantBubbleScrollTitleCompact,
+        ]}
       >
         {orderedPartyParticipants.map((participant) => {
           const isHost = partySyncRole === "host";
-          const isExpanded = isHost && activeParticipantId === participant.id;
+          const isExpanded = liveLayout && isHost && activeParticipantId === participant.id;
           const isSpeaking = participant.isSpeaking && participant.canSpeak;
           const isActive = primaryActiveParticipantIds.includes(participant.id);
           const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
@@ -2374,7 +2472,7 @@ export default function PlayerScreen() {
           const isOnlineActive = isSpeaking || isActive;
           const initials = participant.name
             .split(" ")
-            .map((part) => part[0] ?? "")
+            .map((part: string) => part[0] ?? "")
             .join("")
             .slice(0, 2)
             .toUpperCase();
@@ -2385,6 +2483,7 @@ export default function PlayerScreen() {
               style={[
                 styles.participantBubbleItem,
                 liveLayout && styles.participantBubbleItemLive,
+                !liveLayout && styles.participantBubbleItemTitleCompact,
                 isSpeaking && styles.participantBubbleSpeaking,
                 isActive && styles.participantBubbleActive,
                 shouldDim && styles.participantBubbleInactive,
@@ -2440,6 +2539,28 @@ export default function PlayerScreen() {
                 activeOpacity={0.85}
               >
                 <View style={styles.partyParticipantAvatarWrap}>
+                  {!liveLayout && isOnlineActive ? (
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        styles.titleParticipantLivePulse,
+                        {
+                          opacity: participantActivityPulse.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.2, 0.56],
+                          }),
+                          transform: [
+                            {
+                              scale: participantActivityPulse.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [1, 1.12],
+                              }),
+                            },
+                          ],
+                        },
+                      ]}
+                    />
+                  ) : null}
                   {isActive ? (
                     <Animated.View
                       pointerEvents="none"
@@ -2471,13 +2592,14 @@ export default function PlayerScreen() {
                     style={[
                       styles.participantAvatar,
                       liveLayout && styles.participantAvatarLive,
+                      !liveLayout && styles.participantAvatarTitleCompact,
                       participant.muted && styles.participantAvatarMuted,
                     ]}
                   >
                     {participant.avatarUrl ? (
                       <Image source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
                     ) : (
-                      <Text style={[styles.participantInitials, liveLayout && styles.participantInitialsLive]}>{initials}</Text>
+                      <Text style={[styles.participantInitials, liveLayout && styles.participantInitialsLive, !liveLayout && styles.participantInitialsTitleCompact]}>{initials}</Text>
                     )}
                   </View>
                   {isActive ? (
@@ -2506,9 +2628,9 @@ export default function PlayerScreen() {
                       <Text style={styles.participantSpeakingBadgeText}>LIVE</Text>
                     </View>
                   ) : null}
-                  {participant.role === "host" ? (
+                  {participant.role === "host" || participant.role === "co-host" ? (
                     <View style={styles.participantHostBadge}>
-                      <Text style={styles.participantHostBadgeText}>HOST</Text>
+                      <Text style={styles.participantHostBadgeText}>{participant.role === "host" ? "HOST" : "CO-HOST"}</Text>
                     </View>
                   ) : null}
                   {isRequesting ? (
@@ -2545,12 +2667,24 @@ export default function PlayerScreen() {
                     </Animated.View>
                   ))}
                 </View>
-                <Text style={[styles.participantName, liveLayout && styles.participantNameLive]} numberOfLines={1}>
+                <Text style={[styles.participantName, liveLayout && styles.participantNameLive, !liveLayout && styles.participantNameTitleCompact]} numberOfLines={1}>
                   {participant.name}
                 </Text>
-                <Text style={styles.partyParticipantStatus}>
-                  {isSpeaking ? "🎤 Speaking" : isRequesting ? "✋ Requesting" : participant.muted ? "🔇 Muted" : "🔊 Live"}
-                </Text>
+                {liveLayout ? (
+                  <Text style={styles.partyParticipantStatus}>
+                    {isSpeaking
+                      ? "🎤 Speaking"
+                      : isRequesting
+                        ? "✋ Requesting"
+                        : participant.muted
+                          ? "🔇 Muted"
+                          : participant.role === "host"
+                            ? "👑 Host"
+                            : participant.role === "co-host"
+                              ? "⭐ Co-host"
+                              : "👤 Member"}
+                  </Text>
+                ) : null}
               </TouchableOpacity>
 
               {isExpanded ? (
@@ -2719,6 +2853,146 @@ export default function PlayerScreen() {
     </View>
   );
 
+  const renderTitleParticipantExpandedPanel = () => (
+    <View style={styles.titleParticipantFeedWrap}>
+      <ScrollView
+        horizontal
+        style={styles.titleParticipantFeedScroll}
+        contentContainerStyle={styles.titleParticipantFeedStack}
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        bounces={false}
+      >
+        {orderedPartyParticipants.map((participant) => {
+          const presentation = titleParticipantPresentationById[participant.id] ?? "compact";
+          const isExpandedPresentation = presentation === "expanded";
+          const isMinimizedPresentation = presentation === "minimized";
+          const isActive = primaryActiveParticipantIds.includes(participant.id);
+          const isSpeaking = participant.isSpeaking && participant.canSpeak;
+          const initials = participant.name
+            .split(" ")
+            .map((part: string) => part[0] ?? "")
+            .join("")
+            .slice(0, 2)
+            .toUpperCase();
+
+          return (
+            <View
+              key={`title-sheet-${participant.id}`}
+              style={[
+                styles.titleParticipantFeedCard,
+                isExpandedPresentation && styles.titleParticipantFeedCardExpanded,
+                isMinimizedPresentation && styles.titleParticipantFeedCardMinimized,
+                isSpeaking && styles.titleParticipantFeedCardSpeaking,
+                isActive && styles.titleParticipantFeedCardActive,
+              ]}
+            >
+              <Animated.View
+                style={[
+                  styles.titleParticipantFeedAvatarPulse,
+                  {
+                    transform: [
+                      {
+                        scale: participantActivityPulse.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.05],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <View style={styles.titleParticipantFeedAvatarWrap}>
+                  <TouchableOpacity
+                    style={styles.titleParticipantTileTap}
+                    onPress={() => {
+                      setTitleParticipantPresentationById((prev) => {
+                        const current = prev[participant.id] ?? "compact";
+                        const next =
+                          current === "expanded"
+                            ? "compact"
+                            : current === "minimized"
+                              ? "compact"
+                              : "expanded";
+                        return { ...prev, [participant.id]: next };
+                      });
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <View
+                      style={[
+                        styles.participantAvatar,
+                        styles.participantAvatarTitleFeed,
+                        isExpandedPresentation && styles.participantAvatarTitleFeedExpanded,
+                        isMinimizedPresentation && styles.participantAvatarTitleFeedMinimized,
+                        participant.muted && styles.participantAvatarMuted,
+                      ]}
+                    >
+                      {participant.avatarUrl ? (
+                        <Image source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.participantInitials,
+                            styles.participantInitialsTitleCompact,
+                            isExpandedPresentation && styles.participantInitialsTitleFeedExpanded,
+                            isMinimizedPresentation && styles.participantInitialsTitleFeedMinimized,
+                          ]}
+                        >
+                          {initials}
+                        </Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                  {(participant.role === "host" || participant.role === "co-host") ? (
+                    <View
+                      style={[
+                        styles.participantHostBadge,
+                        styles.participantHostBadgeFeed,
+                        isMinimizedPresentation && styles.participantHostBadgeFeedMinimized,
+                      ]}
+                    >
+                      <Text style={[styles.participantHostBadgeText, styles.participantHostBadgeTextFeed]}>
+                        {participant.role === "host" ? "HOST" : "CO-HOST"}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.titleParticipantFeedLiveDot, isMinimizedPresentation && styles.titleParticipantFeedLiveDotMinimized]} />
+                  {isExpandedPresentation ? (
+                    <TouchableOpacity
+                      style={styles.titleParticipantMinimizeBtn}
+                      onPress={() => {
+                        setTitleParticipantPresentationById((prev) => ({
+                          ...prev,
+                          [participant.id]: "minimized",
+                        }));
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.titleParticipantMinimizeBtnText}>—</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </Animated.View>
+              {!isMinimizedPresentation ? (
+                <Text
+                  style={[
+                    styles.participantName,
+                    styles.participantNameTitleFeed,
+                    isExpandedPresentation && styles.participantNameTitleFeedExpanded,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {participant.name}
+                </Text>
+              ) : null}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+
   useEffect(() => {
     const sourceLabel = source
       ? typeof source === "number"
@@ -2742,13 +3016,24 @@ export default function PlayerScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <View style={styles.topSection}>
+      <View style={styles.playerFrameworkRoot}>
+        {frameworkBackgroundSource ? (
+          <ImageBackground source={frameworkBackgroundSource} style={styles.playerFrameworkBackground} resizeMode="cover" />
+        ) : (
+          <View style={styles.playerFrameworkBackgroundFallback} />
+        )}
+        <View style={styles.playerFrameworkOverlay} pointerEvents="none" />
+        <View style={styles.playerFrameworkDepthTop} pointerEvents="none" />
+        <View style={styles.playerFrameworkDepthBottom} pointerEvents="none" />
+
+        <View style={styles.container}>
+        {!inWatchParty && !isLiveMode && isStandaloneFullscreen ? null : (
+        <View style={[styles.topSection, styles.topSectionFramework]}>
           <Text style={styles.kicker}>CHILLYWOOD · PLAYER</Text>
-          <Text style={styles.header}>{displayItem?.title ?? "Now Playing"}</Text>
+          <Text style={styles.header} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
           {inWatchParty && isLiveMode ? <Text style={styles.liveModeTopLabel}>LIVE SESSION</Text> : null}
           {inWatchParty && partySyncRole ? (
-            <View style={styles.partySyncPill}>
+            <View style={[styles.partySyncPill, styles.partySyncPillFramework]}>
               <Text style={styles.partySyncPillText}>
                 {partySyncRole === "host" ? "Host" : "Guest"}
                 {partySyncStatus ? ` · ${partySyncStatus}` : ""}
@@ -2756,9 +3041,25 @@ export default function PlayerScreen() {
             </View>
           ) : null}
         </View>
+        )}
 
-        {isLiveMode ? (
-          <View style={[styles.videoWrap, styles.liveRoomWrap]}>
+        {source || isLiveMode ? (
+          <>
+          <View
+            style={[
+              styles.videoWrap,
+              styles.videoWrapFramework,
+              inWatchParty && styles.videoWrapWatchPartyTitle,
+              !inWatchParty && !isLiveMode && isStandaloneFullscreen && styles.videoWrapStandaloneFullscreen,
+              isLiveMode && styles.liveRoomWrap,
+            ]}
+            {...(!isLiveMode ? panResponder.panHandlers : {})}
+            onLayout={(event) => {
+              videoWidthRef.current = event.nativeEvent.layout.width;
+            }}
+          >
+            {isLiveMode ? (
+              <>
             {livePrimarySpeakers.length > 0 ? (
               <Animated.View
                 pointerEvents="none"
@@ -2793,7 +3094,7 @@ export default function PlayerScreen() {
                   const isOnlineActive = isSpeaking || isActive;
                   const initials = participant.name
                     .split(" ")
-                    .map((part) => part[0] ?? "")
+                    .map((part: string) => part[0] ?? "")
                     .join("")
                     .slice(0, 2)
                     .toUpperCase();
@@ -3041,15 +3342,9 @@ export default function PlayerScreen() {
                 </View>
               </View>
             ) : null}
-          </View>
-        ) : source ? (
-          <View
-            style={styles.videoWrap}
-            {...panResponder.panHandlers}
-            onLayout={(event) => {
-              videoWidthRef.current = event.nativeEvent.layout.width;
-            }}
-          >
+              </>
+            ) : (
+              <>
             {inWatchParty ? (
               <Animated.View
                 pointerEvents="none"
@@ -3070,7 +3365,7 @@ export default function PlayerScreen() {
                 ref={videoRef}
                 source={source}
                 style={styles.video}
-                resizeMode={ResizeMode.CONTAIN}
+                resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
                 shouldPlay={false}
                 isLooping={false}
                 useNativeControls={false}
@@ -3104,7 +3399,7 @@ export default function PlayerScreen() {
             {inWatchParty ? (
               <>
                 <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
-                  <Animated.View style={[styles.partyPresencePill, { opacity: partyPresenceOpacity }]}> 
+                  <Animated.View style={[styles.partyPresencePill, styles.partyPresencePillWatchPartyTitle, { opacity: partyPresenceOpacity }]}> 
                     <View style={styles.partyPresenceRow}>
                       <Text style={styles.partyPresenceIcon}>👥</Text>
                       <Text style={styles.partyPresenceCount}>{viewerCount}</Text>
@@ -3120,6 +3415,7 @@ export default function PlayerScreen() {
                     pointerEvents={controlsVisible ? "auto" : "none"}
                     style={[
                       styles.partyOverlayActions,
+                      styles.partyOverlayActionsWatchPartyTitle,
                       {
                         opacity: partyOverlayControlsOpacity,
                         transform: [{ translateY: partyOverlayControlsTranslateY }],
@@ -3127,7 +3423,7 @@ export default function PlayerScreen() {
                     ]}
                   >
                       <TouchableOpacity
-                        style={[styles.partyOverlayChip, myListBusy && styles.secondaryBtnDisabled]}
+                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
                         onPress={onToggleMyList}
                         disabled={myListBusy}
                         activeOpacity={0.85}
@@ -3136,7 +3432,7 @@ export default function PlayerScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.partyOverlayChip}
+                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
                         onPress={() => setSpeedMenuOpen((value) => !value)}
                         activeOpacity={0.85}
                       >
@@ -3144,7 +3440,7 @@ export default function PlayerScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.partyOverlayChip}
+                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
                         onPress={() => setPartyCommentsOpen((value) => !value)}
                         activeOpacity={0.85}
                       >
@@ -3152,7 +3448,7 @@ export default function PlayerScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.partyOverlayChip}
+                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
                         onPress={() => {
                           const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
                           triggerLocalPartyReaction(emoji);
@@ -3165,7 +3461,7 @@ export default function PlayerScreen() {
                 </View>
 
                 {partyReactionBursts.length > 0 ? (
-                  <View style={styles.partyReactionBurstWrap} pointerEvents="none">
+                  <View style={[styles.partyReactionBurstWrap, styles.partyReactionBurstWrapWatchPartyTitle]} pointerEvents="none">
                     {partyReactionBursts.map((entry) => (
                       <Animated.View
                         key={entry.id}
@@ -3192,6 +3488,7 @@ export default function PlayerScreen() {
                     pointerEvents="none"
                     style={[
                       styles.partyLocalReactionBubble,
+                      styles.partyLocalReactionBubbleWatchPartyTitle,
                       {
                         right: entry.rightOffset,
                         opacity: partyLocalReactionOpacityMapRef.current[entry.id] ?? 1,
@@ -3208,7 +3505,7 @@ export default function PlayerScreen() {
                 ))}
 
                 {partyChatOpen ? (
-                  <View style={styles.partyChatDrawer}>
+                  <View style={[styles.partyChatDrawer, styles.partyChatDrawerWatchPartyTitle]}>
                     <Text style={styles.partyChatDrawerTitle}>Live Chat</Text>
                     <ScrollView
                       style={{ maxHeight: 140 }}
@@ -3225,7 +3522,7 @@ export default function PlayerScreen() {
                 ) : null}
 
                 {partyCommentsOpen ? (
-                  <View style={styles.partyCommentsDrawer}>
+                  <View style={[styles.partyCommentsDrawer, styles.partyCommentsDrawerWatchPartyTitle]}>
                     <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
                     <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
                       {partyComments.map((comment) => (
@@ -3259,6 +3556,7 @@ export default function PlayerScreen() {
                   pointerEvents={controlsVisible ? "auto" : "none"}
                   style={[
                     styles.partyOverlayActions,
+                    styles.partyOverlayActionsWatchPartyTitle,
                     {
                       opacity: compactControlsOpacity,
                       transform: [{ translateY: compactControlsTranslateY }],
@@ -3266,7 +3564,7 @@ export default function PlayerScreen() {
                   ]}
                 >
                   <TouchableOpacity
-                    style={[styles.partyOverlayChip, myListBusy && styles.secondaryBtnDisabled]}
+                    style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
                     onPress={onToggleMyList}
                     disabled={myListBusy}
                     activeOpacity={0.85}
@@ -3275,21 +3573,31 @@ export default function PlayerScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.partyOverlayChip}
+                    style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
                     onPress={() => setSpeedMenuOpen((value) => !value)}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.partyOverlayChip} onPress={onWatchParty} activeOpacity={0.85}>
+                  <TouchableOpacity
+                    style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
+                    onPress={() => setIsStandaloneFullscreen((value) => !value)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.partyOverlayChipText}>{isStandaloneFullscreen ? "Exit Full" : "Full"}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]} onPress={onWatchParty} activeOpacity={0.85}>
                     <Text style={styles.partyOverlayChipText}>Watch Party</Text>
                   </TouchableOpacity>
                 </Animated.View>
               </View>
             )}
+              </>
+            )}
 
-            {controlsVisible && speedMenuOpen ? (
+            {!isLiveMode && controlsVisible && speedMenuOpen ? (
               <View style={styles.partySpeedOverlayMenu}>
                 {SPEED_OPTIONS.map((option) => {
                   const active = playbackRate === option;
@@ -3306,68 +3614,76 @@ export default function PlayerScreen() {
                 })}
               </View>
             ) : null}
+
+            <View style={[styles.playerFrameworkBottomStack, inWatchParty && styles.playerFrameworkBottomStackWatchParty]}>
+              {!isLiveMode ? (
+                <View style={[styles.progressCard, inWatchParty && styles.progressCardWatchPartyTitle]}>
+                  <View style={styles.progressMetaRow}>
+                    <Text style={styles.progressTime}>{formatTime(positionMillis)}</Text>
+                    <Text style={styles.progressTime}>{formatTime(durationMillis)}</Text>
+                  </View>
+                  <View
+                    style={styles.progressTrack}
+                    {...progressScrubResponder.panHandlers}
+                    onLayout={(event) => {
+                      progressTrackLayoutRef.current = { width: event.nativeEvent.layout.width };
+                    }}
+                  >
+                    <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+                  </View>
+                </View>
+              ) : null}
+
+              {inWatchParty && !isLiveMode && livePresenceEvent ? (
+                <View style={styles.livePresenceEventToast}>
+                  <Text style={styles.livePresenceEventText} numberOfLines={1}>
+                    {livePresenceEvent}
+                  </Text>
+                </View>
+              ) : null}
+
+              {zoomLevel > 1.01 && !inWatchParty && !isLiveMode ? (
+                <View style={styles.controlsRow}>
+                  <TouchableOpacity style={styles.controlBtn} onPress={() => animateZoomTo(1)}>
+                    <Text style={styles.controlBtnText}>Reset Zoom</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {!inWatchParty && !isLiveMode ? (
+                <Animated.View
+                  pointerEvents={controlsVisible ? "auto" : "none"}
+                  style={[
+                    styles.compactControlsShell,
+                    {
+                      opacity: compactControlsOpacity,
+                      transform: [{ translateY: compactControlsTranslateY }],
+                    },
+                  ]}
+                >
+                  <View style={styles.compactActionRow}>
+                    <TouchableOpacity style={styles.compactActionBtn} onPress={replayFromStart}>
+                      <Text style={styles.compactActionBtnText}>Replay</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.compactActionBtn} onPress={() => router.back()}>
+                      <Text style={styles.compactActionBtnText}>Back</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              ) : null}
+            </View>
           </View>
+
+          {inWatchParty && !isLiveMode && source ? (
+            <View style={[styles.titleParticipantFeedDock, hasActiveRailParticipants && styles.titleWatchPartyRailDockActive]}>
+              {renderTitleParticipantExpandedPanel()}
+            </View>
+          ) : null}
+          </>
         ) : (
           <Text style={styles.text}>No video attached</Text>
         )}
-
-        {!isLiveMode ? (
-          <View style={styles.progressCard}>
-            <View style={styles.progressMetaRow}>
-              <Text style={styles.progressTime}>{formatTime(positionMillis)}</Text>
-              <Text style={styles.progressTime}>{formatTime(durationMillis)}</Text>
-            </View>
-            <View
-              style={styles.progressTrack}
-              {...progressScrubResponder.panHandlers}
-              onLayout={(event) => {
-                progressTrackLayoutRef.current = { width: event.nativeEvent.layout.width };
-              }}
-            >
-              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-            </View>
-          </View>
-        ) : null}
-
-        {inWatchParty && !isLiveMode && livePresenceEvent ? (
-          <View style={styles.livePresenceEventToast}>
-            <Text style={styles.livePresenceEventText} numberOfLines={1}>
-              {livePresenceEvent}
-            </Text>
-          </View>
-        ) : null}
-
-        {inWatchParty && !isLiveMode ? renderParticipantPanel(false) : null}
-
-        {zoomLevel > 1.01 && !inWatchParty ? (
-          <View style={styles.controlsRow}>
-            <TouchableOpacity style={styles.controlBtn} onPress={() => animateZoomTo(1)}>
-              <Text style={styles.controlBtnText}>Reset Zoom</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {!inWatchParty ? (
-          <Animated.View
-            pointerEvents={controlsVisible ? "auto" : "none"}
-            style={[
-              styles.compactControlsShell,
-              {
-                opacity: compactControlsOpacity,
-                transform: [{ translateY: compactControlsTranslateY }],
-              },
-            ]}
-          >
-            <View style={styles.compactActionRow}>
-              <TouchableOpacity style={styles.compactActionBtn} onPress={replayFromStart}>
-                <Text style={styles.compactActionBtnText}>Replay</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.compactActionBtn} onPress={() => router.back()}>
-                <Text style={styles.compactActionBtnText}>Back</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        ) : null}
+      </View>
       </View>
     </SafeAreaView>
   );
@@ -3375,10 +3691,39 @@ export default function PlayerScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 18 },
-  topSection: { marginBottom: 10, gap: 6 },
+  playerFrameworkRoot: { flex: 1 },
+  playerFrameworkBackground: { ...StyleSheet.absoluteFillObject },
+  playerFrameworkBackgroundFallback: { ...StyleSheet.absoluteFillObject, backgroundColor: "#0B0B10" },
+  playerFrameworkOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(8,8,12,0.58)" },
+  playerFrameworkDepthTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 132,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  playerFrameworkDepthBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 210,
+    backgroundColor: "rgba(0,0,0,0.32)",
+  },
+  container: { flex: 1, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 8 },
+  topSection: { marginBottom: 2, gap: 2 },
+  topSectionFramework: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(0,0,0,0.2)",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginBottom: 4,
+  },
   kicker: { color: "#5B5B5B", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.1 },
-  header: { color: "white", fontSize: 25, fontWeight: "900", lineHeight: 30 },
+  header: { color: "white", fontSize: 23, fontWeight: "900", lineHeight: 27 },
   liveModeTopLabel: {
     color: "#FFCCD7",
     fontSize: 11,
@@ -3390,10 +3735,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.44)",
-    backgroundColor: "rgba(220,20,60,0.14)",
-    paddingHorizontal: 11,
-    paddingVertical: 6,
+    borderColor: "rgba(220,20,60,0.36)",
+    backgroundColor: "rgba(220,20,60,0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  partySyncPillFramework: {
+    backgroundColor: "rgba(220,20,60,0.16)",
   },
   partySyncPillText: {
     color: "#F2DEE4",
@@ -3404,14 +3752,27 @@ const styles = StyleSheet.create({
 
   videoWrap: {
     width: "100%",
-    height: 268,
-    borderRadius: 18,
+    height: 322,
+    borderRadius: 16,
     backgroundColor: "black",
-    marginBottom: 12,
+    marginBottom: 4,
     overflow: "hidden",
     position: "relative",
+    borderWidth: 0,
+    borderColor: "transparent",
+  },
+  videoWrapFramework: {
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(6,6,8,0.16)",
+  },
+  videoWrapWatchPartyTitle: {
+    marginBottom: 1,
+  },
+  videoWrapStandaloneFullscreen: {
+    height: "92%",
+    marginBottom: 0,
   },
   liveRoomWrap: {
     alignItems: "center",
@@ -3575,12 +3936,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     alignSelf: "center",
     top: "42%",
-    backgroundColor: "rgba(0,0,0,0.72)",
+    backgroundColor: "rgba(0,0,0,0.56)",
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: "rgba(255,255,255,0.12)",
   },
   seekFeedbackText: {
     color: "white",
@@ -3593,11 +3954,11 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     bottom: 12,
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: "rgba(10,10,14,0.9)",
+    borderRadius: 12,
+    padding: 10,
+    backgroundColor: "rgba(10,10,14,0.78)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: "rgba(255,255,255,0.12)",
   },
   upNextLabel: {
     color: "#D7DAE2",
@@ -3650,9 +4011,9 @@ const styles = StyleSheet.create({
 
   partyOverlayTopRow: {
     position: "absolute",
-    top: 10,
-    left: 10,
-    right: 10,
+    top: 8,
+    left: 8,
+    right: 8,
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
@@ -3661,11 +4022,17 @@ const styles = StyleSheet.create({
   partyPresencePill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(6,6,10,0.72)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(6,6,10,0.52)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     maxWidth: "58%",
+  },
+  partyPresencePillWatchPartyTitle: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(8,8,12,0.38)",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
   },
   partyPresenceRow: {
     flexDirection: "row",
@@ -3690,25 +4057,34 @@ const styles = StyleSheet.create({
   },
   partyOverlayActions: {
     flexDirection: "row",
-    gap: 6,
+    gap: 5,
+  },
+  partyOverlayActionsWatchPartyTitle: {
+    gap: 4,
   },
   partyOverlayChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(0,0,0,0.62)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(0,0,0,0.34)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  partyOverlayChipWatchPartyTitle: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(0,0,0,0.28)",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
   },
   partyOverlayChipText: {
     color: "#F1F3F8",
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   partySpeedOverlayMenu: {
     position: "absolute",
-    top: 46,
-    right: 10,
+    top: 40,
+    right: 8,
     flexDirection: "row",
     gap: 6,
     flexWrap: "wrap",
@@ -3718,10 +4094,10 @@ const styles = StyleSheet.create({
   partySpeedOverlayChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.24)",
-    backgroundColor: "rgba(0,0,0,0.72)",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(0,0,0,0.42)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   partySpeedOverlayChipActive: {
     borderColor: "rgba(220,20,60,0.72)",
@@ -3737,16 +4113,19 @@ const styles = StyleSheet.create({
   },
   partyReactionBurstWrap: {
     position: "absolute",
-    right: 10,
-    bottom: 68,
-    gap: 6,
+    right: 8,
+    bottom: 62,
+    gap: 4,
     alignItems: "flex-end",
+  },
+  partyReactionBurstWrapWatchPartyTitle: {
+    bottom: 58,
   },
   partyReactionBurstBubble: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.24)",
-    backgroundColor: "rgba(6,6,10,0.74)",
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(6,6,10,0.56)",
     paddingHorizontal: 8,
     paddingVertical: 4,
     opacity: 0.92,
@@ -3758,17 +4137,21 @@ const styles = StyleSheet.create({
   partyLocalReactionBubble: {
     position: "absolute",
     right: 16,
-    bottom: 120,
+    bottom: 102,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.24)",
-    backgroundColor: "rgba(6,6,10,0.74)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(6,6,10,0.56)",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     shadowColor: "#000",
-    shadowOpacity: 0.24,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  partyLocalReactionBubbleWatchPartyTitle: {
+    bottom: 92,
+    backgroundColor: "rgba(6,6,10,0.48)",
   },
   partyLocalReactionText: {
     fontSize: 21,
@@ -3776,16 +4159,23 @@ const styles = StyleSheet.create({
   },
   partyChatDrawer: {
     position: "absolute",
-    left: 10,
-    right: 10,
-    bottom: 10,
-    borderRadius: 12,
+    left: 8,
+    right: 8,
+    bottom: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(8,8,12,0.82)",
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(8,8,12,0.64)",
+    paddingHorizontal: 8,
+    paddingVertical: 7,
     gap: 3,
+  },
+  partyChatDrawerWatchPartyTitle: {
+    bottom: 6,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(8,8,12,0.5)",
+    paddingHorizontal: 7,
+    paddingVertical: 6,
   },
   partyChatDrawerTitle: {
     color: "#E8EBF3",
@@ -3815,17 +4205,24 @@ const styles = StyleSheet.create({
   },
   partyCommentsDrawer: {
     position: "absolute",
-    left: 10,
-    right: 10,
-    bottom: 10,
-    borderRadius: 12,
+    left: 8,
+    right: 8,
+    bottom: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(8,8,12,0.84)",
-    paddingHorizontal: 10,
-    paddingTop: 9,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(8,8,12,0.66)",
+    paddingHorizontal: 8,
+    paddingTop: 7,
     paddingBottom: 8,
     maxHeight: 148,
+  },
+  partyCommentsDrawerWatchPartyTitle: {
+    bottom: 6,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(8,8,12,0.52)",
+    paddingHorizontal: 7,
+    paddingTop: 6,
   },
   partyCommentsDrawerTitle: {
     color: "#E8EBF3",
@@ -3912,8 +4309,9 @@ const styles = StyleSheet.create({
   },
 
   compactControlsShell: {
-    marginBottom: 8,
-    gap: 8,
+    marginTop: 0,
+    marginBottom: 0,
+    gap: 4,
   },
   compactUtilityRow: {
     flexDirection: "row",
@@ -3923,10 +4321,10 @@ const styles = StyleSheet.create({
   compactChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
   compactChipAccent: {
     borderColor: "rgba(220,20,60,0.52)",
@@ -3948,8 +4346,8 @@ const styles = StyleSheet.create({
   compactSpeedChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -3967,7 +4365,7 @@ const styles = StyleSheet.create({
   },
   compactActionRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
   },
   compactActionBtn: {
     flex: 1,
@@ -3975,10 +4373,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(0,0,0,0.28)",
     paddingHorizontal: 10,
-    paddingVertical: 9,
+    paddingVertical: 7,
   },
   compactActionBtnText: {
     color: "#EEF1F7",
@@ -3987,16 +4385,33 @@ const styles = StyleSheet.create({
   },
 
   progressCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.11)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "transparent",
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  playerFrameworkBottomStack: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    bottom: 6,
+    gap: 3,
+  },
+  playerFrameworkBottomStackWatchParty: {
+    gap: 3,
+  },
+  progressCardWatchPartyTitle: {
+    marginTop: 0,
+    marginBottom: 0,
+    borderColor: "transparent",
+    backgroundColor: "transparent",
   },
   progressMetaRow: {
-    marginBottom: 8,
+    marginBottom: 4,
     flexDirection: "row",
     justifyContent: "space-between",
   },
@@ -4006,12 +4421,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   progressTrack: {
-    height: 8,
+    height: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(0,0,0,0.26)",
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: "rgba(255,255,255,0.12)",
   },
   progressFill: {
     height: "100%",
@@ -4019,25 +4434,265 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   partyFeedCard: {
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "transparent",
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    marginTop: 0,
+    marginBottom: 0,
+    minHeight: 82,
+    maxHeight: 142,
+  },
+  partyFeedCardTitleCompact: {
+    minHeight: 68,
+    maxHeight: 92,
+  },
+  watchPartyParticipantLayer: {
+    marginTop: 2,
+  },
+  titleWatchPartyRailDock: {
+    marginTop: 6,
+    paddingHorizontal: 0,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(7,7,11,0.38)",
+    overflow: "visible",
+  },
+  titleParticipantFeedDock: {
+    marginTop: 6,
+    borderRadius: 10,
+    borderWidth: 0,
+    backgroundColor: "rgba(7,7,11,0.22)",
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    minHeight: 88,
+    maxHeight: 178,
+  },
+  titleWatchPartyRailDockActive: {
+    borderColor: "rgba(220,20,60,0.32)",
+    backgroundColor: "rgba(12,8,12,0.5)",
+    shadowColor: "#DC143C",
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  titleWatchPartyRailPeekFade: {
+    position: "absolute",
+    top: -16,
+    left: 0,
+    right: 0,
+    height: 18,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    opacity: 0.34,
+  },
+  titleRailHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginBottom: 3,
+  },
+  titleWatchPartyRailLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#FF5A7C",
+    shadowColor: "#FF5A7C",
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  titleRailHintText: {
+    color: "#C6CBD8",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  titleRailHintArrow: {
+    color: "#EDEFF6",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: -1,
+  },
+  titleParticipantSheetLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    paddingBottom: 2,
+  },
+  titleParticipantSheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.04)",
+  },
+  titleParticipantSheetBackdropTouch: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  titleParticipantSheet: {
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+  },
+  titleParticipantSheetHandle: {
+    alignSelf: "center",
+    width: 46,
+    height: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.36)",
+    backgroundColor: "rgba(255,255,255,0.42)",
+    marginBottom: 10,
+    shadowColor: "#FFF",
+    shadowOpacity: 0.26,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  titleParticipantSheetScroll: {
+    maxHeight: 220,
+  },
+  titleParticipantSheetGrid: {
+    gap: 8,
+    paddingBottom: 22,
+  },
+  titleParticipantSheetCard: {
+    width: "100%",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(10,10,14,0.52)",
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  titleParticipantSheetAvatarWrap: {
+    position: "relative",
+    marginBottom: 4,
+  },
+  titleParticipantFeedWrap: {
+    width: "100%",
+  },
+  titleParticipantFeedScroll: {
+    maxHeight: 168,
+  },
+  titleParticipantFeedStack: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingRight: 18,
+  },
+  titleParticipantFeedCard: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.11)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     minHeight: 96,
-    maxHeight: 170,
+    width: 118,
+  },
+  titleParticipantFeedCardExpanded: {
+    width: 168,
+    minHeight: 150,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderColor: "rgba(255,120,148,0.56)",
+    backgroundColor: "rgba(220,20,60,0.2)",
+    shadowColor: "#FF6A8E",
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  titleParticipantFeedCardMinimized: {
+    width: 44,
+    minHeight: 44,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  titleParticipantFeedCardActive: {
+    backgroundColor: "rgba(220,20,60,0.14)",
+    shadowColor: "#DC143C",
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  titleParticipantFeedCardSpeaking: {
+    backgroundColor: "rgba(220,20,60,0.2)",
+    shadowColor: "#FF668A",
+    shadowOpacity: 0.14,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  titleParticipantFeedAvatarPulse: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  titleParticipantFeedAvatarWrap: {
+    position: "relative",
+  },
+  titleParticipantTileTap: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  titleParticipantFeedLiveDot: {
+    position: "absolute",
+    right: -1,
+    bottom: -1,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    borderWidth: 1,
+    borderColor: "rgba(7,7,11,0.95)",
+    backgroundColor: "#4ADE80",
+  },
+  titleParticipantFeedLiveDotMinimized: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    right: -2,
+    bottom: -2,
+  },
+  titleParticipantMinimizeBtn: {
+    position: "absolute",
+    top: -7,
+    right: -7,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.32)",
+    backgroundColor: "rgba(8,8,12,0.88)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  titleParticipantMinimizeBtnText: {
+    color: "#EAF0FA",
+    fontSize: 11,
+    fontWeight: "900",
+    lineHeight: 11,
   },
   partyFeedCardLive: {
-    minHeight: 108,
-    maxHeight: 138,
+    minHeight: 96,
+    maxHeight: 126,
     marginBottom: 0,
     alignSelf: "stretch",
   },
   participantBubbleScroll: {
-    gap: 10,
+    gap: 8,
     paddingRight: 4,
+  },
+  participantBubbleScrollTitleCompact: {
+    gap: 7,
+    paddingLeft: 6,
+    paddingRight: 6,
+    paddingVertical: 4,
+    alignItems: "center",
   },
   participantBubbleScrollLive: {
     gap: 14,
@@ -4046,18 +4701,35 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   participantBubbleItem: {
-    width: 82,
-    borderRadius: 12,
+    width: 74,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.13)",
-    backgroundColor: "rgba(8,8,12,0.56)",
-    paddingHorizontal: 7,
-    paddingVertical: 8,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(8,8,12,0.44)",
+    paddingHorizontal: 5,
+    paddingVertical: 6,
+  },
+  participantBubbleItemTitleCompact: {
+    width: 62,
+    borderRadius: 999,
+    paddingHorizontal: 5,
+    paddingVertical: 5,
+  },
+  titleParticipantLivePulse: {
+    position: "absolute",
+    top: -3,
+    left: -3,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,94,130,0.72)",
+    backgroundColor: "rgba(220,20,60,0.16)",
   },
   participantBubbleItemLive: {
-    width: 108,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    width: 94,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   participantBubbleActive: {
     borderColor: "rgba(220,20,60,0.58)",
@@ -4085,14 +4757,42 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   participantAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
     backgroundColor: "rgba(255,255,255,0.09)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  participantAvatarTitleCompact: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  participantAvatarTitleSheet: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+  participantAvatarTitleFeed: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderColor: "rgba(255,255,255,0.26)",
+  },
+  participantAvatarTitleFeedExpanded: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 1.4,
+    borderColor: "rgba(255,255,255,0.46)",
+  },
+  participantAvatarTitleFeedMinimized: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   participantAvatarImage: {
     width: "100%",
@@ -4100,17 +4800,17 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   participantAvatarLive: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   participantActiveRing: {
     position: "absolute",
     top: -4,
     left: -4,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 2.5,
     borderColor: "rgba(220,20,60,0.98)",
   },
@@ -4126,9 +4826,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -2,
     left: -2,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
     borderColor: "rgba(122,196,255,0.9)",
   },
@@ -4136,9 +4836,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -5,
     left: -5,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: "rgba(220,20,60,0.36)",
   },
   participantSpeakingPulse: {
@@ -4222,6 +4922,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
+  participantInitialsTitleCompact: {
+    fontSize: 14,
+  },
   participantInitialsLive: {
     fontSize: 16,
   },
@@ -4237,12 +4940,53 @@ const styles = StyleSheet.create({
   },
   participantName: {
     color: "#F1F3F9",
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: "800",
     maxWidth: "100%",
   },
+  participantNameTitleCompact: {
+    fontSize: 9,
+    marginTop: 0,
+  },
+  participantNameTitleSheet: {
+    fontSize: 10.5,
+    marginTop: 1,
+    textAlign: "center",
+  },
+  participantNameTitleFeed: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#D6DBE6",
+    maxWidth: "100%",
+    textAlign: "center",
+  },
+  participantNameTitleFeedExpanded: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#F3F7FF",
+  },
+  participantHostBadgeFeed: {
+    left: -4,
+    top: -5,
+    paddingHorizontal: 3,
+    paddingVertical: 0,
+  },
+  participantHostBadgeFeedMinimized: {
+    left: -5,
+    top: -5,
+    paddingHorizontal: 2,
+  },
+  participantHostBadgeTextFeed: {
+    fontSize: 6.5,
+  },
+  participantInitialsTitleFeedExpanded: {
+    fontSize: 22,
+  },
+  participantInitialsTitleFeedMinimized: {
+    fontSize: 9,
+  },
   participantNameLive: {
-    fontSize: 12,
+    fontSize: 11,
   },
   participantHostBadge: {
     position: "absolute",
@@ -4280,9 +5024,9 @@ const styles = StyleSheet.create({
   },
   partyParticipantStatus: {
     color: "#D8DCE7",
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: "700",
-    marginTop: 2,
+    marginTop: 1,
   },
   participantExpandedControls: {
     marginTop: 7,
@@ -4306,13 +5050,13 @@ const styles = StyleSheet.create({
   },
 
   controlsSection: {
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(14,14,14,0.94)",
-    padding: 12,
-    marginBottom: 10,
-    gap: 8,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(14,14,14,0.78)",
+    padding: 10,
+    marginBottom: 8,
+    gap: 6,
   },
   controlsKicker: { color: "#5B5B5B", fontSize: 9.5, fontWeight: "800", letterSpacing: 1 },
   controlsRow: {
@@ -4321,12 +5065,12 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   controlBtn: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingVertical: 9,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: "rgba(255,255,255,0.12)",
   },
   controlBtnText: {
     color: "#fff",
@@ -4335,11 +5079,11 @@ const styles = StyleSheet.create({
   },
 
   speedWrap: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10,
     marginBottom: 0,
     gap: 8,
   },
@@ -4352,8 +5096,8 @@ const styles = StyleSheet.create({
   speedChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.025)",
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -4387,12 +5131,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 10,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.12)",
   },
   secondaryBtnPrimary: {
     borderColor: "rgba(220,20,60,0.6)",
@@ -4419,12 +5163,12 @@ const styles = StyleSheet.create({
   backBtn: {
     alignSelf: "stretch",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.12)",
     marginTop: 2,
   },
   backText: { color: "#E6E8EF", fontWeight: "900", fontSize: 13 },
