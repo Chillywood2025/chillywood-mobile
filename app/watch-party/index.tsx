@@ -2,6 +2,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    ImageBackground,
+    type ImageSourcePropType,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -11,8 +13,12 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { titles as localTitles } from "../../_data/titles";
 import { supabase } from "../../_lib/supabase";
-import { getPartyRoom, getSafePartyUserId, type WatchPartyState } from "../../_lib/watchParty";
+import { createPartyRoom, getPartyRoom, getSafePartyUserId, type WatchPartyState } from "../../_lib/watchParty";
+import { RoomParticipantTile } from "../../components/room/participant-tile";
+import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
+import { buildLandingWaitingRoomEntries } from "./_lib/waiting-room-shared";
 
 type RoomPreview = {
   room: WatchPartyState;
@@ -31,14 +37,42 @@ export default function WatchPartyIndexScreen() {
     roomCode?: string;
     titleId?: string;
     partyId?: string;
+    mode?: string;
   }>();
   const [joinCode, setJoinCode] = useState("");
   const [looking, setLooking] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [createTitleId, setCreateTitleId] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [preview, setPreview] = useState<RoomPreview | null>(null);
   const [incomingHandoff, setIncomingHandoff] = useState<IncomingHandoff | null>(null);
   const [hostLabel, setHostLabel] = useState("Viewer");
+  const [selfUserId, setSelfUserId] = useState("");
   const handoffLoadedRef = useRef(false);
+  const isLiveEntryMode = String(Array.isArray(params.mode) ? params.mode[0] : params.mode ?? "").trim().toLowerCase() === "live";
+
+  useEffect(() => {
+    let cancelled = false;
+    getSafePartyUserId()
+      .then((id) => {
+        if (cancelled) return;
+        setSelfUserId(String(id || "").trim());
+      })
+      .catch(() => {
+        if (!cancelled) setSelfUserId("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const getBackgroundSource = (): ImageSourcePropType | null => {
+    const first = localTitles[0] as any;
+    return first?.image || first?.poster || null;
+  };
+
+  const backgroundSource = getBackgroundSource();
 
   useEffect(() => {
     console.log("WATCH PARTY SCREEN: received params", params);
@@ -59,6 +93,7 @@ export default function WatchPartyIndexScreen() {
     setJoinCode(incomingCode);
     setHostLabel("Connecting room…");
     setIncomingHandoff({ roomCode: incomingCode, titleId: incomingTitleId || null });
+    if (incomingTitleId) setCreateTitleId(incomingTitleId);
     console.log("WATCH PARTY SCREEN: parsed handoff", { incomingCode, incomingTitleId });
 
     const loadIncomingRoom = async () => {
@@ -73,15 +108,17 @@ export default function WatchPartyIndexScreen() {
         }
 
         let titleName: string | null = null;
-        try {
-          const { data } = await supabase
-            .from("titles")
-            .select("title")
-            .eq("id", room.titleId)
-            .maybeSingle();
-          titleName = data?.title ? String(data.title) : null;
-        } catch {
-          // cosmetic only
+        if (room.titleId) {
+          try {
+            const { data } = await supabase
+              .from("titles")
+              .select("title")
+              .eq("id", room.titleId)
+              .maybeSingle();
+            titleName = data?.title ? String(data.title) : null;
+          } catch {
+            // cosmetic only
+          }
         }
 
         const safeUserId = await getSafePartyUserId();
@@ -97,7 +134,7 @@ export default function WatchPartyIndexScreen() {
     };
 
     loadIncomingRoom();
-  }, [params.partyId, params.roomCode, params.roomId]);
+  }, [params.partyId, params.roomCode, params.roomId, params.titleId]);
 
   const onLookup = async () => {
     const code = joinCode.trim().toUpperCase();
@@ -114,16 +151,17 @@ export default function WatchPartyIndexScreen() {
         return;
       }
 
-      // Try to get title name for preview
       let titleName: string | null = null;
-      try {
-        const { data } = await supabase
-          .from("titles")
-          .select("title")
-          .eq("id", room.titleId)
-          .maybeSingle();
-        titleName = data?.title ? String(data.title) : null;
-      } catch { /* cosmetic */ }
+      if (room.titleId) {
+        try {
+          const { data } = await supabase
+            .from("titles")
+            .select("title")
+            .eq("id", room.titleId)
+            .maybeSingle();
+          titleName = data?.title ? String(data.title) : null;
+        } catch { /* cosmetic */ }
+      }
 
       setPreview({ room, titleName });
     } catch {
@@ -133,9 +171,68 @@ export default function WatchPartyIndexScreen() {
     }
   };
 
-  const onConfirmJoin = () => {
+  const onConfirmJoin = async () => {
     if (!preview) return;
-    router.push({ pathname: "/watch-party/[partyId]", params: { partyId: preview.room.partyId } });
+    const nextPartyId = String(preview.room.partyId ?? "").trim();
+
+    if (!nextPartyId) {
+      setJoinError("Room is missing an id. Try another code.");
+      return;
+    }
+
+    router.push({ pathname: "/watch-party/[partyId]", params: { partyId: nextPartyId } });
+  };
+
+  const onCreateRoom = async () => {
+    console.log("HOME CREATE BUTTON FIRED", { titleId: createTitleId });
+    if (creating) return;
+
+    setCreateError(null);
+    setCreating(true);
+
+    try {
+      const hostUserId = await getSafePartyUserId();
+      const trimmedTitleId = createTitleId.trim();
+      const effectiveTitleId = trimmedTitleId ? trimmedTitleId : null;
+      const roomType = effectiveTitleId ? "title" : "live";
+
+      console.log("HOME CREATE COMPUTED", {
+        trimmedTitleId,
+        effectiveTitleId,
+        roomType,
+      });
+
+      console.log("WATCH PARTY SCREEN: creating room", { effectiveTitleId, roomType });
+      console.log("HOME CREATE BEFORE CALL", {
+        effectiveTitleId,
+        hostUserId,
+        roomType,
+      });
+
+      const room = await createPartyRoom(effectiveTitleId, hostUserId, 0, "paused", {
+        roomType,
+      });
+      console.log("WATCH PARTY SCREEN: createPartyRoom returned", room);
+      console.log("HOME CREATE RESULT", room);
+
+      if (!room || "error" in room) {
+        setCreateError("Unable to create room right now.");
+        return;
+      }
+
+      const nextPartyId = String(room.partyId ?? room.roomCode ?? "").trim();
+      if (!nextPartyId) {
+        setCreateError("Unable to create room right now.");
+        return;
+      }
+
+      router.push({ pathname: "/watch-party/[partyId]", params: { partyId: nextPartyId } });
+    } catch (error) {
+      console.log("HOME CREATE ERROR", error);
+      setCreateError("Unable to create room right now.");
+    } finally {
+      setCreating(false);
+    }
   };
 
   const onClearPreview = () => {
@@ -146,111 +243,212 @@ export default function WatchPartyIndexScreen() {
 
   const topRoomCode = preview?.room.roomCode ?? incomingHandoff?.roomCode ?? "";
   const topRoomTitle = preview?.titleName ?? preview?.room.titleId ?? incomingHandoff?.titleId ?? "";
-  const topHostLabel = preview ? hostLabel : incomingHandoff ? "Connecting room…" : "";
+  const topHostLabel = preview ? hostLabel : incomingHandoff ? "Connecting room…" : isLiveEntryMode ? "LIVE mode" : "";
+  const waitingPresenceLabel = topHostLabel || "You are in room";
+  const waitingRoomTitle = topRoomTitle || "Live Waiting Room";
+  const hostUserId = String(preview?.room.hostUserId ?? "").trim();
+  const isSelfHost = !!selfUserId && !!hostUserId && selfUserId === hostUserId;
+  const showHostChip = !!hostUserId && (!isSelfHost || !selfUserId);
+  const waitingEntries = buildLandingWaitingRoomEntries({ isSelfHost, showHostChip });
 
   return (
-    <KeyboardAvoidingView
-      style={styles.outerFlex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+    <View style={styles.outerFlex}>
+      {backgroundSource ? (
+        <ImageBackground
+          source={backgroundSource}
+          style={styles.fullBackground}
+          resizeMode="cover"
+          pointerEvents="none"
+        />
+      ) : (
+        <View style={styles.fullBackgroundFallback} pointerEvents="none" />
+      )}
+      <View style={styles.fullBackgroundOverlay} pointerEvents="none" />
+
+      <KeyboardAvoidingView
+        style={styles.outerFlex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        <ScrollView
+          style={styles.screen}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* ── Header ─────────────────────────────────────────────────── */}
         <Text style={styles.kicker}>CHILLYWOOD</Text>
         <Text style={styles.headline}>Watch Party</Text>
         <Text style={styles.tagline}>Watch together, in sync, from anywhere.</Text>
 
-        {/* ── How to start ────────────────────────────────────────────── */}
-        <View style={styles.howCard}>
-          <Text style={styles.howTitle}>Starting a party</Text>
-          <Text style={styles.howBody}>
-            Open any title in the player and tap{" "}
-            <Text style={styles.howHighlight}>Watch Party</Text> in the player controls.
-            {"\n"}Share the room code to invite friends.
+        {/* ── Presence / identity ─────────────────────────────────────── */}
+        <View style={styles.presenceCard}>
+          <View style={styles.presenceAvatar}>
+            <Text style={styles.presenceAvatarText}>Y</Text>
+          </View>
+          <View style={styles.presenceMeta}>
+            <Text style={styles.presenceKicker}>YOUR PRESENCE</Text>
+            <Text style={styles.presenceTitle}>You</Text>
+            <Text style={styles.presenceStatus}>{waitingPresenceLabel}</Text>
+          </View>
+          {topRoomCode ? (
+            <View style={styles.presenceCodePill}>
+              <Text style={styles.presenceCodeText}>{topRoomCode}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* ── Room identity ───────────────────────────────────────────── */}
+        <View style={styles.roomIdentityCard}>
+          <Text style={styles.roomIdentityLabel}>ROOM</Text>
+          <Text style={styles.roomIdentityTitle}>{waitingRoomTitle}</Text>
+          <Text style={styles.roomIdentityBody}>
+            {topRoomCode ? `Live waiting room · code ${topRoomCode}` : "Create or join a room to start the live waiting room experience."}
           </Text>
         </View>
 
-        {/* ── Join a room ─────────────────────────────────────────────── */}
-        {topRoomCode ? (
-          <View style={styles.roomCard}>
-            <Text style={styles.roomLabel}>ROOM CODE</Text>
-            <Text style={styles.roomCode}>{topRoomCode}</Text>
-            <Text style={styles.roomTitle}>{topRoomTitle || "Loading room…"}</Text>
-            <Text style={styles.hostStatus}>{topHostLabel || ""}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.joinCard}>
-          <Text style={styles.joinLabel}>JOIN A ROOM</Text>
-
-          {preview ? (
-            /* ── Room preview (found) ─────────────────────────────────── */
-            <View style={styles.previewBox}>
-              <View style={styles.previewMeta}>
-                <View style={[styles.previewDot, { backgroundColor: preview.room.playbackState === "playing" ? "#2ecc40" : "#b58900" }]} />
-                <Text style={styles.previewStatus}>
-                  {preview.room.playbackState === "playing" ? "Playing" : "Paused"}
-                </Text>
-              </View>
-              <Text style={styles.previewTitle} numberOfLines={2}>
-                {preview.titleName ?? preview.room.titleId}
-              </Text>
-              <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
-              <View style={styles.previewActions}>
-                <TouchableOpacity style={styles.joinNowBtn} onPress={onConfirmJoin} activeOpacity={0.88}>
-                  <Text style={styles.joinNowBtnText}>Join Now →</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelBtn} onPress={onClearPreview} activeOpacity={0.75}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            /* ── Code entry ───────────────────────────────────────────── */
-            <>
-              <TextInput
-                value={joinCode}
-                onChangeText={(t) => {
-                  setJoinCode(t.toUpperCase());
-                  setJoinError(null);
+        {/* ── People area ─────────────────────────────────────────────── */}
+        <View style={styles.peopleCard}>
+          <Text style={styles.peopleLabel}>IN THE ROOM</Text>
+          <View style={styles.peopleRow}>
+            {waitingEntries.map((participant) => (
+              <RoomParticipantTile
+                key={participant.id}
+                participant={participant}
+                showHostBadge={false}
+                selfLabelAsYou={false}
+                styles={{
+                  container: styles.peopleChip,
+                  containerActive: styles.peopleChipActive,
+                  avatarWrap: styles.peopleChipAvatar,
+                  avatarImage: styles.peopleChipAvatarImage,
+                  avatarLabel: styles.peopleChipAvatarText,
+                  nameText: styles.peopleChipText,
                 }}
-                placeholder="Enter room code"
-                placeholderTextColor="#464646"
-                style={styles.input}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="go"
-                onSubmitEditing={onLookup}
-                editable={!looking}
               />
-
-              {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
-
-              <TouchableOpacity
-                style={[styles.primaryButton, (looking || !joinCode.trim()) && styles.primaryButtonDisabled]}
-                onPress={onLookup}
-                activeOpacity={0.85}
-                disabled={looking || !joinCode.trim()}
-              >
-                {looking ? (
-                  <View style={styles.lookingRow}>
-                    <ActivityIndicator color="#fff" size="small" />
-                    <Text style={styles.primaryButtonText}>  Looking up room…</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.primaryButtonText}>Find Room</Text>
-                )}
-              </TouchableOpacity>
-            </>
-          )}
+            ))}
+          </View>
         </View>
 
-        {/* ── Feature list ───────────────────────────────────────────── */}
+        {/* ── Room code / invite ──────────────────────────────────────── */}
+        <RoomCodeInviteCard
+          roomCode={topRoomCode || "— — — — —"}
+          bodyText="Share the room code to invite friends into this waiting room."
+          styles={{
+            card: styles.inviteCard,
+            left: styles.inviteMeta,
+            label: styles.inviteLabel,
+            code: styles.inviteCode,
+            body: styles.inviteBody,
+          }}
+        />
+
+        {/* ── Actions ─────────────────────────────────────────────────── */}
+        <View style={styles.actionArea}>
+          <Text style={styles.actionAreaLabel}>ACTIONS</Text>
+
+          <View style={styles.joinCard}>
+            <Text style={styles.joinLabel}>START A ROOM</Text>
+            <TextInput
+              value={createTitleId}
+              onChangeText={(t) => {
+                setCreateTitleId(t.trim());
+                setCreateError(null);
+              }}
+              placeholder="Title id (optional)"
+              placeholderTextColor="#5A5A5A"
+              style={styles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!creating}
+              returnKeyType="go"
+              onSubmitEditing={onCreateRoom}
+            />
+            {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
+            <TouchableOpacity
+              style={[styles.primaryButton, creating && styles.primaryButtonDisabled]}
+              onPress={onCreateRoom}
+              activeOpacity={0.85}
+              disabled={creating}
+            >
+              {creating ? (
+                <View style={styles.lookingRow}>
+                  <ActivityIndicator color="#fff" size="small" />
+                  <Text style={styles.primaryButtonText}>  Creating room…</Text>
+                </View>
+              ) : (
+                <Text style={styles.primaryButtonText}>Create Room</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.joinCard}>
+            <Text style={styles.joinLabel}>JOIN A ROOM</Text>
+
+            {preview ? (
+              /* ── Room preview (found) ─────────────────────────────────── */
+              <View style={styles.previewBox}>
+                <View style={styles.previewMeta}>
+                  <View style={[styles.previewDot, { backgroundColor: preview.room.playbackState === "playing" ? "#2ecc40" : "#b58900" }]} />
+                  <Text style={styles.previewStatus}>
+                    {preview.room.playbackState === "playing" ? "Playing" : "Paused"}
+                  </Text>
+                </View>
+                <Text style={styles.previewTitle} numberOfLines={2}>
+                  {preview.titleName ?? preview.room.titleId}
+                </Text>
+                <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
+                <View style={styles.previewActions}>
+                  <TouchableOpacity style={styles.joinNowBtn} onPress={onConfirmJoin} activeOpacity={0.88}>
+                    <Text style={styles.joinNowBtnText}>Join Now →</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={onClearPreview} activeOpacity={0.75}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              /* ── Code entry ───────────────────────────────────────────── */
+              <>
+                <TextInput
+                  value={joinCode}
+                  onChangeText={(t) => {
+                    setJoinCode(t.toUpperCase());
+                    setJoinError(null);
+                  }}
+                  placeholder="Enter room code"
+                  placeholderTextColor="#5A5A5A"
+                  style={styles.input}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={onLookup}
+                  editable={!looking}
+                />
+
+                {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, (looking || !joinCode.trim()) && styles.primaryButtonDisabled]}
+                  onPress={onLookup}
+                  activeOpacity={0.85}
+                  disabled={looking || !joinCode.trim()}
+                >
+                  {looking ? (
+                    <View style={styles.lookingRow}>
+                      <ActivityIndicator color="#fff" size="small" />
+                      <Text style={styles.primaryButtonText}>  Looking up room…</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Find Room</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* ── Room experience list ───────────────────────────────────── */}
         <View style={styles.featuresCard}>
-          <Text style={styles.featuresTitle}>WHAT&apos;S INCLUDED</Text>
+          <Text style={styles.featuresTitle}>ROOM EXPERIENCE</Text>
           {[
             "Synced play & pause",
             "Live position sync",
@@ -266,69 +464,154 @@ export default function WatchPartyIndexScreen() {
             </View>
           ))}
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   outerFlex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: "#050505" },
-  content: { paddingTop: 58, paddingHorizontal: 18, paddingBottom: 48, gap: 16 },
+  fullBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  fullBackgroundFallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0B0B10",
+  },
+  fullBackgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  screen: { flex: 1, backgroundColor: "transparent" },
+  content: { paddingTop: 58, paddingHorizontal: 18, paddingBottom: 48, gap: 14 },
 
   // Header
-  kicker: { color: "#444", fontSize: 10, fontWeight: "900", letterSpacing: 1.8 },
+  kicker: { color: "#555", fontSize: 10, fontWeight: "900", letterSpacing: 1.8 },
   headline: { color: "#fff", fontSize: 38, fontWeight: "900", marginTop: 4, lineHeight: 42 },
-  tagline: { color: "#777", fontSize: 14, lineHeight: 20 },
+  tagline: { color: "#8A8A8A", fontSize: 14, lineHeight: 20 },
 
-  // How card
-  howCard: {
-    backgroundColor: "rgba(18,18,18,0.96)",
+  presenceCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "rgba(12,12,16,0.94)",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
-    padding: 16,
-    gap: 8,
-    marginTop: 4,
+    borderColor: "rgba(255,255,255,0.12)",
+    padding: 14,
   },
-  howTitle: { color: "#888", fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
-  howBody: { color: "#c0c0c0", fontSize: 13, lineHeight: 20 },
-  howHighlight: { color: "#F7D6DD", fontWeight: "800" },
+  presenceAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(220,20,60,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  presenceAvatarText: { color: "#fff", fontSize: 20, fontWeight: "900" },
+  presenceMeta: { flex: 1, gap: 2 },
+  presenceKicker: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  presenceTitle: { color: "#fff", fontSize: 17, fontWeight: "900" },
+  presenceStatus: { color: "#B7C0D4", fontSize: 12.5, fontWeight: "700" },
+  presenceCodePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.38)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  presenceCodeText: { color: "#F7D6DD", fontSize: 12, fontWeight: "900", letterSpacing: 1 },
 
-  // Join card
-  roomCard: {
-    backgroundColor: "rgba(18,18,18,0.96)",
+  roomIdentityCard: {
+    backgroundColor: "rgba(14,14,18,0.96)",
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     padding: 16,
     gap: 6,
   },
-  roomLabel: { color: "#555", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
-  roomCode: { color: "#F7D6DD", fontSize: 24, fontWeight: "900", letterSpacing: 2.2 },
-  roomTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
-  hostStatus: { color: "#bbb", fontSize: 12, fontWeight: "700" },
+  roomIdentityLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  roomIdentityTitle: { color: "#F4F7FF", fontSize: 20, fontWeight: "900" },
+  roomIdentityBody: { color: "#9FAAC0", fontSize: 13, lineHeight: 19, fontWeight: "600" },
 
-  joinCard: {
-    backgroundColor: "rgba(18,18,18,0.96)",
-    borderRadius: 18,
+  peopleCard: {
+    backgroundColor: "rgba(12,12,16,0.92)",
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    padding: 18,
-    gap: 12,
+    padding: 14,
+    gap: 10,
   },
-  joinLabel: { color: "#555", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
-  input: {
-    backgroundColor: "rgba(255,255,255,0.05)",
+  peopleLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  peopleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  peopleChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+  },
+  peopleChipActive: {
+    borderColor: "rgba(220,20,60,0.4)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+  },
+  peopleChipAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  peopleChipAvatarText: { color: "#fff", fontSize: 12, fontWeight: "900" },
+  peopleChipAvatarImage: { width: "100%", height: "100%", borderRadius: 999 },
+  peopleChipText: { color: "#D6DCE9", fontSize: 12.5, fontWeight: "800" },
+
+  inviteCard: {
+    backgroundColor: "rgba(14,14,18,0.94)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    padding: 14,
+  },
+  inviteMeta: { gap: 5 },
+  inviteLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  inviteCode: { color: "#F7D6DD", fontSize: 22, fontWeight: "900", letterSpacing: 2 },
+  inviteBody: { color: "#A9B2C7", fontSize: 12.5, fontWeight: "600" },
+
+  actionArea: {
+    gap: 10,
+  },
+  actionAreaLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+
+  joinCard: {
+    backgroundColor: "rgba(14,14,18,0.94)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.11)",
+    padding: 14,
+    gap: 12,
+  },
+  joinLabel: { color: "#6C7488", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  input: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 12,
     color: "#fff",
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    fontSize: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
     fontWeight: "800",
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
   errorText: { color: "#DC143C", fontSize: 12, fontWeight: "600" },
   primaryButton: {
@@ -344,11 +627,11 @@ const styles = StyleSheet.create({
 
   // Room preview
   previewBox: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.09)",
-    padding: 14,
+    padding: 12,
     gap: 7,
   },
   previewMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -377,14 +660,14 @@ const styles = StyleSheet.create({
 
   // Features card
   featuresCard: {
-    backgroundColor: "rgba(14,14,14,0.97)",
+    backgroundColor: "rgba(12,12,16,0.9)",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.06)",
-    padding: 16,
-    gap: 10,
+    padding: 14,
+    gap: 8,
   },
-  featuresTitle: { color: "#444", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.2, marginBottom: 2 },
+  featuresTitle: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1, marginBottom: 2 },
   featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   featureDot: { color: "#DC143C", fontSize: 9 },
   featureLabel: { color: "#bbb", fontSize: 13, fontWeight: "600" },

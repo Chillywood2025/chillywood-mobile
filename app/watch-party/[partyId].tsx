@@ -1,9 +1,29 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+
+
+
+
+
+
+
+
+
+
+
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Animated,
+    Image,
+    ImageBackground,
+    type ImageSourcePropType,
     KeyboardAvoidingView,
+    LayoutAnimation,
+    Modal,
     Platform,
     ScrollView,
     Share,
@@ -11,21 +31,38 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    UIManager,
+    View
 } from "react-native";
+import { titles as localTitles } from "../../_data/titles";
 import { reportDebugError, reportDebugParty, reportDebugQuery } from "../../_lib/devDebug";
 import { supabase } from "../../_lib/supabase";
-import { getAvatarEmoji, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
+import { readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
 import {
     emitSyncEvent,
-    fetchPartyMessages,
     getPartyRoom,
     getSafePartyUserId,
-    sendPartyMessage,
     updateRoomPlayback,
-    type WatchPartyMessage,
     type WatchPartyState,
 } from "../../_lib/watchParty";
+import { RoomReactionChipRow } from "../../components/room/control-primitives";
+import {
+    buildReactionChipTokens,
+    mapReactionChipRowStyles,
+} from "../../components/room/control-style-tokens";
+import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
+import { RoomParticipantTile } from "../../components/room/participant-tile";
+import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
+import {
+    computeBottomStripParticipants,
+    computeDominantSpeakerId,
+    createDefaultParticipantState,
+    getInitials,
+    getParticipantRoleLabel,
+    mergeMissingParticipantStates,
+    resolveIdentityName
+} from "./_lib/room-shared";
+import { buildPartyRoomParticipantEntries, shouldShowHostControls } from "./_lib/waiting-room-shared";
 
 type ConnState = "loading" | "connecting" | "live" | "reconnecting" | "error";
 
@@ -38,11 +75,35 @@ type LocalMsg = {
   ts: number;
 };
 
+type RoomChatMessageRow = {
+  id: string;
+  party_id: string;
+  user_id: string;
+  username: string;
+  text: string;
+  created_at: string;
+};
+
 type PresenceParticipant = {
   userId: string;
   role: "host" | "viewer";
   displayName: string;
   avatarIndex?: number;
+  avatarUrl?: string;
+  cameraPreviewUrl?: string;
+  isLive?: boolean;
+  isSpeaking?: boolean;
+  isMuted?: boolean;
+};
+
+type ParticipantLocalState = {
+  isMuted: boolean;
+  role: "host" | "speaker" | "listener";
+  isRemoved: boolean;
+};
+
+type LiveBubbleParticipant = PresenceParticipant & {
+  isPlaceholder?: boolean;
 };
 
 type ParticipantReaction = {
@@ -50,9 +111,20 @@ type ParticipantReaction = {
   ts: number;
 };
 
-const REACTIONS = ["👍", "😂", "🔥"];
-const HOST_SEEK_STEP_MILLIS = 10_000;
+type FloatingReaction = {
+  id: string;
+  emoji: string;
+  originX: number;
+  drift: number;
+  rise: Animated.Value;
+  opacity: Animated.Value;
+  scale: Animated.Value;
+};
 
+const REACTIONS = ["❤️", "👍", "🔥", "👏"];
+const HOST_SEEK_STEP_MILLIS = 10_000;
+const MIC_SPEAKING_THRESHOLD_DB = -52;
+const MIC_SPEAKING_RELEASE_MS = 420;
 const formatPartyTime = (millis: number) => {
   const totalSeconds = Math.max(0, Math.floor((millis || 0) / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -88,9 +160,20 @@ export default function WatchPartyRoomScreen() {
   const [messages, setMessages] = useState<LocalMsg[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const [floatingReaction, setFloatingReaction] = useState<string | null>(null);
+  const isLive = true;
+  const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [participantReactions, setParticipantReactions] = useState<Record<string, ParticipantReaction>>({});
+  const [featuredParticipantById, setFeaturedParticipantById] = useState<Record<string, boolean>>({});
+  const [activeParticipantId, setActiveParticipantId] = useState<string>("");
+  const [participantPresentationById, setParticipantPresentationById] = useState<Record<string, "compact" | "expanded">>({});
+  const [recentlyJoinedById, setRecentlyJoinedById] = useState<Record<string, boolean>>({});
+  const [participantStateById, setParticipantStateById] = useState<Record<string, ParticipantLocalState>>({});
+  const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
+  const [micLevelDb, setMicLevelDb] = useState(-160);
+  const [tapPulseById, setTapPulseById] = useState<Record<string, boolean>>({});
+  const [selectedParticipant, setSelectedParticipant] = useState<LiveBubbleParticipant | null>(null);
   const chatScrollRef = useRef<ScrollView>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   // ── Host controls (broadcast-driven) ────────────────────────────────────────
   const [reactionsGloballyMuted, setReactionsGloballyMuted] = useState(false);
@@ -100,29 +183,97 @@ export default function WatchPartyRoomScreen() {
   const lastRoomUpdatedAtRef = useRef<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatChannelRef = useRef<RealtimeChannel | null>(null);
+  const roomChatRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const roomRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const myUserIdRef = useRef<string | null>(null);
+  const myUsernameRef = useRef<string>("Guest");
+  const myProfileUsernameRef = useRef<string>("Guest");
+  const myCameraPreviewUrlRef = useRef<string>("");
   const myRoleRef = useRef<"host" | "viewer" | null>(null);
-  const floatingReactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reactionCounterRef = useRef(0);
   const participantReactionTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const participantJoinPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const micRecordingRef = useRef<Audio.Recording | null>(null);
+  const micSpeakingRef = useRef(false);
+  const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seenParticipantIdsRef = useRef<string[]>([]);
+  const tapPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const activityPulse = useRef(new Animated.Value(0)).current;
+  const liveBubbleOrderRef = useRef<string>("");
+
+  useEffect(() => {
+    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      Object.values(tapPulseTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
+      tapPulseTimeoutsRef.current = {};
+    };
+  }, []);
+
+  const triggerBubbleTapPulse = useCallback((participantId: string) => {
+    if (!participantId) return;
+    LayoutAnimation.configureNext({
+      duration: 140,
+      update: { type: LayoutAnimation.Types.easeOut },
+    });
+    setTapPulseById((prev) => ({ ...prev, [participantId]: true }));
+    if (tapPulseTimeoutsRef.current[participantId]) clearTimeout(tapPulseTimeoutsRef.current[participantId]);
+    tapPulseTimeoutsRef.current[participantId] = setTimeout(() => {
+      LayoutAnimation.configureNext({
+        duration: 140,
+        update: { type: LayoutAnimation.Types.easeOut },
+      });
+      setTapPulseById((prev) => ({ ...prev, [participantId]: false }));
+      delete tapPulseTimeoutsRef.current[participantId];
+    }, 150);
+  }, []);
 
   // ── Helper: append message ───────────────────────────────────────────────────
   const addMsg = useCallback((msg: LocalMsg) => {
-    setMessages((prev) => [...prev.slice(-199), msg]);
+    setMessages((prev) => {
+      if (prev.some((existing) => existing.id === msg.id)) return prev;
+      return [...prev.slice(-199), msg];
+    });
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 60);
   }, []);
 
   const flashReaction = useCallback((emoji: string) => {
-    if (floatingReactionTimeoutRef.current) {
-      clearTimeout(floatingReactionTimeoutRef.current);
-      floatingReactionTimeoutRef.current = null;
-    }
-    setFloatingReaction(emoji);
-    floatingReactionTimeoutRef.current = setTimeout(() => {
-      setFloatingReaction(null);
-      floatingReactionTimeoutRef.current = null;
-    }, 1100);
-  }, []);
+    const dominantCandidate = participants.find((participant) => {
+      const participantState = participantStateById[participant.userId];
+      const isMuted = participantState?.isMuted ?? !!participant.isMuted;
+      const role = participantState?.role ?? (participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener");
+      const isSpeakerRole = role === "speaker";
+      return !isMuted && !!(isSpeakingById[participant.userId] || (isSpeakerRole && participant.isSpeaking));
+    });
+    const dominantIndex = dominantCandidate ? participants.findIndex((participant) => participant.userId === dominantCandidate.userId) : -1;
+    const dominantBiasX = dominantIndex >= 0 && participants.length > 1
+      ? ((dominantIndex / (participants.length - 1)) - 0.5) * 44
+      : 0;
+    const id = `reaction-${Date.now()}-${reactionCounterRef.current++}`;
+    const originX = Math.round(dominantBiasX);
+    const drift = Math.floor(Math.random() * 72) - 36;
+    const rise = new Animated.Value(0);
+    const opacity = new Animated.Value(1);
+    const scale = new Animated.Value(0.88);
+
+    const entry: FloatingReaction = { id, emoji, originX, drift, rise, opacity, scale };
+    setFloatingReactions((prev) => [...prev, entry]);
+
+    Animated.parallel([
+      Animated.timing(rise, { toValue: -180, duration: 1680, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 1680, useNativeDriver: true }),
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.12, duration: 240, useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1.0, duration: 1440, useNativeDriver: true }),
+      ]),
+    ]).start(() => {
+      setFloatingReactions((prev) => prev.filter((reaction) => reaction.id !== id));
+    });
+  }, [participants, participantStateById, isSpeakingById]);
 
   const attachReactionToParticipant = useCallback((userId: string, emoji: string) => {
     const safeUserId = String(userId || "").trim();
@@ -148,6 +299,19 @@ export default function WatchPartyRoomScreen() {
 
   const clampMillis = useCallback((value: number) => Math.max(0, Math.floor(value || 0)), []);
 
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(activityPulse, { toValue: 1, duration: 860, useNativeDriver: true }),
+        Animated.timing(activityPulse, { toValue: 0, duration: 860, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+    };
+  }, [activityPulse]);
+
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!partyId) {
@@ -162,12 +326,22 @@ export default function WatchPartyRoomScreen() {
       try {
         // Load user profile for chat identity
         const profile = await readUserProfile();
+        let profileCameraPreviewUrl = "";
+        try {
+          const authUser = await supabase.auth.getUser();
+          const metadata = authUser.data.user?.user_metadata as Record<string, unknown> | undefined;
+          profileCameraPreviewUrl = String(metadata?.camera_preview_url ?? metadata?.cameraPreviewUrl ?? "").trim();
+        } catch {
+          profileCameraPreviewUrl = "";
+        }
 
         // Get session
         const userId = await getSafePartyUserId();
         if (cancelled) return;
 
         myUserIdRef.current = userId;
+        myProfileUsernameRef.current = resolveIdentityName(profile?.username, "Guest");
+        myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
 
         // Load room
         const fetchedRoom = await getPartyRoom(partyId).catch(() => null);
@@ -187,27 +361,39 @@ export default function WatchPartyRoomScreen() {
         myRoleRef.current = role;
 
         // Fetch title name
-        supabase
-          .from("titles")
-          .select("title")
-          .eq("id", fetchedRoom.titleId)
-          .maybeSingle()
-          .then(
-            ({ data }) => { if (data?.title && !cancelled) setTitleName(String(data.title)); },
-            () => {},
-          );
+        if (fetchedRoom.titleId) {
+          supabase
+            .from("titles")
+            .select("title")
+            .eq("id", fetchedRoom.titleId)
+            .maybeSingle()
+            .then(
+              ({ data }) => { if (data?.title && !cancelled) setTitleName(String(data.title)); },
+              () => {},
+            );
+        } else {
+          setTitleName("Live Room");
+        }
 
-        // Try to load message history (graceful – table may not exist)
-        const history = await fetchPartyMessages(partyId, 100).catch((): WatchPartyMessage[] => []);
-        if (!cancelled && history.length > 0) {
-          const loaded: LocalMsg[] = history.map((m) => ({
-            id: m.id,
-            kind: m.kind,
-            body: m.body,
-            authorLabel: m.userId === userId ? "You" : `User·${m.userId.slice(-4)}`,
-            isMe: m.userId === userId,
-            ts: new Date(m.createdAt).getTime(),
-          }));
+        const { data: recentRows } = await supabase
+          .from("watch_party_room_messages")
+          .select("id, party_id, user_id, username, text, created_at")
+          .eq("party_id", partyId)
+          .order("created_at", { ascending: false })
+          .limit(120)
+          .returns<RoomChatMessageRow[]>();
+
+        if (!cancelled && recentRows?.length) {
+          const loaded: LocalMsg[] = [...recentRows]
+            .reverse()
+            .map((row) => ({
+              id: String(row.id),
+              kind: "chat",
+              body: String(row.text ?? ""),
+              authorLabel: String(row.user_id) === String(userId) ? "You" : resolveIdentityName(row.username, "Guest"),
+              isMe: String(row.user_id) === String(userId),
+              ts: new Date(String(row.created_at ?? new Date().toISOString())).getTime(),
+            }));
           setMessages(loaded);
         }
 
@@ -226,7 +412,7 @@ export default function WatchPartyRoomScreen() {
         }, 5000);
 
         // Save this as last joined party for auto-rejoin
-        if (partyId && fetchedRoom) {
+        if (partyId && fetchedRoom?.titleId) {
           await saveLastPartySession({ partyId, titleId: fetchedRoom.titleId, joinedAt: Date.now() }).catch(() => {});
         }
 
@@ -235,6 +421,9 @@ export default function WatchPartyRoomScreen() {
 
         // Start realtime room sync (poll remains as fallback)
         startRoomRealtimeSync();
+
+        // Start realtime room chat stream
+        startRoomChatRealtimeSync();
       } catch {
         if (!cancelled) {
           setNotFound(true);
@@ -252,16 +441,18 @@ export default function WatchPartyRoomScreen() {
         supabase.removeChannel(chatChannelRef.current);
         chatChannelRef.current = null;
       }
+      if (roomChatRealtimeChannelRef.current) {
+        supabase.removeChannel(roomChatRealtimeChannelRef.current);
+        roomChatRealtimeChannelRef.current = null;
+      }
       if (roomRealtimeChannelRef.current) {
         supabase.removeChannel(roomRealtimeChannelRef.current);
         roomRealtimeChannelRef.current = null;
       }
-      if (floatingReactionTimeoutRef.current) {
-        clearTimeout(floatingReactionTimeoutRef.current);
-        floatingReactionTimeoutRef.current = null;
-      }
       Object.values(participantReactionTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
       participantReactionTimeoutsRef.current = {};
+      Object.values(participantJoinPulseTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
+      participantJoinPulseTimeoutsRef.current = {};
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyId]);
@@ -272,20 +463,39 @@ export default function WatchPartyRoomScreen() {
       if (chatChannelRef.current) supabase.removeChannel(chatChannelRef.current);
       setConnState("connecting");
 
-      const channel = supabase.channel(`party-chat-${partyId}`, {
-        config: { presence: { key: userId ?? "anon" } },
+      const safeUserId = String(userId ?? "").trim();
+      const trackedUserId = safeUserId || "anon";
+      const username = resolveIdentityName(profile?.username, "Guest");
+      myUsernameRef.current = username;
+
+      const channel = supabase.channel(`room-${partyId}`, {
+        config: { presence: { key: trackedUserId } },
       });
 
       // Presence sync → participant list
       channel.on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<{ role: string; displayName: string; avatarIndex?: number }>();
+        const state = channel.presenceState<{ userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean }>();
         const list: PresenceParticipant[] = Object.entries(state).map(([key, presArr]) => {
-          const p = Array.isArray(presArr) ? (presArr[0] as { role?: string; displayName?: string; avatarIndex?: number }) : {};
+          const p = Array.isArray(presArr)
+            ? (presArr[0] as { userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean })
+            : {};
+          const normalizedUserId = String(p.userId ?? key).trim();
+          const normalizedUsername = resolveIdentityName(
+            p.username,
+            normalizedUserId === trackedUserId ? myProfileUsernameRef.current : "",
+            "Guest",
+          );
+          const normalizedCameraPreviewUrl = String(p.cameraPreviewUrl ?? p.camera_preview_url ?? "").trim() || (normalizedUserId === trackedUserId ? myCameraPreviewUrlRef.current : "");
           return {
-            userId: key,
+            userId: normalizedUserId,
             role: (p.role === "host" ? "host" : "viewer") as "host" | "viewer",
-            displayName: p.displayName ?? `User·${key.slice(-4)}`,
+            displayName: normalizedUsername,
             avatarIndex: p.avatarIndex,
+            avatarUrl: p.avatarUrl,
+            cameraPreviewUrl: normalizedCameraPreviewUrl || undefined,
+            isLive: !!p.isLive,
+            isSpeaking: !!p.isSpeaking,
+            isMuted: !!p.isMuted,
           };
         });
         setParticipants(list);
@@ -294,7 +504,8 @@ export default function WatchPartyRoomScreen() {
       // Presence join → system message
       channel.on("presence", { event: "join" }, ({ key, newPresences }: any) => {
         const newPres = Array.isArray(newPresences) ? newPresences[0] : newPresences;
-        const displayName = newPres?.displayName ?? `User·${key.slice(-4)}`;
+        const joinedUserId = String(newPres?.userId ?? key ?? "").trim();
+        const displayName = resolveIdentityName(newPres?.username, joinedUserId === trackedUserId ? myProfileUsernameRef.current : "", "Guest");
         addMsg({
           id: `join-${Date.now()}`,
           kind: "system",
@@ -308,7 +519,8 @@ export default function WatchPartyRoomScreen() {
       // Presence leave → system message
       channel.on("presence", { event: "leave" }, ({ key, leftPresences }: any) => {
         const leftPres = Array.isArray(leftPresences) ? leftPresences[0] : leftPresences;
-        const displayName = leftPres?.displayName ?? `User·${key.slice(-4)}`;
+        const leftUserId = String(leftPres?.userId ?? key ?? "").trim();
+        const displayName = resolveIdentityName(leftPres?.username, leftUserId === trackedUserId ? myProfileUsernameRef.current : "", "Guest");
         addMsg({
           id: `leave-${Date.now()}`,
           kind: "system",
@@ -320,18 +532,6 @@ export default function WatchPartyRoomScreen() {
       });
 
       // Incoming chat messages
-      channel.on("broadcast", { event: "message" }, ({ payload }: { payload: Record<string, unknown> }) => {
-        if (!payload?.id) return;
-        addMsg({
-          id: String(payload.id),
-          kind: payload.kind === "reaction" || payload.kind === "system" ? payload.kind as "reaction" | "system" : "chat",
-          body: String(payload.body ?? ""),
-          authorLabel: String(payload.authorLabel ?? "?"),
-          isMe: payload.userId === myUserIdRef.current,
-          ts: Number(payload.ts ?? Date.now()),
-        });
-      });
-
       // Incoming reactions (for chat display + floating overlay)
       channel.on("broadcast", { event: "reaction" }, ({ payload }: { payload: Record<string, unknown> }) => {
         if (!payload?.emoji) return;
@@ -361,18 +561,61 @@ export default function WatchPartyRoomScreen() {
         if (payload?.action === "lock_room") setRoomLocked(!!payload.enabled);
       });
 
+      channel.on("broadcast", { event: "participant:update" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        const changes = (payload?.changes ?? {}) as Record<string, unknown>;
+        if (!participantId || !changes || typeof changes !== "object") return;
+
+        setParticipantStateById((prev) => {
+          const current = prev[participantId] ?? {
+            isMuted: false,
+            role: "listener" as ParticipantLocalState["role"],
+            isRemoved: false,
+          };
+          const incomingRole = changes.role;
+          const nextRoleCandidate = incomingRole === "host" || incomingRole === "speaker" || incomingRole === "listener"
+            ? incomingRole
+            : current.role;
+          const nextRole = current.role === "host" ? "host" : nextRoleCandidate;
+          const nextIsMuted = typeof changes.isMuted === "boolean"
+            ? (nextRole === "host" ? current.isMuted : changes.isMuted)
+            : current.isMuted;
+          const nextIsRemoved = typeof changes.isRemoved === "boolean"
+            ? (nextRole === "host" ? current.isRemoved : changes.isRemoved)
+            : current.isRemoved;
+
+          return {
+            ...prev,
+            [participantId]: {
+              isMuted: nextIsMuted,
+              role: nextRole,
+              isRemoved: nextIsRemoved,
+            },
+          };
+        });
+      });
+
+      channel.on("broadcast", { event: "participant:speaking" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const speaking = !!payload?.isSpeaking;
+        setIsSpeakingById((prev) => ({
+          ...prev,
+          [participantId]: speaking,
+        }));
+      });
+
       // Subscribe → track presence once confirmed
       channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           setConnState("live");
           await channel.track({
+            userId: trackedUserId,
+            username,
+            isLive,
             role,
-            displayName: userId
-              ? role === "host"
-                ? "Host"
-                : `Viewer·${userId.slice(-4)}`
-              : "Guest",
             avatarIndex: profile?.avatarIndex ?? 0,
+            cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
           });
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           setConnState("reconnecting");
@@ -383,8 +626,61 @@ export default function WatchPartyRoomScreen() {
 
       chatChannelRef.current = channel;
     },
-    [partyId, addMsg, attachReactionToParticipant, flashReaction],
+    [partyId, addMsg, attachReactionToParticipant, flashReaction, isLive],
   );
+
+  const startRoomChatRealtimeSync = useCallback(() => {
+    if (!partyId) return;
+
+    if (roomChatRealtimeChannelRef.current) {
+      supabase.removeChannel(roomChatRealtimeChannelRef.current);
+      roomChatRealtimeChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`room-chat-${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "watch_party_room_messages",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          const row = payload.new as RoomChatMessageRow;
+          const rowId = String(row.id ?? "").trim();
+          const rowUserId = String(row.user_id ?? "").trim();
+          const rowUsername = resolveIdentityName(row.username, "Guest");
+          const rowText = String(row.text ?? "");
+          if (!rowId || !rowText) return;
+
+          addMsg({
+            id: rowId,
+            kind: "chat",
+            body: rowText,
+            authorLabel: rowUserId === String(myUserIdRef.current ?? "").trim() ? "You" : rowUsername,
+            isMe: rowUserId === String(myUserIdRef.current ?? "").trim(),
+            ts: new Date(String(row.created_at ?? new Date().toISOString())).getTime(),
+          });
+        },
+      )
+      .subscribe();
+
+    roomChatRealtimeChannelRef.current = channel;
+  }, [partyId, addMsg]);
+
+  useEffect(() => {
+    const channel = chatChannelRef.current;
+    if (!channel) return;
+    const trackedUserId = myUserId || "anon";
+    channel.track({
+      userId: trackedUserId,
+      username: myUsernameRef.current,
+      isLive,
+      cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
+    }).catch(() => {});
+  }, [isLive, myUserId]);
 
   const startRoomRealtimeSync = useCallback(() => {
     if (!partyId) return;
@@ -407,6 +703,7 @@ export default function WatchPartyRoomScreen() {
         (payload) => {
           const row = payload.new as {
             party_id?: string | null;
+            room_type?: string | null;
             host_user_id?: string | null;
             title_id?: string | null;
             playback_position_millis?: number | null;
@@ -418,7 +715,14 @@ export default function WatchPartyRoomScreen() {
           const normalizedPartyId = String(row.party_id ?? "").trim();
           const hostUserId = String(row.host_user_id ?? "").trim();
           const titleId = String(row.title_id ?? "").trim();
-          if (!normalizedPartyId || !hostUserId || !titleId) return;
+          const roomTypeRaw = String(row.room_type ?? "").trim().toLowerCase();
+          const roomType = roomTypeRaw === "live" || roomTypeRaw === "title"
+            ? (roomTypeRaw as "live" | "title")
+            : titleId
+              ? "title"
+              : "live";
+          if (!normalizedPartyId || !hostUserId) return;
+          if (roomType === "title" && !titleId) return;
 
           const nextUpdatedAt = String(row.updated_at ?? "").trim();
           if (nextUpdatedAt && nextUpdatedAt <= lastRoomUpdatedAtRef.current) return;
@@ -427,7 +731,8 @@ export default function WatchPartyRoomScreen() {
           setRoom({
             partyId: normalizedPartyId,
             roomCode: normalizedPartyId,
-            titleId,
+            roomType,
+            titleId: titleId || null,
             hostUserId,
             playbackPositionMillis: Math.max(0, Number(row.playback_position_millis ?? 0)),
             playbackState: row.playback_state === "playing" ? "playing" : "paused",
@@ -480,34 +785,29 @@ export default function WatchPartyRoomScreen() {
   // ── Send chat ────────────────────────────────────────────────────────────────
   const onSendMessage = useCallback(async () => {
     const text = draft.trim();
-    if (!text || !chatChannelRef.current || !myUserIdRef.current || sending) return;
+    if (!text || !myUserIdRef.current || sending) return;
 
     setSending(true);
     setDraft("");
 
-    const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const authorLabel = myRoleRef.current === "host" ? "Host" : "You";
-    const ts = Date.now();
-
-    // Broadcast to all viewers
-    await chatChannelRef.current
-      .send({ type: "broadcast", event: "message", payload: { id, kind: "chat", body: text, userId: myUserIdRef.current, authorLabel, ts } })
+    await supabase
+      .from("watch_party_room_messages")
+      .insert({
+        party_id: partyId,
+        user_id: String(myUserIdRef.current ?? "").trim(),
+        username: myUsernameRef.current,
+        text,
+      })
       .catch(() => {});
 
-    // Show in own view immediately
-    addMsg({ id, kind: "chat", body: text, authorLabel, isMe: true, ts });
-
-    // Best-effort DB persistence
-    sendPartyMessage(partyId, myUserIdRef.current, "chat", text).catch(() => {});
-
     setSending(false);
-  }, [draft, partyId, sending, addMsg]);
+  }, [draft, partyId, sending]);
 
   // ── Send reaction ────────────────────────────────────────────────────────────
   const onSendReaction = useCallback(
     async (emoji: string) => {
       if (!chatChannelRef.current || !myUserIdRef.current || reactionsGloballyMuted) return;
-      const authorLabel = myRoleRef.current === "host" ? "Host" : `User·${myUserIdRef.current.slice(-4)}`;
+      const authorLabel = myRoleRef.current === "host" ? "Host" : resolveIdentityName(myUsernameRef.current, "Guest");
       flashReaction(emoji);
       attachReactionToParticipant(myUserIdRef.current, emoji);
       await chatChannelRef.current
@@ -538,6 +838,153 @@ export default function WatchPartyRoomScreen() {
       .catch(() => {});
   }, [roomLocked]);
 
+  const emitParticipantUpdate = useCallback((participantId: string, changes: Partial<ParticipantLocalState>) => {
+    const channel = chatChannelRef.current;
+    if (!channel || !participantId) return;
+    channel
+      .send({ type: "broadcast", event: "participant:update", payload: { participantId, changes } })
+      .catch(() => {});
+  }, []);
+
+  const emitParticipantSpeaking = useCallback((participantId: string, isSpeaking: boolean) => {
+    const channel = chatChannelRef.current;
+    if (!channel || !participantId) return;
+    channel
+      .send({ type: "broadcast", event: "participant:speaking", payload: { participantId, isSpeaking } })
+      .catch(() => {});
+  }, []);
+
+  const myUserId = String(myUserIdRef.current ?? "").trim();
+  const isNativeCameraPlatform = Platform.OS !== "web";
+
+  useEffect(() => {
+    if (!isNativeCameraPlatform) return;
+    if (!myUserId) return;
+    if (cameraPermission?.granted) return;
+    if (cameraPermission && !cameraPermission.canAskAgain) return;
+    requestCameraPermission().catch(() => {});
+  }, [myUserId, cameraPermission, requestCameraPermission, isNativeCameraPlatform]);
+
+  useEffect(() => {
+    if (!myUserId) return;
+
+    let cancelled = false;
+
+    const startMicMetering = async () => {
+      try {
+        const permission = await Audio.requestPermissionsAsync();
+        console.log("WATCH PARTY MIC PERMISSION", { granted: permission.granted, status: permission.status, canAskAgain: permission.canAskAgain });
+        if (!permission.granted || cancelled) return;
+
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+        });
+
+        console.log("WATCH PARTY MIC RECORDING CREATED");
+        const recording = new Audio.Recording();
+        await recording.prepareToRecordAsync({
+          isMeteringEnabled: true,
+          android: {
+            extension: ".m4a",
+            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+            audioEncoder: Audio.AndroidAudioEncoder.AAC,
+            sampleRate: 44100,
+            numberOfChannels: 1,
+            bitRate: 64000,
+          },
+          ios: {
+            extension: ".caf",
+            outputFormat: Audio.IOSOutputFormat.APPLELOSSLESS,
+            audioQuality: Audio.IOSAudioQuality.MEDIUM,
+            sampleRate: 44100,
+            numberOfChannels: 1,
+            bitRate: 64000,
+            linearPCMBitDepth: 16,
+            linearPCMIsBigEndian: false,
+            linearPCMIsFloat: false,
+          },
+          web: {
+            mimeType: "audio/webm",
+            bitsPerSecond: 64000,
+          },
+        });
+        console.log("WATCH PARTY MIC PREPARE COMPLETE");
+        console.log("WATCH PARTY MIC START ASYNC");
+        await recording.startAsync();
+        console.log("WATCH PARTY MIC RECORDING STARTED");
+        recording.setProgressUpdateInterval(220);
+        recording.setOnRecordingStatusUpdate((status) => {
+          console.log("WATCH PARTY MIC METER", { isRecording: status.isRecording, metering: status.metering });
+          if (!status.isRecording || cancelled) return;
+          const metering = typeof status.metering === "number" ? status.metering : -160;
+          setMicLevelDb(metering);
+          const speaking = metering > MIC_SPEAKING_THRESHOLD_DB;
+          if (speaking) {
+            if (micReleaseTimeoutRef.current) {
+              clearTimeout(micReleaseTimeoutRef.current);
+              micReleaseTimeoutRef.current = null;
+            }
+            if (micSpeakingRef.current) return;
+            console.log("WATCH PARTY SPEAKING CHANGE", {
+              from: micSpeakingRef.current,
+              to: true,
+              metering,
+              threshold: MIC_SPEAKING_THRESHOLD_DB,
+            });
+            micSpeakingRef.current = true;
+            setIsSpeakingById((prev) => ({ ...prev, [myUserId]: true }));
+            emitParticipantSpeaking(myUserId, true);
+            return;
+          }
+          if (!micSpeakingRef.current || micReleaseTimeoutRef.current) return;
+          micReleaseTimeoutRef.current = setTimeout(() => {
+            micReleaseTimeoutRef.current = null;
+            if (!micSpeakingRef.current || cancelled) return;
+            console.log("WATCH PARTY SPEAKING CHANGE", {
+              from: true,
+              to: false,
+              metering,
+              threshold: MIC_SPEAKING_THRESHOLD_DB,
+            });
+            micSpeakingRef.current = false;
+            setIsSpeakingById((prev) => ({ ...prev, [myUserId]: false }));
+            emitParticipantSpeaking(myUserId, false);
+          }, MIC_SPEAKING_RELEASE_MS);
+        });
+        if (cancelled) {
+          await recording.stopAndUnloadAsync().catch(() => {});
+          return;
+        }
+        micRecordingRef.current = recording;
+      } catch {
+      }
+    };
+
+    startMicMetering();
+
+    return () => {
+      cancelled = true;
+      if (micReleaseTimeoutRef.current) {
+        clearTimeout(micReleaseTimeoutRef.current);
+        micReleaseTimeoutRef.current = null;
+      }
+      const recording = micRecordingRef.current;
+      micRecordingRef.current = null;
+      if (micSpeakingRef.current) {
+        micSpeakingRef.current = false;
+        setIsSpeakingById((prev) => ({ ...prev, [myUserId]: false }));
+        emitParticipantSpeaking(myUserId, false);
+      }
+      if (recording) {
+        recording.stopAndUnloadAsync().catch(() => {});
+      }
+    };
+  }, [myUserId, emitParticipantSpeaking]);
+
   // ── Share / invite ───────────────────────────────────────────────────────────
   const onShareCode = useCallback(() => {
     const roomCode = room?.roomCode ?? partyId;
@@ -548,11 +995,12 @@ export default function WatchPartyRoomScreen() {
   }, [partyId, room?.roomCode]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
-  const onWatchTogether = useCallback(async () => {
+  const onWatchTogether = useCallback(async (opts?: { liveMode?: boolean }) => {
+    const nextPartyId = String(room?.partyId ?? partyId ?? "").trim();
     let targetTitleId = String(room?.titleId ?? "").trim();
 
-    if (!targetTitleId && partyId) {
-      const latestRoom = await getPartyRoom(partyId).catch(() => null);
+    if (!targetTitleId && nextPartyId) {
+      const latestRoom = await getPartyRoom(nextPartyId).catch(() => null);
       targetTitleId = String(latestRoom?.titleId ?? "").trim();
     }
 
@@ -560,11 +1008,25 @@ export default function WatchPartyRoomScreen() {
       targetTitleId = String(titleIdHint ?? "").trim();
     }
 
-    if (!targetTitleId || !partyId) return;
+    if (!targetTitleId) {
+      targetTitleId = String((localTitles[0] as any)?.id ?? "").trim();
+    }
+
+    if (!nextPartyId || !targetTitleId) {
+      Alert.alert("Unable to go live", "This room is missing required watch-party context.");
+      return;
+    }
 
     console.log("WATCH PARTY OPEN PLAYER: navigating with titleId", targetTitleId);
-    router.push({ pathname: "/player/[id]", params: { id: targetTitleId, partyId } });
-  }, [room?.titleId, titleIdHint, partyId, router]);
+    router.push({
+      pathname: "/player/[id]",
+      params: {
+        id: targetTitleId,
+        partyId: nextPartyId,
+        ...(opts?.liveMode ? { liveMode: "1" } : {}),
+      },
+    });
+  }, [room?.partyId, room?.titleId, titleIdHint, partyId, router]);
 
   const onHostTogglePlayPause = useCallback(async () => {
     if (myRoleRef.current !== "host" || !room || !partyId) return;
@@ -634,14 +1096,194 @@ export default function WatchPartyRoomScreen() {
   };
 
   const isPlaying = room?.playbackState === "playing";
-  const getParticipantStatus = useCallback(
-    (participant: PresenceParticipant): "watching" | "paused" | "syncing" => {
-      if (connState === "connecting" || connState === "reconnecting") return "syncing";
-      if (participant.role === "host") return isPlaying ? "watching" : "paused";
-      return isPlaying ? "watching" : "paused";
+  const isLiveRoom = room?.roomType === "live" || !room?.titleId;
+  const backgroundSource: ImageSourcePropType | null = (() => {
+    const first = localTitles[0] as any;
+    return first?.image || first?.poster || null;
+  })();
+  const trackedUserId = myUserId || "anon";
+  const resolvedCurrentUsername = resolveIdentityName(myProfileUsernameRef.current, myUsernameRef.current, "You");
+  const participantsBase = useMemo(() => {
+    const seen = new Set<string>();
+    const unique = [...participants].filter((participant) => {
+      if (!participant.userId || seen.has(participant.userId)) return false;
+      seen.add(participant.userId);
+      return true;
+    });
+
+    return unique.sort((a, b) => {
+      const aMe = a.userId === trackedUserId ? 1 : 0;
+      const bMe = b.userId === trackedUserId ? 1 : 0;
+      if (aMe !== bMe) return bMe - aMe;
+      const aHost = a.role === "host" ? 1 : 0;
+      const bHost = b.role === "host" ? 1 : 0;
+      return bHost - aHost;
+    });
+  }, [participants, trackedUserId]);
+  const liveBubbleParticipants: LiveBubbleParticipant[] = useMemo(
+    () => {
+      const prioritizeSpeaking = (list: LiveBubbleParticipant[]) => list
+        .map((participant, index) => ({
+          participant,
+          index,
+          isSpeakingNow: !!(isSpeakingById[participant.userId] || participant.isSpeaking),
+        }))
+        .sort((a, b) => {
+          if (a.isSpeakingNow !== b.isSpeakingNow) return Number(b.isSpeakingNow) - Number(a.isSpeakingNow);
+          return a.index - b.index;
+        })
+        .map((item) => item.participant);
+
+      const next = [
+        ...prioritizeSpeaking(participantsBase.filter((participant) => !!featuredParticipantById[participant.userId])),
+        ...prioritizeSpeaking(participantsBase.filter((participant) => !featuredParticipantById[participant.userId])),
+      ];
+
+      const hasResolvedSelf = !!trackedUserId && next.some((participant) => participant.userId === trackedUserId);
+      const withSelf = hasResolvedSelf
+        ? [...next]
+        : [{
+          userId: trackedUserId,
+          role: (myRoleRef.current ?? "viewer") === "host" ? "host" : "viewer",
+          displayName: resolvedCurrentUsername,
+          avatarUrl: undefined,
+          cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
+          isLive: !!isLive,
+          isSpeaking: !!isSpeakingById[trackedUserId],
+          isMuted: false,
+          isPlaceholder: true,
+        } as LiveBubbleParticipant, ...next];
+
+      const selfIndex = withSelf.findIndex((participant) => participant.userId === trackedUserId);
+      if (selfIndex > 0) {
+        const [selfParticipantFirst] = withSelf.splice(selfIndex, 1);
+        return [selfParticipantFirst, ...withSelf];
+      }
+
+      return withSelf;
     },
-    [connState, isPlaying],
+    [participantsBase, featuredParticipantById, isSpeakingById, trackedUserId, resolvedCurrentUsername, isLive],
   );
+
+  useEffect(() => {
+    const nextOrder = liveBubbleParticipants.map((participant) => participant.userId).join("|");
+    if (!nextOrder) return;
+    if (liveBubbleOrderRef.current && liveBubbleOrderRef.current !== nextOrder) {
+      LayoutAnimation.configureNext({
+        duration: 220,
+        update: { type: LayoutAnimation.Types.easeOut },
+      });
+    }
+    liveBubbleOrderRef.current = nextOrder;
+  }, [liveBubbleParticipants]);
+
+  useEffect(() => {
+    if (liveBubbleParticipants.length === 0) {
+      setActiveParticipantId("");
+      return;
+    }
+    if (!activeParticipantId || !liveBubbleParticipants.some((participant) => participant.userId === activeParticipantId)) {
+      const host = liveBubbleParticipants.find((participant) => participant.role === "host");
+      setActiveParticipantId(host?.userId ?? liveBubbleParticipants[0]?.userId ?? "");
+    }
+  }, [liveBubbleParticipants, activeParticipantId]);
+
+  useEffect(() => {
+    if (liveBubbleParticipants.length === 0) return;
+    setParticipantStateById((prev) => {
+      return mergeMissingParticipantStates(
+        prev,
+        liveBubbleParticipants,
+        (participant) => participant.userId,
+        (participant) =>
+          createDefaultParticipantState({
+            role: participant.role,
+            isSpeaking: participant.isSpeaking,
+          }),
+      );
+    });
+  }, [liveBubbleParticipants]);
+
+  useEffect(() => {
+    const currentIds = liveBubbleParticipants.map((participant) => participant.userId).filter(Boolean);
+    const previousIds = seenParticipantIdsRef.current;
+    const joinedIds = currentIds.filter((id) => !previousIds.includes(id));
+
+    if (joinedIds.length > 0) {
+      setRecentlyJoinedById((prev) => {
+        const next = { ...prev };
+        joinedIds.forEach((id) => {
+          next[id] = true;
+          if (participantJoinPulseTimeoutsRef.current[id]) clearTimeout(participantJoinPulseTimeoutsRef.current[id]);
+          participantJoinPulseTimeoutsRef.current[id] = setTimeout(() => {
+            setRecentlyJoinedById((innerPrev) => {
+              const innerNext = { ...innerPrev };
+              delete innerNext[id];
+              return innerNext;
+            });
+            delete participantJoinPulseTimeoutsRef.current[id];
+          }, 1400);
+        });
+        return next;
+      });
+    }
+
+    seenParticipantIdsRef.current = currentIds;
+  }, [liveBubbleParticipants]);
+
+  const presenceParticipants: PresenceParticipant[] = liveBubbleParticipants;
+  const currentUserBubbleId = trackedUserId;
+  const waitingRoomParticipantSummary = useMemo(
+    () =>
+      buildPartyRoomParticipantEntries({
+        participants: presenceParticipants,
+        currentUserId: currentUserBubbleId,
+        currentUsername: myUsernameRef.current,
+        participantReactionById: participantReactions,
+        maxVisible: 7,
+      }),
+    [presenceParticipants, currentUserBubbleId, participantReactions],
+  );
+  const isCurrentUserInParticipantBubbles = !!currentUserBubbleId && liveBubbleParticipants.some((participant) => participant.userId === currentUserBubbleId);
+  const selfParticipant = liveBubbleParticipants.find((participant) => participant.userId === currentUserBubbleId) ?? null;
+  const dominantLiveSpeakerId = useMemo(() => {
+    return computeDominantSpeakerId(
+      liveBubbleParticipants,
+      (participant) => participant.userId,
+      (participant) => {
+        const participantState = participantStateById[participant.userId];
+        const isMuted = participantState?.isMuted ?? !!participant.isMuted;
+        const role = participantState?.role ?? (participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener");
+        const isSpeakerRole = role === "speaker";
+        return !isMuted && !!(isSpeakingById[participant.userId] || (isSpeakerRole && participant.isSpeaking));
+      },
+    );
+  }, [liveBubbleParticipants, participantStateById, isSpeakingById]);
+  const bottomStripParticipants = useMemo(() => {
+    return computeBottomStripParticipants(
+      liveBubbleParticipants,
+      (participant) => participant.userId,
+      isCurrentUserInParticipantBubbles ? currentUserBubbleId : "",
+    );
+  }, [liveBubbleParticipants, isCurrentUserInParticipantBubbles, currentUserBubbleId]);
+  const bottomStripEntries = useMemo<LiveBottomStripParticipant[]>(
+    () =>
+      bottomStripParticipants.map((participant) => ({
+        id: participant.userId,
+        displayName: participant.displayName,
+        avatarUrl: participant.avatarUrl,
+        cameraPreviewUrl: participant.cameraPreviewUrl,
+        isSpeaking: participant.isSpeaking,
+      })),
+    [bottomStripParticipants],
+  );
+  const pulseOpacity = activityPulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.9] });
+  const pulseScale = activityPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.11] });
+  const selfPulseOpacity = activityPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+  const selfPulseScale = activityPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+  const closeParticipantModal = useCallback(() => {
+    setSelectedParticipant(null);
+  }, []);
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) {
@@ -683,15 +1325,71 @@ export default function WatchPartyRoomScreen() {
 
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+    <View style={styles.outerFlex}>
+      <LiveBottomStrip
+        participants={bottomStripEntries}
+        currentUserId={currentUserBubbleId}
+        dominantSpeakerId={dominantLiveSpeakerId}
+        speakingById={isSpeakingById}
+        myCameraPreviewUrl={myCameraPreviewUrlRef.current}
+        allowCameraPreview={isNativeCameraPlatform}
+        cameraPermissionGranted={!!cameraPermission?.granted}
+        tapPulseById={tapPulseById}
+        pointerEvents="none"
+        onParticipantPress={(participantId) => {
+          triggerBubbleTapPulse(participantId);
+          if (isHost) {
+            console.log("HOST TAP USER", participantId);
+          } else {
+            console.log("REQUEST MIC", participantId);
+          }
+        }}
+        styles={{
+          overlay: styles.bottomLiveStripOverlay,
+          content: styles.bottomLiveStripContent,
+          touchable: styles.bottomLiveBubbleTouchable,
+          tapWrap: styles.liveBubbleTapWrap,
+          tapWrapPulsed: styles.liveBubbleTapWrapPulsed,
+          bubble: styles.bottomLiveBubble,
+          bubbleSpeaking: styles.bottomLiveBubbleSpeaking,
+          bubbleDominant: styles.bottomLiveBubbleDominant,
+          ring: styles.bottomLiveBubbleRing,
+          ringDominant: styles.bottomLiveBubbleRingDominant,
+          faceClip: styles.bottomLiveBubbleFaceClip,
+          cameraFill: styles.bottomLiveBubbleCameraFill,
+          cameraDominant: styles.bottomLiveBubbleCameraDominant,
+          image: styles.bottomLiveBubbleImage,
+          initialText: styles.bottomLiveBubbleInitial,
+        }}
+      />
+      {myUserId ? (
+        <View style={{ position: "absolute", top: 56, left: 12, zIndex: 40, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.55)" }}>
+          <Text style={{ color: "#D9E3FF", fontSize: 11 }}>Meter: {micLevelDb.toFixed(1)} dB</Text>
+          <Text style={{ color: "#D9E3FF", fontSize: 11 }}>Speaking: {String(!!isSpeakingById[myUserId])}</Text>
+          <Text style={{ color: "#D9E3FF", fontSize: 11 }}>Threshold: {MIC_SPEAKING_THRESHOLD_DB} dB</Text>
+        </View>
+      ) : null}
+      {backgroundSource ? (
+        <ImageBackground
+          source={backgroundSource}
+          style={styles.fullBackground}
+          resizeMode="cover"
+          pointerEvents="none"
+        />
+      ) : (
+        <View style={styles.fullBackgroundFallback} pointerEvents="none" />
+      )}
+      <View style={styles.fullBackgroundOverlay} pointerEvents="none" />
+
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* ── Header ─────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12} activeOpacity={0.75}>
@@ -707,84 +1405,366 @@ export default function WatchPartyRoomScreen() {
 
         {/* ── Live indicator + role ───────────────────────────────────── */}
         <View style={styles.liveRow}>
-          <View style={[styles.liveDot, { backgroundColor: isPlaying ? "#2ecc40" : "#b58900" }]} />
-          <Text style={[styles.liveText, { color: isPlaying ? "#2ecc40" : "#b58900" }]}>
-            {isPlaying ? "Playing" : "Paused"}
+          <View style={[styles.liveDot, { backgroundColor: isLiveRoom ? "#DC143C" : isPlaying ? "#2ecc40" : "#b58900" }]} />
+          <Text style={[styles.liveText, { color: isLiveRoom ? "#F7D6DD" : isPlaying ? "#2ecc40" : "#b58900" }]}>
+            {isLiveRoom ? "Live Room" : isPlaying ? "Playing" : "Paused"}
           </Text>
           <View style={{ flex: 1 }} />
           <View style={[styles.rolePill, isHost && styles.rolePillHost]}>
             <Text style={[styles.rolePillText, isHost && styles.rolePillTextHost]}>
-              {isHost ? "Host" : "Guest"}
+              {isHost ? "Host" : "Viewer"}
             </Text>
           </View>
         </View>
 
-        <View style={styles.syncStatusCard}>
-          <Text style={styles.syncStatusTitle}>{roleStatusTitle}</Text>
-          <Text style={styles.syncStatusBody}>{roleStatusBody}</Text>
-          {!isHost ? <Text style={styles.syncedBadge}>Synced to Host</Text> : null}
-        </View>
+        {isLiveRoom && !isCurrentUserInParticipantBubbles && (
+          <View style={[styles.liveSelfTile, isLive ? styles.liveSelfTileOn : styles.liveSelfTileOff]}>
+            <View style={styles.liveSelfTileHeader}>
+              <Text style={styles.liveSelfTileKicker}>YOUR TILE</Text>
+              {isLive ? (
+                <View style={styles.liveNowBadge}>
+                  <Text style={styles.liveNowBadgeText}>LIVE</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.liveSelfTileBody}>
+              <View style={[styles.liveSelfAvatar, isLive && styles.liveSelfAvatarOn]}>
+                {isLive ? (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.liveSelfAvatarPulse,
+                      {
+                        opacity: selfPulseOpacity,
+                        transform: [{ scale: selfPulseScale }],
+                      },
+                    ]}
+                  />
+                ) : null}
+                {(selfParticipant?.cameraPreviewUrl || selfParticipant?.avatarUrl || myCameraPreviewUrlRef.current) ? (
+                  <View style={styles.liveSelfAvatarFaceClip}>
+                    {isNativeCameraPlatform && cameraPermission?.granted && myUserId ? (
+                      <CameraView style={styles.liveSelfAvatarCameraFill} facing="front" mute mirror />
+                    ) : (
+                      <Image source={{ uri: String(selfParticipant?.cameraPreviewUrl || myCameraPreviewUrlRef.current || selfParticipant?.avatarUrl || "") }} style={styles.liveSelfAvatarImage} />
+                    )}
+                  </View>
+                ) : (
+                  <Text style={styles.liveSelfAvatarInitials}>{getInitials("You")}</Text>
+                )}
+              </View>
+              <View style={styles.liveSelfMeta}>
+                <Text style={styles.liveSelfName}>You</Text>
+                <Text style={styles.liveSelfStatus}>{isLive ? "Broadcasting" : "Camera preview offline"}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {!isLiveRoom && (
+          <View style={styles.syncStatusCard}>
+            <Text style={styles.syncStatusTitle}>{roleStatusTitle}</Text>
+            <Text style={styles.syncStatusBody}>{roleStatusBody}</Text>
+            {!isHost ? <Text style={styles.syncedBadge}>Synced to Host</Text> : null}
+          </View>
+        )}
 
         {/* ── Title card ─────────────────────────────────────────────── */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>NOW WATCHING</Text>
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {titleName ?? room.titleId}
-          </Text>
+        {isLiveRoom ? (
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>LIVE ROOM</Text>
+            <Text style={styles.cardTitle} numberOfLines={2}>Live Room</Text>
+            <Text style={styles.liveRoomSubtext}>Social-first room for chat, reactions, and presence.</Text>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>NOW WATCHING</Text>
+            <Text style={styles.cardTitle} numberOfLines={2}>
+              {titleName ?? room.titleId ?? "Live Room"}
+            </Text>
+            <Text style={styles.liveRoomSubtext}>Watching together with live chat, reactions, and presence.</Text>
+          </View>
+        )}
+
+        <View style={styles.liveBubblesSection}>
+          <Text style={styles.sectionKicker}>IN THE ROOM</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.liveBubblesRow}
+          >
+            {liveBubbleParticipants.map((participant, index) => {
+              const participantState = participantStateById[participant.userId] ?? {
+                isMuted: !!participant.isMuted,
+                role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                isRemoved: false,
+              };
+              const isCurrentUser = participant.userId === currentUserBubbleId || (!currentUserBubbleId && index === 0);
+              const isActive = participant.role === "host" || !!participant.isLive || (isCurrentUser && isLive);
+              const isFeatured = !!featuredParticipantById[participant.userId];
+              const isFocused = participant.userId === activeParticipantId;
+              const isMuted = participantState.isMuted;
+              const isSpeakerRole = participantState.role === "speaker";
+              const isSpeaking = !isMuted && (isSpeakingById[participant.userId] || (isSpeakerRole && !!participant.isSpeaking));
+              const isDominantSpeaker = !!dominantLiveSpeakerId && participant.userId === dominantLiveSpeakerId && isSpeaking;
+              const isRemoved = participantState.isRemoved;
+              const isRecentlyJoined = !!recentlyJoinedById[participant.userId];
+              const presentation = participantPresentationById[participant.userId] ?? "compact";
+              const isExpanded = presentation === "expanded";
+              const hasSpeakingVisual = !isFeatured && !isMuted && isDominantSpeaker;
+              const canModerateParticipant = participantState.role !== "host";
+              const showLocalCameraPreview = isNativeCameraPlatform && isCurrentUser && !!cameraPermission?.granted;
+              const roleLabel = getParticipantRoleLabel(participantState);
+              const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
+              return (
+                <TouchableOpacity
+                  key={`${participant.userId}-${index}`}
+                  style={[
+                    styles.liveBubbleItem,
+                    isExpanded && styles.liveBubbleItemExpanded,
+                    isFocused && !isFeatured && styles.liveBubbleItemActive,
+                    isFeatured && styles.liveBubbleItemFeatured,
+                    isRemoved && styles.liveBubbleItemRemoved,
+                  ]}
+                  activeOpacity={0.76}
+                  onPress={() => {
+                    triggerBubbleTapPulse(participant.userId);
+                    if (isHost) {
+                      console.log("HOST TAP USER", participant.userId);
+                    } else {
+                      console.log("REQUEST MIC", participant.userId);
+                    }
+                    setActiveParticipantId(participant.userId);
+                    setParticipantPresentationById((prev) => ({
+                      ...prev,
+                      [participant.userId]: (prev[participant.userId] ?? "compact") === "expanded" ? "compact" : "expanded",
+                    }));
+                    setSelectedParticipant(participant);
+                  }}
+                  onLongPress={() => {
+                    setFeaturedParticipantById((prev) => ({
+                      ...prev,
+                      [participant.userId]: !prev[participant.userId],
+                    }));
+                  }}
+                  delayLongPress={220}
+                >
+                  {isHost && isFocused && canModerateParticipant ? (
+                    <View style={styles.liveBubbleActionMenu}>
+                      <TouchableOpacity
+                        style={styles.liveBubbleActionBtn}
+                        activeOpacity={0.82}
+                        onPress={() => {
+                          setParticipantStateById((prev) => {
+                            const current = prev[participant.userId] ?? {
+                              isMuted: !!participant.isMuted,
+                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                              isRemoved: false,
+                            };
+                            return {
+                              ...prev,
+                              [participant.userId]: {
+                                ...current,
+                                isMuted: current.role === "host" ? current.isMuted : !current.isMuted,
+                              },
+                            };
+                          });
+                          emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
+                        }}
+                      >
+                        <Text style={styles.liveBubbleActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.liveBubbleActionBtn}
+                        activeOpacity={0.82}
+                        onPress={() => {
+                          setParticipantStateById((prev) => {
+                            const current = prev[participant.userId] ?? {
+                              isMuted: !!participant.isMuted,
+                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                              isRemoved: false,
+                            };
+                            return {
+                              ...prev,
+                              [participant.userId]: {
+                                ...current,
+                                role: current.role === "host" ? "host" : current.role === "speaker" ? "listener" : "speaker",
+                              },
+                            };
+                          });
+                          emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
+                        }}
+                      >
+                        <Text style={styles.liveBubbleActionText}>{isSpeakerRole ? "Listener" : "Speaker"}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.liveBubbleActionBtn, styles.liveBubbleActionBtnDanger]}
+                        activeOpacity={0.82}
+                        onPress={() => {
+                          setParticipantStateById((prev) => {
+                            const current = prev[participant.userId] ?? {
+                              isMuted: !!participant.isMuted,
+                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                              isRemoved: false,
+                            };
+                            return {
+                              ...prev,
+                              [participant.userId]: {
+                                ...current,
+                                isRemoved: current.role === "host" ? current.isRemoved : !current.isRemoved,
+                              },
+                            };
+                          });
+                          emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
+                        }}
+                      >
+                        <Text style={[styles.liveBubbleActionText, styles.liveBubbleActionTextDanger]}>
+                          {isRemoved ? "Restore" : "Remove"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  <View style={[styles.liveBubbleTapWrap, tapPulseById[participant.userId] && styles.liveBubbleTapWrapPulsed]}>
+                    <View
+                      style={[
+                        styles.liveBubble,
+                        isExpanded && styles.liveBubbleExpanded,
+                        isFocused && !isFeatured && styles.liveBubbleFocused,
+                        isFeatured && styles.liveBubbleFeatured,
+                        isCurrentUser && styles.liveBubbleMe,
+                        isActive && styles.liveBubbleActive,
+                        !isDominantSpeaker && styles.liveBubbleNonSpeaking,
+                        hasSpeakingVisual && styles.liveBubbleSpeaking,
+                        hasSpeakingVisual && styles.liveBubbleDominant,
+                      ]}
+                    >
+                      {(hasSpeakingVisual || isRecentlyJoined) ? (
+                        <Animated.View
+                          pointerEvents="none"
+                          style={[
+                            styles.liveBubbleActiveRing,
+                            hasSpeakingVisual && styles.liveBubbleActiveRingSpeaking,
+                            hasSpeakingVisual && styles.liveBubbleActiveRingDominant,
+                            {
+                              opacity: pulseOpacity,
+                              transform: [{ scale: pulseScale }],
+                            },
+                          ]}
+                        />
+                      ) : null}
+                      {(showLocalCameraPreview || bubbleMediaUri) ? (
+                        <View style={styles.liveBubbleFaceClip}>
+                          {showLocalCameraPreview ? (
+                            <CameraView
+                              style={[styles.liveBubbleCameraFill, isDominantSpeaker && styles.liveBubbleCameraDominant]}
+                              facing="front"
+                              mute
+                              mirror
+                            />
+                          ) : (
+                            <Image
+                              source={{ uri: bubbleMediaUri }}
+                              style={styles.liveBubbleImage}
+                            />
+                          )}
+                        </View>
+                      ) : (
+                        <Text style={[styles.liveBubbleInitials, isCurrentUser && styles.liveBubbleInitialsMe]}>
+                          {getInitials(isCurrentUser ? "You" : participant.displayName)}
+                        </Text>
+                      )}
+                      {participant.role === "host" ? (
+                        <View style={styles.liveBubbleHostBadge}>
+                          <Text style={styles.liveBubbleHostBadgeText}>👑</Text>
+                        </View>
+                      ) : null}
+                      <View
+                        style={[
+                          styles.liveBubbleOnlineDot,
+                          participant.isLive && !isMuted ? styles.liveBubbleOnlineDotLive : styles.liveBubbleOnlineDotIdle,
+                        ]}
+                      />
+                      {isMuted ? <Text style={styles.liveBubbleMutedIcon}>🔇</Text> : null}
+                    </View>
+                  </View>
+                  <Text style={styles.liveBubbleName} numberOfLines={1}>
+                    <Text
+                      style={[
+                        isExpanded && styles.liveBubbleNameExpanded,
+                        isFocused && !isFeatured && styles.liveBubbleNameFocused,
+                        isFeatured && styles.liveBubbleNameFeatured,
+                      ]}
+                    >
+                      {isCurrentUser ? "You" : participant.displayName}
+                    </Text>
+                  </Text>
+                  <Text
+                    style={[
+                      styles.liveBubbleRole,
+                      isSpeaking && styles.liveBubbleRoleSpeaking,
+                      participant.role === "host" && styles.liveBubbleRoleHost,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {isMuted ? `${roleLabel} · Muted` : roleLabel}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* ── Invite card ────────────────────────────────────────────── */}
-        <View style={styles.inviteCard}>
-          <View style={styles.inviteLeft}>
-            <Text style={styles.inviteLabel}>ROOM CODE</Text>
-            <Text style={styles.inviteCode} selectable>{room.roomCode}</Text>
-          </View>
-          <TouchableOpacity style={styles.shareBtn} onPress={onShareCode} activeOpacity={0.8}>
-            <Text style={styles.shareBtnText}>Share invite ↗</Text>
-          </TouchableOpacity>
-        </View>
+        <RoomCodeInviteCard
+          roomCode={room.roomCode}
+          actionLabel="Share invite ↗"
+          onActionPress={onShareCode}
+          codeSelectable
+          styles={{
+            card: styles.inviteCard,
+            left: styles.inviteLeft,
+            label: styles.inviteLabel,
+            code: styles.inviteCode,
+            actionBtn: styles.shareBtn,
+            actionText: styles.shareBtnText,
+          }}
+        />
 
         {/* ── Participant list ────────────────────────────────────────── */}
-        {participants.length > 0 && (
+        {waitingRoomParticipantSummary.totalCount > 0 && (
           <View style={styles.participantsWrap}>
-            <Text style={styles.sectionKicker}>PRESENCE</Text>
-            <View style={styles.participantsCard}>
+            <Text style={styles.sectionKicker}>IN THE ROOM</Text>
+            <View style={[styles.participantsCard, isLiveRoom && styles.participantsCardLive]}>
             <Text style={styles.participantsLabel}>
-              <Text style={styles.viewerCount}>👥 {participants.length}</Text>
-              {participants.length === 1 ? " person" : " people"} watching
-              {participants.length >= 3 && <Text style={styles.trendingBadge}>  🔥 Trending</Text>}
+              <Text style={styles.viewerCount}>👥 {waitingRoomParticipantSummary.totalCount}</Text>
+              {waitingRoomParticipantSummary.totalCount === 1 ? " person" : " people"} in room
+              {waitingRoomParticipantSummary.totalCount >= 3 && <Text style={styles.trendingBadge}>  🔥 Trending</Text>}
             </Text>
-            <View style={styles.chips}>
-              {participants.slice(0, 7).map((p) => (
-                <View key={p.userId} style={[styles.chip, p.role === "host" && styles.chipHost]}>
-                  <View style={styles.avatarCircle}>
-                    <Text style={styles.chipAvatar}>{getAvatarEmoji(p.avatarIndex ?? 0)}</Text>
-                    {participantReactions[p.userId] ? (
-                      <View style={styles.participantReactionBadge}>
-                        <Text style={styles.participantReactionText}>{participantReactions[p.userId].emoji}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={styles.participantMeta}>
-                    <Text style={[styles.chipText, p.role === "host" && styles.chipTextHost]} numberOfLines={1}>
-                      {p.role === "host" ? "👑 " : ""}{p.displayName}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.participantStatus,
-                        getParticipantStatus(p) === "watching" && styles.participantStatusWatching,
-                        getParticipantStatus(p) === "paused" && styles.participantStatusPaused,
-                        getParticipantStatus(p) === "syncing" && styles.participantStatusSyncing,
-                      ]}
-                    >
-                      {getParticipantStatus(p)}
-                    </Text>
-                  </View>
-                </View>
+            <View style={[styles.chips, isLiveRoom && styles.chipsLive]}>
+              {waitingRoomParticipantSummary.visible.map((participant) => (
+                <RoomParticipantTile
+                  key={participant.id}
+                  participant={participant}
+                  myCameraPreviewUrl={myCameraPreviewUrlRef.current}
+                  showHostBadge={false}
+                  styles={{
+                    container: [styles.chip, isLiveRoom && styles.chipLive],
+                    containerHost: styles.chipHost,
+                    containerSelf: styles.chipMe,
+                    avatarWrap: styles.avatarCircle,
+                    avatarImage: styles.chipAvatarImage,
+                    avatarLabel: styles.chipAvatar,
+                    nameText: styles.chipText,
+                    nameTextHost: styles.chipTextHost,
+                    statusText: [styles.participantStatus, styles.participantStatusLive],
+                    reactionBadge: styles.participantReactionBadge,
+                    reactionText: styles.participantReactionText,
+                  }}
+                />
               ))}
-              {participants.length > 7 && (
+              {waitingRoomParticipantSummary.overflowCount > 0 && (
                 <View style={styles.chip}>
-                  <Text style={styles.chipText}>+{participants.length - 7}</Text>
+                  <Text style={styles.chipText}>+{waitingRoomParticipantSummary.overflowCount}</Text>
                 </View>
               )}
             </View>
@@ -792,41 +1772,67 @@ export default function WatchPartyRoomScreen() {
           </View>
         )}
 
-        {/* ── Watch CTA ──────────────────────────────────────────────── */}
-        <TouchableOpacity style={styles.watchCTA} onPress={onWatchTogether} activeOpacity={0.88}>
-          <Text style={styles.watchCTAText}>{isHost ? "▶  Open Player" : "⟳  Sync & Watch"}</Text>
-        </TouchableOpacity>
+        {/* ── Primary CTA ─────────────────────────────────────────────── */}
+        {isLiveRoom ? (
+          <TouchableOpacity
+            style={styles.watchCTA}
+            activeOpacity={0.88}
+            onPress={() => {
+              if (!partyId) return;
+              router.push({ pathname: "/watch-party/live-stage/[partyId]", params: { partyId } });
+            }}
+          >
+            <Text style={styles.watchCTAText}>🔴  Go Live</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.watchCTA} onPress={() => onWatchTogether({ liveMode: true })} activeOpacity={0.88}>
+            <Text style={styles.watchCTAText}>🔴  Go Live</Text>
+          </TouchableOpacity>
+        )}
 
         {/* ── Reaction bar ───────────────────────────────────────────── */}
         <View style={styles.interactionWrap}>
           <Text style={styles.sectionKicker}>REACTIONS & CHAT</Text>
           <View style={styles.reactionsPanel}>
-            <View style={styles.reactionsRow}>
-              {REACTIONS.map((emoji) => (
-                <TouchableOpacity
-                  key={emoji}
-                  style={[styles.reactionBtn, reactionsGloballyMuted && styles.reactionBtnMuted]}
-                  onPress={() => onSendReaction(emoji)}
-                  disabled={reactionsGloballyMuted}
-                  activeOpacity={0.72}
-                >
-                  <Text style={styles.reactionEmoji}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <RoomReactionChipRow
+              emojis={REACTIONS}
+              onPressEmoji={onSendReaction}
+              disabled={reactionsGloballyMuted}
+              chipActiveOpacity={0.72}
+              keyPrefix="party-room"
+              styles={mapReactionChipRowStyles({
+                row: styles.reactionsRow,
+                chip: styles.reactionBtn,
+                chipDisabled: styles.reactionBtnMuted,
+                chipText: styles.reactionEmoji,
+              }, buildReactionChipTokens({ size: "panel", surface: "soft" }))}
+            />
             {reactionsGloballyMuted && (
               <Text style={styles.mutedNotice}>Reactions muted by host</Text>
             )}
           </View>
         </View>
-        {floatingReaction ? (
+        {floatingReactions.length ? (
           <View pointerEvents="none" style={styles.reactionOverlay}>
-            <Text style={styles.reactionOverlayEmoji}>{floatingReaction}</Text>
+            {floatingReactions.map((reaction) => (
+              <Animated.Text
+                key={reaction.id}
+                style={[
+                  styles.reactionOverlayEmoji,
+                  {
+                    opacity: reaction.opacity,
+                    transform: [{ translateY: reaction.rise }, { translateX: reaction.originX }, { translateX: reaction.drift }, { scale: reaction.scale }],
+                  },
+                ]}
+              >
+                {reaction.emoji}
+              </Animated.Text>
+            ))}
           </View>
         ) : null}
 
         {/* ── Host controls ──────────────────────────────────────────── */}
-        {isHost && (
+        {shouldShowHostControls(isHost, isLiveRoom) && (
           <View style={styles.hostWrap}>
             <Text style={styles.sectionKicker}>CONTROLS</Text>
             <View style={styles.hostSection}>
@@ -928,13 +1934,93 @@ export default function WatchPartyRoomScreen() {
             </View>
           </View>
         )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Modal
+        visible={!!selectedParticipant}
+        transparent
+        animationType="fade"
+        onRequestClose={closeParticipantModal}
+      >
+        <View style={styles.participantModalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={closeParticipantModal}
+          />
+          <View style={styles.participantModalSheet}>
+            <View style={styles.participantModalHandle} />
+            <Text style={styles.participantModalTitle}>{selectedParticipant?.displayName || "Participant"}</Text>
+            <Text style={styles.participantModalMeta}>Role: {selectedParticipant?.role === "host" ? "Host" : "Viewer"}</Text>
+
+            <TouchableOpacity
+              style={styles.participantActionBtn}
+              activeOpacity={0.82}
+              onPress={() => {
+                if (!selectedParticipant) return;
+                const userId = String(selectedParticipant.userId || "").trim();
+                if (!userId) return;
+                closeParticipantModal();
+                router.push(`/profile/${userId}`);
+              }}
+            >
+              <Text style={styles.participantActionBtnText}>View Profile</Text>
+            </TouchableOpacity>
+
+            {isHost ? (
+              <>
+                <TouchableOpacity
+                  style={styles.participantActionBtn}
+                  activeOpacity={0.82}
+                  onPress={() => {
+                    if (!selectedParticipant) return;
+                    console.log("Mute User (placeholder)", selectedParticipant.userId);
+                  }}
+                >
+                  <Text style={styles.participantActionBtnText}>Mute User</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.participantActionBtn, styles.participantActionBtnDanger]}
+                  activeOpacity={0.82}
+                  onPress={() => {
+                    if (!selectedParticipant) return;
+                    console.log("Remove User (placeholder)", selectedParticipant.userId);
+                  }}
+                >
+                  <Text style={[styles.participantActionBtnText, styles.participantActionBtnTextDanger]}>Remove User</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.participantActionBtnClose}
+              activeOpacity={0.82}
+              onPress={closeParticipantModal}
+            >
+              <Text style={styles.participantActionBtnCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#050505" },
+  outerFlex: { flex: 1 },
+  fullBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  fullBackgroundFallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0B0B10",
+  },
+  fullBackgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  screen: { flex: 1, backgroundColor: "transparent" },
   center: { flex: 1, backgroundColor: "#050505", alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1, width: "100%" },
   content: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 18, gap: 14 },
@@ -1032,6 +2118,410 @@ const styles = StyleSheet.create({
   },
   cardLabel: { color: "#555", fontSize: 9.5, fontWeight: "800", letterSpacing: 1 },
   cardTitle: { color: "#fff", fontSize: 21, fontWeight: "900", lineHeight: 27 },
+  liveRoomSubtext: { color: "#8f8f8f", fontSize: 12.5, fontWeight: "600", lineHeight: 18, marginTop: 2 },
+
+  // Live self tile
+  liveSelfTile: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    gap: 10,
+  },
+  liveSelfTileOff: {
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  liveSelfTileOn: {
+    borderColor: "rgba(220,20,60,0.55)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+    shadowColor: "#DC143C",
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  liveSelfTileHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  liveSelfTileKicker: { color: "#6A6A6A", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  liveNowBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(220,20,60,0.88)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  liveNowBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "900", letterSpacing: 0.4 },
+  liveSelfTileBody: { flexDirection: "row", alignItems: "center", gap: 12 },
+  liveSelfAvatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  liveSelfAvatarOn: {
+    borderColor: "rgba(220,20,60,0.75)",
+    backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  liveSelfAvatarPulse: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "rgba(220,20,60,0.75)",
+  },
+  liveSelfAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  liveSelfAvatarFaceClip: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  liveSelfAvatarCameraFill: {
+    width: "100%",
+    height: "100%",
+  },
+  liveSelfAvatarInitials: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: 0.6 },
+  liveSelfMeta: { flex: 1, minWidth: 0 },
+  liveSelfName: { color: "#fff", fontSize: 17, fontWeight: "900" },
+  liveSelfStatus: { color: "#B7B7B7", fontSize: 12, fontWeight: "700", marginTop: 3 },
+
+  // Live participant bubbles
+  liveBubblesSection: {
+    gap: 0,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(8,10,16,0.66)",
+    paddingHorizontal: 11,
+    paddingVertical: 11,
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  liveBubblesRow: {
+    alignItems: "stretch",
+    paddingVertical: 2,
+    paddingRight: 10,
+    gap: 12,
+  },
+  liveBubbleItem: {
+    width: 76,
+    minHeight: 86,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(13,16,24,0.78)",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 4 },
+    position: "relative",
+  },
+  liveBubbleItemExpanded: {
+    width: 84,
+    minHeight: 108,
+    borderColor: "rgba(140,176,255,0.5)",
+    backgroundColor: "rgba(40,54,88,0.52)",
+  },
+  liveBubbleItemActive: {
+    width: 88,
+    borderColor: "rgba(178,210,255,0.86)",
+    shadowColor: "rgba(120,162,255,0.82)",
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  liveBubbleItemFeatured: {
+    width: 112,
+    minHeight: 124,
+    marginHorizontal: 4,
+    borderColor: "rgba(228,238,255,0.58)",
+    backgroundColor: "rgba(42,56,92,0.68)",
+    shadowColor: "rgba(180,205,255,0.86)",
+    shadowOpacity: 0.34,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  liveBubbleItemRemoved: {
+    opacity: 0.6,
+  },
+  liveBubble: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  liveBubbleExpanded: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderColor: "rgba(140,176,255,0.58)",
+    backgroundColor: "rgba(104,149,255,0.2)",
+  },
+  liveBubbleFocused: {
+    borderColor: "rgba(184,212,255,0.92)",
+    backgroundColor: "rgba(120,162,255,0.24)",
+    shadowColor: "rgba(120,162,255,0.84)",
+    shadowOpacity: 0.28,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 2 },
+    transform: [{ scale: 1.02 }],
+  },
+  liveBubbleFeatured: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    marginHorizontal: 5,
+    borderColor: "rgba(234,241,255,0.62)",
+    shadowColor: "rgba(180,205,255,0.9)",
+    shadowOpacity: 0.36,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  liveBubbleMe: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderColor: "rgba(104,149,255,0.75)",
+    backgroundColor: "rgba(104,149,255,0.2)",
+  },
+  liveBubbleActive: {
+    shadowColor: "rgba(104,149,255,0.85)",
+    shadowOpacity: 0.26,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  liveBubbleSpeaking: {
+    transform: [{ translateY: -6 }, { scale: 1.2 }],
+    shadowColor: "rgba(132,220,255,0.98)",
+    shadowOpacity: 0.62,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 4 },
+    zIndex: 12,
+  },
+  liveBubbleDominant: {
+    transform: [{ translateY: -7 }, { scale: 1.24 }],
+    shadowColor: "rgba(132,220,255,1)",
+    shadowOpacity: 0.7,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 4 },
+    opacity: 1,
+    zIndex: 14,
+  },
+  liveBubbleNonSpeaking: {
+    transform: [{ scale: 0.9 }],
+    opacity: 0.66,
+    zIndex: 1,
+  },
+  liveBubbleTapWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  liveBubbleTapWrapPulsed: {
+    transform: [{ scale: 1.05 }],
+    opacity: 0.96,
+  },
+  liveBubbleActiveRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "rgba(104,149,255,0.74)",
+  },
+  liveBubbleActiveRingSpeaking: {
+    borderColor: "rgba(132,220,255,0.98)",
+    borderWidth: 3,
+  },
+  liveBubbleActiveRingDominant: {
+    borderColor: "rgba(182,238,255,0.98)",
+    borderWidth: 3.4,
+  },
+  liveBubbleImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+  },
+  liveBubbleFaceClip: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  liveBubbleCameraFill: {
+    width: "100%",
+    height: "100%",
+  },
+  liveBubbleCameraDominant: {
+    opacity: 0.99,
+  },
+  liveBubbleInitials: { color: "#E7E7E7", fontSize: 14, fontWeight: "900", letterSpacing: 0.4 },
+  liveBubbleInitialsMe: { color: "#fff" },
+  liveBubbleOnlineDot: {
+    position: "absolute",
+    right: 2,
+    bottom: 2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "#2ecc40",
+  },
+  liveBubbleMutedIcon: {
+    position: "absolute",
+    left: -7,
+    bottom: -7,
+    fontSize: 10,
+    lineHeight: 10,
+  },
+  liveBubbleOnlineDotLive: {
+    backgroundColor: "#2ecc40",
+  },
+  liveBubbleOnlineDotIdle: {
+    backgroundColor: "#DC143C",
+  },
+  liveBubbleHostBadge: {
+    position: "absolute",
+    left: -2,
+    top: -4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(220,20,60,0.88)",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  liveBubbleHostBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  liveBubbleName: { color: "#BEBEBE", fontSize: 11, fontWeight: "700", maxWidth: 72, textAlign: "center" },
+  liveBubbleNameExpanded: { fontSize: 13, color: "#E5EBF8", fontWeight: "800" },
+  liveBubbleNameFocused: { color: "#EDF3FF", fontWeight: "800" },
+  liveBubbleNameFeatured: { fontSize: 14, fontWeight: "900", color: "#F4F7FF" },
+  liveBubbleRole: {
+    marginTop: -1,
+    color: "#97A1B5",
+    fontSize: 8.5,
+    fontWeight: "800",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  liveBubbleRoleSpeaking: {
+    color: "#DCEBFF",
+    borderColor: "rgba(141,182,255,0.52)",
+    backgroundColor: "rgba(78,117,194,0.3)",
+  },
+  liveBubbleRoleHost: {
+    color: "#F8E6EB",
+    borderColor: "rgba(220,20,60,0.5)",
+    backgroundColor: "rgba(220,20,60,0.22)",
+  },
+  liveBubbleActionMenu: {
+    position: "absolute",
+    top: -10,
+    left: "50%",
+    transform: [{ translateX: -58 }],
+    flexDirection: "row",
+    gap: 4,
+    zIndex: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(8,12,18,0.9)",
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  liveBubbleActionBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  liveBubbleActionBtnDanger: {
+    borderColor: "rgba(220,20,60,0.5)",
+    backgroundColor: "rgba(220,20,60,0.2)",
+  },
+  liveBubbleActionText: {
+    color: "#EAF0FA",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  liveBubbleActionTextDanger: {
+    color: "#FFE3EA",
+  },
+
+  // Participant modal
+  participantModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.52)",
+  },
+  participantModalSheet: {
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(12,12,12,0.98)",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 20,
+    gap: 10,
+  },
+  participantModalHandle: {
+    alignSelf: "center",
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginBottom: 2,
+  },
+  participantModalTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
+  participantModalMeta: { color: "#A9A9A9", fontSize: 13, fontWeight: "700", marginBottom: 4 },
+  participantActionBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  participantActionBtnText: { color: "#E2E2E2", fontSize: 14, fontWeight: "800" },
+  participantActionBtnDanger: {
+    borderColor: "rgba(220,20,60,0.42)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+  },
+  participantActionBtnTextDanger: { color: "#F7D6DD" },
+  participantActionBtnClose: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 2,
+    alignItems: "center",
+  },
+  participantActionBtnCloseText: { color: "#BEBEBE", fontSize: 13, fontWeight: "800" },
 
   // Invite card
   inviteCard: {
@@ -1060,17 +2550,25 @@ const styles = StyleSheet.create({
   // Participants
   participantsWrap: { gap: 0 },
   participantsCard: {
-    backgroundColor: "rgba(16,16,16,0.97)",
-    borderRadius: 16,
+    backgroundColor: "rgba(8,10,16,0.66)",
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.09)",
-    padding: 14,
+    borderColor: "rgba(255,255,255,0.22)",
+    padding: 11,
     gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  participantsCardLive: {
+    padding: 16,
   },
   participantsLabel: { color: "#7A7A7A", fontSize: 10.5, fontWeight: "700" },
   viewerCount: { color: "#F7D6DD", fontWeight: "900", fontSize: 11 },
   trendingBadge: { color: "#FF6B35", fontWeight: "800", fontSize: 10 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chipsLive: { gap: 10 },
   chip: {
     minWidth: 134,
     borderRadius: 16,
@@ -1082,6 +2580,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  chipLive: {
+    minWidth: 172,
+    paddingVertical: 10,
+  },
+  chipMe: {
+    borderColor: "rgba(104,149,255,0.48)",
+    backgroundColor: "rgba(104,149,255,0.16)",
   },
   chipHost: {
     borderColor: "rgba(220,20,60,0.52)",
@@ -1099,6 +2605,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   chipAvatar: { fontSize: 14, fontWeight: "600" },
+  chipAvatarImage: { width: "100%", height: "100%", borderRadius: 999 },
   participantMeta: { flex: 1, minWidth: 0 },
   chipText: { color: "#CACACA", fontSize: 11, fontWeight: "700" },
   chipTextHost: { color: "#F7D6DD" },
@@ -1128,6 +2635,11 @@ const styles = StyleSheet.create({
     borderColor: "rgba(104,149,255,0.4)",
     backgroundColor: "rgba(104,149,255,0.16)",
   },
+  participantStatusLive: {
+    color: "#A7C4FF",
+    borderColor: "rgba(104,149,255,0.4)",
+    backgroundColor: "rgba(104,149,255,0.16)",
+  },
   participantReactionBadge: {
     position: "absolute",
     top: -8,
@@ -1141,6 +2653,92 @@ const styles = StyleSheet.create({
   },
   participantReactionText: { fontSize: 11, fontWeight: "800" },
 
+  bottomLiveStripOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 14,
+    height: 88,
+    backgroundColor: "transparent",
+    justifyContent: "center",
+    zIndex: 40,
+  },
+  bottomLiveStripContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+    alignItems: "center",
+    minHeight: 88,
+  },
+  bottomLiveBubbleTouchable: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bottomLiveBubble: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    overflow: "visible",
+  },
+  bottomLiveBubbleSpeaking: {
+    transform: [{ scale: 1.08 }],
+    shadowColor: "rgba(122,205,255,0.95)",
+    shadowOpacity: 0.34,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    borderColor: "rgba(132,220,255,0.78)",
+  },
+  bottomLiveBubbleDominant: {
+    transform: [{ scale: 1.13 }],
+    shadowColor: "rgba(132,220,255,1)",
+    shadowOpacity: 0.46,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    borderColor: "rgba(182,238,255,0.94)",
+  },
+  bottomLiveBubbleRing: {
+    position: "absolute",
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderRadius: 999,
+    borderWidth: 1.6,
+    borderColor: "rgba(132,220,255,0.72)",
+  },
+  bottomLiveBubbleRingDominant: {
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderWidth: 2,
+    borderColor: "rgba(182,238,255,0.92)",
+  },
+  bottomLiveBubbleImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+  },
+  bottomLiveBubbleFaceClip: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  bottomLiveBubbleCameraFill: {
+    width: "100%",
+    height: "100%",
+  },
+  bottomLiveBubbleCameraDominant: {
+    opacity: 0.99,
+  },
+  bottomLiveBubbleInitial: { color: "#EAF0FA", fontSize: 14, fontWeight: "900" },
+
   // Watch CTA
   watchCTA: {
     backgroundColor: "#DC143C",
@@ -1151,6 +2749,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
+  },
+  watchCTALiveOn: {
+    backgroundColor: "#B80F31",
   },
   watchCTAText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
 
@@ -1179,16 +2780,20 @@ const styles = StyleSheet.create({
   reactionBtnMuted: { opacity: 0.3 },
   reactionEmoji: { fontSize: 22 },
   reactionOverlay: {
-    alignSelf: "center",
-    marginTop: 4,
-    backgroundColor: "rgba(0,0,0,0.42)",
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    position: "absolute",
+    right: 14,
+    bottom: 184,
+    width: 118,
+    height: 188,
+    alignItems: "center",
+    justifyContent: "flex-end",
   },
-  reactionOverlayEmoji: { fontSize: 24, fontWeight: "800" },
+  reactionOverlayEmoji: {
+    position: "absolute",
+    bottom: 0,
+    fontSize: 28,
+    fontWeight: "900",
+  },
   mutedNotice: { color: "#555", fontSize: 11, textAlign: "center", marginTop: -4 },
 
   // Host controls

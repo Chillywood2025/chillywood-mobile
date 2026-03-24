@@ -162,6 +162,10 @@ export default function HomeScreen() {
     router.push(`/title/${safeId}`);
   }
 
+  function openWatchParty() {
+    router.push({ pathname: "/watch-party", params: { mode: "live" } });
+  }
+
   const heroItem = titles[0];
   const continueItem = titles[1] ?? titles[0];
   const heroImageSource = getImageUri(heroItem);
@@ -223,9 +227,14 @@ export default function HomeScreen() {
                   {heroItem.synopsis || "A cinematic story from the city streets."}
                 </Text>
 
-                <TouchableOpacity style={styles.playBtn} onPress={() => openPlayer(heroItem)} activeOpacity={0.9}>
-                  <Text style={styles.playBtnText}>Play</Text>
-                </TouchableOpacity>
+                <View style={styles.heroActionRow}>
+                  <TouchableOpacity style={styles.playBtn} onPress={() => openPlayer(heroItem)} activeOpacity={0.9}>
+                    <Text style={styles.playBtnText}>Play</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.watchPartyBtn} onPress={openWatchParty} activeOpacity={0.9}>
+                    <Text style={styles.watchPartyBtnText}>Watch Party</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           ) : null}
@@ -445,6 +454,24 @@ const styles = StyleSheet.create({
   playBtnText: {
     color: "#fff",
     fontSize: 15,
+    fontWeight: "800",
+  },
+  heroActionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  watchPartyBtn: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.26)",
+    backgroundColor: "rgba(0,0,0,0.52)",
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 999,
+  },
+  watchPartyBtnText: {
+    color: "#fff",
+    fontSize: 14,
     fontWeight: "800",
   },
 

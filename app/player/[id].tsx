@@ -1,5 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -41,6 +42,9 @@ import {
   updateRoomPlayback,
   type WatchPartyState,
 } from "../../_lib/watchParty";
+import { RoomFooterControlRow } from "../../components/room/control-primitives";
+import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
+import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/room-shared";
 
 const ACCENT = "#DC143C";
 const BG = "#0B0B10";
@@ -64,11 +68,10 @@ const PARTY_MOCK_COMMENTS = [
   { id: "mock-comment-2", username: "Noah", text: "Pause after this for theories" },
   { id: "mock-comment-3", username: "Ava", text: "Soundtrack is perfect here" },
 ] as const;
+const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
-const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 type TitleRow = {
   id: string;
   title: string;
@@ -87,6 +90,8 @@ type PartyParticipant = {
   name: string;
   role: "host" | "co-host" | "viewer";
   avatarUrl?: string;
+  cameraPreviewUrl?: string;
+  isLive?: boolean;
   muted: boolean;
   canSpeak: boolean;
   isSpeaking: boolean;
@@ -166,6 +171,8 @@ export default function PlayerScreen() {
   const [titleParticipantPresentationById, setTitleParticipantPresentationById] = useState<
     Record<string, "compact" | "expanded" | "minimized">
   >({});
+  const [titleParticipantFeaturedById, setTitleParticipantFeaturedById] = useState<Record<string, boolean>>({});
+  const [titleActiveParticipantId, setTitleActiveParticipantId] = useState<string | null>(null);
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
   const [showUpNext, setShowUpNext] = useState(false);
   const [upNextCountdown, setUpNextCountdown] = useState(UP_NEXT_COUNTDOWN_SECONDS);
@@ -222,6 +229,8 @@ export default function PlayerScreen() {
   const entryBoostTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastJoinToastAtRef = useRef(0);
   const roomEnergyRef = useRef(0);
+  const myCameraPreviewUrlRef = useRef("");
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const zoomScale = useRef(new Animated.Value(1)).current;
   const zoomScaleValueRef = useRef(1);
@@ -687,21 +696,27 @@ export default function PlayerScreen() {
     };
 
     const bootstrapPartySocial = async () => {
-      const userId = (partySyncUserIdRef.current || (await getSafePartyUserId().catch(() => "")) || `anon-${Date.now()}`).trim();
+      const safeUserId = String(partySyncUserIdRef.current || (await getSafePartyUserId().catch(() => "")) || "").trim();
+      const trackedUserId = safeUserId || "anon";
       if (!active) return;
-      setPartyUserId(userId);
+      setPartyUserId(trackedUserId);
 
-      let displayName = partySyncRoleRef.current === "host" ? "Host" : "Guest";
+      let displayName = "You";
+      let profileAvatarUrl = "";
+      let profileCameraPreviewUrl = "";
       try {
         const authUser = await supabase.auth.getUser();
         const metadata = authUser.data.user?.user_metadata as Record<string, unknown> | undefined;
         const metadataName = String(metadata?.full_name ?? metadata?.name ?? "").trim();
+        profileAvatarUrl = String(metadata?.avatar_url ?? metadata?.picture ?? "").trim();
+        profileCameraPreviewUrl = String(metadata?.camera_preview_url ?? metadata?.cameraPreviewUrl ?? "").trim();
         if (metadataName) {
-          displayName = metadataName || displayName || "Guest";
+          displayName = metadataName || "You";
         }
       } catch {
         // keep fallback displayName
       }
+      myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
 
       const history = await fetchPartyMessages(partyId, 30).catch(() => []);
       if (!active) return;
@@ -710,7 +725,7 @@ export default function PlayerScreen() {
         .slice(-8)
         .map((m) => ({
           id: m.id,
-          author: m.userId === userId ? "You" : String((m as any).authorLabel ?? "").trim() || "Guest",
+          author: m.userId === trackedUserId ? "You" : String((m as any).authorLabel ?? "").trim() || "Guest",
           body: String(m.body ?? ""),
         }));
       setPartyOverlayMessages(chatHistory);
@@ -721,15 +736,20 @@ export default function PlayerScreen() {
       }
 
       const channel = supabase.channel(`party-chat-${partyId}`, {
-        config: { presence: { key: userId || `anon-${Date.now()}` } },
+        config: { presence: { key: trackedUserId } },
       });
 
       channel.on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{
+          userId?: string;
+          username?: string;
           role?: string;
           displayName?: string;
           avatarIndex?: number;
           avatarUrl?: string;
+          cameraPreviewUrl?: string;
+          camera_preview_url?: string;
+          isLive?: boolean;
           muted?: boolean;
           canSpeak?: boolean;
           isSpeaking?: boolean;
@@ -743,17 +763,26 @@ export default function PlayerScreen() {
           .map(([key, presArr]) => {
             const first = Array.isArray(presArr)
               ? (presArr[0] as {
+                  userId?: string;
+                  username?: string;
                   role?: string;
                   displayName?: string;
                   avatarIndex?: number;
-                      avatarUrl?: string;
+                  avatarUrl?: string;
+                  cameraPreviewUrl?: string;
+                  camera_preview_url?: string;
+                  isLive?: boolean;
                   muted?: boolean;
                   canSpeak?: boolean;
                   isSpeaking?: boolean;
                   isRequestingToSpeak?: boolean;
                 })
               : undefined;
-            return String(first?.displayName ?? (key === userId ? displayName : "") ?? "").trim() || "Guest";
+            const resolvedUserId = String(first?.userId ?? key).trim();
+            const resolvedPreviewName = resolveIdentityName(first?.username, first?.displayName, resolvedUserId === trackedUserId ? displayName : "", "Guest");
+            return resolvedUserId === trackedUserId
+              ? "You"
+              : resolvedPreviewName;
           });
         setPartyParticipantPreview(preview);
 
@@ -762,17 +791,23 @@ export default function PlayerScreen() {
           const next = entries.map(([key, presArr]) => {
             const presence = Array.isArray(presArr)
               ? (presArr[0] as {
+                  userId?: string;
+                  username?: string;
                   role?: string;
                   displayName?: string;
                   avatarIndex?: number;
                   avatarUrl?: string;
+                  cameraPreviewUrl?: string;
+                  camera_preview_url?: string;
+                  isLive?: boolean;
                   muted?: boolean;
                   canSpeak?: boolean;
                   isSpeaking?: boolean;
                   isRequestingToSpeak?: boolean;
                 })
               : undefined;
-            const existing = previousById.get(key);
+            const resolvedUserId = String(presence?.userId ?? key).trim();
+            const existing = previousById.get(resolvedUserId);
             const rawRole = String(presence?.role ?? existing?.role ?? "").trim().toLowerCase();
             const role: "host" | "co-host" | "viewer" =
               rawRole === "host" ? "host" : rawRole === "co-host" || rawRole === "cohost" ? "co-host" : "viewer";
@@ -782,12 +817,24 @@ export default function PlayerScreen() {
                 : typeof existing?.canSpeak === "boolean"
                   ? existing.canSpeak
                   : role === "host" || role === "co-host";
+            const isCurrentUser = resolvedUserId === trackedUserId;
+            const resolvedName = resolveIdentityName(
+              presence?.username,
+              presence?.displayName,
+              existing?.name,
+              isCurrentUser ? displayName : "",
+              "Guest",
+            );
+            const resolvedAvatarUrl = String(presence?.avatarUrl ?? "").trim() || (isCurrentUser ? profileAvatarUrl : "");
+            const resolvedCameraPreviewUrl = String(presence?.cameraPreviewUrl ?? presence?.camera_preview_url ?? "").trim() || (isCurrentUser ? profileCameraPreviewUrl : "");
 
             return {
-              id: key,
-              name: String(presence?.displayName ?? existing?.name ?? (key === userId ? displayName : "") ?? "").trim() || "Guest",
+              id: resolvedUserId,
+              name: isCurrentUser ? "You" : resolvedName || "Guest",
               role,
-              avatarUrl: existing?.avatarUrl ?? (String(presence?.avatarUrl ?? "").trim() || undefined),
+              avatarUrl: resolvedAvatarUrl || existing?.avatarUrl,
+              cameraPreviewUrl: resolvedCameraPreviewUrl || existing?.cameraPreviewUrl,
+              isLive: typeof presence?.isLive === "boolean" ? presence.isLive : existing?.isLive,
               muted: typeof presence?.muted === "boolean" ? presence.muted : existing?.muted ?? false,
               canSpeak: canSpeakFromPresence,
               isSpeaking: typeof presence?.isSpeaking === "boolean" ? presence.isSpeaking : existing?.isSpeaking ?? false,
@@ -798,7 +845,26 @@ export default function PlayerScreen() {
             };
           });
 
+          const hasSelf = next.some((entry) => entry.id === trackedUserId);
+          if (!hasSelf) {
+            next.unshift({
+              id: trackedUserId,
+              name: "You",
+              role: partySyncRoleRef.current === "host" ? "host" : "viewer",
+              avatarUrl: previousById.get(trackedUserId)?.avatarUrl,
+              cameraPreviewUrl: previousById.get(trackedUserId)?.cameraPreviewUrl || profileCameraPreviewUrl || undefined,
+              isLive: true,
+              muted: previousById.get(trackedUserId)?.muted ?? false,
+              canSpeak: previousById.get(trackedUserId)?.canSpeak ?? partySyncRoleRef.current === "host",
+              isSpeaking: previousById.get(trackedUserId)?.isSpeaking ?? false,
+              isRequestingToSpeak: previousById.get(trackedUserId)?.isRequestingToSpeak ?? false,
+            });
+          }
+
           next.sort((a, b) => {
+            const aMe = a.id === trackedUserId ? 1 : 0;
+            const bMe = b.id === trackedUserId ? 1 : 0;
+            if (aMe !== bMe) return bMe - aMe;
             const rank = (role: "host" | "co-host" | "viewer") => (role === "host" ? 0 : role === "co-host" ? 1 : 2);
             const roleDiff = rank(a.role) - rank(b.role);
             if (roleDiff !== 0) return roleDiff;
@@ -829,9 +895,14 @@ export default function PlayerScreen() {
       channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await channel.track({
+            userId: trackedUserId,
+            username: displayName,
+            avatarUrl: profileAvatarUrl || undefined,
+            cameraPreviewUrl: profileCameraPreviewUrl || undefined,
             role: partySyncRoleRef.current === "host" ? "host" : "viewer",
             displayName,
-            avatarIndex: Number.parseInt(userId.slice(-3), 16) % 70,
+            isLive: true,
+            avatarIndex: Number.parseInt(trackedUserId.slice(-3), 16) % 70,
           });
         }
       });
@@ -861,6 +932,16 @@ export default function PlayerScreen() {
       if (upNextIntervalRef.current) clearInterval(upNextIntervalRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (!inWatchParty) return;
+    const currentTrackedUserId = String(partyUserId || "").trim() || "anon";
+    if (!currentTrackedUserId || currentTrackedUserId === "anon") return;
+    if (cameraPermission?.granted) return;
+    if (cameraPermission && !cameraPermission.canAskAgain) return;
+    requestCameraPermission().catch(() => {});
+  }, [inWatchParty, partyUserId, cameraPermission, requestCameraPermission]);
 
   useEffect(() => {
     shouldAutoplayNextRef.current = false;
@@ -2024,25 +2105,28 @@ export default function PlayerScreen() {
     const merged = [...speakingParticipantIds, ...activeParticipantIds.filter((id) => !speakingParticipantIds.includes(id))];
     return merged.slice(0, 2);
   }, [activeParticipantIds, speakingParticipantIds]);
-  const orderedPartyParticipants = useMemo(() => {
-    if (primaryActiveParticipantIds.length === 0) return partyParticipants;
-    const activeIdSet = new Set(primaryActiveParticipantIds);
-    const active = partyParticipants.filter((participant) => activeIdSet.has(participant.id));
-    const inactive = partyParticipants.filter((participant) => !activeIdSet.has(participant.id));
-    return [...active, ...inactive];
-  }, [partyParticipants, primaryActiveParticipantIds]);
-  const localParticipantId = useMemo(() => {
-    if (partyUserId && partyParticipants.some((participant) => participant.id === partyUserId)) {
-      return partyUserId;
-    }
-    if (partySyncRole === "host") {
-      return partyParticipants.find((participant) => participant.role === "host")?.id ?? "";
-    }
-    return partyParticipants.find((participant) => participant.role === "viewer")?.id ?? "";
-  }, [partyParticipants, partySyncRole, partyUserId]);
+  const trackedUserId = useMemo(() => String(partyUserId || "").trim() || "anon", [partyUserId]);
+  const liveBubbleParticipants = useMemo(() => {
+    const seen = new Set<string>();
+    const unique = partyParticipants.filter((participant) => {
+      if (!participant.id || seen.has(participant.id)) return false;
+      seen.add(participant.id);
+      return true;
+    });
+
+    return unique.sort((a, b) => {
+      const aMe = a.id === trackedUserId ? 1 : 0;
+      const bMe = b.id === trackedUserId ? 1 : 0;
+      if (aMe !== bMe) return bMe - aMe;
+      const rank = (role: "host" | "co-host" | "viewer") => (role === "host" ? 0 : role === "co-host" ? 1 : 2);
+      const roleDiff = rank(a.role) - rank(b.role);
+      if (roleDiff !== 0) return roleDiff;
+      return a.name.localeCompare(b.name);
+    });
+  }, [partyParticipants, trackedUserId]);
   const livePrimarySpeakers = useMemo(
-    () => orderedPartyParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
-    [orderedPartyParticipants],
+    () => liveBubbleParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
+    [liveBubbleParticipants],
   );
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
@@ -2321,6 +2405,7 @@ export default function PlayerScreen() {
     return localVisual?.image || localVisual?.poster || null;
   }, [displayItem, localTitle, fallbackTitle]);
   const isLiveMode = inWatchParty && (isLiveModeFlag || !source);
+  const shouldUseLiveSpeakerStage = isLiveMode && !source;
 
   useEffect(() => {
     if (inWatchParty || isLiveMode) {
@@ -2329,8 +2414,8 @@ export default function PlayerScreen() {
   }, [inWatchParty, isLiveMode]);
 
   const hasActiveRailParticipants = useMemo(
-    () => orderedPartyParticipants.some((entry) => entry.isSpeaking || primaryActiveParticipantIds.includes(entry.id)),
-    [orderedPartyParticipants, primaryActiveParticipantIds],
+    () => liveBubbleParticipants.some((entry) => entry.isSpeaking || primaryActiveParticipantIds.includes(entry.id)),
+    [liveBubbleParticipants, primaryActiveParticipantIds],
   );
 
   useEffect(() => {
@@ -2400,7 +2485,7 @@ export default function PlayerScreen() {
         if (suppressed) {
           delete suppressNextSpeakingEventRef.current[startedSpeaking.id];
         } else {
-          eventText = startedSpeaking.id === localParticipantId ? "🎤 You are now speaking" : `🎤 ${startedSpeaking.name} started speaking`;
+          eventText = startedSpeaking.id === trackedUserId ? "🎤 You are now speaking" : `🎤 ${startedSpeaking.name} started speaking`;
         }
         bumpRoomEnergy(0.1);
       }
@@ -2416,7 +2501,7 @@ export default function PlayerScreen() {
         if (suppressed) {
           delete suppressNextSpeakingEventRef.current[stoppedSpeaking.id];
         } else {
-          eventText = stoppedSpeaking.id === localParticipantId ? "🔇 You are muted" : `🔇 ${stoppedSpeaking.name} stopped speaking`;
+          eventText = stoppedSpeaking.id === trackedUserId ? "🔇 You are muted" : `🔇 ${stoppedSpeaking.name} stopped speaking`;
         }
       }
     }
@@ -2432,7 +2517,7 @@ export default function PlayerScreen() {
     }));
   }, [
     inWatchParty,
-    localParticipantId,
+    trackedUserId,
     markParticipantActive,
     partyParticipants,
     bumpRoomEnergy,
@@ -2440,20 +2525,29 @@ export default function PlayerScreen() {
     triggerParticipantReactionBoost,
   ]);
 
-  const renderParticipantPanel = (liveLayout = false) => (
-    <View style={[styles.partyFeedCard, liveLayout && styles.partyFeedCardLive, !liveLayout && styles.partyFeedCardTitleCompact]}>
+  const renderParticipantPanel = (liveLayout = false, dockLayout = false) => (
+    <View
+      style={[
+        styles.partyFeedCard,
+        liveLayout && styles.partyFeedCardLive,
+        dockLayout && styles.partyFeedCardLiveDock,
+        !liveLayout && styles.partyFeedCardTitleCompact,
+      ]}
+    >
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[
           styles.participantBubbleScroll,
           liveLayout && styles.participantBubbleScrollLive,
+          dockLayout && styles.participantBubbleScrollLiveDock,
           !liveLayout && styles.participantBubbleScrollTitleCompact,
         ]}
       >
-        {orderedPartyParticipants.map((participant) => {
+        {liveBubbleParticipants.map((participant) => {
+          const isCurrentUser = participant.id === trackedUserId;
           const isHost = partySyncRole === "host";
-          const isExpanded = liveLayout && isHost && activeParticipantId === participant.id;
+          const isExpanded = liveLayout && !dockLayout && isHost && activeParticipantId === participant.id;
           const isSpeaking = participant.isSpeaking && participant.canSpeak;
           const isActive = primaryActiveParticipantIds.includes(participant.id);
           const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
@@ -2470,12 +2564,9 @@ export default function PlayerScreen() {
           const pressScale = participantPressScaleMapRef.current[participant.id] ?? 1;
           const joinScale = participantJoinScaleMapRef.current[participant.id] ?? 1;
           const isOnlineActive = isSpeaking || isActive;
-          const initials = participant.name
-            .split(" ")
-            .map((part: string) => part[0] ?? "")
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
+          const showLocalCameraPreview = Platform.OS !== "web" && isCurrentUser && !!cameraPermission?.granted;
+          const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
+          const initials = getInitials(participant.name);
 
           return (
             <Animated.View
@@ -2483,6 +2574,7 @@ export default function PlayerScreen() {
               style={[
                 styles.participantBubbleItem,
                 liveLayout && styles.participantBubbleItemLive,
+                dockLayout && styles.participantBubbleItemLiveDock,
                 !liveLayout && styles.participantBubbleItemTitleCompact,
                 isSpeaking && styles.participantBubbleSpeaking,
                 isActive && styles.participantBubbleActive,
@@ -2502,7 +2594,7 @@ export default function PlayerScreen() {
               ]}
             >
               <TouchableOpacity
-                style={styles.partyParticipantBubbleTap}
+                style={[styles.partyParticipantBubbleTap, dockLayout && styles.partyParticipantBubbleTapDock]}
                 onPressIn={() => {
                   const press = participantPressScaleMapRef.current[participant.id];
                   if (!press) return;
@@ -2526,7 +2618,7 @@ export default function PlayerScreen() {
                 onPress={() => {
                   markParticipantActive(participant.id, 2400);
                   bumpRoomEnergy(0.03);
-                  if (!isHost && participant.id === localParticipantId && !participant.canSpeak) {
+                  if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
                     setPartyParticipants((prev) =>
                       prev.map((entry) =>
                         entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
@@ -2538,7 +2630,7 @@ export default function PlayerScreen() {
                 }}
                 activeOpacity={0.85}
               >
-                <View style={styles.partyParticipantAvatarWrap}>
+                <View style={[styles.partyParticipantAvatarWrap, dockLayout && styles.partyParticipantAvatarWrapDock]}>
                   {!liveLayout && isOnlineActive ? (
                     <Animated.View
                       pointerEvents="none"
@@ -2592,12 +2684,17 @@ export default function PlayerScreen() {
                     style={[
                       styles.participantAvatar,
                       liveLayout && styles.participantAvatarLive,
+                      dockLayout && styles.participantAvatarLiveDock,
                       !liveLayout && styles.participantAvatarTitleCompact,
                       participant.muted && styles.participantAvatarMuted,
                     ]}
                   >
-                    {participant.avatarUrl ? (
-                      <Image source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
+                    {(showLocalCameraPreview || bubbleMediaUri) ? (
+                      showLocalCameraPreview ? (
+                        <CameraView style={styles.participantAvatarImage} facing="front" mute mirror />
+                      ) : (
+                        <Image source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
+                      )
                     ) : (
                       <Text style={[styles.participantInitials, liveLayout && styles.participantInitialsLive, !liveLayout && styles.participantInitialsTitleCompact]}>{initials}</Text>
                     )}
@@ -2667,22 +2764,27 @@ export default function PlayerScreen() {
                     </Animated.View>
                   ))}
                 </View>
-                <Text style={[styles.participantName, liveLayout && styles.participantNameLive, !liveLayout && styles.participantNameTitleCompact]} numberOfLines={1}>
-                  {participant.name}
-                </Text>
-                {liveLayout ? (
+                {!dockLayout ? (
+                  <Text
+                    style={[
+                      styles.participantName,
+                      liveLayout && styles.participantNameLive,
+                      dockLayout && styles.participantNameLiveDock,
+                      !liveLayout && styles.participantNameTitleCompact,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {participant.id === trackedUserId ? "You" : participant.name}
+                  </Text>
+                ) : null}
+                {liveLayout && !dockLayout ? (
                   <Text style={styles.partyParticipantStatus}>
-                    {isSpeaking
-                      ? "🎤 Speaking"
-                      : isRequesting
-                        ? "✋ Requesting"
-                        : participant.muted
-                          ? "🔇 Muted"
-                          : participant.role === "host"
-                            ? "👑 Host"
-                            : participant.role === "co-host"
-                              ? "⭐ Co-host"
-                              : "👤 Member"}
+                    {getLiveParticipantStatusText({
+                      isSpeaking,
+                      isRequesting,
+                      isMuted: participant.muted,
+                      role: participant.role,
+                    })}
                   </Text>
                 ) : null}
               </TouchableOpacity>
@@ -2863,10 +2965,15 @@ export default function PlayerScreen() {
         decelerationRate="fast"
         bounces={false}
       >
-        {orderedPartyParticipants.map((participant) => {
+        {[
+          ...liveBubbleParticipants.filter((participant) => titleParticipantFeaturedById[participant.id]),
+          ...liveBubbleParticipants.filter((participant) => !titleParticipantFeaturedById[participant.id]),
+        ].map((participant) => {
           const presentation = titleParticipantPresentationById[participant.id] ?? "compact";
+          const isFeaturedPresentation = !!titleParticipantFeaturedById[participant.id];
           const isExpandedPresentation = presentation === "expanded";
           const isMinimizedPresentation = presentation === "minimized";
+          const isFocusedPresentation = titleActiveParticipantId === participant.id;
           const isActive = primaryActiveParticipantIds.includes(participant.id);
           const isSpeaking = participant.isSpeaking && participant.canSpeak;
           const initials = participant.name
@@ -2881,8 +2988,10 @@ export default function PlayerScreen() {
               key={`title-sheet-${participant.id}`}
               style={[
                 styles.titleParticipantFeedCard,
+                isFeaturedPresentation && styles.titleParticipantFeedCardFeatured,
                 isExpandedPresentation && styles.titleParticipantFeedCardExpanded,
-                isMinimizedPresentation && styles.titleParticipantFeedCardMinimized,
+                isMinimizedPresentation && !isFeaturedPresentation && styles.titleParticipantFeedCardMinimized,
+                isFocusedPresentation && !isFeaturedPresentation && styles.titleParticipantFeedCardFocused,
                 isSpeaking && styles.titleParticipantFeedCardSpeaking,
                 isActive && styles.titleParticipantFeedCardActive,
               ]}
@@ -2906,25 +3015,34 @@ export default function PlayerScreen() {
                   <TouchableOpacity
                     style={styles.titleParticipantTileTap}
                     onPress={() => {
+                      setTitleActiveParticipantId(participant.id);
                       setTitleParticipantPresentationById((prev) => {
                         const current = prev[participant.id] ?? "compact";
                         const next =
                           current === "expanded"
                             ? "compact"
                             : current === "minimized"
-                              ? "compact"
+                              ? "expanded"
                               : "expanded";
                         return { ...prev, [participant.id]: next };
                       });
                     }}
-                    activeOpacity={0.85}
+                    onLongPress={() => {
+                      setTitleParticipantFeaturedById((prev) => ({
+                        ...prev,
+                        [participant.id]: !prev[participant.id],
+                      }));
+                    }}
+                    delayLongPress={220}
+                    activeOpacity={0.76}
                   >
                     <View
                       style={[
                         styles.participantAvatar,
                         styles.participantAvatarTitleFeed,
+                        isFeaturedPresentation && styles.participantAvatarTitleFeedFeatured,
                         isExpandedPresentation && styles.participantAvatarTitleFeedExpanded,
-                        isMinimizedPresentation && styles.participantAvatarTitleFeedMinimized,
+                        isMinimizedPresentation && !isFeaturedPresentation && styles.participantAvatarTitleFeedMinimized,
                         participant.muted && styles.participantAvatarMuted,
                       ]}
                     >
@@ -2935,8 +3053,9 @@ export default function PlayerScreen() {
                           style={[
                             styles.participantInitials,
                             styles.participantInitialsTitleCompact,
+                            isFeaturedPresentation && styles.participantInitialsTitleFeedFeatured,
                             isExpandedPresentation && styles.participantInitialsTitleFeedExpanded,
-                            isMinimizedPresentation && styles.participantInitialsTitleFeedMinimized,
+                            isMinimizedPresentation && !isFeaturedPresentation && styles.participantInitialsTitleFeedMinimized,
                           ]}
                         >
                           {initials}
@@ -2949,7 +3068,7 @@ export default function PlayerScreen() {
                       style={[
                         styles.participantHostBadge,
                         styles.participantHostBadgeFeed,
-                        isMinimizedPresentation && styles.participantHostBadgeFeedMinimized,
+                        isMinimizedPresentation && !isFeaturedPresentation && styles.participantHostBadgeFeedMinimized,
                       ]}
                     >
                       <Text style={[styles.participantHostBadgeText, styles.participantHostBadgeTextFeed]}>
@@ -2957,7 +3076,13 @@ export default function PlayerScreen() {
                       </Text>
                     </View>
                   ) : null}
-                  <View style={[styles.titleParticipantFeedLiveDot, isMinimizedPresentation && styles.titleParticipantFeedLiveDotMinimized]} />
+                  <View
+                    style={[
+                      styles.titleParticipantFeedLiveDot,
+                      isFeaturedPresentation && styles.titleParticipantFeedLiveDotFeatured,
+                      isMinimizedPresentation && !isFeaturedPresentation && styles.titleParticipantFeedLiveDotMinimized,
+                    ]}
+                  />
                   {isExpandedPresentation ? (
                     <TouchableOpacity
                       style={styles.titleParticipantMinimizeBtn}
@@ -2974,11 +3099,13 @@ export default function PlayerScreen() {
                   ) : null}
                 </View>
               </Animated.View>
-              {!isMinimizedPresentation ? (
+              {(!isMinimizedPresentation || isFeaturedPresentation) ? (
                 <Text
                   style={[
                     styles.participantName,
                     styles.participantNameTitleFeed,
+                    isFocusedPresentation && !isFeaturedPresentation && styles.participantNameTitleFeedFocused,
+                    isFeaturedPresentation && styles.participantNameTitleFeedFeatured,
                     isExpandedPresentation && styles.participantNameTitleFeedExpanded,
                   ]}
                   numberOfLines={1}
@@ -3058,7 +3185,7 @@ export default function PlayerScreen() {
               videoWidthRef.current = event.nativeEvent.layout.width;
             }}
           >
-            {isLiveMode ? (
+            {shouldUseLiveSpeakerStage ? (
               <>
             {livePrimarySpeakers.length > 0 ? (
               <Animated.View
@@ -3130,7 +3257,7 @@ export default function PlayerScreen() {
                           const isHost = partySyncRole === "host";
                           markParticipantActive(participant.id, 2400);
                           bumpRoomEnergy(0.03);
-                          if (!isHost && participant.id === localParticipantId && !participant.canSpeak) {
+                          if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
                             setPartyParticipants((prev) =>
                               prev.map((entry) =>
                                 entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
@@ -3366,7 +3493,7 @@ export default function PlayerScreen() {
                 source={source}
                 style={styles.video}
                 resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
-                shouldPlay={false}
+                shouldPlay={isLiveMode ? true : isPlaying}
                 isLooping={false}
                 useNativeControls={false}
                 onPlaybackStatusUpdate={onPlaybackStatusUpdate}
@@ -3677,6 +3804,59 @@ export default function PlayerScreen() {
           {inWatchParty && !isLiveMode && source ? (
             <View style={[styles.titleParticipantFeedDock, hasActiveRailParticipants && styles.titleWatchPartyRailDockActive]}>
               {renderTitleParticipantExpandedPanel()}
+            </View>
+          ) : null}
+          {inWatchParty && isLiveMode && source ? (
+            <View style={[styles.watchPartyLiveBottomDock, hasActiveRailParticipants && styles.watchPartyLiveBottomDockActive]}>
+              {livePresenceEvent ? (
+                <View style={[styles.livePresenceEventToast, styles.watchPartyLivePresenceToast]}>
+                  <Text style={styles.livePresenceEventText} numberOfLines={1}>
+                    {livePresenceEvent}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={styles.watchPartyLiveStripWrap}>{renderParticipantPanel(true)}</View>
+              <RoomFooterControlRow
+                leftAction={{
+                  id: "chat",
+                  icon: "💬",
+                  label: partyChatOpen ? "Hide" : "Chat",
+                  activeOpacity: 0.85,
+                  onPress: () => setPartyChatOpen((value) => !value),
+                  buttonStyle: styles.watchPartyLiveFooterPrimaryBtn,
+                  labelStyle: styles.watchPartyLiveFooterPrimaryLabel,
+                }}
+                quickReactions={PARTY_LOCAL_REACTION_SET}
+                onPressQuickReaction={triggerLocalPartyReaction}
+                trailingActions={[
+                  {
+                    id: "comments",
+                    icon: "🗨️",
+                    label: partyCommentsOpen ? "Hide" : "Comments",
+                    activeOpacity: 0.85,
+                    onPress: () => setPartyCommentsOpen((value) => !value),
+                  },
+                  {
+                    id: "react",
+                    icon: "✨",
+                    label: "React",
+                    activeOpacity: 0.85,
+                    onPress: () => {
+                      const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
+                      triggerLocalPartyReaction(emoji);
+                    },
+                  },
+                ]}
+                styles={mapFooterControlRowStyles({
+                  row: styles.footerControls,
+                  actionButton: styles.footerIconBtn,
+                  actionIconText: styles.footerIconBtnText,
+                  actionLabelText: styles.footerIconBtnLabel,
+                  quickRow: styles.footerReactionQuickRow,
+                  quickChip: styles.footerReactionQuickBtn,
+                  quickChipText: styles.footerReactionQuickText,
+                }, buildFooterControlTokens({ size: "compact", surface: "glass" }))}
+              />
             </View>
           ) : null}
           </>
@@ -4575,12 +4755,12 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   titleParticipantFeedScroll: {
-    maxHeight: 168,
+    maxHeight: 228,
   },
   titleParticipantFeedStack: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     paddingRight: 18,
   },
   titleParticipantFeedCard: {
@@ -4591,22 +4771,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minHeight: 96,
-    width: 118,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    minHeight: 78,
+    width: 94,
   },
   titleParticipantFeedCardExpanded: {
-    width: 168,
-    minHeight: 150,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderColor: "rgba(255,120,148,0.56)",
-    backgroundColor: "rgba(220,20,60,0.2)",
-    shadowColor: "#FF6A8E",
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 3 },
+    width: 206,
+    minHeight: 188,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    marginHorizontal: 4,
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    shadowColor: "#FFFFFF",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  titleParticipantFeedCardFeatured: {
+    width: 238,
+    minHeight: 214,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    marginHorizontal: 6,
   },
   titleParticipantFeedCardMinimized: {
     width: 44,
@@ -4614,6 +4802,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 4,
     borderRadius: 999,
+  },
+  titleParticipantFeedCardFocused: {
+    borderColor: "rgba(168,198,255,0.8)",
+    backgroundColor: "rgba(100,146,255,0.16)",
+    shadowColor: "rgba(126,166,255,0.75)",
+    shadowOpacity: 0.16,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 2 },
   },
   titleParticipantFeedCardActive: {
     backgroundColor: "rgba(220,20,60,0.14)",
@@ -4658,6 +4854,13 @@ const styles = StyleSheet.create({
     right: -2,
     bottom: -2,
   },
+  titleParticipantFeedLiveDotFeatured: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    right: 0,
+    bottom: 0,
+  },
   titleParticipantMinimizeBtn: {
     position: "absolute",
     top: -7,
@@ -4683,6 +4886,14 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     alignSelf: "stretch",
   },
+  partyFeedCardLiveDock: {
+    minHeight: 88,
+    maxHeight: 88,
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
   participantBubbleScroll: {
     gap: 8,
     paddingRight: 4,
@@ -4699,6 +4910,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexGrow: 1,
+  },
+  participantBubbleScrollLiveDock: {
+    gap: 8,
+    alignItems: "center",
+    paddingHorizontal: 12,
+    minHeight: 88,
   },
   participantBubbleItem: {
     width: 74,
@@ -4731,6 +4948,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
+  participantBubbleItemLiveDock: {
+    width: 56,
+    borderRadius: 999,
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    backgroundColor: "transparent",
+  },
   participantBubbleActive: {
     borderColor: "rgba(220,20,60,0.58)",
     backgroundColor: "rgba(220,20,60,0.18)",
@@ -4752,9 +4977,15 @@ const styles = StyleSheet.create({
   partyParticipantBubbleTap: {
     alignItems: "center",
   },
+  partyParticipantBubbleTapDock: {
+    gap: 0,
+  },
   partyParticipantAvatarWrap: {
     position: "relative",
     marginBottom: 6,
+  },
+  partyParticipantAvatarWrapDock: {
+    marginBottom: 0,
   },
   participantAvatar: {
     width: 40,
@@ -4777,17 +5008,23 @@ const styles = StyleSheet.create({
     borderRadius: 19,
   },
   participantAvatarTitleFeed: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderColor: "rgba(255,255,255,0.26)",
   },
   participantAvatarTitleFeedExpanded: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     borderWidth: 1.4,
     borderColor: "rgba(255,255,255,0.46)",
+  },
+  participantAvatarTitleFeedFeatured: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 1.6,
   },
   participantAvatarTitleFeedMinimized: {
     width: 24,
@@ -4803,6 +5040,13 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
+  },
+  participantAvatarLiveDock: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(0,0,0,0.44)",
   },
   participantActiveRing: {
     position: "absolute",
@@ -4961,9 +5205,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   participantNameTitleFeedExpanded: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "900",
     color: "#F3F7FF",
+  },
+  participantNameTitleFeedFocused: {
+    color: "#EFF4FF",
+  },
+  participantNameTitleFeedFeatured: {
+    fontSize: 15,
+    fontWeight: "900",
   },
   participantHostBadgeFeed: {
     left: -4,
@@ -4980,13 +5231,98 @@ const styles = StyleSheet.create({
     fontSize: 6.5,
   },
   participantInitialsTitleFeedExpanded: {
-    fontSize: 22,
+    fontSize: 26,
+  },
+  participantInitialsTitleFeedFeatured: {
+    fontSize: 30,
   },
   participantInitialsTitleFeedMinimized: {
     fontSize: 9,
   },
   participantNameLive: {
     fontSize: 11,
+  },
+  participantNameLiveDock: {
+    fontSize: 9,
+    color: "#E9EDF8",
+  },
+  watchPartyLiveBottomDock: {
+    marginTop: 10,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+  },
+  watchPartyLiveBottomDockActive: {
+    borderWidth: 0,
+    backgroundColor: "transparent",
+  },
+  watchPartyLivePresenceToast: {
+    alignSelf: "center",
+    marginBottom: 6,
+    maxWidth: "96%",
+  },
+  watchPartyLiveStripWrap: {
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(8,10,16,0.66)",
+    paddingVertical: 11,
+    paddingHorizontal: 11,
+    marginBottom: 0,
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  footerControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 6,
+    alignSelf: "center",
+  },
+  footerIconBtn: {
+    width: 58,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(0,0,0,0.36)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 5,
+    gap: 2,
+  },
+  footerReactionQuickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  footerReactionQuickBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(0,0,0,0.32)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  footerReactionQuickText: {
+    color: "#F1F1F1",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  footerIconBtnText: { color: "#F1F1F1", fontSize: 15, fontWeight: "900" },
+  footerIconBtnLabel: { color: "#D4D4D4", fontSize: 9.5, fontWeight: "800" },
+  watchPartyLiveFooterPrimaryBtn: {
+    borderColor: "rgba(220,20,60,0.7)",
+    backgroundColor: "rgba(220,20,60,0.26)",
+  },
+  watchPartyLiveFooterPrimaryLabel: {
+    color: "#fff",
   },
   participantHostBadge: {
     position: "absolute",
