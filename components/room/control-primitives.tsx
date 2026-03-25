@@ -93,17 +93,17 @@ export type RoomFooterControlRowStyles = {
   actionButtonDisabled?: StyleProp<ViewStyle>;
   actionIconText: StyleProp<TextStyle>;
   actionLabelText: StyleProp<TextStyle>;
-  quickRow: StyleProp<ViewStyle>;
-  quickChip: StyleProp<ViewStyle>;
+  quickRow?: StyleProp<ViewStyle>;
+  quickChip?: StyleProp<ViewStyle>;
   quickChipDisabled?: StyleProp<ViewStyle>;
-  quickChipText: StyleProp<TextStyle>;
+  quickChipText?: StyleProp<TextStyle>;
 };
 
 type RoomFooterControlRowProps = {
   leftAction: RoomControlAction;
   trailingActions: RoomControlAction[];
-  quickReactions: readonly string[];
-  onPressQuickReaction: (emoji: string) => void;
+  quickReactions?: readonly string[];
+  onPressQuickReaction?: (emoji: string) => void;
   quickReactionsDisabled?: boolean;
   styles: RoomFooterControlRowStyles;
 };
@@ -116,6 +116,8 @@ export function RoomFooterControlRow({
   quickReactionsDisabled,
   styles,
 }: RoomFooterControlRowProps) {
+  const hasQuickReactions = !!quickReactions?.length && !!onPressQuickReaction && !!styles.quickRow && !!styles.quickChip && !!styles.quickChipText;
+
   return (
     <View style={styles.row}>
       <RoomControlButton
@@ -128,18 +130,20 @@ export function RoomFooterControlRow({
         }}
       />
 
-      <RoomReactionChipRow
-        emojis={quickReactions}
-        onPressEmoji={onPressQuickReaction}
-        disabled={quickReactionsDisabled}
-        styles={{
-          row: styles.quickRow,
-          chip: styles.quickChip,
-          chipDisabled: styles.quickChipDisabled,
-          chipText: styles.quickChipText,
-        }}
-        keyPrefix="footer-quick"
-      />
+      {hasQuickReactions ? (
+        <RoomReactionChipRow
+          emojis={quickReactions}
+          onPressEmoji={onPressQuickReaction}
+          disabled={quickReactionsDisabled}
+          styles={{
+            row: styles.quickRow,
+            chip: styles.quickChip,
+            chipDisabled: styles.quickChipDisabled,
+            chipText: styles.quickChipText,
+          }}
+          keyPrefix="footer-quick"
+        />
+      ) : null}
 
       {trailingActions.map((action) => (
         <RoomControlButton

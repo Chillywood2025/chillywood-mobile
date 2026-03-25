@@ -65,7 +65,7 @@ export function RoomParticipantTile({
     >
       <View style={styles.avatarWrap}>
         {mediaUri ? (
-          <Image source={{ uri: mediaUri }} style={styles.avatarImage} />
+          <Image source={{ uri: mediaUri }} style={styles.avatarImage} resizeMode="cover" />
         ) : (
           <Text style={styles.avatarLabel}>{participant.avatarLabelOverride || getInitials(participant.displayName)}</Text>
         )}

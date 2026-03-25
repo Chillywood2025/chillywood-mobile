@@ -111,21 +111,25 @@ export function mapFooterControlRowStyles(
       base.actionLabelText,
       { fontSize: tokens.actionLabelFontSize, fontWeight: tokens.actionLabelFontWeight },
     ],
-    quickRow: [base.quickRow, { gap: tokens.quickRowGap }],
-    quickChip: [
-      base.quickChip,
-      {
-        borderRadius: tokens.quickRadius,
-        borderWidth: tokens.quickBorderWidth,
-        borderColor: tokens.quickBorderColor,
-        backgroundColor: tokens.quickBackgroundColor,
-      },
-    ],
+    quickRow: base.quickRow ? [base.quickRow, { gap: tokens.quickRowGap }] : undefined,
+    quickChip: base.quickChip
+      ? [
+          base.quickChip,
+          {
+            borderRadius: tokens.quickRadius,
+            borderWidth: tokens.quickBorderWidth,
+            borderColor: tokens.quickBorderColor,
+            backgroundColor: tokens.quickBackgroundColor,
+          },
+        ]
+      : undefined,
     quickChipDisabled: base.quickChipDisabled,
-    quickChipText: [
-      base.quickChipText,
-      { fontSize: tokens.quickTextFontSize, fontWeight: tokens.quickTextFontWeight },
-    ],
+    quickChipText: base.quickChipText
+      ? [
+          base.quickChipText,
+          { fontSize: tokens.quickTextFontSize, fontWeight: tokens.quickTextFontWeight },
+        ]
+      : undefined,
   };
 }
 

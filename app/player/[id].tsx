@@ -42,8 +42,9 @@ import {
   updateRoomPlayback,
   type WatchPartyState,
 } from "../../_lib/watchParty";
-import { RoomFooterControlRow } from "../../components/room/control-primitives";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
+import { LiveLowerDock } from "../../components/room/live-lower-dock";
+import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/room-shared";
 
 const ACCENT = "#DC143C";
@@ -190,6 +191,8 @@ export default function PlayerScreen() {
   const [activeParticipantIds, setActiveParticipantIds] = useState<string[]>([]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [partyComments, setPartyComments] = useState<{ id: string; username: string; text: string }[]>(() =>
     PARTY_MOCK_COMMENTS.map((entry) => ({ ...entry })),
   );
@@ -702,10 +705,12 @@ export default function PlayerScreen() {
       setPartyUserId(trackedUserId);
 
       let displayName = "You";
+      let authUserId = "";
       let profileAvatarUrl = "";
       let profileCameraPreviewUrl = "";
       try {
         const authUser = await supabase.auth.getUser();
+        authUserId = String(authUser.data.user?.id ?? "").trim();
         const metadata = authUser.data.user?.user_metadata as Record<string, unknown> | undefined;
         const metadataName = String(metadata?.full_name ?? metadata?.name ?? "").trim();
         profileAvatarUrl = String(metadata?.avatar_url ?? metadata?.picture ?? "").trim();
@@ -717,6 +722,15 @@ export default function PlayerScreen() {
         // keep fallback displayName
       }
       myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
+      const selfIdentityIds = new Set([
+        trackedUserId,
+        String(partySyncUserIdRef.current ?? "").trim(),
+        authUserId,
+      ].filter(Boolean));
+      const isCurrentIdentity = (value: unknown) => {
+        const resolved = String(value ?? "").trim();
+        return !!resolved && selfIdentityIds.has(resolved);
+      };
 
       const history = await fetchPartyMessages(partyId, 30).catch(() => []);
       if (!active) return;
@@ -725,7 +739,7 @@ export default function PlayerScreen() {
         .slice(-8)
         .map((m) => ({
           id: m.id,
-          author: m.userId === trackedUserId ? "You" : String((m as any).authorLabel ?? "").trim() || "Guest",
+          author: isCurrentIdentity(m.userId) ? "You" : String((m as any).authorLabel ?? "").trim() || "Guest",
           body: String(m.body ?? ""),
         }));
       setPartyOverlayMessages(chatHistory);
@@ -779,8 +793,9 @@ export default function PlayerScreen() {
                 })
               : undefined;
             const resolvedUserId = String(first?.userId ?? key).trim();
-            const resolvedPreviewName = resolveIdentityName(first?.username, first?.displayName, resolvedUserId === trackedUserId ? displayName : "", "Guest");
-            return resolvedUserId === trackedUserId
+            const isCurrentUser = isCurrentIdentity(resolvedUserId);
+            const resolvedPreviewName = resolveIdentityName(first?.username, first?.displayName, isCurrentUser ? displayName : "", "Guest");
+            return isCurrentUser
               ? "You"
               : resolvedPreviewName;
           });
@@ -817,7 +832,7 @@ export default function PlayerScreen() {
                 : typeof existing?.canSpeak === "boolean"
                   ? existing.canSpeak
                   : role === "host" || role === "co-host";
-            const isCurrentUser = resolvedUserId === trackedUserId;
+            const isCurrentUser = isCurrentIdentity(resolvedUserId);
             const resolvedName = resolveIdentityName(
               presence?.username,
               presence?.displayName,
@@ -845,7 +860,7 @@ export default function PlayerScreen() {
             };
           });
 
-          const hasSelf = next.some((entry) => entry.id === trackedUserId);
+          const hasSelf = next.some((entry) => isCurrentIdentity(entry.id));
           if (!hasSelf) {
             next.unshift({
               id: trackedUserId,
@@ -862,8 +877,8 @@ export default function PlayerScreen() {
           }
 
           next.sort((a, b) => {
-            const aMe = a.id === trackedUserId ? 1 : 0;
-            const bMe = b.id === trackedUserId ? 1 : 0;
+            const aMe = isCurrentIdentity(a.id) ? 1 : 0;
+            const bMe = isCurrentIdentity(b.id) ? 1 : 0;
             if (aMe !== bMe) return bMe - aMe;
             const rank = (role: "host" | "co-host" | "viewer") => (role === "host" ? 0 : role === "co-host" ? 1 : 2);
             const roleDiff = rank(a.role) - rank(b.role);
@@ -2076,6 +2091,11 @@ export default function PlayerScreen() {
     setPartyCommentDraft("");
   }, [activeParticipantId, bumpRoomEnergy, markParticipantActive, partyCommentDraft, partyParticipants]);
 
+  const onSelectReactionFromPicker = useCallback((emoji: string) => {
+    triggerLocalPartyReaction(emoji);
+    setRecentReactionEmojis((prev) => pushRecentReaction(prev, emoji));
+  }, [triggerLocalPartyReaction]);
+
   const progressPercent = useMemo(() => {
     if (!durationMillis || durationMillis <= 0) return 0;
     return clamp((positionMillis / durationMillis) * 100, 0, 100);
@@ -3162,7 +3182,7 @@ export default function PlayerScreen() {
           {inWatchParty && partySyncRole ? (
             <View style={[styles.partySyncPill, styles.partySyncPillFramework]}>
               <Text style={styles.partySyncPillText}>
-                {partySyncRole === "host" ? "Host" : "Guest"}
+                {partySyncRole === "host" ? "Host" : "You"}
                 {partySyncStatus ? ` · ${partySyncStatus}` : ""}
               </Text>
             </View>
@@ -3400,26 +3420,28 @@ export default function PlayerScreen() {
 
             <View style={styles.liveModeParticipantsWrap}>{renderParticipantPanel(true)}</View>
 
-            <View style={styles.liveModeActionRow}>
-              <TouchableOpacity
-                style={styles.partyOverlayChip}
-                onPress={() => setPartyCommentsOpen((value) => !value)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.partyOverlayChipText}>🗨️</Text>
-              </TouchableOpacity>
+            {!inWatchParty ? (
+              <View style={styles.liveModeActionRow}>
+                <TouchableOpacity
+                  style={styles.partyOverlayChip}
+                  onPress={() => setPartyCommentsOpen((value) => !value)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.partyOverlayChipText}>🗨️</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.partyOverlayChip}
-                onPress={() => {
-                  const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
-                  triggerLocalPartyReaction(emoji);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.partyOverlayChipText}>🔥</Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={styles.partyOverlayChip}
+                  onPress={() => {
+                    const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
+                    triggerLocalPartyReaction(emoji);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.partyOverlayChipText}>🔥</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             {partyLocalReactions.map((entry) => (
               <Animated.View
@@ -3442,7 +3464,7 @@ export default function PlayerScreen() {
               </Animated.View>
             ))}
 
-            {partyCommentsOpen ? (
+            {partyCommentsOpen && !inWatchParty ? (
               <View style={styles.partyCommentsDrawer}>
                 <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
                 <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
@@ -3566,24 +3588,28 @@ export default function PlayerScreen() {
                         <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                        onPress={() => setPartyCommentsOpen((value) => !value)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>🗨️</Text>
-                      </TouchableOpacity>
+                      {!isLiveMode ? (
+                        <>
+                          <TouchableOpacity
+                            style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
+                            onPress={() => setPartyCommentsOpen((value) => !value)}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.partyOverlayChipText}>🗨️</Text>
+                          </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                        onPress={() => {
-                          const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
-                          triggerLocalPartyReaction(emoji);
-                        }}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>🔥</Text>
-                      </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
+                            onPress={() => {
+                              const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
+                              triggerLocalPartyReaction(emoji);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.partyOverlayChipText}>🔥</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
                     </Animated.View>
                 </View>
 
@@ -3631,7 +3657,7 @@ export default function PlayerScreen() {
                   </Animated.View>
                 ))}
 
-                {partyChatOpen ? (
+                {partyChatOpen && !isLiveMode ? (
                   <View style={[styles.partyChatDrawer, styles.partyChatDrawerWatchPartyTitle]}>
                     <Text style={styles.partyChatDrawerTitle}>Live Chat</Text>
                     <ScrollView
@@ -3807,57 +3833,72 @@ export default function PlayerScreen() {
             </View>
           ) : null}
           {inWatchParty && isLiveMode && source ? (
-            <View style={[styles.watchPartyLiveBottomDock, hasActiveRailParticipants && styles.watchPartyLiveBottomDockActive]}>
-              {livePresenceEvent ? (
+            <LiveLowerDock
+              rootStyle={[styles.watchPartyLiveBottomDock, hasActiveRailParticipants && styles.watchPartyLiveBottomDockActive]}
+              presenceToast={livePresenceEvent ? (
                 <View style={[styles.livePresenceEventToast, styles.watchPartyLivePresenceToast]}>
                   <Text style={styles.livePresenceEventText} numberOfLines={1}>
                     {livePresenceEvent}
                   </Text>
                 </View>
-              ) : null}
-              <View style={styles.watchPartyLiveStripWrap}>{renderParticipantPanel(true)}</View>
-              <RoomFooterControlRow
-                leftAction={{
-                  id: "chat",
-                  icon: "💬",
-                  label: partyChatOpen ? "Hide" : "Chat",
+              ) : undefined}
+              participantStrip={(
+                <View style={styles.watchPartyLiveStripWrap}>
+                  {renderParticipantPanel(true)}
+                </View>
+              )}
+              leftAction={{
+                id: "comments",
+                icon: "🗨️",
+                label: "Comments",
+                activeOpacity: 0.85,
+                onPress: () => setPartyCommentsOpen((value) => !value),
+                buttonStyle: styles.watchPartyLiveFooterPrimaryBtn,
+                labelStyle: styles.watchPartyLiveFooterPrimaryLabel,
+              }}
+              trailingActions={[
+                {
+                  id: "react",
+                  icon: "✨",
+                  label: "React",
                   activeOpacity: 0.85,
-                  onPress: () => setPartyChatOpen((value) => !value),
-                  buttonStyle: styles.watchPartyLiveFooterPrimaryBtn,
-                  labelStyle: styles.watchPartyLiveFooterPrimaryLabel,
-                }}
-                quickReactions={PARTY_LOCAL_REACTION_SET}
-                onPressQuickReaction={triggerLocalPartyReaction}
-                trailingActions={[
-                  {
-                    id: "comments",
-                    icon: "🗨️",
-                    label: partyCommentsOpen ? "Hide" : "Comments",
-                    activeOpacity: 0.85,
-                    onPress: () => setPartyCommentsOpen((value) => !value),
-                  },
-                  {
-                    id: "react",
-                    icon: "✨",
-                    label: "React",
-                    activeOpacity: 0.85,
-                    onPress: () => {
-                      const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
-                      triggerLocalPartyReaction(emoji);
-                    },
-                  },
-                ]}
-                styles={mapFooterControlRowStyles({
-                  row: styles.footerControls,
-                  actionButton: styles.footerIconBtn,
-                  actionIconText: styles.footerIconBtnText,
-                  actionLabelText: styles.footerIconBtnLabel,
-                  quickRow: styles.footerReactionQuickRow,
-                  quickChip: styles.footerReactionQuickBtn,
-                  quickChipText: styles.footerReactionQuickText,
-                }, buildFooterControlTokens({ size: "compact", surface: "glass" }))}
-              />
-            </View>
+                  onPress: () => setReactionPickerOpen((value) => !value),
+                },
+              ]}
+              footerStyles={mapFooterControlRowStyles({
+                row: styles.footerControls,
+                actionButton: styles.footerIconBtn,
+                actionIconText: styles.footerIconBtnText,
+                actionLabelText: styles.footerIconBtnLabel,
+                quickRow: styles.footerReactionQuickRow,
+                quickChip: styles.footerReactionQuickBtn,
+                quickChipText: styles.footerReactionQuickText,
+              }, buildFooterControlTokens({ size: "compact", surface: "glass" }))}
+              reactionPicker={{
+                visible: reactionPickerOpen,
+                onClose: () => setReactionPickerOpen(false),
+                onSelectEmoji: onSelectReactionFromPicker,
+                recentEmojis: recentReactionEmojis,
+                title: "React",
+                subtitle: "Browse and tap to send",
+                styles: {
+                  root: styles.reactionPickerRoot,
+                  backdrop: styles.reactionPickerBackdrop,
+                  sheet: styles.reactionPickerSheet,
+                  header: styles.reactionPickerHeader,
+                  title: styles.reactionPickerTitle,
+                  subtitle: styles.reactionPickerSubtitle,
+                  closeBtn: styles.reactionPickerCloseBtn,
+                  closeText: styles.reactionPickerCloseText,
+                  body: styles.reactionPickerBody,
+                  section: styles.reactionPickerSection,
+                  sectionTitle: styles.reactionPickerSectionTitle,
+                  grid: styles.reactionPickerGrid,
+                  emojiBtn: styles.reactionPickerEmojiBtn,
+                  emojiText: styles.reactionPickerEmojiText,
+                },
+              }}
+            />
           ) : null}
           </>
         ) : (
@@ -5247,7 +5288,8 @@ const styles = StyleSheet.create({
     color: "#E9EDF8",
   },
   watchPartyLiveBottomDock: {
-    marginTop: 10,
+    marginTop: 8,
+    marginBottom: 8,
     paddingHorizontal: 0,
     paddingTop: 0,
     paddingBottom: 0,
@@ -5324,6 +5366,57 @@ const styles = StyleSheet.create({
   watchPartyLiveFooterPrimaryLabel: {
     color: "#fff",
   },
+  reactionPickerRoot: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    zIndex: 26,
+  },
+  reactionPickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.28)",
+  },
+  reactionPickerSheet: {
+    marginHorizontal: 8,
+    marginBottom: 112,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(7,10,16,0.95)",
+    maxHeight: 260,
+    padding: 10,
+  },
+  reactionPickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  reactionPickerTitle: { color: "#F2F5FC", fontSize: 13, fontWeight: "900" },
+  reactionPickerSubtitle: { color: "#9EA6B8", fontSize: 10.5, fontWeight: "700", marginTop: 2 },
+  reactionPickerCloseBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  reactionPickerCloseText: { color: "#E7ECF8", fontSize: 11, fontWeight: "800" },
+  reactionPickerBody: { maxHeight: 196 },
+  reactionPickerSection: { marginBottom: 8 },
+  reactionPickerSectionTitle: { color: "#8F99AD", fontSize: 10.5, fontWeight: "800", marginBottom: 6 },
+  reactionPickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  reactionPickerEmojiBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reactionPickerEmojiText: { fontSize: 20 },
   participantHostBadge: {
     position: "absolute",
     left: -6,

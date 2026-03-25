@@ -1446,7 +1446,7 @@ export default function WatchPartyRoomScreen() {
                     {isNativeCameraPlatform && cameraPermission?.granted && myUserId ? (
                       <CameraView style={styles.liveSelfAvatarCameraFill} facing="front" mute mirror />
                     ) : (
-                      <Image source={{ uri: String(selfParticipant?.cameraPreviewUrl || myCameraPreviewUrlRef.current || selfParticipant?.avatarUrl || "") }} style={styles.liveSelfAvatarImage} />
+                      <Image source={{ uri: String(selfParticipant?.cameraPreviewUrl || myCameraPreviewUrlRef.current || selfParticipant?.avatarUrl || "") }} style={styles.liveSelfAvatarImage} resizeMode="cover" />
                     )}
                   </View>
                 ) : (
@@ -2181,10 +2181,13 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 999,
     overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
   },
   liveSelfAvatarCameraFill: {
     width: "100%",
     height: "100%",
+    position: "absolute",
   },
   liveSelfAvatarInitials: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: 0.6 },
   liveSelfMeta: { flex: 1, minWidth: 0 },
