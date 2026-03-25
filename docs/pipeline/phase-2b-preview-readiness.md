@@ -18,6 +18,13 @@ Prepare Chi'llywood for preview builds safely, without adding deployment or rele
 - EAS project must be initialized and linked.
 - Platform credentials must exist when building iOS/Android previews.
 
+## Phase 3A manual workflow
+- Manual preview builds can be triggered via GitHub Actions workflow dispatch.
+- Workflow file: `.github/workflows/phase3a-manual-preview.yml`
+- Expected input values:
+	- `platform`: `all`, `android`, or `ios`
+	- `profile`: `preview` (default)
+
 ## Deferred
 - Automatic PR preview builds
 - Deployment workflows
