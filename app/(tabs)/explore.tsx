@@ -1,18 +1,18 @@
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    ImageBackground,
-    type ImageSourcePropType,
-    ListRenderItem,
-    Pressable,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  ImageBackground,
+  type ImageSourcePropType,
+  ListRenderItem,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { titles as localTitles } from "../../_data/titles";
 import { supabase } from "../lib/_supabase";
@@ -126,12 +126,13 @@ export default function ExploreScreen() {
   return (
     <View style={styles.container}>
       {backgroundSource ? (
-        <ImageBackground
-          source={backgroundSource}
-          style={styles.fullBackground}
-          resizeMode="cover"
-          pointerEvents="none"
-        />
+        <View style={styles.fullBackground} pointerEvents="none">
+          <ImageBackground
+            source={backgroundSource}
+            style={styles.fullBackground}
+            resizeMode="cover"
+          />
+        </View>
       ) : (
         <View style={styles.fullBackgroundFallback} pointerEvents="none" />
       )}
