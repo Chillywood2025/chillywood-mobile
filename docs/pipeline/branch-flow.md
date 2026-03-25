@@ -6,6 +6,13 @@
 - Keep one goal per branch/session.
 - Prefer small PRs over large mixed changes.
 
+## Branch naming guidance
+- `feature/*` for product or UX additions
+- `fix/*` for bug fixes and correctness
+- `chore/*` for maintenance and non-feature tasks
+- `docs/*` for documentation-only changes
+- `hotfix/*` for urgent production fixes
+
 ## Commit checkpoint habit
 Use checkpoints to reduce risk and speed recovery:
 1. Make a small safe baseline change.
@@ -22,7 +29,20 @@ Recommended commit style:
 - Open PR early when scope is clear.
 - Keep description specific and scoped.
 - Explicitly call out parity risks across paired surfaces.
+- Confirm whether paired/shared surfaces were reviewed:
+  - regular player
+  - watch party
+  - live stage
+  - watch-party live
+  - waiting room
+  - participant strip / lower shared room surfaces
 - Merge only after required checks pass.
+
+## Merge discipline
+- Keep PRs small enough for focused review.
+- Avoid bundling unrelated fixes in one PR.
+- Require clear rollback path for risky changes.
+- Use checkpoint commits before risky edits.
 
 ## Manual GitHub branch protection guidance
 Configure these on `main`:

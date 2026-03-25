@@ -15,6 +15,9 @@ Phase 1 establishes a safe, low-friction CI foundation for Chi'llywood. It reduc
 ## Why this scope is intentionally narrow
 Phase 1 focuses on dependable baseline checks only. This gives the team a stable base before adding broader automation.
 
+## Relationship to Phase 2A
+Phase 1 remains the CI baseline. Phase 2A adds practical day-to-day process discipline (PR expectations, branch flow, merge readiness, and parity-aware review) without adding deployment or preview automation yet.
+
 ## Expected developer flow
 1. Create a small branch with one goal.
 2. Commit an early working checkpoint.

@@ -1,4 +1,4 @@
-name: Phase 1 CI
+name: Phase 1 CI - Lint and Typecheck
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint-and-typecheck:
-    name: Lint and Typecheck
+    name: Phase 1 Checks / Lint and Typecheck
     runs-on: ubuntu-latest
 
     steps:

@@ -7,7 +7,19 @@
 - [ ] One focused goal for this PR
 - [ ] No unrelated cleanup/refactors
 - [ ] Structure-stable changes only
-- [ ] Player / watch-party / live surfaces reviewed for parity risk
+
+## Surface Impact
+- [ ] Regular player impacted
+- [ ] Watch party impacted
+- [ ] Live stage impacted
+- [ ] Watch-party live impacted
+- [ ] Waiting room impacted
+- [ ] Participant strip / lower shared room surfaces impacted
+- [ ] No paired/shared surface impact
+
+## Parity Review
+- [ ] Parity review performed for affected paired/shared surfaces
+- [ ] Parity risk and mitigation notes added below if applicable
 
 ## Verification
 - [ ] `npm run lint`
