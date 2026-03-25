@@ -51,8 +51,8 @@ export default function TitleDetails() {
         // local fallback below
       }
 
-      if (active && !item && localMatch) {
-        setItem({
+      if (active && localMatch) {
+        setItem((prev) => prev ?? {
           id: String((localMatch as any).id),
           title: String((localMatch as any).title ?? "Untitled"),
           synopsis: (localMatch as any).description ?? null,

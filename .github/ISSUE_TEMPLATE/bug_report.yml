@@ -1,0 +1,85 @@
+name: Bug report
+description: Report a defect in Chi'llywood
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Chi'llywood.
+        Please provide enough detail to reproduce safely.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: Short description of the problem
+      placeholder: What is broken?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: What should happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: What happens instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      description: Select all affected surfaces
+      multiple: true
+      options:
+        - Explore
+        - Player
+        - Watch Party
+        - Live Stage
+        - Auth
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: parity
+    attributes:
+      label: Cross-surface parity impact
+      description: If applicable, note whether paired surfaces are drifting
+      placeholder: Describe parity risk between player/watch-party/live.
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Device/OS/app version or commit
+      placeholder: iPhone 15 / iOS 18.2 / commit abc123
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Add relevant error output or visual evidence
+      render: shell

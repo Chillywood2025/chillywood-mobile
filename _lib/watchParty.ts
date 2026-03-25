@@ -447,7 +447,14 @@ export async function createPartyRoom(
             .select("party_id,room_type,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at")
             .single();
 
-          if (!error && data) return rowToState(data as PartyRoomRow);
+          if (!error && data) {
+            const createdState = rowToState(data as PartyRoomRow);
+            if (createdState) return createdState;
+            lastError = toCreateError(
+              { message: "Created room payload missing required fields" },
+              { ...payload, source: "createPartyRoom.insert" },
+            );
+          }
           if (error) {
             lastError = toCreateError(error, payload);
             console.log("WATCH PARTY: createPartyRoom error", lastError);
@@ -470,7 +477,12 @@ export async function createPartyRoom(
               .single();
 
             if (!legacyRoomTypeInsert.error && legacyRoomTypeInsert.data) {
-              return rowToState(legacyRoomTypeInsert.data as PartyRoomRow);
+              const createdState = rowToState(legacyRoomTypeInsert.data as PartyRoomRow);
+              if (createdState) return createdState;
+              lastError = toCreateError(
+                { message: "Created room payload missing required fields" },
+                { ...legacyRoomTypePayload, source: "createPartyRoom.legacyRoomTypeInsert" },
+              );
             }
             if (legacyRoomTypeInsert.error) {
               lastError = toCreateError(legacyRoomTypeInsert.error, legacyRoomTypePayload);
@@ -502,7 +514,14 @@ export async function createPartyRoom(
                 .select("party_id,room_type,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at")
                 .single();
 
-              if (!legacy.error && legacy.data) return rowToState(legacy.data as PartyRoomRow);
+              if (!legacy.error && legacy.data) {
+                const createdState = rowToState(legacy.data as PartyRoomRow);
+                if (createdState) return createdState;
+                lastError = toCreateError(
+                  { message: "Created room payload missing required fields" },
+                  { ...legacyPayload, source: "createPartyRoom.legacyInsert" },
+                );
+              }
               if (legacy.error) {
                 lastError = toCreateError(legacy.error, legacyPayload);
                 console.log("WATCH PARTY: createPartyRoom error", lastError);
@@ -523,7 +542,14 @@ export async function createPartyRoom(
                   .select("party_id,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at")
                   .single();
 
-                if (!legacyRoomTypeInsert.error && legacyRoomTypeInsert.data) return rowToState(legacyRoomTypeInsert.data as PartyRoomRow);
+                if (!legacyRoomTypeInsert.error && legacyRoomTypeInsert.data) {
+                  const createdState = rowToState(legacyRoomTypeInsert.data as PartyRoomRow);
+                  if (createdState) return createdState;
+                  lastError = toCreateError(
+                    { message: "Created room payload missing required fields" },
+                    { ...legacyRoomTypePayload, source: "createPartyRoom.legacyNestedRoomTypeInsert" },
+                  );
+                }
                 if (legacyRoomTypeInsert.error) {
                   lastError = toCreateError(legacyRoomTypeInsert.error, legacyRoomTypePayload);
                   console.log("WATCH PARTY: createPartyRoom error", lastError);

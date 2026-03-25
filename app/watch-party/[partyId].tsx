@@ -17,6 +17,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     Image,
     ImageBackground,
@@ -670,6 +671,9 @@ export default function WatchPartyRoomScreen() {
     roomChatRealtimeChannelRef.current = channel;
   }, [partyId, addMsg]);
 
+  const myUserId = String(myUserIdRef.current ?? "").trim();
+  const isNativeCameraPlatform = Platform.OS !== "web";
+
   useEffect(() => {
     const channel = chatChannelRef.current;
     if (!channel) return;
@@ -790,15 +794,16 @@ export default function WatchPartyRoomScreen() {
     setSending(true);
     setDraft("");
 
-    await supabase
-      .from("watch_party_room_messages")
-      .insert({
-        party_id: partyId,
-        user_id: String(myUserIdRef.current ?? "").trim(),
-        username: myUsernameRef.current,
-        text,
-      })
-      .catch(() => {});
+    try {
+      await supabase
+        .from("watch_party_room_messages")
+        .insert({
+          party_id: partyId,
+          user_id: String(myUserIdRef.current ?? "").trim(),
+          username: myUsernameRef.current,
+          text,
+        });
+    } catch {}
 
     setSending(false);
   }, [draft, partyId, sending]);
@@ -853,9 +858,6 @@ export default function WatchPartyRoomScreen() {
       .send({ type: "broadcast", event: "participant:speaking", payload: { participantId, isSpeaking } })
       .catch(() => {});
   }, []);
-
-  const myUserId = String(myUserIdRef.current ?? "").trim();
-  const isNativeCameraPlatform = Platform.OS !== "web";
 
   useEffect(() => {
     if (!isNativeCameraPlatform) return;
@@ -1316,12 +1318,12 @@ export default function WatchPartyRoomScreen() {
   const isWaitingForHost = !isHost && !participants.some((p) => p.role === "host");
   const roleStatusTitle = isHost ? "Host Controls Active" : "Guest Synced to Host";
   const roleStatusBody = isHost
-    ? `You control room playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.positionMillis ?? 0)}`
+    ? `You control room playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.playbackPositionMillis ?? 0)}`
     : isWaitingForHost
       ? "Waiting for host…"
       : isSyncUnstable
         ? `Resyncing with host · ${isPlaying ? "Playing" : "Paused"}`
-        : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.positionMillis ?? 0)}`;
+        : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.playbackPositionMillis ?? 0)}`;
 
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
@@ -1362,12 +1364,13 @@ export default function WatchPartyRoomScreen() {
         </View>
       ) : null}
       {backgroundSource ? (
-        <ImageBackground
-          source={backgroundSource}
-          style={styles.fullBackground}
-          resizeMode="cover"
-          pointerEvents="none"
-        />
+        <View style={styles.fullBackground} pointerEvents="none">
+          <ImageBackground
+            source={backgroundSource}
+            style={styles.fullBackground}
+            resizeMode="cover"
+          />
+        </View>
       ) : (
         <View style={styles.fullBackgroundFallback} pointerEvents="none" />
       )}

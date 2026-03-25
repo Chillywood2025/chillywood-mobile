@@ -254,12 +254,13 @@ export default function WatchPartyIndexScreen() {
   return (
     <View style={styles.outerFlex}>
       {backgroundSource ? (
-        <ImageBackground
-          source={backgroundSource}
-          style={styles.fullBackground}
-          resizeMode="cover"
-          pointerEvents="none"
-        />
+        <View style={styles.fullBackground} pointerEvents="none">
+          <ImageBackground
+            source={backgroundSource}
+            style={styles.fullBackground}
+            resizeMode="cover"
+          />
+        </View>
       ) : (
         <View style={styles.fullBackgroundFallback} pointerEvents="none" />
       )}

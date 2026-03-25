@@ -769,7 +769,6 @@ export default function WatchPartyLiveStageScreen() {
   const activePulseOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.64, 1] });
   const chatFloat = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
   const chatOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.78, 0.9] });
-  const visibleMessages = stageMessages.slice(-5);
   const dominantStripSpeakerId = useMemo(() => {
     return computeDominantSpeakerId(
       stripParticipants,

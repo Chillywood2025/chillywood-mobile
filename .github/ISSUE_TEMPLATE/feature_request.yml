@@ -1,0 +1,66 @@
+name: Feature request
+description: Propose an improvement for Chi'llywood
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest focused improvements that preserve structure stability.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-line proposal
+      placeholder: What should be improved?
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Why this matters
+      placeholder: What user or developer pain does this address?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: High-level implementation direction
+      placeholder: Keep this safe, incremental, and production-minded.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Small (single focused change)
+        - Medium (multi-file but bounded)
+        - Large (requires phased rollout)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: guardrails
+    attributes:
+      label: Safety guardrails
+      options:
+        - label: No unrelated refactors required
+        - label: Can be implemented with checkpoint commits
+        - label: Parity impact considered for player/watch-party/live
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable conditions for completion
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
