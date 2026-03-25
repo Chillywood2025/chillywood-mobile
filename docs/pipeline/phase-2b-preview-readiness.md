@@ -25,6 +25,17 @@ Prepare Chi'llywood for preview builds safely, without adding deployment or rele
 	- `platform`: `all`, `android`, or `ios`
 	- `profile`: `preview` (default)
 
+## Checkpoint (2026-03-25)
+- Latest successful workflow: `Phase 3A Manual Preview Build` on `main`.
+- Platform confirmed: `android`.
+- EAS profile confirmed: `preview`.
+- Key blockers resolved:
+	- `EXPO_TOKEN` auth
+	- Android package configuration
+	- EAS project linkage in `app.json`
+	- Workflow rerun after config push
+- Remaining cache/Node warnings are non-blocking and can be cleaned up later.
+
 ## Deferred
 - Automatic PR preview builds
 - Deployment workflows
