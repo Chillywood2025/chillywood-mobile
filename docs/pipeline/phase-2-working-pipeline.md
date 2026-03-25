@@ -46,3 +46,7 @@ Phase 2A intentionally does not add:
 - deeper QA automation
 
 These remain planned for future phases after process discipline is stable.
+
+## Next step
+- Phase 2B introduces preview-build readiness scaffolding only.
+- See `docs/pipeline/phase-2b-preview-readiness.md`.
