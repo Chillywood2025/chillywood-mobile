@@ -20,7 +20,7 @@ import {
     View,
 } from "react-native";
 import { titles as localTitles } from "../../_data/titles";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../lib/_supabase";
 
 type TitleRow = {
   id: string;

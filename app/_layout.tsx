@@ -7,7 +7,7 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="player/[id]" />
       <Stack.Screen name="title/[id]" />
-      <Stack.Screen name="watch-party" />
+      <Stack.Screen name="watch-party/index" />
       <Stack.Screen name="admin" />
       <Stack.Screen name="modal" options={{ presentation: "modal" }} />
     </Stack>

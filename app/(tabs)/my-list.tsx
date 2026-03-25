@@ -15,7 +15,7 @@ import {
 
 import { titles as localTitles } from "../../_data/titles";
 import { readMyListIds } from "../../_lib/userData";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../lib/_supabase";
 
 type TitleRow = {
   id: string;

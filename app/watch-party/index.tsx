@@ -18,7 +18,7 @@ import { supabase } from "../../_lib/supabase";
 import { createPartyRoom, getPartyRoom, getSafePartyUserId, type WatchPartyState } from "../../_lib/watchParty";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
-import { buildLandingWaitingRoomEntries } from "./_lib/waiting-room-shared";
+import { buildLandingWaitingRoomEntries } from "./_lib/_waiting-room-shared";
 
 type RoomPreview = {
   room: WatchPartyState;

@@ -1,7 +1,7 @@
 import { Link } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../lib/_supabase";
 
 export default function Login() {
   const [email, setEmail] = useState("");

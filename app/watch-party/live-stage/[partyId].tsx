@@ -32,7 +32,7 @@ import {
     getParticipantRoleLabel,
     mergeMissingParticipantStates,
     resolveIdentityName,
-} from "../_lib/room-shared";
+} from "../_lib/_room-shared";
 
 type StageParticipant = {
   userId: string;
@@ -96,7 +96,7 @@ export default function WatchPartyLiveStageScreen() {
   const [myUsername, setMyUsername] = useState<string>("You");
   const [isHost, setIsHost] = useState(false);
   const [stageMode, setStageMode] = useState<"live" | "hybrid">("live");
-  const [chatOverlayOpen, setChatOverlayOpen] = useState(true);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [sessionSeconds, setSessionSeconds] = useState(0);
@@ -229,8 +229,8 @@ export default function WatchPartyLiveStageScreen() {
             : {};
           const resolvedUserId = String(p.userId ?? key).trim();
           const resolvedUsername = resolveIdentityName(p.username, resolvedUserId === trackedUserId ? profile?.username : "", "Guest");
-          const resolvedAvatarUrl = String(p.avatarUrl ?? "").trim() || (resolvedUserId === userId ? profileAvatarUrl : "");
-          const resolvedCameraPreviewUrl = String(p.cameraPreviewUrl ?? p.camera_preview_url ?? "").trim() || (resolvedUserId === userId ? profileCameraPreviewUrl : "");
+          const resolvedAvatarUrl = String(p.avatarUrl ?? "").trim() || (resolvedUserId === trackedUserId ? profileAvatarUrl : "");
+          const resolvedCameraPreviewUrl = String(p.cameraPreviewUrl ?? p.camera_preview_url ?? "").trim() || (resolvedUserId === trackedUserId ? profileCameraPreviewUrl : "");
           return {
             userId: resolvedUserId,
             username: resolvedUsername,
@@ -884,7 +884,28 @@ export default function WatchPartyLiveStageScreen() {
           </View>
         </Animated.View>
 
-        <View style={styles.overlayBottom} />
+        <View style={styles.overlayBottom} pointerEvents="box-none">
+          {commentsOpen ? (
+            <Animated.View pointerEvents="auto" style={[styles.chatOverlay, { opacity: chatOpacity, transform: [{ translateY: chatFloat }] }]}>
+              <Text style={styles.chatDrawerTitle}>Comments</Text>
+              <ScrollView style={styles.chatDrawerList} contentContainerStyle={styles.chatDrawerListContent}>
+                {stageMessages.length === 0 ? (
+                  <Text style={styles.chatOverlayLine}>No comments yet.</Text>
+                ) : (
+                  stageMessages.slice(-20).map((msg) => {
+                    const isMe = msg.userId === myUserId;
+                    return (
+                      <Text key={msg.id} style={styles.chatOverlayLine}>
+                        <Text style={[styles.chatUsername, isMe && styles.chatUsernameMe]}>{isMe ? "You" : msg.username}: </Text>
+                        <Text style={styles.chatMessageText}>{msg.text}</Text>
+                      </Text>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </Animated.View>
+          ) : null}
+        </View>
 
         <LiveLowerDock
           rootStyle={styles.liveStageLowerDock}
@@ -1138,7 +1159,7 @@ export default function WatchPartyLiveStageScreen() {
             icon: "🗨️",
             label: "Comments",
             activeOpacity: 0.82,
-            onPress: () => setChatOverlayOpen((value) => !value),
+            onPress: () => setCommentsOpen((value) => !value),
           }}
           trailingActions={[
             {
@@ -1689,14 +1710,18 @@ const styles = StyleSheet.create({
   },
   chatToggleText: { color: "#E3E3E3", fontSize: 11, fontWeight: "800" },
   chatOverlay: {
-    borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.16)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    gap: 4,
-    maxHeight: 130,
-    width: "68%",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(7,10,16,0.84)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    maxHeight: 182,
+    width: "100%",
   },
+  chatDrawerTitle: { color: "#EFF3FC", fontSize: 11.5, fontWeight: "900", marginBottom: 6 },
+  chatDrawerList: { maxHeight: 144 },
+  chatDrawerListContent: { gap: 5, paddingBottom: 2 },
   chatFloatStack: { gap: 4 },
   chatFloatLine: {
     alignSelf: "flex-start",

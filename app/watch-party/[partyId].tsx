@@ -61,8 +61,8 @@ import {
     getParticipantRoleLabel,
     mergeMissingParticipantStates,
     resolveIdentityName
-} from "./_lib/room-shared";
-import { buildPartyRoomParticipantEntries, shouldShowHostControls } from "./_lib/waiting-room-shared";
+} from "./_lib/_room-shared";
+import { buildPartyRoomParticipantEntries, shouldShowHostControls } from "./_lib/_waiting-room-shared";
 
 type ConnState = "loading" | "connecting" | "live" | "reconnecting" | "error";
 
@@ -1336,14 +1336,6 @@ export default function WatchPartyRoomScreen() {
         cameraPermissionGranted={!!cameraPermission?.granted}
         tapPulseById={tapPulseById}
         pointerEvents="none"
-        onParticipantPress={(participantId) => {
-          triggerBubbleTapPulse(participantId);
-          if (isHost) {
-            console.log("HOST TAP USER", participantId);
-          } else {
-            console.log("REQUEST MIC", participantId);
-          }
-        }}
         styles={{
           overlay: styles.bottomLiveStripOverlay,
           content: styles.bottomLiveStripContent,

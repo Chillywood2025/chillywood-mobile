@@ -45,7 +45,7 @@ import {
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
-import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/room-shared";
+import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/_room-shared";
 
 const ACCENT = "#DC143C";
 const BG = "#0B0B10";
