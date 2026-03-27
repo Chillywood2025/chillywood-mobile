@@ -3052,7 +3052,7 @@ export default function PlayerScreen() {
         <View style={styles.container}>
         {!inWatchParty && !isLiveMode && isStandaloneFullscreen ? null : (
         <View style={[styles.topSection, styles.topSectionFramework]}>
-          <Text style={styles.kicker}>CHI'LLYWOOD · PLAYER</Text>
+          <Text style={styles.kicker}>CHI&apos;LLYWOOD · PLAYER</Text>
           <Text style={styles.header} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
           {inWatchParty && isLiveMode ? <Text style={styles.liveModeTopLabel}>LIVE SESSION</Text> : null}
           {inWatchParty && partySyncRole ? (
