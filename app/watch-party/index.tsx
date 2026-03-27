@@ -1,5 +1,14 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+    DEFAULT_APP_CONFIG,
+    readAppConfig,
+    resolveBrandingConfig,
+    resolveFeatureConfig,
+    resolveMonetizationConfig,
+} from "../../_lib/appConfig";
+import { trackEvent } from "../../_lib/analytics";
+import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
     ActivityIndicator,
     ImageBackground,
@@ -14,9 +23,15 @@ import {
     View,
 } from "react-native";
 import { titles as localTitles } from "../../_data/titles";
+import { reportRuntimeError } from "../../_lib/logger";
+import { setUserPlan, unlockPartyPass } from "../../_lib/monetization";
+import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
-import { createPartyRoom, getPartyRoom, getSafePartyUserId, type WatchPartyRoomType, type WatchPartyState } from "../../_lib/watchParty";
+import { createPartyRoom, evaluatePartyRoomAccess, getPartyRoom, getSafePartyUserId, type WatchPartyRoomType, type WatchPartyState } from "../../_lib/watchParty";
+import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
+import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
+import { buildSharedRoomLabels, PLAYER_WATCH_PARTY_SOURCE } from "./_lib/_room-shared";
 
 type RoomPreview = {
   room: WatchPartyState;
@@ -36,6 +51,8 @@ const getWaitingRoomPreviewTitle = (preview: RoomPreview) => {
 
 export default function WatchPartyIndexScreen() {
   const router = useRouter();
+  const { isLoading: authLoading, isSignedIn } = useSession();
+  const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const params = useLocalSearchParams<{
     roomId?: string;
     roomCode?: string;
@@ -46,7 +63,7 @@ export default function WatchPartyIndexScreen() {
   }>();
   const isLiveEntryMode = String(Array.isArray(params.mode) ? params.mode[0] : params.mode ?? "").trim().toLowerCase() === "live";
   const sourceParam = String(Array.isArray(params.source) ? params.source[0] : params.source ?? "").trim().toLowerCase();
-  const isPlayerWatchPartyLiveFlow = sourceParam === "player-watch-party-live";
+  const isPlayerWatchPartyLiveFlow = sourceParam === PLAYER_WATCH_PARTY_SOURCE;
   const initialRouteRoomCode = String(Array.isArray(params.roomCode) ? params.roomCode[0] : params.roomCode ?? "").trim().toUpperCase();
   const initialRoutePartyId = String(
     (Array.isArray(params.roomId) ? params.roomId[0] : params.roomId)
@@ -77,8 +94,19 @@ export default function WatchPartyIndexScreen() {
     isLiveEntryMode && !isPlayerWatchPartyLiveFlow && !initialRouteRoomCode ? "preparing" : "idle",
   );
   const [hostLabel, setHostLabel] = useState("Viewer");
+  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
+  const [configReady, setConfigReady] = useState(false);
+  const [accessSheetVisible, setAccessSheetVisible] = useState(false);
+  const [accessSheetBusy, setAccessSheetBusy] = useState(false);
+  const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
+  const [pendingAccessPreview, setPendingAccessPreview] = useState<RoomPreview | null>(null);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
+  const branding = resolveBrandingConfig(appConfig);
+  const features = resolveFeatureConfig(appConfig);
+  const monetizationConfig = resolveMonetizationConfig(appConfig);
+  const canUseBetaRooms = isSignedIn && isActive;
+  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Watch-party rooms");
 
   const getBackgroundSource = (): ImageSourcePropType | null => {
     const first = localTitles[0] as any;
@@ -87,7 +115,27 @@ export default function WatchPartyIndexScreen() {
 
   const backgroundSource = getBackgroundSource();
 
-  const resolveRoomTitleName = async (roomTitleId: string | null | undefined) => {
+  useEffect(() => {
+    let active = true;
+
+    readAppConfig()
+      .then((config) => {
+        if (!active) return;
+        setAppConfig(config);
+        setConfigReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setAppConfig(DEFAULT_APP_CONFIG);
+        setConfigReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const resolveRoomTitleName = useCallback(async (roomTitleId: string | null | undefined) => {
     const normalizedTitleId = String(roomTitleId ?? "").trim();
     if (!normalizedTitleId) return null;
 
@@ -101,14 +149,15 @@ export default function WatchPartyIndexScreen() {
     } catch {
       return null;
     }
-  };
+  }, []);
 
-  const buildRoomPreview = async (room: WatchPartyState): Promise<RoomPreview> => {
+  const buildRoomPreview = useCallback(async (room: WatchPartyState): Promise<RoomPreview> => {
     const titleName = await resolveRoomTitleName(room.titleId);
     return { room, titleName };
-  };
+  }, [resolveRoomTitleName]);
 
-  const createPreparedWaitingRoom = async (titleId: string | null, roomType: WatchPartyRoomType): Promise<RoomPreview | null> => {
+  const createPreparedWaitingRoom = useCallback(async (titleId: string | null, roomType: WatchPartyRoomType): Promise<RoomPreview | null> => {
+    if (!canUseBetaRooms) return null;
     const hostUserId = await getSafePartyUserId();
     const room = await createPartyRoom(titleId, hostUserId, 0, "paused", { roomType });
     if (!room || "error" in room) return null;
@@ -118,13 +167,11 @@ export default function WatchPartyIndexScreen() {
     setIncomingHandoff({ roomCode: room.roomCode, partyId: room.partyId, titleId: room.titleId });
     setHostLabel("You are hosting");
     return nextPreparedRoom;
-  };
+  }, [buildRoomPreview, canUseBetaRooms]);
 
   useEffect(() => {
-    console.log("WATCH PARTY SCREEN: received params", params);
-  }, [params]);
-
-  useEffect(() => {
+    if (!canUseBetaRooms) return;
+    if (!configReady || !features.watchPartyEnabled) return;
     if (handoffLoadedRef.current) return;
 
     const rawRoomCode = Array.isArray(params.roomCode) ? params.roomCode[0] : params.roomCode;
@@ -145,13 +192,10 @@ export default function WatchPartyIndexScreen() {
       partyId: incomingPartyId || null,
       titleId: incomingTitleId || null,
     });
-    console.log("WATCH PARTY SCREEN: parsed handoff", { incomingLookupId, incomingTitleId });
-
     const loadIncomingRoom = async () => {
       try {
         const room = await getPartyRoom(incomingLookupId);
         if (!room) {
-          console.log("WATCH PARTY SCREEN: handoff lookup returned null", { incomingLookupId });
           return;
         }
 
@@ -160,15 +204,19 @@ export default function WatchPartyIndexScreen() {
         if (!isPlayerWatchPartyLiveFlow) setJoinCode(room.roomCode);
         setIncomingHandoff({ roomCode: room.roomCode, partyId: room.partyId, titleId: room.titleId });
         setPreparedRoom(await buildRoomPreview(room));
-      } catch {
-        console.log("WATCH PARTY SCREEN: incoming handoff lookup failed", { incomingLookupId });
+      } catch (error) {
+        reportRuntimeError("watch-party-handoff", error, {
+          incomingLookupId,
+        });
       }
     };
 
     loadIncomingRoom();
-  }, [isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId, params.titleId]);
+  }, [buildRoomPreview, canUseBetaRooms, configReady, features.watchPartyEnabled, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId, params.titleId]);
 
   useEffect(() => {
+    if (!canUseBetaRooms) return;
+    if (!configReady || !features.watchPartyEnabled) return;
     if (liveWaitingRoomLoadedRef.current) return;
     if (!isLiveEntryMode || isPlayerWatchPartyLiveFlow) return;
 
@@ -201,9 +249,13 @@ export default function WatchPartyIndexScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isLiveEntryMode, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId]);
+  }, [canUseBetaRooms, configReady, createPreparedWaitingRoom, features.watchPartyEnabled, isLiveEntryMode, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId]);
 
   const onLookup = async () => {
+    if (!features.watchPartyEnabled) {
+      setJoinError("Watch Party is disabled in the current app configuration.");
+      return;
+    }
     const code = joinCode.trim().toUpperCase();
     if (!code) return;
 
@@ -214,19 +266,27 @@ export default function WatchPartyIndexScreen() {
     try {
       const room = await getPartyRoom(code);
       if (!room) {
+        trackEvent("room_join_failure", {
+          surface: "watch-party-lobby",
+          reason: "room_not_found",
+          roomCode: code,
+        });
         setJoinError("Room not found. Check the code and try again.");
         return;
       }
 
       setPreview(await buildRoomPreview(room));
-    } catch {
+    } catch (error) {
+      reportRuntimeError("watch-party-lookup", error, {
+        roomCode: code,
+      });
       setJoinError("Couldn't reach the server. Check your connection.");
     } finally {
       setJoinLookupBusy(false);
     }
   };
 
-  const buildRoomEntryParams = (nextPartyId: string, options?: { roomCode?: string | null; titleId?: string | null }) => {
+  const buildRoomEntryParams = useCallback((nextPartyId: string, options?: { roomCode?: string | null; titleId?: string | null }) => {
     const nextRoomCode = String(options?.roomCode ?? "").trim().toUpperCase();
     const nextTitleId = String(options?.titleId ?? "").trim();
 
@@ -234,14 +294,12 @@ export default function WatchPartyIndexScreen() {
       partyId: nextPartyId,
       ...(nextRoomCode ? { roomCode: nextRoomCode } : {}),
       ...(nextTitleId ? { titleId: nextTitleId } : {}),
-      ...(isPlayerWatchPartyLiveFlow ? { source: "player-watch-party-live" } : {}),
+      ...(isPlayerWatchPartyLiveFlow ? { source: PLAYER_WATCH_PARTY_SOURCE } : {}),
     };
-  };
+  }, [isPlayerWatchPartyLiveFlow]);
 
-  const onConfirmJoin = async () => {
-    if (!preview) return;
-    const nextPartyId = String(preview.room.partyId ?? "").trim();
-
+  const navigateToPreviewRoom = useCallback((nextPreview: RoomPreview) => {
+    const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
     if (!nextPartyId) {
       setJoinError("Room is missing an id. Try another code.");
       return;
@@ -250,14 +308,147 @@ export default function WatchPartyIndexScreen() {
     router.push({
       pathname: "/watch-party/[partyId]",
       params: buildRoomEntryParams(nextPartyId, {
-        roomCode: preview.room.roomCode,
-        titleId: preview.room.titleId,
+        roomCode: nextPreview.room.roomCode,
+        titleId: nextPreview.room.titleId,
       }),
     });
+  }, [buildRoomEntryParams, router]);
+
+  const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {
+    const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
+    if (!nextPartyId) {
+      setJoinError("Room is missing an id. Try another code.");
+      return;
+    }
+
+    const userId = await getSafePartyUserId().catch(() => "");
+    const access = await evaluatePartyRoomAccess({
+      partyId: nextPartyId,
+      userId,
+      room: nextPreview.room,
+    }).catch(() => null);
+
+    if (!access) {
+      trackEvent("room_join_failure", {
+        surface: "watch-party-lobby",
+        reason: "access_unknown",
+        roomId: nextPartyId,
+      });
+      setJoinError("Unable to confirm room access right now. Try again.");
+      return;
+    }
+
+    if (access.canJoin) {
+      trackEvent("room_join_success", {
+        surface: "watch-party-lobby",
+        roomId: nextPartyId,
+      });
+      navigateToPreviewRoom(nextPreview);
+      return;
+    }
+
+    if (access.reason === "premium_required" || access.reason === "party_pass_required") {
+      trackEvent("monetization_gate_shown", {
+        surface: "watch-party-lobby",
+        reason: access.reason,
+        roomId: nextPartyId,
+      });
+      setPendingAccessPreview(nextPreview);
+      setAccessSheetReason(access.reason);
+      setAccessSheetVisible(true);
+      return;
+    }
+
+    if (access.reason === "room_locked") {
+      setJoinError("This room is locked right now. Ask the host to reopen it.");
+      return;
+    }
+
+    if (access.reason === "removed") {
+      setJoinError("You no longer have access to this room.");
+      return;
+    }
+
+      setJoinError("Sign in to join Chi'llywood rooms.");
+  }, [navigateToPreviewRoom]);
+
+  const onConfirmJoin = async () => {
+    if (!preview) return;
+    await attemptJoinRoom(preview);
   };
 
+  const onResolveJoinAccess = useCallback(async () => {
+    if (!pendingAccessPreview || !accessSheetReason) return;
+
+    setAccessSheetBusy(true);
+    setJoinError(null);
+
+    try {
+      const accessKey = String(pendingAccessPreview.room.partyId ?? "").trim();
+      if (!accessKey) {
+        setJoinError("This room is missing the access key needed to continue.");
+        return;
+      }
+
+      const unlocked = accessSheetReason === "premium_required"
+        ? true
+        : await unlockPartyPass(accessKey);
+
+      if (accessSheetReason === "premium_required") {
+        await setUserPlan("premium");
+      } else if (!unlocked) {
+        trackEvent("monetization_unlock_failure", {
+          surface: "watch-party-lobby",
+          reason: accessSheetReason,
+          roomId: accessKey,
+        });
+        setJoinError("Unable to unlock Party Pass for this room yet.");
+        return;
+      }
+
+      trackEvent("monetization_unlock_success", {
+        surface: "watch-party-lobby",
+        reason: accessSheetReason,
+        roomId: accessKey,
+      });
+
+      const latestRoom = await getPartyRoom(accessKey).catch(() => null);
+      const userId = await getSafePartyUserId().catch(() => "");
+      const refreshedPreview = latestRoom ? { ...pendingAccessPreview, room: latestRoom } : pendingAccessPreview;
+      const access = await evaluatePartyRoomAccess({
+        partyId: accessKey,
+        userId,
+        room: latestRoom ?? pendingAccessPreview.room,
+      }).catch(() => null);
+
+      if (access?.canJoin) {
+        setAccessSheetVisible(false);
+        setAccessSheetReason(null);
+        setPendingAccessPreview(null);
+        navigateToPreviewRoom(refreshedPreview);
+        return;
+      }
+
+      if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+        setAccessSheetReason(access.reason);
+      } else {
+        setJoinError("This room still isn't available for your current access level.");
+      }
+    } catch (error) {
+      reportRuntimeError("watch-party-unlock", error, {
+        reason: accessSheetReason,
+      });
+      setJoinError("Unable to confirm access for this room right now.");
+    } finally {
+      setAccessSheetBusy(false);
+    }
+  }, [accessSheetReason, navigateToPreviewRoom, pendingAccessPreview]);
+
   const onCreateRoom = async () => {
-    console.log("HOME CREATE BUTTON FIRED", { titleId: createTitleId });
+    if (!features.watchPartyEnabled) {
+      setCreateError("Watch Party is disabled in the current app configuration.");
+      return;
+    }
     const trimmedTitleId = createTitleId.trim();
     const effectiveTitleId = trimmedTitleId ? trimmedTitleId : null;
     const preparedTargetPartyId = String(preparedRoom?.room.partyId ?? incomingHandoff?.partyId ?? initialRoutePartyId ?? "").trim();
@@ -288,26 +479,15 @@ export default function WatchPartyIndexScreen() {
       const hostUserId = await getSafePartyUserId();
       const roomType = effectiveTitleId ? "title" : "live";
 
-      console.log("HOME CREATE COMPUTED", {
-        trimmedTitleId,
-        effectiveTitleId,
-        roomType,
-      });
-
-      console.log("WATCH PARTY SCREEN: creating room", { effectiveTitleId, roomType });
-      console.log("HOME CREATE BEFORE CALL", {
-        effectiveTitleId,
-        hostUserId,
-        roomType,
-      });
-
       const room = await createPartyRoom(effectiveTitleId, hostUserId, 0, "paused", {
         roomType,
       });
-      console.log("WATCH PARTY SCREEN: createPartyRoom returned", room);
-      console.log("HOME CREATE RESULT", room);
 
       if (!room || "error" in room) {
+        trackEvent("room_create_failure", {
+          surface: "watch-party-lobby",
+          reason: room && "error" in room ? room.error.message : "unknown_error",
+        });
         setCreateError("Unable to create room right now.");
         return;
       }
@@ -318,6 +498,11 @@ export default function WatchPartyIndexScreen() {
         return;
       }
 
+      trackEvent("room_create_success", {
+        surface: "watch-party-lobby",
+        roomId: nextPartyId,
+        roomType,
+      });
       router.push({
         pathname: "/watch-party/[partyId]",
         params: buildRoomEntryParams(nextPartyId, {
@@ -326,12 +511,47 @@ export default function WatchPartyIndexScreen() {
         }),
       });
     } catch (error) {
-      console.log("HOME CREATE ERROR", error);
+      reportRuntimeError("watch-party-create", error, {
+        titleId: effectiveTitleId,
+      });
+      trackEvent("room_create_failure", {
+        surface: "watch-party-lobby",
+        reason: "runtime_error",
+      });
       setCreateError("Unable to create room right now.");
     } finally {
       setCreating(false);
     }
   };
+
+  if (authLoading || betaLoading) {
+    return (
+      <BetaAccessScreen
+        title="Loading watch-party access"
+        body="Checking your signed-in session before opening room create and join controls."
+        loadingOverride
+      />
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <BetaAccessScreen
+        title="Sign in to create or join watch parties"
+        body="Watch-party rooms use signed-in identities so room truth, moderation, reconnect behavior, and entitlement checks stay reliable."
+      />
+    );
+  }
+
+  if (!isActive) {
+    return (
+      <BetaAccessScreen
+        title={blockedBetaCopy.title}
+        body={blockedBetaCopy.body}
+        accessState={accessState.status === "loading" || accessState.status === "signed_out" || accessState.status === "active" ? null : accessState.status}
+      />
+    );
+  }
 
   const onGenerateNewCode = async () => {
     if (refreshingCode) return;
@@ -379,7 +599,17 @@ export default function WatchPartyIndexScreen() {
         ? "LIVE mode"
         : "";
   const waitingPresenceLabel = isPreparingInitialCode ? "Preparing room code…" : (topHostLabel || "You are in room");
-  const waitingRoomTitle = isPlayerWatchPartyLiveFlow ? "Party Waiting Room" : "Live Waiting Room";
+  const waitingRoomTitle = buildSharedRoomLabels({
+    isLiveRoom: !isPlayerWatchPartyLiveFlow,
+    isPlayerWatchPartyLiveFlow,
+    branding: {
+      watchPartyLabel: branding.watchPartyLabel,
+      liveWaitingRoomTitle: branding.liveWaitingRoomTitle,
+      partyWaitingRoomTitle: branding.partyWaitingRoomTitle,
+      liveRoomTitle: branding.liveRoomTitle,
+      partyRoomTitle: branding.partyRoomTitle,
+    },
+  }).waitingRoomTitle;
   const waitingRoomBody = topRoomCode
     ? `${isPlayerWatchPartyLiveFlow ? "Party waiting room" : "Live waiting room"} · code ${topRoomCode}`
     : isPreparingInitialCode
@@ -417,7 +647,7 @@ export default function WatchPartyIndexScreen() {
           keyboardShouldPersistTaps="handled"
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
-        <Text style={styles.kicker}>CHI'LLYWOOD</Text>
+        <Text style={styles.kicker}>{branding.appDisplayName.toUpperCase()}</Text>
         <Text style={styles.tagline}>Watch together, in sync, from anywhere.</Text>
 
         {/* ── Presence / identity ─────────────────────────────────────── */}
@@ -462,7 +692,7 @@ export default function WatchPartyIndexScreen() {
           style={[styles.generateCodeButton, roomCodeActionBusy && styles.generateCodeButtonDisabled]}
           onPress={onGenerateNewCode}
           activeOpacity={0.85}
-          disabled={roomCodeActionBusy}
+          disabled={roomCodeActionBusy || !features.watchPartyEnabled}
         >
           {refreshingCode || isPreparingInitialCode ? (
             <View style={styles.lookingRow}>
@@ -479,6 +709,15 @@ export default function WatchPartyIndexScreen() {
         {/* ── Actions ─────────────────────────────────────────────────── */}
         <View style={styles.actionArea}>
           <Text style={styles.actionAreaLabel}>ACTIONS</Text>
+
+          {!features.watchPartyEnabled ? (
+            <View style={styles.joinCard}>
+              <Text style={styles.joinLabel}>WATCH PARTY HIDDEN</Text>
+              <Text style={styles.roomIdentityBody}>
+                Watch Party creation and room entry are currently disabled in app configuration.
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.joinCard}>
             <Text style={styles.joinLabel}>START A ROOM</Text>
@@ -502,7 +741,7 @@ export default function WatchPartyIndexScreen() {
               style={[styles.primaryButton, createActionBusy && styles.primaryButtonDisabled]}
               onPress={onCreateRoom}
               activeOpacity={0.85}
-              disabled={createActionBusy}
+              disabled={createActionBusy || !features.watchPartyEnabled}
             >
               {createActionBusy ? (
                 <View style={styles.lookingRow}>
@@ -567,7 +806,7 @@ export default function WatchPartyIndexScreen() {
                   style={[styles.primaryButton, (joinLookupBusy || !joinCode.trim()) && styles.primaryButtonDisabled]}
                   onPress={onLookup}
                   activeOpacity={0.85}
-                  disabled={joinLookupBusy || !joinCode.trim()}
+                  disabled={joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled}
                 >
                   {joinLookupBusy ? (
                     <View style={styles.lookingRow}>
@@ -603,6 +842,20 @@ export default function WatchPartyIndexScreen() {
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {accessSheetReason ? (
+        <AccessSheet
+          visible={accessSheetVisible}
+          reason={accessSheetReason}
+          appDisplayName={branding.appDisplayName}
+          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          busy={accessSheetBusy}
+          onConfirm={() => {
+            void onResolveJoinAccess();
+          }}
+          onClose={() => setAccessSheetVisible(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -668,8 +921,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    padding: 16,
-    gap: 6,
+    padding: 18,
+    gap: 8,
   },
   roomIdentityLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
   roomIdentityTitle: { color: "#F4F7FF", fontSize: 20, fontWeight: "900" },

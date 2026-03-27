@@ -1,6 +1,13 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+    DEFAULT_APP_CONFIG,
+    readAppConfig,
+    resolveFeatureConfig,
+} from "../../_lib/appConfig";
+import { useBetaProgram } from "../../_lib/betaProgram";
+import { getSupportRoutePath } from "../../_lib/runtimeConfig";
+import {
     Alert,
     Image,
     ImageBackground,
@@ -16,7 +23,9 @@ import { getSafePartyUserId } from "../../_lib/watchParty";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { isActive: hasSupportAccess } = useBetaProgram();
   const [currentUserId, setCurrentUserId] = useState("");
+  const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
   const params = useLocalSearchParams<{
     userId?: string;
     displayName?: string;
@@ -62,6 +71,22 @@ export default function ProfileScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    readAppConfig()
+      .then((config) => {
+        if (active) setCreatorSettingsEnabled(resolveFeatureConfig(config).creatorSettingsEnabled);
+      })
+      .catch(() => {
+        if (active) setCreatorSettingsEnabled(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const isSelfProfile = selfParam === "1" || selfParam === "true" || (!!userId && !!currentUserId && userId === currentUserId);
   const roleLabel = profile.role === "creator" ? "Creator" : profile.role === "host" ? "Host" : "Viewer";
   const channelLabel = isSelfProfile
@@ -81,8 +106,8 @@ export default function ProfileScreen() {
   }, [isSelfProfile, profile.displayName]);
   const liveActionLabel = profile.isLive ? "Join Live" : "View Live";
   const hasLiveRouteContext = !!partyIdParam;
-  const primaryActionLabel = isSelfProfile ? "Manage Channel" : "Follow";
-  const secondaryPlaceholderLabel = isSelfProfile ? "Creator Tools Soon" : "Subscribe Soon";
+  const showManageChannelAction = isSelfProfile && creatorSettingsEnabled;
+  const canOpenLinkedRoomActions = hasLiveRouteContext;
   const liveStateLabel = profile.isLive ? "LIVE NOW" : "OFF AIR";
   const routeContextLabel = hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
   const liveStatusTitle = profile.isLive ? "Channel is live now" : "Channel is off air";
@@ -94,33 +119,36 @@ export default function ProfileScreen() {
       ? "This channel looks live. Open this profile from a room or live session to join from here."
       : "Open this profile from a room or live session to jump into Live or Watch Party from here.";
   const actionFootnote = hasLiveRouteContext
-    ? `${liveActionLabel} and Watch Party are connected to this room. ${primaryActionLabel} and ${secondaryPlaceholderLabel} are coming soon.`
-    : `${liveActionLabel} and Watch Party open once this profile is launched from a room or live session. ${primaryActionLabel} and ${secondaryPlaceholderLabel} are coming soon.`;
+    ? `${liveActionLabel} and Watch Party are connected to this room.`
+    : "Open this profile from a room or live session to jump back into linked live and watch-party surfaces from here.";
+  const communicationFootnote = isSelfProfile
+    ? "Communication Room opens your in-app call lobby with your current Chi'llywood identity."
+    : "";
   const contentSections = [
     {
       title: "Live",
       kicker: profile.isLive ? "ON AIR" : "OFF AIR",
       body: profile.isLive
-        ? "This channel is live now. Future live entry, creator presence, and access controls can anchor here."
-        : "No live room right now. Future live entry and scheduled broadcasts can surface here.",
+        ? "This channel is live now, and linked room entry appears here when the profile is opened from an active session."
+        : "No live room is active right now. Live state and linked room entry appear here when a session is running.",
       accent: profile.isLive ? "live" : "default",
     },
     {
       title: "Videos",
       kicker: "CHANNEL LIBRARY",
-      body: "Published videos and clips can land here when creator uploads and catalog structure are ready.",
+      body: "Published titles and featured picks can anchor this channel identity without adding a separate social layer yet.",
       accent: "default",
     },
     {
       title: "Watch Parties",
       kicker: "SOCIAL ROOMS",
-      body: "Host-led watch parties, room history, and creator-led entry points can grow here next.",
+      body: "Room-linked watch-party entry is available from active sessions, while deeper social history stays outside v1 scope.",
       accent: "default",
     },
     {
       title: "Saved / Locked",
       kicker: "ACCESS NOTES",
-      body: "Saved, locked, subscriber, and Party Pass drops can live here as access expands. Payments and entitlements are not active yet, and capture protection stays best-effort on supported devices.",
+      body: "Eligible titles and rooms can still enforce access rules in-context, and capture protection remains best-effort on supported devices.",
       accent: "default",
     },
   ] as const;
@@ -129,12 +157,12 @@ export default function ProfileScreen() {
     const first = localTitles[0] as any;
     return first?.image || first?.poster || undefined;
   })();
-  const onPressFollow = () => {
-    if (isSelfProfile) {
-      Alert.alert("Manage Channel", "Manage Channel tools will land here for creator controls, settings, and access.");
+  const onPressManageChannel = () => {
+    if (!creatorSettingsEnabled) {
+      Alert.alert("Manage Channel", "Creator channel settings are currently hidden by app configuration.");
       return;
     }
-    Alert.alert("Follow", `Follow is coming soon for ${profile.displayName} as channel connections roll out.`);
+    router.push("/channel-settings");
   };
   const onPressLive = () => {
     if (hasLiveRouteContext) {
@@ -162,7 +190,7 @@ export default function ProfileScreen() {
 
     Alert.alert(liveActionLabel, profile.isLive
       ? "This channel is live. Open this profile from a room or live session to join from here."
-      : "View Live becomes available when this profile is opened from a room or live session.");
+      : "Open this profile from a room or live session to jump into the linked live surface from here.");
   };
   const onPressWatchParty = () => {
     if (hasLiveRouteContext) {
@@ -177,12 +205,13 @@ export default function ProfileScreen() {
       return;
     }
 
-    Alert.alert("Watch Party", "Watch Party becomes available when this profile is opened from a room or live session.");
+    Alert.alert("Watch Party", "Open this profile from a room or live session to jump into the linked watch party from here.");
   };
-  const onPressSubscribe = () => {
-    Alert.alert(secondaryPlaceholderLabel, isSelfProfile
-      ? "Creator tools and subscriber access will land here later. Payments and entitlements are not active yet."
-      : "Subscriber access will land here later. Payments and entitlements are not active yet.");
+  const onPressCommunication = () => {
+    router.push("/communication");
+  };
+  const onPressBetaSupport = () => {
+    router.push(getSupportRoutePath());
   };
 
   return (
@@ -203,7 +232,7 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>CHI'LLYWOOD · CHANNEL</Text>
+          <Text style={styles.kicker}>CHI&apos;LLYWOOD · CHANNEL</Text>
           <View style={{ width: 18 }} />
         </View>
 
@@ -243,47 +272,72 @@ export default function ProfileScreen() {
             <Text style={styles.statusPanelBody}>{liveStatusBody}</Text>
           </View>
           <View style={styles.actionCluster}>
-            <View style={styles.primaryActionRow}>
-              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} activeOpacity={0.86} onPress={onPressFollow}>
-                <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>{primaryActionLabel}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.actionBtn,
-                  hasLiveRouteContext
-                    ? (profile.isLive ? styles.actionBtnLive : styles.actionBtnConnected)
-                    : styles.actionBtnPlaceholder,
-                ]}
-                activeOpacity={0.86}
-                onPress={onPressLive}
-              >
-                <Text
-                  style={[
-                    styles.actionBtnText,
-                    hasLiveRouteContext
-                      ? (profile.isLive ? styles.actionBtnTextLive : styles.actionBtnTextConnected)
-                      : styles.actionBtnTextPlaceholder,
-                  ]}
-                >
-                  {liveActionLabel}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.secondaryActionRow}>
-              <TouchableOpacity
-                style={[styles.actionChip, hasLiveRouteContext ? styles.actionChipConnected : styles.actionChipPlaceholder]}
-                activeOpacity={0.82}
-                onPress={onPressWatchParty}
-              >
-                <Text style={[styles.actionChipText, hasLiveRouteContext ? styles.actionChipTextConnected : styles.actionChipTextPlaceholder]}>
-                  Watch Party
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionChip, styles.actionChipPlaceholderMuted]} activeOpacity={0.82} onPress={onPressSubscribe}>
-                <Text style={[styles.actionChipText, styles.actionChipTextMuted]}>{secondaryPlaceholderLabel}</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.actionFootnote}>{actionFootnote}</Text>
+            {showManageChannelAction || canOpenLinkedRoomActions ? (
+              <View style={styles.primaryActionRow}>
+                {showManageChannelAction ? (
+                  <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} activeOpacity={0.86} onPress={onPressManageChannel}>
+                    <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>Manage Channel</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {canOpenLinkedRoomActions ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      profile.isLive ? styles.actionBtnLive : styles.actionBtnConnected,
+                    ]}
+                    activeOpacity={0.86}
+                    onPress={onPressLive}
+                  >
+                    <Text
+                      style={[
+                        styles.actionBtnText,
+                        profile.isLive ? styles.actionBtnTextLive : styles.actionBtnTextConnected,
+                      ]}
+                    >
+                      {liveActionLabel}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : null}
+            {isSelfProfile || canOpenLinkedRoomActions ? (
+              <View style={styles.secondaryActionRow}>
+                {isSelfProfile ? (
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.82}
+                    onPress={onPressCommunication}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                      Communication Room
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {isSelfProfile && hasSupportAccess ? (
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.82}
+                    onPress={onPressBetaSupport}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                      Support
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {canOpenLinkedRoomActions ? (
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.82}
+                    onPress={onPressWatchParty}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                      Watch Party
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : null}
+            <Text style={styles.actionFootnote}>{communicationFootnote ? `${communicationFootnote} ${actionFootnote}` : actionFootnote}</Text>
           </View>
         </View>
 

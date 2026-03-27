@@ -1,43 +1,83 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+import {
+  normalizeCapturePolicy,
+  normalizeContentAccessRule,
+  type CapturePolicy,
+  type ContentAccessRule,
+} from "../../_lib/roomRules";
+
 export const ACCESS_DISCLOSURE_COPY = {
   captureBestEffort: "Capture protection is best-effort on supported devices.",
-  futureAccessControls: "Locked access, subscriber entry, and Party Pass options vary by session and are not active purchase flows here.",
-  noUniversalBlocking: "Screen capture blocking is not guaranteed on every device.",
-  creatorHostPermissions: "Creator and host recording controls are still limited.",
-  stagePermissions: "Recording permission and host controls are still limited.",
+  futureAccessControls: "Premium and Party Pass rules can apply to eligible rooms and titles, with entitlement handled in-context only when the session requires it.",
+  noUniversalBlocking: "Screen capture blocking is not guaranteed across every device, OS version, or external display path.",
+  creatorHostPermissions: "Host and creator capture rules are reflected in room policy, but they are not DRM or universal device enforcement.",
+  stagePermissions: "Live-stage capture rules are reflected in room policy, but they remain best-effort rather than guaranteed device blocking.",
+  hostManagedCapture: "Host-managed capture policy is active for this session, while device-level blocking still remains best-effort.",
 } as const;
+
+type ProtectedSessionOptions = {
+  contentAccessRule?: ContentAccessRule | string | null;
+  capturePolicy?: CapturePolicy | string | null;
+};
+
+const buildPolicyPrefix = (options?: ProtectedSessionOptions) => {
+  const contentAccessRule = normalizeContentAccessRule(options?.contentAccessRule);
+  if (contentAccessRule === "party_pass" || contentAccessRule === "premium") {
+    return ACCESS_DISCLOSURE_COPY.futureAccessControls;
+  }
+  return "";
+};
+
+const buildCaptureCopy = (variant: "watch-player" | "live-player" | "live-stage" | "live-room" | "party-room", options?: ProtectedSessionOptions) => {
+  const capturePolicy = normalizeCapturePolicy(options?.capturePolicy);
+  if (capturePolicy === "host_managed") {
+    return ACCESS_DISCLOSURE_COPY.hostManagedCapture;
+  }
+
+  if (variant === "live-stage") return ACCESS_DISCLOSURE_COPY.stagePermissions;
+  return variant === "live-player" || variant === "watch-player"
+    ? ACCESS_DISCLOSURE_COPY.creatorHostPermissions
+    : ACCESS_DISCLOSURE_COPY.captureBestEffort;
+};
 
 export function getProtectedSessionCopy(
   variant: "watch-player" | "live-player" | "live-stage" | "live-room" | "party-room",
+  options?: ProtectedSessionOptions,
 ): { title: string; body: string } {
+  const prefix = buildPolicyPrefix(options);
+  const captureCopy = buildCaptureCopy(variant, options);
+  const baseCaptureCopy = normalizeCapturePolicy(options?.capturePolicy) === "host_managed"
+    ? ACCESS_DISCLOSURE_COPY.hostManagedCapture
+    : ACCESS_DISCLOSURE_COPY.captureBestEffort;
+
   switch (variant) {
     case "live-player":
       return {
         title: "Protected Live Watch Session",
-        body: `${ACCESS_DISCLOSURE_COPY.captureBestEffort} ${ACCESS_DISCLOSURE_COPY.creatorHostPermissions} ${ACCESS_DISCLOSURE_COPY.noUniversalBlocking}`,
+        body: `${[prefix, baseCaptureCopy, captureCopy, ACCESS_DISCLOSURE_COPY.noUniversalBlocking].filter(Boolean).join(" ")}`,
       };
     case "live-stage":
       return {
         title: "Protected Live Session",
-        body: `${ACCESS_DISCLOSURE_COPY.captureBestEffort} ${ACCESS_DISCLOSURE_COPY.stagePermissions} ${ACCESS_DISCLOSURE_COPY.noUniversalBlocking}`,
+        body: `${[prefix, baseCaptureCopy, captureCopy, ACCESS_DISCLOSURE_COPY.noUniversalBlocking].filter(Boolean).join(" ")}`,
       };
     case "live-room":
       return {
         title: "Protected Live Room",
-        body: `${ACCESS_DISCLOSURE_COPY.futureAccessControls} ${ACCESS_DISCLOSURE_COPY.captureBestEffort} ${ACCESS_DISCLOSURE_COPY.noUniversalBlocking}`,
+        body: `${[prefix || ACCESS_DISCLOSURE_COPY.futureAccessControls, baseCaptureCopy, ACCESS_DISCLOSURE_COPY.noUniversalBlocking].filter(Boolean).join(" ")}`,
       };
     case "party-room":
       return {
         title: "Protected Party Room",
-        body: `${ACCESS_DISCLOSURE_COPY.futureAccessControls} ${ACCESS_DISCLOSURE_COPY.captureBestEffort} ${ACCESS_DISCLOSURE_COPY.noUniversalBlocking}`,
+        body: `${[prefix || ACCESS_DISCLOSURE_COPY.futureAccessControls, baseCaptureCopy, ACCESS_DISCLOSURE_COPY.noUniversalBlocking].filter(Boolean).join(" ")}`,
       };
     case "watch-player":
     default:
       return {
         title: "Protected Watch Session",
-        body: `${ACCESS_DISCLOSURE_COPY.captureBestEffort} ${ACCESS_DISCLOSURE_COPY.creatorHostPermissions} ${ACCESS_DISCLOSURE_COPY.noUniversalBlocking}`,
+        body: `${[prefix, baseCaptureCopy, captureCopy, ACCESS_DISCLOSURE_COPY.noUniversalBlocking].filter(Boolean).join(" ")}`,
       };
   }
 }

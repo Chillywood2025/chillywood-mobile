@@ -1,9 +1,15 @@
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { supabase } from "../lib/_supabase";
+import { trackEvent } from "../../_lib/analytics";
+import { reportRuntimeError } from "../../_lib/logger";
+import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
+import { supabase } from "../../_lib/supabase";
 
 export default function Login() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ redirectTo?: string }>();
+  const redirectTo = String(params.redirectTo ?? "").trim() || "/(tabs)";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,22 +22,45 @@ export default function Login() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    setLoading(false);
+      if (error) {
+        trackEvent("auth_sign_in_failure", {
+          reason: error.message,
+        });
+        Alert.alert("Login Error", error.message);
+        return;
+      }
 
-    if (error) {
-      Alert.alert("Login Error", error.message);
+      trackEvent("auth_sign_in_success", {
+        redirectTo,
+      });
+      router.replace(redirectTo as Parameters<typeof router.replace>[0]);
+    } catch (error) {
+      reportRuntimeError("auth-login", error, {
+        redirectTo,
+      });
+      trackEvent("auth_sign_in_failure", {
+        reason: "runtime_error",
+      });
+      Alert.alert("Login Error", "Unable to sign in right now.");
+    } finally {
+      setLoading(false);
     }
-    // If success, your _layout.tsx auth redirect will send them to /(tabs)
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome Back</Text>
+      <Text style={styles.title}>{isClosedBetaEnvironment() ? "Closed Beta Sign In" : "Sign In"}</Text>
+      <Text style={styles.subtitle}>
+        {isClosedBetaEnvironment()
+          ? "Use the invited Chi'llywood account for room access, feedback capture, and rollout verification."
+          : "Sign in to join rooms, manage your channel, unlock eligible access, and send support reports."}
+      </Text>
 
       <TextInput
         style={styles.input}
@@ -56,7 +85,7 @@ export default function Login() {
 
       <View style={styles.row}>
         <Text style={styles.muted}>No account?</Text>
-        <Link href="/(auth)/signup" style={styles.link}>
+        <Link href={{ pathname: "/(auth)/signup", params: { redirectTo } }} style={styles.link}>
           Sign up
         </Link>
       </View>
@@ -75,7 +104,14 @@ const styles = StyleSheet.create({
     color: "#DC143C",
     fontSize: 26,
     fontWeight: "700",
-    marginBottom: 24,
+    marginBottom: 10,
+  },
+  subtitle: {
+    color: "#A9B3C8",
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontWeight: "600",
+    marginBottom: 20,
   },
   input: {
     backgroundColor: "#1A1A22",

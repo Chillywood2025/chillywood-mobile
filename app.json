@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "chillywood-mobile",
+    "name": "Chi'llywood",
     "slug": "chillywood-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,10 +9,19 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Chi'llywood uses your camera so you can join in-app communication rooms with live video.",
+        "NSMicrophoneUsageDescription": "Chi'llywood uses your microphone so you can speak in in-app communication rooms."
+      }
     },
     "android": {
       "package": "com.chillywood.mobile",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -40,7 +49,8 @@
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      "@config-plugins/react-native-webrtc"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -12,8 +12,31 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import {
+  DEFAULT_APP_CONFIG,
+  getThemePresetPalette,
+  readAppConfig,
+  saveAppConfig,
+  type AppConfig,
+  type HomeRailKey,
+} from "../_lib/appConfig";
+import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
+import { useSession } from "../_lib/session";
+import {
+  normalizeCreatorPermissionSet,
+  normalizeSponsorPlacement,
+  normalizeTitleAccessRule,
+  readCreatorPermissions,
+  sanitizeCreatorTitleMonetization,
+  saveCreatorPermissions,
+  type CreatorPermissionSet,
+  type SponsorPlacement,
+  type TitleAccessRule,
+} from "../_lib/monetization";
+import { isBetaOperatorIdentity } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
+import { BetaAccessScreen } from "../components/system/beta-access-screen";
 
 type TitleId = string | number;
 
@@ -38,6 +61,10 @@ type TitleRow = {
   preview_video_url?: string | null;
   status?: string | null;
   release_at?: string | null;
+  content_access_rule?: TitleAccessRule | null;
+  ads_enabled?: boolean | null;
+  sponsor_placement?: SponsorPlacement | null;
+  sponsor_label?: string | null;
 };
 
 type FilterKey =
@@ -71,6 +98,10 @@ type EditorForm = {
   status: StatusType;
   release_at: string;
   sort_order: string;
+  content_access_rule: TitleAccessRule;
+  ads_enabled: boolean;
+  sponsor_placement: SponsorPlacement;
+  sponsor_label: string;
 };
 
 const BASE_SELECT = "id,title,category,year,runtime,synopsis,poster_url,video_url,featured,is_published,sort_order";
@@ -83,9 +114,19 @@ type AdminCapabilities = {
   statusCol: "status" | null;
   thumbnailCol: "thumbnail_url" | null;
   previewCol: "preview_video_url" | null;
+  contentAccessCol: "content_access_rule" | null;
+  adsEnabledCol: "ads_enabled" | null;
+  sponsorPlacementCol: "sponsor_placement" | null;
+  sponsorLabelCol: "sponsor_label" | null;
 };
 
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
+const railLabels: Record<HomeRailKey, string> = {
+  top_picks: "Top Picks",
+  browse: "Browse",
+  favorites: "Favorites",
+  continue_watching: "Continue Watching",
+};
 
 const normalizeStatus = (raw?: string | null, isPublished?: boolean | null): StatusType => {
   const value = (raw ?? "").toLowerCase().trim();
@@ -108,6 +149,10 @@ const defaultCapabilities: AdminCapabilities = {
   statusCol: null,
   thumbnailCol: null,
   previewCol: null,
+  contentAccessCol: null,
+  adsEnabledCol: null,
+  sponsorPlacementCol: null,
+  sponsorLabelCol: null,
 };
 
 const toBoolean = (value: unknown) => value === true;
@@ -132,6 +177,10 @@ const canonicalizeRow = (row: Record<string, any>): TitleRow => {
     preview_video_url: row.preview_video_url,
     status: row.status,
     release_at: row.release_at ?? row.release_date,
+    content_access_rule: normalizeTitleAccessRule(row.content_access_rule),
+    ads_enabled: row.ads_enabled === true,
+    sponsor_placement: normalizeSponsorPlacement(row.sponsor_placement),
+    sponsor_label: row.sponsor_label,
   };
 };
 
@@ -145,6 +194,10 @@ const normalizeRows = (rows: TitleRow[]) => {
       is_trending: row.is_trending === true,
       pin_to_top_row: row.pin_to_top_row === true,
       is_published: row.is_published === true,
+      content_access_rule: normalizeTitleAccessRule(row.content_access_rule),
+      ads_enabled: row.ads_enabled === true,
+      sponsor_placement: normalizeSponsorPlacement(row.sponsor_placement),
+      sponsor_label: row.sponsor_label ?? null,
     }))
     .sort((a, b) => {
       const orderDiff = toSortNumber(a.sort_order) - toSortNumber(b.sort_order);
@@ -195,6 +248,8 @@ const fromDatetimeLocalValue = (raw: string) => {
 
 export default function AdminStudioScreen() {
   const router = useRouter();
+  const { isLoading: authLoading, isSignedIn, user } = useSession();
+  const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -204,6 +259,13 @@ export default function AdminStudioScreen() {
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
   const [capabilities, setCapabilities] = useState<AdminCapabilities>(defaultCapabilities);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [experienceConfig, setExperienceConfig] = useState<AppConfig>(DEFAULT_APP_CONFIG);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [creatorGrantUserId, setCreatorGrantUserId] = useState("");
+  const [creatorGrantLoading, setCreatorGrantLoading] = useState(false);
+  const [creatorGrantSaving, setCreatorGrantSaving] = useState(false);
+  const [creatorGrantForm, setCreatorGrantForm] = useState<CreatorPermissionSet>(normalizeCreatorPermissionSet(null));
   const [form, setForm] = useState<EditorForm>({
     title: "",
     category: "",
@@ -221,12 +283,29 @@ export default function AdminStudioScreen() {
     status: "draft",
     release_at: "",
     sort_order: "0",
+    content_access_rule: "open",
+    ads_enabled: false,
+    sponsor_placement: "none",
+    sponsor_label: "",
   });
+  const themePalette = getThemePresetPalette(experienceConfig.theme.preset);
+  const isBetaOperator = isBetaOperatorIdentity({
+    userId: user?.id ?? null,
+    email: user?.email ?? null,
+  });
+  const canAccessAdmin = isSignedIn && isActive && isBetaOperator;
+  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin tools");
 
   useEffect(() => {
+    if (!canAccessAdmin) {
+      setLoading(false);
+      setConfigLoading(false);
+      return;
+    }
     loadTitles();
+    loadExperienceConfig();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [canAccessAdmin]);
 
   const stats = useMemo(() => {
     const total = titles.length;
@@ -275,8 +354,14 @@ export default function AdminStudioScreen() {
   const hasTopRowControl = capabilities.topRowCol !== null;
   const hasReleaseControl = capabilities.releaseCol !== null;
   const hasStatusControl = capabilities.statusCol !== null;
+  const hasTitleMonetizationControls =
+    capabilities.contentAccessCol !== null
+    && capabilities.adsEnabledCol !== null
+    && capabilities.sponsorPlacementCol !== null
+    && capabilities.sponsorLabelCol !== null;
 
   useEffect(() => {
+    if (!canAccessAdmin) return;
     if (loading) {
       reportDebugQuery({ name: "admin.titles", status: "loading", error: null });
       return;
@@ -286,11 +371,12 @@ export default function AdminStudioScreen() {
       return;
     }
     reportDebugQuery({ name: "admin.titles", status: "success", error: null });
-  }, [loading, notice]);
+  }, [canAccessAdmin, loading, notice]);
 
   useEffect(() => {
+    if (!canAccessAdmin) return;
     reportDebugError(notice?.type === "error" ? notice.text : null);
-  }, [notice]);
+  }, [canAccessAdmin, notice]);
 
   const probeColumn = useCallback(async (column: string) => {
     const { error } = await supabase.from("titles").select(column).limit(1);
@@ -310,6 +396,10 @@ export default function AdminStudioScreen() {
       hasStatus,
       hasThumb,
       hasPreview,
+      hasContentAccess,
+      hasAdsEnabled,
+      hasSponsorPlacement,
+      hasSponsorLabel,
     ] = await Promise.all([
       probeColumn("is_hero"),
       probeColumn("hero"),
@@ -322,6 +412,10 @@ export default function AdminStudioScreen() {
       probeColumn("status"),
       probeColumn("thumbnail_url"),
       probeColumn("preview_video_url"),
+      probeColumn("content_access_rule"),
+      probeColumn("ads_enabled"),
+      probeColumn("sponsor_placement"),
+      probeColumn("sponsor_label"),
     ]);
 
     return {
@@ -332,8 +426,25 @@ export default function AdminStudioScreen() {
       statusCol: hasStatus ? "status" : null,
       thumbnailCol: hasThumb ? "thumbnail_url" : null,
       previewCol: hasPreview ? "preview_video_url" : null,
+      contentAccessCol: hasContentAccess ? "content_access_rule" : null,
+      adsEnabledCol: hasAdsEnabled ? "ads_enabled" : null,
+      sponsorPlacementCol: hasSponsorPlacement ? "sponsor_placement" : null,
+      sponsorLabelCol: hasSponsorLabel ? "sponsor_label" : null,
     };
   }, [probeColumn]);
+
+  const loadExperienceConfig = useCallback(async () => {
+    try {
+      setConfigLoading(true);
+      const config = await readAppConfig();
+      setExperienceConfig(config);
+    } catch (err: any) {
+      setExperienceConfig(DEFAULT_APP_CONFIG);
+      setNotice({ type: "error", text: err?.message ?? "Failed to load experience config." });
+    } finally {
+      setConfigLoading(false);
+    }
+  }, []);
 
   const toDbPatch = useCallback(
     (patch: Partial<TitleRow>): Record<string, any> => {
@@ -371,6 +482,18 @@ export default function AdminStudioScreen() {
       if (patch.release_at !== undefined && capabilities.releaseCol) {
         payload[capabilities.releaseCol] = patch.release_at;
       }
+      if (patch.content_access_rule !== undefined && capabilities.contentAccessCol) {
+        payload[capabilities.contentAccessCol] = normalizeTitleAccessRule(patch.content_access_rule);
+      }
+      if (patch.ads_enabled !== undefined && capabilities.adsEnabledCol) {
+        payload[capabilities.adsEnabledCol] = !!patch.ads_enabled;
+      }
+      if (patch.sponsor_placement !== undefined && capabilities.sponsorPlacementCol) {
+        payload[capabilities.sponsorPlacementCol] = normalizeSponsorPlacement(patch.sponsor_placement);
+      }
+      if (patch.sponsor_label !== undefined && capabilities.sponsorLabelCol) {
+        payload[capabilities.sponsorLabelCol] = patch.sponsor_label;
+      }
 
       return payload;
     },
@@ -393,6 +516,10 @@ export default function AdminStudioScreen() {
       if (detected.releaseCol) selectParts.add(detected.releaseCol);
       if (detected.thumbnailCol) selectParts.add(detected.thumbnailCol);
       if (detected.previewCol) selectParts.add(detected.previewCol);
+      if (detected.contentAccessCol) selectParts.add(detected.contentAccessCol);
+      if (detected.adsEnabledCol) selectParts.add(detected.adsEnabledCol);
+      if (detected.sponsorPlacementCol) selectParts.add(detected.sponsorPlacementCol);
+      if (detected.sponsorLabelCol) selectParts.add(detected.sponsorLabelCol);
 
       const query = await supabase
         .from("titles")
@@ -409,6 +536,99 @@ export default function AdminStudioScreen() {
       setLoading(false);
     }
   }, [detectCapabilities]);
+
+  const updateExperienceConfig = useCallback((updater: (prev: AppConfig) => AppConfig) => {
+    setExperienceConfig((prev) => updater(prev));
+  }, []);
+
+  const loadCreatorGrantTarget = useCallback(async () => {
+    const targetUserId = creatorGrantUserId.trim();
+    if (!targetUserId) {
+      setCreatorGrantForm(normalizeCreatorPermissionSet(null));
+      return;
+    }
+
+    try {
+      setCreatorGrantLoading(true);
+      const resolved = await readCreatorPermissions(targetUserId);
+      setCreatorGrantForm(resolved);
+      setNotice({ type: "success", text: `Loaded creator grants for ${targetUserId}.` });
+    } catch (err: any) {
+      setCreatorGrantForm(normalizeCreatorPermissionSet(null, targetUserId));
+      setNotice({ type: "error", text: err?.message ?? "Unable to load creator grants." });
+    } finally {
+      setCreatorGrantLoading(false);
+    }
+  }, [creatorGrantUserId]);
+
+  const saveCreatorGrantTarget = useCallback(async () => {
+    const targetUserId = creatorGrantUserId.trim();
+    if (!targetUserId) {
+      setNotice({ type: "error", text: "Enter a creator user id before saving grants." });
+      return;
+    }
+
+    try {
+      setCreatorGrantSaving(true);
+      const saved = await saveCreatorPermissions(targetUserId, creatorGrantForm);
+      setCreatorGrantForm(saved);
+      setNotice({ type: "success", text: `Creator grants saved for ${targetUserId}.` });
+    } catch (err: any) {
+      setNotice({ type: "error", text: err?.message ?? "Unable to save creator grants." });
+    } finally {
+      setCreatorGrantSaving(false);
+    }
+  }, [creatorGrantForm, creatorGrantUserId]);
+
+  const moveRail = useCallback((railKey: HomeRailKey, direction: -1 | 1) => {
+    updateExperienceConfig((prev) => {
+      const nextOrder = [...prev.home.railOrder];
+      const currentIndex = nextOrder.indexOf(railKey);
+      if (currentIndex < 0) return prev;
+      const targetIndex = currentIndex + direction;
+      if (targetIndex < 0 || targetIndex >= nextOrder.length) return prev;
+      const [entry] = nextOrder.splice(currentIndex, 1);
+      nextOrder.splice(targetIndex, 0, entry);
+      return {
+        ...prev,
+        home: {
+          ...prev.home,
+          railOrder: nextOrder,
+        },
+      };
+    });
+  }, [updateExperienceConfig]);
+
+  const saveExperienceConfigChanges = useCallback(async () => {
+    try {
+      setConfigSaving(true);
+
+      let nextConfig = experienceConfig;
+      if (nextConfig.home.heroMode === "manual_title") {
+        const manualTitleId = String(nextConfig.home.manualHeroTitleId ?? "").trim();
+        const manualTitleExists = titles.some((item) => String(item.id) === manualTitleId);
+        if (!manualTitleExists) {
+          const hasHeroFlagTitle = titles.some((item) => item.is_hero === true);
+          nextConfig = {
+            ...nextConfig,
+            home: {
+              ...nextConfig.home,
+              heroMode: hasHeroFlagTitle ? "hero_flag" : "latest",
+              manualHeroTitleId: null,
+            },
+          };
+        }
+      }
+
+      const saved = await saveAppConfig(nextConfig, "admin");
+      setExperienceConfig(saved);
+      setNotice({ type: "success", text: "Experience config saved." });
+    } catch (err: any) {
+      setNotice({ type: "error", text: err?.message ?? "Failed to save experience config." });
+    } finally {
+      setConfigSaving(false);
+    }
+  }, [experienceConfig, titles]);
 
   const openCreate = useCallback(() => {
     const nextSort = titles.reduce((acc, item) => Math.max(acc, item.sort_order ?? 0), 0) + 1;
@@ -430,6 +650,10 @@ export default function AdminStudioScreen() {
       status: "draft",
       release_at: "",
       sort_order: String(nextSort),
+      content_access_rule: "open",
+      ads_enabled: false,
+      sponsor_placement: "none",
+      sponsor_label: "",
     });
     setEditorVisible(true);
   }, [titles]);
@@ -454,6 +678,10 @@ export default function AdminStudioScreen() {
       status: normalizeStatus(item.status, item.is_published),
       release_at: toDatetimeLocalValue(item.release_at),
       sort_order: item.sort_order != null ? String(item.sort_order) : "0",
+      content_access_rule: normalizeTitleAccessRule(item.content_access_rule),
+      ads_enabled: item.ads_enabled === true,
+      sponsor_placement: normalizeSponsorPlacement(item.sponsor_placement),
+      sponsor_label: item.sponsor_label ?? "",
     });
     setEditorVisible(true);
   }, []);
@@ -546,6 +774,15 @@ export default function AdminStudioScreen() {
 
     const derivedPublished = status === "published" || (status === "scheduled" && !scheduledInFuture);
 
+    const operatorPermissions = await readCreatorPermissions().catch(() => normalizeCreatorPermissionSet(null));
+    const sanitizedMonetization = sanitizeCreatorTitleMonetization({
+      contentAccessRule: form.content_access_rule,
+      adsEnabled: form.ads_enabled,
+      sponsorPlacement: form.sponsor_placement,
+      sponsorLabel: form.sponsor_label.trim() || null,
+      permissions: operatorPermissions,
+    });
+
     let payload: Record<string, any> = {
       title: form.title.trim(),
       category: form.category.trim() || null,
@@ -569,6 +806,10 @@ export default function AdminStudioScreen() {
         pin_to_top_row: !!form.pin_to_top_row,
         status,
         release_at: releaseAtIso,
+        content_access_rule: sanitizedMonetization.contentAccessRule,
+        ads_enabled: sanitizedMonetization.adsEnabled,
+        sponsor_placement: sanitizedMonetization.sponsorPlacement,
+        sponsor_label: sanitizedMonetization.sponsorLabel,
       }),
     };
 
@@ -626,23 +867,63 @@ export default function AdminStudioScreen() {
     </View>
   );
 
+  if (authLoading || betaLoading) {
+    return (
+      <BetaAccessScreen
+        title="Loading operator access"
+        body="Checking whether your signed-in account can access studio controls."
+        operatorOnly
+        loadingOverride
+      />
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <BetaAccessScreen
+        title="Sign in to access Chi'llywood studio controls"
+        body="The admin studio is limited to signed-in operator accounts."
+      />
+    );
+  }
+
+  if (!isActive) {
+    return (
+      <BetaAccessScreen
+        title={blockedBetaCopy.title}
+        body={blockedBetaCopy.body}
+        accessState={accessState.status === "loading" || accessState.status === "signed_out" || accessState.status === "active" ? null : accessState.status}
+      />
+    );
+  }
+
+  if (!isBetaOperator) {
+    return (
+      <BetaAccessScreen
+        title="This account is not on the operator allowlist"
+        body="Admin and release controls stay behind a small runtime-config allowlist."
+        operatorOnly
+      />
+    );
+  }
+
   return (
     <ImageBackground
       source={require("../assets/images/chicago-skyline.jpg")}
       resizeMode="cover"
       style={styles.background}
     >
-      <View style={styles.overlay} />
+      <View style={[styles.overlay, { backgroundColor: themePalette.screenOverlay }]} />
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerBlock}>
           <View>
-            <Text style={styles.kicker}>CHILLYWOOD • ADMIN</Text>
-            <Text style={styles.title}>Content Studio</Text>
-            <Text style={styles.subtitle}>Control hero, release windows, rows, and metadata from one premium panel.</Text>
+            <Text style={styles.kicker}>{experienceConfig.branding.appDisplayName.toUpperCase()} • ADMIN</Text>
+            <Text style={styles.title}>{experienceConfig.branding.adminTitle}</Text>
+            <Text style={styles.subtitle}>{experienceConfig.branding.adminSubtitle}</Text>
           </View>
 
-          <TouchableOpacity style={styles.newBtn} onPress={openCreate}>
+          <TouchableOpacity style={[styles.newBtn, { backgroundColor: themePalette.accent }]} onPress={openCreate}>
             <Text style={styles.newBtnText}>+ New Title</Text>
           </TouchableOpacity>
         </View>
@@ -652,6 +933,704 @@ export default function AdminStudioScreen() {
             <Text style={styles.noticeText}>{notice.text}</Text>
           </View>
         )}
+
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>EXPERIENCE CONFIG</Text>
+              <Text style={styles.configTitle}>Global presentation and feature controls</Text>
+              <Text style={styles.configBody}>
+                Tune homepage, branding, feature visibility, and default room settings without touching code.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.configSaveBtn, { backgroundColor: themePalette.accent }, configSaving && styles.configSaveBtnDisabled]}
+              onPress={saveExperienceConfigChanges}
+              disabled={configSaving || configLoading}
+            >
+              {configSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Config</Text>}
+            </TouchableOpacity>
+          </View>
+
+          {configLoading ? (
+            <View style={styles.configLoadingRow}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.configLoadingText}>Loading current config…</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.sectionLabel}>Theme Preset</Text>
+              <View style={styles.toggleRowWrap}>
+                {(["city_night", "lake_glow", "steel_day"] as const).map((preset) => (
+                  <TouchableOpacity
+                    key={preset}
+                    style={[styles.toggleChip, experienceConfig.theme.preset === preset && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        theme: {
+                          ...prev.theme,
+                          preset,
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.theme.preset === preset && styles.toggleChipTextActive]}>
+                      {preset.replace("_", " ").toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.sectionLabel}>Background Mode</Text>
+              <View style={styles.toggleRowWrap}>
+                {(["hero_art", "skyline"] as const).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.toggleChip, experienceConfig.theme.backgroundMode === mode && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        theme: {
+                          ...prev.theme,
+                          backgroundMode: mode,
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.theme.backgroundMode === mode && styles.toggleChipTextActive]}>
+                      {mode.replace("_", " ").toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.sectionLabel}>Hero Strategy</Text>
+              <View style={styles.toggleRowWrap}>
+                {(["latest", "hero_flag", "manual_title"] as const).map((heroMode) => (
+                  <TouchableOpacity
+                    key={heroMode}
+                    style={[styles.toggleChip, experienceConfig.home.heroMode === heroMode && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        home: {
+                          ...prev.home,
+                          heroMode,
+                          manualHeroTitleId: heroMode === "manual_title" ? prev.home.manualHeroTitleId : null,
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.home.heroMode === heroMode && styles.toggleChipTextActive]}>
+                      {heroMode.replace("_", " ").toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {experienceConfig.home.heroMode === "manual_title" ? (
+                <>
+                  <Text style={styles.sectionLabel}>Manual Hero Title</Text>
+                  <View style={styles.toggleRowWrap}>
+                    {titles.slice(0, 12).map((item) => (
+                      <TouchableOpacity
+                        key={toIdString(item.id)}
+                        style={[
+                          styles.toggleChip,
+                          String(experienceConfig.home.manualHeroTitleId ?? "") === String(item.id) && styles.toggleChipActive,
+                        ]}
+                        onPress={() =>
+                          updateExperienceConfig((prev) => ({
+                            ...prev,
+                            home: {
+                              ...prev.home,
+                              manualHeroTitleId: String(item.id),
+                            },
+                          }))
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.toggleChipText,
+                            String(experienceConfig.home.manualHeroTitleId ?? "") === String(item.id) && styles.toggleChipTextActive,
+                          ]}
+                        >
+                          {item.title}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              ) : null}
+
+              <Text style={styles.sectionLabel}>Top Picks Source</Text>
+              <View style={styles.toggleRowWrap}>
+                {(["recent", "top_row", "featured", "trending"] as const).map((source) => (
+                  <TouchableOpacity
+                    key={source}
+                    style={[styles.toggleChip, experienceConfig.home.topPicksSource === source && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        home: {
+                          ...prev.home,
+                          topPicksSource: source,
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.home.topPicksSource === source && styles.toggleChipTextActive]}>
+                      {source.replace("_", " ").toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.sectionLabel}>Homepage Rails</Text>
+              <View style={styles.configList}>
+                {experienceConfig.home.railOrder.map((railKey, index) => (
+                  <View key={railKey} style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>{railLabels[railKey]}</Text>
+                      <Text style={styles.configListBody}>
+                        Position {index + 1} · {experienceConfig.home.enabledRails[railKey] ? "Visible" : "Hidden"}
+                      </Text>
+                    </View>
+                    <View style={styles.configListActions}>
+                      <TouchableOpacity
+                        style={styles.orderBtn}
+                        onPress={() =>
+                          updateExperienceConfig((prev) => ({
+                            ...prev,
+                            home: {
+                              ...prev.home,
+                              enabledRails: {
+                                ...prev.home.enabledRails,
+                                [railKey]: !prev.home.enabledRails[railKey],
+                              },
+                            },
+                          }))
+                        }
+                      >
+                        <Text style={styles.orderBtnText}>
+                          {experienceConfig.home.enabledRails[railKey] ? "Hide" : "Show"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.orderBtn} onPress={() => moveRail(railKey, -1)} disabled={index === 0}>
+                        <Text style={styles.orderBtnText}>Up</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.orderBtn}
+                        onPress={() => moveRail(railKey, 1)}
+                        disabled={index === experienceConfig.home.railOrder.length - 1}
+                      >
+                        <Text style={styles.orderBtnText}>Down</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Browse rail label"
+                  placeholderTextColor="#8d8d8d"
+                  value={experienceConfig.home.browseCategoryLabel}
+                  onChangeText={(text) =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      home: {
+                        ...prev.home,
+                        browseCategoryLabel: text,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Browse category query"
+                  placeholderTextColor="#8d8d8d"
+                  value={experienceConfig.home.browseCategoryQuery}
+                  onChangeText={(text) =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      home: {
+                        ...prev.home,
+                        browseCategoryQuery: text,
+                      },
+                    }))
+                  }
+                />
+              </View>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Max items per rail"
+                placeholderTextColor="#8d8d8d"
+                keyboardType="numeric"
+                value={String(experienceConfig.home.maxItemsPerRail)}
+                onChangeText={(text) =>
+                  updateExperienceConfig((prev) => ({
+                    ...prev,
+                    home: {
+                      ...prev.home,
+                      maxItemsPerRail: Number.parseInt(text || "0", 10) || prev.home.maxItemsPerRail,
+                    },
+                  }))
+                }
+              />
+
+              <Text style={styles.sectionLabel}>Feature Toggles</Text>
+              <View style={styles.toggleRowWrap}>
+                {([
+                  ["watchPartyEnabled", "Watch Party"],
+                  ["communicationEnabled", "Communication"],
+                  ["favoritesEnabled", "Favorites"],
+                  ["continueWatchingEnabled", "Continue Watching"],
+                  ["creatorSettingsEnabled", "Creator Settings"],
+                ] as const).map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.toggleChip, experienceConfig.features[key] && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        features: {
+                          ...prev.features,
+                          [key]: !prev.features[key],
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.features[key] && styles.toggleChipTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.sectionLabel}>Monetization Runtime</Text>
+              <View style={styles.toggleRowWrap}>
+                {([
+                  ["premiumEnabled", "Premium"],
+                  ["partyPassEnabled", "Party Pass"],
+                  ["sponsorPlacementsEnabled", "Sponsor Placements"],
+                  ["playerBannerEnabled", "Player Banner"],
+                  ["playerMidRollEnabled", "Player Mid-Roll"],
+                ] as const).map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.toggleChip, experienceConfig.monetization[key] && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        monetization: {
+                          ...prev.monetization,
+                          [key]: !prev.monetization[key],
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.monetization[key] && styles.toggleChipTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Default sponsor label"
+                placeholderTextColor="#8d8d8d"
+                value={experienceConfig.monetization.defaultSponsorLabel}
+                onChangeText={(text) =>
+                  updateExperienceConfig((prev) => ({
+                    ...prev,
+                    monetization: {
+                      ...prev.monetization,
+                      defaultSponsorLabel: text,
+                    },
+                  }))
+                }
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Premium access title"
+                placeholderTextColor="#8d8d8d"
+                value={experienceConfig.monetization.premiumUpsellTitle}
+                onChangeText={(text) =>
+                  updateExperienceConfig((prev) => ({
+                    ...prev,
+                    monetization: {
+                      ...prev.monetization,
+                      premiumUpsellTitle: text,
+                    },
+                  }))
+                }
+              />
+              <TextInput
+                style={[styles.input, styles.multiline]}
+                placeholder="Premium access body"
+                placeholderTextColor="#8d8d8d"
+                multiline
+                value={experienceConfig.monetization.premiumUpsellBody}
+                onChangeText={(text) =>
+                  updateExperienceConfig((prev) => ({
+                    ...prev,
+                    monetization: {
+                      ...prev.monetization,
+                      premiumUpsellBody: text,
+                    },
+                  }))
+                }
+              />
+
+              <Text style={styles.sectionLabel}>Branding</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="App display name"
+                placeholderTextColor="#8d8d8d"
+                value={experienceConfig.branding.appDisplayName}
+                onChangeText={(text) =>
+                  updateExperienceConfig((prev) => ({
+                    ...prev,
+                    branding: {
+                      ...prev.branding,
+                      appDisplayName: text,
+                    },
+                  }))
+                }
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Home hero kicker"
+                placeholderTextColor="#8d8d8d"
+                value={experienceConfig.branding.homeHeroKicker}
+                onChangeText={(text) =>
+                  updateExperienceConfig((prev) => ({
+                    ...prev,
+                    branding: {
+                      ...prev.branding,
+                      homeHeroKicker: text,
+                    },
+                  }))
+                }
+              />
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Watch Party label"
+                  placeholderTextColor="#8d8d8d"
+                  value={experienceConfig.branding.watchPartyLabel}
+                  onChangeText={(text) =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      branding: {
+                        ...prev.branding,
+                        watchPartyLabel: text,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Admin title"
+                  placeholderTextColor="#8d8d8d"
+                  value={experienceConfig.branding.adminTitle}
+                  onChangeText={(text) =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      branding: {
+                        ...prev.branding,
+                        adminTitle: text,
+                      },
+                    }))
+                  }
+                />
+              </View>
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Live waiting room title"
+                  placeholderTextColor="#8d8d8d"
+                  value={experienceConfig.branding.liveWaitingRoomTitle}
+                  onChangeText={(text) =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      branding: {
+                        ...prev.branding,
+                        liveWaitingRoomTitle: text,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Party waiting room title"
+                  placeholderTextColor="#8d8d8d"
+                  value={experienceConfig.branding.partyWaitingRoomTitle}
+                  onChangeText={(text) =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      branding: {
+                        ...prev.branding,
+                        partyWaitingRoomTitle: text,
+                      },
+                    }))
+                  }
+                />
+              </View>
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Live room title"
+                  placeholderTextColor="#8d8d8d"
+                  value={experienceConfig.branding.liveRoomTitle}
+                  onChangeText={(text) =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      branding: {
+                        ...prev.branding,
+                        liveRoomTitle: text,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Party room title"
+                  placeholderTextColor="#8d8d8d"
+                  value={experienceConfig.branding.partyRoomTitle}
+                  onChangeText={(text) =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      branding: {
+                        ...prev.branding,
+                        partyRoomTitle: text,
+                      },
+                    }))
+                  }
+                />
+              </View>
+              <TextInput
+                style={[styles.input, styles.multiline]}
+                placeholder="Admin subtitle"
+                placeholderTextColor="#8d8d8d"
+                multiline
+                value={experienceConfig.branding.adminSubtitle}
+                onChangeText={(text) =>
+                  updateExperienceConfig((prev) => ({
+                    ...prev,
+                    branding: {
+                      ...prev.branding,
+                      adminSubtitle: text,
+                    },
+                  }))
+                }
+              />
+
+              <Text style={styles.sectionLabel}>New Watch Party Defaults</Text>
+              <View style={styles.toggleRowWrap}>
+                {(["open", "locked"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={`watch-join-${value}`}
+                    style={[styles.toggleChip, experienceConfig.roomDefaults.watchParty.joinPolicy === value && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        roomDefaults: {
+                          ...prev.roomDefaults,
+                          watchParty: {
+                            ...prev.roomDefaults.watchParty,
+                            joinPolicy: value,
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.roomDefaults.watchParty.joinPolicy === value && styles.toggleChipTextActive]}>
+                      JOIN {value.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {(["enabled", "muted"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={`watch-reactions-${value}`}
+                    style={[styles.toggleChip, experienceConfig.roomDefaults.watchParty.reactionsPolicy === value && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        roomDefaults: {
+                          ...prev.roomDefaults,
+                          watchParty: {
+                            ...prev.roomDefaults.watchParty,
+                            reactionsPolicy: value,
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.roomDefaults.watchParty.reactionsPolicy === value && styles.toggleChipTextActive]}>
+                      REACTIONS {value.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.toggleRowWrap}>
+                {(["open", "party_pass", "premium"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={`watch-access-${value}`}
+                    style={[styles.toggleChip, experienceConfig.roomDefaults.watchParty.contentAccessRule === value && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        roomDefaults: {
+                          ...prev.roomDefaults,
+                          watchParty: {
+                            ...prev.roomDefaults.watchParty,
+                            contentAccessRule: value,
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.roomDefaults.watchParty.contentAccessRule === value && styles.toggleChipTextActive]}>
+                      {value.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {(["best_effort", "host_managed"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={`watch-capture-${value}`}
+                    style={[styles.toggleChip, experienceConfig.roomDefaults.watchParty.capturePolicy === value && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        roomDefaults: {
+                          ...prev.roomDefaults,
+                          watchParty: {
+                            ...prev.roomDefaults.watchParty,
+                            capturePolicy: value,
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.roomDefaults.watchParty.capturePolicy === value && styles.toggleChipTextActive]}>
+                      {value.replace("_", " ").toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.sectionLabel}>New Communication Defaults</Text>
+              <View style={styles.toggleRowWrap}>
+                {(["open", "party_pass", "premium"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={`comm-access-${value}`}
+                    style={[styles.toggleChip, experienceConfig.roomDefaults.communication.contentAccessRule === value && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        roomDefaults: {
+                          ...prev.roomDefaults,
+                          communication: {
+                            ...prev.roomDefaults.communication,
+                            contentAccessRule: value,
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.roomDefaults.communication.contentAccessRule === value && styles.toggleChipTextActive]}>
+                      {value.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {(["best_effort", "host_managed"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={`comm-capture-${value}`}
+                    style={[styles.toggleChip, experienceConfig.roomDefaults.communication.capturePolicy === value && styles.toggleChipActive]}
+                    onPress={() =>
+                      updateExperienceConfig((prev) => ({
+                        ...prev,
+                        roomDefaults: {
+                          ...prev.roomDefaults,
+                          communication: {
+                            ...prev.roomDefaults.communication,
+                            capturePolicy: value,
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={[styles.toggleChipText, experienceConfig.roomDefaults.communication.capturePolicy === value && styles.toggleChipTextActive]}>
+                      {value.replace("_", " ").toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+        </View>
+
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>CREATOR GRANTS</Text>
+              <Text style={styles.configTitle}>Backend creator monetization permissions</Text>
+              <Text style={styles.configBody}>
+                Load a creator user id, then decide whether that creator can use premium rooms, Party Pass rooms, premium titles, and sponsor/ad hooks.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.configSaveBtn, { backgroundColor: themePalette.accent }, creatorGrantSaving && styles.configSaveBtnDisabled]}
+              onPress={saveCreatorGrantTarget}
+              disabled={creatorGrantSaving}
+            >
+              {creatorGrantSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Grants</Text>}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inlineInputs}>
+            <TextInput
+              style={[styles.input, styles.inputHalf]}
+              placeholder="Creator user id"
+              placeholderTextColor="#8d8d8d"
+              value={creatorGrantUserId}
+              onChangeText={setCreatorGrantUserId}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={[styles.orderBtn, creatorGrantLoading && styles.configSaveBtnDisabled]}
+              onPress={loadCreatorGrantTarget}
+              disabled={creatorGrantLoading}
+            >
+              {creatorGrantLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.orderBtnText}>Load</Text>}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.toggleRowWrap}>
+            {([
+              ["canUsePartyPassRooms", "Party Pass Rooms"],
+              ["canUsePremiumRooms", "Premium Rooms"],
+              ["canPublishPremiumTitles", "Premium Titles"],
+              ["canUseSponsorPlacements", "Sponsor Placements"],
+              ["canUsePlayerAds", "Player Ads"],
+            ] as const).map(([key, label]) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.toggleChip, creatorGrantForm[key] && styles.toggleChipActive]}
+                onPress={() => setCreatorGrantForm((prev) => ({ ...prev, [key]: !prev[key] }))}
+              >
+                <Text style={[styles.toggleChipText, creatorGrantForm[key] && styles.toggleChipTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
@@ -1014,6 +1993,56 @@ export default function AdminStudioScreen() {
                 ))}
               </View>
 
+              {hasTitleMonetizationControls ? (
+                <>
+                  <Text style={styles.sectionLabel}>Monetization</Text>
+                  <View style={styles.toggleRowWrap}>
+                    {(["open", "premium"] as const).map((value) => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.toggleChip, form.content_access_rule === value && styles.toggleChipActive]}
+                        onPress={() => setForm((prev) => ({ ...prev, content_access_rule: value }))}
+                      >
+                        <Text style={[styles.toggleChipText, form.content_access_rule === value && styles.toggleChipTextActive]}>
+                          {value.toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity
+                      style={[styles.toggleChip, form.ads_enabled && styles.toggleChipActive]}
+                      onPress={() => setForm((prev) => ({ ...prev, ads_enabled: !prev.ads_enabled }))}
+                    >
+                      <Text style={[styles.toggleChipText, form.ads_enabled && styles.toggleChipTextActive]}>
+                        {form.ads_enabled ? "Ads Enabled" : "Ads Off"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.toggleRowWrap}>
+                    {(["none", "detail_banner", "player_banner"] as SponsorPlacement[]).map((placement) => (
+                      <TouchableOpacity
+                        key={placement}
+                        style={[styles.toggleChip, form.sponsor_placement === placement && styles.toggleChipActive]}
+                        onPress={() => setForm((prev) => ({ ...prev, sponsor_placement: placement }))}
+                      >
+                        <Text style={[styles.toggleChipText, form.sponsor_placement === placement && styles.toggleChipTextActive]}>
+                          {placement.replace("_", " ").toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Sponsor label"
+                    placeholderTextColor="#8d8d8d"
+                    value={form.sponsor_label}
+                    onChangeText={(text) => setForm((prev) => ({ ...prev, sponsor_label: text }))}
+                  />
+                  <Text style={styles.configLoadingText}>
+                    Unsupported premium or sponsor settings are normalized to open/off if the current creator grants do not allow them.
+                  </Text>
+                </>
+              ) : null}
+
               <Text style={styles.sectionLabel}>Flags</Text>
               <View style={styles.toggleRowWrap}>
                 <TouchableOpacity
@@ -1148,6 +2177,108 @@ const styles = StyleSheet.create({
     color: "#f0f0f0",
     fontWeight: "700",
     fontSize: 12,
+  },
+  configCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(12,12,18,0.94)",
+    padding: 14,
+    gap: 10,
+  },
+  configHeaderRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  configKicker: {
+    color: "#9AA4B9",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  configTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  configBody: {
+    color: "#BAC3D5",
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 6,
+    maxWidth: "92%",
+  },
+  configSaveBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 108,
+  },
+  configSaveBtnDisabled: {
+    opacity: 0.6,
+  },
+  configSaveBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  configLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 4,
+  },
+  configLoadingText: {
+    color: "#D6DCE8",
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+  configList: {
+    gap: 8,
+    marginBottom: 10,
+  },
+  configListRow: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10,
+    gap: 10,
+  },
+  configListCopy: {
+    gap: 2,
+  },
+  configListTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  configListBody: {
+    color: "#B3BDD0",
+    fontSize: 11.5,
+    fontWeight: "600",
+  },
+  configListActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  orderBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  orderBtnText: {
+    color: "#ECECEC",
+    fontSize: 11,
+    fontWeight: "700",
   },
   statsGrid: {
     flexDirection: "row",

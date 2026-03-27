@@ -19,40 +19,74 @@ import {
     ActivityIndicator,
     Alert,
     Animated,
+    AppState,
     Image,
     ImageBackground,
     type ImageSourcePropType,
     KeyboardAvoidingView,
     LayoutAnimation,
-    Modal,
     Platform,
     ScrollView,
     Share,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     UIManager,
     View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
+import {
+    DEFAULT_APP_CONFIG,
+    readAppConfig,
+    resolveBrandingConfig,
+    resolveFeatureConfig,
+    resolveMonetizationConfig,
+} from "../../_lib/appConfig";
+import { trackEvent } from "../../_lib/analytics";
+import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
+import {
+    evaluateCommunicationRoomAccess,
+    getCommunicationRoomSnapshot,
+    getLinkedCommunicationRoom,
+    getOrCreateLinkedCommunicationRoom,
+} from "../../_lib/communication";
 import { reportDebugError, reportDebugParty, reportDebugQuery } from "../../_lib/devDebug";
+import { debugLog, reportRuntimeError } from "../../_lib/logger";
+import { submitSafetyReport } from "../../_lib/moderation";
+import { setUserPlan, unlockPartyPass } from "../../_lib/monetization";
+import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
 import {
+    applyHostAction,
+    evaluatePartyRoomAccess,
     emitSyncEvent,
+    getActivePartyMemberships,
     getPartyRoom,
+    getPartyRoomSnapshot,
     getSafePartyUserId,
+    joinPartyRoomSession,
+    setPartyRoomPolicies,
+    setPartyParticipantState,
+    touchPartyRoomSession,
     updateRoomPlayback,
+    type WatchPartyRoomMembership,
     type WatchPartyState,
 } from "../../_lib/watchParty";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
+import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
+import { ReportSheet } from "../../components/safety/report-sheet";
+import { BetaAccessScreen } from "../../components/system/beta-access-screen";
+import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
 import {
+    buildOrderedParticipantsWithSelf,
+    buildPartyRoomParticipantEntries,
     buildParticipantProfileParams,
+    buildSharedRoomLabels,
     buildSharedParticipantIdentity,
     computeBottomStripParticipants,
     computeDominantSpeakerId,
@@ -61,12 +95,22 @@ import {
     getParticipantRoleLabel,
     mergeMissingParticipantStates,
     normalizeSharedRoomMode,
+    prioritizeParticipantStripOrder,
     resolveIdentityName,
+    resolveSelectedParticipantContext,
+    shouldShowHostControls,
     type SharedParticipantIdentity,
+    type SharedParticipantLocalState,
 } from "./_lib/_room-shared";
-import { buildPartyRoomParticipantEntries, shouldShowHostControls } from "./_lib/_waiting-room-shared";
 
 type ConnState = "loading" | "connecting" | "live" | "reconnecting" | "error";
+
+type MonetizationGate = {
+  source: "room" | "communication";
+  reason: AccessSheetReason;
+  accessKey: string;
+  roomId?: string;
+};
 
 type LocalMsg = {
   id: string;
@@ -90,12 +134,6 @@ type PresenceParticipant = SharedParticipantIdentity & {
   avatarIndex?: number;
 };
 
-type ParticipantLocalState = {
-  isMuted: boolean;
-  role: "host" | "speaker" | "listener";
-  isRemoved: boolean;
-};
-
 type LiveBubbleParticipant = PresenceParticipant & {
   isPlaceholder?: boolean;
 };
@@ -115,10 +153,10 @@ type FloatingReaction = {
   scale: Animated.Value;
 };
 
-const REACTIONS = ["❤️", "👍", "🔥", "👏"];
 const HOST_SEEK_STEP_MILLIS = 10_000;
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
+const ROOM_HEARTBEAT_INTERVAL_MILLIS = 10_000;
 const formatPartyTime = (millis: number) => {
   const totalSeconds = Math.max(0, Math.floor((millis || 0) / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -134,6 +172,8 @@ const getSafeRoomTitleLabel = (titleName: string | null, room: WatchPartyState, 
 
 export default function WatchPartyRoomScreen() {
   const safeAreaInsets = useSafeAreaInsets();
+  const { isLoading: authLoading, isSignedIn } = useSession();
+  const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const { partyId: partyIdParam, titleId: titleIdParam, roomCode: roomCodeParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{
     partyId?: string;
     titleId?: string;
@@ -149,6 +189,8 @@ export default function WatchPartyRoomScreen() {
   const roomModeParam = Array.isArray(modeParam) ? modeParam[0] : modeParam;
   const source = String(Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "").trim().toLowerCase();
   const sharedRoomMode = normalizeSharedRoomMode(roomModeParam, "live");
+  const canUseBetaRoom = isSignedIn && isActive;
+  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Watch-party rooms");
 
   // ── Core state ───────────────────────────────────────────────────────────────
   const [room, setRoom] = useState<WatchPartyState | null>(null);
@@ -164,20 +206,26 @@ export default function WatchPartyRoomScreen() {
   const [participants, setParticipants] = useState<PresenceParticipant[]>([]);
 
   // ── Chat ─────────────────────────────────────────────────────────────────────
-  const [chatVisible, setChatVisible] = useState(false);
-  const [messages, setMessages] = useState<LocalMsg[]>([]);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
+  const [, setMessages] = useState<LocalMsg[]>([]);
   const isLive = true;
-  const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
+  const [, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [participantReactions, setParticipantReactions] = useState<Record<string, ParticipantReaction>>({});
   const [featuredParticipantById, setFeaturedParticipantById] = useState<Record<string, boolean>>({});
   const [activeParticipantId, setActiveParticipantId] = useState<string>("");
   const [participantPresentationById, setParticipantPresentationById] = useState<Record<string, "compact" | "expanded">>({});
-  const [participantStateById, setParticipantStateById] = useState<Record<string, ParticipantLocalState>>({});
+  const [participantStateById, setParticipantStateById] = useState<Record<string, SharedParticipantLocalState>>({});
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [tapPulseById, setTapPulseById] = useState<Record<string, boolean>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<LiveBubbleParticipant | null>(null);
+  const [communicationBusy, setCommunicationBusy] = useState(false);
+  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
+  const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
+  const [accessSheetVisible, setAccessSheetVisible] = useState(false);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: "room" | "participant"; targetId: string; label: string } | null>(null);
+  const [joinRetryToken, setJoinRetryToken] = useState(0);
   const chatScrollRef = useRef<ScrollView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
@@ -188,12 +236,14 @@ export default function WatchPartyRoomScreen() {
   // ── Refs ─────────────────────────────────────────────────────────────────────
   const lastRoomUpdatedAtRef = useRef<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatChannelRef = useRef<RealtimeChannel | null>(null);
   const roomChatRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const roomRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const membershipMapRef = useRef<Record<string, WatchPartyRoomMembership>>({});
   const myUserIdRef = useRef<string | null>(null);
-  const myUsernameRef = useRef<string>("Guest");
-  const myProfileUsernameRef = useRef<string>("Guest");
+  const myUsernameRef = useRef<string>("");
+  const myProfileUsernameRef = useRef<string>("");
   const myCameraPreviewUrlRef = useRef<string>("");
   const myRoleRef = useRef<"host" | "viewer" | null>(null);
   const reactionCounterRef = useRef(0);
@@ -204,11 +254,30 @@ export default function WatchPartyRoomScreen() {
   const tapPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const activityPulse = useRef(new Animated.Value(0)).current;
   const liveBubbleOrderRef = useRef<string>("");
+  const branding = resolveBrandingConfig(appConfig);
+  const features = resolveFeatureConfig(appConfig);
+  const monetizationConfig = resolveMonetizationConfig(appConfig);
 
   useEffect(() => {
     if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    readAppConfig()
+      .then((config) => {
+        if (active) setAppConfig(config);
+      })
+      .catch(() => {
+        if (active) setAppConfig(DEFAULT_APP_CONFIG);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -303,6 +372,93 @@ export default function WatchPartyRoomScreen() {
 
   const clampMillis = useCallback((value: number) => Math.max(0, Math.floor(value || 0)), []);
 
+  const syncRoomFromSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, userId?: string | null) => {
+    setRoom(snapshot.room);
+    lastRoomUpdatedAtRef.current = snapshot.room.updatedAt;
+    membershipMapRef.current = Object.fromEntries(snapshot.memberships.map((membership) => [membership.userId, membership]));
+    setReactionsGloballyMuted(snapshot.room.reactionsPolicy === "muted");
+    setRoomLocked(snapshot.room.joinPolicy === "locked");
+
+    const resolvedUserId = String(userId ?? myUserIdRef.current ?? "").trim();
+    const selfMembership = resolvedUserId ? snapshot.memberships.find((membership) => membership.userId === resolvedUserId) ?? null : null;
+    const nextRole: "host" | "viewer" = resolvedUserId && resolvedUserId === snapshot.room.hostUserId
+      ? "host"
+      : (selfMembership?.role === "host" ? "host" : "viewer");
+    setMyRole(nextRole);
+    myRoleRef.current = nextRole;
+
+    const nextParticipantStateById: Record<string, SharedParticipantLocalState> = {};
+    getActivePartyMemberships(snapshot.memberships).forEach((membership) => {
+      const state = membership.membershipState;
+      if (state === "removed" || state === "left") return;
+      nextParticipantStateById[membership.userId] = {
+        isMuted: membership.isMuted,
+        role: membership.stageRole,
+        isRemoved: false,
+      };
+    });
+    setParticipantStateById(nextParticipantStateById);
+  }, []);
+
+  const refreshRoomSnapshot = useCallback(async (userId?: string | null) => {
+    const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
+    if (!snapshot) return null;
+    syncRoomFromSnapshot(snapshot, userId);
+    return snapshot;
+  }, [partyId, syncRoomFromSnapshot]);
+
+  const buildPresenceParticipants = useCallback((options: {
+    state: Record<string, { userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean }[] | undefined>;
+    trackedUserId: string;
+  }) => {
+    const activeMemberships = getActivePartyMemberships(Object.values(membershipMapRef.current))
+      .filter((membership) => membership.membershipState !== "removed" && membership.membershipState !== "left");
+    const seenIds = new Set<string>([
+      ...Object.keys(options.state),
+      ...activeMemberships.map((membership) => membership.userId),
+    ]);
+
+    return [...seenIds].map<PresenceParticipant | null>((presenceKey) => {
+      const presArr = options.state[presenceKey];
+      const presence = Array.isArray(presArr)
+        ? presArr[0] as { userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean }
+        : undefined;
+      const normalizedUserId = String(presence?.userId ?? presenceKey).trim();
+      if (!normalizedUserId) return null;
+
+      const membership = membershipMapRef.current[normalizedUserId];
+      if (membership && (membership.membershipState === "removed" || membership.membershipState === "left")) return null;
+
+      const normalizedCameraPreviewUrl = String(
+        presence?.cameraPreviewUrl
+          ?? presence?.camera_preview_url
+          ?? membership?.cameraPreviewUrl
+          ?? "",
+      ).trim() || (normalizedUserId === options.trackedUserId ? myCameraPreviewUrlRef.current : "");
+      const identity = buildSharedParticipantIdentity({
+        userId: normalizedUserId,
+        role: membership?.role ?? presence?.role,
+        displayNameCandidates: [
+          presence?.username,
+          membership?.displayName,
+          normalizedUserId === options.trackedUserId ? myProfileUsernameRef.current : "",
+          "Guest",
+        ],
+        avatarUrl: String(presence?.avatarUrl ?? membership?.avatarUrl ?? "").trim(),
+        cameraPreviewUrl: normalizedCameraPreviewUrl,
+        currentUserId: options.trackedUserId,
+        isLive: typeof presence?.isLive === "boolean" ? presence.isLive : membership?.membershipState === "active",
+        isSpeaking: typeof presence?.isSpeaking === "boolean" ? presence.isSpeaking : undefined,
+        isMuted: membership?.isMuted ?? presence?.isMuted,
+      });
+
+      return {
+        ...identity,
+        avatarIndex: presence?.avatarIndex,
+      };
+    }).filter(Boolean) as PresenceParticipant[];
+  }, []);
+
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -318,6 +474,11 @@ export default function WatchPartyRoomScreen() {
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!canUseBetaRoom) {
+      setLoading(false);
+      setConnState("error");
+      return;
+    }
     if (!partyId) {
       setNotFound(true);
       setLoading(false);
@@ -325,10 +486,11 @@ export default function WatchPartyRoomScreen() {
     }
 
     let cancelled = false;
+    setNotFound(false);
+    setAccessGate(null);
 
     const bootstrap = async () => {
       try {
-        // Load user profile for chat identity
         const profile = await readUserProfile();
         let profileCameraPreviewUrl = "";
         try {
@@ -347,29 +509,67 @@ export default function WatchPartyRoomScreen() {
         myProfileUsernameRef.current = resolveIdentityName(profile?.username, "Guest");
         myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
 
-        // Load room
-        const fetchedRoom = await getPartyRoom(partyId).catch(() => null);
+        const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
         if (cancelled) return;
 
-        if (!fetchedRoom) {
+        if (!snapshot) {
           setNotFound(true);
           setLoading(false);
           return;
         }
 
-        setRoom(fetchedRoom);
-        lastRoomUpdatedAtRef.current = fetchedRoom.updatedAt;
+        syncRoomFromSnapshot(snapshot, userId);
+        const currentMembership = snapshot.memberships.find((membership) => membership.userId === userId) ?? null;
+        const access = await evaluatePartyRoomAccess({
+          partyId,
+          userId,
+          room: snapshot.room,
+          membership: currentMembership,
+        }).catch(() => null);
 
-        const role: "host" | "viewer" = userId === fetchedRoom.hostUserId ? "host" : "viewer";
-        setMyRole(role);
-        myRoleRef.current = role;
+        if (cancelled) return;
 
-        // Fetch title name
-        if (fetchedRoom.titleId) {
+        if (access?.canJoin) {
+          await joinPartyRoomSession({
+            partyId,
+            userId,
+            role: userId === snapshot.room.hostUserId ? "host" : "viewer",
+            canSpeak: userId === snapshot.room.hostUserId,
+            cameraEnabled: !!profileCameraPreviewUrl,
+            micEnabled: true,
+            displayName: myProfileUsernameRef.current,
+            cameraPreviewUrl: profileCameraPreviewUrl,
+          }).catch(() => null);
+          if (!cancelled) {
+            await refreshRoomSnapshot(userId).catch(() => null);
+          }
+        } else if (access?.reason === "identity_required") {
+          setConnState("error");
+        } else if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+          trackEvent("monetization_gate_shown", {
+            surface: "watch-party-room",
+            reason: access.reason,
+            roomId: snapshot.room.partyId,
+          });
+          setAccessGate({
+            source: "room",
+            reason: access.reason,
+            accessKey: snapshot.room.partyId,
+          });
+          setAccessSheetVisible(true);
+          setLoading(false);
+          return;
+        } else if (access && !access.canJoin) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+
+        if (snapshot.room.titleId) {
           supabase
             .from("titles")
             .select("title")
-            .eq("id", fetchedRoom.titleId)
+            .eq("id", snapshot.room.titleId)
             .maybeSingle()
             .then(
               ({ data }) => { if (data?.title && !cancelled) setTitleName(String(data.title)); },
@@ -403,30 +603,31 @@ export default function WatchPartyRoomScreen() {
 
         setLoading(false);
 
-        // Start room poll
         pollRef.current = setInterval(() => {
-          getPartyRoom(partyId)
-            .then((r) => {
-              if (!r || cancelled) return;
-              if (r.updatedAt <= lastRoomUpdatedAtRef.current) return;
-              lastRoomUpdatedAtRef.current = r.updatedAt;
-              setRoom(r);
-            })
-            .catch(() => {});
+          refreshRoomSnapshot(userId).catch(() => {});
         }, 5000);
 
-        // Save this as last joined party for auto-rejoin
-        if (partyId && fetchedRoom?.titleId) {
-          await saveLastPartySession({ partyId, titleId: fetchedRoom.titleId, joinedAt: Date.now() }).catch(() => {});
+        if (access?.canJoin) {
+          heartbeatRef.current = setInterval(() => {
+            void touchPartyRoomSession({
+              partyId,
+              userId,
+              role: myRoleRef.current === "host" ? "host" : "viewer",
+              canSpeak: myRoleRef.current === "host",
+              cameraEnabled: !!myCameraPreviewUrlRef.current,
+              micEnabled: true,
+              displayName: myProfileUsernameRef.current,
+              cameraPreviewUrl: myCameraPreviewUrlRef.current,
+            }).then(() => refreshRoomSnapshot(userId));
+          }, ROOM_HEARTBEAT_INTERVAL_MILLIS);
         }
 
-        // Start chat / presence channel
-        startChatChannel(userId, role, fetchedRoom, profile);
+        if (partyId && snapshot.room.titleId) {
+          await saveLastPartySession({ partyId, titleId: snapshot.room.titleId, joinedAt: Date.now() }).catch(() => {});
+        }
 
-        // Start realtime room sync (poll remains as fallback)
+        startChatChannel(userId, myRoleRef.current === "host" ? "host" : "viewer", snapshot.room, profile);
         startRoomRealtimeSync();
-
-        // Start realtime room chat stream
         startRoomChatRealtimeSync();
       } catch {
         if (!cancelled) {
@@ -441,6 +642,7 @@ export default function WatchPartyRoomScreen() {
     return () => {
       cancelled = true;
       if (pollRef.current) clearInterval(pollRef.current);
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (chatChannelRef.current) {
         supabase.removeChannel(chatChannelRef.current);
         chatChannelRef.current = null;
@@ -457,7 +659,7 @@ export default function WatchPartyRoomScreen() {
       participantReactionTimeoutsRef.current = {};
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partyId]);
+  }, [canUseBetaRoom, joinRetryToken, partyId, refreshRoomSnapshot, syncRoomFromSnapshot]);
 
   // ── Chat + Presence channel ──────────────────────────────────────────────────
   const startChatChannel = useCallback(
@@ -477,31 +679,9 @@ export default function WatchPartyRoomScreen() {
       // Presence sync → participant list
       channel.on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{ userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean }>();
-        const list: PresenceParticipant[] = Object.entries(state).map(([key, presArr]) => {
-          const p = Array.isArray(presArr)
-            ? (presArr[0] as { userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean })
-            : {};
-          const normalizedUserId = String(p.userId ?? key).trim();
-          const normalizedCameraPreviewUrl = String(p.cameraPreviewUrl ?? p.camera_preview_url ?? "").trim() || (normalizedUserId === trackedUserId ? myCameraPreviewUrlRef.current : "");
-          const identity = buildSharedParticipantIdentity({
-            userId: normalizedUserId,
-            role: p.role,
-            displayNameCandidates: [
-              p.username,
-              normalizedUserId === trackedUserId ? myProfileUsernameRef.current : "",
-              "Guest",
-            ],
-            avatarUrl: p.avatarUrl,
-            cameraPreviewUrl: normalizedCameraPreviewUrl,
-            currentUserId: trackedUserId,
-            isLive: p.isLive,
-            isSpeaking: p.isSpeaking,
-            isMuted: p.isMuted,
-          });
-          return {
-            ...identity,
-            avatarIndex: p.avatarIndex,
-          };
+        const list = buildPresenceParticipants({
+          state,
+          trackedUserId,
         });
         setParticipants(list);
       });
@@ -560,46 +740,6 @@ export default function WatchPartyRoomScreen() {
         }
       });
 
-      // Host actions (mute reactions, lock room)
-      channel.on("broadcast", { event: "host_action" }, ({ payload }: { payload: Record<string, unknown> }) => {
-        if (payload?.action === "mute_reactions") setReactionsGloballyMuted(!!payload.enabled);
-        if (payload?.action === "lock_room") setRoomLocked(!!payload.enabled);
-      });
-
-      channel.on("broadcast", { event: "participant:update" }, ({ payload }: { payload: Record<string, unknown> }) => {
-        const participantId = String(payload?.participantId ?? "").trim();
-        const changes = (payload?.changes ?? {}) as Record<string, unknown>;
-        if (!participantId || !changes || typeof changes !== "object") return;
-
-        setParticipantStateById((prev) => {
-          const current = prev[participantId] ?? {
-            isMuted: false,
-            role: "listener" as ParticipantLocalState["role"],
-            isRemoved: false,
-          };
-          const incomingRole = changes.role;
-          const nextRoleCandidate = incomingRole === "host" || incomingRole === "speaker" || incomingRole === "listener"
-            ? incomingRole
-            : current.role;
-          const nextRole = current.role === "host" ? "host" : nextRoleCandidate;
-          const nextIsMuted = typeof changes.isMuted === "boolean"
-            ? (nextRole === "host" ? current.isMuted : changes.isMuted)
-            : current.isMuted;
-          const nextIsRemoved = typeof changes.isRemoved === "boolean"
-            ? (nextRole === "host" ? current.isRemoved : changes.isRemoved)
-            : current.isRemoved;
-
-          return {
-            ...prev,
-            [participantId]: {
-              isMuted: nextIsMuted,
-              role: nextRole,
-              isRemoved: nextIsRemoved,
-            },
-          };
-        });
-      });
-
       channel.on("broadcast", { event: "participant:speaking" }, ({ payload }: { payload: Record<string, unknown> }) => {
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
@@ -618,12 +758,24 @@ export default function WatchPartyRoomScreen() {
             userId: trackedUserId,
             username,
             isLive,
-            role,
+            role: membershipMapRef.current[trackedUserId]?.role ?? role,
             avatarIndex: profile?.avatarIndex ?? 0,
             cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
+            isMuted: membershipMapRef.current[trackedUserId]?.isMuted ?? false,
           });
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           setConnState("reconnecting");
+          void touchPartyRoomSession({
+            partyId,
+            userId: trackedUserId,
+            role: membershipMapRef.current[trackedUserId]?.role ?? role,
+            canSpeak: membershipMapRef.current[trackedUserId]?.canSpeak ?? (role === "host"),
+            cameraEnabled: !!myCameraPreviewUrlRef.current,
+            micEnabled: true,
+            displayName: myProfileUsernameRef.current,
+            cameraPreviewUrl: myCameraPreviewUrlRef.current,
+            membershipState: "reconnecting",
+          }).catch(() => null);
         } else if (status === "CLOSED") {
           setConnState("error");
         }
@@ -631,7 +783,7 @@ export default function WatchPartyRoomScreen() {
 
       chatChannelRef.current = channel;
     },
-    [partyId, addMsg, attachReactionToParticipant, flashReaction, isLive],
+    [partyId, addMsg, attachReactionToParticipant, buildPresenceParticipants, flashReaction, isLive],
   );
 
   const startRoomChatRealtimeSync = useCallback(() => {
@@ -703,50 +855,25 @@ export default function WatchPartyRoomScreen() {
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event: "*",
           schema: "public",
           table: "watch_party_rooms",
           filter: `party_id=eq.${partyId}`,
         },
-        (payload) => {
-          const row = payload.new as {
-            party_id?: string | null;
-            room_type?: string | null;
-            host_user_id?: string | null;
-            title_id?: string | null;
-            playback_position_millis?: number | null;
-            playback_state?: "playing" | "paused" | "buffering" | null;
-            started_at?: string | null;
-            updated_at?: string | null;
-          };
-
-          const normalizedPartyId = String(row.party_id ?? "").trim();
-          const hostUserId = String(row.host_user_id ?? "").trim();
-          const titleId = String(row.title_id ?? "").trim();
-          const roomTypeRaw = String(row.room_type ?? "").trim().toLowerCase();
-          const roomType = roomTypeRaw === "live" || roomTypeRaw === "title"
-            ? (roomTypeRaw as "live" | "title")
-            : titleId
-              ? "title"
-              : "live";
-          if (!normalizedPartyId || !hostUserId) return;
-          if (roomType === "title" && !titleId) return;
-
-          const nextUpdatedAt = String(row.updated_at ?? "").trim();
-          if (nextUpdatedAt && nextUpdatedAt <= lastRoomUpdatedAtRef.current) return;
-          if (nextUpdatedAt) lastRoomUpdatedAtRef.current = nextUpdatedAt;
-
-          setRoom({
-            partyId: normalizedPartyId,
-            roomCode: normalizedPartyId,
-            roomType,
-            titleId: titleId || null,
-            hostUserId,
-            playbackPositionMillis: Math.max(0, Number(row.playback_position_millis ?? 0)),
-            playbackState: row.playback_state === "playing" ? "playing" : "paused",
-            startedAt: String(row.started_at ?? new Date().toISOString()),
-            updatedAt: nextUpdatedAt || new Date().toISOString(),
-          });
+        () => {
+          void refreshRoomSnapshot(myUserIdRef.current);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "watch_party_room_memberships",
+          filter: `party_id=eq.${partyId}`,
+        },
+        () => {
+          void refreshRoomSnapshot(myUserIdRef.current);
         },
       )
       .subscribe((status) => {
@@ -756,7 +883,7 @@ export default function WatchPartyRoomScreen() {
       });
 
     roomRealtimeChannelRef.current = channel;
-  }, [partyId]);
+  }, [partyId, refreshRoomSnapshot]);
 
   useEffect(() => {
     reportDebugParty({
@@ -790,70 +917,117 @@ export default function WatchPartyRoomScreen() {
     reportDebugError(notFound ? "Room not found" : null);
   }, [notFound]);
 
-  // ── Send chat ────────────────────────────────────────────────────────────────
-  const onSendMessage = useCallback(async () => {
-    const text = draft.trim();
-    if (!text || !myUserIdRef.current || sending) return;
-
-    setSending(true);
-    setDraft("");
-
-    try {
-      await supabase
-        .from("watch_party_room_messages")
-        .insert({
-          party_id: partyId,
-          user_id: String(myUserIdRef.current ?? "").trim(),
-          username: myUsernameRef.current,
-          text,
-        });
-    } catch {}
-
-    setSending(false);
-  }, [draft, partyId, sending]);
-
-  // ── Send reaction ────────────────────────────────────────────────────────────
-  const onSendReaction = useCallback(
-    async (emoji: string) => {
-      if (!chatChannelRef.current || !myUserIdRef.current || reactionsGloballyMuted) return;
-      const authorLabel = myRoleRef.current === "host" ? "Host" : resolveIdentityName(myUsernameRef.current, "Guest");
-      flashReaction(emoji);
-      attachReactionToParticipant(myUserIdRef.current, emoji);
-      await chatChannelRef.current
-        .send({ type: "broadcast", event: "reaction", payload: { emoji, userId: myUserIdRef.current, authorLabel } })
-        .catch(() => {});
-      addMsg({ id: `react-${Date.now()}`, kind: "reaction", body: emoji, authorLabel: "You", isMe: true, ts: Date.now() });
-    },
-    [reactionsGloballyMuted, addMsg, attachReactionToParticipant, flashReaction],
-  );
-
   // ── Host: toggle mute reactions ──────────────────────────────────────────────
   const onToggleMuteReactions = useCallback(async () => {
-    if (!chatChannelRef.current || myRoleRef.current !== "host") return;
+    if (myRoleRef.current !== "host" || !partyId) return;
     const next = !reactionsGloballyMuted;
     setReactionsGloballyMuted(next);
-    await chatChannelRef.current
-      .send({ type: "broadcast", event: "host_action", payload: { action: "mute_reactions", enabled: next } })
-      .catch(() => {});
-  }, [reactionsGloballyMuted]);
+    trackEvent("moderation_action_used", {
+      surface: "watch-party-room",
+      action: next ? "mute_reactions" : "unmute_reactions",
+      roomId: partyId,
+    });
+    await (next
+      ? applyHostAction(partyId, { type: "mute_reactions" })
+      : setPartyRoomPolicies(partyId, { reactionsPolicy: "enabled" })
+    ).catch(() => {});
+    await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
+  }, [partyId, reactionsGloballyMuted, refreshRoomSnapshot]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const currentUserId = String(myUserIdRef.current ?? "").trim();
+      if (!partyId || !currentUserId) return;
+
+      if (nextState === "active") {
+        setConnState((prev) => (prev === "reconnecting" ? "connecting" : prev));
+        void touchPartyRoomSession({
+          partyId,
+          userId: currentUserId,
+          role: myRoleRef.current === "host" ? "host" : "viewer",
+          canSpeak: myRoleRef.current === "host",
+          cameraEnabled: !!myCameraPreviewUrlRef.current,
+          micEnabled: true,
+          displayName: myProfileUsernameRef.current,
+          cameraPreviewUrl: myCameraPreviewUrlRef.current,
+          membershipState: "active",
+        }).then(() => refreshRoomSnapshot(currentUserId)).catch((error) => {
+          reportRuntimeError("watch-party-appstate-active", error, {
+            partyId,
+          });
+        });
+        return;
+      }
+
+      setConnState("reconnecting");
+      void touchPartyRoomSession({
+        partyId,
+        userId: currentUserId,
+        role: myRoleRef.current === "host" ? "host" : "viewer",
+        canSpeak: myRoleRef.current === "host",
+        cameraEnabled: !!myCameraPreviewUrlRef.current,
+        micEnabled: true,
+        displayName: myProfileUsernameRef.current,
+        cameraPreviewUrl: myCameraPreviewUrlRef.current,
+        membershipState: "reconnecting",
+      }).catch((error) => {
+        reportRuntimeError("watch-party-appstate-background", error, {
+          partyId,
+        });
+      });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [partyId, refreshRoomSnapshot]);
 
   // ── Host: toggle lock room ───────────────────────────────────────────────────
   const onToggleLockRoom = useCallback(async () => {
-    if (!chatChannelRef.current || myRoleRef.current !== "host") return;
+    if (myRoleRef.current !== "host" || !partyId) return;
     const next = !roomLocked;
     setRoomLocked(next);
-    await chatChannelRef.current
-      .send({ type: "broadcast", event: "host_action", payload: { action: "lock_room", enabled: next } })
-      .catch(() => {});
-  }, [roomLocked]);
+    trackEvent("moderation_action_used", {
+      surface: "watch-party-room",
+      action: next ? "lock_room" : "unlock_room",
+      roomId: partyId,
+    });
+    await (next
+      ? applyHostAction(partyId, { type: "lock_room" })
+      : setPartyRoomPolicies(partyId, { joinPolicy: "open" })
+    ).catch(() => {});
+    await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
+  }, [partyId, refreshRoomSnapshot, roomLocked]);
 
-  const emitParticipantUpdate = useCallback((participantId: string, changes: Partial<ParticipantLocalState>) => {
-    const channel = chatChannelRef.current;
-    if (!channel || !participantId) return;
-    channel
-      .send({ type: "broadcast", event: "participant:update", payload: { participantId, changes } })
-      .catch(() => {});
-  }, []);
+  const emitParticipantUpdate = useCallback(async (participantId: string, changes: Partial<SharedParticipantLocalState>) => {
+    if (!partyId || !participantId || myRoleRef.current !== "host") return;
+    const currentMembership = membershipMapRef.current[participantId];
+    const nextStageRole = changes.role
+      ? (changes.role === "host" ? "host" : changes.role)
+      : currentMembership?.stageRole;
+    const shouldRemove = typeof changes.isRemoved === "boolean" ? changes.isRemoved : currentMembership?.membershipState === "removed";
+    trackEvent("moderation_action_used", {
+      surface: "watch-party-room",
+      action: shouldRemove
+        ? "remove_participant"
+        : typeof changes.isMuted === "boolean"
+          ? (changes.isMuted ? "mute_participant" : "unmute_participant")
+          : nextStageRole === "speaker"
+            ? "promote_speaker"
+            : "demote_listener",
+      roomId: partyId,
+      targetUserId: participantId,
+    });
+
+    await setPartyParticipantState(partyId, participantId, {
+      isMuted: typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership?.isMuted,
+      stageRole: nextStageRole,
+      canSpeak: nextStageRole === "host" || nextStageRole === "speaker",
+      membershipState: shouldRemove ? "removed" : "active",
+      leftAt: shouldRemove ? new Date().toISOString() : null,
+    }).catch(() => null);
+    await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
+  }, [partyId, refreshRoomSnapshot]);
 
   const emitParticipantSpeaking = useCallback((participantId: string, isSpeaking: boolean) => {
     const channel = chatChannelRef.current;
@@ -879,7 +1053,7 @@ export default function WatchPartyRoomScreen() {
     const startMicMetering = async () => {
       try {
         const permission = await Audio.requestPermissionsAsync();
-        console.log("WATCH PARTY MIC PERMISSION", { granted: permission.granted, status: permission.status, canAskAgain: permission.canAskAgain });
+        debugLog("watch-party", "mic permission", { granted: permission.granted, status: permission.status, canAskAgain: permission.canAskAgain });
         if (!permission.granted || cancelled) return;
 
         await Audio.setAudioModeAsync({
@@ -890,7 +1064,7 @@ export default function WatchPartyRoomScreen() {
           interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
         });
 
-        console.log("WATCH PARTY MIC RECORDING CREATED");
+        debugLog("watch-party", "mic recording created");
         const recording = new Audio.Recording();
         await recording.prepareToRecordAsync({
           isMeteringEnabled: true,
@@ -918,13 +1092,13 @@ export default function WatchPartyRoomScreen() {
             bitsPerSecond: 64000,
           },
         });
-        console.log("WATCH PARTY MIC PREPARE COMPLETE");
-        console.log("WATCH PARTY MIC START ASYNC");
+        debugLog("watch-party", "mic prepare complete");
+        debugLog("watch-party", "mic start async");
         await recording.startAsync();
-        console.log("WATCH PARTY MIC RECORDING STARTED");
+        debugLog("watch-party", "mic recording started");
         recording.setProgressUpdateInterval(220);
         recording.setOnRecordingStatusUpdate((status) => {
-          console.log("WATCH PARTY MIC METER", { isRecording: status.isRecording, metering: status.metering });
+          debugLog("watch-party", "mic meter", { isRecording: status.isRecording, metering: status.metering });
           if (!status.isRecording || cancelled) return;
           const metering = typeof status.metering === "number" ? status.metering : -160;
           const speaking = metering > MIC_SPEAKING_THRESHOLD_DB;
@@ -934,7 +1108,7 @@ export default function WatchPartyRoomScreen() {
               micReleaseTimeoutRef.current = null;
             }
             if (micSpeakingRef.current) return;
-            console.log("WATCH PARTY SPEAKING CHANGE", {
+            debugLog("watch-party", "speaking change", {
               from: micSpeakingRef.current,
               to: true,
               metering,
@@ -949,7 +1123,7 @@ export default function WatchPartyRoomScreen() {
           micReleaseTimeoutRef.current = setTimeout(() => {
             micReleaseTimeoutRef.current = null;
             if (!micSpeakingRef.current || cancelled) return;
-            console.log("WATCH PARTY SPEAKING CHANGE", {
+            debugLog("watch-party", "speaking change", {
               from: true,
               to: false,
               metering,
@@ -1001,10 +1175,180 @@ export default function WatchPartyRoomScreen() {
       return;
     }
     Share.share({
-      message: `Join my Chi'llywood Watch Party!\n\nRoom code: ${roomCode}\n\nOpen Chi'llywood -> Watch Party -> enter the code to join.`,
+      message: `Join my ${branding.appDisplayName} Watch Party!\n\nRoom code: ${roomCode}\n\nOpen ${branding.appDisplayName} -> Watch Party -> enter the code to join.`,
       title: "Watch Party Invite",
     }).catch(() => {});
-  }, [displayRoomCode]);
+  }, [branding.appDisplayName, displayRoomCode]);
+
+  const navigateToCommunicationRoom = useCallback((roomId: string, linkedPartyId: string) => {
+    router.push({
+      pathname: "/communication/[roomId]",
+      params: {
+        roomId,
+        cameraOn: "1",
+        micOn: "1",
+        returnTo: "watch-party",
+        returnPartyId: linkedPartyId,
+        returnMode: sharedRoomMode,
+        ...(source ? { returnSource: source } : {}),
+      },
+    });
+  }, [router, sharedRoomMode, source]);
+
+  const onResolveAccessGate = useCallback(async () => {
+    if (!accessGate) return;
+
+    setAccessBusy(true);
+
+    try {
+      const unlocked = accessGate.reason === "premium_required"
+        ? true
+        : await unlockPartyPass(accessGate.accessKey);
+
+      if (accessGate.reason === "premium_required") {
+        await setUserPlan("premium");
+      } else if (!unlocked) {
+        trackEvent("monetization_unlock_failure", {
+          surface: "watch-party-room",
+          reason: accessGate.reason,
+          roomId: accessGate.accessKey,
+        });
+        Alert.alert("Party Pass unavailable", "Unable to unlock Party Pass for this room right now.");
+        return;
+      }
+
+      trackEvent("monetization_unlock_success", {
+        surface: "watch-party-room",
+        reason: accessGate.reason,
+        roomId: accessGate.accessKey,
+      });
+
+      if (accessGate.source === "communication" && accessGate.roomId) {
+        const snapshot = await getCommunicationRoomSnapshot(accessGate.roomId).catch(() => null);
+        const membership = snapshot?.memberships.find((entry) => entry.userId === String(myUserId ?? "").trim()) ?? null;
+        const access = snapshot
+          ? await evaluateCommunicationRoomAccess({
+              room: snapshot.room,
+              membership,
+              userId: String(myUserId ?? "").trim() || undefined,
+            }).catch(() => null)
+          : null;
+
+        if (snapshot?.room && access?.canJoin) {
+          setAccessGate(null);
+          setAccessSheetVisible(false);
+          navigateToCommunicationRoom(snapshot.room.roomId, snapshot.room.linkedPartyId || accessGate.accessKey);
+          return;
+        }
+
+        if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+          setAccessGate({
+            source: "communication",
+            reason: access.reason,
+            accessKey: snapshot?.room.linkedPartyId || accessGate.accessKey,
+            roomId: snapshot?.room.roomId || accessGate.roomId,
+          });
+          return;
+        }
+
+        Alert.alert("Communication room unavailable", "That communication room still isn't available for your current access level.");
+        return;
+      }
+
+      setAccessGate(null);
+      setAccessSheetVisible(false);
+      setLoading(true);
+      setJoinRetryToken((value) => value + 1);
+    } catch (error) {
+      reportRuntimeError("watch-party-access-gate", error, {
+        source: accessGate.source,
+        reason: accessGate.reason,
+      });
+      Alert.alert("Room access unavailable", "Unable to confirm your room access right now.");
+    } finally {
+      setAccessBusy(false);
+    }
+  }, [accessGate, myUserId, navigateToCommunicationRoom]);
+
+  const onOpenCommunicationRoom = useCallback(async () => {
+    if (!features.communicationEnabled) {
+      Alert.alert("Communication unavailable", "Communication entry is currently hidden in app configuration.");
+      return;
+    }
+    const userIsHost = myRole === "host";
+    const linkedPartyId = String(room?.partyId ?? partyId ?? "").trim();
+    const linkedRoomCode = String(room?.roomCode ?? displayRoomCode ?? "").trim().toUpperCase();
+    const linkedRoomMode = room?.roomType === "live" || !room?.titleId ? "live" : "hybrid";
+
+    if (!linkedPartyId) {
+      Alert.alert("Communication unavailable", "This room is missing the watch-party id needed to open communication.");
+      return;
+    }
+
+    setCommunicationBusy(true);
+
+    try {
+      const result = userIsHost
+        ? await getOrCreateLinkedCommunicationRoom({
+            partyId: linkedPartyId,
+            roomCode: linkedRoomCode,
+            roomMode: linkedRoomMode,
+            hostUserId: myUserId || undefined,
+          })
+        : await getLinkedCommunicationRoom(linkedPartyId);
+
+      if (!result) {
+        Alert.alert(
+          "Communication room not live yet",
+          userIsHost
+            ? "Unable to open the linked communication room right now."
+            : "The host has not opened the linked communication room yet.",
+        );
+        return;
+      }
+
+      if ("error" in result) {
+        Alert.alert("Communication room unavailable", result.error.message);
+        return;
+      }
+
+      const access = await evaluateCommunicationRoomAccess({
+        room: result,
+        userId: myUserId || undefined,
+      }).catch(() => null);
+
+      if (access && !access.canJoin && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+        trackEvent("monetization_gate_shown", {
+          surface: "watch-party-room",
+          reason: access.reason,
+          roomId: result.roomId,
+        });
+        setAccessGate({
+          source: "communication",
+          reason: access.reason,
+          accessKey: result.linkedPartyId || result.roomId,
+          roomId: result.roomId,
+        });
+        setAccessSheetVisible(true);
+        return;
+      }
+
+      navigateToCommunicationRoom(result.roomId, linkedPartyId);
+    } catch (error) {
+      reportRuntimeError("watch-party-open-communication", error, {
+        linkedPartyId,
+        userIsHost,
+      });
+      Alert.alert(
+        "Communication room unavailable",
+        userIsHost
+          ? "Unable to open the linked communication room right now."
+          : "Unable to join the linked communication room right now.",
+      );
+    } finally {
+      setCommunicationBusy(false);
+    }
+  }, [displayRoomCode, features.communicationEnabled, myRole, myUserId, navigateToCommunicationRoom, partyId, room?.partyId, room?.roomCode, room?.roomType, room?.titleId]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async (opts?: { liveMode?: boolean }) => {
@@ -1025,7 +1369,7 @@ export default function WatchPartyRoomScreen() {
       return;
     }
 
-    console.log("WATCH PARTY OPEN PLAYER: navigating with titleId", targetTitleId);
+    debugLog("watch-party", "open player", { targetTitleId });
     router.push({
       pathname: "/player/[id]",
       params: {
@@ -1110,71 +1454,35 @@ export default function WatchPartyRoomScreen() {
     return first?.image || first?.poster || null;
   })();
   const trackedUserId = myUserId || "anon";
-  const resolvedCurrentUsername = resolveIdentityName(myProfileUsernameRef.current, myUsernameRef.current, "You");
-  const participantsBase = useMemo(() => {
-    const seen = new Set<string>();
-    const unique = [...participants].filter((participant) => {
-      if (!participant.userId || seen.has(participant.userId)) return false;
-      seen.add(participant.userId);
-      return true;
-    });
-
-    return unique.sort((a, b) => {
-      const aMe = a.userId === trackedUserId ? 1 : 0;
-      const bMe = b.userId === trackedUserId ? 1 : 0;
-      if (aMe !== bMe) return bMe - aMe;
-      const aHost = a.role === "host" ? 1 : 0;
-      const bHost = b.role === "host" ? 1 : 0;
-      return bHost - aHost;
-    });
-  }, [participants, trackedUserId]);
+  const resolvedCurrentUsername = (() => {
+    const preferred = resolveIdentityName(myProfileUsernameRef.current, myUsernameRef.current, "");
+    return preferred === "Guest" ? "You" : preferred;
+  })();
+  const selfFallbackParticipant = useMemo<LiveBubbleParticipant>(() => ({
+    ...buildSharedParticipantIdentity({
+      userId: trackedUserId,
+      role: (myRole ?? myRoleRef.current ?? "viewer") === "host" ? "host" : "viewer",
+      displayNameCandidates: [resolvedCurrentUsername, "Guest"],
+      avatarUrl: "",
+      cameraPreviewUrl: myCameraPreviewUrlRef.current || "",
+      currentUserId: trackedUserId,
+      isLive: !!isLive,
+      isSpeaking: !!isSpeakingById[trackedUserId],
+      isMuted: false,
+    }),
+    isPlaceholder: true,
+  }), [trackedUserId, myRole, resolvedCurrentUsername, isLive, isSpeakingById]);
   const liveBubbleParticipants: LiveBubbleParticipant[] = useMemo(
-    () => {
-      const prioritizeSpeaking = (list: LiveBubbleParticipant[]) => list
-        .map((participant, index) => ({
-          participant,
-          index,
-          isSpeakingNow: !!(isSpeakingById[participant.userId] || participant.isSpeaking),
-        }))
-        .sort((a, b) => {
-          if (a.isSpeakingNow !== b.isSpeakingNow) return Number(b.isSpeakingNow) - Number(a.isSpeakingNow);
-          return a.index - b.index;
-        })
-        .map((item) => item.participant);
-
-      const next = [
-        ...prioritizeSpeaking(participantsBase.filter((participant) => !!featuredParticipantById[participant.userId])),
-        ...prioritizeSpeaking(participantsBase.filter((participant) => !featuredParticipantById[participant.userId])),
-      ];
-
-      const hasResolvedSelf = !!trackedUserId && next.some((participant) => participant.userId === trackedUserId);
-      const selfFallbackIdentity = buildSharedParticipantIdentity({
-        userId: trackedUserId,
-        role: (myRoleRef.current ?? "viewer") === "host" ? "host" : "viewer",
-        displayNameCandidates: [resolvedCurrentUsername, "Guest"],
-        avatarUrl: "",
-        cameraPreviewUrl: myCameraPreviewUrlRef.current || "",
+    () => prioritizeParticipantStripOrder(
+      buildOrderedParticipantsWithSelf({
+        participants,
         currentUserId: trackedUserId,
-        isLive: !!isLive,
-        isSpeaking: !!isSpeakingById[trackedUserId],
-        isMuted: false,
-      });
-      const withSelf = hasResolvedSelf
-        ? [...next]
-        : [{
-          ...selfFallbackIdentity,
-          isPlaceholder: true,
-        } as LiveBubbleParticipant, ...next];
-
-      const selfIndex = withSelf.findIndex((participant) => participant.userId === trackedUserId);
-      if (selfIndex > 0) {
-        const [selfParticipantFirst] = withSelf.splice(selfIndex, 1);
-        return [selfParticipantFirst, ...withSelf];
-      }
-
-      return withSelf;
-    },
-    [participantsBase, featuredParticipantById, isSpeakingById, trackedUserId, resolvedCurrentUsername, isLive],
+        selfFallbackParticipant,
+      }),
+      featuredParticipantById,
+      isSpeakingById,
+    ),
+    [participants, trackedUserId, selfFallbackParticipant, featuredParticipantById, isSpeakingById],
   );
 
   useEffect(() => {
@@ -1224,11 +1532,11 @@ export default function WatchPartyRoomScreen() {
       buildPartyRoomParticipantEntries({
         participants: presenceParticipants,
         currentUserId: currentUserBubbleId,
-        currentUsername: myUsernameRef.current,
+        currentUsername: resolvedCurrentUsername,
         participantReactionById: participantReactions,
         maxVisible: 7,
       }),
-    [presenceParticipants, currentUserBubbleId, participantReactions],
+    [presenceParticipants, currentUserBubbleId, participantReactions, resolvedCurrentUsername],
   );
   const isCurrentUserInParticipantBubbles = !!currentUserBubbleId && liveBubbleParticipants.some((participant) => participant.userId === currentUserBubbleId);
   const dominantLiveSpeakerId = useMemo(() => {
@@ -1276,13 +1584,111 @@ export default function WatchPartyRoomScreen() {
   const closeParticipantModal = useCallback(() => {
     setSelectedParticipant(null);
   }, []);
+  const onSubmitReport = useCallback(async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
+    if (!reportTarget) return;
+    setReportBusy(true);
+    try {
+      await submitSafetyReport({
+        targetType: reportTarget.type === "room" ? "room" : "participant",
+        targetId: reportTarget.targetId,
+        category: input.category,
+        note: input.note,
+        roomId: room?.partyId ?? partyId,
+        titleId: room?.titleId ?? null,
+        context: {
+          label: reportTarget.label,
+          roomType: room?.roomType ?? null,
+        },
+      });
+      setReportVisible(false);
+      setReportTarget(null);
+    } finally {
+      setReportBusy(false);
+    }
+  }, [partyId, reportTarget, room?.partyId, room?.roomType, room?.titleId]);
 
   // ── Loading ──────────────────────────────────────────────────────────────────
+  if (authLoading || betaLoading) {
+    return (
+      <BetaAccessScreen
+        title="Loading watch-party access"
+        body="Checking your signed-in session before joining this room."
+        loadingOverride
+      />
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <BetaAccessScreen
+        title="Sign in to join this watch party"
+        body="Watch-party rooms require a signed-in Chi'llywood identity so membership truth, moderation state, and reconnect behavior stay stable."
+      />
+    );
+  }
+
+  if (!isActive) {
+    return (
+      <BetaAccessScreen
+        title={blockedBetaCopy.title}
+        body={blockedBetaCopy.body}
+        accessState={accessState.status === "loading" || accessState.status === "signed_out" || accessState.status === "active" ? null : accessState.status}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#DC143C" />
         <Text style={styles.loadingText}>Joining room…</Text>
+      </View>
+    );
+  }
+
+  if (accessGate?.source === "room" && room) {
+    return (
+      <View style={styles.center}>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>
+            {accessGate.reason === "premium_required" ? "Premium room" : "Party Pass room"}
+          </Text>
+          <Text style={styles.errorBody}>
+            {accessGate.reason === "premium_required"
+              ? monetizationConfig.premiumUpsellBody
+              : "This room uses Party Pass access. Unlock it once and jump back in without losing the current room context."}
+          </Text>
+          <ProtectedSessionNote
+            {...getProtectedSessionCopy(sharedRoomMode === "live" ? "live-room" : "party-room", {
+              contentAccessRule: room.contentAccessRule,
+              capturePolicy: room.capturePolicy,
+            })}
+          />
+          <TouchableOpacity
+            style={[styles.secondaryBtn, styles.accessPrimaryButton]}
+            onPress={() => setAccessSheetVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
+              {accessGate.reason === "premium_required" ? "Unlock Premium" : "Get Party Pass"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+            <Text style={styles.secondaryBtnText}>← Go Back</Text>
+          </TouchableOpacity>
+        </View>
+        <AccessSheet
+          visible={accessSheetVisible}
+          reason={accessGate.reason}
+          appDisplayName={branding.appDisplayName}
+          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          busy={accessBusy}
+          onConfirm={() => {
+            void onResolveAccessGate();
+          }}
+          onClose={() => setAccessSheetVisible(false)}
+        />
       </View>
     );
   }
@@ -1303,7 +1709,6 @@ export default function WatchPartyRoomScreen() {
   }
 
   const isHost = myRole === "host";
-  const chatCount = messages.filter((m) => m.kind === "chat").length;
   const isSyncUnstable = connState === "reconnecting" || connState === "connecting";
   const isWaitingForHost = !isHost && !participants.some((p) => p.role === "host");
   const roleStatusTitle = isHost ? "Host Controls Active" : "Guest Synced to Host";
@@ -1315,13 +1720,27 @@ export default function WatchPartyRoomScreen() {
         ? `Resyncing with host · ${isPlaying ? "Playing" : "Paused"}`
         : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.playbackPositionMillis ?? 0)}`;
   const partyRoomTitleContext = getSafeRoomTitleLabel(titleName, room, "Selected Title");
-  const roomStatusLabel = isLiveRoom ? "Live Room" : "Party Room";
-  const roomCardLabel = isLiveRoom ? "LIVE ROOM" : "PARTY ROOM";
-  const roomCardTitle = isLiveRoom ? "Live Room" : "Party Room";
+  const roomLabels = buildSharedRoomLabels({
+    isLiveRoom,
+    branding: {
+      watchPartyLabel: branding.watchPartyLabel,
+      liveWaitingRoomTitle: branding.liveWaitingRoomTitle,
+      partyWaitingRoomTitle: branding.partyWaitingRoomTitle,
+      liveRoomTitle: branding.liveRoomTitle,
+      partyRoomTitle: branding.partyRoomTitle,
+    },
+  });
+  const roomStatusLabel = roomLabels.roomStatusLabel;
+  const roomCardLabel = roomLabels.roomCardLabel;
+  const roomCardTitle = roomLabels.roomCardTitle;
   const roomCardSubtext = isLiveRoom
     ? "Host and viewer control room for the live session."
     : `Watching together: ${partyRoomTitleContext}`;
-  const selectedParticipantUserId = String(selectedParticipant?.userId ?? "").trim();
+  const { selectedParticipantUserId, selectedParticipantState, canShowProfileAction } = resolveSelectedParticipantContext({
+    selectedParticipant,
+    participantStateById,
+    currentUserId: currentUserBubbleId,
+  });
   const selectedParticipantProfile = selectedParticipant
     ? buildUserChannelProfile({
         id: selectedParticipantUserId,
@@ -1332,8 +1751,6 @@ export default function WatchPartyRoomScreen() {
         fallbackDisplayName: "Participant",
       })
     : null;
-  const isSelectedParticipantSelf = !!selectedParticipantUserId && selectedParticipantUserId === currentUserBubbleId;
-  const canShowProfileAction = !!selectedParticipantUserId && !isSelectedParticipantSelf;
 
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
@@ -1398,7 +1815,7 @@ export default function WatchPartyRoomScreen() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={12} activeOpacity={0.75}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>CHI'LLYWOOD · WATCH PARTY</Text>
+          <Text style={styles.kicker}>CHI&apos;LLYWOOD · WATCH PARTY</Text>
           {/* Connection badge */}
           <View style={[styles.connBadge, { borderColor: connColor[connState] + "44" }]}>
             <View style={[styles.connDot, { backgroundColor: connColor[connState] }]} />
@@ -1474,9 +1891,9 @@ export default function WatchPartyRoomScreen() {
                   onPress={() => {
                     triggerBubbleTapPulse(participant.userId);
                     if (isHost) {
-                      console.log("HOST TAP USER", participant.userId);
+                      debugLog("watch-party", "host tap user", { userId: participant.userId });
                     } else {
-                      console.log("REQUEST MIC", participant.userId);
+                      debugLog("watch-party", "request mic", { userId: participant.userId });
                     }
                     setActiveParticipantId(participant.userId);
                     setParticipantPresentationById((prev) => ({
@@ -1654,7 +2071,52 @@ export default function WatchPartyRoomScreen() {
           }}
         />
 
-        <ProtectedSessionNote {...getProtectedSessionCopy(isLiveRoom ? "live-room" : "party-room")} />
+        <TouchableOpacity
+          style={styles.reportRoomButton}
+          activeOpacity={0.84}
+          onPress={() => {
+            if (!room) return;
+            setReportTarget({
+              type: "room",
+              targetId: room.partyId,
+              label: roomCodeCardValue || room.partyId,
+            });
+            setReportVisible(true);
+          }}
+        >
+          <Text style={styles.reportRoomButtonText}>Report Room</Text>
+        </TouchableOpacity>
+
+        {features.communicationEnabled ? (
+          <View style={styles.communicationCard}>
+            <Text style={styles.sectionKicker}>COMMUNICATION</Text>
+            <Text style={styles.communicationTitle}>Linked Communication Room</Text>
+            <Text style={styles.communicationBody}>
+              {isHost
+                ? `Open the linked audio and video side-room for this ${isLiveRoom ? "live room" : "party room"}.`
+                : `Join the linked audio and video side-room once the host opens it for this ${isLiveRoom ? "live room" : "party room"}.`}
+            </Text>
+            <TouchableOpacity
+              style={[styles.communicationButton, communicationBusy && styles.communicationButtonDisabled]}
+              activeOpacity={0.86}
+              onPress={() => {
+                void onOpenCommunicationRoom();
+              }}
+              disabled={communicationBusy}
+            >
+              <Text style={styles.communicationButtonText}>
+                {communicationBusy ? "Opening communication..." : isHost ? "Open Communication Room" : "Join Communication Room"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        <ProtectedSessionNote
+          {...getProtectedSessionCopy(isLiveRoom ? "live-room" : "party-room", {
+            contentAccessRule: room.contentAccessRule,
+            capturePolicy: room.capturePolicy,
+          })}
+        />
 
         {/* ── Participant list ────────────────────────────────────────── */}
         {waitingRoomParticipantSummary.totalCount > 0 && (
@@ -1766,98 +2228,69 @@ export default function WatchPartyRoomScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal
+      {accessGate ? (
+        <AccessSheet
+          visible={accessSheetVisible}
+          reason={accessGate.reason}
+          appDisplayName={branding.appDisplayName}
+          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          busy={accessBusy}
+          onConfirm={() => {
+            void onResolveAccessGate();
+          }}
+          onClose={() => setAccessSheetVisible(false)}
+        />
+      ) : null}
+
+      <ParticipantDetailSheet
         visible={!!selectedParticipant}
-        transparent
-        animationType="fade"
-        onRequestClose={closeParticipantModal}
-      >
-        <View style={styles.participantModalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={closeParticipantModal}
-          />
-          <View
-            style={[
-              styles.participantModalSheet,
-              { paddingBottom: Math.max(20, safeAreaInsets.bottom + 12) },
-            ]}
-          >
-            <View style={styles.participantModalHandle} />
-            <Text style={styles.participantModalKicker}>IN ROOM PARTICIPANT</Text>
-            <Text style={styles.participantModalTitle}>{selectedParticipant?.displayName || "Participant"}</Text>
-            <View style={styles.participantModalIdentityRow}>
-              <View style={[styles.participantModalRolePill, selectedParticipant?.role === "host" && styles.participantModalRolePillHost]}>
-                <Text style={[styles.participantModalRoleText, selectedParticipant?.role === "host" && styles.participantModalRoleTextHost]}>
-                  {selectedParticipant?.role === "host" ? "Host" : "Viewer"}
-                </Text>
-              </View>
-              <View style={styles.participantModalStatusRow}>
-                <View style={styles.participantModalStatusPill}>
-                  <Text style={styles.participantModalStatusText}>Present</Text>
-                </View>
-                <View
-                  style={[
-                    styles.participantModalStatusPill,
-                    selectedParticipant?.isLive ? styles.participantModalStatusPillLive : styles.participantModalStatusPillIdle,
-                  ]}
-                >
-                  <Text style={[styles.participantModalStatusText, selectedParticipant?.isLive && styles.participantModalStatusTextLive]}>
-                    {selectedParticipant?.isLive ? "Live" : "Idle"}
-                  </Text>
-                </View>
-                {selectedParticipant?.isMuted ? (
-                  <View style={[styles.participantModalStatusPill, styles.participantModalStatusPillMuted]}>
-                    <Text style={styles.participantModalStatusText}>Muted</Text>
-                  </View>
-                ) : null}
-                {selectedParticipant?.isSpeaking ? (
-                  <View style={[styles.participantModalStatusPill, styles.participantModalStatusPillLive]}>
-                    <Text style={[styles.participantModalStatusText, styles.participantModalStatusTextLive]}>Speaking</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-            <Text style={styles.participantModalActionsLabel}>Actions</Text>
+        participant={selectedParticipant}
+        participantState={selectedParticipantState}
+        canShowProfileAction={canShowProfileAction}
+        safeAreaBottom={safeAreaInsets.bottom}
+        onClose={closeParticipantModal}
+        onReportParticipant={selectedParticipantUserId ? () => {
+          setReportTarget({
+            type: "participant",
+            targetId: selectedParticipantUserId,
+            label: selectedParticipant?.displayName || "Participant",
+          });
+          setReportVisible(true);
+        } : undefined}
+        onViewProfile={canShowProfileAction ? () => {
+          if (!selectedParticipantProfile?.id) return;
+          closeParticipantModal();
+          router.push({
+            pathname: "/profile/[userId]",
+            params: buildParticipantProfileParams({
+              userId: selectedParticipantProfile.id,
+              displayName: selectedParticipantProfile.displayName,
+              role: selectedParticipantProfile.role,
+              isLive: selectedParticipantProfile.isLive,
+              partyId,
+              mode: sharedRoomMode,
+              source,
+              avatarUrl: selectedParticipantProfile.avatarUrl,
+              tagline: selectedParticipantProfile.tagline,
+            }),
+          });
+        } : undefined}
+      />
 
-            {canShowProfileAction ? (
-              <TouchableOpacity
-                style={styles.participantActionBtn}
-                activeOpacity={0.82}
-                onPress={() => {
-                  if (!selectedParticipantProfile?.id) return;
-                  closeParticipantModal();
-                  router.push({
-                    pathname: "/profile/[userId]",
-                    params: buildParticipantProfileParams({
-                      userId: selectedParticipantProfile.id,
-                      displayName: selectedParticipantProfile.displayName,
-                      role: selectedParticipantProfile.role,
-                      isLive: selectedParticipantProfile.isLive,
-                      partyId,
-                      mode: sharedRoomMode,
-                      source,
-                      avatarUrl: selectedParticipantProfile.avatarUrl,
-                      tagline: selectedParticipantProfile.tagline,
-                    }),
-                  });
-                }}
-              >
-                <Text style={styles.participantActionBtnText}>View Profile</Text>
-              </TouchableOpacity>
-            ) : null}
-
-            <TouchableOpacity
-              style={styles.participantActionBtnClose}
-              activeOpacity={0.82}
-              onPress={closeParticipantModal}
-            >
-              <Text style={styles.participantActionBtnCloseText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <ReportSheet
+        visible={reportVisible}
+        title={reportTarget?.type === "participant" ? "Report participant" : "Report watch-party room"}
+        description={reportTarget?.type === "participant"
+          ? `Send a safety report for ${reportTarget?.label || "this participant"}.`
+          : "Send a safety report for this room if it feels unsafe, abusive, or misused."}
+        busy={reportBusy}
+        onSubmit={onSubmitReport}
+        onClose={() => {
+          setReportVisible(false);
+          setReportTarget(null);
+        }}
+      />
     </View>
   );
 }
@@ -1904,6 +2337,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   secondaryBtnText: { color: "#ccc", fontSize: 13, fontWeight: "700" },
+  accessPrimaryButton: {
+    borderColor: "rgba(220,20,60,0.48)",
+    backgroundColor: "rgba(220,20,60,0.2)",
+  },
+  accessPrimaryButtonText: {
+    color: "#FFF1F5",
+    fontWeight: "900",
+  },
 
   // Header
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 },
@@ -2434,6 +2875,21 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   shareBtnText: { color: "#F7D6DD", fontSize: 11, fontWeight: "800" },
+  reportRoomButton: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  reportRoomButtonText: {
+    color: "#C8D0E2",
+    fontSize: 12,
+    fontWeight: "800",
+  },
 
   // Participants
   participantsWrap: { gap: 0 },
@@ -2660,6 +3116,42 @@ const styles = StyleSheet.create({
     backgroundColor: "#B80F31",
   },
   watchCTAText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
+  communicationCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(12,12,12,0.92)",
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    gap: 8,
+  },
+  communicationTitle: {
+    color: "#F5F7FB",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  communicationBody: {
+    color: "#A9B2C6",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  communicationButton: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(90,153,255,0.32)",
+    backgroundColor: "rgba(24,42,76,0.86)",
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  communicationButtonDisabled: {
+    opacity: 0.72,
+  },
+  communicationButtonText: {
+    color: "#E6EEFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
 
   // Reactions
   interactionWrap: { gap: 0 },
