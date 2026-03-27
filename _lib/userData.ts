@@ -20,6 +20,10 @@ export type WatchProgressMap = Record<string, WatchProgressEntry>;
 export type UserProfile = {
   username: string;
   avatarIndex: number; // 0-9 for different avatar colors/emojis
+  displayName?: string;
+  avatarUrl?: string;
+  tagline?: string;
+  channelRole?: "viewer" | "host" | "creator";
 };
 
 export type LastPartySession = {
@@ -36,6 +40,17 @@ export type MyListEntry = {
   savedAt: number;
 };
 
+export type UserChannelRole = "viewer" | "host" | "creator";
+
+export type UserChannelProfile = {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  tagline?: string;
+  role: UserChannelRole;
+  isLive: boolean;
+};
+
 type WatchHistoryRow = {
   title_id?: string | number | null;
   last_position_millis?: number | null;
@@ -49,6 +64,25 @@ type WatchHistoryRow = {
 const toIdString = (value: string | number | null | undefined) => String(value ?? "").trim();
 
 const dedupeIds = (ids: string[]) => Array.from(new Set(ids.filter(Boolean)));
+
+const TECHNICAL_PROFILE_NAME_PATTERN = /^(user[·\-\s]|viewer[·\-\s]|anon[\-\s])/i;
+const UUID_LIKE_PROFILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const normalizeTextValue = (value: unknown) => {
+  const normalized = String(value ?? "").trim();
+  return normalized || undefined;
+};
+
+const resolveProfileDisplayName = (...candidates: unknown[]) => {
+  for (const candidate of candidates) {
+    const value = String(candidate ?? "").trim();
+    if (!value) continue;
+    if (UUID_LIKE_PROFILE_PATTERN.test(value)) continue;
+    if (TECHNICAL_PROFILE_NAME_PATTERN.test(value)) continue;
+    return value;
+  }
+  return "User";
+};
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -81,6 +115,46 @@ const toMyListEntryMap = (entries: MyListEntry[]) => {
 };
 
 const toIsoString = (value?: number) => new Date(value ?? Date.now()).toISOString();
+
+const normalizeChannelRole = (value: unknown): UserChannelRole => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "host" || normalized === "creator") {
+    return normalized;
+  }
+  return "viewer";
+};
+
+export const buildUserChannelProfile = (options: {
+  id?: unknown;
+  profile?: UserProfile | null;
+  displayName?: unknown;
+  username?: unknown;
+  avatarUrl?: unknown;
+  tagline?: unknown;
+  bio?: unknown;
+  role?: unknown;
+  isLive?: unknown;
+  fallbackDisplayName?: unknown;
+}): UserChannelProfile => {
+  const id = toIdString(options.id as string | number | null | undefined);
+  const profile = options.profile;
+  const fallbackDisplayName = normalizeTextValue(options.fallbackDisplayName) ?? "User";
+  const resolvedDisplayName = resolveProfileDisplayName(
+    options.displayName,
+    options.username,
+    profile?.displayName,
+    profile?.username,
+  );
+
+  return {
+    id,
+    displayName: resolvedDisplayName !== "User" ? resolvedDisplayName : fallbackDisplayName,
+    avatarUrl: normalizeTextValue(options.avatarUrl) ?? normalizeTextValue(profile?.avatarUrl),
+    tagline: normalizeTextValue(options.tagline) ?? normalizeTextValue(options.bio) ?? normalizeTextValue(profile?.tagline),
+    role: normalizeChannelRole(options.role ?? profile?.channelRole),
+    isLive: !!options.isLive,
+  };
+};
 
 async function getSignedInUserId() {
   try {
@@ -546,7 +620,7 @@ export async function readUserProfile(): Promise<UserProfile> {
 
   // Generate if missing
   const generated: UserProfile = {
-    username: `User·${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+    username: `Studio Guest ${Math.floor(1000 + Math.random() * 9000)}`,
     avatarIndex: Math.floor(Math.random() * AVATARS.length),
   };
   await saveUserProfile(generated);

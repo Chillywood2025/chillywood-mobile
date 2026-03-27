@@ -84,8 +84,7 @@ export default function ExploreScreen() {
       <TouchableOpacity
         onPress={() => {
           const safeId = String(item.id || item.slug || item.title);
-          console.log("NAVIGATING WITH ID:", safeId);
-          router.push(`/player/${safeId}`);
+          router.push(`/title/${safeId}`);
         }}
         style={styles.card}
         activeOpacity={0.9}

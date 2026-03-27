@@ -148,7 +148,7 @@ export default function TitleDetails() {
           </Pressable>
 
           <Pressable style={styles.btnGhost} onPress={onToggleMyList} disabled={myListBusy}>
-            <Text style={styles.btnText}>{inMyList ? "✓ My List" : "+ My List"}</Text>
+            <Text style={styles.btnText}>{inMyList ? "✓ Favorites" : "+ Favorites"}</Text>
           </Pressable>
 
         </View>

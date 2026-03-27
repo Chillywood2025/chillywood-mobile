@@ -1,9 +1,13 @@
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+    buildUserChannelProfile,
     readMyListIds,
+    readUserProfile,
     toggleMyListTitle,
+    type UserChannelProfile,
 } from "../../_lib/userData";
+import { getSafePartyUserId } from "../../_lib/watchParty";
 
 import {
     ActivityIndicator,
@@ -19,6 +23,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
 import { supabase } from "../lib/_supabase";
 
@@ -37,10 +42,12 @@ type TitleRow = {
 };
 
 export default function HomeScreen() {
+  const safeAreaInsets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [currentChannel, setCurrentChannel] = useState<UserChannelProfile | null>(null);
   const [myListIds, setMyListIds] = useState<string[]>([]);
   const [myListTitles, setMyListTitles] = useState<TitleRow[]>([]);
   const [myListLoading, setMyListLoading] = useState(true);
@@ -111,23 +118,39 @@ export default function HomeScreen() {
     setMyListLoading(false);
   }
 
+  async function fetchCurrentChannelProfile() {
+    const [profile, userId] = await Promise.all([
+      readUserProfile().catch(() => null),
+      getSafePartyUserId().catch(() => ""),
+    ]);
+
+    const nextChannel = buildUserChannelProfile({
+      id: userId,
+      profile,
+      fallbackDisplayName: "You",
+      isLive: false,
+    });
+
+    setCurrentChannel(nextChannel);
+  }
+
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([fetchTitles(), fetchMyList()]);
+      await Promise.all([fetchTitles(), fetchMyList(), fetchCurrentChannelProfile()]);
       setLoading(false);
     })();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      fetchMyList().catch(() => {});
+      Promise.all([fetchMyList(), fetchCurrentChannelProfile()]).catch(() => {});
     }, []),
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([fetchTitles(), fetchMyList()]);
+    await Promise.all([fetchTitles(), fetchMyList(), fetchCurrentChannelProfile()]);
     setRefreshing(false);
   }
 
@@ -166,15 +189,58 @@ export default function HomeScreen() {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
   }
 
+  function openOwnProfile() {
+    if (!currentChannel?.id) return;
+
+    router.push({
+      pathname: "/profile/[userId]",
+      params: {
+        userId: currentChannel.id,
+        displayName: currentChannel.displayName,
+        role: currentChannel.role,
+        isLive: "0",
+        self: "1",
+        ...(currentChannel.avatarUrl ? { avatarUrl: currentChannel.avatarUrl } : {}),
+        ...(currentChannel.tagline ? { tagline: currentChannel.tagline } : {}),
+      },
+    });
+  }
+
   const heroItem = titles[0];
   const continueItem = titles[1] ?? titles[0];
   const heroImageSource = getImageUri(heroItem);
   const continueImageSource = getImageUri(continueItem);
+  const topRatedTitles = useMemo(() => titles.slice(0, 8), [titles]);
+  const homeAvatarInitial = String(currentChannel?.displayName ?? "You").slice(0, 1).toUpperCase() || "Y";
 
   const browseTitles = useMemo(() => {
     const drama = titles.filter((item) => (item.category ?? "").toLowerCase().includes("drama"));
     return drama.length ? drama : titles.slice(0, 8);
   }, [titles]);
+
+  const renderDiscoveryCard = ({ item }: { item: TitleRow }) => {
+    const cardImageSource = getImageUri(item);
+
+    return (
+      <TouchableOpacity style={styles.dramaCard} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
+        {cardImageSource ? (
+          <Image source={cardImageSource} style={styles.dramaImage} />
+        ) : (
+          <View style={styles.dramaFallback} />
+        )}
+        <View style={styles.dramaOverlay} />
+
+        <View style={styles.dramaMeta}>
+          <Text style={styles.dramaTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={styles.dramaRuntime} numberOfLines={1}>
+            {item.runtime || "—"}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <ImageBackground
@@ -208,6 +274,27 @@ export default function HomeScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
           showsVerticalScrollIndicator={false}
         >
+          <View style={[styles.utilityRow, { marginTop: Math.max(safeAreaInsets.top, 8) }]}>
+            <Text style={styles.utilityKicker}>HOME</Text>
+            <TouchableOpacity
+              style={[styles.profileAvatarButton, !currentChannel?.id && styles.profileAvatarButtonDisabled]}
+              onPress={openOwnProfile}
+              activeOpacity={0.86}
+              disabled={!currentChannel?.id}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Open your channel"
+            >
+              {currentChannel?.avatarUrl ? (
+                <Image source={{ uri: currentChannel.avatarUrl }} style={styles.profileAvatarImage} />
+              ) : (
+                <View style={styles.profileAvatarFallback}>
+                  <Text style={styles.profileAvatarInitial}>{homeAvatarInitial}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
           {heroItem ? (
             <View style={styles.heroWrap}>
               {heroImageSource ? (
@@ -232,7 +319,7 @@ export default function HomeScreen() {
                     <Text style={styles.playBtnText}>Play</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.watchPartyBtn} onPress={openWatchParty} activeOpacity={0.9}>
-                    <Text style={styles.watchPartyBtnText}>Watch Party</Text>
+                    <Text style={styles.watchPartyBtnText}>Live Watch-Party</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -240,31 +327,16 @@ export default function HomeScreen() {
           ) : null}
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Continue Watching</Text>
+            <Text style={styles.sectionTitle}>Top Rated</Text>
 
-            {continueItem ? (
-              <TouchableOpacity style={styles.continueCard} onPress={() => openPlayer(continueItem)} activeOpacity={0.9}>
-                {continueImageSource ? (
-                  <Image source={continueImageSource} style={styles.continueImage} />
-                ) : (
-                  <View style={styles.continueFallback} />
-                )}
-                <View style={styles.continueOverlay} />
-
-                <View style={styles.continueContent}>
-                  <Text style={styles.continueTitle} numberOfLines={1}>
-                    {continueItem.title}
-                  </Text>
-                  <Text style={styles.continueSub} numberOfLines={1}>
-                    {continueItem.runtime || "In Progress"}
-                  </Text>
-                </View>
-
-                <View style={styles.continueProgressTrack}>
-                  <View style={styles.continueProgressFill} />
-                </View>
-              </TouchableOpacity>
-            ) : null}
+            <FlatList
+              horizontal
+              data={topRatedTitles}
+              keyExtractor={(item, idx) => `top-rated-${item.id}-${idx}`}
+              renderItem={renderDiscoveryCard}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dramaRow}
+            />
           </View>
 
           <View style={styles.section}>
@@ -274,36 +346,14 @@ export default function HomeScreen() {
               horizontal
               data={browseTitles}
               keyExtractor={(item, idx) => `${item.id}-${idx}`}
-              renderItem={({ item }) => {
-                const dramaImageSource = getImageUri(item);
-
-                return (
-                  <TouchableOpacity style={styles.dramaCard} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
-                    {dramaImageSource ? (
-                      <Image source={dramaImageSource} style={styles.dramaImage} />
-                    ) : (
-                      <View style={styles.dramaFallback} />
-                    )}
-                    <View style={styles.dramaOverlay} />
-
-                    <View style={styles.dramaMeta}>
-                      <Text style={styles.dramaTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.dramaRuntime} numberOfLines={1}>
-                        {item.runtime || "—"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
+              renderItem={renderDiscoveryCard}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dramaRow}
             />
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My List</Text>
+            <Text style={styles.sectionTitle}>Favorites</Text>
 
             {myListLoading ? (
               <View style={styles.myListLoadingWrap}>
@@ -340,6 +390,34 @@ export default function HomeScreen() {
             )}
           </View>
 
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Continue Watching</Text>
+
+            {continueItem ? (
+              <TouchableOpacity style={styles.continueCard} onPress={() => openPlayer(continueItem)} activeOpacity={0.9}>
+                {continueImageSource ? (
+                  <Image source={continueImageSource} style={styles.continueImage} />
+                ) : (
+                  <View style={styles.continueFallback} />
+                )}
+                <View style={styles.continueOverlay} />
+
+                <View style={styles.continueContent}>
+                  <Text style={styles.continueTitle} numberOfLines={1}>
+                    {continueItem.title}
+                  </Text>
+                  <Text style={styles.continueSub} numberOfLines={1}>
+                    {continueItem.runtime || "In Progress"}
+                  </Text>
+                </View>
+
+                <View style={styles.continueProgressTrack}>
+                  <View style={styles.continueProgressFill} />
+                </View>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
         </ScrollView>
       )}
     </View>
@@ -359,6 +437,51 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 28,
     backgroundColor: "transparent",
+  },
+  utilityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  utilityKicker: {
+    color: "#8D98AE",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+  },
+  profileAvatarButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(12,12,16,0.84)",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileAvatarButtonDisabled: {
+    opacity: 0.5,
+  },
+  profileAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  profileAvatarFallback: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  profileAvatarInitial: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "900",
   },
   center: {
     flex: 1,

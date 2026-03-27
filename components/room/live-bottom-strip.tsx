@@ -20,6 +20,9 @@ export type LiveBottomStripParticipant = {
   avatarUrl?: string;
   cameraPreviewUrl?: string;
   isSpeaking?: boolean;
+  isLive?: boolean;
+  isMuted?: boolean;
+  isPresent?: boolean;
 };
 
 type LiveBottomStripStyles = {
@@ -36,6 +39,10 @@ type LiveBottomStripStyles = {
   cameraDominant?: StyleProp<ViewStyle>;
   image: StyleProp<ImageStyle>;
   initialText: StyleProp<TextStyle>;
+  presenceDot?: StyleProp<ViewStyle>;
+  presenceDotLive?: StyleProp<ViewStyle>;
+  presenceDotIdle?: StyleProp<ViewStyle>;
+  mutedIconText?: StyleProp<TextStyle>;
   tapWrap?: StyleProp<ViewStyle>;
   tapWrapPulsed?: StyleProp<ViewStyle>;
 };
@@ -70,6 +77,7 @@ export function LiveBottomStrip({
   return (
     <View style={styles.overlay} pointerEvents={pointerEvents}>
       <FlatList
+        pointerEvents="box-none"
         horizontal
         data={participants}
         keyExtractor={(item) => `bottom-live-${item.id}`}
@@ -79,6 +87,8 @@ export function LiveBottomStrip({
           const isCurrentUser = item.id === currentUserId;
           const isSpeaking = !!((speakingById && speakingById[item.id]) || item.isSpeaking);
           const isDominantSpeaker = !!dominantSpeakerId && item.id === dominantSpeakerId && isSpeaking;
+          const isLiveNow = !!item.isLive && !item.isMuted;
+          const showPresenceDot = item.isPresent !== false;
           const showLocalCameraPreview = allowCameraPreview && isCurrentUser && cameraPermissionGranted;
           const mediaUri = getParticipantMediaUri({
             isCurrentUser,
@@ -106,6 +116,10 @@ export function LiveBottomStrip({
               ) : (
                 <Text style={styles.initialText}>{getInitials(item.displayName)}</Text>
               )}
+              {showPresenceDot && styles.presenceDot ? (
+                <View style={[styles.presenceDot, isLiveNow ? styles.presenceDotLive : styles.presenceDotIdle]} />
+              ) : null}
+              {item.isMuted && styles.mutedIconText ? <Text style={styles.mutedIconText}>🔇</Text> : null}
             </View>
           );
 

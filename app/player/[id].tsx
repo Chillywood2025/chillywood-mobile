@@ -4,47 +4,48 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
-  Easing,
-  Image,
-  ImageBackground,
-  LayoutAnimation,
-  PanResponder,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  UIManager,
-  View,
-  type GestureResponderEvent,
-  type ImageSourcePropType
+    Animated,
+    Easing,
+    Image,
+    ImageBackground,
+    LayoutAnimation,
+    PanResponder,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    UIManager,
+    View,
+    type GestureResponderEvent,
+    type ImageSourcePropType
 } from "react-native";
 
 import { titles } from "../../_data/titles";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { supabase } from "../../_lib/supabase";
 import {
-  clearProgressForTitle,
-  readMergedWatchProgress,
-  readMyListIds,
-  toggleMyListTitle,
-  writeProgressForTitle,
+    clearProgressForTitle,
+    readMergedWatchProgress,
+    readMyListIds,
+    toggleMyListTitle,
+    writeProgressForTitle,
 } from "../../_lib/userData";
 import {
-  createPartyRoom,
-  emitSyncEvent,
-  fetchPartyMessages,
-  getPartyRoom,
-  getSafePartyUserId,
-  updateRoomPlayback,
-  type WatchPartyState,
+    createPartyRoom,
+    emitSyncEvent,
+    fetchPartyMessages,
+    getPartyRoom,
+    getSafePartyUserId,
+    updateRoomPlayback,
+    type WatchPartyState,
 } from "../../_lib/watchParty";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
+import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
 import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/_room-shared";
 
 const ACCENT = "#DC143C";
@@ -63,7 +64,7 @@ const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
 const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
 const PARTY_LOCAL_MAX_REACTIONS = 8;
-const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
+  const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
 const PARTY_MOCK_COMMENTS = [
   { id: "mock-comment-1", username: "Mia", text: "This scene is wild 🔥" },
   { id: "mock-comment-2", username: "Noah", text: "Pause after this for theories" },
@@ -71,8 +72,8 @@ const PARTY_MOCK_COMMENTS = [
 ] as const;
 const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
-const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
-const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+  const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
+  const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
 type TitleRow = {
   id: string;
   title: string;
@@ -153,6 +154,7 @@ export default function PlayerScreen() {
         : "none";
   const fallbackTitle = (titles[0] as any) ?? null;
   const fallbackVideo = getVideoSource(localTitle ?? fallbackTitle ?? {});
+  const showProtectedSessionNote = inWatchParty || isLiveModeFlag;
 
   const videoRef = useRef<Video>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
@@ -202,7 +204,6 @@ export default function PlayerScreen() {
   const [partyParticipantReactions, setPartyParticipantReactions] = useState<
     { id: string; participantId: string; participantName: string; emoji: string; isSpeaking: boolean; createdAt: number }[]
   >([]);
-  const [partyTapReactionTick, setPartyTapReactionTick] = useState(0);
   const [livePresenceEvent, setLivePresenceEvent] = useState<string | null>(null);
   const [participantReactionBoostIds, setParticipantReactionBoostIds] = useState<string[]>([]);
   const [entryBoostActive, setEntryBoostActive] = useState(false);
@@ -1172,7 +1173,6 @@ export default function PlayerScreen() {
 
     if (!isVideoReady) return;
     if (shouldAutoplayNextRef.current && nextTitleId) return;
-    if (inWatchParty) setPartyTapReactionTick((value) => value + 1);
 
     const reachedEnd =
       didJustFinishRef.current ||
@@ -1198,7 +1198,7 @@ export default function PlayerScreen() {
     } else {
       videoRef.current?.playAsync().catch(() => {});
     }
-  }, [inWatchParty, isPlaying, isVideoReady, nextTitleId, titleId]);
+  }, [isPlaying, isVideoReady, nextTitleId, titleId]);
 
   const resetGestureState = useCallback(() => {
     swipeLastAppliedStepRef.current = 0;
@@ -1700,6 +1700,7 @@ export default function PlayerScreen() {
           roomId: room.partyId,
           roomCode: room.roomCode,
           titleId: room.titleId || createTitleId,
+          source: "player-watch-party-live",
         };
         console.log("WATCH PARTY: navigating with params", navParams);
         router.push({ pathname: "/watch-party", params: navParams });
@@ -2023,12 +2024,6 @@ export default function PlayerScreen() {
   }, [activeParticipantId, bumpRoomEnergy, inWatchParty, markParticipantActive, partyParticipants, triggerParticipantLinkedReaction]);
 
   useEffect(() => {
-    if (!inWatchParty || partyTapReactionTick === 0) return;
-    const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
-    triggerLocalPartyReaction(emoji);
-  }, [inWatchParty, partyTapReactionTick, triggerLocalPartyReaction]);
-
-  useEffect(() => {
     return () => {
       Object.values(participantActiveTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
       participantActiveTimeoutsRef.current = {};
@@ -2101,14 +2096,6 @@ export default function PlayerScreen() {
     return clamp((positionMillis / durationMillis) * 100, 0, 100);
   }, [durationMillis, positionMillis]);
 
-  const participantPulseScale = participantActivityPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.12 + roomEnergy * 0.14],
-  });
-  const participantPulseOpacity = participantActivityPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.26 + roomEnergy * 0.18, 0.03 + roomEnergy * 0.05],
-  });
   const roomEnergyAuraOpacity = roomEnergyAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.05, 0.34],
@@ -2271,22 +2258,6 @@ export default function PlayerScreen() {
       entryPulseOpacity.setValue(0);
     };
   }, [entryBoostActive, entryPulseOpacity, inWatchParty]);
-
-  useEffect(() => {
-    if (!inWatchParty || !entryBoostActive) return;
-
-    const interval = setInterval(() => {
-      if (partyParticipants.length === 0) return;
-      const pool = partyParticipants.filter((participant) => participant.canSpeak || participant.isSpeaking);
-      const chosen = (pool.length > 0 ? pool : partyParticipants)[Math.floor(Math.random() * (pool.length > 0 ? pool.length : partyParticipants.length))];
-      if (!chosen) return;
-
-      const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
-      triggerParticipantLinkedReaction(chosen.id, chosen.name, emoji, !!(chosen.isSpeaking && chosen.canSpeak), false);
-    }, 820);
-
-    return () => clearInterval(interval);
-  }, [entryBoostActive, inWatchParty, partyParticipants, triggerParticipantLinkedReaction]);
 
   useEffect(() => {
     if (!inWatchParty) return;
@@ -2576,7 +2547,6 @@ export default function PlayerScreen() {
           const participantReactions = partyParticipantReactions
             .filter((entry) => entry.participantId === participant.id)
             .slice(-2);
-          const voiceLevel = participantVoiceLevelMapRef.current[participant.id] ?? new Animated.Value(0);
           const focusScale = participantFocusScaleMapRef.current[participant.id] ?? 1;
           const focusOpacity = participantFocusOpacityMapRef.current[participant.id] ?? 1;
           const idleScale = !isSpeaking ? (participantIdleScaleMapRef.current[participant.id] ?? 1) : 1;
@@ -2596,8 +2566,6 @@ export default function PlayerScreen() {
                 liveLayout && styles.participantBubbleItemLive,
                 dockLayout && styles.participantBubbleItemLiveDock,
                 !liveLayout && styles.participantBubbleItemTitleCompact,
-                isSpeaking && styles.participantBubbleSpeaking,
-                isActive && styles.participantBubbleActive,
                 shouldDim && styles.participantBubbleInactive,
                 isReactionBoosted && styles.participantBubbleReactionBoost,
                 isExpanded && styles.partyParticipantCardExpanded,
@@ -2651,55 +2619,6 @@ export default function PlayerScreen() {
                 activeOpacity={0.85}
               >
                 <View style={[styles.partyParticipantAvatarWrap, dockLayout && styles.partyParticipantAvatarWrapDock]}>
-                  {!liveLayout && isOnlineActive ? (
-                    <Animated.View
-                      pointerEvents="none"
-                      style={[
-                        styles.titleParticipantLivePulse,
-                        {
-                          opacity: participantActivityPulse.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.2, 0.56],
-                          }),
-                          transform: [
-                            {
-                              scale: participantActivityPulse.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [1, 1.12],
-                              }),
-                            },
-                          ],
-                        },
-                      ]}
-                    />
-                  ) : null}
-                  {isActive ? (
-                    <Animated.View
-                      pointerEvents="none"
-                      style={[
-                        styles.participantActivePulse,
-                        isSpeaking && styles.participantSpeakingPulse,
-                        isSpeaking && {
-                          opacity: voiceLevel.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.14, 0.5],
-                          }),
-                          transform: [
-                            {
-                              scale: voiceLevel.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [1.02, 1.16],
-                              }),
-                            },
-                          ],
-                        },
-                        {
-                          opacity: participantPulseOpacity,
-                          transform: [{ scale: participantPulseScale }],
-                        },
-                      ]}
-                    />
-                  ) : null}
                   <View
                     style={[
                       styles.participantAvatar,
@@ -2719,32 +2638,8 @@ export default function PlayerScreen() {
                       <Text style={[styles.participantInitials, liveLayout && styles.participantInitialsLive, !liveLayout && styles.participantInitialsTitleCompact]}>{initials}</Text>
                     )}
                   </View>
-                  {isActive ? (
-                    <Animated.View
-                      pointerEvents="none"
-                      style={[
-                        styles.participantActiveRing,
-                        isSpeaking && styles.participantSpeakingRing,
-                        isReactionBoosted && styles.participantReactionBoostRing,
-                        isSpeaking && {
-                          borderWidth: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [2.4 + roomEnergy * 0.8, 4.6 + roomEnergy * 1.2] }),
-                          opacity: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [0.72 + roomEnergy * 0.18, 1] }),
-                          transform: [
-                            {
-                              scale: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07 + roomEnergy * 0.05] }),
-                            },
-                          ],
-                        },
-                      ]}
-                    />
-                  ) : null}
                   {isRequesting ? <View pointerEvents="none" style={styles.participantRequestRing} /> : null}
                   <View style={[styles.participantPresenceDot, isOnlineActive ? styles.participantPresenceDotActive : styles.participantPresenceDotIdle]} />
-                  {isSpeaking ? (
-                    <View style={styles.participantSpeakingBadge}>
-                      <Text style={styles.participantSpeakingBadgeText}>LIVE</Text>
-                    </View>
-                  ) : null}
                   {participant.role === "host" || participant.role === "co-host" ? (
                     <View style={styles.participantHostBadge}>
                       <Text style={styles.participantHostBadgeText}>{participant.role === "host" ? "HOST" : "CO-HOST"}</Text>
@@ -2767,7 +2662,6 @@ export default function PlayerScreen() {
                       pointerEvents="none"
                       style={[
                         styles.participantLinkedReaction,
-                        reaction.isSpeaking && styles.participantLinkedReactionSpeaking,
                         {
                           right: reactionIndex * 14 - 2,
                           opacity: participantReactionOpacityMapRef.current[reaction.id] ?? 1,
@@ -2778,7 +2672,7 @@ export default function PlayerScreen() {
                         },
                       ]}
                     >
-                      <Text style={[styles.participantLinkedReactionText, reaction.isSpeaking && styles.participantLinkedReactionTextSpeaking]}>
+                      <Text style={styles.participantLinkedReactionText}>
                         {reaction.emoji}
                       </Text>
                     </Animated.View>
@@ -2994,8 +2888,6 @@ export default function PlayerScreen() {
           const isExpandedPresentation = presentation === "expanded";
           const isMinimizedPresentation = presentation === "minimized";
           const isFocusedPresentation = titleActiveParticipantId === participant.id;
-          const isActive = primaryActiveParticipantIds.includes(participant.id);
-          const isSpeaking = participant.isSpeaking && participant.canSpeak;
           const initials = participant.name
             .split(" ")
             .map((part: string) => part[0] ?? "")
@@ -3012,25 +2904,9 @@ export default function PlayerScreen() {
                 isExpandedPresentation && styles.titleParticipantFeedCardExpanded,
                 isMinimizedPresentation && !isFeaturedPresentation && styles.titleParticipantFeedCardMinimized,
                 isFocusedPresentation && !isFeaturedPresentation && styles.titleParticipantFeedCardFocused,
-                isSpeaking && styles.titleParticipantFeedCardSpeaking,
-                isActive && styles.titleParticipantFeedCardActive,
               ]}
             >
-              <Animated.View
-                style={[
-                  styles.titleParticipantFeedAvatarPulse,
-                  {
-                    transform: [
-                      {
-                        scale: participantActivityPulse.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [1, 1.05],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              >
+              <View style={styles.titleParticipantFeedAvatarPulse}>
                 <View style={styles.titleParticipantFeedAvatarWrap}>
                   <TouchableOpacity
                     style={styles.titleParticipantTileTap}
@@ -3118,7 +2994,7 @@ export default function PlayerScreen() {
                     </TouchableOpacity>
                   ) : null}
                 </View>
-              </Animated.View>
+              </View>
               {(!isMinimizedPresentation || isFeaturedPresentation) ? (
                 <Text
                   style={[
@@ -3176,7 +3052,7 @@ export default function PlayerScreen() {
         <View style={styles.container}>
         {!inWatchParty && !isLiveMode && isStandaloneFullscreen ? null : (
         <View style={[styles.topSection, styles.topSectionFramework]}>
-          <Text style={styles.kicker}>CHILLYWOOD · PLAYER</Text>
+          <Text style={styles.kicker}>CHI'LLYWOOD · PLAYER</Text>
           <Text style={styles.header} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
           {inWatchParty && isLiveMode ? <Text style={styles.liveModeTopLabel}>LIVE SESSION</Text> : null}
           {inWatchParty && partySyncRole ? (
@@ -3189,6 +3065,12 @@ export default function PlayerScreen() {
           ) : null}
         </View>
         )}
+
+        {showProtectedSessionNote ? (
+          <ProtectedSessionNote
+            {...getProtectedSessionCopy(isLiveModeFlag ? "live-player" : "watch-player")}
+          />
+        ) : null}
 
         {source || isLiveMode ? (
           <>
@@ -3229,7 +3111,6 @@ export default function PlayerScreen() {
                   const isSpeaking = participant.isSpeaking && participant.canSpeak;
                   const isActive = primaryActiveParticipantIds.includes(participant.id);
                   const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
-                  const isReactionBoosted = participantReactionBoostIds.includes(participant.id);
                   const participantReactions = partyParticipantReactions
                     .filter((entry) => entry.participantId === participant.id)
                     .slice(-2);
@@ -3290,33 +3171,6 @@ export default function PlayerScreen() {
                         activeOpacity={0.9}
                       >
                         <View style={styles.liveSpeakerAvatarWrap}>
-                        {isActive ? (
-                          <Animated.View
-                            pointerEvents="none"
-                            style={[
-                              styles.participantActivePulse,
-                              isSpeaking && styles.participantSpeakingPulse,
-                              isSpeaking && {
-                                opacity: voiceLevel.interpolate({
-                                  inputRange: [0, 1],
-                                  outputRange: [0.16, 0.56],
-                                }),
-                                transform: [
-                                  {
-                                    scale: voiceLevel.interpolate({
-                                      inputRange: [0, 1],
-                                      outputRange: [1.03, 1.19],
-                                    }),
-                                  },
-                                ],
-                              },
-                              {
-                                opacity: participantPulseOpacity,
-                                transform: [{ scale: participantPulseScale }],
-                              },
-                            ]}
-                          />
-                        ) : null}
                         <View style={[styles.participantAvatar, styles.participantAvatarLive, styles.liveSpeakerAvatar, participant.muted && styles.participantAvatarMuted]}>
                           {participant.avatarUrl ? (
                             <Image source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
@@ -3324,31 +3178,6 @@ export default function PlayerScreen() {
                             <Text style={[styles.participantInitials, styles.participantInitialsLive, styles.liveSpeakerInitials]}>{initials}</Text>
                           )}
                         </View>
-                        {isActive ? (
-                          <Animated.View
-                            pointerEvents="none"
-                            style={[
-                              styles.participantActiveRing,
-                              isSpeaking && styles.participantSpeakingRing,
-                              styles.liveSpeakerRing,
-                              isReactionBoosted && styles.participantReactionBoostRing,
-                              isSpeaking && {
-                                borderWidth: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [2.8 + roomEnergy * 0.9, 5.1 + roomEnergy * 1.3] }),
-                                opacity: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [0.78 + roomEnergy * 0.16, 1] }),
-                                transform: [
-                                  {
-                                    scale: voiceLevel.interpolate({ inputRange: [0, 1], outputRange: [1, 1.09 + roomEnergy * 0.05] }),
-                                  },
-                                ],
-                              },
-                            ]}
-                          />
-                        ) : null}
-                        {isSpeaking ? (
-                          <View style={[styles.participantSpeakingBadge, styles.liveSpeakerBadge]}>
-                            <Text style={styles.participantSpeakingBadgeText}>LIVE</Text>
-                          </View>
-                        ) : null}
                         {isRequesting ? <View pointerEvents="none" style={[styles.participantRequestRing, styles.liveSpeakerRequestRing]} /> : null}
                         <View style={[styles.participantPresenceDot, styles.liveSpeakerPresenceDot, isOnlineActive ? styles.participantPresenceDotActive : styles.participantPresenceDotIdle]} />
                         {participant.muted ? (
@@ -3364,7 +3193,6 @@ export default function PlayerScreen() {
                             style={[
                               styles.participantLinkedReaction,
                               styles.liveSpeakerLinkedReaction,
-                              reaction.isSpeaking && styles.participantLinkedReactionSpeaking,
                               {
                                 right: reactionIndex * 18,
                                 opacity: participantReactionOpacityMapRef.current[reaction.id] ?? 1,
@@ -3375,7 +3203,7 @@ export default function PlayerScreen() {
                               },
                             ]}
                           >
-                            <Text style={[styles.participantLinkedReactionText, reaction.isSpeaking && styles.participantLinkedReactionTextSpeaking]}>
+                            <Text style={styles.participantLinkedReactionText}>
                               {reaction.emoji}
                             </Text>
                           </Animated.View>
@@ -3674,8 +3502,13 @@ export default function PlayerScreen() {
                   </View>
                 ) : null}
 
-                {partyCommentsOpen ? (
-                  <View style={[styles.partyCommentsDrawer, styles.partyCommentsDrawerWatchPartyTitle]}>
+                {partyCommentsOpen && !isLiveMode ? (
+                  <View
+                    style={[
+                      styles.partyCommentsDrawer,
+                      styles.partyCommentsDrawerWatchPartyTitle,
+                    ]}
+                  >
                     <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
                     <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
                       {partyComments.map((comment) => (
@@ -3742,7 +3575,7 @@ export default function PlayerScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]} onPress={onWatchParty} activeOpacity={0.85}>
-                    <Text style={styles.partyOverlayChipText}>Watch Party</Text>
+                    <Text style={styles.partyOverlayChipText}>Live Watch-Party</Text>
                   </TouchableOpacity>
                 </Animated.View>
               </View>
@@ -3835,11 +3668,49 @@ export default function PlayerScreen() {
           {inWatchParty && isLiveMode && source ? (
             <LiveLowerDock
               rootStyle={[styles.watchPartyLiveBottomDock, hasActiveRailParticipants && styles.watchPartyLiveBottomDockActive]}
-              presenceToast={livePresenceEvent ? (
-                <View style={[styles.livePresenceEventToast, styles.watchPartyLivePresenceToast]}>
-                  <Text style={styles.livePresenceEventText} numberOfLines={1}>
-                    {livePresenceEvent}
-                  </Text>
+              presenceToast={partyCommentsOpen || livePresenceEvent ? (
+                <View style={styles.watchPartyLivePresenceStack}>
+                  {partyCommentsOpen ? (
+                    <View
+                      style={[
+                        styles.partyCommentsDrawer,
+                        styles.partyCommentsDrawerWatchPartyTitle,
+                        styles.watchPartyLiveCommentsDrawer,
+                      ]}
+                    >
+                      <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
+                      <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
+                        {partyComments.map((comment) => (
+                          <Text key={comment.id} style={styles.partyCommentsLine}>
+                            <Text style={styles.partyCommentsAuthor}>{comment.username}: </Text>
+                            {comment.text}
+                          </Text>
+                        ))}
+                      </ScrollView>
+                      <View style={styles.partyCommentsInputRow}>
+                        <TextInput
+                          value={partyCommentDraft}
+                          onChangeText={setPartyCommentDraft}
+                          placeholder="Add a comment"
+                          placeholderTextColor="#8B90A0"
+                          style={styles.partyCommentsInput}
+                          returnKeyType="send"
+                          onSubmitEditing={onSendPartyComment}
+                        />
+                        <TouchableOpacity style={styles.partyCommentsSendBtn} onPress={onSendPartyComment} activeOpacity={0.85}>
+                          <Text style={styles.partyCommentsSendBtnText}>Send</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {livePresenceEvent ? (
+                    <View style={[styles.livePresenceEventToast, styles.watchPartyLivePresenceToast]}>
+                      <Text style={styles.livePresenceEventText} numberOfLines={1}>
+                        {livePresenceEvent}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               ) : undefined}
               participantStrip={(
@@ -3852,9 +3723,12 @@ export default function PlayerScreen() {
                 icon: "🗨️",
                 label: "Comments",
                 activeOpacity: 0.85,
-                onPress: () => setPartyCommentsOpen((value) => !value),
-                buttonStyle: styles.watchPartyLiveFooterPrimaryBtn,
-                labelStyle: styles.watchPartyLiveFooterPrimaryLabel,
+                onPress: () => {
+                  setReactionPickerOpen(false);
+                  setPartyCommentsOpen((value) => !value);
+                },
+                buttonStyle: partyCommentsOpen ? styles.watchPartyLiveFooterActiveBtn : undefined,
+                labelStyle: partyCommentsOpen ? styles.watchPartyLiveFooterActiveLabel : undefined,
               }}
               trailingActions={[
                 {
@@ -3862,7 +3736,12 @@ export default function PlayerScreen() {
                   icon: "✨",
                   label: "React",
                   activeOpacity: 0.85,
-                  onPress: () => setReactionPickerOpen((value) => !value),
+                  onPress: () => {
+                    setPartyCommentsOpen(false);
+                    setReactionPickerOpen((value) => !value);
+                  },
+                  buttonStyle: reactionPickerOpen ? styles.watchPartyLiveFooterActiveBtn : undefined,
+                  labelStyle: reactionPickerOpen ? styles.watchPartyLiveFooterActiveLabel : undefined,
                 },
               ]}
               footerStyles={mapFooterControlRowStyles({
@@ -4008,7 +3887,7 @@ const styles = StyleSheet.create({
     width: 210,
     height: 210,
     borderRadius: 120,
-    backgroundColor: "rgba(220,20,60,0.16)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   liveSpeakingLabel: {
     color: "#F6DDE4",
@@ -4098,7 +3977,7 @@ const styles = StyleSheet.create({
   liveSpeakerVoiceFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "rgba(255,112,142,0.95)",
+    backgroundColor: "rgba(132,220,255,0.92)",
   },
   livePresenceEventToast: {
     borderRadius: 999,
@@ -4122,7 +4001,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 120,
-    backgroundColor: "rgba(255,70,110,0.22)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   roomEnergyAura: {
     position: "absolute",
@@ -4131,7 +4010,7 @@ const styles = StyleSheet.create({
     width: 250,
     height: 250,
     borderRadius: 130,
-    backgroundColor: "rgba(220,20,60,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
   liveModeParticipantsWrap: {
     width: "100%",
@@ -4853,17 +4732,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   titleParticipantFeedCardActive: {
-    backgroundColor: "rgba(220,20,60,0.14)",
-    shadowColor: "#DC143C",
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    shadowColor: "rgba(255,255,255,0.2)",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
   },
   titleParticipantFeedCardSpeaking: {
-    backgroundColor: "rgba(220,20,60,0.2)",
-    shadowColor: "#FF668A",
-    shadowOpacity: 0.14,
-    shadowRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    shadowColor: "rgba(255,255,255,0.24)",
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
     shadowOffset: { width: 0, height: 1 },
   },
   titleParticipantFeedAvatarPulse: {
@@ -4981,8 +4860,8 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,94,130,0.72)",
-    backgroundColor: "rgba(220,20,60,0.16)",
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   participantBubbleItemLive: {
     width: 94,
@@ -4998,19 +4877,19 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   participantBubbleActive: {
-    borderColor: "rgba(220,20,60,0.58)",
-    backgroundColor: "rgba(220,20,60,0.18)",
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   participantBubbleSpeaking: {
-    borderColor: "rgba(220,20,60,0.9)",
-    backgroundColor: "rgba(220,20,60,0.24)",
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
   participantBubbleInactive: {
     opacity: 0.58,
   },
   participantBubbleReactionBoost: {
-    borderColor: "rgba(255,96,128,0.92)",
-    backgroundColor: "rgba(220,20,60,0.22)",
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
   partyParticipantCardExpanded: {
     width: 232,
@@ -5096,16 +4975,16 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    borderWidth: 2.5,
-    borderColor: "rgba(220,20,60,0.98)",
+    borderWidth: 1.4,
+    borderColor: "rgba(255,255,255,0.34)",
   },
   participantSpeakingRing: {
-    borderWidth: 3,
-    borderColor: "rgba(255,98,130,0.98)",
+    borderWidth: 1.6,
+    borderColor: "rgba(255,255,255,0.4)",
   },
   participantReactionBoostRing: {
-    borderColor: "rgba(255,128,156,1)",
-    borderWidth: 3.2,
+    borderColor: "rgba(255,255,255,0.44)",
+    borderWidth: 1.8,
   },
   participantRequestRing: {
     position: "absolute",
@@ -5124,10 +5003,10 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: "rgba(220,20,60,0.36)",
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
   participantSpeakingPulse: {
-    backgroundColor: "rgba(255,90,120,0.46)",
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
   participantRequestBadge: {
     position: "absolute",
@@ -5189,8 +5068,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   participantLinkedReactionSpeaking: {
-    backgroundColor: "rgba(220,20,60,0.3)",
-    borderColor: "rgba(255,132,160,0.9)",
+    backgroundColor: "rgba(6,6,10,0.78)",
+    borderColor: "rgba(255,255,255,0.3)",
   },
   participantLinkedReactionText: {
     fontSize: 12,
@@ -5288,54 +5167,62 @@ const styles = StyleSheet.create({
     color: "#E9EDF8",
   },
   watchPartyLiveBottomDock: {
-    marginTop: 8,
-    marginBottom: 8,
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: 0,
-    borderRadius: 0,
-    borderWidth: 0,
-    backgroundColor: "transparent",
+    marginTop: 6,
+    marginBottom: 4,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(8,12,18,0.72)",
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   watchPartyLiveBottomDockActive: {
-    borderWidth: 0,
-    backgroundColor: "transparent",
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(8,12,18,0.72)",
   },
   watchPartyLivePresenceToast: {
     alignSelf: "center",
-    marginBottom: 6,
+    marginBottom: 4,
     maxWidth: "96%",
   },
+  watchPartyLivePresenceStack: {
+    gap: 4,
+  },
   watchPartyLiveStripWrap: {
-    borderRadius: 15,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
-    backgroundColor: "rgba(8,10,16,0.66)",
-    paddingVertical: 11,
-    paddingHorizontal: 11,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(8,10,16,0.48)",
+    paddingVertical: 2,
+    paddingHorizontal: 2,
     marginBottom: 0,
-    shadowColor: "#000",
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
   },
   footerControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 6,
+    gap: 5,
+    marginTop: 4,
     alignSelf: "center",
   },
   footerIconBtn: {
     width: 58,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(0,0,0,0.36)",
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(8,10,16,0.72)",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 5,
     gap: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   footerReactionQuickRow: {
     flexDirection: "row",
@@ -5359,12 +5246,16 @@ const styles = StyleSheet.create({
   },
   footerIconBtnText: { color: "#F1F1F1", fontSize: 15, fontWeight: "900" },
   footerIconBtnLabel: { color: "#D4D4D4", fontSize: 9.5, fontWeight: "800" },
-  watchPartyLiveFooterPrimaryBtn: {
-    borderColor: "rgba(220,20,60,0.7)",
-    backgroundColor: "rgba(220,20,60,0.26)",
+  watchPartyLiveFooterActiveBtn: {
+    borderColor: "rgba(172,196,255,0.52)",
+    backgroundColor: "rgba(120,156,245,0.22)",
+    shadowColor: "rgba(140,176,255,0.86)",
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
-  watchPartyLiveFooterPrimaryLabel: {
-    color: "#fff",
+  watchPartyLiveFooterActiveLabel: {
+    color: "#F4F7FF",
   },
   reactionPickerRoot: {
     ...StyleSheet.absoluteFillObject,
@@ -5377,13 +5268,30 @@ const styles = StyleSheet.create({
   },
   reactionPickerSheet: {
     marginHorizontal: 8,
-    marginBottom: 112,
+    marginBottom: 126,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(7,10,16,0.95)",
     maxHeight: 260,
     padding: 10,
+  },
+  watchPartyLiveCommentsDrawer: {
+    position: "relative",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    marginBottom: 0,
+    borderRadius: 12,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(7,10,16,0.9)",
+    maxHeight: 132,
+    paddingTop: 6,
+    paddingBottom: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   reactionPickerHeader: {
     flexDirection: "row",
@@ -5440,8 +5348,8 @@ const styles = StyleSheet.create({
     top: -7,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.95)",
-    backgroundColor: "rgba(220,20,60,0.92)",
+    borderColor: "rgba(255,255,255,0.28)",
+    backgroundColor: "rgba(8,10,16,0.86)",
     paddingHorizontal: 5,
     paddingVertical: 1,
   },

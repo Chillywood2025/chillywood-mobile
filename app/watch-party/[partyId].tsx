@@ -35,10 +35,11 @@ import {
     UIManager,
     View
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
 import { reportDebugError, reportDebugParty, reportDebugQuery } from "../../_lib/devDebug";
 import { supabase } from "../../_lib/supabase";
-import { readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
+import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
 import {
     emitSyncEvent,
     getPartyRoom,
@@ -46,22 +47,22 @@ import {
     updateRoomPlayback,
     type WatchPartyState,
 } from "../../_lib/watchParty";
-import { RoomReactionChipRow } from "../../components/room/control-primitives";
-import {
-    buildReactionChipTokens,
-    mapReactionChipRowStyles,
-} from "../../components/room/control-style-tokens";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
+import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
 import {
+    buildParticipantProfileParams,
+    buildSharedParticipantIdentity,
     computeBottomStripParticipants,
     computeDominantSpeakerId,
     createDefaultParticipantState,
     getInitials,
     getParticipantRoleLabel,
     mergeMissingParticipantStates,
-    resolveIdentityName
+    normalizeSharedRoomMode,
+    resolveIdentityName,
+    type SharedParticipantIdentity,
 } from "./_lib/_room-shared";
 import { buildPartyRoomParticipantEntries, shouldShowHostControls } from "./_lib/_waiting-room-shared";
 
@@ -85,16 +86,8 @@ type RoomChatMessageRow = {
   created_at: string;
 };
 
-type PresenceParticipant = {
-  userId: string;
-  role: "host" | "viewer";
-  displayName: string;
+type PresenceParticipant = SharedParticipantIdentity & {
   avatarIndex?: number;
-  avatarUrl?: string;
-  cameraPreviewUrl?: string;
-  isLive?: boolean;
-  isSpeaking?: boolean;
-  isMuted?: boolean;
 };
 
 type ParticipantLocalState = {
@@ -133,15 +126,29 @@ const formatPartyTime = (millis: number) => {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
+const getSafeRoomTitleLabel = (titleName: string | null, room: WatchPartyState, fallbackLabel: string) => {
+  const resolvedTitle = String(titleName ?? "").trim();
+  if (resolvedTitle) return resolvedTitle;
+  return room.roomType === "title" ? "Selected Title" : fallbackLabel;
+};
+
 export default function WatchPartyRoomScreen() {
-  const { partyId: partyIdParam, titleId: titleIdParam } = useLocalSearchParams<{
+  const safeAreaInsets = useSafeAreaInsets();
+  const { partyId: partyIdParam, titleId: titleIdParam, roomCode: roomCodeParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{
     partyId?: string;
     titleId?: string;
+    roomCode?: string;
+    mode?: string;
+    source?: string;
   }>();
   const router = useRouter();
 
   const partyId = (Array.isArray(partyIdParam) ? partyIdParam[0] : partyIdParam) ?? "";
   const titleIdHint = Array.isArray(titleIdParam) ? titleIdParam[0] : titleIdParam;
+  const roomCodeHint = String(Array.isArray(roomCodeParam) ? roomCodeParam[0] : roomCodeParam ?? "").trim().toUpperCase();
+  const roomModeParam = Array.isArray(modeParam) ? modeParam[0] : modeParam;
+  const source = String(Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "").trim().toLowerCase();
+  const sharedRoomMode = normalizeSharedRoomMode(roomModeParam, "live");
 
   // ── Core state ───────────────────────────────────────────────────────────────
   const [room, setRoom] = useState<WatchPartyState | null>(null);
@@ -167,10 +174,8 @@ export default function WatchPartyRoomScreen() {
   const [featuredParticipantById, setFeaturedParticipantById] = useState<Record<string, boolean>>({});
   const [activeParticipantId, setActiveParticipantId] = useState<string>("");
   const [participantPresentationById, setParticipantPresentationById] = useState<Record<string, "compact" | "expanded">>({});
-  const [recentlyJoinedById, setRecentlyJoinedById] = useState<Record<string, boolean>>({});
   const [participantStateById, setParticipantStateById] = useState<Record<string, ParticipantLocalState>>({});
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
-  const [micLevelDb, setMicLevelDb] = useState(-160);
   const [tapPulseById, setTapPulseById] = useState<Record<string, boolean>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<LiveBubbleParticipant | null>(null);
   const chatScrollRef = useRef<ScrollView>(null);
@@ -193,11 +198,9 @@ export default function WatchPartyRoomScreen() {
   const myRoleRef = useRef<"host" | "viewer" | null>(null);
   const reactionCounterRef = useRef(0);
   const participantReactionTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const participantJoinPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const micRecordingRef = useRef<Audio.Recording | null>(null);
   const micSpeakingRef = useRef(false);
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const seenParticipantIdsRef = useRef<string[]>([]);
   const tapPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const activityPulse = useRef(new Animated.Value(0)).current;
   const liveBubbleOrderRef = useRef<string>("");
@@ -452,8 +455,6 @@ export default function WatchPartyRoomScreen() {
       }
       Object.values(participantReactionTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
       participantReactionTimeoutsRef.current = {};
-      Object.values(participantJoinPulseTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
-      participantJoinPulseTimeoutsRef.current = {};
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyId]);
@@ -481,22 +482,25 @@ export default function WatchPartyRoomScreen() {
             ? (presArr[0] as { userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean })
             : {};
           const normalizedUserId = String(p.userId ?? key).trim();
-          const normalizedUsername = resolveIdentityName(
-            p.username,
-            normalizedUserId === trackedUserId ? myProfileUsernameRef.current : "",
-            "Guest",
-          );
           const normalizedCameraPreviewUrl = String(p.cameraPreviewUrl ?? p.camera_preview_url ?? "").trim() || (normalizedUserId === trackedUserId ? myCameraPreviewUrlRef.current : "");
-          return {
+          const identity = buildSharedParticipantIdentity({
             userId: normalizedUserId,
-            role: (p.role === "host" ? "host" : "viewer") as "host" | "viewer",
-            displayName: normalizedUsername,
-            avatarIndex: p.avatarIndex,
+            role: p.role,
+            displayNameCandidates: [
+              p.username,
+              normalizedUserId === trackedUserId ? myProfileUsernameRef.current : "",
+              "Guest",
+            ],
             avatarUrl: p.avatarUrl,
-            cameraPreviewUrl: normalizedCameraPreviewUrl || undefined,
-            isLive: !!p.isLive,
-            isSpeaking: !!p.isSpeaking,
-            isMuted: !!p.isMuted,
+            cameraPreviewUrl: normalizedCameraPreviewUrl,
+            currentUserId: trackedUserId,
+            isLive: p.isLive,
+            isSpeaking: p.isSpeaking,
+            isMuted: p.isMuted,
+          });
+          return {
+            ...identity,
+            avatarIndex: p.avatarIndex,
           };
         });
         setParticipants(list);
@@ -923,7 +927,6 @@ export default function WatchPartyRoomScreen() {
           console.log("WATCH PARTY MIC METER", { isRecording: status.isRecording, metering: status.metering });
           if (!status.isRecording || cancelled) return;
           const metering = typeof status.metering === "number" ? status.metering : -160;
-          setMicLevelDb(metering);
           const speaking = metering > MIC_SPEAKING_THRESHOLD_DB;
           if (speaking) {
             if (micReleaseTimeoutRef.current) {
@@ -988,13 +991,20 @@ export default function WatchPartyRoomScreen() {
   }, [myUserId, emitParticipantSpeaking]);
 
   // ── Share / invite ───────────────────────────────────────────────────────────
+  const displayRoomCode = String(room?.roomCode ?? "").trim().toUpperCase() || roomCodeHint;
+  const roomCodeCardValue = displayRoomCode || "Room code unavailable";
+
   const onShareCode = useCallback(() => {
-    const roomCode = room?.roomCode ?? partyId;
+    const roomCode = displayRoomCode;
+    if (!roomCode) {
+      Alert.alert("Room code unavailable", "This room code is still syncing. Try sharing again in a moment.");
+      return;
+    }
     Share.share({
-      message: `Join my Chillywood Watch Party!\n\nRoom code: ${roomCode}\n\nOpen Chillywood → Watch Party → enter the code to join.`,
+      message: `Join my Chi'llywood Watch Party!\n\nRoom code: ${roomCode}\n\nOpen Chi'llywood -> Watch Party -> enter the code to join.`,
       title: "Watch Party Invite",
     }).catch(() => {});
-  }, [partyId, room?.roomCode]);
+  }, [displayRoomCode]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async (opts?: { liveMode?: boolean }) => {
@@ -1008,10 +1018,6 @@ export default function WatchPartyRoomScreen() {
 
     if (!targetTitleId) {
       targetTitleId = String(titleIdHint ?? "").trim();
-    }
-
-    if (!targetTitleId) {
-      targetTitleId = String((localTitles[0] as any)?.id ?? "").trim();
     }
 
     if (!nextPartyId || !targetTitleId) {
@@ -1142,17 +1148,21 @@ export default function WatchPartyRoomScreen() {
       ];
 
       const hasResolvedSelf = !!trackedUserId && next.some((participant) => participant.userId === trackedUserId);
+      const selfFallbackIdentity = buildSharedParticipantIdentity({
+        userId: trackedUserId,
+        role: (myRoleRef.current ?? "viewer") === "host" ? "host" : "viewer",
+        displayNameCandidates: [resolvedCurrentUsername, "Guest"],
+        avatarUrl: "",
+        cameraPreviewUrl: myCameraPreviewUrlRef.current || "",
+        currentUserId: trackedUserId,
+        isLive: !!isLive,
+        isSpeaking: !!isSpeakingById[trackedUserId],
+        isMuted: false,
+      });
       const withSelf = hasResolvedSelf
         ? [...next]
         : [{
-          userId: trackedUserId,
-          role: (myRoleRef.current ?? "viewer") === "host" ? "host" : "viewer",
-          displayName: resolvedCurrentUsername,
-          avatarUrl: undefined,
-          cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
-          isLive: !!isLive,
-          isSpeaking: !!isSpeakingById[trackedUserId],
-          isMuted: false,
+          ...selfFallbackIdentity,
           isPlaceholder: true,
         } as LiveBubbleParticipant, ...next];
 
@@ -1201,36 +1211,10 @@ export default function WatchPartyRoomScreen() {
           createDefaultParticipantState({
             role: participant.role,
             isSpeaking: participant.isSpeaking,
+            isMuted: participant.isMuted,
           }),
       );
     });
-  }, [liveBubbleParticipants]);
-
-  useEffect(() => {
-    const currentIds = liveBubbleParticipants.map((participant) => participant.userId).filter(Boolean);
-    const previousIds = seenParticipantIdsRef.current;
-    const joinedIds = currentIds.filter((id) => !previousIds.includes(id));
-
-    if (joinedIds.length > 0) {
-      setRecentlyJoinedById((prev) => {
-        const next = { ...prev };
-        joinedIds.forEach((id) => {
-          next[id] = true;
-          if (participantJoinPulseTimeoutsRef.current[id]) clearTimeout(participantJoinPulseTimeoutsRef.current[id]);
-          participantJoinPulseTimeoutsRef.current[id] = setTimeout(() => {
-            setRecentlyJoinedById((innerPrev) => {
-              const innerNext = { ...innerPrev };
-              delete innerNext[id];
-              return innerNext;
-            });
-            delete participantJoinPulseTimeoutsRef.current[id];
-          }, 1400);
-        });
-        return next;
-      });
-    }
-
-    seenParticipantIdsRef.current = currentIds;
   }, [liveBubbleParticipants]);
 
   const presenceParticipants: PresenceParticipant[] = liveBubbleParticipants;
@@ -1247,7 +1231,6 @@ export default function WatchPartyRoomScreen() {
     [presenceParticipants, currentUserBubbleId, participantReactions],
   );
   const isCurrentUserInParticipantBubbles = !!currentUserBubbleId && liveBubbleParticipants.some((participant) => participant.userId === currentUserBubbleId);
-  const selfParticipant = liveBubbleParticipants.find((participant) => participant.userId === currentUserBubbleId) ?? null;
   const dominantLiveSpeakerId = useMemo(() => {
     return computeDominantSpeakerId(
       liveBubbleParticipants,
@@ -1276,13 +1259,20 @@ export default function WatchPartyRoomScreen() {
         avatarUrl: participant.avatarUrl,
         cameraPreviewUrl: participant.cameraPreviewUrl,
         isSpeaking: participant.isSpeaking,
+        isLive: participant.isLive,
+        isMuted: participant.isMuted,
+        isPresent: true,
       })),
     [bottomStripParticipants],
   );
-  const pulseOpacity = activityPulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.9] });
-  const pulseScale = activityPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.11] });
-  const selfPulseOpacity = activityPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
-  const selfPulseScale = activityPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+  const onBottomStripParticipantPress = useCallback((participantId: string) => {
+    if (!participantId) return;
+    const participant = liveBubbleParticipants.find((entry) => entry.userId === participantId)
+      ?? bottomStripParticipants.find((entry) => entry.userId === participantId);
+    if (!participant) return;
+    triggerBubbleTapPulse(participantId);
+    setSelectedParticipant(participant);
+  }, [liveBubbleParticipants, bottomStripParticipants, triggerBubbleTapPulse]);
   const closeParticipantModal = useCallback(() => {
     setSelectedParticipant(null);
   }, []);
@@ -1324,6 +1314,26 @@ export default function WatchPartyRoomScreen() {
       : isSyncUnstable
         ? `Resyncing with host · ${isPlaying ? "Playing" : "Paused"}`
         : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.playbackPositionMillis ?? 0)}`;
+  const partyRoomTitleContext = getSafeRoomTitleLabel(titleName, room, "Selected Title");
+  const roomStatusLabel = isLiveRoom ? "Live Room" : "Party Room";
+  const roomCardLabel = isLiveRoom ? "LIVE ROOM" : "PARTY ROOM";
+  const roomCardTitle = isLiveRoom ? "Live Room" : "Party Room";
+  const roomCardSubtext = isLiveRoom
+    ? "Host and viewer control room for the live session."
+    : `Watching together: ${partyRoomTitleContext}`;
+  const selectedParticipantUserId = String(selectedParticipant?.userId ?? "").trim();
+  const selectedParticipantProfile = selectedParticipant
+    ? buildUserChannelProfile({
+        id: selectedParticipantUserId,
+        displayName: selectedParticipant.displayName,
+        avatarUrl: selectedParticipant.avatarUrl,
+        role: selectedParticipant.role,
+        isLive: selectedParticipant.isLive,
+        fallbackDisplayName: "Participant",
+      })
+    : null;
+  const isSelectedParticipantSelf = !!selectedParticipantUserId && selectedParticipantUserId === currentUserBubbleId;
+  const canShowProfileAction = !!selectedParticipantUserId && !isSelectedParticipantSelf;
 
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
@@ -1337,7 +1347,8 @@ export default function WatchPartyRoomScreen() {
         allowCameraPreview={isNativeCameraPlatform}
         cameraPermissionGranted={!!cameraPermission?.granted}
         tapPulseById={tapPulseById}
-        pointerEvents="none"
+        pointerEvents="box-none"
+        onParticipantPress={onBottomStripParticipantPress}
         styles={{
           overlay: styles.bottomLiveStripOverlay,
           content: styles.bottomLiveStripContent,
@@ -1354,15 +1365,12 @@ export default function WatchPartyRoomScreen() {
           cameraDominant: styles.bottomLiveBubbleCameraDominant,
           image: styles.bottomLiveBubbleImage,
           initialText: styles.bottomLiveBubbleInitial,
+          presenceDot: styles.bottomLiveBubblePresenceDot,
+          presenceDotLive: styles.bottomLiveBubblePresenceDotLive,
+          presenceDotIdle: styles.bottomLiveBubblePresenceDotIdle,
+          mutedIconText: styles.bottomLiveBubbleMutedIcon,
         }}
       />
-      {myUserId ? (
-        <View style={{ position: "absolute", top: 56, left: 12, zIndex: 40, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.55)" }}>
-          <Text style={{ color: "#D9E3FF", fontSize: 11 }}>Meter: {micLevelDb.toFixed(1)} dB</Text>
-          <Text style={{ color: "#D9E3FF", fontSize: 11 }}>Speaking: {String(!!isSpeakingById[myUserId])}</Text>
-          <Text style={{ color: "#D9E3FF", fontSize: 11 }}>Threshold: {MIC_SPEAKING_THRESHOLD_DB} dB</Text>
-        </View>
-      ) : null}
       {backgroundSource ? (
         <View style={styles.fullBackground} pointerEvents="none">
           <ImageBackground
@@ -1390,7 +1398,7 @@ export default function WatchPartyRoomScreen() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={12} activeOpacity={0.75}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>CHILLYWOOD · WATCH PARTY</Text>
+          <Text style={styles.kicker}>CHI'LLYWOOD · WATCH PARTY</Text>
           {/* Connection badge */}
           <View style={[styles.connBadge, { borderColor: connColor[connState] + "44" }]}>
             <View style={[styles.connDot, { backgroundColor: connColor[connState] }]} />
@@ -1402,7 +1410,7 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.liveRow}>
           <View style={[styles.liveDot, { backgroundColor: isLiveRoom ? "#DC143C" : isPlaying ? "#2ecc40" : "#b58900" }]} />
           <Text style={[styles.liveText, { color: isLiveRoom ? "#F7D6DD" : isPlaying ? "#2ecc40" : "#b58900" }]}>
-            {isLiveRoom ? "Live Room" : isPlaying ? "Playing" : "Paused"}
+            {roomStatusLabel}
           </Text>
           <View style={{ flex: 1 }} />
           <View style={[styles.rolePill, isHost && styles.rolePillHost]}>
@@ -1411,50 +1419,6 @@ export default function WatchPartyRoomScreen() {
             </Text>
           </View>
         </View>
-
-        {isLiveRoom && !isCurrentUserInParticipantBubbles && (
-          <View style={[styles.liveSelfTile, isLive ? styles.liveSelfTileOn : styles.liveSelfTileOff]}>
-            <View style={styles.liveSelfTileHeader}>
-              <Text style={styles.liveSelfTileKicker}>YOUR TILE</Text>
-              {isLive ? (
-                <View style={styles.liveNowBadge}>
-                  <Text style={styles.liveNowBadgeText}>LIVE</Text>
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.liveSelfTileBody}>
-              <View style={[styles.liveSelfAvatar, isLive && styles.liveSelfAvatarOn]}>
-                {isLive ? (
-                  <Animated.View
-                    pointerEvents="none"
-                    style={[
-                      styles.liveSelfAvatarPulse,
-                      {
-                        opacity: selfPulseOpacity,
-                        transform: [{ scale: selfPulseScale }],
-                      },
-                    ]}
-                  />
-                ) : null}
-                {(selfParticipant?.cameraPreviewUrl || selfParticipant?.avatarUrl || myCameraPreviewUrlRef.current) ? (
-                  <View style={styles.liveSelfAvatarFaceClip}>
-                    {isNativeCameraPlatform && cameraPermission?.granted && myUserId ? (
-                      <CameraView style={styles.liveSelfAvatarCameraFill} facing="front" mute mirror />
-                    ) : (
-                      <Image source={{ uri: String(selfParticipant?.cameraPreviewUrl || myCameraPreviewUrlRef.current || selfParticipant?.avatarUrl || "") }} style={styles.liveSelfAvatarImage} resizeMode="cover" />
-                    )}
-                  </View>
-                ) : (
-                  <Text style={styles.liveSelfAvatarInitials}>{getInitials("You")}</Text>
-                )}
-              </View>
-              <View style={styles.liveSelfMeta}>
-                <Text style={styles.liveSelfName}>You</Text>
-                <Text style={styles.liveSelfStatus}>{isLive ? "Broadcasting" : "Camera preview offline"}</Text>
-              </View>
-            </View>
-          </View>
-        )}
 
         {!isLiveRoom && (
           <View style={styles.syncStatusCard}>
@@ -1465,21 +1429,11 @@ export default function WatchPartyRoomScreen() {
         )}
 
         {/* ── Title card ─────────────────────────────────────────────── */}
-        {isLiveRoom ? (
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>LIVE ROOM</Text>
-            <Text style={styles.cardTitle} numberOfLines={2}>Live Room</Text>
-            <Text style={styles.liveRoomSubtext}>Social-first room for chat, reactions, and presence.</Text>
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>NOW WATCHING</Text>
-            <Text style={styles.cardTitle} numberOfLines={2}>
-              {titleName ?? room.titleId ?? "Live Room"}
-            </Text>
-            <Text style={styles.liveRoomSubtext}>Watching together with live chat, reactions, and presence.</Text>
-          </View>
-        )}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>{roomCardLabel}</Text>
+          <Text style={styles.cardTitle} numberOfLines={2}>{roomCardTitle}</Text>
+          <Text style={styles.liveRoomSubtext}>{roomCardSubtext}</Text>
+        </View>
 
         <View style={styles.liveBubblesSection}>
           <Text style={styles.sectionKicker}>IN THE ROOM</Text>
@@ -1494,19 +1448,14 @@ export default function WatchPartyRoomScreen() {
                 role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
                 isRemoved: false,
               };
-              const isCurrentUser = participant.userId === currentUserBubbleId || (!currentUserBubbleId && index === 0);
-              const isActive = participant.role === "host" || !!participant.isLive || (isCurrentUser && isLive);
+              const isCurrentUser = participant.userId === currentUserBubbleId;
               const isFeatured = !!featuredParticipantById[participant.userId];
               const isFocused = participant.userId === activeParticipantId;
               const isMuted = participantState.isMuted;
               const isSpeakerRole = participantState.role === "speaker";
-              const isSpeaking = !isMuted && (isSpeakingById[participant.userId] || (isSpeakerRole && !!participant.isSpeaking));
-              const isDominantSpeaker = !!dominantLiveSpeakerId && participant.userId === dominantLiveSpeakerId && isSpeaking;
               const isRemoved = participantState.isRemoved;
-              const isRecentlyJoined = !!recentlyJoinedById[participant.userId];
               const presentation = participantPresentationById[participant.userId] ?? "compact";
               const isExpanded = presentation === "expanded";
-              const hasSpeakingVisual = !isFeatured && !isMuted && isDominantSpeaker;
               const canModerateParticipant = participantState.role !== "host";
               const showLocalCameraPreview = isNativeCameraPlatform && isCurrentUser && !!cameraPermission?.granted;
               const roleLabel = getParticipantRoleLabel(participantState);
@@ -1619,7 +1568,7 @@ export default function WatchPartyRoomScreen() {
                       </TouchableOpacity>
                     </View>
                   ) : null}
-                  <View style={[styles.liveBubbleTapWrap, tapPulseById[participant.userId] && styles.liveBubbleTapWrapPulsed]}>
+                  <View style={styles.liveBubbleTapWrap}>
                     <View
                       style={[
                         styles.liveBubble,
@@ -1627,31 +1576,13 @@ export default function WatchPartyRoomScreen() {
                         isFocused && !isFeatured && styles.liveBubbleFocused,
                         isFeatured && styles.liveBubbleFeatured,
                         isCurrentUser && styles.liveBubbleMe,
-                        isActive && styles.liveBubbleActive,
-                        !isDominantSpeaker && styles.liveBubbleNonSpeaking,
-                        hasSpeakingVisual && styles.liveBubbleSpeaking,
-                        hasSpeakingVisual && styles.liveBubbleDominant,
                       ]}
                     >
-                      {(hasSpeakingVisual || isRecentlyJoined) ? (
-                        <Animated.View
-                          pointerEvents="none"
-                          style={[
-                            styles.liveBubbleActiveRing,
-                            hasSpeakingVisual && styles.liveBubbleActiveRingSpeaking,
-                            hasSpeakingVisual && styles.liveBubbleActiveRingDominant,
-                            {
-                              opacity: pulseOpacity,
-                              transform: [{ scale: pulseScale }],
-                            },
-                          ]}
-                        />
-                      ) : null}
                       {(showLocalCameraPreview || bubbleMediaUri) ? (
                         <View style={styles.liveBubbleFaceClip}>
                           {showLocalCameraPreview ? (
                             <CameraView
-                              style={[styles.liveBubbleCameraFill, isDominantSpeaker && styles.liveBubbleCameraDominant]}
+                              style={styles.liveBubbleCameraFill}
                               facing="front"
                               mute
                               mirror
@@ -1696,8 +1627,6 @@ export default function WatchPartyRoomScreen() {
                   <Text
                     style={[
                       styles.liveBubbleRole,
-                      isSpeaking && styles.liveBubbleRoleSpeaking,
-                      participant.role === "host" && styles.liveBubbleRoleHost,
                     ]}
                     numberOfLines={1}
                   >
@@ -1711,7 +1640,7 @@ export default function WatchPartyRoomScreen() {
 
         {/* ── Invite card ────────────────────────────────────────────── */}
         <RoomCodeInviteCard
-          roomCode={room.roomCode}
+          roomCode={roomCodeCardValue}
           actionLabel="Share invite ↗"
           onActionPress={onShareCode}
           codeSelectable
@@ -1725,15 +1654,17 @@ export default function WatchPartyRoomScreen() {
           }}
         />
 
+        <ProtectedSessionNote {...getProtectedSessionCopy(isLiveRoom ? "live-room" : "party-room")} />
+
         {/* ── Participant list ────────────────────────────────────────── */}
         {waitingRoomParticipantSummary.totalCount > 0 && (
           <View style={styles.participantsWrap}>
-            <Text style={styles.sectionKicker}>IN THE ROOM</Text>
+            {!isLiveRoom ? <Text style={styles.sectionKicker}>IN THE ROOM</Text> : null}
             <View style={[styles.participantsCard, isLiveRoom && styles.participantsCardLive]}>
             <Text style={styles.participantsLabel}>
               <Text style={styles.viewerCount}>👥 {waitingRoomParticipantSummary.totalCount}</Text>
               {waitingRoomParticipantSummary.totalCount === 1 ? " person" : " people"} in room
-              {waitingRoomParticipantSummary.totalCount >= 3 && <Text style={styles.trendingBadge}>  🔥 Trending</Text>}
+              {!isLiveRoom && waitingRoomParticipantSummary.totalCount >= 3 && <Text style={styles.trendingBadge}>  🔥 Trending</Text>}
             </Text>
             <View style={[styles.chips, isLiveRoom && styles.chipsLive]}>
               {waitingRoomParticipantSummary.visible.map((participant) => (
@@ -1774,7 +1705,14 @@ export default function WatchPartyRoomScreen() {
             activeOpacity={0.88}
             onPress={() => {
               if (!partyId) return;
-              router.push({ pathname: "/watch-party/live-stage/[partyId]", params: { partyId } });
+              router.push({
+                pathname: "/watch-party/live-stage/[partyId]",
+                params: {
+                  partyId,
+                  mode: sharedRoomMode,
+                  ...(source ? { source } : {}),
+                },
+              });
             }}
           >
             <Text style={styles.watchCTAText}>🔴  Go Live</Text>
@@ -1784,47 +1722,6 @@ export default function WatchPartyRoomScreen() {
             <Text style={styles.watchCTAText}>🔴  Go Live</Text>
           </TouchableOpacity>
         )}
-
-        {/* ── Reaction bar ───────────────────────────────────────────── */}
-        <View style={styles.interactionWrap}>
-          <Text style={styles.sectionKicker}>REACTIONS & CHAT</Text>
-          <View style={styles.reactionsPanel}>
-            <RoomReactionChipRow
-              emojis={REACTIONS}
-              onPressEmoji={onSendReaction}
-              disabled={reactionsGloballyMuted}
-              chipActiveOpacity={0.72}
-              keyPrefix="party-room"
-              styles={mapReactionChipRowStyles({
-                row: styles.reactionsRow,
-                chip: styles.reactionBtn,
-                chipDisabled: styles.reactionBtnMuted,
-                chipText: styles.reactionEmoji,
-              }, buildReactionChipTokens({ size: "panel", surface: "soft" }))}
-            />
-            {reactionsGloballyMuted && (
-              <Text style={styles.mutedNotice}>Reactions muted by host</Text>
-            )}
-          </View>
-        </View>
-        {floatingReactions.length ? (
-          <View pointerEvents="none" style={styles.reactionOverlay}>
-            {floatingReactions.map((reaction) => (
-              <Animated.Text
-                key={reaction.id}
-                style={[
-                  styles.reactionOverlayEmoji,
-                  {
-                    opacity: reaction.opacity,
-                    transform: [{ translateY: reaction.rise }, { translateX: reaction.originX }, { translateX: reaction.drift }, { scale: reaction.scale }],
-                  },
-                ]}
-              >
-                {reaction.emoji}
-              </Animated.Text>
-            ))}
-          </View>
-        ) : null}
 
         {/* ── Host controls ──────────────────────────────────────────── */}
         {shouldShowHostControls(isHost, isLiveRoom) && (
@@ -1866,69 +1763,6 @@ export default function WatchPartyRoomScreen() {
             </View>
           </View>
         )}
-
-        {/* ── Chat toggle ────────────────────────────────────────────── */}
-        <TouchableOpacity style={styles.chatToggle} onPress={() => setChatVisible((v) => !v)} activeOpacity={0.8}>
-          <Text style={styles.chatToggleText}>
-            {chatVisible ? "▾  Hide chat" : "▸  Party chat"}
-            {chatCount > 0 && <Text style={styles.chatCount}>  ({chatCount})</Text>}
-          </Text>
-        </TouchableOpacity>
-
-        {/* ── Chat section ───────────────────────────────────────────── */}
-        {chatVisible && (
-          <View style={styles.chatSection}>
-            <ScrollView
-              ref={chatScrollRef}
-              style={styles.chatScroll}
-              contentContainerStyle={styles.chatScrollContent}
-            >
-              {messages.length === 0 ? (
-                <Text style={styles.chatEmpty}>No messages yet — say hi! 👋</Text>
-              ) : (
-                messages.map((msg) =>
-                  msg.kind === "reaction" ? (
-                    <View key={msg.id} style={styles.reactionLine}>
-                      <Text style={styles.reactionLineEmoji}>{msg.body}</Text>
-                      <Text style={styles.reactionLineAuthor}>{msg.authorLabel}</Text>
-                    </View>
-                  ) : msg.kind === "system" ? (
-                    <Text key={msg.id} style={styles.systemMsg}>{msg.body}</Text>
-                  ) : (
-                    <View key={msg.id} style={[styles.msgRow, msg.isMe && styles.msgRowMe]}>
-                      <View style={[styles.msgBubble, msg.isMe && styles.msgBubbleMe]}>
-                        {!msg.isMe && <Text style={styles.msgAuthor}>{msg.authorLabel}</Text>}
-                        <Text style={[styles.msgText, msg.isMe && styles.msgTextMe]}>{msg.body}</Text>
-                      </View>
-                    </View>
-                  )
-                )
-              )}
-            </ScrollView>
-
-            <View style={styles.chatInputRow}>
-              <TextInput
-                style={styles.chatInput}
-                placeholder="Say something…"
-                placeholderTextColor="#555"
-                value={draft}
-                onChangeText={setDraft}
-                onSubmitEditing={onSendMessage}
-                returnKeyType="send"
-                editable={!sending}
-                maxLength={300}
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnDisabled]}
-                onPress={onSendMessage}
-                disabled={!draft.trim() || sending}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.sendBtnText}>↑</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1944,48 +1778,74 @@ export default function WatchPartyRoomScreen() {
             activeOpacity={1}
             onPress={closeParticipantModal}
           />
-          <View style={styles.participantModalSheet}>
+          <View
+            style={[
+              styles.participantModalSheet,
+              { paddingBottom: Math.max(20, safeAreaInsets.bottom + 12) },
+            ]}
+          >
             <View style={styles.participantModalHandle} />
+            <Text style={styles.participantModalKicker}>IN ROOM PARTICIPANT</Text>
             <Text style={styles.participantModalTitle}>{selectedParticipant?.displayName || "Participant"}</Text>
-            <Text style={styles.participantModalMeta}>Role: {selectedParticipant?.role === "host" ? "Host" : "Viewer"}</Text>
-
-            <TouchableOpacity
-              style={styles.participantActionBtn}
-              activeOpacity={0.82}
-              onPress={() => {
-                if (!selectedParticipant) return;
-                const userId = String(selectedParticipant.userId || "").trim();
-                if (!userId) return;
-                closeParticipantModal();
-                router.push(`/profile/${userId}`);
-              }}
-            >
-              <Text style={styles.participantActionBtnText}>View Profile</Text>
-            </TouchableOpacity>
-
-            {isHost ? (
-              <>
-                <TouchableOpacity
-                  style={styles.participantActionBtn}
-                  activeOpacity={0.82}
-                  onPress={() => {
-                    if (!selectedParticipant) return;
-                    console.log("Mute User (placeholder)", selectedParticipant.userId);
-                  }}
+            <View style={styles.participantModalIdentityRow}>
+              <View style={[styles.participantModalRolePill, selectedParticipant?.role === "host" && styles.participantModalRolePillHost]}>
+                <Text style={[styles.participantModalRoleText, selectedParticipant?.role === "host" && styles.participantModalRoleTextHost]}>
+                  {selectedParticipant?.role === "host" ? "Host" : "Viewer"}
+                </Text>
+              </View>
+              <View style={styles.participantModalStatusRow}>
+                <View style={styles.participantModalStatusPill}>
+                  <Text style={styles.participantModalStatusText}>Present</Text>
+                </View>
+                <View
+                  style={[
+                    styles.participantModalStatusPill,
+                    selectedParticipant?.isLive ? styles.participantModalStatusPillLive : styles.participantModalStatusPillIdle,
+                  ]}
                 >
-                  <Text style={styles.participantActionBtnText}>Mute User</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.participantActionBtn, styles.participantActionBtnDanger]}
-                  activeOpacity={0.82}
-                  onPress={() => {
-                    if (!selectedParticipant) return;
-                    console.log("Remove User (placeholder)", selectedParticipant.userId);
-                  }}
-                >
-                  <Text style={[styles.participantActionBtnText, styles.participantActionBtnTextDanger]}>Remove User</Text>
-                </TouchableOpacity>
-              </>
+                  <Text style={[styles.participantModalStatusText, selectedParticipant?.isLive && styles.participantModalStatusTextLive]}>
+                    {selectedParticipant?.isLive ? "Live" : "Idle"}
+                  </Text>
+                </View>
+                {selectedParticipant?.isMuted ? (
+                  <View style={[styles.participantModalStatusPill, styles.participantModalStatusPillMuted]}>
+                    <Text style={styles.participantModalStatusText}>Muted</Text>
+                  </View>
+                ) : null}
+                {selectedParticipant?.isSpeaking ? (
+                  <View style={[styles.participantModalStatusPill, styles.participantModalStatusPillLive]}>
+                    <Text style={[styles.participantModalStatusText, styles.participantModalStatusTextLive]}>Speaking</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+            <Text style={styles.participantModalActionsLabel}>Actions</Text>
+
+            {canShowProfileAction ? (
+              <TouchableOpacity
+                style={styles.participantActionBtn}
+                activeOpacity={0.82}
+                onPress={() => {
+                  if (!selectedParticipantProfile?.id) return;
+                  closeParticipantModal();
+                  router.push({
+                    pathname: "/profile/[userId]",
+                    params: buildParticipantProfileParams({
+                      userId: selectedParticipantProfile.id,
+                      displayName: selectedParticipantProfile.displayName,
+                      role: selectedParticipantProfile.role,
+                      isLive: selectedParticipantProfile.isLive,
+                      partyId,
+                      mode: sharedRoomMode,
+                      source,
+                      avatarUrl: selectedParticipantProfile.avatarUrl,
+                      tagline: selectedParticipantProfile.tagline,
+                    }),
+                  });
+                }}
+              >
+                <Text style={styles.participantActionBtnText}>View Profile</Text>
+              </TouchableOpacity>
             ) : null}
 
             <TouchableOpacity
@@ -2018,7 +1878,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
   center: { flex: 1, backgroundColor: "#050505", alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1, width: "100%" },
-  content: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 18, gap: 14 },
+  content: { paddingTop: 56, paddingBottom: 128, paddingHorizontal: 18, gap: 14 },
   loadingText: { color: "#888", marginTop: 14, fontSize: 14 },
   sectionKicker: { color: "#5B5B5B", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.1, marginBottom: 6 },
 
@@ -2301,31 +2161,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(104,149,255,0.2)",
   },
   liveBubbleActive: {
-    shadowColor: "rgba(104,149,255,0.85)",
-    shadowOpacity: 0.26,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0,
   },
   liveBubbleSpeaking: {
-    transform: [{ translateY: -6 }, { scale: 1.2 }],
-    shadowColor: "rgba(132,220,255,0.98)",
-    shadowOpacity: 0.62,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 4 },
-    zIndex: 12,
+    transform: [{ scale: 1 }],
+    shadowOpacity: 0,
+    zIndex: 1,
   },
   liveBubbleDominant: {
-    transform: [{ translateY: -7 }, { scale: 1.24 }],
-    shadowColor: "rgba(132,220,255,1)",
-    shadowOpacity: 0.7,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 4 },
+    transform: [{ scale: 1 }],
+    shadowOpacity: 0,
     opacity: 1,
-    zIndex: 14,
+    zIndex: 1,
   },
   liveBubbleNonSpeaking: {
-    transform: [{ scale: 0.9 }],
-    opacity: 0.66,
+    transform: [{ scale: 1 }],
+    opacity: 1,
     zIndex: 1,
   },
   liveBubbleTapWrap: {
@@ -2333,22 +2184,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   liveBubbleTapWrapPulsed: {
-    transform: [{ scale: 1.05 }],
-    opacity: 0.96,
+    transform: [{ scale: 1 }],
+    opacity: 1,
   },
   liveBubbleActiveRing: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 999,
-    borderWidth: 2,
-    borderColor: "rgba(104,149,255,0.74)",
+    borderWidth: 0,
+    borderColor: "transparent",
   },
   liveBubbleActiveRingSpeaking: {
-    borderColor: "rgba(132,220,255,0.98)",
-    borderWidth: 3,
+    borderWidth: 0,
   },
   liveBubbleActiveRingDominant: {
-    borderColor: "rgba(182,238,255,0.98)",
-    borderWidth: 3.4,
+    borderWidth: 0,
   },
   liveBubbleImage: {
     width: "100%",
@@ -2392,7 +2241,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2ecc40",
   },
   liveBubbleOnlineDotIdle: {
-    backgroundColor: "#DC143C",
+    backgroundColor: "#7A808F",
   },
   liveBubbleHostBadge: {
     position: "absolute",
@@ -2475,6 +2324,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.52)",
   },
   participantModalSheet: {
+    maxHeight: "78%",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     borderWidth: 1,
@@ -2493,8 +2343,48 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     marginBottom: 2,
   },
+  participantModalKicker: { color: "#7A7A7A", fontSize: 9.5, fontWeight: "800", letterSpacing: 1, marginBottom: -2 },
   participantModalTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
-  participantModalMeta: { color: "#A9A9A9", fontSize: 13, fontWeight: "700", marginBottom: 4 },
+  participantModalIdentityRow: { gap: 7, marginBottom: 2 },
+  participantModalRolePill: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  participantModalRolePillHost: {
+    borderColor: "rgba(220,20,60,0.42)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+  },
+  participantModalRoleText: { color: "#CFCFCF", fontSize: 11, fontWeight: "800" },
+  participantModalRoleTextHost: { color: "#F7D6DD" },
+  participantModalStatusRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  participantModalStatusPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  participantModalStatusPillLive: {
+    borderColor: "rgba(46,204,64,0.34)",
+    backgroundColor: "rgba(46,204,64,0.12)",
+  },
+  participantModalStatusPillIdle: {
+    borderColor: "rgba(122,128,143,0.35)",
+    backgroundColor: "rgba(122,128,143,0.14)",
+  },
+  participantModalStatusPillMuted: {
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  participantModalStatusText: { color: "#B8B8B8", fontSize: 10.5, fontWeight: "700" },
+  participantModalStatusTextLive: { color: "#BFDAC4" },
+  participantModalActionsLabel: { color: "#7A7A7A", fontSize: 10, fontWeight: "800", letterSpacing: 0.8, marginTop: 2 },
   participantActionBtn: {
     borderRadius: 12,
     borderWidth: 1,
@@ -2655,8 +2545,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 14,
-    height: 88,
+    bottom: 0,
+    height: 64,
     backgroundColor: "transparent",
     justifyContent: "center",
     zIndex: 40,
@@ -2665,7 +2555,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 8,
     alignItems: "center",
-    minHeight: 88,
+    minHeight: 64,
   },
   bottomLiveBubbleTouchable: {
     alignItems: "center",
@@ -2684,20 +2574,14 @@ const styles = StyleSheet.create({
     overflow: "visible",
   },
   bottomLiveBubbleSpeaking: {
-    transform: [{ scale: 1.08 }],
-    shadowColor: "rgba(122,205,255,0.95)",
-    shadowOpacity: 0.34,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    borderColor: "rgba(132,220,255,0.78)",
+    transform: [{ scale: 1 }],
+    shadowOpacity: 0,
+    borderColor: "rgba(255,255,255,0.24)",
   },
   bottomLiveBubbleDominant: {
-    transform: [{ scale: 1.13 }],
-    shadowColor: "rgba(132,220,255,1)",
-    shadowOpacity: 0.46,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
-    borderColor: "rgba(182,238,255,0.94)",
+    transform: [{ scale: 1 }],
+    shadowOpacity: 0,
+    borderColor: "rgba(255,255,255,0.24)",
   },
   bottomLiveBubbleRing: {
     position: "absolute",
@@ -2706,16 +2590,16 @@ const styles = StyleSheet.create({
     right: -3,
     bottom: -3,
     borderRadius: 999,
-    borderWidth: 1.6,
-    borderColor: "rgba(132,220,255,0.72)",
+    borderWidth: 0,
+    borderColor: "transparent",
   },
   bottomLiveBubbleRingDominant: {
     top: -4,
     left: -4,
     right: -4,
     bottom: -4,
-    borderWidth: 2,
-    borderColor: "rgba(182,238,255,0.92)",
+    borderWidth: 0,
+    borderColor: "transparent",
   },
   bottomLiveBubbleImage: {
     width: "100%",
@@ -2736,6 +2620,30 @@ const styles = StyleSheet.create({
     opacity: 0.99,
   },
   bottomLiveBubbleInitial: { color: "#EAF0FA", fontSize: 14, fontWeight: "900" },
+  bottomLiveBubblePresenceDot: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.46)",
+    backgroundColor: "#2ecc40",
+  },
+  bottomLiveBubblePresenceDotLive: {
+    backgroundColor: "#2ecc40",
+  },
+  bottomLiveBubblePresenceDotIdle: {
+    backgroundColor: "#7A808F",
+  },
+  bottomLiveBubbleMutedIcon: {
+    position: "absolute",
+    left: -8,
+    bottom: -8,
+    fontSize: 10,
+    lineHeight: 10,
+  },
 
   // Watch CTA
   watchCTA: {

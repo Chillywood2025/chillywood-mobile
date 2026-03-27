@@ -1,5 +1,21 @@
 export type SharedParticipantRole = "host" | "speaker" | "listener";
 
+export type SharedRoomMode = "live" | "hybrid";
+
+export type SharedParticipantIdentity = {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  cameraPreviewUrl?: string;
+  role: "host" | "viewer";
+  isCurrentUser: boolean;
+  isHost: boolean;
+  isLive: boolean;
+  isSpeaking: boolean;
+  isMuted: boolean;
+};
+
 export type SharedParticipantLocalState = {
   isMuted: boolean;
   role: SharedParticipantRole;
@@ -18,6 +34,70 @@ export const resolveIdentityName = (...candidates: unknown[]) => {
     return value;
   }
   return "Guest";
+};
+
+export const buildParticipantProfileParams = (options: {
+  userId?: unknown;
+  displayName?: unknown;
+  role?: unknown;
+  isLive?: unknown;
+  partyId?: unknown;
+  mode?: unknown;
+  source?: unknown;
+  avatarUrl?: unknown;
+  tagline?: unknown;
+}) => {
+  const userId = String(options.userId ?? "").trim();
+  const partyId = String(options.partyId ?? "").trim();
+  const mode = String(options.mode ?? "").trim();
+  const source = String(options.source ?? "").trim();
+  const avatarUrl = String(options.avatarUrl ?? "").trim();
+  const tagline = String(options.tagline ?? "").trim();
+
+  return {
+    userId,
+    displayName: resolveIdentityName(options.displayName, userId, "Participant"),
+    role: options.role === "host" ? "host" : "viewer",
+    isLive: !!options.isLive ? "1" : "0",
+    ...(partyId ? { partyId } : {}),
+    ...(mode ? { mode } : {}),
+    ...(source ? { source } : {}),
+    ...(avatarUrl ? { avatarUrl } : {}),
+    ...(tagline ? { tagline } : {}),
+  };
+};
+
+export const buildSharedParticipantIdentity = (options: {
+  userId?: unknown;
+  role?: unknown;
+  displayNameCandidates?: unknown[];
+  avatarUrl?: unknown;
+  cameraPreviewUrl?: unknown;
+  currentUserId?: unknown;
+  fallbackDisplayName?: unknown;
+  isLive?: unknown;
+  isSpeaking?: unknown;
+  isMuted?: unknown;
+}): SharedParticipantIdentity => {
+  const userId = String(options.userId ?? "").trim();
+  const role: "host" | "viewer" = options.role === "host" ? "host" : "viewer";
+  const currentUserId = String(options.currentUserId ?? "").trim();
+  const avatarUrl = String(options.avatarUrl ?? "").trim();
+  const cameraPreviewUrl = String(options.cameraPreviewUrl ?? "").trim();
+
+  return {
+    id: userId,
+    userId,
+    displayName: resolveIdentityName(...(options.displayNameCandidates ?? []), options.fallbackDisplayName ?? "Guest"),
+    avatarUrl: avatarUrl || undefined,
+    cameraPreviewUrl: cameraPreviewUrl || undefined,
+    role,
+    isCurrentUser: !!userId && !!currentUserId && userId === currentUserId,
+    isHost: role === "host",
+    isLive: !!options.isLive,
+    isSpeaking: !!options.isSpeaking,
+    isMuted: !!options.isMuted,
+  };
 };
 
 export const getInitials = (displayName: string) => {
@@ -114,3 +194,14 @@ export const getParticipantMediaUri = (options: {
   cameraPreviewUrl?: string;
   avatarUrl?: string;
 }) => (options.isCurrentUser ? options.myCameraPreviewUrl || "" : "") || options.cameraPreviewUrl || options.avatarUrl || "";
+
+export const normalizeSharedRoomMode = (value: unknown, fallback: SharedRoomMode = "live"): SharedRoomMode => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "hybrid" || normalized === "watch-party-live" || normalized === "watch_party_live") {
+    return "hybrid";
+  }
+  if (normalized === "live" || normalized === "live-first" || normalized === "live_first") {
+    return "live";
+  }
+  return fallback;
+};
