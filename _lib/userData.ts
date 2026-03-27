@@ -1,4 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  normalizeCapturePolicy,
+  normalizeContentAccessRule,
+  normalizeJoinPolicy,
+  normalizeReactionsPolicy,
+  type CapturePolicy,
+  type ContentAccessRule,
+  type JoinPolicy,
+  type ReactionsPolicy,
+} from "./roomRules";
 import { supabase } from "./supabase";
 
 export const WATCH_PROGRESS_KEY = "@chillywood/watch-progress";
@@ -24,6 +34,12 @@ export type UserProfile = {
   avatarUrl?: string;
   tagline?: string;
   channelRole?: "viewer" | "host" | "creator";
+  defaultWatchPartyJoinPolicy?: JoinPolicy;
+  defaultWatchPartyReactionsPolicy?: ReactionsPolicy;
+  defaultWatchPartyContentAccessRule?: ContentAccessRule;
+  defaultWatchPartyCapturePolicy?: CapturePolicy;
+  defaultCommunicationContentAccessRule?: ContentAccessRule;
+  defaultCommunicationCapturePolicy?: CapturePolicy;
 };
 
 export type LastPartySession = {
@@ -71,6 +87,28 @@ const UUID_LIKE_PROFILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89
 const normalizeTextValue = (value: unknown) => {
   const normalized = String(value ?? "").trim();
   return normalized || undefined;
+};
+
+export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): UserProfile => {
+  const fallbackUsername = normalizeTextValue(profile?.username) ?? `Studio Guest ${Math.floor(1000 + Math.random() * 9000)}`;
+  const avatarIndex = Number.isFinite(Number(profile?.avatarIndex))
+    ? Math.max(0, Math.min(9, Math.floor(Number(profile?.avatarIndex))))
+    : Math.floor(Math.random() * AVATARS.length);
+
+  return {
+    username: fallbackUsername,
+    avatarIndex,
+    displayName: normalizeTextValue(profile?.displayName),
+    avatarUrl: normalizeTextValue(profile?.avatarUrl),
+    tagline: normalizeTextValue(profile?.tagline),
+    channelRole: normalizeChannelRole(profile?.channelRole),
+    defaultWatchPartyJoinPolicy: normalizeJoinPolicy(profile?.defaultWatchPartyJoinPolicy),
+    defaultWatchPartyReactionsPolicy: normalizeReactionsPolicy(profile?.defaultWatchPartyReactionsPolicy),
+    defaultWatchPartyContentAccessRule: normalizeContentAccessRule(profile?.defaultWatchPartyContentAccessRule),
+    defaultWatchPartyCapturePolicy: normalizeCapturePolicy(profile?.defaultWatchPartyCapturePolicy),
+    defaultCommunicationContentAccessRule: normalizeContentAccessRule(profile?.defaultCommunicationContentAccessRule),
+    defaultCommunicationCapturePolicy: normalizeCapturePolicy(profile?.defaultCommunicationCapturePolicy),
+  };
 };
 
 const resolveProfileDisplayName = (...candidates: unknown[]) => {
@@ -616,19 +654,19 @@ export function getAvatarEmoji(index: number): string {
 
 export async function readUserProfile(): Promise<UserProfile> {
   const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
-  if (cached.username) return cached;
+  if (cached.username) return normalizeUserProfile(cached);
 
   // Generate if missing
-  const generated: UserProfile = {
+  const generated = normalizeUserProfile({
     username: `Studio Guest ${Math.floor(1000 + Math.random() * 9000)}`,
     avatarIndex: Math.floor(Math.random() * AVATARS.length),
-  };
+  });
   await saveUserProfile(generated);
   return generated;
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
-  await writeJsonValue(USER_PROFILE_KEY, profile);
+  await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile(profile));
 }
 
 // ── Last Party Session (for auto-rejoin) ──────────────────────────────────────

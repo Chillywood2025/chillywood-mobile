@@ -2,6 +2,39 @@ export type SharedParticipantRole = "host" | "speaker" | "listener";
 
 export type SharedRoomMode = "live" | "hybrid";
 
+export type WaitingRoomParticipantEntry = {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  cameraPreviewUrl?: string;
+  avatarLabelOverride?: string;
+  isHost?: boolean;
+  isSelf?: boolean;
+  isActive?: boolean;
+  isSpeaking?: boolean;
+  statusText?: string;
+  reactionEmoji?: string;
+};
+
+export const LIVE_WATCH_PARTY_LABEL = "Live Watch-Party";
+export const PLAYER_WATCH_PARTY_SOURCE = "player-watch-party-live";
+
+export type SharedRoomLabels = {
+  watchPartyLabel: string;
+  waitingRoomTitle: string;
+  roomStatusLabel: string;
+  roomCardLabel: string;
+  roomCardTitle: string;
+};
+
+export type SharedRoomBranding = {
+  watchPartyLabel?: string;
+  liveWaitingRoomTitle?: string;
+  partyWaitingRoomTitle?: string;
+  liveRoomTitle?: string;
+  partyRoomTitle?: string;
+};
+
 export type SharedParticipantIdentity = {
   id: string;
   userId: string;
@@ -24,6 +57,21 @@ export type SharedParticipantLocalState = {
 
 const TECHNICAL_NAME_PATTERN = /^(user[·\-\s]|viewer[·\-\s]|anon[\-\s])/i;
 const UUID_LIKE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const LIVE_WAITING_ROOM_TITLE = "Live Waiting Room";
+const PARTY_WAITING_ROOM_TITLE = "Party Waiting Room";
+const LIVE_ROOM_TITLE = "Live Room";
+const PARTY_ROOM_TITLE = "Party Room";
+const LIVE_ROOM_CARD_LABEL = "LIVE ROOM";
+const PARTY_ROOM_CARD_LABEL = "PARTY ROOM";
+
+export const DEFAULT_SHARED_ROOM_BRANDING: Required<SharedRoomBranding> = {
+  watchPartyLabel: LIVE_WATCH_PARTY_LABEL,
+  liveWaitingRoomTitle: LIVE_WAITING_ROOM_TITLE,
+  partyWaitingRoomTitle: PARTY_WAITING_ROOM_TITLE,
+  liveRoomTitle: LIVE_ROOM_TITLE,
+  partyRoomTitle: PARTY_ROOM_TITLE,
+};
 
 export const resolveIdentityName = (...candidates: unknown[]) => {
   for (const candidate of candidates) {
@@ -100,6 +148,31 @@ export const buildSharedParticipantIdentity = (options: {
   };
 };
 
+export const buildSharedRoomLabels = (options: {
+  isLiveRoom: boolean;
+  isPlayerWatchPartyLiveFlow?: boolean;
+  branding?: SharedRoomBranding | null;
+}): SharedRoomLabels => {
+  const branding = {
+    ...DEFAULT_SHARED_ROOM_BRANDING,
+    ...(options.branding ?? {}),
+  };
+  const liveRoomTitle = String(branding.liveRoomTitle || LIVE_ROOM_TITLE).trim() || LIVE_ROOM_TITLE;
+  const partyRoomTitle = String(branding.partyRoomTitle || PARTY_ROOM_TITLE).trim() || PARTY_ROOM_TITLE;
+
+  return {
+    watchPartyLabel: String(branding.watchPartyLabel || LIVE_WATCH_PARTY_LABEL).trim() || LIVE_WATCH_PARTY_LABEL,
+    waitingRoomTitle: options.isPlayerWatchPartyLiveFlow
+      ? String(branding.partyWaitingRoomTitle || PARTY_WAITING_ROOM_TITLE).trim() || PARTY_WAITING_ROOM_TITLE
+      : String(branding.liveWaitingRoomTitle || LIVE_WAITING_ROOM_TITLE).trim() || LIVE_WAITING_ROOM_TITLE,
+    roomStatusLabel: options.isLiveRoom ? liveRoomTitle : partyRoomTitle,
+    roomCardLabel: options.isLiveRoom
+      ? String(liveRoomTitle || LIVE_ROOM_CARD_LABEL).toUpperCase()
+      : String(partyRoomTitle || PARTY_ROOM_CARD_LABEL).toUpperCase(),
+    roomCardTitle: options.isLiveRoom ? liveRoomTitle : partyRoomTitle,
+  };
+};
+
 export const getInitials = (displayName: string) => {
   const clean = String(displayName || "").trim();
   if (!clean) return "?";
@@ -138,6 +211,41 @@ export const mergeMissingParticipantStates = <T>(
   return changed ? next : prev;
 };
 
+export const buildOrderedParticipantsWithSelf = <T extends SharedParticipantIdentity>(options: {
+  participants: T[];
+  currentUserId: string;
+  selfFallbackParticipant: T;
+}) => {
+  const seen = new Set<string>();
+  const unique = [...options.participants].filter((participant) => {
+    if (!participant.userId || seen.has(participant.userId)) return false;
+    seen.add(participant.userId);
+    return true;
+  });
+
+  const ordered = unique.sort((a, b) => {
+    const aMe = a.userId === options.currentUserId ? 1 : 0;
+    const bMe = b.userId === options.currentUserId ? 1 : 0;
+    if (aMe !== bMe) return bMe - aMe;
+    const aHost = a.role === "host" ? 1 : 0;
+    const bHost = b.role === "host" ? 1 : 0;
+    return bHost - aHost;
+  });
+
+  const hasResolvedSelf = !!options.currentUserId && ordered.some((participant) => participant.userId === options.currentUserId);
+  const withSelf = hasResolvedSelf
+    ? [...ordered]
+    : [options.selfFallbackParticipant, ...ordered];
+
+  const selfIndex = withSelf.findIndex((participant) => participant.userId === options.currentUserId);
+  if (selfIndex > 0) {
+    const [selfParticipant] = withSelf.splice(selfIndex, 1);
+    return [selfParticipant, ...withSelf];
+  }
+
+  return withSelf;
+};
+
 export const computeDominantSpeakerId = <T>(
   participants: T[],
   getId: (participant: T) => string,
@@ -167,6 +275,59 @@ export const computeBottomStripParticipants = <T>(
   });
 };
 
+export const prioritizeParticipantStripOrder = <T extends { userId: string; isSpeaking?: boolean }>(
+  participants: T[],
+  featuredParticipantById: Record<string, boolean>,
+  isSpeakingById: Record<string, boolean>,
+) => {
+  const prioritizeSpeaking = (list: T[]) => list
+    .map((participant, index) => ({
+      participant,
+      index,
+      isSpeakingNow: !!(isSpeakingById[participant.userId] || participant.isSpeaking),
+    }))
+    .sort((a, b) => {
+      if (a.isSpeakingNow !== b.isSpeakingNow) return Number(b.isSpeakingNow) - Number(a.isSpeakingNow);
+      return a.index - b.index;
+    })
+    .map((item) => item.participant);
+
+  return [
+    ...prioritizeSpeaking(participants.filter((participant) => !!featuredParticipantById[participant.userId])),
+    ...prioritizeSpeaking(participants.filter((participant) => !featuredParticipantById[participant.userId])),
+  ];
+};
+
+export const resolveSelectedParticipantContext = <T extends {
+  userId: string;
+  role: "host" | "viewer";
+  isLive: boolean;
+  isSpeaking: boolean;
+  isMuted: boolean;
+}>(options: {
+  selectedParticipant: T | null;
+  participantStateById: Record<string, SharedParticipantLocalState>;
+  currentUserId: string;
+}) => {
+  const selectedParticipantUserId = String(options.selectedParticipant?.userId ?? "").trim();
+  const selectedParticipantState = options.selectedParticipant
+    ? (options.participantStateById[selectedParticipantUserId]
+      ?? createDefaultParticipantState({
+        role: options.selectedParticipant.role,
+        isSpeaking: options.selectedParticipant.isSpeaking,
+        isMuted: options.selectedParticipant.isMuted,
+      }))
+    : null;
+  const isSelectedParticipantSelf = !!selectedParticipantUserId && selectedParticipantUserId === options.currentUserId;
+
+  return {
+    selectedParticipantUserId,
+    selectedParticipantState,
+    isSelectedParticipantSelf,
+    canShowProfileAction: !!selectedParticipantUserId && !isSelectedParticipantSelf,
+  };
+};
+
 export const getParticipantRoleLabel = (state: SharedParticipantLocalState) => {
   if (state.isRemoved) return "Removed";
   if (state.role === "host") return "Host";
@@ -186,6 +347,53 @@ export const getLiveParticipantStatusText = (options: {
   if (options.role === "host") return "👑 Host";
   if (options.role === "co-host") return "⭐ Co-host";
   return "👤 Member";
+};
+
+type PresenceParticipantLike = {
+  userId: string;
+  role: "host" | "viewer";
+  displayName: string;
+  avatarUrl?: string;
+  cameraPreviewUrl?: string;
+};
+
+export const shouldShowHostControls = (isHost: boolean, isLiveRoom: boolean) => isHost && !isLiveRoom;
+
+export const buildPartyRoomParticipantEntries = (options: {
+  participants: PresenceParticipantLike[];
+  currentUserId: string;
+  currentUsername?: string;
+  participantReactionById?: Record<string, { emoji: string }>;
+  maxVisible?: number;
+}) => {
+  const seen = new Set<string>();
+  const rows = options.participants.filter((participant) => {
+    if (!participant.userId || seen.has(participant.userId)) return false;
+    seen.add(participant.userId);
+    return true;
+  });
+
+  const maxVisible = options.maxVisible ?? 7;
+  const visible = rows.slice(0, maxVisible).map<WaitingRoomParticipantEntry>((participant) => {
+    const isSelf = !!options.currentUserId && participant.userId === options.currentUserId;
+    return {
+      id: participant.userId,
+      displayName: isSelf ? (options.currentUsername || "You") : participant.displayName,
+      avatarUrl: participant.avatarUrl,
+      cameraPreviewUrl: participant.cameraPreviewUrl,
+      isHost: participant.role === "host",
+      isSelf,
+      isActive: isSelf,
+      statusText: participant.role === "host" ? "host" : "in room",
+      reactionEmoji: options.participantReactionById?.[participant.userId]?.emoji,
+    };
+  });
+
+  return {
+    visible,
+    overflowCount: Math.max(0, rows.length - maxVisible),
+    totalCount: rows.length,
+  };
 };
 
 export const getParticipantMediaUri = (options: {
