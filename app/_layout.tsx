@@ -1,61 +1,17 @@
-import { Redirect, Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import { PostHogProvider, useFeatureFlag } from "posthog-react-native";
 
 import { trackEvent, trackScreen } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
 import { reportRuntimeError } from "../_lib/logger";
 import { getPostHogConfig, posthogFeatureFlags } from "../_lib/posthog";
-import { getRuntimeConfigIssueSummary, getSupportRoutePath, isRuntimeConfigValid } from "../_lib/runtimeConfig";
-import { ensureSentryInitialized } from "../_lib/sentry";
-import { SessionProvider, useSession } from "../_lib/session";
+import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
+import { SessionProvider } from "../_lib/session";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
 import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
-import * as Sentry from '@sentry/react-native';
-
-Sentry.init({
-  dsn: 'https://16324e9e351e8fae1009349f4390d163@o4511124423835648.ingest.us.sentry.io/4511124437270528',
-
-  // Adds more context data to events (IP address, cookies, user, etc.)
-  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
-  sendDefaultPii: true,
-
-  // Enable Logs
-  enableLogs: true,
-
-  // Configure Session Replay
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1,
-  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
-
-  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: __DEV__,
-});
-
-ensureSentryInitialized();
-
-const serializeRedirectTarget = (pathname: string, params: Record<string, unknown>) => {
-  const search = new URLSearchParams();
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value == null) return;
-
-    if (Array.isArray(value)) {
-      value.forEach((entry) => {
-        if (entry == null) return;
-        search.append(key, String(entry));
-      });
-      return;
-    }
-
-    search.append(key, String(value));
-  });
-
-  const query = search.toString();
-  return query ? `${pathname}?${query}` : pathname;
-};
 
 function RouteAnalyticsBridge() {
   const pathname = usePathname();
@@ -104,31 +60,10 @@ function PostHogRootProvider({ children }: { children: React.ReactNode }) {
 }
 
 function RootNavigator() {
-  const pathname = usePathname();
-  const params = useGlobalSearchParams();
-  const segments = useSegments();
-  const { isLoading: sessionLoading, isSignedIn } = useSession();
-  const redirectTo = useMemo(
-    () => serializeRedirectTarget(pathname, params as Record<string, unknown>),
-    [params, pathname],
-  );
-  const authRoute = segments[0] === "(auth)";
-
-  if (sessionLoading || (!isSignedIn && !authRoute)) {
-    return sessionLoading ? null : (
-      <Redirect
-        href={{
-          pathname: "/(auth)/login",
-          params: { redirectTo },
-        }}
-      />
-    );
-  }
-
   return (
     <>
       <RouteAnalyticsBridge />
-      <Stack initialRouteName={isSignedIn ? "(tabs)" : "(auth)"} screenOptions={{ headerShown: false }}>
+      <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="player/[id]" />
@@ -138,8 +73,6 @@ function RootNavigator() {
         <Stack.Screen name="watch-party/live-stage/[partyId]" />
         <Stack.Screen name="communication/index" />
         <Stack.Screen name="communication/[roomId]" />
-        <Stack.Screen name="chat/index" />
-        <Stack.Screen name="chat/[threadId]" />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="admin" />
         <Stack.Screen name="channel-settings" />
@@ -203,7 +136,7 @@ function BetaWelcomeController() {
   );
 }
 
-export default Sentry.wrap(function RootLayout() {
+export default function RootLayout() {
   if (!isRuntimeConfigValid()) {
     const message = getRuntimeConfigIssueSummary();
     if (__DEV__) {
@@ -225,4 +158,4 @@ export default Sentry.wrap(function RootLayout() {
       </SessionProvider>
     </PostHogRootProvider>
   );
-});
+}
