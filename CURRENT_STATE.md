@@ -2,6 +2,7 @@
 
 ## Current Checkpoint
 Chi'llywood still carries locked product doctrine, hard-locked core naming, canonical room architecture, a standalone Chi'lly Chat MVP in repo code, and an explicit messenger-first / profile-first / action-first MVP direction in the control files. Stage 4's final automation batch is now completed/proved on the current build because current terminal/workflow output proved the corrected local release-style / bundled Android lane, the corrected Party / Live split, local Flow 09, and the final cloud rerun all green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91`. The previous cloud rerun narrowed the only remaining issue to a below-the-fold Flow 09 proof-path problem, cloud artifact inspection plus a bounded local 320x640-style replay proved that diagnosis, and the replacement cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green with all cloud Maestro flows passing.
+The active repo-truth files `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` are restored after the accidental cleanup deletion, while the intended PostHog root wiring remains intact.
 
 ## Current Batch Surface Inventory
 - Home tab -> self profile -> channel settings -> profile rails -> Chi'lly Chat inbox
@@ -107,6 +108,7 @@ Chi'llywood still carries locked product doctrine, hard-locked core naming, cano
 - Stage 4 is now safe to mark complete because the final automation pass stayed green and did not reveal a real new bug
 - the earlier local Flow 09 Android ANR/system-UI interruptions remain recorded as historical environment instability on the bundled lane, but they are not the active checkpoint blocker unless they recur during the cloud follow-up or a future rerun
 - PostHog root feature-flag wiring now exists, but remote delivery for `live_waiting_room_enabled`, `party_waiting_room_enabled`, and `watch_party_live_handoff_v2` is not yet proved on the current build
+- the accidental cleanup deletion of `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` is now repaired, so the repo-truth and checkpoint references are consistent again
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`

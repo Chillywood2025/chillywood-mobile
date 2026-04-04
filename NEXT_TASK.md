@@ -1,7 +1,8 @@
 # NEXT TASK
 
 ## Exact Next Task
-Stage 4 is now completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, do not reopen Stage 4 unless new proof truly invalidates it, move to the next roadmap checkpoint, and prove PostHog root flag delivery before any room-flow gating.
+Stage 4 is now completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, keep the restored repo-truth/control files and Flow 09 proof file intact, do not reopen Stage 4 unless new proof truly invalidates it, move to the next roadmap checkpoint, and prove PostHog root flag delivery before any room-flow gating.
+Keep the restored repo-truth files and the Flow 09 proof file intact while that PostHog flag-delivery proof continues.
 
 ## Current Plan
 1. Preserve Stage 4 as completed/proved on the current build
