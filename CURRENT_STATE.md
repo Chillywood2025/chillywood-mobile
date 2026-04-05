@@ -40,8 +40,10 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 - shared app config now owns `runtimeVersion` with the Expo `appVersion` policy plus `updates.url=https://u.expo.dev/c384ed57-5454-4e80-81ad-dcc218b8a3c8`, so repo config and Android native update metadata now agree on the OTA transport
 - `package.json` now exposes `npm run validate:runtime`, and `scripts/validate-runtime.mjs` now loads `.env.local` before verifying the required runtime env vars plus the effective Expo config for `extra.eas.projectId`, `updates.url`, `runtimeVersion`, and `betaEnvironment`
 - On April 5, 2026, `npm run validate:runtime` passed locally from the current repo state after the real runtime allowlist value was added to `.env.local`; the gate now resolves `projectId=c384ed57-5454-4e80-81ad-dcc218b8a3c8`, the repo-owned `updates.url`, `runtimeVersion.policy=appVersion`, and `betaEnvironment=public-v1`
+- On April 5, 2026, `npx expo install expo-updates` completed cleanly and confirmed the SDK 54-compatible `expo-updates@~29.0.16` dependency is now repo-owned in `package.json` and `package-lock.json`, so `eas update` no longer needs to mutate package files just to begin the preview OTA lane
 - `README.md` and `docs/public-v1-release-checklist.md` now record the manual EAS Update flow: validate -> preview publish -> verify delivery -> production rollout -> rollback/revert if needed
-- No production builds exist yet on EAS for the `production` profile, so the first controlled rollout step remains preview-channel publish and verification from the proved checkpoint before any production OTA rollout
+- Expo's EAS Update setup guidance requires a new build after adding `expo-updates` so the binary actually contains the library; the existing preview builds on channel `preview` predate this repo-owned dependency step, so a fresh preview build is now required before preview OTA delivery can be tested on-device
+- No production builds exist yet on EAS for the `production` profile, and the first controlled rollout step is now: create a fresh preview build with `expo-updates`, install it, publish the first preview OTA, and then verify delivery before any production OTA rollout
 - The current runtime version policy in effect is `appVersion`, which resolves to `1.0.0` on the current checkpoint
 
 ## What Was Fixed In This Pass
@@ -51,6 +53,7 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 - `SESSION_START_PROTOCOL.md`, `ROADMAP.md`, and the active `maestro/` docs/flows were reconciled so repo truth, checkpoint truth, and proof-harness truth now describe the same closed Stage 4 + PostHog baseline without changing app behavior
 - `app.json`, `package.json`, `scripts/validate-runtime.mjs`, `README.md`, and `docs/public-v1-release-checklist.md` now make the EAS Update readiness path explicit without changing app features or business logic
 - `scripts/validate-runtime.mjs` now loads `.env.local` directly, which removed the plain `npm run validate:runtime` blocker once the real local beta operator allowlist value was present
+- `package.json` and `package-lock.json` now intentionally own `expo-updates@~29.0.16` through the Expo-managed install path, which closes the preview OTA auto-install blocker without changing app logic
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`
