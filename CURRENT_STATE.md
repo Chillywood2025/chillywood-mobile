@@ -3,7 +3,7 @@
 ## Current Checkpoint
 Stage 4 remains completed/proved on the current build. Current JS via Expo Go / Metro proved Home, Player, Profile, Chi'lly Chat, Live Waiting Room, Party Waiting Room, Live Room, Party Room, and Live Stage behavior as described below.
 
-The latest proof pass fixed two real current-build bugs: `app/player/[id].tsx` now resolves bundled assets through `expo-asset` before passing them to `expo-av`, and `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes. Typecheck passed afterward. PostHog env wiring is now present locally and the current Expo runtime proof below confirms the vars are loading, but remote on-state delivery for the gated chat flags still remains unproved because the flags were intentionally left OFF in this pass.
+The latest proof passes fixed three real current-build issues: `app/player/[id].tsx` now resolves bundled assets through `expo-asset` before passing them to `expo-av`, `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes, and `app/_layout.tsx` now identifies the signed-in Supabase user to PostHog before reloading feature flags so the runtime requests flag values for the real current user. Typecheck passed afterward. PostHog env wiring is present locally and the current Expo runtime proof below confirms the vars are loading, but remote on-state delivery for the gated chat flags still remains blocked because PostHog is still evaluating both flags false for the current signed-in user.
 
 ## Current-Build Proved Items
 - Home: `Continue Watching` proved at the top by temporarily seeding `watch_history` for `Chicago Streets` and then clearing it; `Browse` / `Top Rated` cards show title, info line, and `Added` date; the lower Home area is reserved for `Chi'llywood Originals`
@@ -19,8 +19,10 @@ The latest proof pass fixed two real current-build bugs: `app/player/[id].tsx` n
 ## PostHog And Flags
 - The current Expo session on `8084` loaded `.env.local` and exported `EXPO_PUBLIC_POSTHOG_API_KEY` plus `EXPO_PUBLIC_POSTHOG_HOST`; the served Android `node_modules/expo-router/entry.bundle` also contained those injected values and the two active chat flag keys
 - Default-off stability is now proved on the PostHog-enabled runtime for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`: `/chat` still opened on the current build, `/chat/[threadId]` still opened on the current build, and the thread surface kept `Proof User`, `Direct thread`, voice/video actions, `Attach`, `React`, `Write a message`, and `Send` while `AI SMART REPLIES` and `PostHog gated` remained absent
-- No remote flag changes were made in this pass; the proof is specifically for the remote-default-off state only
-- Remote-delivery on-state for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` remains unproved because the flags were intentionally left OFF in this pass
+- `app/_layout.tsx` now mounts a signed-in PostHog bridge inside `SessionProvider`, identifies the authenticated Supabase user, and immediately reloads feature flags so current-runtime flag evaluation is no longer limited to the anonymous client
+- Remote on-state delivery was re-checked on April 5, 2026 after the signed-in bridge landed: Home reopened cleanly, `/chat/[threadId]` reopened cleanly, and own profile reopened cleanly, but the `AI SMART REPLIES` / `PostHog gated` card still did not render
+- Direct backend proof now explains that absence: two live `POST https://us.i.posthog.com/flags/?v=2` checks for distinct id `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f` returned both `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` as `enabled: false` with reason `out_of_rollout_bound`, even after a propagation wait and re-check
+- Remote-delivery on-state for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` therefore remains unproved on the current runtime because PostHog is still excluding the current proof user from rollout, not because the local client is missing env wiring or route-level flag consumers
 - The active chat-thread flag consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`
 - Waiting-room and live flags are probe-only in `app/_layout.tsx` and are not wired to active UI owners
 
@@ -34,6 +36,7 @@ The latest proof pass fixed two real current-build bugs: `app/player/[id].tsx` n
 ## What Was Fixed In This Pass
 - `app/player/[id].tsx` now resolves bundled assets through `expo-asset` `localUri` before `expo-av` `Video`, which fixed the real Android preview/current-JS playback bug
 - `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes, which fixed the `cannot add presence callbacks after joining a channel` runtime error
+- `app/_layout.tsx` now identifies the signed-in Supabase user to PostHog and reloads feature flags inside the current provider tree, which fixed the missing identified-user flag-request path during the remote on-state proof lane
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`

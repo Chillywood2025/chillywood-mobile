@@ -1,13 +1,13 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { PostHogProvider, useFeatureFlag } from "posthog-react-native";
+import { PostHogProvider, useFeatureFlag, usePostHog } from "posthog-react-native";
 
 import { trackEvent, trackScreen } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
 import { reportRuntimeError } from "../_lib/logger";
 import { getPostHogConfig, posthogFeatureFlags } from "../_lib/posthog";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
-import { SessionProvider } from "../_lib/session";
+import { SessionProvider, useSession } from "../_lib/session";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
 import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
@@ -32,6 +32,32 @@ function PostHogFlagProbe() {
   void liveWaitingRoomEnabled;
   void partyWaitingRoomEnabled;
   void watchPartyLiveHandoffV2;
+
+  return null;
+}
+
+function PostHogSessionBridge() {
+  const posthog = usePostHog();
+  const { user } = useSession();
+  const identifiedUserIdRef = useRef("");
+
+  useEffect(() => {
+    const userId = String(user?.id ?? "").trim();
+    if (!posthog || userId.length === 0) {
+      if (userId.length === 0) {
+        identifiedUserIdRef.current = "";
+      }
+      return;
+    }
+
+    if (identifiedUserIdRef.current === userId) {
+      return;
+    }
+
+    identifiedUserIdRef.current = userId;
+    posthog.identify(userId, user?.email ? { email: user.email } : undefined);
+    void posthog.reloadFeatureFlagsAsync().catch(() => null);
+  }, [posthog, user?.email, user?.id]);
 
   return null;
 }
@@ -149,6 +175,7 @@ export default function RootLayout() {
   return (
     <PostHogRootProvider>
       <SessionProvider>
+        <PostHogSessionBridge />
         <BetaProgramProvider>
           <RootErrorBoundary>
             <RootNavigator />
