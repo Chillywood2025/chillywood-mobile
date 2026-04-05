@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Keep Stage 4 closed and recorded as completed/proved on the current build. The next exact lane is to create and install a fresh preview build that includes `expo-updates`, then publish and verify the first preview-channel EAS Update from the now-ready checkpoint baseline while preserving the newly proved Settings / Logout owner-surface truth.
+Keep Stage 4 closed and recorded as completed/proved on the current build. The next exact lane is to verify the already-published preview-channel EAS Update on the installed Android preview build `3daa1615-d003-46d5-af7a-af8500497155` while preserving the newly proved Settings / Logout owner-surface truth.
 
 ## Current Plan
 1. Preserve the current green Stage 4 truth exactly as recorded
@@ -9,7 +9,7 @@ Keep Stage 4 closed and recorded as completed/proved on the current build. The n
 3. Preserve the newly re-closed auth/home regression fix exactly as recorded
 4. Preserve the newly proved Home/Profile Settings / Logout truth exactly as recorded
 5. Keep the current-build live-stage proof recorded as complete after the channel-topic fix
-6. Use the now-ready EAS Update config/docs baseline to rebuild preview with `expo-updates`, then publish and verify a preview OTA before any production rollout
+6. Use the now-published preview OTA checkpoint to verify delivery on the installed preview build before any production rollout
 
 ## Exact Next Batch
 - preserve the newly proved PostHog runtime baseline: `.env.local` now loads into the current Expo session, the Android bundle carries the injected `EXPO_PUBLIC_POSTHOG_*` values, and the remote-default-off state keeps the chat thread stable with no smart-reply card visible
@@ -22,8 +22,17 @@ Keep Stage 4 closed and recorded as completed/proved on the current build. The n
 - keep the live-stage UI proof recorded as complete: `Live-First`, `Live Watch-Party`, `PROTECTED LIVE SESSION`, `LIVE FIRST FOCUS`, and `TAILORED LIVE WATCH-PARTY` are all now visible on the current build
 - treat the Expo Go `Unable to activate keep awake` / intermittent Android ANR dialogs as environment noise unless the same behavior reproduces outside this proof lane or on a non-Expo-Go runtime
 - use the reconciled proof harness baseline exactly as recorded: `SESSION_START_PROTOCOL.md` exists, the Maestro smoke lane is explicit, and the authenticated owner-rails flow no longer depends on missing subflows or dead ids
-- preserve the new EAS Update readiness truth exactly as recorded: `runtimeVersion` now uses `appVersion`, `updates.url` is repo-owned, `npm run validate:runtime` now passes locally from `.env.local`, and `expo-updates@~29.0.16` is now repo-owned in `package.json` / `package-lock.json`
-- create a fresh preview build first so the binary actually contains `expo-updates`; then publish the first preview OTA with `npx eas-cli@latest update --channel preview --message "Chi'llywood preview OTA"` and verify it with `npx eas-cli@latest update:list` / `npx eas-cli@latest update:view` plus a cold restart on that fresh preview build
+- preserve the new EAS Update truth exactly as recorded: `runtimeVersion` now uses `appVersion`, `updates.url` is repo-owned, `npm run validate:runtime` passes locally from `.env.local`, `expo-updates@~29.0.16` is repo-owned, Android preview build `3daa1615-d003-46d5-af7a-af8500497155` already exists on channel `preview`, and preview OTA group `7519a9ee-c320-4d24-939d-4deeec57048b` is now published from commit `c8cc828`
+- verify the installed preview build against the published preview OTA with this exact manual checklist:
+- logged-out first open lands on login
+- valid login returns to Home
+- `Top Rated` opens the real `/title/[id]` surface
+- `Browse` opens the real `/title/[id]` surface
+- Home shows a visible `Settings` entry
+- own profile shows a visible `Settings` entry
+- `Settings` opens
+- `Log Out` clears session and returns to login
+- other-user profile does not show a `Settings` control
 - only after preview verification, prepare the first controlled production rollout; if no production build exists yet for runtime `1.0.0`, create it first with `npx eas-cli@latest build --platform android --profile production --non-interactive`
 
 ## Scope
@@ -33,7 +42,7 @@ This next pass should:
 - preserve the newly re-closed auth/home regression fix without reopening app logic
 - preserve the newly proved Settings / Logout owner-surface behavior without collapsing own-profile and other-user profile doctrine
 - preserve the now-complete live-stage UI proof and stage-channel fix
-- create a fresh preview build with `expo-updates`, then execute the first preview-channel EAS Update publish and delivery verification without reopening proof
+- verify delivery of the already-published preview-channel EAS Update on the installed preview build without reopening app implementation work
 
 ## Out Of Scope
 Do not:
@@ -48,5 +57,5 @@ The next lane is successful when:
 - remote PostHog on-state delivery remains recorded as proven for the gated chat flags
 - Home/Profile Settings / Logout truth remains recorded as proved without collapsing profile-role separation
 - the live-stage route remains recorded as visibly proved, not merely log-proved
-- the first preview OTA is published from the proved checkpoint and verified on a fresh preview build/runtime that includes `expo-updates`
+- preview OTA group `7519a9ee-c320-4d24-939d-4deeec57048b` is verified on preview build `3daa1615-d003-46d5-af7a-af8500497155`
 - `CURRENT_STATE.md` and `NEXT_TASK.md` tell the same checkpoint story
