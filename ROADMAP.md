@@ -5,8 +5,7 @@ Chi'llywood should advance in structure-safe phases that keep product truth stab
 
 Current execution order:
 - Phase 0: Rachi foundation first
-- Phase 1: profile/channel and Chi'lly Chat completion
-- Phase 2: moderation/admin minimums
+- Phase 2: moderation/admin minimums after Rachi
 - Phase 3: Home/content polish
 - Phase 4: release hardening
 - Phase 5: final integration proof
@@ -23,11 +22,11 @@ Current execution order:
 - add the minimum official identity, role-foundation, starter-presence, and protection groundwork needed for later moderation/admin extension
 - avoid broad unrelated rewrites
 
-## Phase 1: Profile / Channel And Chi'lly Chat Completion
-- complete profile/channel minimum completion on the canonical `/profile/[userId]` architecture
-- complete Chi'lly Chat MVP basics on `/chat` and `/chat/[threadId]`
-- improve direct-thread stability, message flow basics, thread entry from profiles, and MVP voice/video entry continuity
-- keep changes additive and aligned with locked Chi'llywood profile/messenger truth
+## Carried-Forward Profile / Channel And Chi'lly Chat Truth
+- the current profile/channel and Chi'lly Chat implementation is carried forward as good enough for now unless a later blocker proves otherwise
+- canonical profile/channel routing remains `/profile/[userId]`
+- canonical Chi'lly Chat routing remains `/chat` and `/chat/[threadId]`
+- no automatic next-phase reopening of profile/channel or Chi'lly Chat completion is planned
 
 ### Current Stage 4 / PostHog Checkpoint
 - Phase 4 / Stage 4 is completed/proved on the current build

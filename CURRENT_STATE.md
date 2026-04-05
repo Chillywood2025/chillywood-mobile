@@ -44,7 +44,7 @@ A new Phase 0 Rachi foundation pass on April 5, 2026 now adds Chi'llywood's offi
 - `maestro/` now records the active baseline smoke lane explicitly, uses shared `CHILLYWOOD_APP_ID` / `EXPO_URL` contracts instead of the stale `8081` hardcode, and replaces the missing auth-subflow / dead-id flow 09 path with an optional authenticated self-profile owner-rails flow
 - No app logic changed in this reconciliation pass; the unrelated Supabase/media/screenshot worktree noise remains outside this checkpoint
 - Expo Go surfaced intermittent Android ANR dialogs plus `Unable to activate keep awake` during the PostHog-enabled proof sessions, but the underlying Home/chat/profile routes still rendered and both default-off plus on-state proof completed
-- with the updated execution plan now adopted, the next active lane after the completed Phase 0 Rachi foundation pass is Phase 1 profile/channel and Chi'lly Chat completion, while release hardening moves later in the plan
+- with the updated execution plan now corrected after the completed Phase 0 Rachi foundation pass, current profile/channel and Chi'lly Chat work is carried forward as good enough for now unless a later blocker proves otherwise; the next active lane is now Phase 2 moderation/admin minimums after Rachi, followed by Home/content polish, release hardening, and final integration proof, while emulator/device-heavy proof remains deferred until that final integration phase unless a true blocker appears
 
 ## EAS Update Readiness
 - `eas.json` already maps the active build profiles to `development`, `preview`, and `production` channels, and EAS remote state already has preview builds on channel `preview` with runtime `1.0.0`
