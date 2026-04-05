@@ -38,7 +38,8 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 ## EAS Update Readiness
 - `eas.json` already maps the active build profiles to `development`, `preview`, and `production` channels, and EAS remote state already has preview builds on channel `preview` with runtime `1.0.0`
 - shared app config now owns `runtimeVersion` with the Expo `appVersion` policy plus `updates.url=https://u.expo.dev/c384ed57-5454-4e80-81ad-dcc218b8a3c8`, so repo config and Android native update metadata now agree on the OTA transport
-- `package.json` now exposes `npm run validate:runtime`, and `scripts/validate-runtime.mjs` verifies the required runtime env vars plus the effective Expo config for `extra.eas.projectId`, `updates.url`, `runtimeVersion`, and `betaEnvironment`
+- `package.json` now exposes `npm run validate:runtime`, and `scripts/validate-runtime.mjs` now loads `.env.local` before verifying the required runtime env vars plus the effective Expo config for `extra.eas.projectId`, `updates.url`, `runtimeVersion`, and `betaEnvironment`
+- On April 5, 2026, `npm run validate:runtime` passed locally from the current repo state after the real runtime allowlist value was added to `.env.local`; the gate now resolves `projectId=c384ed57-5454-4e80-81ad-dcc218b8a3c8`, the repo-owned `updates.url`, `runtimeVersion.policy=appVersion`, and `betaEnvironment=public-v1`
 - `README.md` and `docs/public-v1-release-checklist.md` now record the manual EAS Update flow: validate -> preview publish -> verify delivery -> production rollout -> rollback/revert if needed
 - No production builds exist yet on EAS for the `production` profile, so the first controlled rollout step remains preview-channel publish and verification from the proved checkpoint before any production OTA rollout
 - The current runtime version policy in effect is `appVersion`, which resolves to `1.0.0` on the current checkpoint
@@ -49,6 +50,7 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 - `app/_layout.tsx` now identifies the signed-in Supabase user to PostHog and reloads feature flags inside the current provider tree, which fixed the missing identified-user flag-request path during the remote on-state proof lane
 - `SESSION_START_PROTOCOL.md`, `ROADMAP.md`, and the active `maestro/` docs/flows were reconciled so repo truth, checkpoint truth, and proof-harness truth now describe the same closed Stage 4 + PostHog baseline without changing app behavior
 - `app.json`, `package.json`, `scripts/validate-runtime.mjs`, `README.md`, and `docs/public-v1-release-checklist.md` now make the EAS Update readiness path explicit without changing app features or business logic
+- `scripts/validate-runtime.mjs` now loads `.env.local` directly, which removed the plain `npm run validate:runtime` blocker once the real local beta operator allowlist value was present
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`

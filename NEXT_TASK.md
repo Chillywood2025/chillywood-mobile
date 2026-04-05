@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Keep Stage 4 closed and recorded as completed/proved on the current build. The next exact lane is the first preview-channel EAS Update publish and verification from the now-ready checkpoint baseline.
+Keep Stage 4 closed and recorded as completed/proved on the current build. The next exact lane is the first preview-channel EAS Update publish and verification from the now-ready checkpoint baseline, with `npm run validate:runtime` now unblocked as the pre-publish gate.
 
 ## Current Plan
 1. Preserve the current green Stage 4 truth exactly as recorded
@@ -18,7 +18,7 @@ Keep Stage 4 closed and recorded as completed/proved on the current build. The n
 - keep the live-stage UI proof recorded as complete: `Live-First`, `Live Watch-Party`, `PROTECTED LIVE SESSION`, `LIVE FIRST FOCUS`, and `TAILORED LIVE WATCH-PARTY` are all now visible on the current build
 - treat the Expo Go `Unable to activate keep awake` / intermittent Android ANR dialogs as environment noise unless the same behavior reproduces outside this proof lane or on a non-Expo-Go runtime
 - use the reconciled proof harness baseline exactly as recorded: `SESSION_START_PROTOCOL.md` exists, the Maestro smoke lane is explicit, and the authenticated owner-rails flow no longer depends on missing subflows or dead ids
-- preserve the new EAS Update readiness truth exactly as recorded: `runtimeVersion` now uses `appVersion`, `updates.url` is repo-owned, and `npm run validate:runtime` is the required pre-publish gate
+- preserve the new EAS Update readiness truth exactly as recorded: `runtimeVersion` now uses `appVersion`, `updates.url` is repo-owned, and `npm run validate:runtime` now passes locally from `.env.local` as the required pre-publish gate
 - publish the first preview OTA with `npx eas-cli@latest update --channel preview --message "Chi'llywood preview OTA"` and verify it with `npx eas-cli@latest update:list` / `npx eas-cli@latest update:view` plus a cold restart on the latest preview build
 - only after preview verification, prepare the first controlled production rollout; if no production build exists yet for runtime `1.0.0`, create it first with `npx eas-cli@latest build --platform android --profile production --non-interactive`
 

@@ -1,4 +1,36 @@
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+const loadDotEnvFile = (filename) => {
+  const envPath = path.join(process.cwd(), filename);
+  if (!existsSync(envPath)) {
+    return;
+  }
+
+  const contents = readFileSync(envPath, "utf8");
+  for (const rawLine of contents.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const name = line.slice(0, separatorIndex).trim();
+    if (!name || process.env[name]) {
+      continue;
+    }
+
+    const value = line.slice(separatorIndex + 1).trim();
+    process.env[name] = value;
+  }
+};
+
+loadDotEnvFile(".env.local");
 
 const requiredEnv = [
   "EXPO_PUBLIC_SUPABASE_URL",
