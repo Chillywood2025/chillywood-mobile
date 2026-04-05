@@ -3,7 +3,7 @@
 ## Current Checkpoint
 Stage 4 remains completed/proved on the current build. Current JS via Expo Go / Metro proved Home, Player, Profile, Chi'lly Chat, Live Waiting Room, Party Waiting Room, Live Room, Party Room, and Live Stage behavior as described below.
 
-The latest proof passes fixed three real current-build issues: `app/player/[id].tsx` now resolves bundled assets through `expo-asset` before passing them to `expo-av`, `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes, and `app/_layout.tsx` now identifies the signed-in Supabase user to PostHog before reloading feature flags so the runtime requests flag values for the real current user. Typecheck passed afterward. PostHog env wiring is present locally and the current Expo runtime proof below confirms the vars are loading, but remote on-state delivery for the gated chat flags still remains blocked because PostHog is still evaluating both flags false for the current signed-in user.
+The latest proof passes fixed three real current-build issues: `app/player/[id].tsx` now resolves bundled assets through `expo-asset` before passing them to `expo-av`, `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes, and `app/_layout.tsx` now identifies the signed-in Supabase user to PostHog before reloading feature flags so the runtime requests flag values for the real current user. Typecheck passed afterward. PostHog env wiring is present locally and the current Expo runtime proof below now confirms both remote default-off stability and remote on-state delivery for the gated chat flags.
 
 ## Current-Build Proved Items
 - Home: `Continue Watching` proved at the top by temporarily seeding `watch_history` for `Chicago Streets` and then clearing it; `Browse` / `Top Rated` cards show title, info line, and `Added` date; the lower Home area is reserved for `Chi'llywood Originals`
@@ -20,9 +20,10 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 - The current Expo session on `8084` loaded `.env.local` and exported `EXPO_PUBLIC_POSTHOG_API_KEY` plus `EXPO_PUBLIC_POSTHOG_HOST`; the served Android `node_modules/expo-router/entry.bundle` also contained those injected values and the two active chat flag keys
 - Default-off stability is now proved on the PostHog-enabled runtime for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`: `/chat` still opened on the current build, `/chat/[threadId]` still opened on the current build, and the thread surface kept `Proof User`, `Direct thread`, voice/video actions, `Attach`, `React`, `Write a message`, and `Send` while `AI SMART REPLIES` and `PostHog gated` remained absent
 - `app/_layout.tsx` now mounts a signed-in PostHog bridge inside `SessionProvider`, identifies the authenticated Supabase user, and immediately reloads feature flags so current-runtime flag evaluation is no longer limited to the anonymous client
-- Remote on-state delivery was re-checked on April 5, 2026 after the signed-in bridge landed: Home reopened cleanly, `/chat/[threadId]` reopened cleanly, and own profile reopened cleanly, but the `AI SMART REPLIES` / `PostHog gated` card still did not render
-- Direct backend proof now explains that absence: two live `POST https://us.i.posthog.com/flags/?v=2` checks for distinct id `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f` returned both `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` as `enabled: false` with reason `out_of_rollout_bound`, even after a propagation wait and re-check
-- Remote-delivery on-state for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` therefore remains unproved on the current runtime because PostHog is still excluding the current proof user from rollout, not because the local client is missing env wiring or route-level flag consumers
+- Remote on-state delivery was re-run on April 5, 2026 after rollout targeting was updated in PostHog. A fresh live `POST https://us.i.posthog.com/flags/?v=2` check for distinct id `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f` returned both `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` as `enabled: true` with reason `condition_match`
+- Current-runtime on-state delivery is now proved: after a fresh Expo Go reload, Home reopened cleanly, own profile reopened cleanly, and `/chat/[threadId]` reopened cleanly with the gated card visible in-app
+- The proved on-state thread markers are `AI SMART REPLIES`, `PostHog gated`, and the visible smart-reply chips `Hey Proof, I'm here`, `Let's do a voice call`, and `Send me the details`
+- Remote PostHog on-state delivery for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` is therefore now closed on the current runtime
 - The active chat-thread flag consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`
 - Waiting-room and live flags are probe-only in `app/_layout.tsx` and are not wired to active UI owners
 
@@ -30,8 +31,8 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 - `SESSION_START_PROTOCOL.md` is missing even though docs refer to it
 - `maestro/` docs and the actual flow inventory are out of sync
 - `_subflows/ensure-authenticated.yaml` and several referenced flows are missing
-- Expo Go surfaced intermittent Android ANR dialogs plus `Unable to activate keep awake` during the PostHog-enabled proof session, but the underlying Home/chat routes still rendered and the default-off proof completed
-- the checkpoint files must stay aligned on the single active blocker: remote PostHog on-state delivery
+- Expo Go surfaced intermittent Android ANR dialogs plus `Unable to activate keep awake` during the PostHog-enabled proof sessions, but the underlying Home/chat/profile routes still rendered and both default-off plus on-state proof completed
+- with PostHog on-state now proved, the next active lane is repo/doc drift reconciliation rather than flag delivery
 
 ## What Was Fixed In This Pass
 - `app/player/[id].tsx` now resolves bundled assets through `expo-asset` `localUri` before `expo-av` `Video`, which fixed the real Android preview/current-JS playback bug
