@@ -3,8 +3,10 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     buildUserChannelProfile,
     readMyListIds,
+    readMergedWatchProgress,
     readUserProfile,
     toggleMyListTitle,
+    type WatchProgressMap,
     type UserChannelProfile,
 } from "../../_lib/userData";
 import { getSafePartyUserId } from "../../_lib/watchParty";
@@ -41,6 +43,42 @@ type TitleRow = {
   video_url?: string | null;
 };
 
+type TitleLiveMetadata = {
+  liveRoomCount: number;
+  commentCount: number;
+  reactionsEnabled: boolean;
+};
+
+type WatchPartyRoomRow = {
+  party_id?: string | null;
+  title_id?: string | null;
+  reactions_policy?: string | null;
+  last_activity_at?: string | null;
+  updated_at?: string | null;
+};
+
+type WatchPartyRoomMessageRow = {
+  party_id?: string | null;
+};
+
+const LIVE_ACTIVITY_WINDOW_MILLIS = 15 * 60 * 1000;
+
+const formatAddedDate = (value?: string | null) => {
+  if (!value) return "Added recently";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Added recently";
+  return `Added ${date.toLocaleDateString([], { month: "short", day: "numeric" })}`;
+};
+
+const buildDiscoveryInfoLine = (item: TitleRow) => {
+  const segments = [
+    String(item.category ?? "").trim() || "Title",
+    String(item.runtime ?? "").trim() || (item.year ? String(item.year) : ""),
+  ].filter(Boolean);
+
+  return segments.join(" • ");
+};
+
 export default function HomeScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
@@ -51,6 +89,81 @@ export default function HomeScreen() {
   const [myListIds, setMyListIds] = useState<string[]>([]);
   const [myListTitles, setMyListTitles] = useState<TitleRow[]>([]);
   const [myListLoading, setMyListLoading] = useState(true);
+  const [watchProgress, setWatchProgress] = useState<WatchProgressMap>({});
+  const [titleLiveMetadataById, setTitleLiveMetadataById] = useState<Record<string, TitleLiveMetadata>>({});
+
+  async function fetchTitleLiveMetadata(nextTitles: TitleRow[]) {
+    const titleIds = nextTitles.map((item) => String(item.id)).filter(Boolean);
+    if (!titleIds.length) {
+      setTitleLiveMetadataById({});
+      return;
+    }
+
+    try {
+      const { data: roomData, error: roomError } = await supabase
+        .from("watch_party_rooms")
+        .select("party_id,title_id,reactions_policy,last_activity_at,updated_at")
+        .eq("room_type", "title")
+        .in("title_id", titleIds);
+
+      if (roomError || !roomData) {
+        setTitleLiveMetadataById({});
+        return;
+      }
+
+      const activeRooms = (roomData as WatchPartyRoomRow[]).filter((row) => {
+        const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
+        if (!activitySource) return false;
+        const activityAt = Date.parse(activitySource);
+        if (!Number.isFinite(activityAt)) return false;
+        return Date.now() - activityAt <= LIVE_ACTIVITY_WINDOW_MILLIS;
+      });
+
+      if (!activeRooms.length) {
+        setTitleLiveMetadataById({});
+        return;
+      }
+
+      const activePartyIds = activeRooms.map((row) => String(row.party_id ?? "").trim()).filter(Boolean);
+      const messageCountByPartyId: Record<string, number> = {};
+
+      if (activePartyIds.length) {
+        const { data: messageData } = await supabase
+          .from("watch_party_room_messages")
+          .select("party_id")
+          .in("party_id", activePartyIds);
+
+        (messageData as WatchPartyRoomMessageRow[] | null)?.forEach((row) => {
+          const partyId = String(row.party_id ?? "").trim();
+          if (!partyId) return;
+          messageCountByPartyId[partyId] = (messageCountByPartyId[partyId] ?? 0) + 1;
+        });
+      }
+
+      const nextMetadata: Record<string, TitleLiveMetadata> = {};
+
+      activeRooms.forEach((row) => {
+        const titleId = String(row.title_id ?? "").trim();
+        const partyId = String(row.party_id ?? "").trim();
+        if (!titleId || !partyId) return;
+
+        const current = nextMetadata[titleId] ?? {
+          liveRoomCount: 0,
+          commentCount: 0,
+          reactionsEnabled: false,
+        };
+
+        current.liveRoomCount += 1;
+        current.commentCount += messageCountByPartyId[partyId] ?? 0;
+        current.reactionsEnabled = current.reactionsEnabled || String(row.reactions_policy ?? "").trim().toLowerCase() !== "muted";
+        nextMetadata[titleId] = current;
+      });
+
+      setTitleLiveMetadataById(nextMetadata);
+    } catch {
+      setTitleLiveMetadataById({});
+    }
+  }
 
   async function fetchTitles() {
     setError(null);
@@ -62,11 +175,19 @@ export default function HomeScreen() {
 
     if (error) {
       setTitles([]);
+      setTitleLiveMetadataById({});
       setError(error.message);
       return;
     }
 
-    setTitles((data as TitleRow[]) ?? []);
+    const nextTitles = (data as TitleRow[]) ?? [];
+    setTitles(nextTitles);
+    await fetchTitleLiveMetadata(nextTitles);
+  }
+
+  async function fetchWatchProgress() {
+    const nextProgress = await readMergedWatchProgress().catch(() => ({} as WatchProgressMap));
+    setWatchProgress(nextProgress);
   }
 
   async function fetchMyList() {
@@ -137,20 +258,20 @@ export default function HomeScreen() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([fetchTitles(), fetchMyList(), fetchCurrentChannelProfile()]);
+      await Promise.all([fetchTitles(), fetchMyList(), fetchCurrentChannelProfile(), fetchWatchProgress()]);
       setLoading(false);
     })();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      Promise.all([fetchMyList(), fetchCurrentChannelProfile()]).catch(() => {});
+      Promise.all([fetchMyList(), fetchCurrentChannelProfile(), fetchWatchProgress()]).catch(() => {});
     }, []),
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([fetchTitles(), fetchMyList(), fetchCurrentChannelProfile()]);
+    await Promise.all([fetchTitles(), fetchMyList(), fetchCurrentChannelProfile(), fetchWatchProgress()]);
     setRefreshing(false);
   }
 
@@ -206,10 +327,26 @@ export default function HomeScreen() {
     });
   }
 
-  const heroItem = titles[0];
-  const continueItem = titles[1] ?? titles[0];
-  const heroImageSource = getImageUri(heroItem);
-  const continueImageSource = getImageUri(continueItem);
+  const continueCandidates = useMemo(() => {
+    return titles
+      .filter((item) => {
+        const progressEntry = watchProgress[String(item.id)];
+        return !!progressEntry && progressEntry.positionMillis > 0;
+      })
+      .sort((a, b) => {
+        const aUpdated = watchProgress[String(a.id)]?.updatedAt ?? 0;
+        const bUpdated = watchProgress[String(b.id)]?.updatedAt ?? 0;
+        return bUpdated - aUpdated;
+      });
+  }, [titles, watchProgress]);
+
+  const spotlightItem = continueCandidates[0] ?? titles[0] ?? null;
+  const spotlightIsContinueWatching = !!continueCandidates.length && !!spotlightItem;
+  const spotlightImageSource = getImageUri(spotlightItem);
+  const spotlightProgress = spotlightItem ? watchProgress[String(spotlightItem.id)] : undefined;
+  const spotlightProgressPercent = spotlightProgress?.durationMillis
+    ? Math.max(8, Math.min(100, Math.round((spotlightProgress.positionMillis / spotlightProgress.durationMillis) * 100)))
+    : 42;
   const topRatedTitles = useMemo(() => titles.slice(0, 8), [titles]);
   const homeAvatarInitial = String(currentChannel?.displayName ?? "You").slice(0, 1).toUpperCase() || "Y";
 
@@ -220,6 +357,9 @@ export default function HomeScreen() {
 
   const renderDiscoveryCard = ({ item }: { item: TitleRow }) => {
     const cardImageSource = getImageUri(item);
+    const liveMetadata = titleLiveMetadataById[String(item.id)];
+    const infoLine = buildDiscoveryInfoLine(item);
+    const addedLabel = formatAddedDate(item.created_at);
 
     return (
       <TouchableOpacity style={styles.dramaCard} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
@@ -230,13 +370,32 @@ export default function HomeScreen() {
         )}
         <View style={styles.dramaOverlay} />
 
+        {liveMetadata?.liveRoomCount ? (
+          <View style={styles.liveBadge}>
+            <Text style={styles.liveBadgeText}>LIVE</Text>
+          </View>
+        ) : null}
+
         <View style={styles.dramaMeta}>
           <Text style={styles.dramaTitle} numberOfLines={1}>
             {item.title}
           </Text>
           <Text style={styles.dramaRuntime} numberOfLines={1}>
-            {item.runtime || "—"}
+            {infoLine}
           </Text>
+          <Text style={styles.dramaDate} numberOfLines={1}>
+            {addedLabel}
+          </Text>
+          {liveMetadata?.liveRoomCount ? (
+            <View style={styles.dramaLiveMetaRow}>
+              <Text style={styles.dramaLiveMetaText}>
+                {liveMetadata.commentCount} comment{liveMetadata.commentCount === 1 ? "" : "s"}
+              </Text>
+              {liveMetadata.reactionsEnabled ? (
+                <Text style={styles.dramaLiveMetaText}>Reactions live</Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </TouchableOpacity>
     );
@@ -244,7 +403,7 @@ export default function HomeScreen() {
 
   return (
     <ImageBackground
-      source={heroImageSource || undefined}
+      source={spotlightImageSource || undefined}
       style={styles.screenBackground}
       resizeMode="cover"
     >
@@ -295,10 +454,10 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {heroItem ? (
+          {spotlightItem ? (
             <View style={styles.heroWrap}>
-              {heroImageSource ? (
-                <Image source={heroImageSource} style={styles.heroImage} />
+              {spotlightImageSource ? (
+                <Image source={spotlightImageSource} style={styles.heroImage} />
               ) : (
                 <View style={styles.heroFallback} />
               )}
@@ -306,17 +465,40 @@ export default function HomeScreen() {
               <View style={styles.heroOverlay} />
 
               <View style={styles.heroContent}>
-                <Text style={styles.topBrand}>STREAM THE CITY</Text>
+                <Text style={styles.topBrand}>
+                  {spotlightIsContinueWatching ? "CONTINUE WATCHING" : "STREAM THE CITY"}
+                </Text>
                 <Text style={styles.heroTitle} numberOfLines={2}>
-                  {heroItem.title}
+                  {spotlightItem.title}
                 </Text>
                 <Text style={styles.heroSubtitle} numberOfLines={2}>
-                  {heroItem.synopsis || "A cinematic story from the city streets."}
+                  {spotlightIsContinueWatching
+                    ? spotlightItem.synopsis || "Pick up where you left off without losing your place."
+                    : spotlightItem.synopsis || "A cinematic story from the city streets."}
                 </Text>
 
+                <View style={styles.heroMetaRow}>
+                  <Text style={styles.heroMetaText}>{buildDiscoveryInfoLine(spotlightItem)}</Text>
+                  <Text style={styles.heroMetaDot}>•</Text>
+                  <Text style={styles.heroMetaText}>{formatAddedDate(spotlightItem.created_at)}</Text>
+                </View>
+
+                {spotlightIsContinueWatching ? (
+                  <View style={styles.heroProgressWrap}>
+                    <View style={styles.heroProgressTrack}>
+                      <View style={[styles.heroProgressFill, { width: `${spotlightProgressPercent}%` }]} />
+                    </View>
+                    <Text style={styles.heroProgressText}>
+                      {spotlightProgress?.durationMillis
+                        ? `${Math.round(spotlightProgressPercent)}% complete`
+                        : "Resume where you left off"}
+                    </Text>
+                  </View>
+                ) : null}
+
                 <View style={styles.heroActionRow}>
-                  <TouchableOpacity style={styles.playBtn} onPress={() => openPlayer(heroItem)} activeOpacity={0.9}>
-                    <Text style={styles.playBtnText}>Play</Text>
+                  <TouchableOpacity style={styles.playBtn} onPress={() => openPlayer(spotlightItem)} activeOpacity={0.9}>
+                    <Text style={styles.playBtnText}>{spotlightIsContinueWatching ? "Resume" : "Play"}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.watchPartyBtn} onPress={openWatchParty} activeOpacity={0.9}>
                     <Text style={styles.watchPartyBtnText}>Live Watch-Party</Text>
@@ -391,31 +573,13 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Continue Watching</Text>
-
-            {continueItem ? (
-              <TouchableOpacity style={styles.continueCard} onPress={() => openPlayer(continueItem)} activeOpacity={0.9}>
-                {continueImageSource ? (
-                  <Image source={continueImageSource} style={styles.continueImage} />
-                ) : (
-                  <View style={styles.continueFallback} />
-                )}
-                <View style={styles.continueOverlay} />
-
-                <View style={styles.continueContent}>
-                  <Text style={styles.continueTitle} numberOfLines={1}>
-                    {continueItem.title}
-                  </Text>
-                  <Text style={styles.continueSub} numberOfLines={1}>
-                    {continueItem.runtime || "In Progress"}
-                  </Text>
-                </View>
-
-                <View style={styles.continueProgressTrack}>
-                  <View style={styles.continueProgressFill} />
-                </View>
-              </TouchableOpacity>
-            ) : null}
+            <Text style={styles.sectionTitle}>Chi&apos;llywood Originals</Text>
+            <View style={styles.originalsPlaceholder}>
+              <Text style={styles.originalsPlaceholderTitle}>Reserved for Chi&apos;llywood-owned originals</Text>
+              <Text style={styles.originalsPlaceholderBody}>
+                This lower Home area is intentionally left open for future original drops, curated rails, and platform-owned premieres.
+              </Text>
+            </View>
           </View>
 
         </ScrollView>
@@ -567,6 +731,43 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 14,
   },
+  heroMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 12,
+  },
+  heroMetaText: {
+    color: "#E8EDF8",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  heroMetaDot: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  heroProgressWrap: {
+    marginBottom: 14,
+  },
+  heroProgressTrack: {
+    height: 7,
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  heroProgressFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "#E50914",
+  },
+  heroProgressText: {
+    color: "#DDE5F7",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 8,
+  },
   playBtn: {
     alignSelf: "flex-start",
     backgroundColor: "#E50914",
@@ -688,8 +889,23 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 84,
+    height: 118,
     backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  liveBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    borderRadius: 999,
+    backgroundColor: "#E50914",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  liveBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
   },
   dramaMeta: {
     position: "absolute",
@@ -709,6 +925,44 @@ const styles = StyleSheet.create({
     color: "#c3c3c3",
     fontSize: 12,
     marginTop: 4,
+  },
+  dramaDate: {
+    color: "#98A3BA",
+    fontSize: 10.5,
+    marginTop: 4,
+    fontWeight: "700",
+  },
+  dramaLiveMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 6,
+  },
+  dramaLiveMetaText: {
+    color: "#E7EDF9",
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+
+  originalsPlaceholder: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(10,12,18,0.72)",
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    gap: 6,
+  },
+  originalsPlaceholderTitle: {
+    color: "#F2F5FC",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  originalsPlaceholderBody: {
+    color: "#97A3B8",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
   },
 
   myListLoadingWrap: {

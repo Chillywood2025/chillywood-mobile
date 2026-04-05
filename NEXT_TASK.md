@@ -1,13 +1,13 @@
 # NEXT TASK
 
 ## Exact Next Task
-Stage 4 is now completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, keep the restored repo-truth/control files and Flow 09 proof file intact, do not reopen Stage 4 unless new proof truly invalidates it, move to the next roadmap checkpoint, and prove PostHog root flag delivery before any room-flow gating.
-Keep the restored repo-truth files and the Flow 09 proof file intact while that PostHog flag-delivery proof continues.
+Stage 4 remains completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, keep the restored repo-truth/control files and Flow 09 proof file intact, current-build prove the new Phase 1 Home / Discovery implementation, then continue into Phase 2 Player / Party with phase-pure commits. PostHog root flag delivery is still required before any room-flow gating or higher-risk AI/high-tech slice.
+Keep the restored repo-truth files and the Flow 09 proof file intact while the new phased product-alignment pass proceeds from that stable baseline.
 
 ## Current Plan
 1. Preserve Stage 4 as completed/proved on the current build
-2. Begin Phase 5 multi-user validation planning from the now-green room/chat/profile baseline while proving PostHog root flag delivery
-3. Report exact files changed, final proof status, and any newly discovered blocker if one appears
+2. Current-build prove Phase 1 Home / Discovery from the now-green baseline
+3. Continue into Phase 2 Player / Party with phase-pure validation and commits
 4. No final human verification pass
 5. Do not reopen Stage 4 unless new current-build proof truly invalidates it
 
@@ -35,6 +35,14 @@ Keep the restored repo-truth files and the Flow 09 proof file intact while that 
   - `auth-gate`, `home-to-title-to-player`, `home-to-live-watch-party`, `player-to-watch-party-live`, `06-player-to-party-room`, `07-home-live-watch-party-to-live-stage`, `08-home-profile-chat-and-channel-settings`, and `09-title-actions-to-self-profile-rails` all passed
 - keep the bounded local 320x640-style replay recorded accurately as having passed after the new direct `profile-shares-entry-t1` scroll step
 - keep Stage 4 recorded accurately as having no remaining automated blocker now
+- current-build prove the new Home / Discovery slice in `app/(tabs)/index.tsx`:
+  - Continue Watching occupies the top hero slot when real watch progress exists
+  - the lower Home slot is now reserved for future Chi'llywood Originals instead of a duplicate Continue Watching rail
+  - `Top Rated` and `Browse` cards now expose added-date plus live comment/reaction metadata when active title-room activity exists
+- then move into Phase 2 Player / Party:
+  - preserve standalone playback
+  - keep title/player CTA wording exactly `Watch-Party Live`
+  - harden Party Waiting Room -> Party Room -> tailored watch-party live behavior without any Party Room -> Live Stage drift
 - prove remote PostHog flag delivery at the root for:
   - `live_waiting_room_enabled`
   - `party_waiting_room_enabled`
@@ -49,14 +57,12 @@ Keep the restored repo-truth files and the Flow 09 proof file intact while that 
 ## Scope
 This next pass should:
 - preserve the now-green Stage 4 baseline exactly as proved on the current build
-- plan the first Phase 5 validation slice around:
-  - cross-account/device room-native communication proof
-  - cross-account/device Chi'lly Chat messaging and thread-call proof
-  - reconnect, background/foreground, and access-gate validation
+- prove the newly landed Phase 1 Home / Discovery implementation on the current build
+- continue the requested product-alignment work in phase order after each phase has a task-pure diff, validation, and checkpoint update
 - keep proof bookkeeping strict:
   - nothing counts as passed unless current terminal/workflow output proves it on the current build
   - keep locked product truth separate from checkpoint truth
-  - keep completed Stage 4 proof separate from new Phase 5 work
+  - keep completed Stage 4 proof separate from the new phase-by-phase product-alignment work
 - preserve the preview EAS environment values and the corrected Android bundled/cloud lanes so future validation remains runnable
 - preserve canonical room routes, Chi'lly Chat routes, profile/channel truth, and the corrected Party / Live split while Phase 5 planning begins
 - validate PostHog root flag delivery without changing room routes, waiting-room behavior, or live room ownership

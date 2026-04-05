@@ -3,8 +3,10 @@
 ## Current Checkpoint
 Chi'llywood still carries locked product doctrine, hard-locked core naming, canonical room architecture, a standalone Chi'lly Chat MVP in repo code, and an explicit messenger-first / profile-first / action-first MVP direction in the control files. Stage 4's final automation batch is now completed/proved on the current build because current terminal/workflow output proved the corrected local release-style / bundled Android lane, the corrected Party / Live split, local Flow 09, and the final cloud rerun all green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91`. The previous cloud rerun narrowed the only remaining issue to a below-the-fold Flow 09 proof-path problem, cloud artifact inspection plus a bounded local 320x640-style replay proved that diagnosis, and the replacement cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green with all cloud Maestro flows passing.
 The active repo-truth files `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` are restored after the accidental cleanup deletion, while the intended PostHog root wiring remains intact.
+A new phased product-alignment pass has begun from that stable baseline, and Phase 1 Home / Discovery code is now in repo, but current-build UI proof for that phase is still pending.
 
 ## Current Batch Surface Inventory
+- Home tab -> Continue Watching hero slot -> Top Rated / Browse metadata -> reserved Chi'llywood Originals slot
 - Home tab -> self profile -> channel settings -> profile rails -> Chi'lly Chat inbox
 - Explore tab -> title detail -> self profile likes/shares rails
 
@@ -109,6 +111,7 @@ The active repo-truth files `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMA
 - the earlier local Flow 09 Android ANR/system-UI interruptions remain recorded as historical environment instability on the bundled lane, but they are not the active checkpoint blocker unless they recur during the cloud follow-up or a future rerun
 - PostHog root feature-flag wiring now exists, but remote delivery for `live_waiting_room_enabled`, `party_waiting_room_enabled`, and `watch_party_live_handoff_v2` is not yet proved on the current build
 - the accidental cleanup deletion of `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` is now repaired, so the repo-truth and checkpoint references are consistent again
+- the new Phase 1 Home / Discovery implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`
@@ -135,6 +138,7 @@ The active repo-truth files `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMA
 - repo-root control files were rewritten so standalone Chi'lly Chat and room-native communication no longer conflict
 - `SESSION_START_PROTOCOL.md` now exists and locks the session-start checklist for future sessions
 - PostHog feature flags are now scaffolded at the root via Expo-compatible dependencies in `package.json`, env/flag helpers in `_lib/posthog.ts`, and a non-invasive `PostHogProvider` + proof-only flag probe in `app/_layout.tsx`
+- `app/(tabs)/index.tsx` now promotes real Continue Watching progress into the top Home hero slot when progress exists, enriches `Top Rated` and `Browse` cards with added-date plus live comment/reaction metadata when active title-room activity exists, and replaces the lower Continue Watching slot with a reserved Chi'llywood Originals placeholder instead of filler content
 - `_lib/appConfig.ts` hard-locks the doctrinal product labels
 - `app/admin.tsx` now exposes locked naming as read-only instead of editable runtime branding
 - `supabase/migrations/202603270009_create_chilly_chat_threads.sql` adds:
