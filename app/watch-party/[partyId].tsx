@@ -51,7 +51,7 @@ import {
     reportDebugQuery,
 } from "../../_lib/devDebug";
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
-import { submitSafetyReport } from "../../_lib/moderation";
+import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { setUserPlan, unlockPartyPass } from "../../_lib/monetization";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
@@ -919,10 +919,11 @@ export default function WatchPartyRoomScreen() {
     if (myRoleRef.current !== "host" || !partyId) return;
     const next = !reactionsGloballyMuted;
     setReactionsGloballyMuted(next);
-    trackEvent("moderation_action_used", {
+    trackModerationActionUsed({
       surface: "watch-party-room",
       action: next ? "mute_reactions" : "unmute_reactions",
       roomId: partyId,
+      sourceRoute: `/watch-party/${partyId}`,
     });
     await (next
       ? applyHostAction(partyId, { type: "mute_reactions" })
@@ -984,10 +985,11 @@ export default function WatchPartyRoomScreen() {
     if (myRoleRef.current !== "host" || !partyId) return;
     const next = !roomLocked;
     setRoomLocked(next);
-    trackEvent("moderation_action_used", {
+    trackModerationActionUsed({
       surface: "watch-party-room",
       action: next ? "lock_room" : "unlock_room",
       roomId: partyId,
+      sourceRoute: `/watch-party/${partyId}`,
     });
     await (next
       ? applyHostAction(partyId, { type: "lock_room" })
@@ -1003,7 +1005,7 @@ export default function WatchPartyRoomScreen() {
       ? (changes.role === "host" ? "host" : changes.role)
       : currentMembership?.stageRole;
     const shouldRemove = typeof changes.isRemoved === "boolean" ? changes.isRemoved : currentMembership?.membershipState === "removed";
-    trackEvent("moderation_action_used", {
+    trackModerationActionUsed({
       surface: "watch-party-room",
       action: shouldRemove
         ? "remove_participant"
@@ -1013,7 +1015,10 @@ export default function WatchPartyRoomScreen() {
             ? "promote_speaker"
             : "demote_listener",
       roomId: partyId,
-      targetUserId: participantId,
+      titleId: room?.titleId ?? null,
+      targetType: "participant",
+      targetId: participantId,
+      sourceRoute: `/watch-party/${partyId}`,
     });
 
     await setPartyParticipantState(partyId, participantId, {
@@ -1524,10 +1529,16 @@ export default function WatchPartyRoomScreen() {
         note: input.note,
         roomId: room?.partyId ?? partyId,
         titleId: room?.titleId ?? null,
-        context: {
-          label: reportTarget.label,
-          roomType: room?.roomType ?? null,
-        },
+        context: buildSafetyReportContext({
+          sourceSurface: "watch-party-room",
+          sourceRoute: `/watch-party/${partyId}`,
+          targetLabel: reportTarget.label,
+          targetRoleLabel: reportTarget.type === "room" ? "Room" : "Participant",
+          context: {
+            label: reportTarget.label,
+            roomType: room?.roomType ?? null,
+          },
+        }),
       });
       setReportVisible(false);
       setReportTarget(null);
@@ -2091,6 +2102,15 @@ export default function WatchPartyRoomScreen() {
           activeOpacity={0.84}
           onPress={() => {
             if (!room) return;
+            trackModerationActionUsed({
+              surface: "watch-party-room",
+              action: "open_safety_report",
+              targetType: "room",
+              targetId: room.partyId,
+              roomId: room.partyId,
+              titleId: room.titleId ?? null,
+              sourceRoute: `/watch-party/${partyId}`,
+            });
             setReportTarget({
               type: "room",
               targetId: room.partyId,
@@ -2242,6 +2262,15 @@ export default function WatchPartyRoomScreen() {
         safeAreaBottom={safeAreaInsets.bottom}
         onClose={closeParticipantModal}
         onReportParticipant={selectedParticipantUserId ? () => {
+          trackModerationActionUsed({
+            surface: "watch-party-room",
+            action: "open_safety_report",
+            targetType: "participant",
+            targetId: selectedParticipantUserId,
+            roomId: partyId,
+            titleId: room?.titleId ?? null,
+            sourceRoute: `/watch-party/${partyId}`,
+          });
           setReportTarget({
             type: "participant",
             targetId: selectedParticipantUserId,

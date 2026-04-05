@@ -29,7 +29,7 @@ import {
 } from "../../../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
-import { submitSafetyReport } from "../../../_lib/moderation";
+import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
 import { useSession } from "../../../_lib/session";
 import { supabase } from "../../../_lib/supabase";
 import { readUserProfile } from "../../../_lib/userData";
@@ -1557,6 +1557,15 @@ export default function WatchPartyLiveStageScreen() {
         safeAreaBottom={safeAreaInsets.bottom}
         onClose={closeParticipantModal}
         onReportParticipant={selectedParticipantUserId ? () => {
+          trackModerationActionUsed({
+            surface: "live-stage",
+            action: "open_safety_report",
+            targetType: "participant",
+            targetId: selectedParticipantUserId,
+            roomId: partyId,
+            titleId: room?.titleId ?? null,
+            sourceRoute: `/watch-party/live-stage/${partyId}`,
+          });
           setReportTarget({
             userId: selectedParticipantUserId,
             label: selectedParticipant?.displayName || "Participant",
@@ -1598,10 +1607,16 @@ export default function WatchPartyLiveStageScreen() {
               note: input.note,
               roomId: partyId,
               titleId: room?.titleId ?? null,
-              context: {
-                label: reportTarget.label,
-                roomType: room?.roomType ?? null,
-              },
+              context: buildSafetyReportContext({
+                sourceSurface: "live-stage",
+                sourceRoute: `/watch-party/live-stage/${partyId}`,
+                targetLabel: reportTarget.label,
+                targetRoleLabel: "Participant",
+                context: {
+                  label: reportTarget.label,
+                  roomType: room?.roomType ?? null,
+                },
+              }),
             });
             setReportVisible(false);
             setReportTarget(null);

@@ -24,6 +24,14 @@ import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
 import { useSession } from "../_lib/session";
 import {
+  getModerationAccess,
+  hasPlatformRoleMembership,
+  readMyPlatformRoleMemberships,
+  readSafetyReports,
+  type PlatformRoleMembership,
+  type SafetyReportRecord,
+} from "../_lib/moderation";
+import {
   normalizeCreatorPermissionSet,
   normalizeSponsorPlacement,
   normalizeTitleAccessRule,
@@ -34,7 +42,6 @@ import {
   type SponsorPlacement,
   type TitleAccessRule,
 } from "../_lib/monetization";
-import { isBetaOperatorIdentity } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 
@@ -221,6 +228,24 @@ const getStatusTone = (status: StatusType) => {
   return styles.badgeDraft;
 };
 
+const formatModerationToken = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "UNKNOWN";
+  return text.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const readContextText = (value: unknown, fallback = "") => {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+};
+
+const formatModerationTimestamp = (value: string | null) => {
+  if (!value) return "Pending timestamp";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+};
+
 const formatRelease = (releaseAt?: string | null) => {
   const raw = (releaseAt ?? "").trim();
   if (!raw) return "—";
@@ -266,6 +291,11 @@ export default function AdminStudioScreen() {
   const [creatorGrantLoading, setCreatorGrantLoading] = useState(false);
   const [creatorGrantSaving, setCreatorGrantSaving] = useState(false);
   const [creatorGrantForm, setCreatorGrantForm] = useState<CreatorPermissionSet>(normalizeCreatorPermissionSet(null));
+  const [platformRoles, setPlatformRoles] = useState<PlatformRoleMembership[]>([]);
+  const [platformRolesLoading, setPlatformRolesLoading] = useState(false);
+  const [safetyReports, setSafetyReports] = useState<SafetyReportRecord[]>([]);
+  const [safetyReportsLoading, setSafetyReportsLoading] = useState(false);
+  const [moderationNotice, setModerationNotice] = useState<string | null>(null);
   const [form, setForm] = useState<EditorForm>({
     title: "",
     category: "",
@@ -289,23 +319,40 @@ export default function AdminStudioScreen() {
     sponsor_label: "",
   });
   const themePalette = getThemePresetPalette(experienceConfig.theme.preset);
-  const isBetaOperator = isBetaOperatorIdentity({
+  const moderationAccess = getModerationAccess({
     userId: user?.id ?? null,
     email: user?.email ?? null,
   });
-  const canAccessAdmin = isSignedIn && isActive && isBetaOperator;
+  const canAccessAdmin = isSignedIn && isActive && moderationAccess.canAccessAdmin;
+  const canReviewSafetyReports = hasPlatformRoleMembership(platformRoles, ["operator", "moderator"]);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin tools");
 
   useEffect(() => {
     if (!canAccessAdmin) {
       setLoading(false);
       setConfigLoading(false);
+      setPlatformRoles([]);
+      setPlatformRolesLoading(false);
+      setSafetyReports([]);
+      setSafetyReportsLoading(false);
+      setModerationNotice(null);
       return;
     }
     loadTitles();
     loadExperienceConfig();
+    void loadPlatformRoles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessAdmin]);
+
+  useEffect(() => {
+    if (!canAccessAdmin || !canReviewSafetyReports) {
+      setSafetyReports([]);
+      setSafetyReportsLoading(false);
+      return;
+    }
+    void loadSafetyReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAccessAdmin, canReviewSafetyReports]);
 
   const stats = useMemo(() => {
     const total = titles.length;
@@ -443,6 +490,34 @@ export default function AdminStudioScreen() {
       setNotice({ type: "error", text: err?.message ?? "Failed to load experience config." });
     } finally {
       setConfigLoading(false);
+    }
+  }, []);
+
+  const loadPlatformRoles = useCallback(async () => {
+    try {
+      setPlatformRolesLoading(true);
+      setModerationNotice(null);
+      const memberships = await readMyPlatformRoleMemberships();
+      setPlatformRoles(memberships);
+    } catch (err: any) {
+      setPlatformRoles([]);
+      setModerationNotice(err?.message ?? "Failed to load platform moderation roles.");
+    } finally {
+      setPlatformRolesLoading(false);
+    }
+  }, []);
+
+  const loadSafetyReports = useCallback(async () => {
+    try {
+      setSafetyReportsLoading(true);
+      setModerationNotice(null);
+      const reports = await readSafetyReports({ limit: 8 });
+      setSafetyReports(reports);
+    } catch (err: any) {
+      setSafetyReports([]);
+      setModerationNotice(err?.message ?? "Failed to load the safety review queue.");
+    } finally {
+      setSafetyReportsLoading(false);
     }
   }, []);
 
@@ -897,7 +972,7 @@ export default function AdminStudioScreen() {
     );
   }
 
-  if (!isBetaOperator) {
+  if (!moderationAccess.canAccessAdmin) {
     return (
       <BetaAccessScreen
         title="This account is not on the operator allowlist"
@@ -933,6 +1008,123 @@ export default function AdminStudioScreen() {
             <Text style={styles.noticeText}>{notice.text}</Text>
           </View>
         )}
+
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>MODERATION</Text>
+              <Text style={styles.configTitle}>Safety reports and role-aware review</Text>
+              <Text style={styles.configBody}>
+                Report flows now preserve route, target, and audit context across title, profile, chat, and room surfaces while review stays behind active platform moderation roles.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.badgesRow}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{`Actor ${formatModerationToken(moderationAccess.actorRole)}`}</Text>
+            </View>
+            <View style={[styles.badge, styles.badgePublished]}>
+              <Text style={styles.badgeText}>Admin Access Enabled</Text>
+            </View>
+            <View style={[styles.badge, canReviewSafetyReports ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canReviewSafetyReports ? "Review Queue Enabled" : "Review Queue Locked"}</Text>
+            </View>
+            {platformRoles.map((membership) => (
+              <View key={`${membership.role}-${membership.id}`} style={[styles.badge, styles.badgeScheduled]}>
+                <Text style={styles.badgeText}>{formatModerationToken(membership.role)}</Text>
+              </View>
+            ))}
+          </View>
+
+          {platformRolesLoading ? (
+            <View style={styles.configLoadingRow}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.configLoadingText}>Loading platform moderation roles…</Text>
+            </View>
+          ) : null}
+
+          {moderationNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{moderationNotice}</Text>
+            </View>
+          ) : null}
+
+          {!platformRolesLoading && !platformRoles.length ? (
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>No active review role on this account yet</Text>
+                <Text style={styles.configListBody}>
+                  Content studio access can stay operator-only while safety-report review remains locked until this signed-in identity is granted an active `operator` or `moderator` platform role membership.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {canReviewSafetyReports ? (
+            safetyReportsLoading ? (
+              <View style={styles.configLoadingRow}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.configLoadingText}>Loading recent safety reports…</Text>
+              </View>
+            ) : safetyReports.length ? (
+              <View style={styles.configList}>
+                {safetyReports.map((report) => {
+                  const targetLabel = readContextText(report.context.targetLabel, report.targetId);
+                  const sourceSurface = readContextText(report.context.sourceSurface, "unknown");
+                  const reporterRole = readContextText(report.context.reporterRole, "member");
+                  const reviewState = readContextText(report.context.moderationReviewState, "pending_review");
+                  const targetAuditOwnerKey = readContextText(report.context.targetAuditOwnerKey);
+                  const platformOwnedTarget = report.context.platformOwnedTarget === true;
+
+                  return (
+                    <View key={report.id} style={styles.configListRow}>
+                      <View style={styles.configListCopy}>
+                        <Text style={styles.configListTitle}>{targetLabel}</Text>
+                        <Text style={styles.configListBody}>{formatModerationTimestamp(report.createdAt)}</Text>
+                        <Text style={styles.configListBody}>
+                          {`${formatModerationToken(sourceSurface)} · Reporter ${formatModerationToken(reporterRole)}`}
+                        </Text>
+                        {targetAuditOwnerKey ? (
+                          <Text style={styles.configListBody}>{`Audit owner ${targetAuditOwnerKey}`}</Text>
+                        ) : null}
+                        {report.note ? (
+                          <Text style={styles.configListBody}>{report.note}</Text>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.badgesRow}>
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{formatModerationToken(report.category)}</Text>
+                        </View>
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{formatModerationToken(report.targetType)}</Text>
+                        </View>
+                        <View style={[styles.badge, reviewState === "operator_visible" ? styles.badgeScheduled : styles.badgeDraft]}>
+                          <Text style={styles.badgeText}>{formatModerationToken(reviewState)}</Text>
+                        </View>
+                        {platformOwnedTarget ? (
+                          <View style={[styles.badge, styles.badgeOn]}>
+                            <Text style={styles.badgeText}>Platform Target</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>No safety reports yet</Text>
+                  <Text style={styles.configListBody}>
+                    Report review is ready, but the current queue is empty on this build.
+                  </Text>
+                </View>
+              </View>
+            )
+          ) : null}
+        </View>
 
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>

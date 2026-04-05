@@ -2,6 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -30,10 +31,12 @@ import {
   type ChatThreadSummary,
 } from "../../_lib/chat";
 import { reportRuntimeError } from "../../_lib/logger";
+import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { getPostHogConfig, isPostHogFlagEnabled, posthogFeatureFlags } from "../../_lib/posthog";
 import { useSession } from "../../_lib/session";
 import { InRoomCommunicationPanel } from "../../components/communication/in-room-communication-panel";
+import { ReportSheet } from "../../components/safety/report-sheet";
 import { useCommunicationRoomSession } from "../../hooks/use-communication-room-session";
 
 const buildAuthor = (members: ChatThreadMember[], senderUserId: string) => {
@@ -164,6 +167,8 @@ export default function ChillyChatThreadScreen() {
   const [thread, setThread] = useState<ChatThreadSummary | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
   const [callPanelOpen, setCallPanelOpen] = useState(false);
   const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
   const autoStartCallRef = useRef("");
@@ -456,6 +461,62 @@ export default function ChillyChatThreadScreen() {
     await handleStartCall(mode);
   }, [activeCallRoomId, handleStartCall, thread?.activeCallType, threadId]);
 
+  const handleOpenReport = useCallback(() => {
+    if (!otherMember?.userId) {
+      Alert.alert("Report", "This thread is missing the participant identity needed for a safety report.");
+      return;
+    }
+
+    trackModerationActionUsed({
+      surface: "chat-thread",
+      action: "open_safety_report",
+      targetType: "participant",
+      targetId: otherMember.userId,
+      threadId,
+      sourceRoute: `/chat/${threadId}`,
+      targetAuditOwnerKey: officialAccount?.auditOwnerKey ?? null,
+      platformOwnedTarget: !!officialAccount,
+    });
+    setHeaderQuickActionsOpen(false);
+    setReportVisible(true);
+  }, [officialAccount?.auditOwnerKey, otherMember?.userId, threadId, officialAccount]);
+
+  const handleSubmitReport = useCallback(async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
+    if (!otherMember?.userId) return;
+    setReportBusy(true);
+    try {
+      await submitSafetyReport({
+        targetType: "participant",
+        targetId: otherMember.userId,
+        category: input.category,
+        note: input.note,
+        context: buildSafetyReportContext({
+          sourceSurface: "chat-thread",
+          sourceRoute: `/chat/${threadId}`,
+          targetLabel: otherMemberDisplayName,
+          targetRoleLabel: officialAccount?.platformRoleLabel ?? "Participant",
+          targetAuditOwnerKey: officialAccount?.auditOwnerKey ?? null,
+          platformOwnedTarget: !!officialAccount,
+          context: {
+            threadId,
+            activeCallType: thread?.activeCallType ?? null,
+          },
+        }),
+      });
+      setReportVisible(false);
+    } finally {
+      setReportBusy(false);
+    }
+  }, [
+    officialAccount?.auditOwnerKey,
+    officialAccount?.platformRoleLabel,
+    otherMember?.userId,
+    otherMemberDisplayName,
+    thread?.activeCallType,
+    threadId,
+    officialAccount,
+  ]);
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
@@ -549,6 +610,14 @@ export default function ChillyChatThreadScreen() {
               }}
             >
               <Text style={styles.headerQuickActionButtonText}>View Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerQuickActionButton, styles.headerQuickActionReportButton]}
+              activeOpacity={0.86}
+              disabled={!otherMember?.userId}
+              onPress={handleOpenReport}
+            >
+              <Text style={styles.headerQuickActionReportButtonText}>Report</Text>
             </TouchableOpacity>
             {activeCallRoomId ? (
               <TouchableOpacity
@@ -768,6 +837,17 @@ export default function ChillyChatThreadScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <ReportSheet
+        visible={reportVisible}
+        title={officialAccount ? "Report official thread concern" : "Report participant"}
+        description={officialAccount
+          ? `Send a safety report if this official ${otherMemberDisplayName} thread feels unsafe, misleading, or compromised.`
+          : `Send a safety report for ${otherMemberDisplayName} if this direct thread feels abusive, unsafe, or impersonated.`}
+        busy={reportBusy}
+        onSubmit={handleSubmitReport}
+        onClose={() => setReportVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -944,6 +1024,15 @@ const styles = StyleSheet.create({
   },
   headerQuickActionAccentButtonText: {
     color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  headerQuickActionReportButton: {
+    borderColor: "rgba(220,20,60,0.28)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+  },
+  headerQuickActionReportButtonText: {
+    color: "#FFD5DD",
     fontSize: 12,
     fontWeight: "900",
   },

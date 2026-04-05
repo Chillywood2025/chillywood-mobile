@@ -9,7 +9,7 @@ import { CommunicationRoomHeader } from "../../components/communication/communic
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
-import { submitSafetyReport } from "../../_lib/moderation";
+import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { useSession } from "../../_lib/session";
 import { useCommunicationRoomSession } from "../../hooks/use-communication-room-session";
 
@@ -151,10 +151,17 @@ export default function CommunicationRoomScreen() {
         category: input.category,
         note: input.note,
         roomId: room.roomId,
-        context: {
-          linkedPartyId: room.linkedPartyId ?? null,
-          linkedRoomCode: room.linkedRoomCode ?? null,
-        },
+        context: buildSafetyReportContext({
+          sourceSurface: "communication-room",
+          sourceRoute: `/communication/${room.roomId}`,
+          targetLabel: room.roomCode ?? room.roomId,
+          targetRoleLabel: "Room",
+          context: {
+            linkedPartyId: room.linkedPartyId ?? null,
+            linkedRoomCode: room.linkedRoomCode ?? null,
+            linkedRoomMode: room.linkedRoomMode ?? null,
+          },
+        }),
       });
       setReportVisible(false);
     } finally {
@@ -225,7 +232,17 @@ export default function CommunicationRoomScreen() {
           linkedRoomCode={room?.linkedRoomCode}
           linkedRoomMode={room?.linkedRoomMode}
           onLeave={onLeave}
-          onReportRoom={() => setReportVisible(true)}
+          onReportRoom={() => {
+            trackModerationActionUsed({
+              surface: "communication-room",
+              action: "open_safety_report",
+              targetType: "room",
+              targetId: room?.roomId ?? roomId,
+              roomId: room?.roomId ?? roomId,
+              sourceRoute: `/communication/${room?.roomId ?? roomId}`,
+            });
+            setReportVisible(true);
+          }}
         />
 
         {loading ? (

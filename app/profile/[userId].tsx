@@ -9,6 +9,7 @@ import { trackEvent } from "../../_lib/analytics";
 import { useBetaProgram } from "../../_lib/betaProgram";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import { reportRuntimeError } from "../../_lib/logger";
+import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { getSupportRoutePath } from "../../_lib/runtimeConfig";
 import {
@@ -24,6 +25,7 @@ import {
 import { titles as localTitles } from "../../_data/titles";
 import { buildUserChannelProfile } from "../../_lib/userData";
 import { getSafePartyUserId } from "../../_lib/watchParty";
+import { ReportSheet } from "../../components/safety/report-sheet";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -31,6 +33,8 @@ export default function ProfileScreen() {
   const [currentUserId, setCurrentUserId] = useState("");
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
   const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
   const params = useLocalSearchParams<{
     userId?: string;
     displayName?: string;
@@ -136,6 +140,7 @@ export default function ProfileScreen() {
   const liveActionLabel = profile.isLive ? "Join Live" : "View Live";
   const hasLiveRouteContext = !!partyIdParam;
   const showManageChannelAction = isSelfProfile && creatorSettingsEnabled;
+  const canReportProfile = !isSelfProfile && !!userId;
   const canOpenLinkedRoomActions = hasLiveRouteContext;
   const liveStateLabel = profile.isLive ? "LIVE NOW" : "OFF AIR";
   const routeContextLabel = hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
@@ -394,6 +399,46 @@ export default function ProfileScreen() {
   const onPressSettings = () => {
     router.push("/settings");
   };
+  const onPressReportProfile = () => {
+    if (!canReportProfile) return;
+    trackModerationActionUsed({
+      surface: "profile",
+      action: "open_safety_report",
+      targetType: "participant",
+      targetId: userId,
+      sourceRoute: `/profile/${userId}`,
+      targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+      platformOwnedTarget: isOfficialProfile,
+    });
+    setReportVisible(true);
+  };
+  const onSubmitProfileReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
+    if (!canReportProfile) return;
+    setReportBusy(true);
+    try {
+      await submitSafetyReport({
+        targetType: "participant",
+        targetId: userId,
+        category: input.category,
+        note: input.note,
+        context: buildSafetyReportContext({
+          sourceSurface: "profile",
+          sourceRoute: `/profile/${userId}`,
+          targetLabel: profile.displayName,
+          targetRoleLabel: roleLabel,
+          targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+          platformOwnedTarget: isOfficialProfile,
+          context: {
+            identityKind: profile.identityKind,
+            channelHandle,
+          },
+        }),
+      });
+      setReportVisible(false);
+    } finally {
+      setReportBusy(false);
+    }
+  };
   const quickActions = isSelfProfile
     ? [
         { label: "Edit Profile", onPress: () => onPressOwnerScaffold("edit-profile") },
@@ -407,6 +452,7 @@ export default function ProfileScreen() {
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
         { label: "Voice Call", onPress: () => { void onPressCommunication("voice"); } },
         { label: "Video Call", onPress: () => { void onPressCommunication("video"); } },
+        ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
       ];
 
   return (
@@ -631,6 +677,17 @@ export default function ProfileScreen() {
                     </Text>
                   </TouchableOpacity>
                 ) : null}
+                {canReportProfile ? (
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipReport]}
+                    activeOpacity={0.82}
+                    onPress={onPressReportProfile}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextReport]}>
+                      Report
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ) : null}
             <Text style={styles.actionFootnote}>{communicationFootnote ? `${communicationFootnote} ${actionFootnote}` : actionFootnote}</Text>
@@ -679,6 +736,16 @@ export default function ProfileScreen() {
             </View>
           )) : null}
         </View>
+        <ReportSheet
+          visible={reportVisible}
+          title={isOfficialProfile ? "Report official account concern" : "Report profile or participant"}
+          description={isOfficialProfile
+            ? `Send a safety report for ${profile.displayName} if an official platform interaction feels unsafe, misleading, or compromised.`
+            : `Send a safety report for ${profile.displayName} if this identity feels abusive, unsafe, or misrepresented.`}
+          busy={reportBusy}
+          onSubmit={onSubmitProfileReport}
+          onClose={() => setReportVisible(false)}
+        />
       </ScrollView>
     </View>
   );
@@ -897,6 +964,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(115,134,255,0.22)",
     backgroundColor: "rgba(115,134,255,0.12)",
   },
+  actionChipReport: {
+    borderColor: "rgba(220,20,60,0.24)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+  },
   actionChipPlaceholder: {
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(255,255,255,0.03)",
@@ -907,6 +978,7 @@ const styles = StyleSheet.create({
   },
   actionChipText: { color: "#DCE2F0", fontSize: 12, fontWeight: "800" },
   actionChipTextConnected: { color: "#DDE4FF" },
+  actionChipTextReport: { color: "#FFD6DE" },
   actionChipTextPlaceholder: { color: "#97A1B5" },
   actionChipTextMuted: { color: "#9AA3B7" },
   ownerActionChip: {

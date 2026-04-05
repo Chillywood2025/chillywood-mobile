@@ -18,7 +18,7 @@ import {
   type TitleAccessRule,
 } from "../../_lib/monetization";
 import { trackEvent } from "../../_lib/analytics";
-import { submitSafetyReport } from "../../_lib/moderation";
+import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
@@ -254,9 +254,15 @@ export default function TitleDetails() {
         category: input.category,
         note: input.note,
         titleId: String(title.id ?? titleId).trim(),
-        context: {
-          titleTitle: title.title,
-        },
+        context: buildSafetyReportContext({
+          sourceSurface: "title-detail",
+          sourceRoute: `/title/${String(title.id ?? titleId).trim()}`,
+          targetLabel: title.title,
+          targetRoleLabel: "Title",
+          context: {
+            titleTitle: title.title,
+          },
+        }),
       });
       setReportVisible(false);
     } finally {
@@ -338,7 +344,20 @@ export default function TitleDetails() {
               <Text style={styles.btnText}>{inMyList ? "✓ Favorites" : "+ Favorites"}</Text>
             </Pressable>
 
-            <Pressable style={styles.btnGhost} onPress={() => setReportVisible(true)}>
+            <Pressable
+              style={styles.btnGhost}
+              onPress={() => {
+                trackModerationActionUsed({
+                  surface: "title-detail",
+                  action: "open_safety_report",
+                  targetType: "title",
+                  targetId: String(title.id ?? titleId).trim(),
+                  titleId: String(title.id ?? titleId).trim(),
+                  sourceRoute: `/title/${String(title.id ?? titleId).trim()}`,
+                });
+                setReportVisible(true);
+              }}
+            >
               <Text style={styles.btnText}>Report</Text>
             </Pressable>
           </View>
