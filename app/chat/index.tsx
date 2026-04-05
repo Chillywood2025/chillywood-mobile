@@ -59,6 +59,7 @@ export default function ChillyChatInboxScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [quickActionThreadId, setQuickActionThreadId] = useState("");
 
   const loadThreads = useCallback(async (refresh = false) => {
     if (refresh) {
@@ -99,6 +100,57 @@ export default function ChillyChatInboxScreen() {
     [searchQuery, threads],
   );
 
+  const unreadThreadCount = useMemo(
+    () => threads.filter((thread) => (thread.currentMember?.unreadCount ?? 0) > 0).length,
+    [threads],
+  );
+
+  const liveCallCount = useMemo(
+    () => threads.filter((thread) => !!thread.activeCommunicationRoomId && !!thread.activeCallType).length,
+    [threads],
+  );
+
+  const quickActionThread = useMemo(
+    () => threads.find((thread) => thread.threadId === quickActionThreadId) ?? null,
+    [quickActionThreadId, threads],
+  );
+
+  const openThread = useCallback((thread: ChatThreadSummary, startCall?: "voice" | "video") => {
+    trackEvent("chat_thread_open_requested", {
+      surface: "chat-inbox",
+      threadId: thread.threadId,
+      hasUnread: (thread.currentMember?.unreadCount ?? 0) > 0 ? "true" : "false",
+      entryMode: startCall ?? "thread",
+    });
+    router.push({
+      pathname: "/chat/[threadId]",
+      params: {
+        threadId: thread.threadId,
+        ...(startCall ? { startCall } : {}),
+      },
+    });
+  }, [router]);
+
+  const openProfile = useCallback((thread: ChatThreadSummary) => {
+    const otherMember = thread.otherMember;
+    if (!otherMember?.userId) return;
+
+    trackEvent("chat_inbox_profile_open_requested", {
+      surface: "chat-inbox",
+      threadId: thread.threadId,
+      targetUserId: otherMember.userId,
+    });
+    router.push({
+      pathname: "/profile/[userId]",
+      params: {
+        userId: otherMember.userId,
+        displayName: otherMember.displayName,
+        avatarUrl: otherMember.avatarUrl,
+        tagline: otherMember.tagline,
+      },
+    });
+  }, [router]);
+
   const listHeader = useMemo(() => (
     <View style={styles.header}>
       <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
@@ -111,9 +163,69 @@ export default function ChillyChatInboxScreen() {
           <Text style={styles.headerPillText}>{threads.length} thread{threads.length === 1 ? "" : "s"}</Text>
         </View>
         <View style={styles.headerPill}>
-          <Text style={styles.headerPillText}>Messenger-first MVP</Text>
+          <Text style={styles.headerPillText}>{unreadThreadCount} unread</Text>
+        </View>
+        <View style={styles.headerPill}>
+          <Text style={styles.headerPillText}>{liveCallCount} live call{liveCallCount === 1 ? "" : "s"}</Text>
         </View>
       </View>
+      <Text style={styles.headerHint}>Long-press a thread or avatar for profile and call quick actions.</Text>
+      {quickActionThread ? (
+        <View style={styles.quickActionCard}>
+          <Text style={styles.quickActionKicker}>QUICK ACTIONS</Text>
+          <Text style={styles.quickActionTitle}>
+            {quickActionThread.otherMember?.displayName ?? "Chi'lly Chat Thread"}
+          </Text>
+          <Text style={styles.quickActionBody}>
+            Jump into the thread, open the profile, or launch a thread-based voice/video call without leaving Chi&apos;lly Chat.
+          </Text>
+          <View style={styles.quickActionRow}>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              activeOpacity={0.86}
+              onPress={() => {
+                setQuickActionThreadId("");
+                openThread(quickActionThread);
+              }}
+            >
+              <Text style={styles.quickActionButtonText}>Open Thread</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              activeOpacity={0.86}
+              disabled={!quickActionThread.otherMember?.userId}
+              onPress={() => {
+                setQuickActionThreadId("");
+                openProfile(quickActionThread);
+              }}
+            >
+              <Text style={styles.quickActionButtonText}>Open Profile</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.quickActionRow}>
+            <TouchableOpacity
+              style={[styles.quickActionButton, styles.quickActionAccentButton]}
+              activeOpacity={0.86}
+              onPress={() => {
+                setQuickActionThreadId("");
+                openThread(quickActionThread, "voice");
+              }}
+            >
+              <Text style={styles.quickActionAccentButtonText}>Voice Call</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.quickActionButton, styles.quickActionAccentButton]}
+              activeOpacity={0.86}
+              onPress={() => {
+                setQuickActionThreadId("");
+                openThread(quickActionThread, "video");
+              }}
+            >
+              <Text style={styles.quickActionAccentButtonText}>Video Call</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
       <View style={styles.searchShell}>
         <Text style={styles.searchLabel}>Search</Text>
         <TextInput
@@ -130,7 +242,7 @@ export default function ChillyChatInboxScreen() {
         />
       </View>
     </View>
-  ), [searchQuery, threads.length]);
+  ), [liveCallCount, openProfile, openThread, quickActionThread, searchQuery, threads.length, unreadThreadCount]);
 
   if (loading) {
     return (
@@ -175,25 +287,23 @@ export default function ChillyChatInboxScreen() {
               testID={`chat-thread-row-${item.threadId}`}
               style={styles.threadCard}
               activeOpacity={0.85}
-              onPress={() => {
-                trackEvent("chat_thread_open_requested", {
-                  surface: "chat-inbox",
-                  threadId: item.threadId,
-                  hasUnread: unreadCount > 0 ? "true" : "false",
-                });
-                router.push({
-                  pathname: "/chat/[threadId]",
-                  params: { threadId: item.threadId },
-                });
-              }}
+              onLongPress={() => setQuickActionThreadId(item.threadId)}
+              onPress={() => openThread(item)}
             >
-              {other?.avatarUrl ? (
-                <Image source={{ uri: other.avatarUrl }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{(other?.displayName ?? "C").slice(0, 1).toUpperCase()}</Text>
-                </View>
-              )}
+              <TouchableOpacity
+                style={styles.avatarButton}
+                activeOpacity={0.86}
+                onPress={() => openThread(item)}
+                onLongPress={() => setQuickActionThreadId(item.threadId)}
+              >
+                {other?.avatarUrl ? (
+                  <Image source={{ uri: other.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{(other?.displayName ?? "C").slice(0, 1).toUpperCase()}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
               <View style={styles.threadCopy}>
                 <View style={styles.threadTitleRow}>
                   <Text style={styles.threadTitle}>{other?.displayName ?? "Chi'lly Chat Thread"}</Text>
@@ -269,6 +379,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
+  headerHint: {
+    color: "#90A0B9",
+    fontSize: 11.5,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
   searchShell: {
     flexDirection: "row",
     alignItems: "center",
@@ -319,6 +435,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(255,255,255,0.04)",
     padding: 14,
+  },
+  avatarButton: {
+    borderRadius: 26,
   },
   avatar: {
     width: 52,
@@ -434,6 +553,60 @@ const styles = StyleSheet.create({
   },
   unreadText: {
     color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  quickActionCard: {
+    gap: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(243,75,116,0.28)",
+    backgroundColor: "rgba(243,75,116,0.1)",
+    padding: 16,
+  },
+  quickActionKicker: {
+    color: "#FFB8C8",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  quickActionTitle: {
+    color: "#FFF5F8",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  quickActionBody: {
+    color: "#FFD8E2",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  quickActionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  quickActionButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(6,10,18,0.35)",
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+  },
+  quickActionButtonText: {
+    color: "#FFF4F8",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  quickActionAccentButton: {
+    backgroundColor: "#F34B74",
+    borderColor: "rgba(243,75,116,0.7)",
+  },
+  quickActionAccentButtonText: {
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "900",
   },

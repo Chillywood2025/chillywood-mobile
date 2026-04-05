@@ -69,6 +69,7 @@ export default function ChillyChatThreadScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [callPanelOpen, setCallPanelOpen] = useState(false);
+  const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
   const autoStartCallRef = useRef("");
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
@@ -318,6 +319,42 @@ export default function ChillyChatThreadScreen() {
     }
   }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, leaveRoom, loadThreadState, thread?.activeCallType, threadId]);
 
+  const handleOpenProfile = useCallback(() => {
+    if (!otherMember?.userId) return;
+
+    trackEvent("chat_thread_profile_open_requested", {
+      surface: "chat-thread",
+      threadId,
+      targetUserId: otherMember.userId,
+    });
+    setHeaderQuickActionsOpen(false);
+    router.push({
+      pathname: "/profile/[userId]",
+      params: {
+        userId: otherMember.userId,
+        displayName: otherMember.displayName,
+        avatarUrl: otherMember.avatarUrl,
+        tagline: otherMember.tagline,
+      },
+    });
+  }, [otherMember, router, threadId]);
+
+  const handleHeaderCallAction = useCallback(async (mode: ChatCallType) => {
+    setHeaderQuickActionsOpen(false);
+
+    if (activeCallRoomId) {
+      trackEvent("chat_thread_call_join_requested", {
+        surface: "chat-thread-header",
+        threadId,
+        mode: thread?.activeCallType ?? mode,
+      });
+      setCallPanelOpen(true);
+      return;
+    }
+
+    await handleStartCall(mode);
+  }, [activeCallRoomId, handleStartCall, thread?.activeCallType, threadId]);
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
@@ -354,13 +391,20 @@ export default function ChillyChatThreadScreen() {
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        {otherMember?.avatarUrl ? (
-          <Image source={{ uri: otherMember.avatarUrl }} style={styles.headerAvatarImage} />
-        ) : (
-          <View style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarText}>{(otherMember?.displayName ?? "C").slice(0, 1).toUpperCase()}</Text>
-          </View>
-        )}
+        <TouchableOpacity
+          style={styles.headerAvatarButton}
+          activeOpacity={0.86}
+          onLongPress={() => setHeaderQuickActionsOpen((current) => !current)}
+          onPress={() => setHeaderQuickActionsOpen(false)}
+        >
+          {otherMember?.avatarUrl ? (
+            <Image source={{ uri: otherMember.avatarUrl }} style={styles.headerAvatarImage} />
+          ) : (
+            <View style={styles.headerAvatar}>
+              <Text style={styles.headerAvatarText}>{(otherMember?.displayName ?? "C").slice(0, 1).toUpperCase()}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
           <Text style={styles.title}>{otherMember?.displayName ?? "Direct Thread"}</Text>
@@ -376,8 +420,65 @@ export default function ChillyChatThreadScreen() {
               <Text style={styles.headerMetaText}>Messenger-first thread with room-linked calling.</Text>
             )}
           </View>
+          <Text style={styles.headerHint}>Long-press the avatar for profile and call actions.</Text>
         </View>
       </View>
+
+      {headerQuickActionsOpen ? (
+        <View style={styles.headerQuickActionCard}>
+          <Text style={styles.headerQuickActionKicker}>THREAD QUICK ACTIONS</Text>
+          <Text style={styles.headerQuickActionTitle}>
+            {otherMember?.displayName ?? "Chi'lly Chat contact"}
+          </Text>
+          <Text style={styles.headerQuickActionBody}>
+            Open the profile or keep voice/video entry inside this thread so the conversation and call state stay together.
+          </Text>
+          <View style={styles.headerQuickActionRow}>
+            <TouchableOpacity
+              style={styles.headerQuickActionButton}
+              activeOpacity={0.86}
+              disabled={!otherMember?.userId}
+              onPress={() => {
+                void handleOpenProfile();
+              }}
+            >
+              <Text style={styles.headerQuickActionButtonText}>View Profile</Text>
+            </TouchableOpacity>
+            {activeCallRoomId ? (
+              <TouchableOpacity
+                style={[styles.headerQuickActionButton, styles.headerQuickActionAccentButton]}
+                activeOpacity={0.86}
+                onPress={() => {
+                  void handleHeaderCallAction(thread?.activeCallType ?? "video");
+                }}
+              >
+                <Text style={styles.headerQuickActionAccentButtonText}>Open Call</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[styles.headerQuickActionButton, styles.headerQuickActionAccentButton]}
+                  activeOpacity={0.86}
+                  onPress={() => {
+                    void handleHeaderCallAction("voice");
+                  }}
+                >
+                  <Text style={styles.headerQuickActionAccentButtonText}>Voice Call</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.headerQuickActionButton, styles.headerQuickActionAccentButton]}
+                  activeOpacity={0.86}
+                  onPress={() => {
+                    void handleHeaderCallAction("video");
+                  }}
+                >
+                  <Text style={styles.headerQuickActionAccentButtonText}>Video Call</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.actionRow}>
         <TouchableOpacity
@@ -553,6 +654,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
   },
+  headerAvatarButton: {
+    borderRadius: 24,
+  },
   headerAvatar: {
     width: 48,
     height: 48,
@@ -631,6 +735,69 @@ const styles = StyleSheet.create({
     color: "#92A0B8",
     fontSize: 11,
     fontWeight: "700",
+  },
+  headerHint: {
+    color: "#90A0B9",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  headerQuickActionCard: {
+    gap: 10,
+    marginHorizontal: 18,
+    marginBottom: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(243,75,116,0.28)",
+    backgroundColor: "rgba(243,75,116,0.1)",
+    padding: 16,
+  },
+  headerQuickActionKicker: {
+    color: "#FFB8C8",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  headerQuickActionTitle: {
+    color: "#FFF5F8",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  headerQuickActionBody: {
+    color: "#FFD8E2",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  headerQuickActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  headerQuickActionButton: {
+    minWidth: 116,
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(6,10,18,0.35)",
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+  },
+  headerQuickActionButtonText: {
+    color: "#FFF4F8",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  headerQuickActionAccentButton: {
+    backgroundColor: "#F34B74",
+    borderColor: "rgba(243,75,116,0.7)",
+  },
+  headerQuickActionAccentButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
   },
   actionRow: {
     flexDirection: "row",
