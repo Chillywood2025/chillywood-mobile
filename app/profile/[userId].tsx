@@ -521,7 +521,7 @@ export default function ProfileScreen() {
                     }}
                   >
                     <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
-                      Chi'lly Chat
+                      Chi&apos;lly Chat
                     </Text>
                   </TouchableOpacity>
                 ) : null}
