@@ -339,6 +339,9 @@ export default function ProfileScreen() {
   const onPressBetaSupport = () => {
     router.push(getSupportRoutePath());
   };
+  const onPressSettings = () => {
+    router.push("/settings");
+  };
   const quickActions = isSelfProfile
     ? [
         { label: "Edit Profile", onPress: () => onPressOwnerScaffold("edit-profile") },
@@ -522,6 +525,17 @@ export default function ProfileScreen() {
                   >
                     <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
                       Chi&apos;lly Chat
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {isSelfProfile ? (
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.82}
+                    onPress={onPressSettings}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                      Settings
                     </Text>
                   </TouchableOpacity>
                 ) : null}

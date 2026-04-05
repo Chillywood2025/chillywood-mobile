@@ -5,12 +5,15 @@ Stage 4 remains completed/proved on the current build. Current JS via Expo Go / 
 
 The latest proof pass also closed two reported current-build regressions on April 5, 2026: logged-out first open now lands on login again, and Home `Top Rated` / `Browse` content cards now route to the real title detail surface instead of `Not found`. The current fix set is intentionally small and owner-based: `app/_layout.tsx` now lets the root auth gate own post-auth redirect resolution, `app/(auth)/login.tsx` no longer dispatches its own tabs-group replace, `app/(tabs)/index.tsx` now pushes the canonical structured `/title/[id]` target, and `app/title/[id].tsx` no longer requests the nonexistent `titles.thumbnail_url` column during title hydration. Typecheck passed afterward. PostHog env wiring is present locally and the current Expo runtime proof below now confirms both remote default-off stability and remote on-state delivery for the gated chat flags.
 
+An additional owner-surface proof pass on April 5, 2026 now also closes the visible Settings / Logout requirement without collapsing profile doctrine: Home exposes a visible `Settings` entry beside the existing self-profile avatar, own profile exposes a self-only `Settings` chip alongside the owner controls, `app/settings.tsx` owns the new settings route plus real `Log Out`, signing out returns to `/login`, cold reopen while logged out lands on `/login`, and other-user profile behavior remains the separate public/profile + channel + Chi'lly Chat surface. Typecheck remained green after the additive route and action changes.
+
 ## Current-Build Proved Items
-- Home: `Continue Watching` proved at the top by temporarily seeding `watch_history` for `Chicago Streets` and then clearing it; `Browse` / `Top Rated` cards show title, info line, and `Added` date; the lower Home area is reserved for `Chi'llywood Originals`; on April 5, 2026 a clean `adb shell pm clear host.exp.exponent` first-open proof landed on `/login`, then the authenticated Home proof landed on `/` with `Top Rated`, `Browse`, and the `Chicago Streets` card metadata visible in the UI tree
+- Home: `Continue Watching` proved at the top by temporarily seeding `watch_history` for `Chicago Streets` and then clearing it; `Browse` / `Top Rated` cards show title, info line, and `Added` date; the lower Home area is reserved for `Chi'llywood Originals`; on April 5, 2026 a clean `adb shell pm clear host.exp.exponent` first-open proof landed on `/login`, then the authenticated Home proof landed on `/` with `Top Rated`, `Browse`, the `Chicago Streets` card metadata visible in the UI tree, and the new visible `Settings` entry still sitting beside the self-profile avatar instead of replacing it
 - Player: the bundled Android asset-path playback bug was fixed in `app/player/[id].tsx` by resolving the bundled asset via `expo-asset` `localUri` before `expo-av` `Video`, and the current JS player route showed a real video frame while retaining the `Watch-Party Live` CTA
-- Own profile: owner/control page proved with `Manage Channel`, `Chi'lly Chat`, and the owner/channel toggle
-- Other-user profile: basic profile plus channel-home behavior proved through the `Proof User` route
+- Own profile: owner/control page proved with `Manage Channel`, `Chi'lly Chat`, `Settings`, `Support`, and the owner/channel toggle; the self-only `Settings` chip opened `/settings` without collapsing the owner/control role into a generic settings screen
+- Other-user profile: basic profile plus channel-home behavior proved through the synthetic `Proof Guest` route, with `Profile`, `Channel Home`, and `Chi'lly Chat` visible while no owner-only `Settings` control appeared
 - Chi'lly Chat: inbox, quick actions (`Open Thread`, `Open Profile`, `Voice Call`, `Video Call`), direct thread, composer, voice/video buttons, and profile-to-thread handoff proved
+- Settings / Logout: `/settings` is now reachable from both Home and own profile on the current build; `Log Out` clears the Supabase session, analytics recorded `auth_sign_out_requested` plus `auth_sign_out_success`, the UI returned to `/login`, and a fresh `adb shell pm clear host.exp.exponent` reopen while logged out again landed on `/login`
 - Live Waiting Room and Party Waiting Room: both proved with correct labels when the deep-link query params were quoted correctly for `adb shell`
 - Live Room: proved with `Live Room` + `Go Live` and no watch-party-only CTA visible
 - Party Room: proved with `Party Room` + tailored `Watch-Party Live` copy + `Watch-Party Live` CTA, not `Go Live`
@@ -55,6 +58,7 @@ The latest proof pass also closed two reported current-build regressions on Apri
 - `app.json`, `package.json`, `scripts/validate-runtime.mjs`, `README.md`, and `docs/public-v1-release-checklist.md` now make the EAS Update readiness path explicit without changing app features or business logic
 - `scripts/validate-runtime.mjs` now loads `.env.local` directly, which removed the plain `npm run validate:runtime` blocker once the real local beta operator allowlist value was present
 - `package.json` and `package-lock.json` now intentionally own `expo-updates@~29.0.16` through the Expo-managed install path, which closes the preview OTA auto-install blocker without changing app logic
+- `app/_layout.tsx`, `app/(tabs)/index.tsx`, `app/profile/[userId].tsx`, and `app/settings.tsx` now add the smallest visible Settings / Logout surface that product required: Home gained a visible `Settings` entry, own profile gained a self-only `Settings` chip, the new `/settings` route owns session sign-out, and post-logout routing returns to `/login` without changing other-user profile behavior
 
 ## What Is Proved In Repo
 - A clean Expo Go first-open reset now lands on `/login` when the session is absent, and a valid login now returns to Home on `/` without the prior unhandled `"(tabs)"` replace error
@@ -64,12 +68,15 @@ The latest proof pass also closed two reported current-build regressions on Apri
 - Party Room must not hand off to Live Stage
 - `/communication` and `/communication/[roomId]` remain compatibility-only room redirects
 - Home `Top Rated` and `Browse` title cards route through `app/(tabs)/index.tsx` into `app/title/[id].tsx`, and the current build now re-proves that both visible Home rails open the `Chicago Streets` title detail surface instead of `Not found`
+- Home now keeps both top-right owner entries visible and separate: `Settings` opens `/settings`, while the existing avatar still opens the canonical self-profile `/profile/[userId]` owner/control surface
 - Title Detail resolves by exact `id`, then exact `title`, then local fallback, so valid titles such as `Chicago Streets` do not fall through from the Home rails without exhausting real resolution paths; the removed `thumbnail_url` select is part of that proved fix
 - `Live Watch-Party`, `Watch-Party Live`, `Live First`, and `Chi'lly Chat` are locked in the repo control files alongside the corrected Party / Live route split
 - runtime/admin config cannot rename locked product labels such as `watchPartyLabel`, `liveRoomTitle`, or `partyRoomTitle`
 - standalone Chi'lly Chat exists on `/chat` and `/chat/[threadId]`
 - self-profile entry opens the canonical `/profile/[userId]` channel/profile surface, while the in-profile Chi'lly Chat action opens `/chat` for the authenticated user
+- self-profile keeps owner-only controls (`Manage Channel`, `Chi'lly Chat`, `Settings`, `Support`) while other-user profiles remain on the separate `Profile` + `Channel Home` + `Chi'lly Chat` behavior with no Settings owner control
 - another profile resolves or creates a direct Chi'lly Chat thread and opens `/chat/[threadId]`
+- `/settings` is now a repo-owned additive route for account/session actions only, and `Log Out` returns the app to `/login` while a signed-out cold reopen still lands on `/login`
 - room-native communication copy in Party Room and Live Room uses Chi'lly Chat-native wording instead of `In-Room Call`
 - repo control files explicitly lock Chi'lly Chat as a messenger-first system, profiles as social identity hubs, and like/share/download/cast as reusable rights-aware content primitives
 - repo control files explicitly lock Chi'lly Chat as Chi'llywood's built-in messenger layer, with `/chat` inbox, `/chat/[threadId]` direct threads, the `chat_threads` / `chat_thread_members` / `chat_messages` MVP data model, and shared communication-room primitives for thread calls

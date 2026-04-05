@@ -330,6 +330,10 @@ export default function HomeScreen() {
     });
   }
 
+  function openSettings() {
+    router.push("/settings");
+  }
+
   const continueCandidates = useMemo(() => {
     return titles
       .filter((item) => {
@@ -438,23 +442,35 @@ export default function HomeScreen() {
         >
           <View style={[styles.utilityRow, { marginTop: Math.max(safeAreaInsets.top, 8) }]}>
             <Text style={styles.utilityKicker}>HOME</Text>
-            <TouchableOpacity
-              style={[styles.profileAvatarButton, !currentChannel?.id && styles.profileAvatarButtonDisabled]}
-              onPress={openOwnProfile}
-              activeOpacity={0.86}
-              disabled={!currentChannel?.id}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Open your channel"
-            >
-              {currentChannel?.avatarUrl ? (
-                <Image source={{ uri: currentChannel.avatarUrl }} style={styles.profileAvatarImage} />
-              ) : (
-                <View style={styles.profileAvatarFallback}>
-                  <Text style={styles.profileAvatarInitial}>{homeAvatarInitial}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <View style={styles.utilityActions}>
+              <TouchableOpacity
+                style={styles.utilitySettingsButton}
+                onPress={openSettings}
+                activeOpacity={0.86}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Open settings"
+              >
+                <Text style={styles.utilitySettingsText}>Settings</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.profileAvatarButton, !currentChannel?.id && styles.profileAvatarButtonDisabled]}
+                onPress={openOwnProfile}
+                activeOpacity={0.86}
+                disabled={!currentChannel?.id}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Open your channel"
+              >
+                {currentChannel?.avatarUrl ? (
+                  <Image source={{ uri: currentChannel.avatarUrl }} style={styles.profileAvatarImage} />
+                ) : (
+                  <View style={styles.profileAvatarFallback}>
+                    <Text style={styles.profileAvatarInitial}>{homeAvatarInitial}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
 
           {spotlightItem ? (
@@ -618,6 +634,26 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.4,
+  },
+  utilityActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  utilitySettingsButton: {
+    minHeight: 36,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(12,12,16,0.84)",
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  utilitySettingsText: {
+    color: "#F4F7FC",
+    fontSize: 12.5,
+    fontWeight: "800",
   },
   profileAvatarButton: {
     width: 44,

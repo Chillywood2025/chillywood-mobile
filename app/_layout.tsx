@@ -121,6 +121,7 @@ function RootNavigator() {
         <Stack.Screen name="communication/index" />
         <Stack.Screen name="communication/[roomId]" />
         <Stack.Screen name="profile/[userId]" />
+        <Stack.Screen name="settings" />
         <Stack.Screen name="admin" />
         <Stack.Screen name="channel-settings" />
         <Stack.Screen name="support" />
