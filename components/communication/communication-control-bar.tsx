@@ -7,6 +7,7 @@ type CommunicationControlBarProps = {
   onToggleCamera: () => void;
   onToggleMic: () => void;
   onLeave: () => void;
+  leaveLabel?: string;
 };
 
 export function CommunicationControlBar({
@@ -15,6 +16,7 @@ export function CommunicationControlBar({
   onToggleCamera,
   onToggleMic,
   onLeave,
+  leaveLabel = "Leave",
 }: CommunicationControlBarProps) {
   return (
     <View style={styles.row}>
@@ -37,7 +39,7 @@ export function CommunicationControlBar({
         activeOpacity={0.86}
         onPress={onLeave}
       >
-        <Text style={[styles.controlLabel, styles.controlLeaveLabel]}>Leave</Text>
+        <Text style={[styles.controlLabel, styles.controlLeaveLabel]}>{leaveLabel}</Text>
       </TouchableOpacity>
     </View>
   );

@@ -5,7 +5,10 @@ import {
     readAppConfig,
     resolveFeatureConfig,
 } from "../../_lib/appConfig";
+import { trackEvent } from "../../_lib/analytics";
 import { useBetaProgram } from "../../_lib/betaProgram";
+import { getOrCreateDirectThread } from "../../_lib/chat";
+import { reportRuntimeError } from "../../_lib/logger";
 import { getSupportRoutePath } from "../../_lib/runtimeConfig";
 import {
     Alert,
@@ -122,7 +125,7 @@ export default function ProfileScreen() {
     ? `${liveActionLabel} and Watch Party are connected to this room.`
     : "Open this profile from a room or live session to jump back into linked live and watch-party surfaces from here.";
   const communicationFootnote = isSelfProfile
-    ? "Communication Room opens your in-app call lobby with your current Chi'llywood identity."
+    ? "Chi'lly Chat opens your native Chi'llywood inbox and direct threads."
     : "";
   const contentSections = [
     {
@@ -207,15 +210,74 @@ export default function ProfileScreen() {
 
     Alert.alert("Watch Party", "Open this profile from a room or live session to jump into the linked watch party from here.");
   };
-  const onPressCommunication = () => {
-    router.push("/communication");
+  const onPressCommunication = async () => {
+    if (isSelfProfile) {
+      trackEvent("communication_profile_entry_requested", {
+        targetRoute: "/chat",
+        entryPath: "profile",
+        profileIsSelf: "true",
+      });
+      router.push("/chat");
+      return;
+    }
+
+    if (!userId) {
+      trackEvent("communication_profile_entry_blocked", {
+        entryPath: "profile",
+        profileIsSelf: "false",
+        reason: "missing_target_user",
+      });
+      Alert.alert("Chi'lly Chat", "This channel is missing the identity needed to open a direct thread.");
+      return;
+    }
+
+    try {
+      trackEvent("communication_profile_entry_requested", {
+        targetRoute: "/chat/[threadId]",
+        entryPath: "profile",
+        profileIsSelf: "false",
+        targetUserId: userId,
+      });
+
+      const thread = await getOrCreateDirectThread({
+        userId,
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+        tagline: profile.tagline,
+      });
+
+      router.push({
+        pathname: "/chat/[threadId]",
+        params: {
+          threadId: thread.threadId,
+        },
+      });
+    } catch (error) {
+      trackEvent("communication_profile_entry_blocked", {
+        entryPath: "profile",
+        profileIsSelf: "false",
+        reason: "thread_open_failed",
+        targetUserId: userId,
+      });
+      reportRuntimeError("profile-open-chilly-chat", error, {
+        targetUserId: userId,
+      });
+      Alert.alert(
+        "Chi'lly Chat",
+        error instanceof Error ? error.message : "Unable to open Chi'lly Chat right now.",
+      );
+    }
   };
   const onPressBetaSupport = () => {
     router.push(getSupportRoutePath());
   };
 
   return (
-    <View style={styles.outerFlex}>
+    <View
+      style={styles.outerFlex}
+      testID="profile-screen"
+      accessibilityLabel="Chi'llywood profile channel screen"
+    >
       {backgroundSource ? (
         <ImageBackground
           source={backgroundSource}
@@ -300,16 +362,20 @@ export default function ProfileScreen() {
                 ) : null}
               </View>
             ) : null}
-            {isSelfProfile || canOpenLinkedRoomActions ? (
+            {isSelfProfile || !!userId || canOpenLinkedRoomActions ? (
               <View style={styles.secondaryActionRow}>
-                {isSelfProfile ? (
+                {isSelfProfile || !!userId ? (
                   <TouchableOpacity
+                    testID="profile-chilly-chat-button"
+                    accessibilityLabel="Open Chi'lly Chat"
                     style={[styles.actionChip, styles.actionChipConnected]}
                     activeOpacity={0.82}
-                    onPress={onPressCommunication}
+                    onPress={() => {
+                      void onPressCommunication();
+                    }}
                   >
                     <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
-                      Communication Room
+                      Chi'lly Chat
                     </Text>
                   </TouchableOpacity>
                 ) : null}

@@ -44,6 +44,10 @@ type UseCommunicationRoomSessionOptions = {
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
   onRoomEnded?: (reason: "host-left" | "ended" | "room-full") => void;
   enabled?: boolean;
+  analyticsContext?: {
+    surface?: "party-room" | "live-room" | "communication-room" | "chat-thread";
+    role?: "host" | "viewer" | null;
+  };
 };
 
 type PeerConnectionState = CommunicationParticipantView["connectionState"];
@@ -81,6 +85,7 @@ export function useCommunicationRoomSession({
   initialMediaPreferences,
   onRoomEnded,
   enabled = true,
+  analyticsContext,
 }: UseCommunicationRoomSessionOptions) {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [microphonePermissionState, setMicrophonePermissionState] = useState<CommunicationPermissionState>("unknown");
@@ -113,6 +118,7 @@ export function useCommunicationRoomSession({
   const peerConnectionsRef = useRef<Record<string, any>>({});
   const endingRef = useRef(false);
   const reconnectTrackedRef = useRef(false);
+  const appStateRef = useRef(AppState.currentState);
 
   const cameraPermissionState: CommunicationPermissionState = cameraPermission?.granted
     ? "granted"
@@ -123,6 +129,8 @@ export function useCommunicationRoomSession({
         : "unknown";
 
   const isRtcAvailable = !!getCommunicationRTCModule();
+  const analyticsSurface = analyticsContext?.surface ?? "communication-room";
+  const analyticsRole = analyticsContext?.role ?? null;
 
   useEffect(() => {
     cameraEnabledRef.current = cameraEnabled;
@@ -131,6 +139,19 @@ export function useCommunicationRoomSession({
   useEffect(() => {
     micEnabledRef.current = micEnabled;
   }, [micEnabled]);
+
+  useEffect(() => {
+    if (typeof initialMediaPreferences?.cameraEnabled === "boolean") {
+      setCameraEnabled(initialMediaPreferences.cameraEnabled);
+    }
+    if (typeof initialMediaPreferences?.micEnabled === "boolean") {
+      setMicEnabled(initialMediaPreferences.micEnabled);
+    }
+  }, [
+    initialMediaPreferences?.cameraEnabled,
+    initialMediaPreferences?.micEnabled,
+    roomId,
+  ]);
 
   useEffect(() => {
     cameraPermissionGrantedRef.current = !!cameraPermission?.granted;
@@ -552,8 +573,11 @@ export function useCommunicationRoomSession({
     }
 
     trackEvent("communication_disconnect", {
+      surface: analyticsSurface,
+      role: analyticsRole,
       roomId: resolvedRoom?.roomId ?? roomId,
       endRoomIfHost: !!options?.endRoomIfHost,
+      reason: options?.endRoomIfHost ? "host_end_call" : "leave",
     });
 
     await cleanupChannel();
@@ -567,8 +591,16 @@ export function useCommunicationRoomSession({
 
     const init = async () => {
       if (!enabled) {
+        setRoom(null);
+        setIdentity(null);
+        setMemberships([]);
+        setPresenceParticipants([]);
+        setRemoteStreamURLByUserId({});
+        setConnectionStateByUserId({});
+        setLocalStreamURL("");
         setLoading(false);
-        setError("Sign in to join this communication room.");
+        setError(null);
+        setChannelState("idle");
         return;
       }
       if (!roomId) {
@@ -625,7 +657,8 @@ export function useCommunicationRoomSession({
           setError("Room is full. This communication room is limited to four active participants.");
           setLoading(false);
           trackEvent("room_join_failure", {
-            surface: "communication-room",
+            surface: analyticsSurface,
+            role: analyticsRole,
             reason: "room_full",
             roomId,
           });
@@ -636,7 +669,8 @@ export function useCommunicationRoomSession({
         setError("This communication room is unavailable.");
         setLoading(false);
         trackEvent("room_join_failure", {
-          surface: "communication-room",
+          surface: analyticsSurface,
+          role: analyticsRole,
           reason: "room_unavailable",
           roomId,
         });
@@ -775,9 +809,13 @@ export function useCommunicationRoomSession({
           channelRef.current = channel;
           setChannelState("live");
           setError(null);
+          const reconnectReason = reconnectTrackedRef.current ? "recovered" : "initial_join";
           reconnectTrackedRef.current = false;
           trackEvent("communication_connect", {
+            surface: analyticsSurface,
+            role: analyticsRole,
             roomId: snapshot.room.roomId,
+            reason: reconnectReason,
           });
           await updatePresence(cameraEnabledRef.current, micEnabledRef.current);
           await refreshSnapshot(snapshot.room.roomId);
@@ -791,7 +829,14 @@ export function useCommunicationRoomSession({
           if (!reconnectTrackedRef.current) {
             reconnectTrackedRef.current = true;
             trackEvent("communication_reconnect", {
+              surface: analyticsSurface,
+              role: analyticsRole,
               roomId: snapshot.room.roomId,
+              reason: status === "CHANNEL_ERROR"
+                ? "channel_error"
+                : status === "TIMED_OUT"
+                  ? "timed_out"
+                  : "closed",
             });
           }
           const currentRoom = roomRef.current;
@@ -860,6 +905,8 @@ export function useCommunicationRoomSession({
     setPresenceFromChannel,
     updatePresence,
     enabled,
+    analyticsRole,
+    analyticsSurface,
   ]);
 
   useEffect(() => {
@@ -884,11 +931,24 @@ export function useCommunicationRoomSession({
   useEffect(() => {
     if (!enabled) return;
     const subscription = AppState.addEventListener("change", (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+      if (nextState === previousState) return;
+
       const currentRoom = roomRef.current;
       const currentIdentity = identityRef.current;
       if (!currentRoom || !currentIdentity) return;
 
       if (nextState === "active") {
+        if (reconnectTrackedRef.current) {
+          reconnectTrackedRef.current = false;
+          trackEvent("communication_connect", {
+            surface: analyticsSurface,
+            role: analyticsRole,
+            roomId: currentRoom.roomId,
+            reason: "app_foreground",
+          });
+        }
         setChannelState((prev) => (prev === "reconnecting" ? "connecting" : prev));
         void touchCommunicationRoomSession({
           roomId: currentRoom.roomId,
@@ -907,6 +967,15 @@ export function useCommunicationRoomSession({
       }
 
       setChannelState("reconnecting");
+      if (!reconnectTrackedRef.current) {
+        reconnectTrackedRef.current = true;
+        trackEvent("communication_reconnect", {
+          surface: analyticsSurface,
+          role: analyticsRole,
+          roomId: currentRoom.roomId,
+          reason: "app_background",
+        });
+      }
       void touchCommunicationRoomSession({
         roomId: currentRoom.roomId,
         userId: currentIdentity.userId,
@@ -925,7 +994,7 @@ export function useCommunicationRoomSession({
     return () => {
       subscription.remove();
     };
-  }, [enabled, refreshSnapshot]);
+  }, [enabled, refreshSnapshot, analyticsRole, analyticsSurface]);
 
   useEffect(() => {
     if (!enabled) return;
