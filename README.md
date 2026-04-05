@@ -31,6 +31,49 @@ npm run typecheck
 npx expo start --clear
 ```
 
+## EAS Update Rollout
+
+Current EAS Update ownership for this repo:
+
+- `eas.json` build profiles map directly to `development`, `preview`, and `production` channels.
+- `runtimeVersion` uses the Expo `appVersion` policy, so the current runtime is `1.0.0`.
+- `updates.url` points at the linked EAS project `c384ed57-5454-4e80-81ad-dcc218b8a3c8`.
+- Use `preview` as the internal proof lane first, then promote to `production` only after verification.
+
+Recommended command path:
+
+```bash
+# 1. Validate runtime/config before any publish
+npm run validate:runtime
+
+# 2. Publish the first preview update from the proved checkpoint
+npx eas-cli@latest update --channel preview --message "Chi'llywood preview OTA"
+
+# 3. Verify preview delivery
+npx eas-cli@latest update:list --branch preview
+npx eas-cli@latest update:view <update-group-id>
+
+# 4. If no production build exists yet, create it before production OTA rollout
+npx eas-cli@latest build --platform android --profile production --non-interactive
+
+# 5. Start a controlled production rollout after preview verification
+npx eas-cli@latest update --channel production --message "Chi'llywood production OTA" --rollout-percentage 10
+
+# 6. Progress or inspect the rollout
+npx eas-cli@latest update:edit
+npx eas-cli@latest update:list --branch production
+
+# 7. Safe recovery
+npx eas-cli@latest update:rollback
+npx eas-cli@latest update:revert-update-rollout
+```
+
+Delivery verification can also use the update manifest URL directly:
+
+```bash
+curl "https://u.expo.dev/c384ed57-5454-4e80-81ad-dcc218b8a3c8?runtime-version=1.0.0&channel-name=preview&platform=android"
+```
+
 ## Migration Order
 
 Apply these migrations in order against the active backend:
@@ -66,6 +109,7 @@ Invite-only beta access still comes from `beta_access_memberships`, and the clos
 
 - Closed beta preview: [.github/workflows/phase3a-manual-preview.yml](.github/workflows/phase3a-manual-preview.yml)
 - Android public v1 build: [.github/workflows/manual-public-v1-release.yml](.github/workflows/manual-public-v1-release.yml)
+- EAS Update rollout stays manual in this lane: validate -> preview publish -> verify -> production rollout -> rollback only if needed
 
 ## Canonical Fallback Media
 

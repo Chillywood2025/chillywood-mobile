@@ -3,6 +3,12 @@
     "name": "Chi'llywood",
     "slug": "chillywood-mobile",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c384ed57-5454-4e80-81ad-dcc218b8a3c8"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "chillywoodmobile",

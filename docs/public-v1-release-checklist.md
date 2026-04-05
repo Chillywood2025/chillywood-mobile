@@ -24,6 +24,26 @@
 10. Confirm a non-allowlisted signed-in account is blocked from `/admin`.
 11. Build Android production with the `production` EAS profile and confirm the bundle succeeds.
 
+## EAS Update Rollout
+
+1. Run `npm run validate:runtime`.
+2. Publish the preview update:
+   `npx eas-cli@latest update --channel preview --message "Chi'llywood preview OTA"`.
+3. Verify preview delivery:
+   - `npx eas-cli@latest update:list --branch preview`
+   - `npx eas-cli@latest update:view <update-group-id>`
+   - reopen the latest preview build up to two times and confirm the expected JS/assets load
+4. If a production build does not yet exist for the current runtime, create one:
+   `npx eas-cli@latest build --platform android --profile production --non-interactive`
+5. Start the first controlled production rollout only after preview verification:
+   `npx eas-cli@latest update --channel production --message "Chi'llywood production OTA" --rollout-percentage 10`
+6. Progress or inspect the rollout with:
+   - `npx eas-cli@latest update:edit`
+   - `npx eas-cli@latest update:list --branch production`
+7. Recover safely if needed with:
+   - `npx eas-cli@latest update:rollback`
+   - `npx eas-cli@latest update:revert-update-rollout`
+
 ## Launch Gate
 
 - Real signed-in auth restored and verified in the actual launch build
@@ -32,6 +52,7 @@
 - Distinct-account two-device communication verification completed
 - Zero open `blocking` feedback items
 - Zero open `before_public` feedback items
+- Preview-channel OTA publish verified on the current runtime before any production rollout
 
 ## Deferred Post-V1
 
