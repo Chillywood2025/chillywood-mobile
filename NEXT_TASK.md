@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Keep Stage 4 closed and recorded as completed/proved on the current build. The next exact lane is to verify the already-published preview-channel EAS Update on the installed Android preview build `3daa1615-d003-46d5-af7a-af8500497155` while preserving the newly proved Settings / Logout owner-surface truth and the restored Chi'llywood login presentation.
+Keep Stage 4 closed and recorded as completed/proved on the current build. The next exact lane is to verify the already-published preview-channel EAS Update on the installed Android preview build `3daa1615-d003-46d5-af7a-af8500497155` while preserving the newly proved Settings / Logout owner-surface truth and the restored Chi'llywood login presentation, including the further-lowered login-card spacing from the latest visual-only micro-pass.
 
 ## Current Plan
 1. Preserve the current green Stage 4 truth exactly as recorded
@@ -16,7 +16,7 @@ Keep Stage 4 closed and recorded as completed/proved on the current build. The n
 - preserve the newly proved PostHog runtime baseline: `.env.local` now loads into the current Expo session, the Android bundle carries the injected `EXPO_PUBLIC_POSTHOG_*` values, and the remote-default-off state keeps the chat thread stable with no smart-reply card visible
 - preserve the newly re-proved April 5, 2026 auth/home truth: `adb shell pm clear host.exp.exponent` lands on `/login`, the valid test login returns to `/` without the prior unhandled tabs-group replace, and both visible Home `Chicago Streets` rails land on `/title/f0d03df8-ced8-433f-a5c0-e2b930813eb0` with `Play` visible instead of `Not found`
 - preserve the newly proved April 5, 2026 Settings / Logout truth: Home now shows a visible `Settings` entry beside the self-profile avatar, own profile keeps its owner/control role while adding a self-only `Settings` chip, `/settings` owns `Log Out`, signing out returns to `/login`, a clean reopen while logged out still lands on `/login`, and other-user profile behavior remains the separate `Profile` + `Channel Home` + `Chi'lly Chat` surface with no Settings owner control
-- preserve the April 5, 2026 login visual restoration truth: `app/(auth)/login.tsx` owns the skyline-backed Chi'llywood login presentation again, `app/(auth)/_layout.tsx` remains wrapper-only, `assets/images/chicago-skyline.jpg` remains the background asset truth, logged-out first open still lands on login, and valid login still returns to Home without any auth/session/route logic changes in that pass
+- preserve the April 5, 2026 login visual restoration truth: `app/(auth)/login.tsx` owns the skyline-backed Chi'llywood login presentation again, `app/(auth)/_layout.tsx` remains wrapper-only, `assets/images/chicago-skyline.jpg` remains the background asset truth, and the login card now sits further lower via route-local container spacing so more branding remains visible above it; carry a fresh runtime verification of logged-out first open and valid login into the next QA lane because this latest spacing-only micro-pass intentionally skipped emulator reproof
 - preserve the new identified-user flag bridge in `app/_layout.tsx`; the current runtime now identifies the signed-in Supabase user to PostHog before reloading feature flags
 - preserve the newly proved PostHog on-state truth from April 5, 2026: direct `/flags/?v=2` now returns both `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` as `enabled: true` with `condition_match`, and `/chat/[threadId]` now visibly renders `AI SMART REPLIES`, `PostHog gated`, and the three smart-reply chips
 - keep the flag-owner bookkeeping exact: active chat-thread consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`, while the waiting-room/live flags remain probe-only in `app/_layout.tsx`
@@ -59,7 +59,7 @@ The next lane is successful when:
 - Stage 4 still reads as completed/proved on the current build
 - remote PostHog on-state delivery remains recorded as proven for the gated chat flags
 - Home/Profile Settings / Logout truth remains recorded as proved without collapsing profile-role separation
-- the login screen remains recorded as the restored Chi'llywood skyline/branded presentation while login-first and valid-login behavior stay proved
+- the login screen remains recorded as the restored Chi'llywood skyline/branded presentation with the further-lowered card spacing, and the next runtime QA lane re-confirms login-first and valid-login behavior after this visual-only micro-pass
 - the live-stage route remains recorded as visibly proved, not merely log-proved
 - preview OTA group `7519a9ee-c320-4d24-939d-4deeec57048b` is verified on preview build `3daa1615-d003-46d5-af7a-af8500497155`
 - `CURRENT_STATE.md` and `NEXT_TASK.md` tell the same checkpoint story
