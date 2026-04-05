@@ -46,12 +46,10 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
-    evaluateCommunicationRoomAccess,
-    getCommunicationRoomSnapshot,
-    getLinkedCommunicationRoom,
-    getOrCreateLinkedCommunicationRoom,
-} from "../../_lib/communication";
-import { reportDebugError, reportDebugParty, reportDebugQuery } from "../../_lib/devDebug";
+    reportDebugError,
+    reportDebugParty,
+    reportDebugQuery,
+} from "../../_lib/devDebug";
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import { submitSafetyReport } from "../../_lib/moderation";
 import { setUserPlan, unlockPartyPass } from "../../_lib/monetization";
@@ -106,10 +104,9 @@ import {
 type ConnState = "loading" | "connecting" | "live" | "reconnecting" | "error";
 
 type MonetizationGate = {
-  source: "room" | "communication";
+  source: "room";
   reason: AccessSheetReason;
   accessKey: string;
-  roomId?: string;
 };
 
 type LocalMsg = {
@@ -217,7 +214,7 @@ export default function WatchPartyRoomScreen() {
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [tapPulseById, setTapPulseById] = useState<Record<string, boolean>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<LiveBubbleParticipant | null>(null);
-  const [communicationBusy, setCommunicationBusy] = useState(false);
+  const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
@@ -1175,25 +1172,10 @@ export default function WatchPartyRoomScreen() {
       return;
     }
     Share.share({
-      message: `Join my ${branding.appDisplayName} Watch Party!\n\nRoom code: ${roomCode}\n\nOpen ${branding.appDisplayName} -> Watch Party -> enter the code to join.`,
-      title: "Watch Party Invite",
+      message: `Join my ${branding.appDisplayName} Watch-Party Live!\n\nRoom code: ${roomCode}\n\nOpen ${branding.appDisplayName} -> Watch-Party Live -> enter the code to join.`,
+      title: "Watch-Party Live Invite",
     }).catch(() => {});
   }, [branding.appDisplayName, displayRoomCode]);
-
-  const navigateToCommunicationRoom = useCallback((roomId: string, linkedPartyId: string) => {
-    router.push({
-      pathname: "/communication/[roomId]",
-      params: {
-        roomId,
-        cameraOn: "1",
-        micOn: "1",
-        returnTo: "watch-party",
-        returnPartyId: linkedPartyId,
-        returnMode: sharedRoomMode,
-        ...(source ? { returnSource: source } : {}),
-      },
-    });
-  }, [router, sharedRoomMode, source]);
 
   const onResolveAccessGate = useCallback(async () => {
     if (!accessGate) return;
@@ -1223,38 +1205,6 @@ export default function WatchPartyRoomScreen() {
         roomId: accessGate.accessKey,
       });
 
-      if (accessGate.source === "communication" && accessGate.roomId) {
-        const snapshot = await getCommunicationRoomSnapshot(accessGate.roomId).catch(() => null);
-        const membership = snapshot?.memberships.find((entry) => entry.userId === String(myUserId ?? "").trim()) ?? null;
-        const access = snapshot
-          ? await evaluateCommunicationRoomAccess({
-              room: snapshot.room,
-              membership,
-              userId: String(myUserId ?? "").trim() || undefined,
-            }).catch(() => null)
-          : null;
-
-        if (snapshot?.room && access?.canJoin) {
-          setAccessGate(null);
-          setAccessSheetVisible(false);
-          navigateToCommunicationRoom(snapshot.room.roomId, snapshot.room.linkedPartyId || accessGate.accessKey);
-          return;
-        }
-
-        if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
-          setAccessGate({
-            source: "communication",
-            reason: access.reason,
-            accessKey: snapshot?.room.linkedPartyId || accessGate.accessKey,
-            roomId: snapshot?.room.roomId || accessGate.roomId,
-          });
-          return;
-        }
-
-        Alert.alert("Communication room unavailable", "That communication room still isn't available for your current access level.");
-        return;
-      }
-
       setAccessGate(null);
       setAccessSheetVisible(false);
       setLoading(true);
@@ -1268,87 +1218,7 @@ export default function WatchPartyRoomScreen() {
     } finally {
       setAccessBusy(false);
     }
-  }, [accessGate, myUserId, navigateToCommunicationRoom]);
-
-  const onOpenCommunicationRoom = useCallback(async () => {
-    if (!features.communicationEnabled) {
-      Alert.alert("Communication unavailable", "Communication entry is currently hidden in app configuration.");
-      return;
-    }
-    const userIsHost = myRole === "host";
-    const linkedPartyId = String(room?.partyId ?? partyId ?? "").trim();
-    const linkedRoomCode = String(room?.roomCode ?? displayRoomCode ?? "").trim().toUpperCase();
-    const linkedRoomMode = room?.roomType === "live" || !room?.titleId ? "live" : "hybrid";
-
-    if (!linkedPartyId) {
-      Alert.alert("Communication unavailable", "This room is missing the watch-party id needed to open communication.");
-      return;
-    }
-
-    setCommunicationBusy(true);
-
-    try {
-      const result = userIsHost
-        ? await getOrCreateLinkedCommunicationRoom({
-            partyId: linkedPartyId,
-            roomCode: linkedRoomCode,
-            roomMode: linkedRoomMode,
-            hostUserId: myUserId || undefined,
-          })
-        : await getLinkedCommunicationRoom(linkedPartyId);
-
-      if (!result) {
-        Alert.alert(
-          "Communication room not live yet",
-          userIsHost
-            ? "Unable to open the linked communication room right now."
-            : "The host has not opened the linked communication room yet.",
-        );
-        return;
-      }
-
-      if ("error" in result) {
-        Alert.alert("Communication room unavailable", result.error.message);
-        return;
-      }
-
-      const access = await evaluateCommunicationRoomAccess({
-        room: result,
-        userId: myUserId || undefined,
-      }).catch(() => null);
-
-      if (access && !access.canJoin && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
-        trackEvent("monetization_gate_shown", {
-          surface: "watch-party-room",
-          reason: access.reason,
-          roomId: result.roomId,
-        });
-        setAccessGate({
-          source: "communication",
-          reason: access.reason,
-          accessKey: result.linkedPartyId || result.roomId,
-          roomId: result.roomId,
-        });
-        setAccessSheetVisible(true);
-        return;
-      }
-
-      navigateToCommunicationRoom(result.roomId, linkedPartyId);
-    } catch (error) {
-      reportRuntimeError("watch-party-open-communication", error, {
-        linkedPartyId,
-        userIsHost,
-      });
-      Alert.alert(
-        "Communication room unavailable",
-        userIsHost
-          ? "Unable to open the linked communication room right now."
-          : "Unable to join the linked communication room right now.",
-      );
-    } finally {
-      setCommunicationBusy(false);
-    }
-  }, [displayRoomCode, features.communicationEnabled, myRole, myUserId, navigateToCommunicationRoom, partyId, room?.partyId, room?.roomCode, room?.roomType, room?.titleId]);
+  }, [accessGate]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async (opts?: { liveMode?: boolean }) => {
@@ -1497,6 +1367,15 @@ export default function WatchPartyRoomScreen() {
     liveBubbleOrderRef.current = nextOrder;
   }, [liveBubbleParticipants]);
 
+  const hostParticipant = useMemo(
+    () => liveBubbleParticipants.find((participant) => participant.role === "host") ?? null,
+    [liveBubbleParticipants],
+  );
+  const visibleLiveBubbleParticipants = useMemo(
+    () => liveBubbleParticipants.filter((participant) => !hiddenParticipantIds[participant.userId]),
+    [hiddenParticipantIds, liveBubbleParticipants],
+  );
+
   useEffect(() => {
     if (liveBubbleParticipants.length === 0) {
       setActiveParticipantId("");
@@ -1538,10 +1417,10 @@ export default function WatchPartyRoomScreen() {
       }),
     [presenceParticipants, currentUserBubbleId, participantReactions, resolvedCurrentUsername],
   );
-  const isCurrentUserInParticipantBubbles = !!currentUserBubbleId && liveBubbleParticipants.some((participant) => participant.userId === currentUserBubbleId);
+  const isCurrentUserInParticipantBubbles = !!currentUserBubbleId && visibleLiveBubbleParticipants.some((participant) => participant.userId === currentUserBubbleId);
   const dominantLiveSpeakerId = useMemo(() => {
     return computeDominantSpeakerId(
-      liveBubbleParticipants,
+      visibleLiveBubbleParticipants,
       (participant) => participant.userId,
       (participant) => {
         const participantState = participantStateById[participant.userId];
@@ -1551,14 +1430,14 @@ export default function WatchPartyRoomScreen() {
         return !isMuted && !!(isSpeakingById[participant.userId] || (isSpeakerRole && participant.isSpeaking));
       },
     );
-  }, [liveBubbleParticipants, participantStateById, isSpeakingById]);
+  }, [visibleLiveBubbleParticipants, participantStateById, isSpeakingById]);
   const bottomStripParticipants = useMemo(() => {
     return computeBottomStripParticipants(
-      liveBubbleParticipants,
+      visibleLiveBubbleParticipants,
       (participant) => participant.userId,
       isCurrentUserInParticipantBubbles ? currentUserBubbleId : "",
     );
-  }, [liveBubbleParticipants, isCurrentUserInParticipantBubbles, currentUserBubbleId]);
+  }, [visibleLiveBubbleParticipants, isCurrentUserInParticipantBubbles, currentUserBubbleId]);
   const bottomStripEntries = useMemo<LiveBottomStripParticipant[]>(
     () =>
       bottomStripParticipants.map((participant) => ({
@@ -1575,12 +1454,62 @@ export default function WatchPartyRoomScreen() {
   );
   const onBottomStripParticipantPress = useCallback((participantId: string) => {
     if (!participantId) return;
-    const participant = liveBubbleParticipants.find((entry) => entry.userId === participantId)
+    const participant = visibleLiveBubbleParticipants.find((entry) => entry.userId === participantId)
       ?? bottomStripParticipants.find((entry) => entry.userId === participantId);
     if (!participant) return;
     triggerBubbleTapPulse(participantId);
     setSelectedParticipant(participant);
-  }, [liveBubbleParticipants, bottomStripParticipants, triggerBubbleTapPulse]);
+  }, [visibleLiveBubbleParticipants, bottomStripParticipants, triggerBubbleTapPulse]);
+  const tailoredFocusParticipant = useMemo(
+    () => visibleLiveBubbleParticipants.find((participant) => participant.userId === activeParticipantId)
+      ?? hostParticipant
+      ?? visibleLiveBubbleParticipants[0]
+      ?? null,
+    [activeParticipantId, hostParticipant, visibleLiveBubbleParticipants],
+  );
+  const hiddenParticipantCount = useMemo(
+    () => Object.values(hiddenParticipantIds).filter(Boolean).length,
+    [hiddenParticipantIds],
+  );
+  const featureParticipantFirst = useCallback((participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    setFeaturedParticipantById({ [nextParticipantId]: true });
+    setActiveParticipantId(nextParticipantId);
+  }, []);
+  const hideParticipantLocally = useCallback((participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    const participant = liveBubbleParticipants.find((entry) => entry.userId === nextParticipantId);
+    if (!participant || participant.userId === currentUserBubbleId || participant.role === "host") return;
+    setHiddenParticipantIds((prev) => ({ ...prev, [nextParticipantId]: true }));
+    setFeaturedParticipantById((prev) => {
+      if (!prev[nextParticipantId]) return prev;
+      const next = { ...prev };
+      delete next[nextParticipantId];
+      return next;
+    });
+    setParticipantPresentationById((prev) => {
+      if (!prev[nextParticipantId]) return prev;
+      const next = { ...prev };
+      delete next[nextParticipantId];
+      return next;
+    });
+    if (activeParticipantId === nextParticipantId) {
+      setActiveParticipantId(hostParticipant?.userId ?? "");
+    }
+    setSelectedParticipant((current) => (current?.userId === nextParticipantId ? null : current));
+  }, [activeParticipantId, currentUserBubbleId, hostParticipant?.userId, liveBubbleParticipants]);
+  const showEveryoneLocally = useCallback(() => {
+    setHiddenParticipantIds({});
+  }, []);
+  const resetTailoredRoomView = useCallback(() => {
+    setHiddenParticipantIds({});
+    setFeaturedParticipantById({});
+    setParticipantPresentationById({});
+    setActiveParticipantId(hostParticipant?.userId ?? "");
+    setSelectedParticipant(null);
+  }, [hostParticipant?.userId]);
   const closeParticipantModal = useCallback(() => {
     setSelectedParticipant(null);
   }, []);
@@ -1859,7 +1788,7 @@ export default function WatchPartyRoomScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.liveBubblesRow}
           >
-            {liveBubbleParticipants.map((participant, index) => {
+            {visibleLiveBubbleParticipants.map((participant, index) => {
               const participantState = participantStateById[participant.userId] ?? {
                 isMuted: !!participant.isMuted,
                 role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
@@ -2055,6 +1984,92 @@ export default function WatchPartyRoomScreen() {
           </ScrollView>
         </View>
 
+        {!isLiveRoom ? (
+          <View style={styles.tailoredRoomCard}>
+            <Text style={styles.sectionKicker}>TAILORED WATCH-PARTY LIVE</Text>
+            <Text style={styles.tailoredRoomTitle}>Your room view stays personal</Text>
+            <Text style={styles.tailoredRoomBody}>
+              {hostParticipant
+                ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Choose who appears first in your strip and hide guests locally without changing the shared room truth.`
+                : "Choose who appears first in your strip and hide guests locally without changing the shared room truth."}
+            </Text>
+            <View style={styles.tailoredRoomMetaRow}>
+              <View style={styles.tailoredRoomMetaPill}>
+                <Text style={styles.tailoredRoomMetaText}>
+                  Host: {hostParticipant ? (hostParticipant.userId === currentUserBubbleId ? "You" : hostParticipant.displayName) : "Syncing..."}
+                </Text>
+              </View>
+              <View style={styles.tailoredRoomMetaPill}>
+                <Text style={styles.tailoredRoomMetaText}>
+                  Focus: {tailoredFocusParticipant ? (tailoredFocusParticipant.userId === currentUserBubbleId ? "You" : tailoredFocusParticipant.displayName) : "Host"}
+                </Text>
+              </View>
+              {hiddenParticipantCount > 0 ? (
+                <View style={styles.tailoredRoomMetaPill}>
+                  <Text style={styles.tailoredRoomMetaText}>Hidden locally: {hiddenParticipantCount}</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.tailoredRoomActions}>
+              <TouchableOpacity
+                style={styles.tailoredRoomActionButton}
+                activeOpacity={0.86}
+                onPress={() => {
+                  if (!hostParticipant?.userId) return;
+                  featureParticipantFirst(hostParticipant.userId);
+                }}
+                disabled={!hostParticipant?.userId}
+              >
+                <Text style={styles.tailoredRoomActionText}>See host first</Text>
+              </TouchableOpacity>
+              {tailoredFocusParticipant && tailoredFocusParticipant.userId !== hostParticipant?.userId ? (
+                <TouchableOpacity
+                  style={styles.tailoredRoomActionButton}
+                  activeOpacity={0.86}
+                  onPress={() => {
+                    featureParticipantFirst(tailoredFocusParticipant.userId);
+                  }}
+                >
+                  <Text style={styles.tailoredRoomActionText}>
+                    See {tailoredFocusParticipant.userId === currentUserBubbleId ? "yourself" : tailoredFocusParticipant.displayName} first
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              {tailoredFocusParticipant
+                && tailoredFocusParticipant.userId !== currentUserBubbleId
+                && tailoredFocusParticipant.role !== "host" ? (
+                <TouchableOpacity
+                  style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
+                  activeOpacity={0.86}
+                  onPress={() => {
+                    hideParticipantLocally(tailoredFocusParticipant.userId);
+                  }}
+                >
+                  <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>
+                    Hide {tailoredFocusParticipant.displayName}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              {hiddenParticipantCount > 0 ? (
+                <TouchableOpacity
+                  style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
+                  activeOpacity={0.86}
+                  onPress={showEveryoneLocally}
+                >
+                  <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Show everyone</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
+                activeOpacity={0.86}
+                onPress={resetTailoredRoomView}
+              >
+                <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Reset layout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
         {/* ── Invite card ────────────────────────────────────────────── */}
         <RoomCodeInviteCard
           roomCode={roomCodeCardValue}
@@ -2086,30 +2101,6 @@ export default function WatchPartyRoomScreen() {
         >
           <Text style={styles.reportRoomButtonText}>Report Room</Text>
         </TouchableOpacity>
-
-        {features.communicationEnabled ? (
-          <View style={styles.communicationCard}>
-            <Text style={styles.sectionKicker}>COMMUNICATION</Text>
-            <Text style={styles.communicationTitle}>Linked Communication Room</Text>
-            <Text style={styles.communicationBody}>
-              {isHost
-                ? `Open the linked audio and video side-room for this ${isLiveRoom ? "live room" : "party room"}.`
-                : `Join the linked audio and video side-room once the host opens it for this ${isLiveRoom ? "live room" : "party room"}.`}
-            </Text>
-            <TouchableOpacity
-              style={[styles.communicationButton, communicationBusy && styles.communicationButtonDisabled]}
-              activeOpacity={0.86}
-              onPress={() => {
-                void onOpenCommunicationRoom();
-              }}
-              disabled={communicationBusy}
-            >
-              <Text style={styles.communicationButtonText}>
-                {communicationBusy ? "Opening communication..." : isHost ? "Open Communication Room" : "Join Communication Room"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
 
         <ProtectedSessionNote
           {...getProtectedSessionCopy(isLiveRoom ? "live-room" : "party-room", {
@@ -2181,7 +2172,7 @@ export default function WatchPartyRoomScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.watchCTA} onPress={() => onWatchTogether({ liveMode: true })} activeOpacity={0.88}>
-            <Text style={styles.watchCTAText}>🔴  Go Live</Text>
+            <Text style={styles.watchCTAText}>Watch-Party Live</Text>
           </TouchableOpacity>
         )}
 
@@ -3116,7 +3107,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#B80F31",
   },
   watchCTAText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
-  communicationCard: {
+  tailoredRoomCard: {
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
@@ -3125,32 +3116,60 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     gap: 8,
   },
-  communicationTitle: {
+  tailoredRoomTitle: {
     color: "#F5F7FB",
     fontSize: 17,
     fontWeight: "900",
   },
-  communicationBody: {
+  tailoredRoomBody: {
     color: "#A9B2C6",
     fontSize: 12.5,
     lineHeight: 18,
     fontWeight: "600",
   },
-  communicationButton: {
+  tailoredRoomMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tailoredRoomMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  tailoredRoomMetaText: {
+    color: "#D9E1F2",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  tailoredRoomActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  tailoredRoomActionButton: {
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(90,153,255,0.32)",
     backgroundColor: "rgba(24,42,76,0.86)",
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     alignItems: "center",
   },
-  communicationButtonDisabled: {
-    opacity: 0.72,
+  tailoredRoomActionButtonGhost: {
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.05)",
   },
-  communicationButtonText: {
+  tailoredRoomActionText: {
     color: "#E6EEFF",
     fontSize: 13,
     fontWeight: "900",
+  },
+  tailoredRoomActionTextGhost: {
+    color: "#E6EAF5",
   },
 
   // Reactions

@@ -3,10 +3,11 @@
 ## Current Checkpoint
 Chi'llywood still carries locked product doctrine, hard-locked core naming, canonical room architecture, a standalone Chi'lly Chat MVP in repo code, and an explicit messenger-first / profile-first / action-first MVP direction in the control files. Stage 4's final automation batch is now completed/proved on the current build because current terminal/workflow output proved the corrected local release-style / bundled Android lane, the corrected Party / Live split, local Flow 09, and the final cloud rerun all green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91`. The previous cloud rerun narrowed the only remaining issue to a below-the-fold Flow 09 proof-path problem, cloud artifact inspection plus a bounded local 320x640-style replay proved that diagnosis, and the replacement cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green with all cloud Maestro flows passing.
 The active repo-truth files `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` are restored after the accidental cleanup deletion, while the intended PostHog root wiring remains intact.
-A new phased product-alignment pass has begun from that stable baseline, and Phase 1 Home / Discovery code is now in repo, but current-build UI proof for that phase is still pending.
+A new phased product-alignment pass has begun from that stable baseline, and Phase 1 Home / Discovery plus Phase 2 Player / Party code are now in repo, but current-build UI proof for those new slices is still pending.
 
 ## Current Batch Surface Inventory
 - Home tab -> Continue Watching hero slot -> Top Rated / Browse metadata -> reserved Chi'llywood Originals slot
+- Player -> Party Waiting Room -> Party Room -> tailored Watch-Party Live handoff
 - Home tab -> self profile -> channel settings -> profile rails -> Chi'lly Chat inbox
 - Explore tab -> title detail -> self profile likes/shares rails
 
@@ -112,6 +113,7 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - PostHog root feature-flag wiring now exists, but remote delivery for `live_waiting_room_enabled`, `party_waiting_room_enabled`, and `watch_party_live_handoff_v2` is not yet proved on the current build
 - the accidental cleanup deletion of `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` is now repaired, so the repo-truth and checkpoint references are consistent again
 - the new Phase 1 Home / Discovery implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
+- the new Phase 2 Player / Party implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`
@@ -133,12 +135,14 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - Live Stage init now tears down stale `room-${partyId}` and `live-stage-room-${partyId}` realtime channels before creating fresh subscriptions, which closes the proved `cannot add presence callback after joining a channel` race during canonical Live entry and fast reruns
 - Player now resets and unloads its `Video` instance on title-route change / unmount, which closes the proved `[player-video] Player error: Detaching surface timed out.` blocker that surfaced while resuming the room-validation path through `/player/t1`
 - PostHog feature-flag scaffolding is now wired at the root through `posthog-react-native` in `app/_layout.tsx`, reads `EXPO_PUBLIC_POSTHOG_API_KEY` / `EXPO_PUBLIC_POSTHOG_HOST` via `_lib/posthog.ts`, and performs a proof-only flag probe without changing Party/Live routes or live room behavior
+- the standalone Player owner on `app/player/[id].tsx` now renders the locked `Watch-Party Live` CTA text, and the Party Room owner on `app/watch-party/[partyId].tsx` now keeps tailoring inside `/watch-party/[partyId]` instead of routing users into `/communication/[roomId]`
 
 ## What Was Implemented In This Pass
 - repo-root control files were rewritten so standalone Chi'lly Chat and room-native communication no longer conflict
 - `SESSION_START_PROTOCOL.md` now exists and locks the session-start checklist for future sessions
 - PostHog feature flags are now scaffolded at the root via Expo-compatible dependencies in `package.json`, env/flag helpers in `_lib/posthog.ts`, and a non-invasive `PostHogProvider` + proof-only flag probe in `app/_layout.tsx`
 - `app/(tabs)/index.tsx` now promotes real Continue Watching progress into the top Home hero slot when progress exists, enriches `Top Rated` and `Browse` cards with added-date plus live comment/reaction metadata when active title-room activity exists, and replaces the lower Continue Watching slot with a reserved Chi'llywood Originals placeholder instead of filler content
+- `app/player/[id].tsx` now uses the locked `Watch-Party Live` wording on the standalone player CTA, and `app/watch-party/[partyId].tsx` now replaces the generic linked communication-room handoff with Party Room-native tailored-view controls for host-first focus, local hide, and layout reset while keeping shared room truth intact
 - `_lib/appConfig.ts` hard-locks the doctrinal product labels
 - `app/admin.tsx` now exposes locked naming as read-only instead of editable runtime branding
 - `supabase/migrations/202603270009_create_chilly_chat_threads.sql` adds:

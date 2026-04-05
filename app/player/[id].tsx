@@ -3575,7 +3575,7 @@ export default function PlayerScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]} onPress={onWatchParty} activeOpacity={0.85}>
-                    <Text style={styles.partyOverlayChipText}>Live Watch-Party</Text>
+                    <Text style={styles.partyOverlayChipText}>Watch-Party Live</Text>
                   </TouchableOpacity>
                 </Animated.View>
               </View>
