@@ -3,10 +3,10 @@
 ## Current Checkpoint
 Stage 4 remains completed/proved on the current build. Current JS via Expo Go / Metro proved Home, Player, Profile, Chi'lly Chat, Live Waiting Room, Party Waiting Room, Live Room, Party Room, and Live Stage behavior as described below.
 
-The latest proof passes fixed three real current-build issues: `app/player/[id].tsx` now resolves bundled assets through `expo-asset` before passing them to `expo-av`, `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes, and `app/_layout.tsx` now identifies the signed-in Supabase user to PostHog before reloading feature flags so the runtime requests flag values for the real current user. Typecheck passed afterward. PostHog env wiring is present locally and the current Expo runtime proof below now confirms both remote default-off stability and remote on-state delivery for the gated chat flags.
+The latest proof pass also closed two reported current-build regressions on April 5, 2026: logged-out first open now lands on login again, and Home `Top Rated` / `Browse` content cards now route to the real title detail surface instead of `Not found`. The current fix set is intentionally small and owner-based: `app/_layout.tsx` now lets the root auth gate own post-auth redirect resolution, `app/(auth)/login.tsx` no longer dispatches its own tabs-group replace, `app/(tabs)/index.tsx` now pushes the canonical structured `/title/[id]` target, and `app/title/[id].tsx` no longer requests the nonexistent `titles.thumbnail_url` column during title hydration. Typecheck passed afterward. PostHog env wiring is present locally and the current Expo runtime proof below now confirms both remote default-off stability and remote on-state delivery for the gated chat flags.
 
 ## Current-Build Proved Items
-- Home: `Continue Watching` proved at the top by temporarily seeding `watch_history` for `Chicago Streets` and then clearing it; `Browse` / `Top Rated` cards show title, info line, and `Added` date; the lower Home area is reserved for `Chi'llywood Originals`
+- Home: `Continue Watching` proved at the top by temporarily seeding `watch_history` for `Chicago Streets` and then clearing it; `Browse` / `Top Rated` cards show title, info line, and `Added` date; the lower Home area is reserved for `Chi'llywood Originals`; on April 5, 2026 a clean `adb shell pm clear host.exp.exponent` first-open proof landed on `/login`, then the authenticated Home proof landed on `/` with `Top Rated`, `Browse`, and the `Chicago Streets` card metadata visible in the UI tree
 - Player: the bundled Android asset-path playback bug was fixed in `app/player/[id].tsx` by resolving the bundled asset via `expo-asset` `localUri` before `expo-av` `Video`, and the current JS player route showed a real video frame while retaining the `Watch-Party Live` CTA
 - Own profile: owner/control page proved with `Manage Channel`, `Chi'lly Chat`, and the owner/channel toggle
 - Other-user profile: basic profile plus channel-home behavior proved through the `Proof User` route
@@ -47,6 +47,7 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 - The current runtime version policy in effect is `appVersion`, which resolves to `1.0.0` on the current checkpoint
 
 ## What Was Fixed In This Pass
+- `app/_layout.tsx`, `app/(auth)/login.tsx`, `app/(tabs)/index.tsx`, and `app/title/[id].tsx` now close the reported auth/home regressions: the root auth gate owns post-auth redirect resolution from auth routes, the login screen no longer dispatches the broken tabs-group replace, Home discovery cards push the canonical structured `/title/[id]` target, and title hydration no longer requests the missing `thumbnail_url` column that forced valid DB titles into the `Not found` fallback
 - `app/player/[id].tsx` now resolves bundled assets through `expo-asset` `localUri` before `expo-av` `Video`, which fixed the real Android preview/current-JS playback bug
 - `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes, which fixed the `cannot add presence callbacks after joining a channel` runtime error
 - `app/_layout.tsx` now identifies the signed-in Supabase user to PostHog and reloads feature flags inside the current provider tree, which fixed the missing identified-user flag-request path during the remote on-state proof lane
@@ -56,13 +57,14 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 - `package.json` and `package-lock.json` now intentionally own `expo-updates@~29.0.16` through the Expo-managed install path, which closes the preview OTA auto-install blocker without changing app logic
 
 ## What Is Proved In Repo
+- A clean Expo Go first-open reset now lands on `/login` when the session is absent, and a valid login now returns to Home on `/` without the prior unhandled `"(tabs)"` replace error
 - Party Room is canonical on `/watch-party/[partyId]`
 - Live Room is canonical on `/watch-party/live-stage/[partyId]`
 - Party Waiting Room routes into Party Room, while Live Waiting Room routes into Live Room
 - Party Room must not hand off to Live Stage
 - `/communication` and `/communication/[roomId]` remain compatibility-only room redirects
-- Home `Top Rated` and `Browse` title cards route through `app/(tabs)/index.tsx` into `app/title/[id].tsx`
-- Title Detail resolves by exact `id`, then exact `title`, then local fallback, so valid titles such as `Chicago Streets` do not fall through from the Home rails without exhausting real resolution paths
+- Home `Top Rated` and `Browse` title cards route through `app/(tabs)/index.tsx` into `app/title/[id].tsx`, and the current build now re-proves that both visible Home rails open the `Chicago Streets` title detail surface instead of `Not found`
+- Title Detail resolves by exact `id`, then exact `title`, then local fallback, so valid titles such as `Chicago Streets` do not fall through from the Home rails without exhausting real resolution paths; the removed `thumbnail_url` select is part of that proved fix
 - `Live Watch-Party`, `Watch-Party Live`, `Live First`, and `Chi'lly Chat` are locked in the repo control files alongside the corrected Party / Live route split
 - runtime/admin config cannot rename locked product labels such as `watchPartyLabel`, `liveRoomTitle`, or `partyRoomTitle`
 - standalone Chi'lly Chat exists on `/chat` and `/chat/[threadId]`

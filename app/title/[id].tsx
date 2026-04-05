@@ -33,7 +33,6 @@ type TitleRow = {
   title: string;
   synopsis?: string | null;
   poster_url?: string | null;
-  thumbnail_url?: string | null;
   content_access_rule?: TitleAccessRule | null;
   ads_enabled?: boolean | null;
   sponsor_placement?: SponsorPlacement | null;
@@ -92,7 +91,7 @@ export default function TitleDetails() {
       try {
         const { data } = await supabase
           .from("titles")
-          .select("id,title,synopsis,poster_url,thumbnail_url,content_access_rule,ads_enabled,sponsor_placement,sponsor_label")
+          .select("id,title,synopsis,poster_url,content_access_rule,ads_enabled,sponsor_placement,sponsor_label")
           .eq("id", cleanId)
           .maybeSingle();
 
@@ -109,7 +108,6 @@ export default function TitleDetails() {
           title: String((localMatch as any).title ?? "Untitled"),
           synopsis: (localMatch as any).description ?? null,
           poster_url: null,
-          thumbnail_url: null,
           content_access_rule: "open",
           ads_enabled: false,
           sponsor_placement: "none",
@@ -148,7 +146,6 @@ export default function TitleDetails() {
           title: String((localMatch as any).title ?? "Untitled"),
           synopsis: (localMatch as any).description ?? null,
           poster_url: null,
-          thumbnail_url: null,
           content_access_rule: "open",
           ads_enabled: false,
           sponsor_placement: "none",

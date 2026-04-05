@@ -6,11 +6,13 @@ Keep Stage 4 closed and recorded as completed/proved on the current build. The n
 ## Current Plan
 1. Preserve the current green Stage 4 truth exactly as recorded
 2. Preserve the now-closed PostHog proof truth exactly as recorded
-3. Keep the current-build live-stage proof recorded as complete after the channel-topic fix
-4. Use the now-ready EAS Update config/docs baseline to rebuild preview with `expo-updates`, then publish and verify a preview OTA before any production rollout
+3. Preserve the newly re-closed auth/home regression fix exactly as recorded
+4. Keep the current-build live-stage proof recorded as complete after the channel-topic fix
+5. Use the now-ready EAS Update config/docs baseline to rebuild preview with `expo-updates`, then publish and verify a preview OTA before any production rollout
 
 ## Exact Next Batch
 - preserve the newly proved PostHog runtime baseline: `.env.local` now loads into the current Expo session, the Android bundle carries the injected `EXPO_PUBLIC_POSTHOG_*` values, and the remote-default-off state keeps the chat thread stable with no smart-reply card visible
+- preserve the newly re-proved April 5, 2026 auth/home truth: `adb shell pm clear host.exp.exponent` lands on `/login`, the valid test login returns to `/` without the prior unhandled tabs-group replace, and both visible Home `Chicago Streets` rails land on `/title/f0d03df8-ced8-433f-a5c0-e2b930813eb0` with `Play` visible instead of `Not found`
 - preserve the new identified-user flag bridge in `app/_layout.tsx`; the current runtime now identifies the signed-in Supabase user to PostHog before reloading feature flags
 - preserve the newly proved PostHog on-state truth from April 5, 2026: direct `/flags/?v=2` now returns both `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` as `enabled: true` with `condition_match`, and `/chat/[threadId]` now visibly renders `AI SMART REPLIES`, `PostHog gated`, and the three smart-reply chips
 - keep the flag-owner bookkeeping exact: active chat-thread consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`, while the waiting-room/live flags remain probe-only in `app/_layout.tsx`
@@ -26,6 +28,7 @@ Keep Stage 4 closed and recorded as completed/proved on the current build. The n
 This next pass should:
 - preserve the proved Stage 4 baseline exactly
 - preserve the closed PostHog proof lane
+- preserve the newly re-closed auth/home regression fix without reopening app logic
 - preserve the now-complete live-stage UI proof and stage-channel fix
 - create a fresh preview build with `expo-updates`, then execute the first preview-channel EAS Update publish and delivery verification without reopening proof
 

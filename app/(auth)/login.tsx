@@ -1,4 +1,4 @@
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { trackEvent } from "../../_lib/analytics";
@@ -7,9 +7,8 @@ import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { supabase } from "../../_lib/supabase";
 
 export default function Login() {
-  const router = useRouter();
   const params = useLocalSearchParams<{ redirectTo?: string }>();
-  const redirectTo = String(params.redirectTo ?? "").trim() || "/(tabs)";
+  const redirectTo = String(params.redirectTo ?? "").trim() || "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,7 +38,6 @@ export default function Login() {
       trackEvent("auth_sign_in_success", {
         redirectTo,
       });
-      router.replace(redirectTo as Parameters<typeof router.replace>[0]);
     } catch (error) {
       reportRuntimeError("auth-login", error, {
         redirectTo,

@@ -1,6 +1,7 @@
-import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { PostHogProvider, useFeatureFlag, usePostHog } from "posthog-react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { trackEvent, trackScreen } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -23,6 +24,26 @@ function RouteAnalyticsBridge() {
 
   return null;
 }
+
+const serializeRedirectTarget = (pathname: string, params: Record<string, unknown>) => {
+  const search = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        if (entry == null) return;
+        search.append(key, String(entry));
+      });
+      return;
+    }
+
+    search.append(key, String(value));
+  });
+
+  const query = search.toString();
+  return query ? `${pathname}?${query}` : pathname;
+};
 
 function PostHogFlagProbe() {
   const liveWaitingRoomEnabled = useFeatureFlag(posthogFeatureFlags.liveWaitingRoomEnabled);
@@ -111,6 +132,49 @@ function RootNavigator() {
   );
 }
 
+function AuthBootScreen() {
+  return (
+    <View style={styles.authBootScreen}>
+      <ActivityIndicator color="#DC143C" />
+      <Text style={styles.authBootText}>Checking your session…</Text>
+    </View>
+  );
+}
+
+function AuthRouteGate() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams();
+  const segments = useSegments();
+  const { isLoading, isSignedIn } = useSession();
+
+  const redirectTo = serializeRedirectTarget(pathname, params as Record<string, unknown>);
+  const authRedirectTo = String(params.redirectTo ?? "").trim() || "/";
+  const insideAuthGroup = segments[0] === "(auth)";
+  const insideTabsGroup = segments[0] === "(tabs)" || pathname === "/";
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!isSignedIn && insideTabsGroup) {
+      router.replace({
+        pathname: "/(auth)/login",
+        params: { redirectTo },
+      });
+      return;
+    }
+
+    if (isSignedIn && insideAuthGroup) {
+      router.replace(authRedirectTo as Parameters<typeof router.replace>[0]);
+    }
+  }, [authRedirectTo, insideAuthGroup, insideTabsGroup, isLoading, isSignedIn, redirectTo, router]);
+
+  if (isLoading) return <AuthBootScreen />;
+  if ((!isSignedIn && insideTabsGroup) || (isSignedIn && insideAuthGroup)) return <AuthBootScreen />;
+
+  return <RootNavigator />;
+}
+
 function BetaWelcomeController() {
   const router = useRouter();
   const { accessState, isActive, acknowledgeOnboarding } = useBetaProgram();
@@ -178,7 +242,7 @@ export default function RootLayout() {
         <PostHogSessionBridge />
         <BetaProgramProvider>
           <RootErrorBoundary>
-            <RootNavigator />
+            <AuthRouteGate />
           </RootErrorBoundary>
           <BetaWelcomeController />
         </BetaProgramProvider>
@@ -186,3 +250,18 @@ export default function RootLayout() {
     </PostHogRootProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  authBootScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#05060A",
+    gap: 10,
+  },
+  authBootText: {
+    color: "#F4F7FC",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+});

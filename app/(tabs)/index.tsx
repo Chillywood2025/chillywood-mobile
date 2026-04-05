@@ -303,7 +303,10 @@ export default function HomeScreen() {
 
   function openTitleDetails(item: TitleRow) {
     const safeId = String(item.id || item.slug || item.title);
-    router.push(`/title/${safeId}`);
+    router.push({
+      pathname: "/title/[id]",
+      params: { id: safeId },
+    });
   }
 
   function openWatchParty() {
