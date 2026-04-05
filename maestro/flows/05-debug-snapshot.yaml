@@ -1,4 +1,4 @@
-appId: host.exp.exponent
+appId: ${CHILLYWOOD_APP_ID}
 ---
 # Flow 05 — DEV debug panel: overlay activates and Copy Debug Snapshot is reachable
 #
@@ -13,11 +13,11 @@ appId: host.exp.exponent
     clearState: false
 
 # Enter the running Expo app from Expo Go home
-- openLink: "exp://127.0.0.1:8081"
+- openLink: "${EXPO_URL}"
 
 # Wait for home to render first
 - assertVisible:
-    text: "▶ Play"
+    text: "Live Watch-Party"
 
 # ── Activate DEV mode: long-press the badge ───────────────────────────────────
 # The badge shows "DEV" when disabled, "DEV ON" when enabled.

@@ -1,9 +1,9 @@
-appId: host.exp.exponent
+appId: ${CHILLYWOOD_APP_ID}
 ---
 # Flow 02 — Tapping a visible title card opens the Player
 #
 # Validates:
-#   ✓ Hero section "▶ Play" button is tappable
+#   ✓ Explore title card is tappable
 #   ✓ Navigating to player does not crash
 #   ✓ Player screen loads (brand tag visible)
 #   ✓ "Title not found." error is NOT shown
@@ -12,7 +12,7 @@ appId: host.exp.exponent
     clearState: false
 
 # Enter the running Expo app from Expo Go home
-- openLink: "exp://127.0.0.1:8081"
+- openLink: "${EXPO_URL}"
 
 # Navigate via Explore to tap a visible title card
 - assertVisible:

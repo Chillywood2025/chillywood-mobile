@@ -27,17 +27,19 @@ The latest proof passes fixed three real current-build issues: `app/player/[id].
 - The active chat-thread flag consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`
 - Waiting-room and live flags are probe-only in `app/_layout.tsx` and are not wired to active UI owners
 
-## Repo And Doc Drift
-- `SESSION_START_PROTOCOL.md` is missing even though docs refer to it
-- `maestro/` docs and the actual flow inventory are out of sync
-- `_subflows/ensure-authenticated.yaml` and several referenced flows are missing
+## Repo And Harness Reconciliation
+- `SESSION_START_PROTOCOL.md` now exists and locks the control-file-first preflight plus checkpoint-bookkeeping order
+- `ROADMAP.md`, `CURRENT_STATE.md`, and `NEXT_TASK.md` now agree on the preserved checkpoint truth: Stage 4 closed, PostHog default-off closed, and PostHog on-state closed
+- `maestro/` now records the active baseline smoke lane explicitly, uses shared `CHILLYWOOD_APP_ID` / `EXPO_URL` contracts instead of the stale `8081` hardcode, and replaces the missing auth-subflow / dead-id flow 09 path with an optional authenticated self-profile owner-rails flow
+- No app logic changed in this reconciliation pass; the unrelated Supabase/media/screenshot worktree noise remains outside this checkpoint
 - Expo Go surfaced intermittent Android ANR dialogs plus `Unable to activate keep awake` during the PostHog-enabled proof sessions, but the underlying Home/chat/profile routes still rendered and both default-off plus on-state proof completed
-- with PostHog on-state now proved, the next active lane is repo/doc drift reconciliation rather than flag delivery
+- with reconciliation now closed, the next active lane is EAS Update readiness / rollout work
 
 ## What Was Fixed In This Pass
 - `app/player/[id].tsx` now resolves bundled assets through `expo-asset` `localUri` before `expo-av` `Video`, which fixed the real Android preview/current-JS playback bug
 - `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes, which fixed the `cannot add presence callbacks after joining a channel` runtime error
 - `app/_layout.tsx` now identifies the signed-in Supabase user to PostHog and reloads feature flags inside the current provider tree, which fixed the missing identified-user flag-request path during the remote on-state proof lane
+- `SESSION_START_PROTOCOL.md`, `ROADMAP.md`, and the active `maestro/` docs/flows were reconciled so repo truth, checkpoint truth, and proof-harness truth now describe the same closed Stage 4 + PostHog baseline without changing app behavior
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`

@@ -1,17 +1,21 @@
 # Maestro workspace config
-# Runs all flows in the flows/ directory
+# Includes baseline smoke flows plus optional authenticated flows in flows/
 flows:
   - "flows/*.yaml"
 
 # ── Environment variables (override via .env or CLI --env flags) ──────────────
 #
+#  EXPO_URL            – Current Expo session URL for openLink targets.
+#                        Example: exp://127.0.0.1:8084
+#
 #  CHILLYWOOD_APP_ID   – App bundle ID when running against a dev build.
 #                        Defaults to Expo Go (host.exp.exponent).
 #
-#  PARTY_ROOM_ID       – Optional: supply a live room ID to run
-#                        04-watch-party-room.yaml against a real party room.
-#                        When absent, flow 04 tests the Watch Party index screen only.
+#  SELF_PROFILE_USER_ID – Optional: authenticated self-profile id for flow 09.
 #
-# Override example:
-#   maestro test maestro/flows/04-watch-party-screen.yaml \
-#     --env PARTY_ROOM_ID=ABC123
+# Override examples:
+#   maestro test maestro/run-all.yaml \
+#     --env EXPO_URL=exp://127.0.0.1:8084
+#
+#   maestro test maestro/flows/09-title-actions-to-self-profile-rails.yaml \
+#     --env SELF_PROFILE_USER_ID=<profile-user-id>

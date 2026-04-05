@@ -1,25 +1,25 @@
-appId: host.exp.exponent
+appId: ${CHILLYWOOD_APP_ID}
 ---
-# Flow 04 — Watch Party: hub screen renders and room-code entry works
+# Flow 04 — Watch Party waiting-room entry screen renders and room-code entry works
 #
-# Part A: Watch Party index screen renders correctly (no auth required)
+# Part A: shared waiting-room entry screen renders correctly (no auth required)
 # Part B: Entering an invalid room code shows the expected error — not a crash
 #
 # Validates:
-#   ✓ Watch Party hub opens via deeplink without crash
-#   ✓ CHILLYWOOD brand, "Watch Party" headline, and "JOIN A ROOM" section are visible
+#   ✓ Watch Party waiting-room entry opens via deeplink without crash
+#   ✓ CHILLYWOOD brand, room identity copy, and "JOIN A ROOM" section are visible
 #   ✓ Typing a bogus code and tapping "Find Room" shows "Room not found" error
 #   ✓ App remains usable after the error (screen does not crash)
 
-# ── Part A: hub screen renders ────────────────────────────────────────────────
+# ── Part A: waiting-room entry screen renders ─────────────────────────────────
 
 - launchApp:
     clearState: false
 
 # Enter the running Expo app from Expo Go home
-- openLink: "exp://127.0.0.1:8081"
+- openLink: "${EXPO_URL}"
 
-# Navigate directly to the Watch Party hub via Expo deep-link
+# Navigate directly to the shared waiting-room entry via Expo deep-link
 - openLink: "chillywoodmobile://watch-party"
 
 - waitForAnimationToEnd

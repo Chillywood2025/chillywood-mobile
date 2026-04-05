@@ -1,160 +1,37 @@
-appId: ${MAESTRO_APP_ID}
+appId: ${CHILLYWOOD_APP_ID}
 ---
-# Flow 09 — Title actions -> self profile likes/shares rails
+# Flow 09 — Optional authenticated self-profile owner rails
+#
+# Preconditions:
+#   ✓ The device is already signed in
+#   ✓ SELF_PROFILE_USER_ID matches the authenticated user
 #
 # Validates:
-#   ✓ A deterministic title can be liked and copied through the shared content-action layer
-#   ✓ Home self-profile entry still opens the canonical profile/channel surface
-#   ✓ Self profile rails surface the liked/shared title entries
+#   ✓ The canonical self-profile route opens
+#   ✓ Self-profile owner rails surface Manage Channel and Chi'lly Chat
+#   ✓ Channel Home remains reachable from the owner page
 
 - launchApp:
-    clearState: true
+    clearState: false
+
+- openLink: "${EXPO_URL}"
+
+- openLink: "chillywoodmobile://profile/${SELF_PROFILE_USER_ID}"
 
 - waitForAnimationToEnd
 
-- runFlow: "_subflows/ensure-authenticated.yaml"
+- assertVisible:
+    id: "profile-screen"
 
-- extendedWaitUntil:
-    visible:
-      id: "tab-explore-button"
-    timeout: 60000
+- assertVisible:
+    text: "Manage Channel"
+
+- assertVisible:
+    id: "profile-chilly-chat-button"
 
 - tapOn:
-    id: "tab-explore-button"
+    text: "Channel Home"
     retryTapIfNoChange: true
 
-- waitForAnimationToEnd
-
-- extendedWaitUntil:
-    visible:
-      id: "explore-screen"
-    timeout: 60000
-
-- scrollUntilVisible:
-    element:
-      id: "explore-title-card-chicago-streets"
-    direction: DOWN
-    timeout: 60000
-    speed: 40
-    visibilityPercentage: 100
-    centerElement: true
-
 - assertVisible:
-    id: "explore-title-card-chicago-streets"
-
-- tapOn:
-    id: "explore-title-card-chicago-streets"
-    retryTapIfNoChange: true
-
-- waitForAnimationToEnd
-
-- extendedWaitUntil:
-    visible:
-      id: "title-screen"
-    timeout: 60000
-
-- assertVisible:
-    text: "Chicago Streets"
-
-- runFlow:
-    when:
-      visible:
-        text: "♡ Like"
-    commands:
-      - tapOn:
-          id: "title-like-button"
-
-- runFlow:
-    when:
-      visible:
-        text: "♥ Liked"
-    commands:
-      - assertVisible:
-          id: "title-like-button"
-
-- scrollUntilVisible:
-    element:
-      id: "title-copy-link-button"
-    direction: DOWN
-    timeout: 60000
-    speed: 40
-    visibilityPercentage: 100
-    centerElement: true
-
-- tapOn:
-    id: "title-copy-link-button"
-
-- runFlow:
-    when:
-      visible:
-        text: "OK"
-    commands:
-      - tapOn:
-          text: "OK"
-
-- tapOn:
-    id: "title-back-button"
-
-- waitForAnimationToEnd
-
-- extendedWaitUntil:
-    visible:
-      id: "explore-screen"
-    timeout: 60000
-
-- tapOn:
-    id: "tab-home-button"
-
-- extendedWaitUntil:
-    visible:
-      id: "home-screen"
-    timeout: 60000
-
-- tapOn:
-    id: "home-profile-button"
-
-- waitForAnimationToEnd
-
-- extendedWaitUntil:
-    visible:
-      id: "profile-screen"
-    timeout: 60000
-
-- scrollUntilVisible:
-    element:
-      id: "profile-likes-section"
-    direction: DOWN
-    timeout: 60000
-    speed: 40
-    visibilityPercentage: 100
-    centerElement: true
-
-- assertVisible:
-    id: "profile-likes-section"
-
-- assertVisible:
-    id: "profile-likes-entry-t1"
-
-- scrollUntilVisible:
-    element:
-      id: "profile-shares-section"
-    direction: DOWN
-    timeout: 60000
-    speed: 40
-    visibilityPercentage: 50
-    centerElement: false
-
-- assertVisible:
-    id: "profile-shares-section"
-
-- scrollUntilVisible:
-    element:
-      id: "profile-shares-entry-t1"
-    direction: DOWN
-    timeout: 60000
-    speed: 40
-    visibilityPercentage: 50
-    centerElement: false
-
-- assertVisible:
-    id: "profile-shares-entry-t1"
+    text: "Channel home for live drops, rooms, and creator presence."

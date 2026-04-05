@@ -43,7 +43,7 @@ Chi'llywood should advance in structure-safe phases that keep product truth stab
 - reusable rights-aware content-action primitives for like/share/download/cast
 - standalone-player cast / TV handoff direction for allowed content
 
-### Current Phase 4 / Stage 4 Checkpoint
+### Current Stage 4 / PostHog Checkpoint
 - Phase 4 / Stage 4 is completed/proved on the current build
 - Flow 08 is completed/proved on the current build because current terminal/workflow output proved it on the current build
 - cloud Flow 08 is now completed/proved on the latest cloud rerun
@@ -53,7 +53,9 @@ Chi'llywood should advance in structure-safe phases that keep product truth stab
 - cloud artifact inspection plus a bounded local 320x640-style replay proved the earlier Flow 09 cloud issue was a patched below-the-fold shares-entry proof-path problem, not a product regression
 - there is no remaining automated blocker in Stage 4
 - no final human verification pass is planned for this checkpoint
-- Phase 5 can begin from the now-green Stage 4 baseline
+- PostHog default-off and on-state proof are completed/proved on the current build
+- repo/doc/proof-harness reconciliation is now closed against this checkpoint baseline
+- the next lane after this checkpoint is EAS Update readiness / rollout work
 
 ## Phase 5: Multi-User Validation
 - cross-account/device proof for room-native communication

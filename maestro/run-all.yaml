@@ -1,15 +1,15 @@
-appId: host.exp.exponent
+appId: ${CHILLYWOOD_APP_ID}
 ---
-# run-all.yaml — Executes all critical-path flows in order.
+# run-all.yaml — Executes the baseline smoke flows in order.
 #
 # Run with:
-#   maestro test maestro/run-all.yaml
-#
-# Or run individual flows:
-#   maestro test maestro/flows/01-home-opens.yaml
+#   cp maestro/.env.example maestro/.env
+#   maestro test maestro/run-all.yaml --env EXPO_URL=exp://127.0.0.1:8084
 #
 # Set a custom app ID (dev build):
-#   maestro test maestro/run-all.yaml --env CHILLYWOOD_APP_ID=com.yourorg.chillywood
+#   maestro test maestro/run-all.yaml \
+#     --env CHILLYWOOD_APP_ID=com.yourorg.chillywood \
+#     --env EXPO_URL=exp://127.0.0.1:8084
 
 - runFlow: "./flows/01-home-opens.yaml"
 - runFlow: "./flows/02-tap-title-to-player.yaml"
