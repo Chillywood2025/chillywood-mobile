@@ -347,7 +347,14 @@ export default function WatchPartyLiveStageScreen() {
           await refreshStageSnapshot(trackedUserId).catch(() => null);
         }
 
-        const channel = supabase.channel(`room-${partyId}`, {
+        const roomChannelName = `room-${partyId}`;
+        supabase.getChannels().forEach((existingChannel) => {
+          if (existingChannel.topic === roomChannelName || existingChannel.topic === `realtime:${roomChannelName}`) {
+            supabase.removeChannel(existingChannel);
+          }
+        });
+
+        const channel = supabase.channel(roomChannelName, {
           config: { presence: { key: trackedUserId } },
         });
 

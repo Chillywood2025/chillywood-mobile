@@ -1,9 +1,11 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { Asset } from "expo-asset";
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     Animated,
     Easing,
     Image,
@@ -2387,6 +2389,38 @@ export default function PlayerScreen() {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo]);
+  const [playbackSource, setPlaybackSource] = useState<any>(() => (typeof source === "number" ? null : source));
+  useEffect(() => {
+    let cancelled = false;
+
+    if (typeof source !== "number") {
+      setPlaybackSource(source);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setPlaybackSource(null);
+
+    // Android preview builds need the bundled asset resolved to a local URI before expo-av can play it.
+    const asset = Asset.fromModule(source);
+    void asset
+      .downloadAsync()
+      .then(() => {
+        if (cancelled) return;
+        const localUri = asset.localUri ?? asset.uri;
+        setPlaybackSource(localUri ? { uri: localUri } : source);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPlaybackSource(source);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
   const frameworkBackgroundSource = useMemo<ImageSourcePropType | null>(() => {
     const poster = String((displayItem as any)?.poster_url ?? "").trim();
     if (poster) return { uri: poster };
@@ -3338,17 +3372,24 @@ export default function PlayerScreen() {
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
             <Animated.View style={[styles.videoAnimatedWrap, { transform: [{ scale: zoomScale }] }]}> 
-              <Video
-                ref={videoRef}
-                source={source}
-                style={styles.video}
-                resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
-                shouldPlay={isLiveMode ? true : isPlaying}
-                isLooping={false}
-                useNativeControls={false}
-                onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-                onLoad={onVideoLoad}
-              />
+              {playbackSource ? (
+                <Video
+                  ref={videoRef}
+                  source={playbackSource}
+                  style={styles.video}
+                  resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
+                  shouldPlay={isLiveMode ? true : isPlaying}
+                  isLooping={false}
+                  useNativeControls={false}
+                  onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+                  onLoad={onVideoLoad}
+                />
+              ) : (
+                <View style={styles.videoLoadingFallback}>
+                  <ActivityIndicator color={ACCENT} />
+                  <Text style={styles.videoLoadingText}>Preparing video…</Text>
+                </View>
+              )}
             </Animated.View>
 
             {seekFeedback ? (
@@ -4026,6 +4067,19 @@ const styles = StyleSheet.create({
   videoAnimatedWrap: {
     width: "100%",
     height: "100%",
+  },
+  videoLoadingFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    backgroundColor: "black",
+  },
+  videoLoadingText: {
+    color: "#BFC7D8",
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   video: {
     width: "100%",

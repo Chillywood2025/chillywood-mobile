@@ -1,131 +1,41 @@
 # NEXT TASK
 
 ## Exact Next Task
-Stage 4 remains completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, keep the restored repo-truth/control files and Flow 09 proof file intact, preserve the newly proved logged-out -> login -> other-profile -> Chi'lly Chat direct-thread runtime path, and current-build prove the remaining unproved slices from Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, Phase 4 Profile / Channel, Phase 5 Chi'lly Chat, plus the minimal Phase 6 AI/high-tech scaffold. PostHog root flag delivery is still required before any room-flow gating or higher-risk AI/high-tech slice.
-Keep the restored repo-truth files and the Flow 09 proof file intact while the new phased product-alignment pass proceeds from that stable baseline.
+Keep Stage 4 closed and recorded as completed/proved on the current build. The next lane is to prove remote PostHog delivery for the gated chat flags with real credentials or admin access, then reconcile the doc/proof-harness drift without touching EAS Update.
 
 ## Current Plan
-1. Preserve Stage 4 as completed/proved on the current build
-2. Current-build prove the remaining unproved slices from Phases 1 through 6 from the now-green baseline
-3. Prove remote PostHog root flag delivery and the gated Phase 6 chat-thread smart-reply slice without changing default behavior
-4. No final human verification pass
-5. Do not reopen Stage 4 unless new current-build proof truly invalidates it
+1. Preserve the current green Stage 4 truth exactly as recorded
+2. Prove remote PostHog delivery for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`, and confirm whether the waiting-room/live probe flags need any proof-harness alignment
+3. Keep the current-build live-stage proof recorded as complete after the channel-topic fix
+4. Reconcile the missing or out-of-sync docs and Maestro inventory so the checkpoint files and harness inventory agree
 
 ## Exact Next Batch
-- keep Flow 08 recorded as completed/proved on the current build only because current terminal output proved it on the current build
-- keep the now-proved Flow 08 path intact through Home -> self profile -> channel settings -> profile rails -> Chi'lly Chat inbox
-- keep cloud Flow 08 recorded accurately as now proved green on the latest cloud rerun after the earlier smaller-viewport issue was corrected
-- keep the corrected Party / Live split recorded accurately as completed/proved on the current build:
-  - Party flow stops at Party Room and the shared watch-party player
-  - Live Stage is entered only from the separate Home -> Live Watch-Party flow
-  - the obsolete Party Room -> Live Stage branch is removed from active doctrine, code, and automation
-- keep Flow 09 recorded accurately as completed/proved on the current build:
-  - `explore-screen`
-  - `title-like-button`
-  - `title-copy-link-button`
-  - `profile-likes-entry-t1`
-  - `profile-shares-entry-t1`
-- keep the earlier local Flow 09 proof-path blockers recorded accurately as fixed flow issues, not product regressions:
-  - `profile-shares-section` scroll strictness
-  - `tab-explore-button` transition determinism
-- keep the newest Flow 09 proof-path blocker recorded accurately as fixed flow logic, not a product regression:
-  - cloud-sized viewport stopped at `profile-shares-section` while `profile-shares-entry-t1` remained below the fold
-- keep the latest cloud rerun recorded accurately as:
-  - build passed
-  - `auth-gate`, `home-to-title-to-player`, `home-to-live-watch-party`, `player-to-watch-party-live`, `06-player-to-party-room`, `07-home-live-watch-party-to-live-stage`, `08-home-profile-chat-and-channel-settings`, and `09-title-actions-to-self-profile-rails` all passed
-- keep the bounded local 320x640-style replay recorded accurately as having passed after the new direct `profile-shares-entry-t1` scroll step
-- keep Stage 4 recorded accurately as having no remaining automated blocker now
-- keep the newly proved deterministic auth/chat runtime path recorded accurately on the current build:
-  - cleared Expo Go/emulator state plus explicit `/login` entry shows the real login form first
-  - successful sign-in returns to `home-screen`
-  - another-user `profile-chilly-chat-button` opens canonical `/chat/[threadId]`
-  - `chat-thread-screen` loads with the composer plus thread-native voice/video actions instead of the prior launch failure
-- keep the auth/chat recovery owner set and migration chain intact:
-  - `_lib/supabase.ts`
-  - `_lib/session.tsx`
-  - `_lib/chat.ts`
-  - `_lib/logger.ts`
-  - `app/profile/[userId].tsx`
-  - `202604040001_fix_chat_thread_policy_recursion.sql`
-  - `202604050001_relax_chat_thread_insert_policy.sql`
-  - `202604050002_allow_chat_thread_creator_bootstrap_access.sql`
-- current-build prove the new Home / Discovery slice in `app/(tabs)/index.tsx`:
-  - Continue Watching occupies the top hero slot when real watch progress exists
-  - the lower Home slot is now reserved for future Chi'llywood Originals instead of a duplicate Continue Watching rail
-  - `Top Rated` and `Browse` cards now expose added-date plus live comment/reaction metadata when active title-room activity exists
-- current-build prove the new Player / Party slice on the real owners:
-  - `app/player/[id].tsx` keeps standalone playback and now renders the CTA text exactly `Watch-Party Live`
-  - `app/watch-party/[partyId].tsx` no longer exposes a generic `/communication` destination in Party Room
-  - Party Room now keeps host-first / local-hide / reset controls inside the canonical room surface
-  - Party Room now hands forward with `Watch-Party Live` wording instead of `Go Live`
-- current-build prove the new Live slice on the real owner:
-  - `app/watch-party/live-stage/[partyId].tsx` no longer exposes a generic `/communication` destination in Live Stage
-  - Live First keeps comments/reactions inside the canonical live surface with no call-room dependency
-  - hybrid `Live Watch-Party` now keeps the host visible in the participant strip while preserving local host-first / hide / reset controls
-- current-build prove the new Profile / Channel slice on the real owners:
-  - `app/profile/[userId].tsx` now gives self profile an owner-mode surface and other profiles a real channel-home toggle
-  - long-press avatar quick actions now expose profile/channel/message/voice/video entry in the canonical profile owner
-  - `app/chat/[threadId].tsx` now reuses the existing thread-call owner for profile-launched voice/video quick actions
-- current-build prove the remaining unproved Phase 5 Chi'lly Chat slice on the real owners:
-  - `app/chat/index.tsx` now exposes long-press inbox quick actions for thread open, profile handoff, and voice/video launch
-  - `app/chat/[threadId].tsx` now exposes thread-header quick actions so profile and call entry stay inside the canonical Chi'lly Chat owner
-  - the already-proved profile -> direct-thread handoff must stay green while the remaining inbox/thread quick-action coverage is finished
-- current-build prove the new Phase 6 gated slice on the real owners:
-  - `_lib/posthog.ts` now exposes `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`
-  - `app/chat/[threadId].tsx` now renders PostHog-gated AI smart-reply suggestions only inside the canonical thread owner and only when the root provider/env path is active
-- prove remote PostHog flag delivery at the root for:
-  - `live_waiting_room_enabled`
-  - `party_waiting_room_enabled`
-  - `watch_party_live_handoff_v2`
-  - `chilly_chat_expanded_v1`
-  - `ai_chat_suggestions_v1`
-- keep PostHog wiring non-invasive:
-  - `app/_layout.tsx` root provider only
-  - `EXPO_PUBLIC_POSTHOG_API_KEY` / `EXPO_PUBLIC_POSTHOG_HOST` env wiring only
-  - no Party/Live route gating yet
-  - no AI backend overreach
-- treat the Expo `expo-localization` config-plugin warning as follow-up only if a current native build proves it necessary
-- report exact files changed, exact fixes, and any remaining blocker
+- prove remote PostHog delivery for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`; the local default-off short-circuit is already proved, so the missing piece is remote on-state with real credentials or admin access
+- keep the flag-owner bookkeeping exact: active chat-thread consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`, while the waiting-room/live flags remain probe-only in `app/_layout.tsx`
+- keep the proved live-stage fix recorded precisely as a channel-topic cleanup before stage subscribe, not as a broader room refactor
+- keep the live-stage UI proof recorded as complete: `Live-First`, `Live Watch-Party`, `PROTECTED LIVE SESSION`, `LIVE FIRST FOCUS`, and `TAILORED LIVE WATCH-PARTY` are all now visible on the current build
+- reconcile the proof harness and docs drift: `SESSION_START_PROTOCOL.md` missing, Maestro flow inventory out of sync, and `_subflows/ensure-authenticated.yaml` / referenced flows missing
+- keep `CURRENT_STATE.md` and this file aligned on the single active blocker: remote PostHog on-state delivery
 
 ## Scope
 This next pass should:
-- preserve the now-green Stage 4 baseline exactly as proved on the current build
-- prove the newly landed Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, and Phase 4 Profile / Channel implementations on the current build
-- continue the requested product-alignment work in phase order after each phase has a task-pure diff, validation, and checkpoint update
-- keep proof bookkeeping strict:
-  - nothing counts as passed unless current terminal/workflow output proves it on the current build
-  - keep locked product truth separate from checkpoint truth
-  - keep completed Stage 4 proof separate from the new phase-by-phase product-alignment work
-- preserve the preview EAS environment values and the corrected Android bundled/cloud lanes so future validation remains runnable
-- preserve canonical room routes, Chi'lly Chat routes, profile/channel truth, and the corrected Party / Live split while the phase-by-phase product-alignment pass continues
-- validate PostHog root flag delivery without changing room routes, waiting-room behavior, or live room ownership
+- preserve the proved Stage 4 baseline exactly
+- focus on remote PostHog delivery proof for the gated chat layer
+- preserve the now-complete live-stage UI proof and stage-channel fix
+- repair the docs/proof-harness mismatch if it blocks reliable future proofing
+- leave EAS Update untouched
 
 ## Out Of Scope
 Do not:
 - reopen Stage 4 unless new proof truly invalidates it
-- reintroduce Party Room -> Live Stage behavior
-- broad-refactor Party Room, Live Room, Chi'lly Chat, or profile/channel surfaces
+- broad-refactor the room surfaces, chat surfaces, or profile/channel surfaces
 - change locked routes, naming, or communication ownership without new doctrine updates
-
-## Proof Requirements
-Before claiming the next pass complete:
-1. preserve the final green Stage 4 proof in repo truth
-2. define the next concrete current-build proof target from the remaining unproved Home / Player / Party / Live / Profile / Chi'lly Chat surfaces while preserving the now-proved auth/chat handoff path
-3. keep canonical room routes, Chi'lly Chat behavior, and profile/channel truth unchanged unless new proof requires targeted fixes
-4. prove remote PostHog root flag delivery before enabling any room-flow gate or relying on the new AI/high-tech slice
+- spend the lane on EAS Update
 
 ## Success Criteria
-The next pass is successful when:
-- Stage 4 remains recorded as completed/proved on the current build
-- the repo points cleanly at the remaining current-build proof plus PostHog delivery as the next checkpoint while the recovered auth/chat path stays recorded as green
-- no stale Stage 4 blocker language remains active in the control files
-- Party flow stays on `/watch-party/[partyId]` and does not hand off to Live Stage
-- Live Stage is reached only from the separate Live flow on `/watch-party/live-stage/[partyId]`
-- canonical room routes remain unchanged:
-  - `/watch-party/[partyId]`
-  - `/watch-party/live-stage/[partyId]`
-- `/communication` remains compatibility-only
-- the repo stays structure-stable with no broad refactor
-- Live Stage no longer surfaces the presence-init toast during canonical room handoff or rerun scenarios
-- Player no longer surfaces the detach-surface runtime error while handing into the room-validation path
-- PostHog root wiring stays env-driven and non-invasive until current-build proof exists for remote flag delivery
+The next lane is successful when:
+- Stage 4 still reads as completed/proved on the current build
+- remote PostHog delivery is proven for the gated chat flags, or the missing credentials/access are explicitly recorded as the blocker
+- the live-stage route remains recorded as visibly proved, not merely log-proved
+- the docs and Maestro inventory no longer disagree about the active proof surface
+- `CURRENT_STATE.md` and `NEXT_TASK.md` tell the same checkpoint story

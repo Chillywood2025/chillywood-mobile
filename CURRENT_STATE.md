@@ -1,380 +1,51 @@
 # CURRENT STATE
 
 ## Current Checkpoint
-Chi'llywood still carries locked product doctrine, hard-locked core naming, canonical room architecture, a standalone Chi'lly Chat MVP in repo code, and an explicit messenger-first / profile-first / action-first MVP direction in the control files. Stage 4's final automation batch is now completed/proved on the current build because current terminal/workflow output proved the corrected local release-style / bundled Android lane, the corrected Party / Live split, local Flow 09, and the final cloud rerun all green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91`. The previous cloud rerun narrowed the only remaining issue to a below-the-fold Flow 09 proof-path problem, cloud artifact inspection plus a bounded local 320x640-style replay proved that diagnosis, and the replacement cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green with all cloud Maestro flows passing.
-The active repo-truth files `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` are restored after the accidental cleanup deletion, while the intended PostHog root wiring remains intact.
-A new phased product-alignment pass has begun from that stable baseline. Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, Phase 4 Profile / Channel, Phase 5 Chi'lly Chat, plus a minimal Phase 6 AI/high-tech scaffold are now in repo. Current-build proof now covers the deterministic logged-out auth path plus the recovered other-profile -> Chi'lly Chat direct-thread handoff, while the remaining Home / Discovery, Player / Party, Live, broader Profile / Channel, remaining Chi'lly Chat quick-action coverage, and remote PostHog delivery proof are still pending.
+Stage 4 remains completed/proved on the current build. Current JS via Expo Go / Metro proved Home, Player, Profile, Chi'lly Chat, Live Waiting Room, Party Waiting Room, Live Room, Party Room, and Live Stage behavior as described below.
 
-## Current Batch Surface Inventory
-- Home tab -> Continue Watching hero slot -> Top Rated / Browse metadata -> reserved Chi'llywood Originals slot
-- Player -> Party Waiting Room -> Party Room -> tailored Watch-Party Live handoff
-- Home -> Live Watch-Party -> Live Room -> Live Stage -> tailored Live Watch-Party strip and Live-First focus
-- Profile / Channel -> owner controls / channel-home switch / avatar quick actions -> Chi'lly Chat voice-video entry
-- Chi'lly Chat inbox/thread -> long-press quick actions -> profile handoff -> in-thread voice/video call entry
-- Chi'lly Chat direct thread -> PostHog-gated AI smart reply scaffold -> additive composer suggestions only
-- Home tab -> self profile -> channel settings -> profile rails -> Chi'lly Chat inbox
-- Explore tab -> title detail -> self profile likes/shares rails
+The latest proof pass fixed two real current-build bugs: `app/player/[id].tsx` now resolves bundled assets through `expo-asset` before passing them to `expo-av`, and `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes. Typecheck passed afterward. The only remaining blocker from this pass is remote PostHog on-state delivery for the gated chat flags because no local PostHog credentials or admin access are present in this workspace.
 
 ## Current-Build Proved Items
-- local credential access was restored and local Maestro proof resumed successfully
-- local shell and `adb` remain restored in `~/chillywood-mobile`
-- Flow 08 is completed/proved on the current build because current terminal output proved it on the current build
-- the latest cloud rerun on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` proved `08-home-profile-chat-and-channel-settings` green, so the earlier cloud Flow 08 smaller-viewport selector issue is now historical rather than active
-- the corrected local release-style / bundled Android build was freshly installed before the Party / Live split reproval so the proof reflects current repo code instead of a stale bundled app
-- the corrected Party / Live split is completed/proved on the current build because current terminal output proved:
-  - `06-player-to-party-room`
-  - `07-home-live-watch-party-to-live-stage`
-- Flow 09 is completed/proved on the current build because current terminal output proved `09-title-actions-to-self-profile-rails`
-- the cloud Flow 09 artifact plus a bounded local 320x640-style replay proved the remaining `profile-shares-entry-t1` failure was a below-the-fold proof-path issue on the smaller viewport, and the Flow 09 Maestro path now scrolls directly to that shares entry before asserting it
-- the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` completed/proved green, including:
-  - `auth-gate`
-  - `home-to-title-to-player`
-  - `home-to-live-watch-party`
-  - `player-to-watch-party-live`
-  - `06-player-to-party-room`
-  - `07-home-live-watch-party-to-live-stage`
-  - `08-home-profile-chat-and-channel-settings`
-  - `09-title-actions-to-self-profile-rails`
-- the latest cloud rerun also proved these flows green on the current commit before failing later in the suite:
-  - `auth-gate`
-  - `home-to-title-to-player`
-  - `home-to-live-watch-party`
-  - `player-to-watch-party-live`
-  - `06-player-to-party-room`
-  - `07-home-live-watch-party-to-live-stage`
-  - `08-home-profile-chat-and-channel-settings`
-- corrected split current-build proof covers:
-  - Party flow reaches `party-room-screen`
-  - Party flow shows `Watching together: Chicago Streets`
-  - Party flow keeps `live-stage-screen` not visible
-  - Home `Live Watch-Party` reaches `live-watch-party-screen`
-  - Live Waiting Room create-room reaches `live-stage-screen`
-  - Live Stage exposes `live-stage-mode-live-first-button`
-  - Live Stage exposes `live-stage-mode-watch-party-button`
-- Flow 08 current-build proof covers:
-  - `home-screen`
-  - `home-profile-button`
-  - `profile-screen`
-  - `profile-manage-channel-button`
-  - `channel-settings-screen`
-  - channel-settings likes/shares visibility controls
-  - `Save Channel Settings`
-  - back to `profile-screen`
-  - `profile-chilly-chat-button`
-  - `profile-likes-section`
-  - `profile-shares-section`
-  - `chat-inbox-screen`
-  - `chat-inbox-search-input`
-- Flow 09 current-build proof covers:
-  - `explore-screen`
-  - `explore-title-card-chicago-streets`
-  - `title-screen`
-  - `title-like-button`
-  - `title-copy-link-button`
-  - back to `explore-screen`
-  - back to `home-screen`
-  - `profile-screen`
-  - `profile-likes-section`
-  - `profile-likes-entry-t1`
-  - `profile-shares-section`
-  - `profile-shares-entry-t1`
-- the previously identified blockers on this corrected proof path were:
-  - wrong session/access mode
-  - wrong dev-client runtime path
-- deterministic emulator auth proof now covers the logged-out-first path on the current build because clearing Expo Go state and opening `/login` showed the real login form first, successful sign-in emitted `auth_sign_in_success`, and the app then returned to `home-screen`
-- the current other-profile -> Chi'lly Chat recovery path is now proved on the current build because tapping `profile-chilly-chat-button` on another user's profile opened the canonical `/chat/[threadId]` owner, emitted `chat_thread_opened`, and rendered `chat-thread-screen` with the composer plus thread-native voice/video actions
-- the linked Supabase project has already accepted `202604050002_allow_chat_thread_creator_bootstrap_access.sql` through `supabase db push`, so the creator-bootstrap chat-thread access rule is no longer only local repo state
+- Home: `Continue Watching` proved at the top by temporarily seeding `watch_history` for `Chicago Streets` and then clearing it; `Browse` / `Top Rated` cards show title, info line, and `Added` date; the lower Home area is reserved for `Chi'llywood Originals`
+- Player: the bundled Android asset-path playback bug was fixed in `app/player/[id].tsx` by resolving the bundled asset via `expo-asset` `localUri` before `expo-av` `Video`, and the current JS player route showed a real video frame while retaining the `Watch-Party Live` CTA
+- Own profile: owner/control page proved with `Manage Channel`, `Chi'lly Chat`, and the owner/channel toggle
+- Other-user profile: basic profile plus channel-home behavior proved through the `Proof User` route
+- Chi'lly Chat: inbox, quick actions (`Open Thread`, `Open Profile`, `Voice Call`, `Video Call`), direct thread, composer, voice/video buttons, and profile-to-thread handoff proved
+- Live Waiting Room and Party Waiting Room: both proved with correct labels when the deep-link query params were quoted correctly for `adb shell`
+- Live Room: proved with `Live Room` + `Go Live` and no watch-party-only CTA visible
+- Party Room: proved with `Party Room` + tailored `Watch-Party Live` copy + `Watch-Party Live` CTA, not `Go Live`
+- Live Stage: visible current-build proof now covers `Live-First`, `Live Watch-Party`, `PROTECTED LIVE SESSION`, `LIVE FIRST FOCUS`, and `TAILORED LIVE WATCH-PARTY`; analytics logs also showed `/watch-party/live-stage/QNBQLU` rendering in `mode=hybrid`, so both in-screen live modes are proved on the stage owner
 
-## Previously Proved And Preserved
-- `build_android_for_e2e` passed
-- canonical Party flow proof remains preserved for:
-  - `06-player-to-party-room`
-- corrected separate Live-flow proof is now preserved for:
-  - `07-home-live-watch-party-to-live-stage`
-- the obsolete `07-party-live-branch-to-live-stage` proof was recorded under superseded doctrine and is no longer current truth
-- confirmed local files exist:
-  - `app/profile/[userId].tsx`
-  - `app/channel-settings.tsx`
-  - `maestro/flows/08-home-profile-chat-and-channel-settings.yaml`
-  - `app/(tabs)/explore.tsx`
-  - `app/title/[id].tsx`
-  - `maestro/flows/09-title-actions-to-self-profile-rails.yaml`
-- confirmed local anchors already exist:
-  - `testID="profile-manage-channel-button"` in `app/profile/[userId].tsx`
-  - `testID="channel-settings-screen"` in `app/channel-settings.tsx`
-  - `testID="title-screen"` in `app/title/[id].tsx`
-- corrected Party / Live split doctrine now supersedes the old Party Room -> Live Stage branch everywhere active
+## PostHog And Flags
+- Default-off stability is proved locally because `EXPO_PUBLIC_POSTHOG_API_KEY` and `EXPO_PUBLIC_POSTHOG_HOST` are absent in the repo-local env, so the PostHog provider short-circuits and the chat thread works without the smart-reply card
+- Remote-delivery on-state for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` remains unproved because there are no local PostHog credentials or remote flag admin access
+- The active chat-thread flag consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`
+- Waiting-room and live flags are probe-only in `app/_layout.tsx` and are not wired to active UI owners
 
-## Active In-Progress / Pending Proof
-- Flow 09 is now completed/proved on the current build and must stay recorded as such
-- the earlier local Flow 09 proof-path blockers were:
-  - over-strict `profile-shares-section` scroll settings
-  - non-deterministic `tab-explore-button` transition handling
-- the previous cloud rerun is no longer generally pending; it has already been classified as failed on `09-title-actions-to-self-profile-rails`
-- the prior cloud Flow 09 failure `Assertion is false: id: profile-shares-entry-t1 is visible` is now classified as a patched below-the-fold proof-path issue rather than a proved product regression
-- cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` build and Maestro phases are now completed/proved green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91`
-- there is no active remaining automated blocker in Stage 4
-- no final human verification pass is planned for this checkpoint
-- Stage 4 is now safe to mark complete because the final automation pass stayed green and did not reveal a real new bug
-- the earlier local Flow 09 Android ANR/system-UI interruptions remain recorded as historical environment instability on the bundled lane, but they are not the active checkpoint blocker unless they recur during the cloud follow-up or a future rerun
-- PostHog root feature-flag wiring now exists, but remote delivery for `live_waiting_room_enabled`, `party_waiting_room_enabled`, and `watch_party_live_handoff_v2` is not yet proved on the current build
-- the accidental cleanup deletion of `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` is now repaired, so the repo-truth and checkpoint references are consistent again
-- the new Phase 1 Home / Discovery implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
-- the new Phase 2 Player / Party implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
-- the new Phase 3 Live implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
-- the new Phase 4 Profile / Channel implementation is only partially current-build proved; terminal/runtime proof now covers the deterministic logged-out auth path plus other-profile -> Chi'lly Chat handoff, while the remaining owner controls, channel-home toggle, and avatar quick-action coverage are still pending
-- the new Phase 5 Chi'lly Chat implementation is only partially current-build proved; runtime proof now covers the recovered profile entry into `/chat/[threadId]`, while inbox long-press coverage and the rest of the thread quick-action surface still remain pending
-- the new Phase 6 AI/high-tech scaffold is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
+## Repo And Doc Drift
+- `SESSION_START_PROTOCOL.md` is missing even though docs refer to it
+- `maestro/` docs and the actual flow inventory are out of sync
+- `_subflows/ensure-authenticated.yaml` and several referenced flows are missing
+- the checkpoint files must stay aligned on the single active blocker: remote PostHog on-state delivery
+
+## What Was Fixed In This Pass
+- `app/player/[id].tsx` now resolves bundled assets through `expo-asset` `localUri` before `expo-av` `Video`, which fixed the real Android preview/current-JS playback bug
+- `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes, which fixed the `cannot add presence callbacks after joining a channel` runtime error
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`
 - Live Room is canonical on `/watch-party/live-stage/[partyId]`
 - Party Waiting Room routes into Party Room, while Live Waiting Room routes into Live Room
-- Party Room must not hand off to Live Stage; Party flow stops at Party Room and the shared watch-party player
+- Party Room must not hand off to Live Stage
 - `/communication` and `/communication/[roomId]` remain compatibility-only room redirects
 - Home `Top Rated` and `Browse` title cards route through `app/(tabs)/index.tsx` into `app/title/[id].tsx`
-- Title Detail resolves by exact `id`, then exact `title`, then local fallback, so valid titles such as `Chicago Streets` no longer fall through from the Home rails without exhausting real resolution paths
-- `Live Watch-Party`, `Watch-Party Live`, `Live First`, and `Chi'lly Chat` are now locked in the repo control files alongside the corrected Party / Live route split
-- runtime/admin config can no longer rename locked product labels such as `watchPartyLabel`, `liveRoomTitle`, or `partyRoomTitle`
-- standalone Chi'lly Chat now exists on `/chat` and `/chat/[threadId]`
+- Title Detail resolves by exact `id`, then exact `title`, then local fallback, so valid titles such as `Chicago Streets` do not fall through from the Home rails without exhausting real resolution paths
+- `Live Watch-Party`, `Watch-Party Live`, `Live First`, and `Chi'lly Chat` are locked in the repo control files alongside the corrected Party / Live route split
+- runtime/admin config cannot rename locked product labels such as `watchPartyLabel`, `liveRoomTitle`, or `partyRoomTitle`
+- standalone Chi'lly Chat exists on `/chat` and `/chat/[threadId]`
 - self-profile entry opens the canonical `/profile/[userId]` channel/profile surface, while the in-profile Chi'lly Chat action opens `/chat` for the authenticated user
 - another profile resolves or creates a direct Chi'lly Chat thread and opens `/chat/[threadId]`
-- room-native communication copy in Party Room and Live Room now uses Chi'lly Chat-native wording instead of `In-Room Call`
-- repo control files now explicitly lock Chi'lly Chat as a messenger-first system, profiles as social identity hubs, and like/share/download/cast as reusable rights-aware content primitives
-- repo control files now also explicitly lock Chi'lly Chat as Chi'llywood's built-in messenger layer, with `/chat` inbox, `/chat/[threadId]` direct threads, the `chat_threads` / `chat_thread_members` / `chat_messages` MVP data model, and shared communication-room primitives for thread calls
-- repo control files now explicitly lock profiles as native social identity hubs that grow toward each user's mini streaming platform / creator channel, with approved depth for photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction
-- Live Stage init now tears down stale `room-${partyId}` and `live-stage-room-${partyId}` realtime channels before creating fresh subscriptions, which closes the proved `cannot add presence callback after joining a channel` race during canonical Live entry and fast reruns
-- Player now resets and unloads its `Video` instance on title-route change / unmount, which closes the proved `[player-video] Player error: Detaching surface timed out.` blocker that surfaced while resuming the room-validation path through `/player/t1`
-- PostHog feature-flag scaffolding is now wired at the root through `posthog-react-native` in `app/_layout.tsx`, reads `EXPO_PUBLIC_POSTHOG_API_KEY` / `EXPO_PUBLIC_POSTHOG_HOST` via `_lib/posthog.ts`, and performs a proof-only flag probe without changing Party/Live routes or live room behavior
-- the standalone Player owner on `app/player/[id].tsx` now renders the locked `Watch-Party Live` CTA text, and the Party Room owner on `app/watch-party/[partyId].tsx` now keeps tailoring inside `/watch-party/[partyId]` instead of routing users into `/communication/[roomId]`
-- the Live Stage owner on `app/watch-party/live-stage/[partyId].tsx` now keeps Live First and Live Watch-Party interaction inside the canonical live route instead of routing users into `/communication/[roomId]`, and hybrid mode now keeps the host visible in the shared participant strip while preserving local host-first / hide / reset controls
-- the profile owner on `app/profile/[userId].tsx` now supports an owner/profile/channel-home split, avatar quick actions, and direct Chi'lly Chat message/voice/video entry without inventing a second profile system, while `app/chat/[threadId].tsx` now accepts safe call-start deep links for those voice/video quick actions
-- the Chi'lly Chat owners on `app/chat/index.tsx` and `app/chat/[threadId].tsx` now add inbox/thread quick actions for profile handoff plus thread-native voice/video entry without changing routes, schema, or room ownership
-- `_lib/posthog.ts` plus `app/chat/[threadId].tsx` now scaffold `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` as provider-safe, PostHog-gated smart-reply UI inside the canonical thread owner without changing default messaging behavior when flags are off
-
-## What Was Implemented In This Pass
-- repo-root control files were rewritten so standalone Chi'lly Chat and room-native communication no longer conflict
-- `SESSION_START_PROTOCOL.md` now exists and locks the session-start checklist for future sessions
-- PostHog feature flags are now scaffolded at the root via Expo-compatible dependencies in `package.json`, env/flag helpers in `_lib/posthog.ts`, and a non-invasive `PostHogProvider` + proof-only flag probe in `app/_layout.tsx`
-- `app/(tabs)/index.tsx` now promotes real Continue Watching progress into the top Home hero slot when progress exists, enriches `Top Rated` and `Browse` cards with added-date plus live comment/reaction metadata when active title-room activity exists, and replaces the lower Continue Watching slot with a reserved Chi'llywood Originals placeholder instead of filler content
-- `app/player/[id].tsx` now uses the locked `Watch-Party Live` wording on the standalone player CTA, and `app/watch-party/[partyId].tsx` now replaces the generic linked communication-room handoff with Party Room-native tailored-view controls for host-first focus, local hide, and layout reset while keeping shared room truth intact
-- `app/watch-party/live-stage/[partyId].tsx` now removes the generic call-room footer exit, keeps Live First comments/reactions inside the canonical Live Stage owner, adds local host-first / hide / reset controls for the live participant strip, and ensures hybrid `Live Watch-Party` mode keeps the host visible instead of filtering the host out of the community strip
-- `app/profile/[userId].tsx` now gives self profile a real owner-mode surface, gives other profiles a channel-home toggle plus avatar quick actions, and routes message / voice / video entry through canonical Chi'lly Chat; `app/chat/[threadId].tsx` now honors `startCall=voice|video` deep links so those quick actions reuse the existing thread-call owner instead of creating a new calling route
-- `app/chat/index.tsx` now surfaces long-press inbox quick actions for direct thread open, profile handoff, and thread-native voice/video launch, while `app/chat/[threadId].tsx` now adds matching header quick actions so profile and call entry stay inside the canonical Chi'lly Chat owners instead of inventing new routes
-- `_lib/posthog.ts` now also exposes `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`, while `app/chat/[threadId].tsx` now keeps a minimal AI smart-reply suggestion rail behind those flags so the high-tech layer stays additive, provider-safe, and easy to disable remotely
-- `_lib/supabase.ts` and `_lib/session.tsx` now keep native Supabase session refresh active across app foregrounding so the deterministic logged-out -> login -> home proof path stays stable on emulator
-- `_lib/chat.ts` now creates direct Chi'lly Chat thread ids client-side instead of depending on `insert(...).select("id")`, repairs missing direct-thread membership rows when older thread records are incomplete, and then re-reads the canonical thread owner after membership bootstrap
-- `_lib/logger.ts` plus `app/profile/[userId].tsx` now surface normalized runtime error details during Chi'lly Chat launch failures, which turned the prior generic alert into the concrete chat-thread policy diagnosis
-- the auth/chat recovery path now carries a dedicated direct-thread RLS migration chain in repo:
-  - `202604040001_fix_chat_thread_policy_recursion.sql`
-  - `202604050001_relax_chat_thread_insert_policy.sql`
-  - `202604050002_allow_chat_thread_creator_bootstrap_access.sql`
-- `_lib/appConfig.ts` hard-locks the doctrinal product labels
-- `app/admin.tsx` now exposes locked naming as read-only instead of editable runtime branding
-- `supabase/migrations/202603270009_create_chilly_chat_threads.sql` adds:
-  - `chat_threads`
-  - `chat_thread_members`
-  - `chat_messages`
-  - direct-thread RLS
-  - message/unread sync triggers
-- `supabase/migrations/202603270011_create_social_identity_foundation.sql` adds:
-  - `user_profiles`
-  - `user_content_relationships`
-  - public/private profile-relationship visibility policies
-  - auth-backed sync for likes, shares, and profile social settings
-- `_lib/chat.ts` now owns direct-thread creation, inbox loading, thread loading, messaging, read state, realtime subscriptions, and thread-call state
-- `app/chat/index.tsx` implements the Chi'lly Chat inbox
-- `app/chat/[threadId].tsx` implements the direct-thread screen with:
-  - optimistic send
-  - message ordering
-  - unread clearing on open
-  - voice call start
-  - video call start
-  - join/close behavior for active thread calls
-- `app/chat/index.tsx` now also includes:
-  - local inbox search
-  - stronger avatar/name/thread identity presentation
-  - clearer unread vs caught-up presentation
-  - messenger-first header framing without changing routes or schema
-- `app/chat/[threadId].tsx` now also includes:
-  - stronger thread identity in the header
-  - clearer direct-thread status framing
-  - a composer layout that visibly reserves attachment/reaction affordances while text send remains the live path
-  - more messenger-grade empty/loading framing without disturbing thread-call behavior
-- `_lib/contentActions.ts` now provides one reusable rights-aware content-action layer for:
-  - like eligibility
-  - share eligibility
-  - copy-link eligibility
-  - download/cast gating placeholders
-  - merged local/remote like-share relationship storage for signed-in users
-  - public profile-relationship reads for other signed-in users when visibility allows
-- `_lib/userData.ts` now syncs the signed-in user's profile identity and social-visibility settings through `user_profiles` while keeping local fallback behavior intact
-- `app/title/[id].tsx` now uses that shared layer for:
-  - Like
-  - Share
-  - Copy Link
-  - hiding blocked actions when access is not allowed
-- `app/player/[id].tsx` now uses that same shared layer for:
-  - standalone-player Share
-  - long-press Copy Link on the Share chip
-  - hiding blocked share actions when access is not allowed
-- `app/profile/[userId].tsx` now replaces placeholder utility cards with real `Likes` and `Shares` rails backed by the shared content-action relationship store for self profile and remote public/private profile visibility rules for other profiles
-- `app/channel-settings.tsx` now manages the same `Likes` / `Shares` visibility settings that feed the remote public-profile rule
-- `hooks/use-communication-room-session.ts` now supports the `chat-thread` analytics surface and respects initial media preferences for thread-based voice/video calls
-- thread calls reuse the existing generic communication-room primitives instead of inventing a separate calling stack
-- standalone Chi'lly Chat validation now has dedicated operator docs:
-  - `docs/chilly-chat-validation.md`
-  - `docs/chilly-chat-validation-report-template.md`
-- the active room-validation docs were corrected so profile `Chi'lly Chat` no longer incorrectly implies a return into room-inline communication
-- release-ops docs now explicitly include the Chi'lly Chat migration in the documented migration order
-- duplicate migration numbering was resolved by moving the later public feedback policy migration to `202603270010_public_v1_feedback_policy.sql`
-- `app/watch-party/live-stage/[partyId].tsx` now uses generation-scoped init guards, stale channel teardown, and single-heartbeat ownership so Live Stage presence init is idempotent across canonical Live entry, cold entry, fast leave/re-enter, and effect reruns
-- `app/player/[id].tsx` now resets playback state and unloads the previous `Video` surface on route cleanup so replaying the Player entry path does not reuse a half-detached Android surface
-- Sentry is durably wired in repo code through `@sentry/react-native`, the Expo plugin in `app.config.ts`, the Sentry Metro config in `metro.config.js`, and root init/wrap in `app/_layout.tsx`
-- the active Player -> Watch-Party Live -> Party Waiting Room -> Party Room flow and the separate Home -> Live Watch-Party -> Live Waiting Room -> Live Room flow now include code-level automation IDs on the real screen roots, shared-player state, playback controls, and canonical room selectors:
-  - `player-watch-party-live-chip`
-  - `watch-party-presence-card`
-  - `watch-party-room-identity-card`
-  - `watch-party-room-identity-title`
-  - `watch-party-room-identity-body`
-  - `watch-party-create-room-button`
-  - `watch-party-generate-code-button`
-  - `watch-party-join-preview-card`
-  - `watch-party-join-now-button`
-  - `party-room-screen`
-  - `party-room-playback-status-card`
-  - `party-room-playback-status-body`
-  - `party-room-shared-content-card`
-  - `party-room-playback-toggle-button`
-  - `party-room-seek-backward-button`
-  - `party-room-seek-forward-button`
-  - `live-stage-screen`
-  - `live-stage-mode-live-first-button`
-  - `live-stage-mode-watch-party-button`
-  - `live-stage-comments-button`
-  - `live-stage-communication-button`
-  - `live-stage-react-button`
-- `maestro/flows/06-player-to-party-room.yaml` now encodes the canonical Player -> Watch-Party Live -> Party Waiting Room -> Party Room -> shared watch-party player path and explicitly stops before Live Stage
-- the signed-in Android proof for `maestro/flows/06-player-to-party-room.yaml` now relies on the visible Party Room copy `Host Controls Active`, `Party Room`, and `Watching together: Chicago Streets`, plus `assertNotVisible: live-stage-screen`, because the preview-APK Maestro lane did not reliably surface the Party Room wrapper IDs as visible selectors
-- `maestro/flows/07-home-live-watch-party-to-live-stage.yaml` now owns the separate Home -> Live Watch-Party -> Live Waiting Room -> canonical Live Stage path
-- `maestro/flows/_subflows/home-to-party-room.yaml` now owns the shared signed-in Home -> Title -> Player -> Watch-Party Live -> Party Room path without any Party Room -> Live Stage branch
-- `maestro/flows/_subflows/home-to-party-room.yaml` now also asserts the stable Party Waiting Room identity selectors before room creation, so the signed-in Party flow no longer relies only on waiting-room copy during the player-origin handoff
-- the proved remote failure after the Home -> Title fix moved one step later: on the EAS cloud emulator, `watch-party-create-room-button` started below the fold in both the Party Waiting Room and Live Waiting Room surfaces, so the active Maestro flows now scroll that exact button into view before asserting and tapping it
-- the Live Stage footer controls `live-stage-comments-button`, `live-stage-communication-button`, and `live-stage-react-button` now exist on the real screen owner in repo code, but the canonical cloud Live-flow proof stays on the above-the-fold Live Stage surface and mode toggle buttons because the footer row renders below the fold on the remote device viewport
-- `maestro/flows/_subflows/ensure-authenticated.yaml` now handles both valid startup states (`home-screen` already visible or `auth-screen` required) and waits up to 180 seconds for the auth screen on the slowest white-splash preview APK launches
-- the cloud `type: maestro` EAS workflow lane now depends on `MAESTRO_*` flow variables end to end; the proved remote failure mode was `Unable to launch app undefined` when the workflow job used `MAESTRO_APP_ID` but the flow files still referenced `${CHILLYWOOD_APP_ID}`
-- an earlier remote EAS workflow rerun proved build -> emulator install -> Maestro execution -> per-flow reporting on `.eas/workflows/e2e-test-android.yml`, and isolated the former shared Home `home-top-rated-first-card` -> `title-screen` failure across the shared title/player and room-entry flows
-- the later remote EAS workflow rerun after the Home-card hardening proved that `auth-gate`, `home-to-title-to-player`, `home-to-live-watch-party`, and `player-to-watch-party-live` all passed in cloud, and narrowed the remaining Party-flow failure to the below-the-fold `watch-party-create-room-button` on the Party Waiting Room screen
-- the finished remote workflow `019d44a7-7550-7fc8-9477-c3412f9313d7` then proved `06-player-to-party-room` passes in cloud from the updated waiting-room snapshot, and also proved the canonical Live Stage surface and mode toggle buttons were already visible in cloud while the footer row remained below the fold
-- the linked Supabase project already has remote migration `202603270011` applied; the local file `supabase/migrations/202603270011_create_social_identity_foundation.sql` was repaired after stray-text drift (`screate` / `adb devices`) so repo schema truth is valid on disk again
-- the next signed-in social-identity validation lane now has stable real-owner anchors in repo code:
-  - `profile-screen`
-  - `profile-chilly-chat-button`
-  - `profile-likes-section`
-  - `profile-shares-section`
-  - `title-like-button`
-  - `title-share-button`
-  - `title-copy-link-button`
-  - `player-share-chip`
-- the room-native other-profile entry path now also has stable automation anchors on the real owners:
-  - `party-room-participant-{userId}`
-  - `live-stage-participant-{userId}`
-  - `participant-detail-sheet`
-  - `participant-detail-view-profile-button`
-  - `participant-detail-report-button`
-  - `participant-detail-close-button`
-- `.eas/workflows/e2e-test-android.yml` now runs the new `maestro/flows/08-home-profile-chat-and-channel-settings.yaml` cloud proof alongside the existing auth, title/player, Party Room, and Live Stage flows
-- `.eas/workflows/e2e-test-android.yml` and `maestro/run-all.yaml` now also run `maestro/flows/09-title-actions-to-self-profile-rails.yaml`, which uses deterministic title `t1` / `Chicago Streets` to prove shared title actions can feed the self-profile Likes and Shares rails through the native profile surface
-- `app/title/[id].tsx` now exposes `title-back-button` on the real title owner so the social proof lane can return from a deterministic title back into Home/Profile without changing routing behavior
-- the finished remote workflow `019d44f2-0468-76b7-85ab-b07ba2d8378d` proved the new social proof landed in cloud, but narrowed the remaining failures to two below-the-fold selectors on the remote emulator:
-  - `home-to-title-to-player` failed only on `title-copy-link-button`
-  - `08-home-profile-chat-and-channel-settings` failed only on `profile-chilly-chat-button`
-- both remaining failures were flow-only viewport issues against real rendered elements, so `maestro/flows/home-to-title-to-player.yaml` now scrolls `title-copy-link-button` into view before asserting it and then recenters `title-play-button`, while `maestro/flows/08-home-profile-chat-and-channel-settings.yaml` now scrolls to `profile-chilly-chat-button`, `profile-likes-section`, and `profile-shares-section` on the real profile owner before continuing into `/chat`
-- `maestro/flows/_subflows/ensure-authenticated.yaml` now dismisses the Android `Wait` action if a transient system-level ANR dialog appears after password entry, so auth-flow proof does not confuse a blocked emulator/system prompt with product-selector drift
-- rerun `019d4522-e45a-7086-94cb-32e5d3158332` is now stale relative to the current workspace because `09-title-actions-to-self-profile-rails.yaml` and `title-back-button` were added after that build started
-- fresh rerun `019d4528-ee11-7148-b306-8c7b9e9cfc99` is now the active cloud source of truth for the latest social-lane snapshot, with Android build `88314f4e-d2b4-466a-8cc0-ff13f2ebdf7c` currently queued
-- the latest selector audit against the real room owners found the requested coverage already present for:
-  - Party Waiting Room on `app/watch-party/index.tsx`
-  - Party Room and the shared watch-party player path on `app/watch-party/[partyId].tsx`
-  - Live Stage entry and mode toggles on `app/watch-party/live-stage/[partyId].tsx`
-  - participant-to-profile handoff on `components/room/participant-detail-sheet.tsx`
-- the current Expo MCP server in this workspace answers build/workflow/docs calls, but the local interaction endpoints currently required for screenshot/find-view/tap/log capture proof return MCP `Tool ... not found` errors for:
-  - `expo_router_sitemap`
-  - `automation_take_screenshot`
-  - `automation_find_view`
-  - `open_devtools`
-  - `collect_app_logs`
-- the current workspace hardens that shared Home -> Title entry by centering `home-top-rated-first-card` via `scrollUntilVisible` and adding `retryTapIfNoChange: true` to the duplicated tap in `maestro/flows/home-to-title-to-player.yaml`, `maestro/flows/player-to-watch-party-live.yaml`, `maestro/flows/03-player-valid.yaml`, and `maestro/flows/_subflows/home-to-party-room.yaml`; an elevated local rerun of `home-to-title-to-player` then passed through `title-screen` and `player-screen`
-- `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `NEXT_TASK.md`, and `SESSION_START_PROTOCOL.md` now permanently state that:
-  - Chi'lly Chat is broader than embedded room chat
-  - profiles are social identity hubs
-  - likes, shares/reposts, download/save, and cast eligibility are reusable content primitives
-  - standalone-player cast/TV handoff is approved MVP direction for allowed content
-- embedded room-chat copy now describes Party Room and Live Room conversation surfaces as part of the broader Chi'lly Chat system instead of surface-local utility panels
-- a locally installed preview APK now proves the direct-launch Android Maestro `home-to-title-to-player` path can reach:
-  - `auth-screen`
-  - `home-screen`
-  - `title-screen`
-  - `player-screen`
-  - `player-video`
-- `eas.json` now includes a dedicated Android `e2e-test` build profile, and `.eas/workflows/e2e-test-android.yml` now builds that APK and runs the current stable Android Maestro flow set in EAS Workflows
-- the active login, home, title, player, Party Room, and Live Stage surfaces now carry stable automation IDs on their real render path plus explicit accessibility labels on the primary roots and entry controls used by Maestro/runtime QA
-- React Native DevTools should be used through the normal local Metro + native app workflow for this repo; no extra DevTools package is required
-
-## Current Product-UX Drift Still Present
-- `app/chat/index.tsx` is now search-ready and noticeably closer to messenger UX, but it still lacks pinned/mute affordances, richer presence, and conversation management depth
-- `app/chat/[threadId].tsx` now has stronger thread identity and composer affordance framing, but it still lacks live reactions, attachments/files, richer read-state UI, and true presence indicators
-- `app/profile/[userId].tsx` now has a backed public/private visibility model for likes and shares, but it still needs live cross-account proof after the new migration is applied
-- `app/title/[id].tsx` now has live like/share/copy-link actions, but download/save and cast are still gated off and not surfaced yet
-- `app/player/[id].tsx` now has a live share/copy-link path, but it still does not surface cast or download actions
-- likes and shares now have a real remote/shared backend model for signed-in users, but they still need live migration/runtime proof in the linked Supabase environment
-
-## Safe Reuse Now In Place
-- Supabase auth-backed identity for signed-in users
-- auth-backed `user_profiles` for social identity and visibility settings
-- auth-backed `user_content_relationships` for reusable like/share state
-- profile-derived identity snapshots for direct-thread members
-- generic communication rooms for thread voice/video transport
-- realtime subscriptions for inbox, thread state, and message updates
-- canonical Party Room / Live Room communication still lives inside the room surfaces
-- a locked doctrinal split between standalone Chi'lly Chat surfaces and embedded room-linked Chi'lly Chat surfaces
-
-## Remaining Gaps And Unproved Runtime Areas
-- the new Chi'lly Chat migration still needs to be applied in the real Supabase environment before the new routes can work end to end
-- the new social-identity migration is now applied in the linked Supabase environment
-- `supabase migration list` now shows the linked remote applied through `202603270011`
-- the repo now typechecks, but direct-message realtime, unread updates, and thread-based calling still need live multi-user verification
-- direct-thread identity is still snapshot-based in `chat_thread_members`, even though `user_profiles` now exists for broader social/profile surfaces
-- inbox realtime currently uses member-scoped updates plus a broad `chat_threads` subscription to catch active-call state changes; that is acceptable for the MVP but should be validated under real traffic
-- the reusable action layer and the first profile likes/shares rails are now implemented, but download/save and cast remain gated off and unsurfaced
-- standalone player cast / TV handoff direction is now locked in continuity, but no cast toggle exists yet in the active player UI
-- the first messenger-first inbox/thread UI pass is now in repo code, but still needs runtime proof on `/chat` and `/chat/[threadId]`
-- likes and shares now sync to remote state for signed-in users and still keep local fallback so the existing profile rails do not need a redesign
-- there is still no native cast/download implementation or package in the repo, so those actions remain intentionally hidden until a real path exists
-- the preferred local Android runtime and automation lane is now the corrected local release-style / bundled path with the refined selector path, and the preferred remote lane remains the `e2e-test` workflow/build path; the Expo development-client launcher path is not the current proof source of truth
-- the Live Stage presence-race fix is implemented in code, but still needs runtime confirmation on:
-  - Live Waiting Room -> Live Room entry
-  - cold Live Room entry
-  - fast leave/re-enter
-  - effect rerun / stale async teardown timing
-- the Player detach-surface fix is implemented in code and no longer reproduced in filtered Android logs on the same `/player/t1` entry path, but the corrected split Party-flow / separate Live-flow room validation path still needs end-to-end runtime confirmation in the current emulator session
-- the current proof path for the Live Stage presence-race regression is manual runtime validation, not Maestro-specific investigation
-- the latest runtime checks kept the old `[live-stage-init] cannot add presence callback...` toast quiet in filtered Android logs, so the fix is keepable unless manual runtime validation proves otherwise
-- the same-account and cross-account room report templates now include explicit manual capture fields for:
-  - Player -> Watch-Party Live -> Party Waiting Room -> Party Room handoff
-  - Home -> Live Watch-Party -> Live Waiting Room -> Live Room handoff
-  - cold Live Stage entry
-  - quick Live Stage leave / re-enter
-  - duplicate subscription / heartbeat symptoms
-- the new cloud Android E2E lane has now had real remote runs with preview-environment variables set for `MAESTRO_APP_ID`, `MAESTRO_CHILLYWOOD_LOGIN_EMAIL`, and `MAESTRO_CHILLYWOOD_LOGIN_PASSWORD`
-- the next remote rerun still needs the current local Maestro title-handoff hardening committed on the branch before the cloud lane can prove the shared Home -> Title path green
-- `expo-mcp` is installed in `devDependencies`, but repo-side Expo MCP configuration is intentionally still absent because actual Expo account/client MCP support is not yet confirmed from this workspace
-
-## Explicitly Deferred
-- group threads
-- media attachments or uploads
-- typing indicators
-- global online presence outside active call/session state
-- push notifications and incoming-call alerts
-- archive, pin, or mute management
-- any resurrection of `/communication` as standalone chat identity
+- room-native communication copy in Party Room and Live Room uses Chi'lly Chat-native wording instead of `In-Room Call`
+- repo control files explicitly lock Chi'lly Chat as a messenger-first system, profiles as social identity hubs, and like/share/download/cast as reusable rights-aware content primitives
+- repo control files explicitly lock Chi'lly Chat as Chi'llywood's built-in messenger layer, with `/chat` inbox, `/chat/[threadId]` direct threads, the `chat_threads` / `chat_thread_members` / `chat_messages` MVP data model, and shared communication-room primitives for thread calls
+- repo control files explicitly lock profiles as native social identity hubs that grow toward each user's mini streaming platform / creator channel
