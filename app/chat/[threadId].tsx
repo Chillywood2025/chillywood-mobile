@@ -30,6 +30,7 @@ import {
   type ChatThreadSummary,
 } from "../../_lib/chat";
 import { reportRuntimeError } from "../../_lib/logger";
+import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { getPostHogConfig, isPostHogFlagEnabled, posthogFeatureFlags } from "../../_lib/posthog";
 import { useSession } from "../../_lib/session";
 import { InRoomCommunicationPanel } from "../../components/communication/in-room-communication-panel";
@@ -277,6 +278,10 @@ export default function ChillyChatThreadScreen() {
   });
 
   const otherMember = thread?.otherMember;
+  const officialAccount = getOfficialPlatformAccount(otherMember?.userId);
+  const otherMemberAvatarUrl = officialAccount ? undefined : otherMember?.avatarUrl;
+  const otherMemberDisplayName = officialAccount?.displayName ?? otherMember?.displayName ?? "Direct Thread";
+  const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;
   const callTitle = thread?.activeCallType === "video" ? "Video call active" : "Voice call active";
   const callBody = thread?.activeCallType === "video"
     ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
@@ -300,8 +305,8 @@ export default function ChillyChatThreadScreen() {
     [currentUserId, messages, thread?.members],
   );
 
-  const handleSend = useCallback(async () => {
-    const trimmedDraft = draft.trim();
+  const handleSend = useCallback(async (bodyOverride?: string) => {
+    const trimmedDraft = String(bodyOverride ?? draft).trim();
     if (!threadId || !trimmedDraft || sending || !thread) return;
 
     const tempId = `temp-${Date.now()}`;
@@ -428,12 +433,12 @@ export default function ChillyChatThreadScreen() {
       pathname: "/profile/[userId]",
       params: {
         userId: otherMember.userId,
-        displayName: otherMember.displayName,
-        avatarUrl: otherMember.avatarUrl,
-        tagline: otherMember.tagline,
+        displayName: otherMemberDisplayName,
+        avatarUrl: otherMemberAvatarUrl,
+        tagline: otherMemberTagline,
       },
     });
-  }, [otherMember, router, threadId]);
+  }, [otherMember, otherMemberAvatarUrl, otherMemberDisplayName, otherMemberTagline, router, threadId]);
 
   const handleHeaderCallAction = useCallback(async (mode: ChatCallType) => {
     setHeaderQuickActionsOpen(false);
@@ -493,19 +498,24 @@ export default function ChillyChatThreadScreen() {
           onLongPress={() => setHeaderQuickActionsOpen((current) => !current)}
           onPress={() => setHeaderQuickActionsOpen(false)}
         >
-          {otherMember?.avatarUrl ? (
-            <Image source={{ uri: otherMember.avatarUrl }} style={styles.headerAvatarImage} />
+          {otherMemberAvatarUrl ? (
+            <Image source={{ uri: otherMemberAvatarUrl }} style={styles.headerAvatarImage} />
           ) : (
             <View style={styles.headerAvatar}>
-              <Text style={styles.headerAvatarText}>{(otherMember?.displayName ?? "C").slice(0, 1).toUpperCase()}</Text>
+              <Text style={styles.headerAvatarText}>{otherMemberDisplayName.slice(0, 1).toUpperCase()}</Text>
             </View>
           )}
         </TouchableOpacity>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
-          <Text style={styles.title}>{otherMember?.displayName ?? "Direct Thread"}</Text>
-          {otherMember?.tagline ? <Text style={styles.body}>{otherMember.tagline}</Text> : null}
+          <Text style={styles.title}>{otherMemberDisplayName}</Text>
+          {otherMemberTagline ? <Text style={styles.body}>{otherMemberTagline}</Text> : null}
           <View style={styles.headerMetaRow}>
+            {officialAccount ? (
+              <View style={[styles.headerPill, styles.headerPillOfficial]}>
+                <Text style={[styles.headerPillText, styles.headerPillTextOfficial]}>{officialAccount.officialBadgeLabel}</Text>
+              </View>
+            ) : null}
             <View style={styles.headerPill}>
               <View style={[styles.headerPillDot, activeCallRoomId && styles.headerPillDotAlert]} />
               <Text style={styles.headerPillText}>{getThreadStatusLabel(thread)}</Text>
@@ -524,7 +534,7 @@ export default function ChillyChatThreadScreen() {
         <View style={styles.headerQuickActionCard}>
           <Text style={styles.headerQuickActionKicker}>THREAD QUICK ACTIONS</Text>
           <Text style={styles.headerQuickActionTitle}>
-            {otherMember?.displayName ?? "Chi'lly Chat contact"}
+            {otherMemberDisplayName}
           </Text>
           <Text style={styles.headerQuickActionBody}>
             Open the profile or keep voice/video entry inside this thread so the conversation and call state stay together.
@@ -613,7 +623,7 @@ export default function ChillyChatThreadScreen() {
         <View style={styles.callBanner}>
           <Text style={styles.callBannerTitle}>{callTitle}</Text>
           <Text style={styles.callBannerBody}>
-            {otherMember?.displayName ?? "The other participant"} can join from this same thread. Open Chi&apos;lly Chat to join.
+            {otherMemberDisplayName} can join from this same thread. Open Chi&apos;lly Chat to join.
           </Text>
         </View>
       ) : null}
@@ -668,16 +678,35 @@ export default function ChillyChatThreadScreen() {
             </Text>
           </View>
         ))}
-        {renderedMessages.length === 0 ? (
+      {renderedMessages.length === 0 ? (
           <View
-            style={styles.emptyCard}
+            style={[styles.emptyCard, officialAccount && styles.emptyCardOfficial]}
             testID="chat-thread-empty-state"
             accessibilityLabel="Chi'lly Chat empty thread"
           >
-            <Text style={styles.emptyTitle}>Start the conversation</Text>
-              <Text style={styles.emptyBody}>
-                Send the first message here. Voice and video stay thread-based when you start a Chi&apos;lly Chat call.
-              </Text>
+            <Text style={styles.emptyTitle}>{officialAccount ? `${officialAccount.displayName} is ready` : "Start the conversation"}</Text>
+            <Text style={styles.emptyBody}>
+              {officialAccount
+                ? officialAccount.starterWelcomeBody
+                : "Send the first message here. Voice and video stay thread-based when you start a Chi&apos;lly Chat call."}
+            </Text>
+            {officialAccount ? (
+              <View style={styles.starterPromptRow}>
+                {officialAccount.starterPrompts.map((prompt) => (
+                  <TouchableOpacity
+                    key={prompt}
+                    style={styles.starterPromptChip}
+                    activeOpacity={0.86}
+                    disabled={sending}
+                    onPress={() => {
+                      void handleSend(prompt);
+                    }}
+                  >
+                    <Text style={styles.starterPromptChipText}>{prompt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
@@ -703,7 +732,7 @@ export default function ChillyChatThreadScreen() {
             activeCallType={thread?.activeCallType}
             currentUserId={currentUserId}
             messages={messages}
-            otherMemberName={otherMember?.displayName}
+            otherMemberName={otherMemberDisplayName}
             onSelectSuggestion={(suggestion) => {
               trackEvent("chat_thread_ai_suggestion_selected", {
                 surface: "chat-thread",
@@ -842,6 +871,13 @@ const styles = StyleSheet.create({
     color: "#E8F0FF",
     fontSize: 10,
     fontWeight: "900",
+  },
+  headerPillOfficial: {
+    borderColor: "rgba(242,194,91,0.38)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+  },
+  headerPillTextOfficial: {
+    color: "#FFE6A6",
   },
   headerMetaText: {
     color: "#92A0B8",
@@ -1028,6 +1064,10 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
+  emptyCardOfficial: {
+    borderColor: "rgba(242,194,91,0.24)",
+    backgroundColor: "rgba(96,72,20,0.18)",
+  },
   emptyTitle: {
     color: "#F8FBFF",
     fontSize: 18,
@@ -1038,6 +1078,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     fontWeight: "600",
+  },
+  starterPromptRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 6,
+  },
+  starterPromptChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.34)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  starterPromptChipText: {
+    color: "#FFE6A6",
+    fontSize: 11.5,
+    fontWeight: "800",
   },
   composer: {
     gap: 10,

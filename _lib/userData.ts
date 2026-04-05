@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getOfficialPlatformAccount } from "./officialAccounts";
 import {
   normalizeCapturePolicy,
   normalizeContentAccessRule,
@@ -65,6 +66,13 @@ export type UserChannelProfile = {
   tagline?: string;
   role: UserChannelRole;
   isLive: boolean;
+  identityKind: "member" | "official_platform";
+  officialBadgeLabel?: string;
+  platformOwnershipLabel?: string;
+  platformRoleLabel?: string;
+  isProtectedFromClaim: boolean;
+  handle?: string;
+  auditOwnerKey?: string;
 };
 
 type WatchHistoryRow = {
@@ -176,6 +184,7 @@ export const buildUserChannelProfile = (options: {
 }): UserChannelProfile => {
   const id = toIdString(options.id as string | number | null | undefined);
   const profile = options.profile;
+  const officialAccount = getOfficialPlatformAccount(id);
   const fallbackDisplayName = normalizeTextValue(options.fallbackDisplayName) ?? "User";
   const resolvedDisplayName = resolveProfileDisplayName(
     options.displayName,
@@ -185,12 +194,22 @@ export const buildUserChannelProfile = (options: {
   );
 
   return {
-    id,
-    displayName: resolvedDisplayName !== "User" ? resolvedDisplayName : fallbackDisplayName,
-    avatarUrl: normalizeTextValue(options.avatarUrl) ?? normalizeTextValue(profile?.avatarUrl),
-    tagline: normalizeTextValue(options.tagline) ?? normalizeTextValue(options.bio) ?? normalizeTextValue(profile?.tagline),
-    role: normalizeChannelRole(options.role ?? profile?.channelRole),
+    id: officialAccount?.userId ?? id,
+    displayName: officialAccount?.displayName ?? (resolvedDisplayName !== "User" ? resolvedDisplayName : fallbackDisplayName),
+    avatarUrl: officialAccount ? normalizeTextValue(officialAccount.avatarUrl) : normalizeTextValue(options.avatarUrl) ?? normalizeTextValue(profile?.avatarUrl),
+    tagline: officialAccount?.tagline
+      ?? normalizeTextValue(options.tagline)
+      ?? normalizeTextValue(options.bio)
+      ?? normalizeTextValue(profile?.tagline),
+    role: officialAccount?.channelRole ?? normalizeChannelRole(options.role ?? profile?.channelRole),
     isLive: !!options.isLive,
+    identityKind: officialAccount ? "official_platform" : "member",
+    officialBadgeLabel: officialAccount?.officialBadgeLabel,
+    platformOwnershipLabel: officialAccount?.platformOwnershipLabel,
+    platformRoleLabel: officialAccount?.platformRoleLabel,
+    isProtectedFromClaim: !!officialAccount,
+    handle: officialAccount?.handle,
+    auditOwnerKey: officialAccount?.auditOwnerKey,
   };
 };
 

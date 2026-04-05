@@ -14,7 +14,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
-import { listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../../_lib/chat";
+import { getOrCreateDirectThread, listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../../_lib/chat";
+import { getOfficialPlatformAccount, RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 
 function buildPreview(thread: ChatThreadSummary) {
   if (thread.activeCommunicationRoomId && thread.activeCallType) {
@@ -60,6 +61,7 @@ export default function ChillyChatInboxScreen() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [quickActionThreadId, setQuickActionThreadId] = useState("");
+  const [starterBusy, setStarterBusy] = useState(false);
 
   const loadThreads = useCallback(async (refresh = false) => {
     if (refresh) {
@@ -134,6 +136,8 @@ export default function ChillyChatInboxScreen() {
   const openProfile = useCallback((thread: ChatThreadSummary) => {
     const otherMember = thread.otherMember;
     if (!otherMember?.userId) return;
+    const officialAccount = getOfficialPlatformAccount(otherMember.userId);
+    const avatarUrl = officialAccount ? undefined : otherMember.avatarUrl;
 
     trackEvent("chat_inbox_profile_open_requested", {
       surface: "chat-inbox",
@@ -144,11 +148,54 @@ export default function ChillyChatInboxScreen() {
       pathname: "/profile/[userId]",
       params: {
         userId: otherMember.userId,
-        displayName: otherMember.displayName,
-        avatarUrl: otherMember.avatarUrl,
-        tagline: otherMember.tagline,
+        displayName: officialAccount?.displayName ?? otherMember.displayName,
+        avatarUrl,
+        tagline: officialAccount?.tagline ?? otherMember.tagline,
       },
     });
+  }, [router]);
+
+  const openOfficialProfile = useCallback(() => {
+    trackEvent("chat_official_profile_open_requested", {
+      surface: "chat-inbox",
+      targetUserId: RACHI_OFFICIAL_ACCOUNT.userId,
+    });
+    router.push({
+      pathname: "/profile/[userId]",
+      params: {
+        userId: RACHI_OFFICIAL_ACCOUNT.userId,
+        displayName: RACHI_OFFICIAL_ACCOUNT.displayName,
+        tagline: RACHI_OFFICIAL_ACCOUNT.tagline,
+      },
+    });
+  }, [router]);
+
+  const openOfficialThread = useCallback(async () => {
+    setStarterBusy(true);
+    setError(null);
+
+    try {
+      const thread = await getOrCreateDirectThread({
+        userId: RACHI_OFFICIAL_ACCOUNT.userId,
+        displayName: RACHI_OFFICIAL_ACCOUNT.displayName,
+        tagline: RACHI_OFFICIAL_ACCOUNT.tagline,
+      });
+      trackEvent("chat_official_thread_open_requested", {
+        surface: "chat-inbox",
+        threadId: thread.threadId,
+        targetUserId: RACHI_OFFICIAL_ACCOUNT.userId,
+      });
+      router.push({
+        pathname: "/chat/[threadId]",
+        params: {
+          threadId: thread.threadId,
+        },
+      });
+    } catch (threadError: any) {
+      setError(threadError?.message ?? "Unable to open the official Chi'lly Chat thread right now.");
+    } finally {
+      setStarterBusy(false);
+    }
   }, [router]);
 
   const listHeader = useMemo(() => (
@@ -167,6 +214,37 @@ export default function ChillyChatInboxScreen() {
         </View>
         <View style={styles.headerPill}>
           <Text style={styles.headerPillText}>{liveCallCount} live call{liveCallCount === 1 ? "" : "s"}</Text>
+        </View>
+      </View>
+      <View style={styles.officialStarterCard}>
+        <View style={styles.officialStarterBadgeRow}>
+          <View style={styles.officialStarterBadge}>
+            <Text style={styles.officialStarterBadgeText}>{RACHI_OFFICIAL_ACCOUNT.officialBadgeLabel}</Text>
+          </View>
+          <View style={styles.officialStarterMetaPill}>
+            <Text style={styles.officialStarterMetaText}>{RACHI_OFFICIAL_ACCOUNT.platformOwnershipLabel}</Text>
+          </View>
+        </View>
+        <Text style={styles.officialStarterTitle}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
+        <Text style={styles.officialStarterBody}>{RACHI_OFFICIAL_ACCOUNT.starterWelcomeBody}</Text>
+        <View style={styles.quickActionRow}>
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            activeOpacity={0.86}
+            onPress={() => {
+              void openOfficialThread();
+            }}
+            disabled={starterBusy}
+          >
+            <Text style={styles.quickActionButtonText}>{starterBusy ? "Opening..." : "Open Thread"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.quickActionButton, styles.quickActionAccentButton]}
+            activeOpacity={0.86}
+            onPress={openOfficialProfile}
+          >
+            <Text style={styles.quickActionAccentButtonText}>Open Profile</Text>
+          </TouchableOpacity>
         </View>
       </View>
       <Text style={styles.headerHint}>Long-press a thread or avatar for profile and call quick actions.</Text>
@@ -242,7 +320,7 @@ export default function ChillyChatInboxScreen() {
         />
       </View>
     </View>
-  ), [liveCallCount, openProfile, openThread, quickActionThread, searchQuery, threads.length, unreadThreadCount]);
+  ), [liveCallCount, openOfficialProfile, openOfficialThread, openProfile, openThread, quickActionThread, searchQuery, starterBusy, threads.length, unreadThreadCount]);
 
   if (loading) {
     return (
@@ -278,9 +356,15 @@ export default function ChillyChatInboxScreen() {
         )}
         renderItem={({ item }) => {
           const other = item.otherMember;
+          const officialAccount = getOfficialPlatformAccount(other?.userId);
+          const avatarUrl = officialAccount ? undefined : other?.avatarUrl;
           const unreadCount = item.currentMember?.unreadCount ?? 0;
-          const preview = buildPreview(item);
+          const preview = officialAccount && !item.lastMessagePreview && !item.activeCommunicationRoomId
+            ? officialAccount.starterWelcomeBody
+            : buildPreview(item);
           const identityLabel = getIdentityLabel(item);
+          const displayName = officialAccount?.displayName ?? other?.displayName ?? "Chi'lly Chat Thread";
+          const tagline = officialAccount?.tagline ?? other?.tagline;
 
           return (
             <TouchableOpacity
@@ -296,17 +380,24 @@ export default function ChillyChatInboxScreen() {
                 onPress={() => openThread(item)}
                 onLongPress={() => setQuickActionThreadId(item.threadId)}
               >
-                {other?.avatarUrl ? (
-                  <Image source={{ uri: other.avatarUrl }} style={styles.avatarImage} />
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
                 ) : (
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{(other?.displayName ?? "C").slice(0, 1).toUpperCase()}</Text>
+                    <Text style={styles.avatarText}>{displayName.slice(0, 1).toUpperCase()}</Text>
                   </View>
                 )}
               </TouchableOpacity>
               <View style={styles.threadCopy}>
                 <View style={styles.threadTitleRow}>
-                  <Text style={styles.threadTitle}>{other?.displayName ?? "Chi'lly Chat Thread"}</Text>
+                  <View style={styles.threadTitleWrap}>
+                    <Text style={styles.threadTitle}>{displayName}</Text>
+                    {officialAccount ? (
+                      <View style={styles.threadOfficialPill}>
+                        <Text style={styles.threadOfficialPillText}>{officialAccount.officialBadgeLabel}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text style={styles.threadTime}>{formatThreadTime(item.lastMessageAt ?? item.updatedAt)}</Text>
                 </View>
                 <View style={styles.threadMetaRow}>
@@ -314,8 +405,8 @@ export default function ChillyChatInboxScreen() {
                     <View style={[styles.identityDot, unreadCount > 0 && styles.identityDotUnread]} />
                     <Text style={[styles.identityPillText, unreadCount > 0 && styles.identityPillTextUnread]}>{identityLabel}</Text>
                   </View>
-                  {other?.tagline ? (
-                    <Text style={styles.threadTagline} numberOfLines={1}>{other.tagline}</Text>
+                  {tagline ? (
+                    <Text style={styles.threadTagline} numberOfLines={1}>{tagline}</Text>
                   ) : (
                     <Text style={styles.threadTagline} numberOfLines={1}>Direct thread</Text>
                   )}
@@ -384,6 +475,58 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 17,
     fontWeight: "700",
+  },
+  officialStarterCard: {
+    gap: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.3)",
+    backgroundColor: "rgba(96,72,20,0.26)",
+    padding: 16,
+  },
+  officialStarterBadgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  officialStarterBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.38)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  officialStarterBadgeText: {
+    color: "#FFE6A6",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.9,
+  },
+  officialStarterMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  officialStarterMetaText: {
+    color: "#F8F2DD",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  officialStarterTitle: {
+    color: "#FFF9E8",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  officialStarterBody: {
+    color: "#F0E5C5",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
   },
   searchShell: {
     flexDirection: "row",
@@ -468,11 +611,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  threadTitle: {
+  threadTitleWrap: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  threadTitle: {
     color: "#F7FBFF",
     fontSize: 16,
     fontWeight: "900",
+  },
+  threadOfficialPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.38)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  threadOfficialPillText: {
+    color: "#FFE6A6",
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.7,
   },
   threadTime: {
     color: "#93A1B7",

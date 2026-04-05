@@ -3,45 +3,31 @@
 ## Phase Order
 Chi'llywood should advance in structure-safe phases that keep product truth stable while deeper platform systems are added.
 
-## Phase 1: Foundation and Stability
-- auth and runtime config correctness
-- build reliability
-- stable title discovery and playback
-- critical route stability
+Current execution order:
+- Phase 0: Rachi foundation first
+- Phase 1: profile/channel and Chi'lly Chat completion
+- Phase 2: moderation/admin minimums
+- Phase 3: Home/content polish
+- Phase 4: release hardening
+- Phase 5: final integration proof
 
-## Phase 2: Canonical Room Architecture
-- Party Room locked on `/watch-party/[partyId]`
-- Live Room locked on `/watch-party/live-stage/[partyId]`
-- Party Room does not hand off to Live Stage; the separate Live flow enters Live Room from Live Waiting Room
-- `/communication` reduced to compatibility-only behavior
-- Player kept playback-only
-- room communication rooted inside canonical room surfaces
+## Carried-Forward Proved Baseline
+- The previously closed Stage 4 / PostHog / auth-home / Settings-Logout / login-visual truth remains carried forward as valid baseline work
+- That proved baseline should not be reopened during intermediate build phases unless code-level evidence shows a real contradiction
+- Emulator/device-heavy proof is intentionally deferred until the final integration phase unless a targeted runtime check becomes a true blocker
 
-## Phase 3: Naming and Product-Truth Lock-In
-- lock distinct meanings for `Live First`, `Live Watch-Party`, `Watch-Party Live`, and `Chi'lly Chat` while keeping Party Room and Live Room structurally separate
-- hard-lock runtime config so core product labels do not drift
-- keep Home title cards resolving to real title/player destinations
+## Phase 0: Rachi Foundation
+- establish Rachi as Chi'llywood's official platform-owned seeded account
+- protect Rachi from normal-user claim/edit semantics
+- keep Rachi on the canonical profile/channel and Chi'lly Chat routes
+- add the minimum official identity, role-foundation, starter-presence, and protection groundwork needed for later moderation/admin extension
+- avoid broad unrelated rewrites
 
-## Phase 4: Standalone And Messenger-First Chi'lly Chat MVP
-- establish Chi'lly Chat as Chi'llywood's built-in messenger layer, not just an in-room side panel and not a separate second app
-- standalone inbox on `/chat`
-- direct threads on `/chat/[threadId]`
-- direct-thread MVP contract with header, messages, composer, timestamps, optimistic sending, realtime updates, and mark-read on open/focus
-- `chat_threads`, `chat_thread_members`, and `chat_messages` as the MVP data model
-- persistent direct messages
-- realtime message updates
-- thread-based voice and video call entry using existing communication-room primitives
-- inbox-first and thread-first messenger UX upgrades on `/chat`
-- room-linked conversations inheriting from the same Chi'lly Chat system without replacing canonical room routes
-- room-linked conversations and direct conversations sharing message primitives and visual language, while embedded room surfaces stay distinct from the target standalone messenger reference
-- direct-messaging-first MVP that expands later into broader social/community communication
-- profile/channel surfaces as native social identity hubs instead of simple account pages
-- the authenticated user's own profile opening their own channel/profile surface on `/profile/[userId]`
-- viewing another user's profile supporting direct Chi'lly Chat thread creation/opening
-- profile-first social identity rails for likes, shares/reposts, and public activity
-- photos/videos, saved movies/videos, creator/channel identity, and community interaction as approved profile/channel expansion
-- reusable rights-aware content-action primitives for like/share/download/cast
-- standalone-player cast / TV handoff direction for allowed content
+## Phase 1: Profile / Channel And Chi'lly Chat Completion
+- complete profile/channel minimum completion on the canonical `/profile/[userId]` architecture
+- complete Chi'lly Chat MVP basics on `/chat` and `/chat/[threadId]`
+- improve direct-thread stability, message flow basics, thread entry from profiles, and MVP voice/video entry continuity
+- keep changes additive and aligned with locked Chi'llywood profile/messenger truth
 
 ### Current Stage 4 / PostHog Checkpoint
 - Phase 4 / Stage 4 is completed/proved on the current build
@@ -55,20 +41,28 @@ Chi'llywood should advance in structure-safe phases that keep product truth stab
 - no final human verification pass is planned for this checkpoint
 - PostHog default-off and on-state proof are completed/proved on the current build
 - repo/doc/proof-harness reconciliation is now closed against this checkpoint baseline
-- the next lane after this checkpoint is EAS Update readiness / rollout work
+- that checkpoint now serves as carried-forward baseline truth under the new execution order instead of forcing the next lane to be EAS-only rollout work
 
-## Phase 5: Multi-User Validation
-- cross-account/device proof for room-native communication
-- cross-account/device proof for Chi'lly Chat messaging and thread-based calls
-- reconnect, background/foreground, and access-gate validation
+## Phase 2: Moderation / Admin Minimums
+- report flow
+- role-aware permissions
+- admin/moderation minimum surfaces or foundations
+- audit-minded platform action structure
 
-## Phase 6: Creator, Moderation, and Platform Depth
-- creator tooling
-- admin and CMS systems
-- moderation and safety operations
-- analytics and lifecycle systems
+## Phase 3: Home / Content Polish
+- Continue Watching placement and product truth
+- Top Rated / Browse / Favorites correctness
+- title metadata, added-date, and reactions/comments correctness where intended
+- no dead routes or `Not found` regressions on valid content paths
 
-## Phase 7: Monetization, Notifications, and Launch Hardening
-- entitlements and premium enforcement
-- notification surfacing where safe
-- performance, edge-case cleanup, and launch readiness
+## Phase 4: Release Hardening
+- preview/release configuration cleanup
+- PostHog, flags, and config cleanup where planned
+- Sentry and release-minded hardening
+- EAS and config-warning cleanup
+- task-pure repo/checkpoint truth cleanup
+
+## Phase 5: Final Integration Proof
+- resume emulator/device-heavy proof only here
+- verify the completed phases together end-to-end
+- run the required final integration/runtime proof after the build phases are complete

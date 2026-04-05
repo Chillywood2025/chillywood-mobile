@@ -9,6 +9,7 @@ import { trackEvent } from "../../_lib/analytics";
 import { useBetaProgram } from "../../_lib/betaProgram";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import { reportRuntimeError } from "../../_lib/logger";
+import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { getSupportRoutePath } from "../../_lib/runtimeConfig";
 import {
     Alert,
@@ -52,6 +53,7 @@ export default function ProfileScreen() {
   const partyIdParam = String(Array.isArray(params.partyId) ? params.partyId[0] : params.partyId ?? "").trim();
   const modeParam = String(Array.isArray(params.mode) ? params.mode[0] : params.mode ?? "").trim();
   const sourceParam = String(Array.isArray(params.source) ? params.source[0] : params.source ?? "").trim();
+  const officialAccount = getOfficialPlatformAccount(userId);
   const profile = buildUserChannelProfile({
     id: userId,
     displayName: displayNameParam,
@@ -91,11 +93,20 @@ export default function ProfileScreen() {
     };
   }, []);
 
-  const isSelfProfile = selfParam === "1" || selfParam === "true" || (!!userId && !!currentUserId && userId === currentUserId);
+  const requestedSelfProfile = selfParam === "1" || selfParam === "true";
+  const isOfficialProfile = profile.identityKind === "official_platform";
+  const isSelfProfile = !profile.isProtectedFromClaim
+    && (requestedSelfProfile || (!!userId && !!currentUserId && userId === currentUserId));
   const [activeProfileView, setActiveProfileView] = useState<"owner" | "profile" | "channel">(
-    selfParam === "1" || selfParam === "true" ? "owner" : "profile",
+    requestedSelfProfile && !profile.isProtectedFromClaim ? "owner" : "profile",
   );
-  const roleLabel = profile.role === "creator" ? "Creator" : profile.role === "host" ? "Host" : "Viewer";
+  const roleLabel = isOfficialProfile
+    ? profile.platformRoleLabel ?? "Official"
+    : profile.role === "creator"
+      ? "Creator"
+      : profile.role === "host"
+        ? "Host"
+        : "Viewer";
   useEffect(() => {
     setActiveProfileView((current) => {
       if (isSelfProfile) {
@@ -104,21 +115,24 @@ export default function ProfileScreen() {
       return current === "owner" ? "profile" : current;
     });
   }, [isSelfProfile]);
-  const channelLabel = isSelfProfile
-    ? "Your Channel"
-    : profile.role === "creator"
-      ? "Creator Channel"
-      : profile.role === "host"
-        ? "Host Channel"
-        : "Channel";
+  const channelLabel = isOfficialProfile
+    ? "Chi'llywood Network"
+    : isSelfProfile
+      ? "Your Channel"
+      : profile.role === "creator"
+        ? "Creator Channel"
+        : profile.role === "host"
+          ? "Host Channel"
+          : "Channel";
   const channelHandle = useMemo(() => {
+    if (profile.handle) return profile.handle;
     const normalizedHandle = profile.displayName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, ".")
       .replace(/^\.+|\.+$/g, "");
     if (normalizedHandle) return `@${normalizedHandle}`;
     return isSelfProfile ? "@you" : "@channel";
-  }, [isSelfProfile, profile.displayName]);
+  }, [isSelfProfile, profile.displayName, profile.handle]);
   const liveActionLabel = profile.isLive ? "Join Live" : "View Live";
   const hasLiveRouteContext = !!partyIdParam;
   const showManageChannelAction = isSelfProfile && creatorSettingsEnabled;
@@ -133,11 +147,15 @@ export default function ProfileScreen() {
     : profile.isLive
       ? "This channel looks live. Open this profile from a room or live session to join from here."
       : "Open this profile from a room or live session to jump into Live or Watch Party from here.";
-  const actionFootnote = hasLiveRouteContext
-    ? `${liveActionLabel} and Watch Party are connected to this room.`
-    : "Open this profile from a room or live session to jump back into linked live and watch-party surfaces from here.";
+  const actionFootnote = isOfficialProfile
+    ? "Rachi stays on the canonical profile and Chi'lly Chat paths so future help, moderation, and official announcements remain platform-owned and auditable."
+    : hasLiveRouteContext
+      ? `${liveActionLabel} and Watch Party are connected to this room.`
+      : "Open this profile from a room or live session to jump back into linked live and watch-party surfaces from here.";
   const communicationFootnote = isSelfProfile
     ? "Chi'lly Chat opens your native Chi'llywood inbox and direct threads."
+    : isOfficialProfile
+      ? "Chi'lly Chat opens Rachi's official starter thread for welcome help, platform guidance, and future moderation-aware follow-up."
     : "";
   const ownerSections = [
     {
@@ -169,46 +187,80 @@ export default function ProfileScreen() {
       actionKind: "creator-controls" as const,
     },
   ] as const;
-  const profileSections = [
-    {
-      title: "Profile Snapshot",
-      kicker: "ABOUT",
-      body: `${profile.displayName} keeps live presence, rooms, and direct communication inside one Chi'llywood identity instead of splitting them across disconnected surfaces.`,
-    },
-    {
-      title: "Channel Entry",
-      kicker: "NEXT STEP",
-      body: "Open the channel-home view to browse live drops, featured titles, and the creator-facing streaming identity tied to this profile.",
-    },
-  ] as const;
-  const contentSections = [
-    {
-      title: "Live",
-      kicker: profile.isLive ? "ON AIR" : "OFF AIR",
-      body: profile.isLive
-        ? "This channel is live now, and linked room entry appears here when the profile is opened from an active session."
-        : "No live room is active right now. Live state and linked room entry appear here when a session is running.",
-      accent: profile.isLive ? "live" : "default",
-    },
-    {
-      title: "Videos",
-      kicker: "CHANNEL LIBRARY",
-      body: "Published titles and featured picks can anchor this channel identity without adding a separate social layer yet.",
-      accent: "default",
-    },
-    {
-      title: "Watch Parties",
-      kicker: "SOCIAL ROOMS",
-      body: "Room-linked watch-party entry is available from active sessions, while deeper social history stays outside v1 scope.",
-      accent: "default",
-    },
-    {
-      title: "Saved / Locked",
-      kicker: "ACCESS NOTES",
-      body: "Eligible titles and rooms can still enforce access rules in-context, and capture protection remains best-effort on supported devices.",
-      accent: "default",
-    },
-  ] as const;
+  const profileSections = isOfficialProfile
+    ? [
+        {
+          title: "Official Concierge",
+          kicker: profile.platformOwnershipLabel ?? "PLATFORM OWNED",
+          body: `${profile.displayName} is Chi'llywood's official seeded platform account, not a random user-created profile and not a claimable owner page.`,
+        },
+        {
+          title: "Starter Path",
+          kicker: "CHI'LLY CHAT",
+          body: "Open the canonical direct thread to ask how to get started, request official help, and follow future platform announcements without leaving the native messenger architecture.",
+        },
+      ] as const
+    : [
+        {
+          title: "Profile Snapshot",
+          kicker: "ABOUT",
+          body: `${profile.displayName} keeps live presence, rooms, and direct communication inside one Chi'llywood identity instead of splitting them across disconnected surfaces.`,
+        },
+        {
+          title: "Channel Entry",
+          kicker: "NEXT STEP",
+          body: "Open the channel-home view to browse live drops, featured titles, and the creator-facing streaming identity tied to this profile.",
+        },
+      ] as const;
+  const contentSections = isOfficialProfile
+    ? [
+        {
+          title: "Official Network",
+          kicker: profile.officialBadgeLabel ?? "OFFICIAL",
+          body: "This channel surface is reserved for Chi'llywood's official welcome guidance, platform notes, and future announcement drops without inventing a separate network page.",
+          accent: "default",
+        },
+        {
+          title: "Help And Moderation",
+          kicker: roleLabel,
+          body: "Rachi is the moderation-ready official persona that future help, safety, and platform escalation flows can build on through the same protected identity foundation.",
+          accent: "default",
+        },
+        {
+          title: "Rooms And Announcements",
+          kicker: "FUTURE READY",
+          body: "Official room notices, release notes, and starter content can grow here later while staying inside the canonical profile/channel model.",
+          accent: "default",
+        },
+      ] as const
+    : [
+        {
+          title: "Live",
+          kicker: profile.isLive ? "ON AIR" : "OFF AIR",
+          body: profile.isLive
+            ? "This channel is live now, and linked room entry appears here when the profile is opened from an active session."
+            : "No live room is active right now. Live state and linked room entry appear here when a session is running.",
+          accent: profile.isLive ? "live" : "default",
+        },
+        {
+          title: "Videos",
+          kicker: "CHANNEL LIBRARY",
+          body: "Published titles and featured picks can anchor this channel identity without adding a separate social layer yet.",
+          accent: "default",
+        },
+        {
+          title: "Watch Parties",
+          kicker: "SOCIAL ROOMS",
+          body: "Room-linked watch-party entry is available from active sessions, while deeper social history stays outside v1 scope.",
+          accent: "default",
+        },
+        {
+          title: "Saved / Locked",
+          kicker: "ACCESS NOTES",
+          body: "Eligible titles and rooms can still enforce access rules in-context, and capture protection remains best-effort on supported devices.",
+          accent: "default",
+        },
+      ] as const;
 
   const backgroundSource = (() => {
     const first = localTitles[0] as any;
@@ -384,8 +436,15 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.profileCard}>
-          <Text style={styles.profileEyebrow}>CHANNEL</Text>
+          <Text style={styles.profileEyebrow}>{isOfficialProfile ? "OFFICIAL ACCOUNT" : "CHANNEL"}</Text>
           <View style={styles.heroBadgeRow}>
+            {isOfficialProfile ? (
+              <View style={[styles.heroBadge, styles.heroBadgeOfficial]}>
+                <Text style={[styles.heroBadgeText, styles.heroBadgeTextOfficial]}>
+                  {profile.officialBadgeLabel ?? officialAccount?.officialBadgeLabel ?? "OFFICIAL"}
+                </Text>
+              </View>
+            ) : null}
             <View style={[styles.heroBadge, profile.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
               <Text style={[styles.heroBadgeText, profile.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
             </View>
@@ -419,8 +478,19 @@ export default function ProfileScreen() {
             <View style={styles.metaPill}>
               <Text style={styles.metaPillText}>{roleLabel}</Text>
             </View>
+            {isOfficialProfile ? (
+              <View style={[styles.metaPill, styles.metaPillOfficial]}>
+                <Text style={[styles.metaPillText, styles.metaPillTextOfficial]}>
+                  {profile.platformOwnershipLabel ?? officialAccount?.platformOwnershipLabel ?? "PLATFORM OWNED"}
+                </Text>
+              </View>
+            ) : null}
           </View>
-          <Text style={styles.channelSupportText}>Channel home for live drops, rooms, and creator presence.</Text>
+          <Text style={styles.channelSupportText}>
+            {isOfficialProfile
+              ? "Official Chi'llywood network page for welcome guidance, platform help, and future announcements."
+              : "Channel home for live drops, rooms, and creator presence."}
+          </Text>
           {avatarQuickActionsOpen ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>{isSelfProfile ? "Owner Quick Actions" : "Profile Quick Actions"}</Text>
@@ -659,12 +729,17 @@ const styles = StyleSheet.create({
     borderColor: "rgba(220,20,60,0.32)",
     backgroundColor: "rgba(220,20,60,0.14)",
   },
+  heroBadgeOfficial: {
+    borderColor: "rgba(242,194,91,0.38)",
+    backgroundColor: "rgba(242,194,91,0.14)",
+  },
   heroBadgeLinked: {
     borderColor: "rgba(115,134,255,0.26)",
     backgroundColor: "rgba(115,134,255,0.12)",
   },
   heroBadgeText: { color: "#A8B0C3", fontSize: 10.5, fontWeight: "900", letterSpacing: 0.8 },
   heroBadgeTextLive: { color: "#FFD5DD" },
+  heroBadgeTextOfficial: { color: "#FFE6A6" },
   heroBadgeTextLinked: { color: "#D7DDFF" },
   avatarWrap: { position: "relative", marginTop: 2 },
   avatarCircle: {
@@ -706,6 +781,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   metaPillText: { color: "#D5D5D5", fontSize: 11, fontWeight: "800" },
+  metaPillOfficial: {
+    borderColor: "rgba(242,194,91,0.34)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+  },
+  metaPillTextOfficial: {
+    color: "#FFE6A6",
+  },
   livePill: {
     borderColor: "rgba(220,20,60,0.28)",
     backgroundColor: "rgba(220,20,60,0.12)",

@@ -43,6 +43,7 @@ Do not:
 - `Live Watch-Party`: the home-screen product-flow label and the social live-viewing mode inside Live Room.
 - `Watch-Party Live`: the title/player-driven watch-together flow label.
 - `Profile`: Chi'llywood's social identity hub for creator identity, community activity, and public/private content relationships.
+- `Rachi`: Chi'llywood's official platform-owned seeded account, concierge presence, and moderation-ready official persona inside the same canonical profile/channel and Chi'lly Chat system.
 - `Like`: a first-class content relationship showing affinity for a title or creator surface when policy allows it.
 - `Share / Repost`: a first-class content relationship for redistributing or signaling content when policy allows it.
 - `Download / Save`: a rights-aware content relationship that only appears when entitlement and policy allow the title to be saved or downloaded.
@@ -121,6 +122,16 @@ MVP truth:
 - profile surfaces should naturally connect with Chi'lly Chat, watch-party coordination, live communication, and broader social identity
 - photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction are approved profile/channel depth
 - future profile/channel depth must extend the same native Chi'llywood profile system instead of inventing a disconnected second app or parallel creator identity
+
+## Official Platform Account Truth
+Rachi is Chi'llywood's official platform-owned seeded account.
+
+MVP truth:
+- Rachi is not a normal user profile with ordinary self-claim or self-edit semantics
+- Rachi must use the canonical `/profile/[userId]` and Chi'lly Chat thread architecture instead of a disconnected special route
+- Rachi must be visually identifiable as official/platform-owned
+- Rachi should act as the default official starter presence for welcome/help messaging
+- future moderation, announcement, and platform-help behavior must extend the same protected official identity foundation instead of inventing a second persona system
 
 ## Profile And Content Direction
 Profiles are social identity hubs, not static account cards.

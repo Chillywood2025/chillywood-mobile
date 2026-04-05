@@ -141,6 +141,16 @@ Locked product direction:
 - viewing another user's profile should support opening or creating a direct Chi'lly Chat thread
 - photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction must extend the same profile/channel system over time
 
+## Official Platform Account Rule
+Rachi is Chi'llywood's official platform-owned seeded account.
+
+Architecture requirements:
+- Rachi must use the canonical `/profile/[userId]` profile/channel route and the canonical Chi'lly Chat thread path instead of a disconnected special route
+- Rachi must not be treated as an ordinary self-editable or user-claimable profile
+- Rachi must carry explicit official/platform markers in both UI and logic
+- future moderation, admin, announcement, and audit-minded behavior must build on the same protected official-account foundation
+- official starter presence and direct-thread entry should remain additive to the existing messenger/profile architecture rather than rewriting it
+
 ## Content Action Primitive Rule
 Like, share/repost, download/save, and cast eligibility are reusable content primitives.
 

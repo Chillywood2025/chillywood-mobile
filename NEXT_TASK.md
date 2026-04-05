@@ -1,65 +1,46 @@
 # NEXT TASK
 
 ## Exact Next Task
-Keep Stage 4 closed and recorded as completed/proved on the current build. The next exact lane is to verify the already-published preview-channel EAS Update on the installed Android preview build `3daa1615-d003-46d5-af7a-af8500497155` while preserving the newly proved Settings / Logout owner-surface truth and the restored Chi'llywood login presentation, including the further-lowered login-card spacing from the latest visual-only micro-pass.
+Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, and login-visual baseline exactly as already proved. With Phase 0 Rachi foundation now established, the next exact lane is Phase 1: profile/channel and Chi'lly Chat completion, starting with the C lane and still deferring emulator/device-heavy proof until the final integration phase unless a real blocker requires one targeted runtime check.
 
 ## Current Plan
-1. Preserve the current green Stage 4 truth exactly as recorded
-2. Preserve the now-closed PostHog proof truth exactly as recorded
-3. Preserve the newly re-closed auth/home regression fix exactly as recorded
-4. Preserve the newly proved Home/Profile Settings / Logout truth exactly as recorded
-5. Preserve the restored Chi'llywood login visual truth exactly as recorded without reopening auth/session logic
-6. Keep the current-build live-stage proof recorded as complete after the channel-topic fix
-7. Use the now-published preview OTA checkpoint to verify delivery on the installed preview build before any production rollout
+1. Preserve the carried-forward proved baseline without reopening unrelated prior work
+2. Preserve the new execution order: Phase 0 Rachi foundation, Phase 1 profile/channel and Chi'lly Chat completion, Phase 2 moderation/admin minimums, Phase 3 Home/content polish, Phase 4 release hardening, Phase 5 final integration proof
+3. Preserve Rachi as Chi'llywood's official platform-owned seeded account through the canonical profile and Chi'lly Chat paths
+4. Complete profile/channel minimums without breaking the locked social-identity doctrine
+5. Complete Chi'lly Chat MVP basics and direct-thread stability without regressing canonical routes or existing call entry points
+6. Keep build-phase proof static/owner-based until the final integration phase
 
 ## Exact Next Batch
-- preserve the newly proved PostHog runtime baseline: `.env.local` now loads into the current Expo session, the Android bundle carries the injected `EXPO_PUBLIC_POSTHOG_*` values, and the remote-default-off state keeps the chat thread stable with no smart-reply card visible
-- preserve the newly re-proved April 5, 2026 auth/home truth: `adb shell pm clear host.exp.exponent` lands on `/login`, the valid test login returns to `/` without the prior unhandled tabs-group replace, and both visible Home `Chicago Streets` rails land on `/title/f0d03df8-ced8-433f-a5c0-e2b930813eb0` with `Play` visible instead of `Not found`
-- preserve the newly proved April 5, 2026 Settings / Logout truth: Home now shows a visible `Settings` entry beside the self-profile avatar, own profile keeps its owner/control role while adding a self-only `Settings` chip, `/settings` owns `Log Out`, signing out returns to `/login`, a clean reopen while logged out still lands on `/login`, and other-user profile behavior remains the separate `Profile` + `Channel Home` + `Chi'lly Chat` surface with no Settings owner control
-- preserve the April 5, 2026 login visual restoration truth: `app/(auth)/login.tsx` owns the skyline-backed Chi'llywood login presentation again, `app/(auth)/_layout.tsx` remains wrapper-only, `assets/images/chicago-skyline.jpg` remains the background asset truth, and the login card now sits further lower via route-local container spacing so more branding remains visible above it; carry a fresh runtime verification of logged-out first open and valid login into the next QA lane because this latest spacing-only micro-pass intentionally skipped emulator reproof
-- preserve the new identified-user flag bridge in `app/_layout.tsx`; the current runtime now identifies the signed-in Supabase user to PostHog before reloading feature flags
-- preserve the newly proved PostHog on-state truth from April 5, 2026: direct `/flags/?v=2` now returns both `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` as `enabled: true` with `condition_match`, and `/chat/[threadId]` now visibly renders `AI SMART REPLIES`, `PostHog gated`, and the three smart-reply chips
-- keep the flag-owner bookkeeping exact: active chat-thread consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`, while the waiting-room/live flags remain probe-only in `app/_layout.tsx`
-- keep the proved live-stage fix recorded precisely as a channel-topic cleanup before stage subscribe, not as a broader room refactor
-- keep the live-stage UI proof recorded as complete: `Live-First`, `Live Watch-Party`, `PROTECTED LIVE SESSION`, `LIVE FIRST FOCUS`, and `TAILORED LIVE WATCH-PARTY` are all now visible on the current build
-- treat the Expo Go `Unable to activate keep awake` / intermittent Android ANR dialogs as environment noise unless the same behavior reproduces outside this proof lane or on a non-Expo-Go runtime
-- use the reconciled proof harness baseline exactly as recorded: `SESSION_START_PROTOCOL.md` exists, the Maestro smoke lane is explicit, and the authenticated owner-rails flow no longer depends on missing subflows or dead ids
-- preserve the new EAS Update truth exactly as recorded: `runtimeVersion` now uses `appVersion`, `updates.url` is repo-owned, `npm run validate:runtime` passes locally from `.env.local`, `expo-updates@~29.0.16` is repo-owned, Android preview build `3daa1615-d003-46d5-af7a-af8500497155` already exists on channel `preview`, and preview OTA group `7519a9ee-c320-4d24-939d-4deeec57048b` is now published from commit `c8cc828`
-- verify the installed preview build against the published preview OTA with this exact manual checklist:
-- logged-out first open lands on login
-- valid login returns to Home
-- `Top Rated` opens the real `/title/[id]` surface
-- `Browse` opens the real `/title/[id]` surface
-- Home shows a visible `Settings` entry
-- own profile shows a visible `Settings` entry
-- `Settings` opens
-- `Log Out` clears session and returns to login
-- other-user profile does not show a `Settings` control
-- only after preview verification, prepare the first controlled production rollout; if no production build exists yet for runtime `1.0.0`, create it first with `npx eas-cli@latest build --platform android --profile production --non-interactive`
+- preserve the proved current-build baseline exactly as carried-forward truth: logged-out first open lands on `/login`, valid login returns to Home, Home `Top Rated` and `Browse` resolve to the real title surface, Home/Profile `Settings` stay visible, `Log Out` returns to `/login`, Party/Live route truth stays locked, and the restored Chi'llywood login presentation remains intact
+- preserve the proved PostHog truth exactly as carried forward: identified-user bridge remains in `app/_layout.tsx`, default-off stability stays closed, remote on-state stays closed, and no new build-phase pass should reopen that proof without code-level contradiction
+- preserve the new Phase 0 Rachi truth: Rachi remains the protected official platform-owned seeded account, `/profile/[userId]` remains the canonical profile/channel path, `/chat/[threadId]` remains the canonical direct-thread path, and the starter-presence/chat-open flow remains canonical instead of becoming a separate side surface
+- complete profile/channel minimum completion in Phase 1 using the existing profile architecture: strengthen the canonical profile/channel route, keep channel-home behavior additive, and avoid splitting profile truth into another product surface
+- complete Chi'lly Chat MVP basics in Phase 1 using the existing direct-thread architecture: improve direct-thread stability, message-flow basics, thread-entry polish from profile surfaces, and MVP voice/video entry-point continuity without rewriting the shared communication primitives
+- keep Phase 1 scoped: additive profile/channel and messenger completion only, no broad moderation/admin surface work yet, no Home/content polish yet, and no release-hardening churn yet
+- use non-runtime proof only during the build phase unless blocked: owner-file proof, route/render-path proof, deterministic static checks, and `npm run typecheck`
+- after Phase 1, continue in exact order: Phase 2 moderation/admin minimums, Phase 3 Home/content polish, Phase 4 release hardening, then Phase 5 final integration proof
 
 ## Scope
 This next pass should:
-- preserve the proved Stage 4 baseline exactly
-- preserve the closed PostHog proof lane
-- preserve the newly re-closed auth/home regression fix without reopening app logic
-- preserve the newly proved Settings / Logout owner-surface behavior without collapsing own-profile and other-user profile doctrine
-- preserve the restored Chi'llywood login presentation without reopening auth/session/error/redirect logic
-- preserve the now-complete live-stage UI proof and stage-channel fix
-- verify delivery of the already-published preview-channel EAS Update on the installed preview build without reopening app implementation work
+- preserve the carried-forward proved baseline exactly as recorded
+- preserve the protected official Rachi foundation exactly as recorded
+- complete profile/channel minimum completion through canonical routes only
+- complete Chi'lly Chat MVP basics through canonical inbox/thread routes only
+- keep runtime-heavy proof deferred until final integration unless a true blocker demands one targeted check
 
 ## Out Of Scope
 Do not:
-- reopen Stage 4 unless new proof truly invalidates it
-- broad-refactor the room surfaces, chat surfaces, or profile/channel surfaces
-- change locked routes, naming, or communication ownership without new doctrine updates
-- publish directly to `production` before preview verification
+- reopen unrelated prior lanes without code-level contradiction
+- broaden Phase 1 into moderation/admin, Home/content polish, or release-hardening work
+- invent a non-canonical Rachi route, fake starter surface, or disconnected messenger pattern
+- resume repeated emulator/device reruns during intermediate build phases
 
 ## Success Criteria
 The next lane is successful when:
-- Stage 4 still reads as completed/proved on the current build
-- remote PostHog on-state delivery remains recorded as proven for the gated chat flags
-- Home/Profile Settings / Logout truth remains recorded as proved without collapsing profile-role separation
-- the login screen remains recorded as the restored Chi'llywood skyline/branded presentation with the further-lowered card spacing, and the next runtime QA lane re-confirms login-first and valid-login behavior after this visual-only micro-pass
-- the live-stage route remains recorded as visibly proved, not merely log-proved
-- preview OTA group `7519a9ee-c320-4d24-939d-4deeec57048b` is verified on preview build `3daa1615-d003-46d5-af7a-af8500497155`
-- `CURRENT_STATE.md` and `NEXT_TASK.md` tell the same checkpoint story
+- the carried-forward proved baseline still matches repo truth without contradiction
+- Rachi remains recorded as the protected official platform-owned seeded account
+- profile/channel minimum completion is additive and stays on `/profile/[userId]`
+- Chi'lly Chat MVP completion is additive and stays on `/chat` plus `/chat/[threadId]`
+- build-phase proof remains static/owner-based and `npm run typecheck` stays green
+- `CURRENT_STATE.md`, `NEXT_TASK.md`, and the durable doctrine files tell the same new execution-plan story
