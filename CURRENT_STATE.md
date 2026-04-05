@@ -3,7 +3,7 @@
 ## Current Checkpoint
 Stage 4 remains completed/proved on the current build. Current JS via Expo Go / Metro proved Home, Player, Profile, Chi'lly Chat, Live Waiting Room, Party Waiting Room, Live Room, Party Room, and Live Stage behavior as described below.
 
-The latest proof pass fixed two real current-build bugs: `app/player/[id].tsx` now resolves bundled assets through `expo-asset` before passing them to `expo-av`, and `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes. Typecheck passed afterward. The only remaining blocker from this pass is remote PostHog on-state delivery for the gated chat flags because no local PostHog credentials or admin access are present in this workspace.
+The latest proof pass fixed two real current-build bugs: `app/player/[id].tsx` now resolves bundled assets through `expo-asset` before passing them to `expo-av`, and `app/watch-party/live-stage/[partyId].tsx` now removes any existing room channel with the same topic before the stage subscribes. Typecheck passed afterward. PostHog env wiring is now present locally and the current Expo runtime proof below confirms the vars are loading, but remote on-state delivery for the gated chat flags still remains unproved because the flags were intentionally left OFF in this pass.
 
 ## Current-Build Proved Items
 - Home: `Continue Watching` proved at the top by temporarily seeding `watch_history` for `Chicago Streets` and then clearing it; `Browse` / `Top Rated` cards show title, info line, and `Added` date; the lower Home area is reserved for `Chi'llywood Originals`
@@ -17,8 +17,10 @@ The latest proof pass fixed two real current-build bugs: `app/player/[id].tsx` n
 - Live Stage: visible current-build proof now covers `Live-First`, `Live Watch-Party`, `PROTECTED LIVE SESSION`, `LIVE FIRST FOCUS`, and `TAILORED LIVE WATCH-PARTY`; analytics logs also showed `/watch-party/live-stage/QNBQLU` rendering in `mode=hybrid`, so both in-screen live modes are proved on the stage owner
 
 ## PostHog And Flags
-- Default-off stability is proved locally because `EXPO_PUBLIC_POSTHOG_API_KEY` and `EXPO_PUBLIC_POSTHOG_HOST` are absent in the repo-local env, so the PostHog provider short-circuits and the chat thread works without the smart-reply card
-- Remote-delivery on-state for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` remains unproved because there are no local PostHog credentials or remote flag admin access
+- The current Expo session on `8084` loaded `.env.local` and exported `EXPO_PUBLIC_POSTHOG_API_KEY` plus `EXPO_PUBLIC_POSTHOG_HOST`; the served Android `node_modules/expo-router/entry.bundle` also contained those injected values and the two active chat flag keys
+- Default-off stability is now proved on the PostHog-enabled runtime for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`: `/chat` still opened on the current build, `/chat/[threadId]` still opened on the current build, and the thread surface kept `Proof User`, `Direct thread`, voice/video actions, `Attach`, `React`, `Write a message`, and `Send` while `AI SMART REPLIES` and `PostHog gated` remained absent
+- No remote flag changes were made in this pass; the proof is specifically for the remote-default-off state only
+- Remote-delivery on-state for `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` remains unproved because the flags were intentionally left OFF in this pass
 - The active chat-thread flag consumers are only `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`
 - Waiting-room and live flags are probe-only in `app/_layout.tsx` and are not wired to active UI owners
 
@@ -26,6 +28,7 @@ The latest proof pass fixed two real current-build bugs: `app/player/[id].tsx` n
 - `SESSION_START_PROTOCOL.md` is missing even though docs refer to it
 - `maestro/` docs and the actual flow inventory are out of sync
 - `_subflows/ensure-authenticated.yaml` and several referenced flows are missing
+- Expo Go surfaced intermittent Android ANR dialogs plus `Unable to activate keep awake` during the PostHog-enabled proof session, but the underlying Home/chat routes still rendered and the default-off proof completed
 - the checkpoint files must stay aligned on the single active blocker: remote PostHog on-state delivery
 
 ## What Was Fixed In This Pass
