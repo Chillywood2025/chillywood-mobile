@@ -3,7 +3,7 @@
 ## Current Checkpoint
 Chi'llywood still carries locked product doctrine, hard-locked core naming, canonical room architecture, a standalone Chi'lly Chat MVP in repo code, and an explicit messenger-first / profile-first / action-first MVP direction in the control files. Stage 4's final automation batch is now completed/proved on the current build because current terminal/workflow output proved the corrected local release-style / bundled Android lane, the corrected Party / Live split, local Flow 09, and the final cloud rerun all green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91`. The previous cloud rerun narrowed the only remaining issue to a below-the-fold Flow 09 proof-path problem, cloud artifact inspection plus a bounded local 320x640-style replay proved that diagnosis, and the replacement cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green with all cloud Maestro flows passing.
 The active repo-truth files `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` are restored after the accidental cleanup deletion, while the intended PostHog root wiring remains intact.
-A new phased product-alignment pass has begun from that stable baseline, and Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, Phase 4 Profile / Channel, plus Phase 5 Chi'lly Chat code are now in repo, but current-build UI proof for those new slices is still pending.
+A new phased product-alignment pass has begun from that stable baseline, and Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, Phase 4 Profile / Channel, Phase 5 Chi'lly Chat, plus a minimal Phase 6 AI/high-tech scaffold are now in repo, but current-build UI proof for those new slices is still pending.
 
 ## Current Batch Surface Inventory
 - Home tab -> Continue Watching hero slot -> Top Rated / Browse metadata -> reserved Chi'llywood Originals slot
@@ -11,6 +11,7 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - Home -> Live Watch-Party -> Live Room -> Live Stage -> tailored Live Watch-Party strip and Live-First focus
 - Profile / Channel -> owner controls / channel-home switch / avatar quick actions -> Chi'lly Chat voice-video entry
 - Chi'lly Chat inbox/thread -> long-press quick actions -> profile handoff -> in-thread voice/video call entry
+- Chi'lly Chat direct thread -> PostHog-gated AI smart reply scaffold -> additive composer suggestions only
 - Home tab -> self profile -> channel settings -> profile rails -> Chi'lly Chat inbox
 - Explore tab -> title detail -> self profile likes/shares rails
 
@@ -120,6 +121,7 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - the new Phase 3 Live implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
 - the new Phase 4 Profile / Channel implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
 - the new Phase 5 Chi'lly Chat implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
+- the new Phase 6 AI/high-tech scaffold is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
 
 ## What Is Proved In Repo
 - Party Room is canonical on `/watch-party/[partyId]`
@@ -145,6 +147,7 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - the Live Stage owner on `app/watch-party/live-stage/[partyId].tsx` now keeps Live First and Live Watch-Party interaction inside the canonical live route instead of routing users into `/communication/[roomId]`, and hybrid mode now keeps the host visible in the shared participant strip while preserving local host-first / hide / reset controls
 - the profile owner on `app/profile/[userId].tsx` now supports an owner/profile/channel-home split, avatar quick actions, and direct Chi'lly Chat message/voice/video entry without inventing a second profile system, while `app/chat/[threadId].tsx` now accepts safe call-start deep links for those voice/video quick actions
 - the Chi'lly Chat owners on `app/chat/index.tsx` and `app/chat/[threadId].tsx` now add inbox/thread quick actions for profile handoff plus thread-native voice/video entry without changing routes, schema, or room ownership
+- `_lib/posthog.ts` plus `app/chat/[threadId].tsx` now scaffold `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1` as provider-safe, PostHog-gated smart-reply UI inside the canonical thread owner without changing default messaging behavior when flags are off
 
 ## What Was Implemented In This Pass
 - repo-root control files were rewritten so standalone Chi'lly Chat and room-native communication no longer conflict
@@ -155,6 +158,7 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - `app/watch-party/live-stage/[partyId].tsx` now removes the generic call-room footer exit, keeps Live First comments/reactions inside the canonical Live Stage owner, adds local host-first / hide / reset controls for the live participant strip, and ensures hybrid `Live Watch-Party` mode keeps the host visible instead of filtering the host out of the community strip
 - `app/profile/[userId].tsx` now gives self profile a real owner-mode surface, gives other profiles a channel-home toggle plus avatar quick actions, and routes message / voice / video entry through canonical Chi'lly Chat; `app/chat/[threadId].tsx` now honors `startCall=voice|video` deep links so those quick actions reuse the existing thread-call owner instead of creating a new calling route
 - `app/chat/index.tsx` now surfaces long-press inbox quick actions for direct thread open, profile handoff, and thread-native voice/video launch, while `app/chat/[threadId].tsx` now adds matching header quick actions so profile and call entry stay inside the canonical Chi'lly Chat owners instead of inventing new routes
+- `_lib/posthog.ts` now also exposes `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`, while `app/chat/[threadId].tsx` now keeps a minimal AI smart-reply suggestion rail behind those flags so the high-tech layer stays additive, provider-safe, and easy to disable remotely
 - `_lib/appConfig.ts` hard-locks the doctrinal product labels
 - `app/admin.tsx` now exposes locked naming as read-only instead of editable runtime branding
 - `supabase/migrations/202603270009_create_chilly_chat_threads.sql` adds:

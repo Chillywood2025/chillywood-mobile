@@ -1,13 +1,13 @@
 # NEXT TASK
 
 ## Exact Next Task
-Stage 4 remains completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, keep the restored repo-truth/control files and Flow 09 proof file intact, current-build prove the new Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, Phase 4 Profile / Channel, and Phase 5 Chi'lly Chat implementations, then continue into a tightly gated Phase 6 AI/high-tech slice only where the active owners support it safely. PostHog root flag delivery is still required before any room-flow gating or higher-risk AI/high-tech slice.
+Stage 4 remains completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, keep the restored repo-truth/control files and Flow 09 proof file intact, and current-build prove the newly landed Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, Phase 4 Profile / Channel, Phase 5 Chi'lly Chat, plus the minimal Phase 6 AI/high-tech scaffold. PostHog root flag delivery is still required before any room-flow gating or higher-risk AI/high-tech slice.
 Keep the restored repo-truth files and the Flow 09 proof file intact while the new phased product-alignment pass proceeds from that stable baseline.
 
 ## Current Plan
 1. Preserve Stage 4 as completed/proved on the current build
-2. Current-build prove Phases 1, 2, 3, and 4 from the now-green baseline
-3. Current-build prove Phase 5 Chi'lly Chat, then continue into a gated Phase 6 slice with phase-pure validation and commits
+2. Current-build prove Phases 1 through 6 from the now-green baseline
+3. Prove remote PostHog root flag delivery and the gated Phase 6 chat-thread smart-reply slice without changing default behavior
 4. No final human verification pass
 5. Do not reopen Stage 4 unless new current-build proof truly invalidates it
 
@@ -55,18 +55,20 @@ Keep the restored repo-truth files and the Flow 09 proof file intact while the n
 - current-build prove the new Phase 5 Chi'lly Chat slice on the real owners:
   - `app/chat/index.tsx` now exposes long-press inbox quick actions for thread open, profile handoff, and voice/video launch
   - `app/chat/[threadId].tsx` now exposes thread-header quick actions so profile and call entry stay inside the canonical Chi'lly Chat owner
-- then move into a tightly gated Phase 6 slice:
-  - preserve the restored messenger-first routes
-  - add only safe PostHog-gated AI/high-tech scaffolding inside proven owners
-  - do not overreach backend architecture
+- current-build prove the new Phase 6 gated slice on the real owners:
+  - `_lib/posthog.ts` now exposes `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`
+  - `app/chat/[threadId].tsx` now renders PostHog-gated AI smart-reply suggestions only inside the canonical thread owner and only when the root provider/env path is active
 - prove remote PostHog flag delivery at the root for:
   - `live_waiting_room_enabled`
   - `party_waiting_room_enabled`
   - `watch_party_live_handoff_v2`
+  - `chilly_chat_expanded_v1`
+  - `ai_chat_suggestions_v1`
 - keep PostHog wiring non-invasive:
   - `app/_layout.tsx` root provider only
   - `EXPO_PUBLIC_POSTHOG_API_KEY` / `EXPO_PUBLIC_POSTHOG_HOST` env wiring only
   - no Party/Live route gating yet
+  - no AI backend overreach
 - treat the Expo `expo-localization` config-plugin warning as follow-up only if a current native build proves it necessary
 - report exact files changed, exact fixes, and any remaining blocker
 
@@ -93,14 +95,14 @@ Do not:
 ## Proof Requirements
 Before claiming the next pass complete:
 1. preserve the final green Stage 4 proof in repo truth
-2. define the first concrete current-build proof target for the new Phase 5 Chi'lly Chat quick-action slice
+2. define the first concrete current-build proof target that covers the new Phase 5 Chi'lly Chat quick-action slice plus the gated Phase 6 smart-reply rail
 3. keep canonical room routes, Chi'lly Chat behavior, and profile/channel truth unchanged unless new proof requires targeted fixes
-4. prove remote PostHog root flag delivery before enabling any room-flow gate
+4. prove remote PostHog root flag delivery before enabling any room-flow gate or relying on the new AI/high-tech slice
 
 ## Success Criteria
 The next pass is successful when:
 - Stage 4 remains recorded as completed/proved on the current build
-- the repo points cleanly at Phase 6 as the next code checkpoint while Phases 1-5 still await current-build UI proof
+- the repo points cleanly at current-build proof plus PostHog delivery as the next checkpoint while Phases 1-6 await runtime confirmation
 - no stale Stage 4 blocker language remains active in the control files
 - Party flow stays on `/watch-party/[partyId]` and does not hand off to Live Stage
 - Live Stage is reached only from the separate Live flow on `/watch-party/live-stage/[partyId]`

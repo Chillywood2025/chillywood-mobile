@@ -12,6 +12,7 @@ import {
   Image,
   View,
 } from "react-native";
+import { useFeatureFlag } from "posthog-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
@@ -29,6 +30,7 @@ import {
   type ChatThreadSummary,
 } from "../../_lib/chat";
 import { reportRuntimeError } from "../../_lib/logger";
+import { getPostHogConfig, isPostHogFlagEnabled, posthogFeatureFlags } from "../../_lib/posthog";
 import { useSession } from "../../_lib/session";
 import { InRoomCommunicationPanel } from "../../components/communication/in-room-communication-panel";
 import { useCommunicationRoomSession } from "../../hooks/use-communication-room-session";
@@ -53,6 +55,99 @@ const getThreadStatusLabel = (thread: ChatThreadSummary | null) => {
   return "Direct thread";
 };
 
+const buildSmartReplySuggestions = ({
+  activeCallType,
+  lastIncomingMessage,
+  otherMemberName,
+}: {
+  activeCallType?: ChatCallType;
+  lastIncomingMessage?: string;
+  otherMemberName?: string;
+}) => {
+  const firstName = String(otherMemberName ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "there";
+  const normalizedMessage = String(lastIncomingMessage ?? "").trim().toLowerCase();
+
+  if (activeCallType) {
+    return activeCallType === "video"
+      ? ["Joining the video now", "Give me 2 min", "Let's keep the camera on"]
+      : ["Joining the call now", "Mic is ready", "Give me 2 min"];
+  }
+
+  if (normalizedMessage.includes("?")) {
+    return ["I'm in", "Give me 5 min", "Let's jump on a call"];
+  }
+
+  if (normalizedMessage.includes("when")) {
+    return ["I'm ready now", "Send the time", "Let's do a quick call"];
+  }
+
+  if (normalizedMessage.includes("where")) {
+    return ["Send the link", "I'm on my way", "Let's meet in the thread"];
+  }
+
+  return [`Hey ${firstName}, I'm here`, "Let's do a voice call", "Send me the details"];
+};
+
+function GatedSmartReplySuggestions({
+  activeCallType,
+  currentUserId,
+  messages,
+  onSelectSuggestion,
+  otherMemberName,
+}: {
+  activeCallType?: ChatCallType;
+  currentUserId: string;
+  messages: ChatMessage[];
+  onSelectSuggestion: (suggestion: string) => void;
+  otherMemberName?: string;
+}) {
+  const chillyChatExpandedFlag = useFeatureFlag(posthogFeatureFlags.chillyChatExpandedV1);
+  const aiChatSuggestionsFlag = useFeatureFlag(posthogFeatureFlags.aiChatSuggestionsV1);
+
+  const isExpandedEnabled = isPostHogFlagEnabled(chillyChatExpandedFlag);
+  const isAiSuggestionsEnabled = isPostHogFlagEnabled(aiChatSuggestionsFlag);
+  const latestIncomingMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.senderUserId !== currentUserId)?.body ?? "",
+    [currentUserId, messages],
+  );
+  const suggestions = useMemo(
+    () => buildSmartReplySuggestions({
+      activeCallType,
+      lastIncomingMessage: latestIncomingMessage,
+      otherMemberName,
+    }),
+    [activeCallType, latestIncomingMessage, otherMemberName],
+  );
+
+  if (!isExpandedEnabled || !isAiSuggestionsEnabled || suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.smartReplyCard}>
+      <View style={styles.smartReplyHeader}>
+        <Text style={styles.smartReplyKicker}>AI SMART REPLIES</Text>
+        <Text style={styles.smartReplyMeta}>PostHog gated</Text>
+      </View>
+      <Text style={styles.smartReplyBody}>
+        Smart suggestions stay additive inside this thread and do not change default messaging behavior unless the remote flags are enabled.
+      </Text>
+      <View style={styles.smartReplyRow}>
+        {suggestions.map((suggestion) => (
+          <TouchableOpacity
+            key={suggestion}
+            style={styles.smartReplyChip}
+            activeOpacity={0.86}
+            onPress={() => onSelectSuggestion(suggestion)}
+          >
+            <Text style={styles.smartReplyChipText}>{suggestion}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function ChillyChatThreadScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
@@ -74,6 +169,7 @@ export default function ChillyChatThreadScreen() {
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
+  const posthogEnabled = getPostHogConfig().isEnabled;
 
   const loadThreadState = useCallback(async () => {
     if (!threadId) {
@@ -602,6 +698,22 @@ export default function ChillyChatThreadScreen() {
           </View>
           <Text style={styles.composerAssistText}>Text send is live now. Media and reactions land next.</Text>
         </View>
+        {posthogEnabled ? (
+          <GatedSmartReplySuggestions
+            activeCallType={thread?.activeCallType}
+            currentUserId={currentUserId}
+            messages={messages}
+            otherMemberName={otherMember?.displayName}
+            onSelectSuggestion={(suggestion) => {
+              trackEvent("chat_thread_ai_suggestion_selected", {
+                surface: "chat-thread",
+                threadId,
+                suggestion,
+              });
+              setDraft((current) => (current.trim() ? `${current.trim()} ${suggestion}` : suggestion));
+            }}
+          />
+        ) : null}
         <View style={styles.composerInputRow}>
           <TextInput
             testID="chat-thread-input"
@@ -960,6 +1072,55 @@ const styles = StyleSheet.create({
     color: "#8794AC",
     fontSize: 10.5,
     fontWeight: "700",
+  },
+  smartReplyCard: {
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(122,226,183,0.16)",
+    backgroundColor: "rgba(122,226,183,0.08)",
+    padding: 14,
+  },
+  smartReplyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  smartReplyKicker: {
+    color: "#D8FFF0",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.05,
+  },
+  smartReplyMeta: {
+    color: "#8FE0BE",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  smartReplyBody: {
+    color: "#CDEBDF",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  smartReplyRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  smartReplyChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(122,226,183,0.28)",
+    backgroundColor: "rgba(6,10,18,0.3)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  smartReplyChipText: {
+    color: "#E8FFF5",
+    fontSize: 11.5,
+    fontWeight: "800",
   },
   composerInputRow: {
     flexDirection: "row",
