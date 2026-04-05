@@ -1,5 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { AppState, Platform } from "react-native";
 
 import { clearUser, identifyUser, trackEvent } from "./analytics";
 import { reportDebugAuth } from "./devDebug";
@@ -20,6 +21,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    supabase.auth.startAutoRefresh();
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        supabase.auth.startAutoRefresh();
+        return;
+      }
+
+      supabase.auth.stopAutoRefresh();
+    });
+
+    return () => {
+      subscription.remove();
+      supabase.auth.stopAutoRefresh();
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     supabase.auth.getSession()
@@ -30,6 +50,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setSession(nextSession);
         setUser(nextUser);
         setIsLoading(false);
+
+        if (!nextSession || Platform.OS === "web") return;
+
+        supabase.auth.refreshSession()
+          .then(({ data: refreshed }) => {
+            if (!active) return;
+            const refreshedSession = refreshed.session ?? nextSession;
+            setSession(refreshedSession);
+            setUser(refreshedSession.user ?? nextUser);
+          })
+          .catch(() => {
+            // keep the cached session state if refresh fails
+          });
       })
       .catch(() => {
         if (!active) return;

@@ -3,7 +3,7 @@
 ## Current Checkpoint
 Chi'llywood still carries locked product doctrine, hard-locked core naming, canonical room architecture, a standalone Chi'lly Chat MVP in repo code, and an explicit messenger-first / profile-first / action-first MVP direction in the control files. Stage 4's final automation batch is now completed/proved on the current build because current terminal/workflow output proved the corrected local release-style / bundled Android lane, the corrected Party / Live split, local Flow 09, and the final cloud rerun all green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91`. The previous cloud rerun narrowed the only remaining issue to a below-the-fold Flow 09 proof-path problem, cloud artifact inspection plus a bounded local 320x640-style replay proved that diagnosis, and the replacement cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green with all cloud Maestro flows passing.
 The active repo-truth files `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `ROADMAP.md`, and `maestro/flows/09-title-actions-to-self-profile-rails.yaml` are restored after the accidental cleanup deletion, while the intended PostHog root wiring remains intact.
-A new phased product-alignment pass has begun from that stable baseline, and Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, Phase 4 Profile / Channel, Phase 5 Chi'lly Chat, plus a minimal Phase 6 AI/high-tech scaffold are now in repo, but current-build UI proof for those new slices is still pending.
+A new phased product-alignment pass has begun from that stable baseline. Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, Phase 4 Profile / Channel, Phase 5 Chi'lly Chat, plus a minimal Phase 6 AI/high-tech scaffold are now in repo. Current-build proof now covers the deterministic logged-out auth path plus the recovered other-profile -> Chi'lly Chat direct-thread handoff, while the remaining Home / Discovery, Player / Party, Live, broader Profile / Channel, remaining Chi'lly Chat quick-action coverage, and remote PostHog delivery proof are still pending.
 
 ## Current Batch Surface Inventory
 - Home tab -> Continue Watching hero slot -> Top Rated / Browse metadata -> reserved Chi'llywood Originals slot
@@ -81,6 +81,9 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - the previously identified blockers on this corrected proof path were:
   - wrong session/access mode
   - wrong dev-client runtime path
+- deterministic emulator auth proof now covers the logged-out-first path on the current build because clearing Expo Go state and opening `/login` showed the real login form first, successful sign-in emitted `auth_sign_in_success`, and the app then returned to `home-screen`
+- the current other-profile -> Chi'lly Chat recovery path is now proved on the current build because tapping `profile-chilly-chat-button` on another user's profile opened the canonical `/chat/[threadId]` owner, emitted `chat_thread_opened`, and rendered `chat-thread-screen` with the composer plus thread-native voice/video actions
+- the linked Supabase project has already accepted `202604050002_allow_chat_thread_creator_bootstrap_access.sql` through `supabase db push`, so the creator-bootstrap chat-thread access rule is no longer only local repo state
 
 ## Previously Proved And Preserved
 - `build_android_for_e2e` passed
@@ -119,8 +122,8 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - the new Phase 1 Home / Discovery implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
 - the new Phase 2 Player / Party implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
 - the new Phase 3 Live implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
-- the new Phase 4 Profile / Channel implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
-- the new Phase 5 Chi'lly Chat implementation is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
+- the new Phase 4 Profile / Channel implementation is only partially current-build proved; terminal/runtime proof now covers the deterministic logged-out auth path plus other-profile -> Chi'lly Chat handoff, while the remaining owner controls, channel-home toggle, and avatar quick-action coverage are still pending
+- the new Phase 5 Chi'lly Chat implementation is only partially current-build proved; runtime proof now covers the recovered profile entry into `/chat/[threadId]`, while inbox long-press coverage and the rest of the thread quick-action surface still remain pending
 - the new Phase 6 AI/high-tech scaffold is not yet current-build proved; terminal proof currently covers owner-file verification plus a clean `npm run typecheck`, not runtime UI confirmation
 
 ## What Is Proved In Repo
@@ -159,6 +162,13 @@ A new phased product-alignment pass has begun from that stable baseline, and Pha
 - `app/profile/[userId].tsx` now gives self profile a real owner-mode surface, gives other profiles a channel-home toggle plus avatar quick actions, and routes message / voice / video entry through canonical Chi'lly Chat; `app/chat/[threadId].tsx` now honors `startCall=voice|video` deep links so those quick actions reuse the existing thread-call owner instead of creating a new calling route
 - `app/chat/index.tsx` now surfaces long-press inbox quick actions for direct thread open, profile handoff, and thread-native voice/video launch, while `app/chat/[threadId].tsx` now adds matching header quick actions so profile and call entry stay inside the canonical Chi'lly Chat owners instead of inventing new routes
 - `_lib/posthog.ts` now also exposes `chilly_chat_expanded_v1` and `ai_chat_suggestions_v1`, while `app/chat/[threadId].tsx` now keeps a minimal AI smart-reply suggestion rail behind those flags so the high-tech layer stays additive, provider-safe, and easy to disable remotely
+- `_lib/supabase.ts` and `_lib/session.tsx` now keep native Supabase session refresh active across app foregrounding so the deterministic logged-out -> login -> home proof path stays stable on emulator
+- `_lib/chat.ts` now creates direct Chi'lly Chat thread ids client-side instead of depending on `insert(...).select("id")`, repairs missing direct-thread membership rows when older thread records are incomplete, and then re-reads the canonical thread owner after membership bootstrap
+- `_lib/logger.ts` plus `app/profile/[userId].tsx` now surface normalized runtime error details during Chi'lly Chat launch failures, which turned the prior generic alert into the concrete chat-thread policy diagnosis
+- the auth/chat recovery path now carries a dedicated direct-thread RLS migration chain in repo:
+  - `202604040001_fix_chat_thread_policy_recursion.sql`
+  - `202604050001_relax_chat_thread_insert_policy.sql`
+  - `202604050002_allow_chat_thread_creator_bootstrap_access.sql`
 - `_lib/appConfig.ts` hard-locks the doctrinal product labels
 - `app/admin.tsx` now exposes locked naming as read-only instead of editable runtime branding
 - `supabase/migrations/202603270009_create_chilly_chat_threads.sql` adds:

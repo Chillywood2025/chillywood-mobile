@@ -327,12 +327,12 @@ export default function ProfileScreen() {
         reason: "thread_open_failed",
         targetUserId: userId,
       });
-      reportRuntimeError("profile-open-chilly-chat", error, {
+      const normalizedError = reportRuntimeError("profile-open-chilly-chat", error, {
         targetUserId: userId,
       });
       Alert.alert(
         "Chi'lly Chat",
-        error instanceof Error ? error.message : "Unable to open Chi'lly Chat right now.",
+        normalizedError.message || "Unable to open Chi'lly Chat right now.",
       );
     }
   };

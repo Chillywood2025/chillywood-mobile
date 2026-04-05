@@ -12,6 +12,22 @@ const serializeError = (error: unknown) => {
     };
   }
 
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+    const message = [
+      normalizeText(record.message),
+      normalizeText(record.details),
+      normalizeText(record.hint),
+    ].filter(Boolean).join(" ");
+
+    return {
+      name: normalizeText(record.name) || "Error",
+      message: message || normalizeText(record.code) || "Unknown error",
+      stack: normalizeText(record.stack) || undefined,
+    };
+  }
+
   return {
     name: "Error",
     message: String(error ?? "Unknown error"),

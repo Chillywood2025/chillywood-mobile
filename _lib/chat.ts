@@ -105,6 +105,35 @@ const normalizeCallType = (value: unknown): ChatCallType | undefined => {
   return undefined;
 };
 
+const randomHex = (size: number) =>
+  Array.from({ length: size }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+
+const createChatThreadId = () =>
+  `${randomHex(8)}-${randomHex(4)}-4${randomHex(3)}-${["8", "9", "a", "b"][Math.floor(Math.random() * 4)]}${randomHex(3)}-${randomHex(12)}`;
+
+const buildDirectThreadMemberRows = (
+  threadId: string,
+  currentUserId: string,
+  currentIdentity: Awaited<ReturnType<typeof readCommunicationIdentity>>,
+  currentProfile: Awaited<ReturnType<typeof readUserProfile>> | null,
+  target: ChatTargetIdentity,
+) => [
+  {
+    thread_id: threadId,
+    user_id: currentUserId,
+    display_name: toText(currentIdentity.displayName) || "You",
+    avatar_url: toText(currentIdentity.avatarUrl) || null,
+    tagline: toText(currentIdentity.tagline ?? currentProfile?.tagline) || null,
+  },
+  {
+    thread_id: threadId,
+    user_id: toText(target.userId),
+    display_name: toText(target.displayName) || "Channel",
+    avatar_url: toText(target.avatarUrl) || null,
+    tagline: toText(target.tagline) || null,
+  },
+];
+
 export const buildDirectParticipantPairKey = (a: string, b: string) =>
   [toText(a), toText(b)].filter(Boolean).sort().join("::");
 
@@ -251,25 +280,46 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     .eq("participant_pair_key", participantPairKey)
     .maybeSingle();
 
-  if (!existing.error && existing.data) {
-    const thread = parseChatThread(existing.data as ChatThreadRow, currentUserId);
-    if (thread) return thread;
-  }
-
   const [currentIdentity, currentProfile] = await Promise.all([
     readCommunicationIdentity(),
     readUserProfile().catch(() => null),
   ]);
 
+  if (!existing.error && existing.data) {
+    const thread = parseChatThread(existing.data as ChatThreadRow, currentUserId);
+    if (thread?.currentMember && thread.otherMember) return thread;
+
+    const existingThreadId = toText((existing.data as ChatThreadRow).id);
+    if (existingThreadId) {
+      const repairedMembers = buildDirectThreadMemberRows(
+        existingThreadId,
+        currentUserId,
+        currentIdentity,
+        currentProfile,
+        target,
+      );
+      const repairInsert = await supabase
+        .from(CHAT_THREAD_MEMBERS_TABLE)
+        .upsert(repairedMembers, { onConflict: "thread_id,user_id" });
+
+      if (repairInsert.error) {
+        throw repairInsert.error;
+      }
+
+      const repaired = await getChatThread(existingThreadId);
+      if (repaired) return repaired;
+    }
+  }
+
+  const threadId = createChatThreadId();
   const inserted = await supabase
     .from(CHAT_THREADS_TABLE)
     .insert({
+      id: threadId,
       thread_kind: "direct",
       participant_pair_key: participantPairKey,
       created_by: currentUserId,
-    })
-    .select("id")
-    .single();
+    });
 
   if (inserted.error) {
     const errorCode = toText((inserted.error as { code?: unknown })?.code);
@@ -280,27 +330,13 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     throw inserted.error;
   }
 
-  const threadId = toText((inserted.data as { id?: unknown } | null)?.id);
-  if (!threadId) {
-    throw new Error("Failed to create Chi'lly Chat thread.");
-  }
-
-  const memberRows = [
-    {
-      thread_id: threadId,
-      user_id: currentUserId,
-      display_name: toText(currentIdentity.displayName) || "You",
-      avatar_url: toText(currentIdentity.avatarUrl) || null,
-      tagline: toText(currentIdentity.tagline ?? currentProfile?.tagline) || null,
-    },
-    {
-      thread_id: threadId,
-      user_id: targetUserId,
-      display_name: toText(target.displayName) || "Channel",
-      avatar_url: toText(target.avatarUrl) || null,
-      tagline: toText(target.tagline) || null,
-    },
-  ];
+  const memberRows = buildDirectThreadMemberRows(
+    threadId,
+    currentUserId,
+    currentIdentity,
+    currentProfile,
+    target,
+  );
 
   const membershipInsert = await supabase
     .from(CHAT_THREAD_MEMBERS_TABLE)
