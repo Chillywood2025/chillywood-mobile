@@ -1,5 +1,5 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -57,8 +57,9 @@ export default function ChillyChatThreadScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useSession();
-  const { threadId: threadIdParam } = useLocalSearchParams<{ threadId?: string }>();
+  const { threadId: threadIdParam, startCall: startCallParam } = useLocalSearchParams<{ threadId?: string; startCall?: string }>();
   const threadId = String(Array.isArray(threadIdParam) ? threadIdParam[0] : threadIdParam ?? "").trim();
+  const requestedCallMode = String(Array.isArray(startCallParam) ? startCallParam[0] : startCallParam ?? "").trim().toLowerCase();
 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -68,6 +69,7 @@ export default function ChillyChatThreadScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [callPanelOpen, setCallPanelOpen] = useState(false);
+  const autoStartCallRef = useRef("");
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
@@ -263,6 +265,24 @@ export default function ChillyChatThreadScreen() {
       setCallBusy(false);
     }
   }, [activeCallRoomId, callBusy, threadId]);
+
+  useEffect(() => {
+    const nextMode: ChatCallType | null = requestedCallMode === "voice"
+      ? "voice"
+      : requestedCallMode === "video"
+        ? "video"
+        : null;
+    const requestKey = nextMode ? `${threadId}:${nextMode}` : "";
+
+    if (!nextMode || !threadId || loading || !thread || callBusy || !!activeCallRoomId) {
+      if (!nextMode) autoStartCallRef.current = "";
+      return;
+    }
+
+    if (autoStartCallRef.current === requestKey) return;
+    autoStartCallRef.current = requestKey;
+    void handleStartCall(nextMode);
+  }, [activeCallRoomId, callBusy, handleStartCall, loading, requestedCallMode, thread, threadId]);
 
   const handleJoinOrCloseCall = useCallback(async () => {
     if (!threadId) return;

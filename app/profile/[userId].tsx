@@ -29,6 +29,7 @@ export default function ProfileScreen() {
   const { isActive: hasSupportAccess } = useBetaProgram();
   const [currentUserId, setCurrentUserId] = useState("");
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
+  const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
   const params = useLocalSearchParams<{
     userId?: string;
     displayName?: string;
@@ -91,7 +92,18 @@ export default function ProfileScreen() {
   }, []);
 
   const isSelfProfile = selfParam === "1" || selfParam === "true" || (!!userId && !!currentUserId && userId === currentUserId);
+  const [activeProfileView, setActiveProfileView] = useState<"owner" | "profile" | "channel">(
+    selfParam === "1" || selfParam === "true" ? "owner" : "profile",
+  );
   const roleLabel = profile.role === "creator" ? "Creator" : profile.role === "host" ? "Host" : "Viewer";
+  useEffect(() => {
+    setActiveProfileView((current) => {
+      if (isSelfProfile) {
+        return current === "profile" ? "owner" : current;
+      }
+      return current === "owner" ? "profile" : current;
+    });
+  }, [isSelfProfile]);
   const channelLabel = isSelfProfile
     ? "Your Channel"
     : profile.role === "creator"
@@ -127,6 +139,48 @@ export default function ProfileScreen() {
   const communicationFootnote = isSelfProfile
     ? "Chi'lly Chat opens your native Chi'llywood inbox and direct threads."
     : "";
+  const ownerSections = [
+    {
+      title: "Profile Studio",
+      kicker: "IDENTITY",
+      body: "Edit profile presentation, update channel voice, and keep your public owner identity in one place.",
+      actionLabel: "Edit Profile",
+      actionKind: "edit-profile" as const,
+    },
+    {
+      title: "Channel Scope",
+      kicker: "CHANNEL CONTROLS",
+      body: "Manage channel defaults, room inheritance, and the creator-facing scope already anchored to this profile system.",
+      actionLabel: "Manage Channel",
+      actionKind: "manage-channel" as const,
+    },
+    {
+      title: "Monetization",
+      kicker: "EARNINGS SCOPE",
+      body: "Keep monetization entry points attached to your owner page so future payouts, access products, and creator offers stay native.",
+      actionLabel: "Monetization",
+      actionKind: "monetization" as const,
+    },
+    {
+      title: "Creator Controls",
+      kicker: "PLATFORM SCOPE",
+      body: "Review creator permissions, platform controls, and room policy defaults without leaving your channel home.",
+      actionLabel: "Creator Controls",
+      actionKind: "creator-controls" as const,
+    },
+  ] as const;
+  const profileSections = [
+    {
+      title: "Profile Snapshot",
+      kicker: "ABOUT",
+      body: `${profile.displayName} keeps live presence, rooms, and direct communication inside one Chi'llywood identity instead of splitting them across disconnected surfaces.`,
+    },
+    {
+      title: "Channel Entry",
+      kicker: "NEXT STEP",
+      body: "Open the channel-home view to browse live drops, featured titles, and the creator-facing streaming identity tied to this profile.",
+    },
+  ] as const;
   const contentSections = [
     {
       title: "Live",
@@ -166,6 +220,17 @@ export default function ProfileScreen() {
       return;
     }
     router.push("/channel-settings");
+  };
+  const onPressOwnerScaffold = (surface: "edit-profile" | "monetization" | "creator-controls") => {
+    const label = surface === "edit-profile"
+      ? "Edit Profile"
+      : surface === "monetization"
+        ? "Monetization"
+        : "Creator Controls";
+    Alert.alert(
+      label,
+      `${label} stays anchored to this owner page. The dedicated depth for this control is queued next without splitting profile/channel truth into a second app surface.`,
+    );
   };
   const onPressLive = () => {
     if (hasLiveRouteContext) {
@@ -210,12 +275,13 @@ export default function ProfileScreen() {
 
     Alert.alert("Watch Party", "Open this profile from a room or live session to jump into the linked watch party from here.");
   };
-  const onPressCommunication = async () => {
+  const onPressCommunication = async (entryMode: "message" | "voice" | "video" = "message") => {
     if (isSelfProfile) {
       trackEvent("communication_profile_entry_requested", {
         targetRoute: "/chat",
         entryPath: "profile",
         profileIsSelf: "true",
+        entryMode,
       });
       router.push("/chat");
       return;
@@ -237,6 +303,7 @@ export default function ProfileScreen() {
         entryPath: "profile",
         profileIsSelf: "false",
         targetUserId: userId,
+        entryMode,
       });
 
       const thread = await getOrCreateDirectThread({
@@ -250,6 +317,7 @@ export default function ProfileScreen() {
         pathname: "/chat/[threadId]",
         params: {
           threadId: thread.threadId,
+          ...(entryMode === "voice" || entryMode === "video" ? { startCall: entryMode } : {}),
         },
       });
     } catch (error) {
@@ -271,6 +339,20 @@ export default function ProfileScreen() {
   const onPressBetaSupport = () => {
     router.push(getSupportRoutePath());
   };
+  const quickActions = isSelfProfile
+    ? [
+        { label: "Edit Profile", onPress: () => onPressOwnerScaffold("edit-profile") },
+        { label: "Channel Scope", onPress: onPressManageChannel },
+        { label: "Monetization", onPress: () => onPressOwnerScaffold("monetization") },
+        { label: "Creator Controls", onPress: () => onPressOwnerScaffold("creator-controls") },
+      ]
+    : [
+        { label: "Open Profile", onPress: () => setActiveProfileView("profile") },
+        { label: "Open Channel Home", onPress: () => setActiveProfileView("channel") },
+        { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+        { label: "Voice Call", onPress: () => { void onPressCommunication("voice"); } },
+        { label: "Video Call", onPress: () => { void onPressCommunication("video"); } },
+      ];
 
   return (
     <View
@@ -309,15 +391,23 @@ export default function ProfileScreen() {
             </View>
           </View>
           <View style={styles.avatarWrap}>
-            <View style={styles.avatarCircle}>
-              {profile.avatarUrl ? (
-                <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
-              )}
-            </View>
-            {profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => setAvatarQuickActionsOpen((current) => !current)}
+              onLongPress={() => setAvatarQuickActionsOpen((current) => !current)}
+              delayLongPress={220}
+            >
+              <View style={styles.avatarCircle}>
+                {profile.avatarUrl ? (
+                  <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
+                )}
+              </View>
+              {profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
+            </TouchableOpacity>
           </View>
+          <Text style={styles.avatarHint}>Long-press the avatar for quick actions.</Text>
           <Text style={styles.channelLabel}>{channelLabel}</Text>
           <Text style={styles.username}>{profile.displayName}</Text>
           <Text style={styles.userIdLabel}>{channelHandle}</Text>
@@ -328,10 +418,66 @@ export default function ProfileScreen() {
             </View>
           </View>
           <Text style={styles.channelSupportText}>Channel home for live drops, rooms, and creator presence.</Text>
+          {avatarQuickActionsOpen ? (
+            <View style={styles.quickActionsCard}>
+              <Text style={styles.quickActionsTitle}>{isSelfProfile ? "Owner Quick Actions" : "Profile Quick Actions"}</Text>
+              <View style={styles.quickActionsRow}>
+                {quickActions.map((action) => (
+                  <TouchableOpacity
+                    key={action.label}
+                    style={styles.quickActionChip}
+                    activeOpacity={0.84}
+                    onPress={() => {
+                      setAvatarQuickActionsOpen(false);
+                      action.onPress();
+                    }}
+                  >
+                    <Text style={styles.quickActionChipText}>{action.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : null}
           <View style={[styles.statusPanel, profile.isLive && styles.statusPanelLive]}>
             <Text style={styles.statusPanelKicker}>{profile.isLive ? "LIVE STATUS" : "CHANNEL STATUS"}</Text>
             <Text style={styles.statusPanelTitle}>{liveStatusTitle}</Text>
             <Text style={styles.statusPanelBody}>{liveStatusBody}</Text>
+          </View>
+          <View style={styles.viewSwitchRow}>
+            <TouchableOpacity
+              style={[
+                styles.viewSwitchChip,
+                activeProfileView === (isSelfProfile ? "owner" : "profile") && styles.viewSwitchChipActive,
+              ]}
+              activeOpacity={0.84}
+              onPress={() => setActiveProfileView(isSelfProfile ? "owner" : "profile")}
+            >
+              <Text
+                style={[
+                  styles.viewSwitchChipText,
+                  activeProfileView === (isSelfProfile ? "owner" : "profile") && styles.viewSwitchChipTextActive,
+                ]}
+              >
+                {isSelfProfile ? "Owner" : "Profile"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.viewSwitchChip,
+                activeProfileView === "channel" && styles.viewSwitchChipActive,
+              ]}
+              activeOpacity={0.84}
+              onPress={() => setActiveProfileView("channel")}
+            >
+              <Text
+                style={[
+                  styles.viewSwitchChipText,
+                  activeProfileView === "channel" && styles.viewSwitchChipTextActive,
+                ]}
+              >
+                Channel Home
+              </Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.actionCluster}>
             {showManageChannelAction || canOpenLinkedRoomActions ? (
@@ -371,7 +517,7 @@ export default function ProfileScreen() {
                     style={[styles.actionChip, styles.actionChipConnected]}
                     activeOpacity={0.82}
                     onPress={() => {
-                      void onPressCommunication();
+                      void onPressCommunication("message");
                     }}
                   >
                     <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
@@ -408,7 +554,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.sectionStack}>
-          {contentSections.map((section) => (
+          {activeProfileView === "channel" ? contentSections.map((section) => (
             <View
               key={section.title}
               style={[
@@ -420,7 +566,34 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>{section.title}</Text>
               <Text style={styles.sectionBody}>{section.body}</Text>
             </View>
-          ))}
+          )) : null}
+          {activeProfileView === "owner" ? ownerSections.map((section) => (
+            <View key={section.title} style={styles.sectionCard}>
+              <Text style={styles.sectionKicker}>{section.kicker}</Text>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Text style={styles.sectionBody}>{section.body}</Text>
+              <TouchableOpacity
+                style={[styles.actionChip, styles.ownerActionChip]}
+                activeOpacity={0.84}
+                onPress={() => {
+                  if (section.actionKind === "manage-channel") {
+                    onPressManageChannel();
+                    return;
+                  }
+                  onPressOwnerScaffold(section.actionKind);
+                }}
+              >
+                <Text style={[styles.actionChipText, styles.ownerActionChipText]}>{section.actionLabel}</Text>
+              </TouchableOpacity>
+            </View>
+          )) : null}
+          {activeProfileView === "profile" ? profileSections.map((section) => (
+            <View key={section.title} style={styles.sectionCard}>
+              <Text style={styles.sectionKicker}>{section.kicker}</Text>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Text style={styles.sectionBody}>{section.body}</Text>
+            </View>
+          )) : null}
         </View>
       </ScrollView>
     </View>
@@ -504,6 +677,7 @@ const styles = StyleSheet.create({
   },
   avatarImage: { width: "100%", height: "100%" },
   avatarInitial: { color: "#fff", fontSize: 38, fontWeight: "900" },
+  avatarHint: { color: "#7C879C", fontSize: 11, fontWeight: "700" },
   channelLabel: { color: "#A7B2C9", fontSize: 12, fontWeight: "800", letterSpacing: 0.8 },
   username: { color: "#fff", fontSize: 29, fontWeight: "900", letterSpacing: 0.2 },
   userIdLabel: { color: "#A0A0A0", fontSize: 13, fontWeight: "700" },
@@ -541,6 +715,43 @@ const styles = StyleSheet.create({
   statusPanelKicker: { color: "#7A859A", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   statusPanelTitle: { color: "#F3F5FA", fontSize: 16, fontWeight: "900" },
   statusPanelBody: { color: "#9CA5B8", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  quickActionsCard: {
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.2)",
+    backgroundColor: "rgba(24,34,58,0.88)",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 8,
+  },
+  quickActionsTitle: { color: "#F2F5FD", fontSize: 14, fontWeight: "900" },
+  quickActionsRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10 },
+  quickActionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.24)",
+    backgroundColor: "rgba(115,134,255,0.12)",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  quickActionChipText: { color: "#E0E7FF", fontSize: 12, fontWeight: "800" },
+  viewSwitchRow: { flexDirection: "row", gap: 10, width: "100%" },
+  viewSwitchChip: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingVertical: 9,
+    alignItems: "center",
+  },
+  viewSwitchChipActive: {
+    borderColor: "rgba(115,134,255,0.28)",
+    backgroundColor: "rgba(115,134,255,0.14)",
+  },
+  viewSwitchChipText: { color: "#B5BED1", fontSize: 12.5, fontWeight: "800" },
+  viewSwitchChipTextActive: { color: "#E4E9FF" },
   actionCluster: { width: "100%", gap: 10, marginTop: 6 },
   primaryActionRow: { flexDirection: "row", gap: 10, width: "100%" },
   secondaryActionRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10 },
@@ -602,6 +813,11 @@ const styles = StyleSheet.create({
   actionChipTextConnected: { color: "#DDE4FF" },
   actionChipTextPlaceholder: { color: "#97A1B5" },
   actionChipTextMuted: { color: "#9AA3B7" },
+  ownerActionChip: {
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  ownerActionChipText: { color: "#DDE4FF" },
   actionFootnote: { color: "#6D7486", fontSize: 11.5, lineHeight: 16, fontWeight: "600", textAlign: "center" },
 
   sectionStack: { gap: 12 },

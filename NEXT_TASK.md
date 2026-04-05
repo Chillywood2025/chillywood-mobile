@@ -1,13 +1,13 @@
 # NEXT TASK
 
 ## Exact Next Task
-Stage 4 remains completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, keep the restored repo-truth/control files and Flow 09 proof file intact, current-build prove the new Phase 1 Home / Discovery, Phase 2 Player / Party, and Phase 3 Live implementations, then continue into Phase 4 Profile / Channel with phase-pure commits. PostHog root flag delivery is still required before any room-flow gating or higher-risk AI/high-tech slice.
+Stage 4 remains completed/proved on the current build and must stay recorded that way: local/current-build Flow 08 is proved, the corrected Party / Live split is proved, local Flow 09 is proved, and the final cloud rerun `019d4809-ba44-75d1-a3bb-39bb8c16663c` finished green on commit `14b45f5bd0e00ce73a8e5c9a6b3bbbb347c14e91` with all cloud Maestro flows passing. Preserve that final truth accurately, keep the restored repo-truth/control files and Flow 09 proof file intact, current-build prove the new Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, and Phase 4 Profile / Channel implementations, then continue into Phase 5 Chi'lly Chat with phase-pure commits. PostHog root flag delivery is still required before any room-flow gating or higher-risk AI/high-tech slice.
 Keep the restored repo-truth files and the Flow 09 proof file intact while the new phased product-alignment pass proceeds from that stable baseline.
 
 ## Current Plan
 1. Preserve Stage 4 as completed/proved on the current build
-2. Current-build prove Phases 1, 2, and 3 from the now-green baseline
-3. Continue into Phase 4 Profile / Channel with phase-pure validation and commits
+2. Current-build prove Phases 1, 2, 3, and 4 from the now-green baseline
+3. Continue into Phase 5 Chi'lly Chat with phase-pure validation and commits
 4. No final human verification pass
 5. Do not reopen Stage 4 unless new current-build proof truly invalidates it
 
@@ -48,9 +48,13 @@ Keep the restored repo-truth files and the Flow 09 proof file intact while the n
   - `app/watch-party/live-stage/[partyId].tsx` no longer exposes a generic `/communication` destination in Live Stage
   - Live First keeps comments/reactions inside the canonical live surface with no call-room dependency
   - hybrid `Live Watch-Party` now keeps the host visible in the participant strip while preserving local host-first / hide / reset controls
-- then move into Phase 4 Profile / Channel:
-  - preserve the top profile button -> own profile behavior
-  - deepen own-profile owner controls and other-user channel-home behavior without disturbing Chi'lly Chat routing
+- current-build prove the new Profile / Channel slice on the real owners:
+  - `app/profile/[userId].tsx` now gives self profile an owner-mode surface and other profiles a real channel-home toggle
+  - long-press avatar quick actions now expose profile/channel/message/voice/video entry in the canonical profile owner
+  - `app/chat/[threadId].tsx` now reuses the existing thread-call owner for profile-launched voice/video quick actions
+- then move into Phase 5 Chi'lly Chat:
+  - preserve the restored messenger-first routes
+  - deepen inbox/thread UX, header actions, and avatar/profile quick actions without collapsing back into room-only behavior
 - prove remote PostHog flag delivery at the root for:
   - `live_waiting_room_enabled`
   - `party_waiting_room_enabled`
@@ -65,7 +69,7 @@ Keep the restored repo-truth files and the Flow 09 proof file intact while the n
 ## Scope
 This next pass should:
 - preserve the now-green Stage 4 baseline exactly as proved on the current build
-- prove the newly landed Phase 1 Home / Discovery, Phase 2 Player / Party, and Phase 3 Live implementations on the current build
+- prove the newly landed Phase 1 Home / Discovery, Phase 2 Player / Party, Phase 3 Live, and Phase 4 Profile / Channel implementations on the current build
 - continue the requested product-alignment work in phase order after each phase has a task-pure diff, validation, and checkpoint update
 - keep proof bookkeeping strict:
   - nothing counts as passed unless current terminal/workflow output proves it on the current build
