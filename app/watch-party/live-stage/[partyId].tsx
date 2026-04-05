@@ -26,10 +26,8 @@ import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveBrandingConfig,
-    resolveFeatureConfig,
 } from "../../../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
-import { getLinkedCommunicationRoom, getOrCreateLinkedCommunicationRoom } from "../../../_lib/communication";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
 import { submitSafetyReport } from "../../../_lib/moderation";
 import { useSession } from "../../../_lib/session";
@@ -140,8 +138,7 @@ export default function WatchPartyLiveStageScreen() {
   const [participantStateById, setParticipantStateById] = useState<Record<string, SharedParticipantLocalState>>({});
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
-  const [roomCode, setRoomCode] = useState("");
-  const [communicationBusy, setCommunicationBusy] = useState(false);
+  const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -162,7 +159,6 @@ export default function WatchPartyLiveStageScreen() {
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stripOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
-  const features = resolveFeatureConfig(appConfig);
 
   useEffect(() => {
     let active = true;
@@ -184,7 +180,6 @@ export default function WatchPartyLiveStageScreen() {
     setRoom(snapshot.room);
     membershipMapRef.current = Object.fromEntries(snapshot.memberships.map((membership) => [membership.userId, membership]));
     setIsHost(String(snapshot.room.hostUserId) === String(trackedUserId));
-    setRoomCode(String(snapshot.room.roomCode ?? "").trim().toUpperCase());
 
     const nextParticipantStateById: Record<string, SharedParticipantLocalState> = {};
     getActivePartyMemberships(snapshot.memberships).forEach((membership) => {
@@ -571,22 +566,85 @@ export default function WatchPartyLiveStageScreen() {
     () => prioritizeParticipantStripOrder(displayParticipants, featuredParticipantById, isSpeakingById),
     [displayParticipants, featuredParticipantById, isSpeakingById],
   );
+  const hostParticipant = useMemo(
+    () => displayParticipants.find((participant) => participant.role === "host") ?? null,
+    [displayParticipants],
+  );
+  const visibleStripParticipants = useMemo(
+    () => stripParticipants.filter((participant) => !hiddenParticipantIds[participant.userId]),
+    [hiddenParticipantIds, stripParticipants],
+  );
   const currentUserParticipantId = trackedUserId;
   const selectedParticipant = useMemo(
-    () => stripParticipants.find((participant) => participant.userId === selectedParticipantId) ?? null,
-    [stripParticipants, selectedParticipantId],
+    () => visibleStripParticipants.find((participant) => participant.userId === selectedParticipantId) ?? null,
+    [visibleStripParticipants, selectedParticipantId],
   );
   const { selectedParticipantUserId, selectedParticipantState, canShowProfileAction } = resolveSelectedParticipantContext({
     selectedParticipant,
     participantStateById,
     currentUserId: currentUserParticipantId,
   });
+  const tailoredFocusParticipant = useMemo(
+    () => visibleStripParticipants.find((participant) => participant.userId === activeParticipantId)
+      ?? hostParticipant
+      ?? visibleStripParticipants[0]
+      ?? null,
+    [activeParticipantId, hostParticipant, visibleStripParticipants],
+  );
+  const hiddenParticipantCount = useMemo(
+    () => Object.values(hiddenParticipantIds).filter(Boolean).length,
+    [hiddenParticipantIds],
+  );
   const closeParticipantModal = useCallback(() => {
     setSelectedParticipantId("");
   }, []);
+  const featureParticipantFirst = useCallback((participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    setFeaturedParticipantById({ [nextParticipantId]: true });
+    setActiveParticipantId(nextParticipantId);
+    setActiveSpeakerUserId(nextParticipantId);
+  }, []);
+  const hideParticipantLocally = useCallback((participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    const participant = stripParticipants.find((entry) => entry.userId === nextParticipantId);
+    if (!participant || participant.userId === currentUserParticipantId || participant.role === "host") return;
+    setHiddenParticipantIds((prev) => ({ ...prev, [nextParticipantId]: true }));
+    setFeaturedParticipantById((prev) => {
+      if (!prev[nextParticipantId]) return prev;
+      const next = { ...prev };
+      delete next[nextParticipantId];
+      return next;
+    });
+    setParticipantPresentationById((prev) => {
+      if (!prev[nextParticipantId]) return prev;
+      const next = { ...prev };
+      delete next[nextParticipantId];
+      return next;
+    });
+    if (activeParticipantId === nextParticipantId) {
+      setActiveParticipantId(hostParticipant?.userId ?? "");
+    }
+    if (activeSpeakerUserId === nextParticipantId) {
+      setActiveSpeakerUserId(hostParticipant?.userId ?? "");
+    }
+    setSelectedParticipantId((current) => (current === nextParticipantId ? "" : current));
+  }, [activeParticipantId, activeSpeakerUserId, currentUserParticipantId, hostParticipant?.userId, stripParticipants]);
+  const showEveryoneLocally = useCallback(() => {
+    setHiddenParticipantIds({});
+  }, []);
+  const resetTailoredStageView = useCallback(() => {
+    setHiddenParticipantIds({});
+    setFeaturedParticipantById({});
+    setParticipantPresentationById({});
+    setActiveParticipantId(hostParticipant?.userId ?? "");
+    setActiveSpeakerUserId(hostParticipant?.userId ?? "");
+    setSelectedParticipantId("");
+  }, [hostParticipant?.userId]);
 
   useEffect(() => {
-    const nextOrder = stripParticipants.map((participant) => participant.userId).join("|");
+    const nextOrder = visibleStripParticipants.map((participant) => participant.userId).join("|");
     if (!nextOrder) return;
     if (stripOrderRef.current && stripOrderRef.current !== nextOrder) {
       LayoutAnimation.configureNext({
@@ -595,29 +653,27 @@ export default function WatchPartyLiveStageScreen() {
       });
     }
     stripOrderRef.current = nextOrder;
-  }, [stripParticipants]);
+  }, [visibleStripParticipants]);
 
   useEffect(() => {
-    if (displayParticipants.length === 0) {
+    if (visibleStripParticipants.length === 0) {
       setActiveSpeakerUserId("");
       return;
     }
-    if (!activeSpeakerUserId || !displayParticipants.some((p) => p.userId === activeSpeakerUserId)) {
-      const host = displayParticipants.find((p) => p.role === "host");
-      setActiveSpeakerUserId(host?.userId ?? displayParticipants[0]?.userId ?? "");
+    if (!activeSpeakerUserId || !visibleStripParticipants.some((p) => p.userId === activeSpeakerUserId)) {
+      setActiveSpeakerUserId(hostParticipant?.userId ?? visibleStripParticipants[0]?.userId ?? "");
     }
-  }, [displayParticipants, activeSpeakerUserId]);
+  }, [activeSpeakerUserId, hostParticipant, visibleStripParticipants]);
 
   useEffect(() => {
-    if (displayParticipants.length === 0) {
+    if (visibleStripParticipants.length === 0) {
       setActiveParticipantId("");
       return;
     }
-    if (!activeParticipantId || !displayParticipants.some((p) => p.userId === activeParticipantId)) {
-      const host = displayParticipants.find((p) => p.role === "host");
-      setActiveParticipantId(host?.userId ?? displayParticipants[0]?.userId ?? "");
+    if (!activeParticipantId || !visibleStripParticipants.some((p) => p.userId === activeParticipantId)) {
+      setActiveParticipantId(hostParticipant?.userId ?? visibleStripParticipants[0]?.userId ?? "");
     }
-  }, [displayParticipants, activeParticipantId]);
+  }, [activeParticipantId, hostParticipant, visibleStripParticipants]);
 
   useEffect(() => {
     if (displayParticipants.length === 0) return;
@@ -695,7 +751,7 @@ export default function WatchPartyLiveStageScreen() {
   }, [displayParticipants, myUserId, pushStageMessage]);
 
   const emitFloatingReaction = useCallback((emoji: string) => {
-    const dominantCandidate = stripParticipants.find((participant) => {
+    const dominantCandidate = visibleStripParticipants.find((participant) => {
       const participantState = participantStateById[participant.userId];
       const isMuted = participantState?.isMuted ?? !!participant.isMuted;
       const role = participantState?.role ?? (participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener");
@@ -703,9 +759,9 @@ export default function WatchPartyLiveStageScreen() {
       const isSpeakingNow = !isMuted && !!(isSpeakingById[participant.userId] || (isSpeakerRole && (!!participant.isSpeaking || participant.userId === activeSpeakerUserId)));
       return isSpeakingNow;
     });
-    const dominantIndex = dominantCandidate ? stripParticipants.findIndex((participant) => participant.userId === dominantCandidate.userId) : -1;
-    const dominantBiasX = dominantIndex >= 0 && stripParticipants.length > 1
-      ? ((dominantIndex / (stripParticipants.length - 1)) - 0.5) * 52
+    const dominantIndex = dominantCandidate ? visibleStripParticipants.findIndex((participant) => participant.userId === dominantCandidate.userId) : -1;
+    const dominantBiasX = dominantIndex >= 0 && visibleStripParticipants.length > 1
+      ? ((dominantIndex / (visibleStripParticipants.length - 1)) - 0.5) * 52
       : 0;
     const id = `reaction-${Date.now()}-${reactionCounterRef.current++}`;
     const originX = Math.round(dominantBiasX);
@@ -727,7 +783,7 @@ export default function WatchPartyLiveStageScreen() {
     ]).start(() => {
       setFloatingReactions((prev) => prev.filter((reaction) => reaction.id !== id));
     });
-  }, [stripParticipants, participantStateById, isSpeakingById, activeSpeakerUserId]);
+  }, [visibleStripParticipants, participantStateById, isSpeakingById, activeSpeakerUserId]);
 
   const triggerReactionBurst = useCallback((emoji: string) => {
     Animated.sequence([
@@ -746,68 +802,6 @@ export default function WatchPartyLiveStageScreen() {
     triggerReactionBurst(emoji);
     setRecentReactionEmojis((prev) => pushRecentReaction(prev, emoji));
   }, [triggerReactionBurst]);
-
-  const onOpenCommunicationRoom = useCallback(async () => {
-    if (!features.communicationEnabled) {
-      Alert.alert("Communication unavailable", "Communication entry is currently hidden in app configuration.");
-      return;
-    }
-    const linkedPartyId = String(partyId ?? "").trim();
-    if (!linkedPartyId) {
-      Alert.alert("Communication unavailable", "This live stage is missing the room identity needed to open communication.");
-      return;
-    }
-
-    setCommunicationBusy(true);
-
-    try {
-      const result = isHost
-        ? await getOrCreateLinkedCommunicationRoom({
-            partyId: linkedPartyId,
-            roomCode,
-            roomMode: stageMode,
-            hostUserId: myUserId || undefined,
-          })
-        : await getLinkedCommunicationRoom(linkedPartyId);
-
-      if (!result) {
-        Alert.alert(
-          "Communication room not live yet",
-          isHost
-            ? "Unable to open the linked communication room right now."
-            : "The host has not opened the linked communication room yet.",
-        );
-        return;
-      }
-
-      if ("error" in result) {
-        Alert.alert("Communication room unavailable", result.error.message);
-        return;
-      }
-
-      router.push({
-        pathname: "/communication/[roomId]",
-        params: {
-          roomId: result.roomId,
-          cameraOn: "1",
-          micOn: "1",
-          returnTo: "live-stage",
-          returnPartyId: linkedPartyId,
-          returnMode: stageMode,
-          ...(source ? { returnSource: source } : {}),
-        },
-      });
-    } catch {
-      Alert.alert(
-        "Communication room unavailable",
-        isHost
-          ? "Unable to open the linked communication room right now."
-          : "Unable to join the linked communication room right now.",
-      );
-    } finally {
-      setCommunicationBusy(false);
-    }
-  }, [features.communicationEnabled, isHost, myUserId, partyId, roomCode, router, source, stageMode]);
 
   const emitParticipantUpdate = useCallback(async (participantId: string, changes: Partial<SharedParticipantLocalState>) => {
     if (!partyId || !participantId || !isHost) return;
@@ -986,10 +980,10 @@ export default function WatchPartyLiveStageScreen() {
   const isLiveFirstMode = stageMode === "live";
   const lowerCommunityParticipants = useMemo(() => {
     if (isLiveFirstMode) {
-      return stripParticipants.filter((participant) => participant.role !== "host");
+      return visibleStripParticipants.filter((participant) => participant.role !== "host");
     }
-    return stripParticipants.filter((participant) => participant.userId !== currentUserParticipantId && participant.role !== "host");
-  }, [isLiveFirstMode, stripParticipants, currentUserParticipantId]);
+    return visibleStripParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
+  }, [isLiveFirstMode, visibleStripParticipants, currentUserParticipantId]);
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
@@ -1121,9 +1115,9 @@ export default function WatchPartyLiveStageScreen() {
           <View pointerEvents="none" style={styles.stageHeroOverlay}>
             <View style={styles.stageHeroTagRow}>
               <View style={styles.stageHeroLiveDot} />
-              <Text style={styles.stageHeroTagText}>YOUR LIVE FEED</Text>
-            </View>
+            <Text style={styles.stageHeroTagText}>{isLiveFirstMode ? "LIVE FIRST" : "LIVE WATCH-PARTY"}</Text>
           </View>
+        </View>
           <View pointerEvents="none" style={styles.floatingReactionsLayer}>
             {floatingReactions.map((reaction) => (
               <Animated.Text
@@ -1169,6 +1163,91 @@ export default function WatchPartyLiveStageScreen() {
           rootStyle={[styles.liveStageLowerDock, { marginBottom: liveDockBottomInset }]}
           participantStrip={(
             <View style={styles.stageParticipantStripWrap}>
+              <View style={styles.stageTailoredCard}>
+                <Text style={styles.stageTailoredKicker}>{isLiveFirstMode ? "LIVE FIRST FOCUS" : "TAILORED LIVE WATCH-PARTY"}</Text>
+                <Text style={styles.stageTailoredTitle}>
+                  {isLiveFirstMode ? "Keep the live room focused" : "Keep the host and community clear"}
+                </Text>
+                <Text style={styles.stageTailoredBody}>
+                  {hostParticipant
+                    ? `${hostParticipant.userId === currentUserParticipantId ? "You are" : `${hostParticipant.displayName} is`} hosting. Use local host-first and hide controls here without opening a separate communication room.`
+                    : "Use local host-first and hide controls here without opening a separate communication room."}
+                </Text>
+                <View style={styles.stageTailoredMetaRow}>
+                  <View style={styles.stageTailoredMetaPill}>
+                    <Text style={styles.stageTailoredMetaText}>
+                      Host: {hostParticipant ? (hostParticipant.userId === currentUserParticipantId ? "You" : hostParticipant.displayName) : "Syncing..."}
+                    </Text>
+                  </View>
+                  <View style={styles.stageTailoredMetaPill}>
+                    <Text style={styles.stageTailoredMetaText}>
+                      Focus: {tailoredFocusParticipant ? (tailoredFocusParticipant.userId === currentUserParticipantId ? "You" : tailoredFocusParticipant.displayName) : "Host"}
+                    </Text>
+                  </View>
+                  {hiddenParticipantCount > 0 ? (
+                    <View style={styles.stageTailoredMetaPill}>
+                      <Text style={styles.stageTailoredMetaText}>Hidden locally: {hiddenParticipantCount}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.stageTailoredActions}>
+                  <TouchableOpacity
+                    style={styles.stageTailoredActionButton}
+                    activeOpacity={0.86}
+                    onPress={() => {
+                      if (!hostParticipant?.userId) return;
+                      featureParticipantFirst(hostParticipant.userId);
+                    }}
+                    disabled={!hostParticipant?.userId}
+                  >
+                    <Text style={styles.stageTailoredActionText}>See host first</Text>
+                  </TouchableOpacity>
+                  {tailoredFocusParticipant && tailoredFocusParticipant.userId !== hostParticipant?.userId ? (
+                    <TouchableOpacity
+                      style={styles.stageTailoredActionButton}
+                      activeOpacity={0.86}
+                      onPress={() => {
+                        featureParticipantFirst(tailoredFocusParticipant.userId);
+                      }}
+                    >
+                      <Text style={styles.stageTailoredActionText}>
+                        See {tailoredFocusParticipant.userId === currentUserParticipantId ? "yourself" : tailoredFocusParticipant.displayName} first
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {tailoredFocusParticipant
+                    && tailoredFocusParticipant.userId !== currentUserParticipantId
+                    && tailoredFocusParticipant.role !== "host" ? (
+                    <TouchableOpacity
+                      style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
+                      activeOpacity={0.86}
+                      onPress={() => {
+                        hideParticipantLocally(tailoredFocusParticipant.userId);
+                      }}
+                    >
+                      <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>
+                        Hide {tailoredFocusParticipant.displayName}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {hiddenParticipantCount > 0 ? (
+                    <TouchableOpacity
+                      style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
+                      activeOpacity={0.86}
+                      onPress={showEveryoneLocally}
+                    >
+                      <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>Show everyone</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity
+                    style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
+                    activeOpacity={0.86}
+                    onPress={resetTailoredStageView}
+                  >
+                    <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>Reset layout</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
               <View style={styles.stageCommunityHeader}>
                 <View style={styles.stageCommunityHeaderLeft}>
                   <View style={styles.stageCommunityDot} />
@@ -1414,20 +1493,6 @@ export default function WatchPartyLiveStageScreen() {
             labelStyle: commentsOpen ? styles.stageFooterActionActiveLabel : undefined,
           }}
           trailingActions={[
-            ...(features.communicationEnabled ? [{
-              id: "communication",
-              icon: "📹",
-              label: "Call",
-              activeOpacity: 0.82,
-              disabled: communicationBusy,
-              onPress: () => {
-                setCommentsOpen(false);
-                setReactionPickerOpen(false);
-                void onOpenCommunicationRoom();
-              },
-              buttonStyle: communicationBusy ? styles.stageFooterActionActiveBtn : undefined,
-              labelStyle: communicationBusy ? styles.stageFooterActionActiveLabel : undefined,
-            }] : []),
             {
               id: "react",
               icon: "✨",
@@ -1795,6 +1860,77 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.26,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 4 },
+  },
+  stageTailoredCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(154,182,246,0.22)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+    marginBottom: 10,
+  },
+  stageTailoredKicker: {
+    color: "#89A6DF",
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  stageTailoredTitle: {
+    color: "#F3F6FD",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  stageTailoredBody: {
+    color: "#B4C1DC",
+    fontSize: 11.5,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  stageTailoredMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  stageTailoredMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(7,12,22,0.7)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  stageTailoredMetaText: {
+    color: "#E5ECFA",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  stageTailoredActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  stageTailoredActionButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(138,178,255,0.34)",
+    backgroundColor: "rgba(24,42,76,0.84)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    alignItems: "center",
+  },
+  stageTailoredActionButtonGhost: {
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  stageTailoredActionText: {
+    color: "#E7EEFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  stageTailoredActionTextGhost: {
+    color: "#DCE4F5",
   },
   stageCommunityHeader: {
     flexDirection: "row",
