@@ -92,6 +92,12 @@ These labels are locked and are not runtime-branding experiments.
 
 If duplicate files or shared constants exist, prove which active surface owns the label before editing.
 
+## Branded Background Rule
+- `assets/images/chillywood-branded-background.png` is the exact source-of-truth Chi'llywood branded-background asset for the current nighttime city direction
+- `assets/images/chicago-skyline.jpg` remains the shared runtime owner path that active branded shells and skyline-style fallback posters currently import, and it should stay visually aligned with the source-of-truth asset
+- active branded shells such as login, support, admin, and channel settings should converge on that shared runtime asset path instead of drifting to unrelated imagery
+- room/content owners such as Party Room, Live Room / Live Stage, Player, Profile / Channel, Home rails, Explore, and Chi'lly Chat should keep their own room- or content-specific background treatments unless those owners are intentionally updated together
+
 ## Live Stage Toggle Rule
 `Live First / Live Watch-Party` is in-screen Live Room state only.
 
