@@ -39,7 +39,6 @@ import {
 import { reportRuntimeError } from "../../_lib/logger";
 import {
   getMonetizationAccessSheetPresentation,
-  purchaseBlockedAccess,
 } from "../../_lib/monetization";
 import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
@@ -70,7 +69,6 @@ export default function CommunicationLobbyScreen() {
   const [previewStreamURL, setPreviewStreamURL] = useState("");
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
-  const [accessSheetBusy, setAccessSheetBusy] = useState(false);
   const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
   const [pendingJoinRoom, setPendingJoinRoom] = useState<CommunicationRoomState | null>(null);
   const [pendingJoinAccess, setPendingJoinAccess] = useState<RoomAccessDecision | null>(null);
@@ -315,60 +313,91 @@ export default function CommunicationLobbyScreen() {
     await evaluateJoinAccess(room);
   };
 
-  const onResolveJoinAccess = async () => {
-    if (!pendingJoinRoom || !pendingJoinAccess || !accessSheetReason) return;
+  const onResolveJoinAccess = async (action: "purchase" | "restore") => {
+    if (!pendingJoinRoom || !pendingJoinAccess || !accessSheetReason) {
+      return {
+        message: "Unable to confirm access for that room right now.",
+        tone: "error" as const,
+      };
+    }
 
-    setAccessSheetBusy(true);
     setError(null);
 
     try {
       const accessKey = String(pendingJoinRoom.linkedPartyId ?? pendingJoinRoom.roomId ?? "").trim();
       if (!accessKey) {
-        setError("That room is missing the access key needed to continue.");
-        return;
+        const message = "That room is missing the access key needed to continue.";
+        setError(message);
+        return {
+          message,
+          tone: "error" as const,
+        };
       }
-
-      const purchase = await purchaseBlockedAccess({ gate: pendingJoinAccess });
-      if (!purchase.ok) {
-        trackEvent("monetization_unlock_failure", {
-          surface: "communication-lobby",
-          reason: accessSheetReason,
-        });
-        setError(purchase.message);
-        return;
-      }
-
-      trackEvent("monetization_unlock_success", {
-        surface: "communication-lobby",
-        reason: accessSheetReason,
-      });
 
       const latestRoom = await getCommunicationRoomByCode(pendingJoinRoom.roomCode).catch(() => null);
       const roomToUse = latestRoom ?? pendingJoinRoom;
       const access = await evaluateCommunicationRoomAccess({ room: roomToUse }).catch(() => null);
 
       if (access?.canJoin) {
+        trackEvent("monetization_unlock_success", {
+          action,
+          surface: "communication-lobby",
+          reason: accessSheetReason,
+        });
         setPendingJoinRoom(null);
         setPendingJoinAccess(null);
         setAccessSheetReason(null);
         setAccessSheetVisible(false);
+        setError(null);
         openRoom(roomToUse.roomId);
-        return;
+        return {
+          message: action === "restore" ? "Purchases restored. Opening communication room…" : "Access unlocked. Opening communication room…",
+          tone: "success" as const,
+        };
       }
 
       if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
         setPendingJoinAccess(access);
         setAccessSheetReason(access.reason);
-      } else {
-        setError("That communication room still isn't available for your current access level.");
+        const message = access.monetization.issues[0] ?? "That communication room still isn't available for your current access level.";
+        trackEvent("monetization_unlock_failure", {
+          action,
+          surface: "communication-lobby",
+          reason: access.reason,
+        });
+        setError(message);
+        return {
+          message,
+          tone: "error" as const,
+        };
       }
-    } catch (error) {
-      reportRuntimeError("communication-lobby-unlock", error, {
+
+      const message = access?.reason === "room_locked"
+        ? "That communication room is locked right now."
+        : access?.reason === "removed"
+          ? "You no longer have access to that communication room."
+          : "That communication room still isn't available for your current access level.";
+      trackEvent("monetization_unlock_failure", {
+        action,
+        surface: "communication-lobby",
         reason: accessSheetReason,
       });
-      setError("Unable to confirm access for that room right now.");
-    } finally {
-      setAccessSheetBusy(false);
+      setError(message);
+      return {
+        message,
+        tone: "error" as const,
+      };
+    } catch (error) {
+      reportRuntimeError("communication-lobby-unlock", error, {
+        action,
+        reason: accessSheetReason,
+      });
+      const message = "Unable to confirm access for that room right now.";
+      setError(message);
+      return {
+        message,
+        tone: "error" as const,
+      };
     }
   };
 
@@ -547,6 +576,7 @@ export default function CommunicationLobbyScreen() {
         <AccessSheet
           visible={accessSheetVisible}
           reason={accessSheetReason}
+          gate={pendingJoinAccess}
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
@@ -574,9 +604,29 @@ export default function CommunicationLobbyScreen() {
             premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
             premiumUpsellBody: monetizationConfig.premiumUpsellBody,
           }).actionLabel : undefined}
-          busy={accessSheetBusy}
-          onConfirm={() => {
-            void onResolveJoinAccess();
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "purchase",
+                surface: "communication-lobby",
+                reason: accessSheetReason ?? "unknown",
+              });
+              setError(result.message);
+              return;
+            }
+            return onResolveJoinAccess("purchase");
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "restore",
+                surface: "communication-lobby",
+                reason: accessSheetReason ?? "unknown",
+              });
+              setError(result.message);
+              return;
+            }
+            return onResolveJoinAccess("restore");
           }}
           onClose={() => setAccessSheetVisible(false)}
         />

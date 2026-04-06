@@ -26,7 +26,6 @@ import { titles as localTitles } from "../../_data/titles";
 import { reportRuntimeError } from "../../_lib/logger";
 import {
     getMonetizationAccessSheetPresentation,
-    purchaseBlockedAccess,
 } from "../../_lib/monetization";
 import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
@@ -134,7 +133,6 @@ export default function WatchPartyIndexScreen() {
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [configReady, setConfigReady] = useState(false);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
-  const [accessSheetBusy, setAccessSheetBusy] = useState(false);
   const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
   const [pendingAccessPreview, setPendingAccessPreview] = useState<RoomPreview | null>(null);
   const [pendingAccessDecision, setPendingAccessDecision] = useState<RoomAccessDecision | null>(null);
@@ -490,35 +488,26 @@ export default function WatchPartyIndexScreen() {
     await attemptJoinRoom(preview);
   };
 
-  const onResolveJoinAccess = useCallback(async () => {
-    if (!pendingAccessPreview || !pendingAccessDecision || !accessSheetReason) return;
+  const onResolveJoinAccess = useCallback(async (action: "purchase" | "restore") => {
+    if (!pendingAccessPreview || !pendingAccessDecision || !accessSheetReason) {
+      return {
+        message: "Unable to confirm access for this room right now.",
+        tone: "error" as const,
+      };
+    }
 
-    setAccessSheetBusy(true);
     setJoinError(null);
 
     try {
       const accessKey = String(pendingAccessPreview.room.partyId ?? "").trim();
       if (!accessKey) {
-        setJoinError("This room is missing the access key needed to continue.");
-        return;
+        const message = "This room is missing the access key needed to continue.";
+        setJoinError(message);
+        return {
+          message,
+          tone: "error" as const,
+        };
       }
-
-      const purchase = await purchaseBlockedAccess({ gate: pendingAccessDecision });
-      if (!purchase.ok) {
-        trackEvent("monetization_unlock_failure", {
-          surface: "watch-party-lobby",
-          reason: accessSheetReason,
-          roomId: accessKey,
-        });
-        setJoinError(purchase.message);
-        return;
-      }
-
-      trackEvent("monetization_unlock_success", {
-        surface: "watch-party-lobby",
-        reason: accessSheetReason,
-        roomId: accessKey,
-      });
 
       const latestRoom = await getPartyRoom(accessKey).catch(() => null);
       const userId = await getSafePartyUserId().catch(() => "");
@@ -530,27 +519,68 @@ export default function WatchPartyIndexScreen() {
       }).catch(() => null);
 
       if (access?.canJoin) {
+        trackEvent("monetization_unlock_success", {
+          action,
+          surface: "watch-party-lobby",
+          reason: accessSheetReason,
+          roomId: accessKey,
+        });
         setAccessSheetVisible(false);
         setAccessSheetReason(null);
         setPendingAccessPreview(null);
         setPendingAccessDecision(null);
+        setJoinError(null);
         navigateToPreviewRoom(refreshedPreview);
-        return;
+        return {
+          message: action === "restore" ? "Purchases restored. Joining room…" : "Access unlocked. Joining room…",
+          tone: "success" as const,
+        };
       }
 
       if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
         setPendingAccessDecision(access);
         setAccessSheetReason(access.reason);
-      } else {
-        setJoinError("This room still isn't available for your current access level.");
+        const message = access.monetization.issues[0] ?? "This room still isn't available for your current access level.";
+        trackEvent("monetization_unlock_failure", {
+          action,
+          surface: "watch-party-lobby",
+          reason: access.reason,
+          roomId: accessKey,
+        });
+        setJoinError(message);
+        return {
+          message,
+          tone: "error" as const,
+        };
       }
+
+      const message = access?.reason === "room_locked"
+        ? "This room is locked right now. Ask the host to reopen it."
+        : access?.reason === "removed"
+          ? "You no longer have access to this room."
+          : "This room still isn't available for your current access level.";
+      trackEvent("monetization_unlock_failure", {
+        action,
+        surface: "watch-party-lobby",
+        reason: accessSheetReason,
+        roomId: accessKey,
+      });
+      setJoinError(message);
+      return {
+        message,
+        tone: "error" as const,
+      };
     } catch (error) {
       reportRuntimeError("watch-party-unlock", error, {
+        action,
         reason: accessSheetReason,
       });
-      setJoinError("Unable to confirm access for this room right now.");
-    } finally {
-      setAccessSheetBusy(false);
+      const message = "Unable to confirm access for this room right now.";
+      setJoinError(message);
+      return {
+        message,
+        tone: "error" as const,
+      };
     }
   }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview]);
 
@@ -1207,6 +1237,7 @@ export default function WatchPartyIndexScreen() {
         <AccessSheet
           visible={accessSheetVisible}
           reason={accessSheetReason}
+          gate={pendingAccessDecision}
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
@@ -1234,9 +1265,31 @@ export default function WatchPartyIndexScreen() {
             premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
             premiumUpsellBody: monetizationConfig.premiumUpsellBody,
           }).actionLabel : undefined}
-          busy={accessSheetBusy}
-          onConfirm={() => {
-            void onResolveJoinAccess();
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "purchase",
+                surface: "watch-party-lobby",
+                reason: accessSheetReason ?? "unknown",
+                roomId: String(pendingAccessPreview?.room.partyId ?? "").trim(),
+              });
+              setJoinError(result.message);
+              return;
+            }
+            return onResolveJoinAccess("purchase");
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "restore",
+                surface: "watch-party-lobby",
+                reason: accessSheetReason ?? "unknown",
+                roomId: String(pendingAccessPreview?.room.partyId ?? "").trim(),
+              });
+              setJoinError(result.message);
+              return;
+            }
+            return onResolveJoinAccess("restore");
           }}
           onClose={() => setAccessSheetVisible(false)}
         />

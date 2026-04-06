@@ -54,7 +54,6 @@ import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
     getMonetizationAccessSheetPresentation,
-    purchaseBlockedAccess,
 } from "../../_lib/monetization";
 import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
@@ -222,7 +221,6 @@ export default function WatchPartyRoomScreen() {
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
-  const [accessBusy, setAccessBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ type: "room" | "participant"; targetId: string; label: string } | null>(null);
@@ -1186,43 +1184,85 @@ export default function WatchPartyRoomScreen() {
     }).catch(() => {});
   }, [branding.appDisplayName, displayRoomCode]);
 
-  const onResolveAccessGate = useCallback(async () => {
-    if (!accessGate) return;
-
-    setAccessBusy(true);
+  const onResolveAccessGate = useCallback(async (action: "purchase" | "restore") => {
+    if (!accessGate) {
+      return {
+        message: "Unable to confirm your room access right now.",
+        tone: "error" as const,
+      };
+    }
 
     try {
-      const purchase = await purchaseBlockedAccess({ gate: accessGate.access });
-      if (!purchase.ok) {
-        trackEvent("monetization_unlock_failure", {
+      const latestRoom = await getPartyRoom(accessGate.accessKey).catch(() => null);
+      const userId = await getSafePartyUserId().catch(() => "");
+      const access = await evaluatePartyRoomAccess({
+        partyId: accessGate.accessKey,
+        userId,
+        room: latestRoom ?? room ?? undefined,
+      }).catch(() => null);
+
+      if (access?.canJoin) {
+        trackEvent("monetization_unlock_success", {
+          action,
           surface: "watch-party-room",
           reason: accessGate.access.reason,
           roomId: accessGate.accessKey,
         });
-        Alert.alert("Room access unavailable", purchase.message);
-        return;
+        setAccessGate(null);
+        setAccessSheetVisible(false);
+        setLoading(true);
+        setJoinRetryToken((value) => value + 1);
+        return {
+          message: action === "restore" ? "Purchases restored. Rejoining room…" : "Access unlocked. Rejoining room…",
+          tone: "success" as const,
+        };
       }
 
-      trackEvent("monetization_unlock_success", {
+      if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+        setAccessGate({
+          ...accessGate,
+          access,
+        });
+        const message = access.monetization.issues[0] ?? "Room access is still locked for this account.";
+        trackEvent("monetization_unlock_failure", {
+          action,
+          surface: "watch-party-room",
+          reason: access.reason,
+          roomId: accessGate.accessKey,
+        });
+        return {
+          message,
+          tone: "error" as const,
+        };
+      }
+
+      const message = access?.reason === "room_locked"
+        ? "This room is locked right now. Ask the host to reopen it."
+        : access?.reason === "removed"
+          ? "You no longer have access to this room."
+          : "Unable to confirm your room access right now.";
+      trackEvent("monetization_unlock_failure", {
+        action,
         surface: "watch-party-room",
         reason: accessGate.access.reason,
         roomId: accessGate.accessKey,
       });
-
-      setAccessGate(null);
-      setAccessSheetVisible(false);
-      setLoading(true);
-      setJoinRetryToken((value) => value + 1);
+      return {
+        message,
+        tone: "error" as const,
+      };
     } catch (error) {
       reportRuntimeError("watch-party-access-gate", error, {
+        action,
         source: accessGate.source,
         reason: accessGate.access.reason,
       });
-      Alert.alert("Room access unavailable", "Unable to confirm your room access right now.");
-    } finally {
-      setAccessBusy(false);
+      return {
+        message: "Unable to confirm your room access right now.",
+        tone: "error" as const,
+      };
     }
-  }, [accessGate]);
+  }, [accessGate, room]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async () => {
@@ -1624,6 +1664,7 @@ export default function WatchPartyRoomScreen() {
         <AccessSheet
           visible={accessSheetVisible}
           reason={accessGate.access.reason as AccessSheetReason}
+          gate={accessGate.access}
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
@@ -1631,9 +1672,35 @@ export default function WatchPartyRoomScreen() {
           titleOverride={accessGatePresentation.title}
           bodyOverride={accessGatePresentation.body}
           actionLabelOverride={accessGatePresentation.actionLabel}
-          busy={accessBusy}
-          onConfirm={() => {
-            void onResolveAccessGate();
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "purchase",
+                surface: "watch-party-room",
+                reason: accessGate.access.reason,
+                roomId: accessGate.accessKey,
+              });
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return onResolveAccessGate("purchase");
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "restore",
+                surface: "watch-party-room",
+                reason: accessGate.access.reason,
+                roomId: accessGate.accessKey,
+              });
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return onResolveAccessGate("restore");
           }}
           onClose={() => setAccessSheetVisible(false)}
         />
@@ -2259,6 +2326,7 @@ export default function WatchPartyRoomScreen() {
         <AccessSheet
           visible={accessSheetVisible}
           reason={accessGate.access.reason as AccessSheetReason}
+          gate={accessGate.access}
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
@@ -2266,9 +2334,35 @@ export default function WatchPartyRoomScreen() {
           titleOverride={accessGatePresentation?.title}
           bodyOverride={accessGatePresentation?.body}
           actionLabelOverride={accessGatePresentation?.actionLabel}
-          busy={accessBusy}
-          onConfirm={() => {
-            void onResolveAccessGate();
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "purchase",
+                surface: "watch-party-room",
+                reason: accessGate.access.reason,
+                roomId: accessGate.accessKey,
+              });
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return onResolveAccessGate("purchase");
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "restore",
+                surface: "watch-party-room",
+                reason: accessGate.access.reason,
+                roomId: accessGate.accessKey,
+              });
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return onResolveAccessGate("restore");
           }}
           onClose={() => setAccessSheetVisible(false)}
         />

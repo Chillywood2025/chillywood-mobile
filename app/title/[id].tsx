@@ -12,7 +12,6 @@ import {
 import {
   evaluateTitleAccess,
   getMonetizationAccessSheetPresentation,
-  purchaseBlockedAccess,
   resolveSponsorPlacement,
   type ContentAccessDecision,
   type SponsorPlacement,
@@ -90,7 +89,6 @@ export default function TitleDetails() {
   const [myListBusy, setMyListBusy] = useState(false);
   const [titleAccess, setTitleAccess] = useState<ContentAccessDecision | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
-  const [accessBusy, setAccessBusy] = useState(false);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [detailSponsorPlacement, setDetailSponsorPlacement] = useState<SponsorPlacement>("none");
@@ -335,60 +333,46 @@ export default function TitleDetails() {
     }
   };
 
-  const onUnlockAccess = async () => {
-    if (!title || !titleAccess || titleAccess.reason !== "premium_required") return;
-    if (!isSignedIn) {
-      router.push({
-        pathname: "/(auth)/login",
-        params: {
-          redirectTo: `/title/${String(title.id ?? titleId).trim()}`,
-        },
-      });
-      return;
+  const refreshTitleAccessAfterSheetAction = async (action: "purchase" | "restore") => {
+    if (!title) {
+      return {
+        message: "Unable to confirm title access right now.",
+        tone: "error" as const,
+      };
     }
-    setAccessBusy(true);
-    setAccessError(null);
-    try {
-      const purchase = await purchaseBlockedAccess({ gate: titleAccess });
-      if (!purchase.ok) {
-        trackEvent("monetization_unlock_failure", {
-          surface: "title-detail",
-          titleId: String(title.id ?? titleId).trim(),
-        });
-        setAccessError(purchase.message);
-        return;
-      }
 
-      const refreshed = await evaluateTitleAccess({
-        titleId: String(title.id ?? "").trim(),
-        accessRule: title.content_access_rule,
-      }).catch(() => null);
-      setTitleAccess(refreshed);
-      if (refreshed?.allowed) {
-        trackEvent("monetization_unlock_success", {
-          surface: "title-detail",
-          titleId: String(title.id ?? titleId).trim(),
-        });
-        setAccessSheetVisible(false);
-      } else {
-        trackEvent("monetization_unlock_failure", {
-          surface: "title-detail",
-          titleId: String(title.id ?? titleId).trim(),
-        });
-        setAccessError(
-          refreshed?.monetization.issues[0]
-            ?? "Access is still locked for this title after the purchase attempt.",
-        );
-      }
-    } catch {
-      trackEvent("monetization_unlock_failure", {
+    const refreshed = await evaluateTitleAccess({
+      titleId: String(title.id ?? "").trim(),
+      accessRule: title.content_access_rule,
+    }).catch(() => null);
+    setTitleAccess(refreshed);
+
+    if (refreshed?.allowed) {
+      trackEvent("monetization_unlock_success", {
+        action,
         surface: "title-detail",
         titleId: String(title.id ?? titleId).trim(),
       });
-      setAccessError("Unable to confirm title access right now.");
-    } finally {
-      setAccessBusy(false);
+      setAccessError(null);
+      setAccessSheetVisible(false);
+      return {
+        message: action === "restore" ? "Purchases restored. Title access is active." : "Title access unlocked. You're ready to play.",
+        tone: "success" as const,
+      };
     }
+
+    const message = refreshed?.monetization.issues[0]
+      ?? "Access is still locked for this title after the monetization check.";
+    trackEvent("monetization_unlock_failure", {
+      action,
+      surface: "title-detail",
+      titleId: String(title.id ?? titleId).trim(),
+    });
+    setAccessError(message);
+    return {
+      message,
+      tone: "error" as const,
+    };
   };
 
   const onSubmitReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
@@ -566,6 +550,7 @@ export default function TitleDetails() {
         <AccessSheet
           visible={accessSheetVisible}
           reason="premium_required"
+          gate={titleAccess}
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
@@ -573,9 +558,29 @@ export default function TitleDetails() {
           titleOverride={accessSheetPresentation?.title}
           bodyOverride={accessSheetPresentation?.body}
           actionLabelOverride={accessSheetPresentation?.actionLabel}
-          busy={accessBusy}
-          onConfirm={() => {
-            void onUnlockAccess();
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "purchase",
+                surface: "title-detail",
+                titleId: String(title.id ?? titleId).trim(),
+              });
+              setAccessError(result.message);
+              return;
+            }
+            return refreshTitleAccessAfterSheetAction("purchase");
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "restore",
+                surface: "title-detail",
+                titleId: String(title.id ?? titleId).trim(),
+              });
+              setAccessError(result.message);
+              return;
+            }
+            return refreshTitleAccessAfterSheetAction("restore");
           }}
           onClose={() => setAccessSheetVisible(false)}
         />

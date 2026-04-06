@@ -135,6 +135,33 @@ export type MonetizationAccessSheetPresentation = {
   actionLabel: string;
 };
 
+export type MonetizationAccessSheetAction = "purchase" | "retry";
+
+export type MonetizationAccessSheetStatusTone = "neutral" | "warning";
+
+export type MonetizationAccessSheetOffer = {
+  title: string;
+  priceLabel: string;
+  detail: string;
+  caption?: string;
+  badge?: string;
+  packageId?: string;
+};
+
+export type MonetizationAccessSheetState = {
+  snapshot: MonetizationSnapshot;
+  presentation: MonetizationAccessSheetPresentation;
+  primaryAction: MonetizationAccessSheetAction;
+  primaryLabel: string;
+  primaryDisabled: boolean;
+  helperKicker: string;
+  helperBody: string;
+  helperTone: MonetizationAccessSheetStatusTone;
+  offer: MonetizationAccessSheetOffer | null;
+  canRestore: boolean;
+  canManage: boolean;
+};
+
 export type MonetizationAccessPurchaseOutcome = {
   ok: boolean;
   targetId?: MonetizationTargetId;
@@ -400,6 +427,83 @@ const selectRecommendedPackage = (offering: PurchasesOffering | null): Purchases
     ?? offering.lifetime
     ?? offering.availablePackages[0]
     ?? null;
+};
+
+const findPackageForTarget = (
+  targetId: MonetizationTargetId,
+  offerings: PurchasesOfferings | null,
+  packageId?: string | null,
+) => {
+  const definition = MONETIZATION_TARGETS[targetId];
+  const offering = getOfferingByIdentifier(offerings, definition.offeringId);
+  if (!offering) return null;
+
+  const normalizedPackageId = String(packageId ?? "").trim();
+  if (normalizedPackageId) {
+    const explicitPackage = offering.availablePackages.find((entry) => {
+      const entryPackageId = String(entry.identifier ?? "").trim();
+      return entryPackageId && entryPackageId === normalizedPackageId;
+    });
+    if (explicitPackage) return explicitPackage;
+  }
+
+  return selectRecommendedPackage(offering);
+};
+
+const formatPackageBadge = (pkg: PurchasesPackage | null) => {
+  const packageType = String(pkg?.packageType ?? "").trim().toUpperCase();
+  if (packageType === "MONTHLY") return "MONTHLY PLAN";
+  if (packageType === "ANNUAL") return "ANNUAL PLAN";
+  if (packageType === "WEEKLY") return "WEEKLY PLAN";
+  if (packageType === "THREE_MONTH") return "3-MONTH PLAN";
+  if (packageType === "SIX_MONTH") return "6-MONTH PLAN";
+  if (packageType === "LIFETIME") return "LIFETIME ACCESS";
+  return "LIVE OFFER";
+};
+
+const formatPackageDetail = (pkg: PurchasesPackage | null, target: MonetizationTargetDefinition) => {
+  const product = pkg?.product;
+  if (!product) return target.summary;
+
+  const subscriptionPeriod = String(product.subscriptionPeriod ?? "").trim().toUpperCase();
+  if (subscriptionPeriod === "P1W") return "Billed weekly through Google Play.";
+  if (subscriptionPeriod === "P1M") return "Billed monthly through Google Play.";
+  if (subscriptionPeriod === "P3M") return "Billed every 3 months through Google Play.";
+  if (subscriptionPeriod === "P6M") return "Billed every 6 months through Google Play.";
+  if (subscriptionPeriod === "P1Y") return "Billed yearly through Google Play.";
+
+  const packageType = String(pkg.packageType ?? "").trim().toUpperCase();
+  if (packageType === "LIFETIME") return "One-time unlock through Google Play.";
+
+  return String(product.description ?? "").trim() || target.summary;
+};
+
+const buildMonetizationAccessSheetOffer = (options: {
+  targetId: MonetizationTargetId;
+  targetState: MonetizationTargetState;
+  packageId?: string | null;
+  offerings: PurchasesOfferings | null;
+}): MonetizationAccessSheetOffer | null => {
+  const target = MONETIZATION_TARGETS[options.targetId];
+  const selectedPackage = findPackageForTarget(options.targetId, options.offerings, options.packageId);
+  if (!selectedPackage) return null;
+
+  const product = selectedPackage.product;
+  const availableCount = options.targetState.packageCount;
+  const offerTitle = String(product.title ?? "").trim() || target.label;
+  const offerPrice = String(product.priceString ?? "").trim();
+  if (!offerPrice) return null;
+
+  return {
+    title: offerTitle,
+    priceLabel: offerPrice,
+    detail: formatPackageDetail(selectedPackage, target),
+    caption: availableCount > 1
+      ? `${availableCount} live packages are configured for this offer.`
+      : "Pricing is coming from the current RevenueCat offering.",
+    badge: formatPackageBadge(selectedPackage),
+    packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+  };
 };
 
 const hasActiveEntitlement = (
@@ -831,6 +935,118 @@ export function getMonetizationAccessSheetPresentation(options: {
     body: String(options.premiumUpsellBody ?? "").trim()
       || `Premium unlocks premium titles and premium-entry rooms inside ${appDisplayName}, while keeping playback ad-free.`,
     actionLabel: "Unlock Premium",
+  };
+}
+
+export async function readMonetizationAccessSheetState(options: {
+  gate: GateLike | null | undefined;
+  userId?: string | null;
+  appDisplayName?: string;
+  premiumUpsellTitle?: string;
+  premiumUpsellBody?: string;
+}): Promise<MonetizationAccessSheetState> {
+  const snapshot = await readMonetizationSnapshot({
+    forceRefresh: true,
+    userId: options.userId,
+  });
+  const presentation = getMonetizationAccessSheetPresentation({
+    gate: options.gate,
+    appDisplayName: options.appDisplayName,
+    premiumUpsellTitle: options.premiumUpsellTitle,
+    premiumUpsellBody: options.premiumUpsellBody,
+  });
+  const purchaseTargetId = options.gate?.monetization?.purchaseTargetId;
+  const primaryTargetId = options.gate?.monetization?.primaryTargetId;
+  const targetId = purchaseTargetId ?? primaryTargetId;
+  const targetState = targetId ? snapshot.targets[targetId] : null;
+  const offerings = snapshot.offeringsLoaded ? await readRevenueCatOfferings() : null;
+  const offer = targetId && targetState
+    ? buildMonetizationAccessSheetOffer({
+        targetId,
+        targetState,
+        packageId: options.gate?.monetization?.recommendedPackageId,
+        offerings,
+      })
+    : null;
+
+  if (!snapshot.configuration.shouldConfigure) {
+    return {
+      snapshot,
+      presentation,
+      primaryAction: "retry",
+      primaryLabel: "Monetization Disabled",
+      primaryDisabled: true,
+      helperKicker: "MONETIZATION STATUS",
+      helperBody: snapshot.configuration.reason ?? "RevenueCat is not configured for this build yet.",
+      helperTone: "warning",
+      offer,
+      canRestore: false,
+      canManage: false,
+    };
+  }
+
+  if (!snapshot.canMakePayments) {
+    return {
+      snapshot,
+      presentation,
+      primaryAction: "retry",
+      primaryLabel: "Retry Billing Check",
+      primaryDisabled: false,
+      helperKicker: "BILLING STATUS",
+      helperBody: snapshot.issues[0]
+        ?? "Google Play billing is not currently available on this device/account.",
+      helperTone: "warning",
+      offer,
+      canRestore: true,
+      canManage: true,
+    };
+  }
+
+  if (!purchaseTargetId || !targetState?.offeringAvailable || !targetState.packageCount || !offer) {
+    return {
+      snapshot,
+      presentation,
+      primaryAction: "retry",
+      primaryLabel: "Retry Offer Lookup",
+      primaryDisabled: false,
+      helperKicker: "OFFER STATUS",
+      helperBody: snapshot.issues[0]
+        ?? "This purchase path is not available in the current RevenueCat offering configuration yet.",
+      helperTone: "warning",
+      offer,
+      canRestore: true,
+      canManage: true,
+    };
+  }
+
+  if (targetState.hasEntitlement) {
+    return {
+      snapshot,
+      presentation,
+      primaryAction: "retry",
+      primaryLabel: "Recheck Access",
+      primaryDisabled: false,
+      helperKicker: "ACCESS READY",
+      helperBody: `${targetState.definition.label} is already active for this account. Recheck access, restore purchases, or manage your subscription if needed.`,
+      helperTone: "neutral",
+      offer,
+      canRestore: true,
+      canManage: true,
+    };
+  }
+
+  return {
+    snapshot,
+    presentation,
+    primaryAction: "purchase",
+    primaryLabel: presentation.actionLabel,
+    primaryDisabled: false,
+    helperKicker: "LIVE OFFER",
+    helperBody: "This pricing is coming from the current RevenueCat offering on this Android dev build.",
+    helperTone: "neutral",
+    offer,
+    canRestore: true,
+    canManage: true,
   };
 }
 

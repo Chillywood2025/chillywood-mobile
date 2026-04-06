@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, login-visual, Phase 0 Rachi baseline, the completed Phase 2 moderation/admin minimums, the completed Phase 3 Home/content polish, the completed Phase 4 release hardening, the closed Phase 5 final integration proof, the pushed room campaign through Chapter 3, the now-completed Chapter 4 Phases 1 and 2, and the new branded-background restoration truth exactly as already proved. Do not reopen runtime proof, do not reopen earlier room chapters, and do not reopen earlier phases unless a later blocker proves the need. `ROOM_BLUEPRINT.md` remains implementation law for room boundaries, and the monetization foundation plus access model remain owned centrally by `app/_layout.tsx`, `_lib/revenuecat.ts`, `_lib/monetization.ts`, and the shared route-safe gate helpers now used by the waiting-room/title/communication owners. `assets/images/chillywood-branded-background.png` is now the exact source-of-truth branded background asset, while `assets/images/chicago-skyline.jpg` remains the restored shared runtime owner for login, support, admin, channel settings, and skyline-fallback poster surfaces. Room-owned backgrounds in Live / Party / Player / Profile / Chat remain intentionally separate. The next exact lane is still Chapter 4, Phase 3: paywalls / offers / purchase UX.
+Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, login-visual, Phase 0 Rachi baseline, the completed Phase 2 moderation/admin minimums, the completed Phase 3 Home/content polish, the completed Phase 4 release hardening, the closed Phase 5 final integration proof, the pushed room campaign through Chapter 3, the now-completed Chapter 4 Phases 1 through 3, and the branded-background restoration truth exactly as already proved. Do not reopen runtime proof, do not reopen earlier room chapters, and do not reopen earlier phases unless a later blocker proves the need. `ROOM_BLUEPRINT.md` remains implementation law for room boundaries, and the monetization foundation plus access model remain owned centrally by `app/_layout.tsx`, `_lib/revenuecat.ts`, `_lib/monetization.ts`, and the shared route-safe gate helpers now used by the waiting-room/title/communication owners. `assets/images/chillywood-branded-background.png` is now the exact source-of-truth branded background asset, while `assets/images/chicago-skyline.jpg` remains the restored shared runtime owner for login, support, admin, channel settings, and skyline-fallback poster surfaces. Room-owned backgrounds in Live / Party / Player / Profile / Chat remain intentionally separate. The next exact lane is now Chapter 4, Phase 4: surface integration.
 
 ## Current Plan
 1. Preserve the carried-forward proved baseline without reopening unrelated prior work
@@ -10,7 +10,7 @@ Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, logi
 4. Carry forward Chapter 4 Phase 1 as complete: RevenueCat foundation, centralized SDK ownership, auth-linked customer identity mapping, monetization catalog, snapshot model, and service-level purchase / restore / manage-subscription entry points now exist without scattered raw SDK calls
 5. Carry forward Chapter 4 Phase 2 as complete: centralized entitlement checks, route-safe gating, target-aware access-sheet copy for premium subscription / title access / premium live / premium watch-party access, and the RevenueCat identity/logging fixes are now proved on Android dev client
 6. Carry forward the restored branded background truth: the uploaded nighttime city image now lives in-repo as `assets/images/chillywood-branded-background.png`, while the shared branded runtime owner path remains `assets/images/chicago-skyline.jpg` for branded shells and fallback poster usage, and room/content-specific surfaces keep their own owners
-7. Implement Chapter 4 Phase 3 next: visible paywalls, offers, restore/manage entry, and honest purchase UX states on top of the now-proved central access model
+7. Carry forward Chapter 4 Phase 3 as complete: the reusable access sheet now owns visible paywall / offer UX, restore/manage entry points, retry/failure messaging, and honest fallback behavior when the current RevenueCat offering configuration does not expose a live purchase path
 8. Keep iOS out of runtime proof for this chapter; prove on Android dev client only
 9. Keep final combined monetization proof as the closing lane after all Chapter 4 phases are complete
 
@@ -20,9 +20,11 @@ Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, logi
 - preserve the new Chapter 4 Phase 1 truth: RevenueCat is configured once at startup on Android debug/dev builds only, the provided Test Store key is not wired into release config, the signed-in auth user is mapped into the central monetization snapshot, and monetization catalog / purchase / restore / manage-subscription entry points remain centralized
 - preserve the new Chapter 4 Phase 2 truth: entitlement reads, reusable `can access / needs upgrade / needs purchase` helpers, route-safe gating for premium subscription / paid title access / premium live / premium Watch-Party access, and the identity-safe RevenueCat snapshot path are now centralized and proved on Android dev client
 - preserve the new branded-background truth: the uploaded nighttime city image now lives in-repo as the source-of-truth branded asset, the shared skyline runtime owner path stays aligned with it for branded shells and fallback poster surfaces, and Live / Party / Player / Profile / Chat keep their existing room-owned background systems
-- implement Phase 3 in the smallest safe owner set: reusable paywall / offer surfaces, restore/manage entry points, honest pending / failure / retry states, and owner-safe fallback UI when live store offerings are incomplete
-- keep Phase 3 honest: no fake purchase success, no hardcoded unlocked premium, no fake live prices, and no paywall plastering outside intentional premium surfaces
-- keep the next checkpoint task-pure: update `CURRENT_STATE.md` first and `NEXT_TASK.md` second after the Phase 3 proof pass, stage only the Phase 3 file set, and make one local commit before any later push recommendation
+- preserve the new Phase 3 truth: live / watch-party / title access now all route into the same upgraded paywall surface with restore/manage/retry entry points, honest `OFFER STATUS` fallback, and no fake purchase success when RevenueCat offer mapping is incomplete
+- preserve the external monetization truth from Phase 3: Google Play subscription management opens, restore rechecks access honestly, but the current RevenueCat offering configuration still lacks a live purchase path for the proved targets
+- implement Phase 4 in the smallest safe owner set: integrate entitlement-aware monetization behavior into the real title / player / live / party / profile / Rachi surfaces only where the current product truth and room boundaries support it
+- keep Phase 4 honest: no fake unlocked premium, no hidden route drift, no blocking of free/core behavior that should remain available, and no monetization sprawl across unrelated surfaces
+- keep the next checkpoint task-pure: update `CURRENT_STATE.md` first and `NEXT_TASK.md` second after the Phase 4 proof pass, stage only the Phase 4 file set, and make one local commit before any later push recommendation
 
 ## Scope
 This next pass should:
@@ -44,7 +46,7 @@ This next pass should:
 - preserve the completed Chapter 4 Phase 1 monetization foundation exactly as recorded
 - preserve the completed Chapter 4 Phase 2 entitlement plumbing exactly as recorded
 - carry forward the current Rachi foundation without reopening unrelated profile/chat architecture unless a later blocker proves otherwise
-- run only Chapter 4 Phase 3 next, using the smallest file scope that honest paywall / offer UX requires
+- run only Chapter 4 Phase 4 next, using the smallest file scope that honest entitlement-aware surface integration requires
 
 ## Out Of Scope
 Do not:
@@ -65,7 +67,8 @@ Do not:
 - reopen the completed Chapter 4 Phase 1 foundation except for a tiny directly-proved dependency needed by later monetization UX
 - reopen the completed Chapter 4 Phase 2 entitlement plumbing except for a tiny directly-proved dependency needed by Phase 3 purchase surfaces
 - treat the expanded room blueprint as approval to scatter AI or premium features into rooms without the correct room owner and maturity fit
-- broaden the next pass beyond Phase 3 paywalls / offers / purchase UX into speculative cleanup
+- reopen the completed Chapter 4 Phase 3 paywall / offer UX lane except for a tiny directly-proved dependency needed by Phase 4 surface integration
+- broaden the next pass beyond Phase 4 surface integration into speculative cleanup
 - invent a non-canonical Rachi route, fake starter surface, or disconnected messenger pattern
 - rerun emulator/device proof repeatedly without a concrete blocker-driven reason
 
@@ -88,5 +91,6 @@ The next lane is successful when:
 - the completed Chapter 4 Phase 1 monetization foundation remains aligned with single-startup RevenueCat wiring, Android-dev-only Test Store config, auth-linked customer identity mapping, centralized catalog/snapshot ownership, and honest no-paywall-yet behavior
 - the completed Chapter 4 Phase 2 entitlement plumbing remains aligned with centralized access-policy ownership, Android-dev-client proof for live / watch-party / title-target gates, and the fixed RevenueCat identity/logging path without contradictory active checkpoint text
 - final integration proof remains recorded as closed on the current build without contradictory active checkpoint text
-- the next Chapter 4 Phase 3 pass can build visible paywall / offer UX on top of the now-proved central access model without contradictory active checkpoint text
+- the completed Chapter 4 Phase 3 pass remains aligned with centralized paywall ownership, Android dev-client proof for live / watch-party / title sheets, honest restore/manage/retry utility entry, and explicit fallback behavior when live offer mapping is unavailable
+- the next Chapter 4 Phase 4 pass can integrate entitlement-aware monetization behavior into the real product surfaces without contradictory active checkpoint text
 - `CURRENT_STATE.md`, `NEXT_TASK.md`, and the durable doctrine files tell the same new execution-plan story
