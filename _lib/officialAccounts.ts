@@ -9,8 +9,11 @@ export type OfficialPlatformAccount = {
   platformOwnershipLabel: string;
   platformRoleLabel: string;
   auditOwnerKey: string;
+  conciergeHeadline: string;
+  trustSummary: string;
   starterWelcomeBody: string;
   starterPrompts: readonly string[];
+  guidanceTopics: readonly string[];
 };
 
 export const RACHI_OFFICIAL_USER_ID = "platform_rachi_official";
@@ -25,12 +28,21 @@ export const RACHI_OFFICIAL_ACCOUNT: OfficialPlatformAccount = {
   platformOwnershipLabel: "PLATFORM OWNED",
   platformRoleLabel: "CONCIERGE",
   auditOwnerKey: "platform:rachi",
+  conciergeHeadline: "Official Chi'llywood concierge and trusted platform guide.",
+  trustSummary:
+    "Use Rachi for getting started, trusted account guidance, safety follow-up, and future official Chi'llywood updates on the canonical profile and Chi'lly Chat routes.",
   starterWelcomeBody:
     "Rachi is Chi'llywood's official starter presence. Open this canonical thread for welcome guidance now, while future moderation, help, and announcement behavior grows on the same platform-owned identity.",
   starterPrompts: [
     "Hi Rachi, help me get started.",
     "Show me where to start in Chi'llywood.",
     "I need official help with my account.",
+  ],
+  guidanceTopics: [
+    "Getting started",
+    "Account help",
+    "Safety guidance",
+    "Official updates",
   ],
 };
 

@@ -265,7 +265,15 @@ export default function ChillyChatInboxScreen() {
           </View>
         </View>
         <Text style={styles.officialStarterTitle}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
-        <Text style={styles.officialStarterBody}>{RACHI_OFFICIAL_ACCOUNT.starterWelcomeBody}</Text>
+        <Text style={styles.officialStarterHeadline}>{RACHI_OFFICIAL_ACCOUNT.conciergeHeadline}</Text>
+        <Text style={styles.officialStarterBody}>{RACHI_OFFICIAL_ACCOUNT.trustSummary}</Text>
+        <View style={styles.officialStarterTopicRow}>
+          {RACHI_OFFICIAL_ACCOUNT.guidanceTopics.map((topic) => (
+            <View key={topic} style={styles.officialStarterTopicPill}>
+              <Text style={styles.officialStarterTopicText}>{topic}</Text>
+            </View>
+          ))}
+        </View>
         <View style={styles.quickActionRow}>
           <TouchableOpacity
             style={styles.quickActionButton}
@@ -639,11 +647,35 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900",
   },
+  officialStarterHeadline: {
+    color: "#FFF4D6",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "800",
+  },
   officialStarterBody: {
     color: "#F0E5C5",
     fontSize: 12.5,
     lineHeight: 18,
     fontWeight: "600",
+  },
+  officialStarterTopicRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  officialStarterTopicPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.32)",
+    backgroundColor: "rgba(32,24,10,0.32)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  officialStarterTopicText: {
+    color: "#FFE6A6",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   searchShell: {
     flexDirection: "row",

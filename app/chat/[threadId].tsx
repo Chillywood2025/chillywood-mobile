@@ -49,14 +49,14 @@ const formatStamp = (value: string) => {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 };
 
-const getThreadStatusLabel = (thread: ChatThreadSummary | null) => {
+const getThreadStatusLabel = (thread: ChatThreadSummary | null, platformOwned = false) => {
   if (thread?.activeCommunicationRoomId && thread.activeCallType) {
     return thread.activeCallType === "video" ? "Video call live" : "Voice call live";
   }
   if ((thread?.currentMember?.unreadCount ?? 0) > 0) {
     return "Unread activity";
   }
-  return "Direct thread";
+  return platformOwned ? "Official thread" : "Direct thread";
 };
 
 const getThreadKindLabel = (platformOwned: boolean) => {
@@ -328,10 +328,15 @@ export default function ChillyChatThreadScreen() {
   const otherMemberAvatarUrl = officialAccount ? undefined : otherMember?.avatarUrl;
   const otherMemberDisplayName = officialAccount?.displayName ?? otherMember?.displayName ?? "Direct Thread";
   const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;
+  const officialGuidanceTopics = officialAccount?.guidanceTopics ?? [];
   const callTitle = thread?.activeCallType === "video" ? "Video call active" : "Voice call active";
-  const callBody = thread?.activeCallType === "video"
-    ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
-    : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
+  const callBody = officialAccount
+    ? thread?.activeCallType === "video"
+      ? "Chi'lly Chat video for this official thread stays inside the same trusted conversation so platform guidance and call state never split apart."
+      : "Chi'lly Chat voice for this official thread stays inside the same trusted conversation so platform guidance and call state never split apart."
+    : thread?.activeCallType === "video"
+      ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
+      : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
   const callActionLabel = callBusy
     ? "Connecting..."
     : !activeCallRoomId
@@ -364,7 +369,7 @@ export default function ChillyChatThreadScreen() {
   const latestThreadHint = useMemo(() => {
     if (renderedMessages.length === 0) {
       return officialAccount
-        ? `${otherMemberDisplayName} can start here with official prompts while keeping profile and support identity separate.`
+        ? `${otherMemberDisplayName} can start here with official prompts while keeping help on the canonical profile and thread routes.`
         : "This thread is ready for the first message. Voice and video attach here if you choose to start a call.";
     }
 
@@ -646,7 +651,7 @@ export default function ChillyChatThreadScreen() {
             ) : null}
             <View style={styles.headerPill}>
               <View style={[styles.headerPillDot, activeCallRoomId && styles.headerPillDotAlert]} />
-              <Text style={styles.headerPillText}>{getThreadStatusLabel(thread)}</Text>
+              <Text style={styles.headerPillText}>{getThreadStatusLabel(thread, !!officialAccount)}</Text>
             </View>
             {thread?.currentMember?.lastReadAt ? (
               <Text style={styles.headerMetaText}>Read updates sync when this thread opens.</Text>
@@ -780,6 +785,21 @@ export default function ChillyChatThreadScreen() {
         </View>
         <Text style={styles.threadGuideHint}>{latestThreadHint}</Text>
       </View>
+
+      {officialAccount ? (
+        <View style={styles.officialPresenceCard}>
+          <Text style={styles.officialPresenceKicker}>{officialAccount.platformOwnershipLabel}</Text>
+          <Text style={styles.officialPresenceTitle}>{officialAccount.conciergeHeadline}</Text>
+          <Text style={styles.officialPresenceBody}>{officialAccount.trustSummary}</Text>
+          <View style={styles.officialPresenceTopicRow}>
+            {officialGuidanceTopics.map((topic) => (
+              <View key={topic} style={styles.officialPresenceTopicPill}>
+                <Text style={styles.officialPresenceTopicText}>{topic}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {activeCallRoomId && !callPanelOpen ? (
         <View style={styles.callBanner}>
@@ -1239,6 +1259,51 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     fontWeight: "700",
+  },
+  officialPresenceCard: {
+    gap: 8,
+    marginHorizontal: 18,
+    marginBottom: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.26)",
+    backgroundColor: "rgba(96,72,20,0.18)",
+    padding: 16,
+  },
+  officialPresenceKicker: {
+    color: "#FFE6A6",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  officialPresenceTitle: {
+    color: "#FFF6E0",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  officialPresenceBody: {
+    color: "#EEDFB8",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  officialPresenceTopicRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  officialPresenceTopicPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.3)",
+    backgroundColor: "rgba(32,24,10,0.28)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  officialPresenceTopicText: {
+    color: "#FFE6A6",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   joinBtnText: {
     color: "#fff",

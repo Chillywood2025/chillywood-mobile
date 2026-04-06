@@ -157,7 +157,7 @@ export default function ProfileScreen() {
     });
   }, [isSelfProfile]);
   const channelLabel = isOfficialProfile
-    ? "Chi'llywood Network"
+    ? "Official Concierge"
     : isSelfProfile
       ? "Your Channel"
       : profile.role === "creator"
@@ -179,21 +179,29 @@ export default function ProfileScreen() {
   const showManageChannelAction = isSelfProfile && creatorSettingsEnabled;
   const canReportProfile = !isSelfProfile && !!userId;
   const canOpenLinkedRoomActions = hasLiveRouteContext;
-  const liveStateLabel = profile.isLive ? "LIVE NOW" : "OFF AIR";
-  const routeContextLabel = hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
+  const officialGuidanceTopics = officialAccount?.guidanceTopics ?? [];
+  const liveStateLabel = isOfficialProfile ? "CONCIERGE READY" : profile.isLive ? "LIVE NOW" : "OFF AIR";
+  const routeContextLabel = isOfficialProfile ? "PROTECTED" : hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
   const channelHomeBody = isOfficialProfile
-    ? "This protected profile doubles as Chi'llywood's official channel surface so trusted help, announcements, and future moderation-aware follow-up stay on the canonical route."
+    ? officialAccount?.trustSummary
+      ?? "This protected profile doubles as Chi'llywood's official channel surface so trusted help, announcements, and future moderation-aware follow-up stay on the canonical route."
     : isSelfProfile
       ? "Your profile is also your public-facing channel home. Owner controls stay here, while Settings and Chi'lly Chat stay separate."
       : "This viewer-facing channel home explains who this person is across live rooms, watch parties, and direct communication without turning into a room or an inbox.";
-  const liveStatusTitle = profile.isLive ? "Channel is live now" : "Channel is off air";
-  const liveStatusBody = hasLiveRouteContext
-    ? profile.isLive
-      ? "Join Live and Watch Party open from the current room on this profile."
-      : "View Live and Watch Party open from the current room on this profile."
+  const liveStatusTitle = isOfficialProfile
+    ? "Official concierge is ready"
     : profile.isLive
-      ? "This channel looks live. Open this profile from a room or live session to join from here."
-      : "Open this profile from a room or live session to jump into Live or Watch Party from here.";
+      ? "Channel is live now"
+      : "Channel is off air";
+  const liveStatusBody = isOfficialProfile
+    ? "Open Chi'lly Chat for trusted welcome help, account guidance, safety follow-up, and future official updates without leaving the canonical profile and thread routes."
+    : hasLiveRouteContext
+      ? profile.isLive
+        ? "Join Live and Watch Party open from the current room on this profile."
+        : "View Live and Watch Party open from the current room on this profile."
+      : profile.isLive
+        ? "This channel looks live. Open this profile from a room or live session to join from here."
+        : "Open this profile from a room or live session to jump into Live or Watch Party from here.";
   const actionFootnote = isOfficialProfile
     ? "Rachi stays on the canonical profile and Chi'lly Chat paths so future help, moderation, and official announcements remain platform-owned and auditable."
     : hasLiveRouteContext
@@ -209,12 +217,14 @@ export default function ProfileScreen() {
         {
           title: "Official Concierge",
           kicker: profile.platformOwnershipLabel ?? "PLATFORM OWNED",
-          body: `${profile.displayName} is Chi'llywood's official seeded platform account, not a random user-created profile and not a claimable owner page.`,
+          body: officialAccount?.conciergeHeadline
+            ? `${officialAccount.conciergeHeadline} ${profile.displayName} is not a random user-created profile and not a claimable owner page.`
+            : `${profile.displayName} is Chi'llywood's official seeded platform account, not a random user-created profile and not a claimable owner page.`,
         },
         {
           title: "Starter Path",
           kicker: "CHI'LLY CHAT",
-          body: "Open the canonical direct thread to ask how to get started, request official help, and follow future platform announcements without leaving the native messenger architecture.",
+          body: "Open the canonical direct thread to ask how to get started, request official help, and follow future platform announcements without leaving the native messenger architecture or pretending this is a separate support app.",
         },
       ] as const
     : [
@@ -234,7 +244,8 @@ export default function ProfileScreen() {
         {
           title: "Official Network",
           kicker: profile.officialBadgeLabel ?? "OFFICIAL",
-          body: "This channel surface is reserved for Chi'llywood's official welcome guidance, platform notes, and future announcement drops without inventing a separate network page.",
+          body: officialAccount?.trustSummary
+            ?? "This channel surface is reserved for Chi'llywood's official welcome guidance, platform notes, and future announcement drops without inventing a separate network page.",
           accent: "default",
         },
         {
@@ -244,9 +255,9 @@ export default function ProfileScreen() {
           accent: "default",
         },
         {
-          title: "Rooms And Announcements",
-          kicker: "FUTURE READY",
-          body: "Official room notices, release notes, and starter content can grow here later while staying inside the canonical profile/channel model.",
+          title: "Trusted Scope",
+          kicker: "CANONICAL ROUTES",
+          body: "Rachi stays on the canonical profile and Chi'lly Chat routes so trusted onboarding, official updates, and moderation-aware follow-up can grow without turning into a generic support center.",
           accent: "default",
         },
       ] as const
@@ -479,20 +490,24 @@ export default function ProfileScreen() {
     },
     {
       label: "Room",
-      value: hasLiveRouteContext ? "Linked" : (profile.isLive ? "Live" : "No Link"),
-      body: hasLiveRouteContext
-        ? "real room context attached"
-        : profile.isLive
-          ? "live state visible"
-          : "context unlocks room entry",
-      tone: hasLiveRouteContext ? "linked" : (profile.isLive ? "live" : "default"),
+      value: isOfficialProfile
+        ? "Audited"
+        : hasLiveRouteContext ? "Linked" : (profile.isLive ? "Live" : "No Link"),
+      body: isOfficialProfile
+        ? "platform-owned follow-up"
+        : hasLiveRouteContext
+          ? "real room context attached"
+          : profile.isLive
+            ? "live state visible"
+            : "context unlocks room entry",
+      tone: isOfficialProfile ? "official" : hasLiveRouteContext ? "linked" : (profile.isLive ? "live" : "default"),
     },
   ] as const;
   const channelHelper = isOfficialProfile
     ? {
         kicker: "CHANNEL HELPER",
         title: "Keep official help on the canonical route",
-        body: "Open Chi'lly Chat for trusted help, then return here for the protected official profile and channel identity. This surface stays official, not social-roleplay.",
+        body: `${officialAccount?.trustSummary ?? "Open Chi'lly Chat for trusted help, then return here for the protected official profile and channel identity."} This surface stays official, not social-roleplay and not a separate support app.`,
       }
     : isSelfProfile
       ? {
@@ -532,7 +547,14 @@ export default function ProfileScreen() {
       actionKind: "settings" as const,
     },
   ] as const;
-  const quickActions = isSelfProfile
+  const quickActions = isOfficialProfile
+    ? [
+        { label: "Official Profile", onPress: () => setActiveProfileView("profile") },
+        { label: "Official Channel", onPress: () => setActiveProfileView("channel") },
+        { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+        ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
+      ]
+    : isSelfProfile
     ? [
         { label: "Owner Desk", onPress: () => setActiveProfileView("owner") },
         { label: "Channel Home", onPress: () => setActiveProfileView("channel") },
@@ -578,7 +600,7 @@ export default function ProfileScreen() {
 
         <View style={styles.profileCard}>
           <Text style={styles.profileEyebrow}>
-            {isOfficialProfile ? "OFFICIAL ACCOUNT" : isSelfProfile ? "OWNER CHANNEL" : "PUBLIC CHANNEL"}
+            {isOfficialProfile ? "OFFICIAL PLATFORM PRESENCE" : isSelfProfile ? "OWNER CHANNEL" : "PUBLIC CHANNEL"}
           </Text>
           <View style={styles.heroBadgeRow}>
             {isOfficialProfile ? (
@@ -653,7 +675,7 @@ export default function ProfileScreen() {
             </View>
           ) : null}
           <View style={[styles.statusPanel, profile.isLive && styles.statusPanelLive]}>
-            <Text style={styles.statusPanelKicker}>{profile.isLive ? "LIVE STATUS" : "CHANNEL STATUS"}</Text>
+            <Text style={styles.statusPanelKicker}>{isOfficialProfile ? "OFFICIAL STATUS" : profile.isLive ? "LIVE STATUS" : "CHANNEL STATUS"}</Text>
             <Text style={styles.statusPanelTitle}>{liveStatusTitle}</Text>
             <Text style={styles.statusPanelBody}>{liveStatusBody}</Text>
           </View>
@@ -678,6 +700,15 @@ export default function ProfileScreen() {
             <Text style={styles.channelGuideKicker}>{channelHelper.kicker}</Text>
             <Text style={styles.channelGuideTitle}>{channelHelper.title}</Text>
             <Text style={styles.channelGuideBody}>{channelHelper.body}</Text>
+            {isOfficialProfile && officialGuidanceTopics.length ? (
+              <View style={styles.officialTopicRow}>
+                {officialGuidanceTopics.map((topic) => (
+                  <View key={topic} style={styles.officialTopicChip}>
+                    <Text style={styles.officialTopicChipText}>{topic}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </View>
           <View style={styles.viewSwitchRow}>
             <TouchableOpacity
@@ -1036,6 +1067,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     gap: 5,
+  },
+  officialTopicRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+  },
+  officialTopicChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.3)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  officialTopicChipText: {
+    color: "#FFE6A6",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   channelGuideKicker: { color: "#7A859A", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   channelGuideTitle: { color: "#F4F7FF", fontSize: 15, fontWeight: "900" },
