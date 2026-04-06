@@ -1017,6 +1017,24 @@ export default function WatchPartyLiveStageScreen() {
   const liveRoomFocusTarget = isHost
     ? (lowerCommunityParticipants[0] ?? hostParticipant)
     : hostParticipant;
+  const stageModeTitle = isLiveFirstMode
+    ? "Host-led live focus"
+    : "Shared watch moment";
+  const stageModeBody = isLiveFirstMode
+    ? "Live-First keeps the host and crowd energy at the front."
+    : `${branding.watchPartyLabel} keeps the shared watch moment centered inside the live route.`;
+  const stageFocusTarget = isLiveFirstMode
+    ? (hostParticipant ?? tailoredFocusParticipant)
+    : (tailoredFocusParticipant ?? lowerCommunityParticipants[0] ?? hostParticipant);
+  const stageFocusLabel = stageFocusTarget
+    ? (stageFocusTarget.userId === currentUserParticipantId ? "You" : stageFocusTarget.displayName)
+    : "Syncing...";
+  const stagePrimaryActionLabel = isHost
+    ? (isLiveFirstMode ? "Spotlight host" : "Spotlight community")
+    : "Follow stage focus";
+  const stageHelperCopy = isLiveFirstMode
+    ? `${lowerCommunityCountLabel}. ${hostParticipant ? `${hostParticipant.userId === currentUserParticipantId ? "You are" : `${hostParticipant.displayName} is`} leading the stage.` : "Host focus is syncing."} Keep comments and reactions additive so the host stays visually clear.`
+    : `${lowerCommunityCountLabel}. Shared viewing is active here, so keep the host and community readable while the watch moment leads the stage.`;
 
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
@@ -1196,6 +1214,60 @@ export default function WatchPartyLiveStageScreen() {
           >
             <Text style={[styles.modeBtnText, stageMode === "hybrid" && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.stageModeCard}>
+          <Text style={styles.stageModeCardKicker}>STAGE MODE</Text>
+          <Text style={styles.stageModeCardTitle}>{stageModeTitle}</Text>
+          <Text style={styles.stageModeCardBody}>{stageModeBody}</Text>
+          <Text style={styles.stageModeHelperText}>
+            {isLiveFirstMode ? "STAGE HELPER: " : "WATCH MOMENT HELPER: "}
+            {stageHelperCopy}
+          </Text>
+
+          <View style={styles.stageModeMetaRow}>
+            <View style={styles.stageModeMetaPill}>
+              <Text style={styles.stageModeMetaLabel}>Mode</Text>
+              <Text style={styles.stageModeMetaValue}>{liveRoomModeLabel}</Text>
+            </View>
+            <View style={styles.stageModeMetaPill}>
+              <Text style={styles.stageModeMetaLabel}>Focus</Text>
+              <Text style={styles.stageModeMetaValue}>{stageFocusLabel}</Text>
+            </View>
+            <View style={styles.stageModeMetaPill}>
+              <Text style={styles.stageModeMetaLabel}>Community</Text>
+              <Text style={styles.stageModeMetaValue}>{lowerCommunityCountLabel}</Text>
+            </View>
+          </View>
+
+          <View style={styles.stageModeActionRow}>
+            <TouchableOpacity
+              style={[
+                styles.stageModeActionBtn,
+                !stageFocusTarget?.userId && styles.stageModeActionBtnDisabled,
+              ]}
+              activeOpacity={0.84}
+              disabled={!stageFocusTarget?.userId}
+              onPress={() => {
+                if (!stageFocusTarget?.userId) return;
+                featureParticipantFirst(stageFocusTarget.userId);
+              }}
+            >
+              <Text style={styles.stageModeActionText}>{stagePrimaryActionLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.stageModeActionBtn, reactionPickerOpen && styles.stageModeActionBtnActive]}
+              activeOpacity={0.84}
+              onPress={() => {
+                setCommentsOpen(false);
+                setReactionPickerOpen((value) => !value);
+              }}
+            >
+              <Text style={[styles.stageModeActionText, reactionPickerOpen && styles.stageModeActionTextActive]}>
+                {reactionPickerOpen ? "Hide reactions" : "Open reactions"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ProtectedSessionNote
@@ -1879,6 +1951,50 @@ const styles = StyleSheet.create({
   },
   stageSectionKicker: { color: "#A5B0C6", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
   stageSectionBody: { color: "#C5CCDA", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+  stageModeCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(138,178,255,0.18)",
+    backgroundColor: "rgba(10,14,24,0.8)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+    marginBottom: 8,
+  },
+  stageModeCardKicker: { color: "#9DB8FF", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  stageModeCardTitle: { color: "#F5F8FF", fontSize: 18, fontWeight: "900", lineHeight: 23 },
+  stageModeCardBody: { color: "#C6D0E2", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  stageModeHelperText: { color: "#EFF4FF", fontSize: 12, lineHeight: 17, fontWeight: "700" },
+  stageModeMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  stageModeMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 2,
+  },
+  stageModeMetaLabel: { color: "#8E9DBA", fontSize: 10, fontWeight: "800", textTransform: "uppercase" },
+  stageModeMetaValue: { color: "#F4F7FF", fontSize: 12, fontWeight: "800" },
+  stageModeActionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  stageModeActionBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(138,178,255,0.22)",
+    backgroundColor: "rgba(16,28,51,0.82)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  stageModeActionBtnActive: {
+    borderColor: "rgba(220,20,60,0.3)",
+    backgroundColor: "rgba(220,20,60,0.16)",
+  },
+  stageModeActionBtnDisabled: {
+    opacity: 0.45,
+  },
+  stageModeActionText: { color: "#EEF2FF", fontSize: 12, fontWeight: "800" },
+  stageModeActionTextActive: { color: "#FFF5F7" },
 
   modeRow: {
     flexDirection: "row",
