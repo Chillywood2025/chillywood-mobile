@@ -1226,7 +1226,7 @@ export default function WatchPartyRoomScreen() {
   }, [accessGate]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
-  const onWatchTogether = useCallback(async (opts?: { liveMode?: boolean }) => {
+  const onWatchTogether = useCallback(async () => {
     const nextPartyId = String(room?.partyId ?? partyId ?? "").trim();
     let targetTitleId = String(room?.titleId ?? "").trim();
 
@@ -1250,7 +1250,6 @@ export default function WatchPartyRoomScreen() {
       params: {
         id: targetTitleId,
         partyId: nextPartyId,
-        ...(opts?.liveMode ? { liveMode: "1" } : {}),
       },
     });
   }, [room?.partyId, room?.titleId, titleIdHint, partyId, router]);
@@ -2191,7 +2190,7 @@ export default function WatchPartyRoomScreen() {
             <Text style={styles.watchCTAText}>🔴  Go Live</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.watchCTA} onPress={() => onWatchTogether({ liveMode: true })} activeOpacity={0.88}>
+          <TouchableOpacity style={styles.watchCTA} onPress={onWatchTogether} activeOpacity={0.88}>
             <Text style={styles.watchCTAText}>Watch-Party Live</Text>
           </TouchableOpacity>
         )}

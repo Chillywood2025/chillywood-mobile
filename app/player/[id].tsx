@@ -1716,6 +1716,22 @@ export default function PlayerScreen() {
     router.push("/watch-party");
   }, [isPlaying, titleId, item?.id, item?.title, localTitle, fallbackTitle]);
 
+  const onReturnToPartyRoom = useCallback(() => {
+    if (!partyId) {
+      router.back();
+      return;
+    }
+
+    router.dismissTo({
+      pathname: "/watch-party/[partyId]",
+      params: {
+        partyId,
+        ...(titleId ? { titleId } : {}),
+        source: "player-watch-party-live",
+      },
+    });
+  }, [partyId, titleId]);
+
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
     setPlaybackRate(rate);
@@ -2442,6 +2458,38 @@ export default function PlayerScreen() {
     () => liveBubbleParticipants.some((entry) => entry.isSpeaking || primaryActiveParticipantIds.includes(entry.id)),
     [liveBubbleParticipants, primaryActiveParticipantIds],
   );
+  const watchPartyContextTitle = useMemo(() => {
+    if (partySyncRole === "host") return "You are hosting the shared playback.";
+    if (partySyncRole === "guest") return "You are following the shared room timeline.";
+    return "You are inside shared Watch-Party playback.";
+  }, [partySyncRole]);
+  const watchPartyContextBody = useMemo(() => {
+    if (partySyncRole === "host") {
+      return "Playback authority lives here while comments, reactions, and room energy stay tied to the party session.";
+    }
+
+    return "Playback stays synced to the room here. Return to Party Room for invites, access changes, and room setup.";
+  }, [partySyncRole]);
+  const watchPartyContextHelper = useMemo(() => {
+    if (partySyncRole === "host") {
+      return "SYNC HELPER · Use Party Room for invites and room controls. Stay here to drive the shared watch moment.";
+    }
+
+    if (partySyncStatus) {
+      return `SYNC HELPER · ${partySyncStatus}. Return to Party Room when you need social setup instead of playback.`;
+    }
+
+    return "SYNC HELPER · Stay here for synced playback. Return to Party Room for room context, invites, and access changes.";
+  }, [partySyncRole, partySyncStatus]);
+  const watchPartyAudienceLabel = useMemo(() => {
+    if (!inWatchParty) return "";
+    if (viewerCount <= 1) return "1 viewer synced";
+    return `${viewerCount} viewers synced`;
+  }, [inWatchParty, viewerCount]);
+  const watchPartyPreviewLabel = useMemo(() => {
+    if (partyParticipantPreview.length === 0) return "";
+    return partyParticipantPreview.slice(0, 2).join(" · ");
+  }, [partyParticipantPreview]);
 
   useEffect(() => {
     if (!inWatchParty) return;
@@ -3104,6 +3152,39 @@ export default function PlayerScreen() {
           <ProtectedSessionNote
             {...getProtectedSessionCopy(isLiveModeFlag ? "live-player" : "watch-player")}
           />
+        ) : null}
+
+        {inWatchParty && !isLiveMode ? (
+          <View style={styles.watchPartyContextCard}>
+            <View style={styles.watchPartyContextHeaderRow}>
+              <View style={styles.watchPartyContextCopy}>
+                <Text style={styles.watchPartyContextKicker}>WATCH-PARTY LIVE</Text>
+                <Text style={styles.watchPartyContextTitle}>{watchPartyContextTitle}</Text>
+                <Text style={styles.watchPartyContextBody}>{watchPartyContextBody}</Text>
+              </View>
+              <TouchableOpacity style={styles.watchPartyContextBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
+                <Text style={styles.watchPartyContextBtnText}>Party Room</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.watchPartyContextMetaRow}>
+              {watchPartyAudienceLabel ? (
+                <View style={styles.watchPartyContextMetaPill}>
+                  <Text style={styles.watchPartyContextMetaText}>{watchPartyAudienceLabel}</Text>
+                </View>
+              ) : null}
+              {partySyncStatus ? (
+                <View style={styles.watchPartyContextMetaPill}>
+                  <Text style={styles.watchPartyContextMetaText}>{partySyncStatus}</Text>
+                </View>
+              ) : null}
+              {watchPartyPreviewLabel ? (
+                <View style={styles.watchPartyContextMetaPill}>
+                  <Text style={styles.watchPartyContextMetaText}>{watchPartyPreviewLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.watchPartyContextHelper}>{watchPartyContextHelper}</Text>
+          </View>
         ) : null}
 
         {source || isLiveMode ? (
@@ -3888,6 +3969,79 @@ const styles = StyleSheet.create({
     color: "#F2DEE4",
     fontSize: 10.5,
     fontWeight: "800",
+  },
+  watchPartyContextCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(8,8,12,0.42)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    marginBottom: 6,
+    gap: 7,
+  },
+  watchPartyContextHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  watchPartyContextCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  watchPartyContextKicker: {
+    color: "#F0C8D2",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  watchPartyContextTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  watchPartyContextBody: {
+    color: "#D3D7E3",
+    fontSize: 11.5,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
+  watchPartyContextBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.56)",
+    backgroundColor: "rgba(220,20,60,0.18)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  watchPartyContextBtnText: {
+    color: "#FFF5F7",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  watchPartyContextMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  watchPartyContextMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  watchPartyContextMetaText: {
+    color: "#EDF0F7",
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  watchPartyContextHelper: {
+    color: "#BFC4D2",
+    fontSize: 10.5,
+    fontWeight: "700",
+    lineHeight: 15,
   },
   text: { color: "#D6D6D6", fontSize: 14, marginBottom: 10 },
 

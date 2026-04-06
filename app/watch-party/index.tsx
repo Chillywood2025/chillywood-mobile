@@ -558,7 +558,7 @@ export default function WatchPartyIndexScreen() {
     }
     const trimmedTitleId = createTitleId.trim();
     const defaultPartyTitleId = String(preparedRoom?.room.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim();
-    const activeWaitingRoomType: WatchPartyRoomType = isPlayerWatchPartyLiveFlow ? "title" : "live";
+    const activeWaitingRoomType: WatchPartyRoomType = inferredWaitingRoomType;
     const effectiveTitleId = activeWaitingRoomType === "live" ? null : (trimmedTitleId || defaultPartyTitleId || null);
     const preparedTargetPartyId = String(preparedRoom?.room.partyId ?? incomingHandoff?.partyId ?? initialRoutePartyId ?? "").trim();
     const preparedTargetRoomCode = String(preparedRoom?.room.roomCode ?? incomingHandoff?.roomCode ?? initialRouteRoomCode ?? "").trim().toUpperCase();
@@ -691,9 +691,10 @@ export default function WatchPartyIndexScreen() {
     setJoinError(null);
   };
 
-  const activeRoomType: WatchPartyRoomType = preview?.room.roomType
+  const inferredWaitingRoomType: WatchPartyRoomType = preview?.room.roomType
     ?? preparedRoom?.room.roomType
-    ?? (isPlayerWatchPartyLiveFlow || initialRouteTitleId ? "title" : "live");
+    ?? (incomingHandoff?.titleId || initialRouteTitleId || isPlayerWatchPartyLiveFlow ? "title" : "live");
+  const activeRoomType: WatchPartyRoomType = inferredWaitingRoomType;
   const isLiveWaitingRoom = activeRoomType === "live" && !isPlayerWatchPartyLiveFlow;
   const activeRoomContext = preview?.room ?? preparedRoom?.room ?? null;
   const partyTitleId = String(activeRoomContext?.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim();
