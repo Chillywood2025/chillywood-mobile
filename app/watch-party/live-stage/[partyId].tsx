@@ -994,6 +994,33 @@ export default function WatchPartyLiveStageScreen() {
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
+  const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
+  const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
+  const liveRoomJoinLabel = room?.joinPolicy === "locked"
+    ? "Host approval"
+    : "Signed-in access";
+  const liveRoomCaptureLabel = room?.capturePolicy === "host_managed"
+    ? "Host-managed capture"
+    : "Best-effort capture";
+  const liveRoomShellTitle = isHost
+    ? "You are controlling the live room."
+    : "You are inside the live room.";
+  const liveRoomShellBody = isHost
+    ? "Use the live room shell to manage participation, keep role boundaries visible, and hand presentation down into the stage without leaving this route."
+    : "This is the live social shell. Participation, room policy, and host authority stay clear here while the stage below carries the presentation."
+  const liveRoomPermissionCopy = isHost
+    ? "Host authority stays explicit here: you control room mode, participant focus, and any safety-sensitive audience actions."
+    : "The host controls room mode, participant focus, and higher-trust audience actions. You can react, comment, follow the host, and leave safely."
+  const liveRoomHelperCopy = isHost
+    ? `${viewerCount} ${viewerCount === 1 ? "person is" : "people are"} in room right now. Keep the room shell clear here, then let Live Stage carry the presentation.`
+    : `You are in ${liveRoomModeLabel}. Comments and reactions stay open to you here; speaker or visibility changes remain host-controlled.`;
+  const liveRoomFocusTarget = isHost
+    ? (lowerCommunityParticipants[0] ?? hostParticipant)
+    : hostParticipant;
+
+  const leaveLiveRoom = useCallback(() => {
+    router.push({ pathname: "/watch-party", params: { mode: "live" } });
+  }, [router]);
 
   debugLog("live-stage", "render branch", {
     loading,
@@ -1073,6 +1100,85 @@ export default function WatchPartyLiveStageScreen() {
           <Animated.View style={[styles.viewersPill, { opacity: viewersOpacity, transform: [{ scale: viewersScale }] }]}>
             <Text style={styles.viewersText}>👁 {viewerCount}</Text>
           </Animated.View>
+        </View>
+
+        <View style={styles.liveRoomShellCard}>
+          <Text style={styles.liveRoomShellKicker}>LIVE ROOM</Text>
+          <Text style={styles.liveRoomShellTitle}>{liveRoomShellTitle}</Text>
+          <Text style={styles.liveRoomShellBody}>{liveRoomShellBody}</Text>
+
+          <View style={styles.liveRoomMetaRow}>
+            <View style={styles.liveRoomMetaPill}>
+              <Text style={styles.liveRoomMetaLabel}>Role</Text>
+              <Text style={styles.liveRoomMetaValue}>{liveRoomRoleLabel}</Text>
+            </View>
+            <View style={styles.liveRoomMetaPill}>
+              <Text style={styles.liveRoomMetaLabel}>Mode</Text>
+              <Text style={styles.liveRoomMetaValue}>{liveRoomModeLabel}</Text>
+            </View>
+            <View style={styles.liveRoomMetaPill}>
+              <Text style={styles.liveRoomMetaLabel}>Join</Text>
+              <Text style={styles.liveRoomMetaValue}>{liveRoomJoinLabel}</Text>
+            </View>
+            <View style={styles.liveRoomMetaPill}>
+              <Text style={styles.liveRoomMetaLabel}>Capture</Text>
+              <Text style={styles.liveRoomMetaValue}>{liveRoomCaptureLabel}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.liveRoomPermissionText}>{liveRoomPermissionCopy}</Text>
+
+          <View style={styles.liveRoomActionRow}>
+            <TouchableOpacity
+              style={[styles.liveRoomActionBtn, commentsOpen && styles.liveRoomActionBtnActive]}
+              activeOpacity={0.84}
+              onPress={() => {
+                setReactionPickerOpen(false);
+                setCommentsOpen((value) => !value);
+              }}
+            >
+              <Text style={[styles.liveRoomActionText, commentsOpen && styles.liveRoomActionTextActive]}>
+                {commentsOpen ? "Hide comments" : "Open comments"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.liveRoomActionBtn,
+                !liveRoomFocusTarget?.userId && styles.liveRoomActionBtnDisabled,
+              ]}
+              activeOpacity={0.84}
+              disabled={!liveRoomFocusTarget?.userId}
+              onPress={() => {
+                if (!liveRoomFocusTarget?.userId) return;
+                featureParticipantFirst(liveRoomFocusTarget.userId);
+                setActiveParticipantId(liveRoomFocusTarget.userId);
+                setActiveSpeakerUserId(liveRoomFocusTarget.userId);
+              }}
+            >
+              <Text style={styles.liveRoomActionText}>
+                {isHost ? "Focus audience" : "See host first"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
+              activeOpacity={0.84}
+              onPress={leaveLiveRoom}
+            >
+              <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Leave room</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.liveRoomHelperCard}>
+            <Text style={styles.liveRoomHelperKicker}>LIVE ROOM HELPER</Text>
+            <Text style={styles.liveRoomHelperBody}>{liveRoomHelperCopy}</Text>
+          </View>
+        </View>
+
+        <View style={styles.stageSectionIntro}>
+          <Text style={styles.stageSectionKicker}>LIVE STAGE</Text>
+          <Text style={styles.stageSectionBody}>
+            Presentation stays inside this room. Switch between `Live-First` and `{branding.watchPartyLabel}` without leaving the live route.
+          </Text>
         </View>
 
         <View style={styles.modeRow}>
@@ -1700,6 +1806,79 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   viewersText: { color: "#E8E8E8", fontSize: 11, fontWeight: "900" },
+
+  liveRoomShellCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(8,10,16,0.78)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 10,
+    marginBottom: 10,
+  },
+  liveRoomShellKicker: { color: "#F3A6B7", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  liveRoomShellTitle: { color: "#F6F7FB", fontSize: 19, fontWeight: "900", lineHeight: 24 },
+  liveRoomShellBody: { color: "#C6CDDA", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  liveRoomMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  liveRoomMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 2,
+  },
+  liveRoomMetaLabel: { color: "#8E99B0", fontSize: 10, fontWeight: "800", textTransform: "uppercase" },
+  liveRoomMetaValue: { color: "#F4F7FF", fontSize: 12, fontWeight: "800" },
+  liveRoomPermissionText: { color: "#AEB9CC", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  liveRoomActionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  liveRoomActionBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(138,178,255,0.22)",
+    backgroundColor: "rgba(19,28,46,0.8)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  liveRoomActionBtnActive: {
+    borderColor: "rgba(220,20,60,0.3)",
+    backgroundColor: "rgba(220,20,60,0.16)",
+  },
+  liveRoomActionBtnDisabled: {
+    opacity: 0.45,
+  },
+  liveRoomActionBtnGhost: {
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  liveRoomActionText: { color: "#EEF2FF", fontSize: 12, fontWeight: "800" },
+  liveRoomActionTextActive: { color: "#FFF5F7" },
+  liveRoomActionTextGhost: { color: "#C5CCDA" },
+  liveRoomHelperCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.24)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  liveRoomHelperKicker: { color: "#F8D7DE", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  liveRoomHelperBody: { color: "#F6F7FB", fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
+  stageSectionIntro: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(8,10,16,0.54)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 4,
+    marginBottom: 8,
+  },
+  stageSectionKicker: { color: "#A5B0C6", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  stageSectionBody: { color: "#C5CCDA", fontSize: 12, lineHeight: 17, fontWeight: "600" },
 
   modeRow: {
     flexDirection: "row",
