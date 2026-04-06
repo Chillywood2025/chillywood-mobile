@@ -1,5 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { CustomerInfo, PurchasesOffering, PurchasesPackage, PurchasesOfferings } from "react-native-purchases";
+
 import { FEATURE_FLAGS, getAppMonetizationRuntimeFeatures } from "./featureFlags";
+import { debugLog, reportRuntimeError } from "./logger";
+import {
+  canMakeRevenueCatPurchases,
+  configureRevenueCatOnce,
+  openRevenueCatManageSubscriptions,
+  purchaseRevenueCatPackage,
+  readRevenueCatCustomerInfo,
+  readRevenueCatOfferings,
+  restoreRevenueCatPurchases,
+  syncRevenueCatCustomerIdentity,
+  type RevenueCatConfigurationState,
+} from "./revenuecat";
 import { supabase } from "./supabase";
 
 export type PlanTier = "free" | "premium";
@@ -38,6 +52,69 @@ export type ContentAccessDecision = {
   plan: UserPlan;
 };
 
+export type MonetizationTargetId =
+  | "premium_subscription"
+  | "paid_title_access"
+  | "premium_live_access"
+  | "premium_watch_party_access";
+
+export type MonetizationTargetKind = "subscription" | "one_time_unlock";
+
+export type MonetizationTargetDefinition = {
+  id: MonetizationTargetId;
+  label: string;
+  summary: string;
+  kind: MonetizationTargetKind;
+  offeringId: string;
+  entitlementIds: string[];
+  accessRule: MonetizationAccessRule;
+};
+
+export type MonetizationTargetState = {
+  definition: MonetizationTargetDefinition;
+  status: "entitled" | "available" | "unavailable";
+  hasEntitlement: boolean;
+  offeringAvailable: boolean;
+  packageCount: number;
+  availablePackageIds: string[];
+  recommendedPackageId?: string;
+};
+
+export type MonetizationSnapshot = {
+  status: "disabled" | "ready" | "store_unavailable" | "partial";
+  configuration: RevenueCatConfigurationState;
+  userId: string | null;
+  revenueCatAppUserId: string;
+  isAnonymousCustomer: boolean;
+  canMakePayments: boolean;
+  customerInfoLoaded: boolean;
+  offeringsLoaded: boolean;
+  currentOfferingId: string | null;
+  availableOfferingIds: string[];
+  activeEntitlementIds: string[];
+  activeProductIds: string[];
+  targets: Record<MonetizationTargetId, MonetizationTargetState>;
+  issues: string[];
+  updatedAt: number;
+};
+
+export type MonetizationPurchaseOutcome = {
+  ok: boolean;
+  target: MonetizationTargetId;
+  snapshot: MonetizationSnapshot;
+  customerInfo: CustomerInfo | null;
+  message: string;
+  packageId?: string;
+  productId?: string;
+};
+
+export type MonetizationRestoreOutcome = {
+  ok: boolean;
+  snapshot: MonetizationSnapshot;
+  customerInfo: CustomerInfo | null;
+  message: string;
+};
+
 const USER_PLAN_KEY = "@chillywood/user-plan";
 const SUBSCRIPTIONS_TABLE = "user_subscriptions";
 const PARTY_PASS_TABLE = "watch_party_pass_unlocks";
@@ -49,6 +126,89 @@ const defaultPlan: UserPlan = {
   watchPartyPerks: false,
   updatedAt: Date.now(),
 };
+
+const MONETIZATION_TARGETS: Record<MonetizationTargetId, MonetizationTargetDefinition> = {
+  premium_subscription: {
+    id: "premium_subscription",
+    label: "Chi'llywood Premium",
+    summary: "Subscription-based premium access for premium titles, premium live, and ad-free playback.",
+    kind: "subscription",
+    offeringId: "premium",
+    entitlementIds: ["premium"],
+    accessRule: "premium",
+  },
+  paid_title_access: {
+    id: "paid_title_access",
+    label: "Title Unlock",
+    summary: "One-time paid-content access for titles when creator-paid unlocks go live.",
+    kind: "one_time_unlock",
+    offeringId: "paid-content",
+    entitlementIds: ["paid_content"],
+    accessRule: "premium",
+  },
+  premium_live_access: {
+    id: "premium_live_access",
+    label: "Premium Live Access",
+    summary: "Premium entry for live-first sessions that should stay outside the free baseline.",
+    kind: "one_time_unlock",
+    offeringId: "premium-live",
+    entitlementIds: ["premium_live", "premium"],
+    accessRule: "premium",
+  },
+  premium_watch_party_access: {
+    id: "premium_watch_party_access",
+    label: "Watch-Party Access",
+    summary: "Premium shared-room access for Watch-Party Live and paid room entry.",
+    kind: "one_time_unlock",
+    offeringId: "premium-watch-party",
+    entitlementIds: ["premium_watch_party", "premium"],
+    accessRule: "party_pass",
+  },
+};
+
+const getDefaultMonetizationTargetState = (
+  definition: MonetizationTargetDefinition,
+): MonetizationTargetState => ({
+  definition,
+  status: "unavailable",
+  hasEntitlement: false,
+  offeringAvailable: false,
+  packageCount: 0,
+  availablePackageIds: [],
+});
+
+const createEmptyMonetizationSnapshot = (
+  configuration: RevenueCatConfigurationState,
+  userId: string | null,
+): MonetizationSnapshot => ({
+  status: configuration.shouldConfigure ? "partial" : "disabled",
+  configuration,
+  userId,
+  revenueCatAppUserId: "",
+  isAnonymousCustomer: true,
+  canMakePayments: false,
+  customerInfoLoaded: false,
+  offeringsLoaded: false,
+  currentOfferingId: null,
+  availableOfferingIds: [],
+  activeEntitlementIds: [],
+  activeProductIds: [],
+  targets: {
+    premium_subscription: getDefaultMonetizationTargetState(MONETIZATION_TARGETS.premium_subscription),
+    paid_title_access: getDefaultMonetizationTargetState(MONETIZATION_TARGETS.paid_title_access),
+    premium_live_access: getDefaultMonetizationTargetState(MONETIZATION_TARGETS.premium_live_access),
+    premium_watch_party_access: getDefaultMonetizationTargetState(MONETIZATION_TARGETS.premium_watch_party_access),
+  },
+  issues: configuration.reason ? [configuration.reason] : [],
+  updatedAt: Date.now(),
+});
+
+let cachedMonetizationSnapshot: MonetizationSnapshot = createEmptyMonetizationSnapshot(
+  { mode: "disabled", apiKey: "", shouldConfigure: false, reason: "RevenueCat has not been configured yet." },
+  null,
+);
+
+const monetizationSnapshotListeners = new Set<() => void>();
 
 export const DEFAULT_CREATOR_PERMISSION_SET: CreatorPermissionSet = {
   userId: "",
@@ -148,6 +308,352 @@ async function getSignedInUserId() {
   }
 }
 
+const notifyMonetizationSnapshotListeners = () => {
+  monetizationSnapshotListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch {
+      // ignore listener failures
+    }
+  });
+};
+
+const getOfferingByIdentifier = (
+  offerings: PurchasesOfferings | null,
+  offeringId: string,
+): PurchasesOffering | null => {
+  if (!offerings) return null;
+  return offerings.all[offeringId] ?? null;
+};
+
+const selectRecommendedPackage = (offering: PurchasesOffering | null): PurchasesPackage | null => {
+  if (!offering) return null;
+  return offering.monthly
+    ?? offering.annual
+    ?? offering.threeMonth
+    ?? offering.sixMonth
+    ?? offering.weekly
+    ?? offering.lifetime
+    ?? offering.availablePackages[0]
+    ?? null;
+};
+
+const hasActiveEntitlement = (
+  customerInfo: CustomerInfo | null,
+  entitlementIds: string[],
+): boolean => {
+  if (!customerInfo) return false;
+  return entitlementIds.some((entitlementId) => {
+    const normalizedId = String(entitlementId ?? "").trim();
+    if (!normalizedId) return false;
+    return !!customerInfo.entitlements.active[normalizedId];
+  });
+};
+
+const buildMonetizationTargetState = (
+  definition: MonetizationTargetDefinition,
+  customerInfo: CustomerInfo | null,
+  offerings: PurchasesOfferings | null,
+): MonetizationTargetState => {
+  const offering = getOfferingByIdentifier(offerings, definition.offeringId);
+  const recommendedPackage = selectRecommendedPackage(offering);
+  const hasEntitlement = hasActiveEntitlement(customerInfo, definition.entitlementIds);
+  const packageIds = offering?.availablePackages.map((entry) => String(entry.identifier ?? "").trim()).filter(Boolean) ?? [];
+
+  if (hasEntitlement) {
+    return {
+      definition,
+      status: "entitled",
+      hasEntitlement: true,
+      offeringAvailable: !!offering,
+      packageCount: packageIds.length,
+      availablePackageIds: packageIds,
+      recommendedPackageId: recommendedPackage ? String(recommendedPackage.identifier ?? "").trim() : undefined,
+    };
+  }
+
+  if (offering && packageIds.length > 0) {
+    return {
+      definition,
+      status: "available",
+      hasEntitlement: false,
+      offeringAvailable: true,
+      packageCount: packageIds.length,
+      availablePackageIds: packageIds,
+      recommendedPackageId: recommendedPackage ? String(recommendedPackage.identifier ?? "").trim() : undefined,
+    };
+  }
+
+  return {
+    definition,
+    status: "unavailable",
+    hasEntitlement: false,
+    offeringAvailable: !!offering,
+    packageCount: packageIds.length,
+    availablePackageIds: packageIds,
+  };
+};
+
+const derivePlanFromMonetizationSnapshot = (
+  snapshot: MonetizationSnapshot,
+  fallback = defaultPlan,
+): UserPlan => {
+  const premiumTarget = snapshot.targets.premium_subscription;
+  const watchPartyTarget = snapshot.targets.premium_watch_party_access;
+  const liveTarget = snapshot.targets.premium_live_access;
+  const hasPremium = premiumTarget.hasEntitlement;
+  const watchPartyPerks = hasPremium || watchPartyTarget.hasEntitlement || liveTarget.hasEntitlement;
+
+  return {
+    tier: hasPremium ? "premium" : "free",
+    adFree: hasPremium,
+    watchPartyPerks,
+    updatedAt: snapshot.updatedAt || fallback.updatedAt,
+  };
+};
+
+const setCachedMonetizationSnapshot = (snapshot: MonetizationSnapshot) => {
+  cachedMonetizationSnapshot = snapshot;
+  notifyMonetizationSnapshotListeners();
+  return snapshot;
+};
+
+export function getMonetizationCatalog() {
+  return MONETIZATION_TARGETS;
+}
+
+export function getCachedMonetizationSnapshot() {
+  return cachedMonetizationSnapshot;
+}
+
+export function subscribeToMonetizationSnapshot(listener: () => void) {
+  monetizationSnapshotListeners.add(listener);
+  return () => {
+    monetizationSnapshotListeners.delete(listener);
+  };
+}
+
+export async function readMonetizationSnapshot(options?: {
+  forceRefresh?: boolean;
+  userId?: string | null;
+}): Promise<MonetizationSnapshot> {
+  const userId = String(options?.userId ?? await getSignedInUserId()).trim() || null;
+  const configuration = configureRevenueCatOnce();
+  const baseSnapshot = createEmptyMonetizationSnapshot(configuration, userId);
+
+  if (!configuration.shouldConfigure) {
+    return setCachedMonetizationSnapshot(baseSnapshot);
+  }
+
+  try {
+    const [identity, canMakePayments, customerInfo, offerings] = await Promise.all([
+      syncRevenueCatCustomerIdentity(userId),
+      canMakeRevenueCatPurchases(),
+      readRevenueCatCustomerInfo({ refresh: !!options?.forceRefresh }),
+      readRevenueCatOfferings(),
+    ]);
+
+    const issues = [...baseSnapshot.issues];
+    if (!canMakePayments) {
+      issues.push("Google Play billing is not currently available on this device/account.");
+    }
+    if (!customerInfo) {
+      issues.push("Customer info is unavailable from RevenueCat.");
+    }
+    if (!offerings) {
+      issues.push("Offerings are unavailable from RevenueCat.");
+    }
+
+    const snapshot: MonetizationSnapshot = {
+      status: !canMakePayments
+        ? "store_unavailable"
+        : customerInfo && offerings
+          ? "ready"
+          : "partial",
+      configuration,
+      userId,
+      revenueCatAppUserId: identity.appUserId,
+      isAnonymousCustomer: identity.isAnonymous,
+      canMakePayments,
+      customerInfoLoaded: !!customerInfo,
+      offeringsLoaded: !!offerings,
+      currentOfferingId: offerings?.current?.identifier ?? null,
+      availableOfferingIds: Object.keys(offerings?.all ?? {}),
+      activeEntitlementIds: Object.keys(customerInfo?.entitlements.active ?? {}),
+      activeProductIds: customerInfo?.activeSubscriptions ?? [],
+      targets: {
+        premium_subscription: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_subscription, customerInfo, offerings),
+        paid_title_access: buildMonetizationTargetState(MONETIZATION_TARGETS.paid_title_access, customerInfo, offerings),
+        premium_live_access: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_live_access, customerInfo, offerings),
+        premium_watch_party_access: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_watch_party_access, customerInfo, offerings),
+      },
+      issues,
+      updatedAt: Date.now(),
+    };
+
+    debugLog("monetization", "Monetization snapshot refreshed", {
+      activeEntitlements: snapshot.activeEntitlementIds.join(","),
+      appUserId: snapshot.revenueCatAppUserId,
+      availableOfferings: snapshot.availableOfferingIds.join(","),
+      status: snapshot.status,
+      userId: snapshot.userId,
+    });
+
+    return setCachedMonetizationSnapshot(snapshot);
+  } catch (error) {
+    reportRuntimeError("monetization-snapshot", error, {
+      userId: userId ?? "anonymous",
+    });
+    return setCachedMonetizationSnapshot({
+      ...baseSnapshot,
+      status: "partial",
+      issues: [...baseSnapshot.issues, "Failed to refresh the monetization snapshot."],
+      updatedAt: Date.now(),
+    });
+  }
+}
+
+export async function bootstrapMonetizationFoundation(userId?: string | null) {
+  return readMonetizationSnapshot({ userId });
+}
+
+export async function purchaseMonetizationTarget(
+  targetId: MonetizationTargetId,
+  options?: { packageId?: string | null; userId?: string | null },
+): Promise<MonetizationPurchaseOutcome> {
+  const target = MONETIZATION_TARGETS[targetId];
+  const snapshot = await readMonetizationSnapshot({
+    forceRefresh: true,
+    userId: options?.userId,
+  });
+  const targetState = snapshot.targets[targetId];
+
+  if (!snapshot.configuration.shouldConfigure) {
+    return {
+      ok: false,
+      target: targetId,
+      snapshot,
+      customerInfo: null,
+      message: snapshot.configuration.reason ?? "RevenueCat is not configured for this build.",
+    };
+  }
+
+  if (!snapshot.canMakePayments) {
+    return {
+      ok: false,
+      target: targetId,
+      snapshot,
+      customerInfo: null,
+      message: "Google Play billing is not currently available on this device/account.",
+    };
+  }
+
+  if (targetState.hasEntitlement) {
+    return {
+      ok: true,
+      target: targetId,
+      snapshot,
+      customerInfo: null,
+      message: `${target.label} is already active for this account.`,
+    };
+  }
+
+  const offerings = await readRevenueCatOfferings();
+  const offering = getOfferingByIdentifier(offerings, target.offeringId);
+  const selectedPackage = offering?.availablePackages.find((entry) => {
+    const packageId = String(entry.identifier ?? "").trim();
+    return packageId && packageId === String(options?.packageId ?? "").trim();
+  }) ?? selectRecommendedPackage(offering);
+
+  if (!selectedPackage) {
+    return {
+      ok: false,
+      target: targetId,
+      snapshot,
+      customerInfo: null,
+      message: `${target.label} is not available in the current RevenueCat offerings yet.`,
+    };
+  }
+
+  try {
+    const result = await purchaseRevenueCatPackage(selectedPackage);
+    const refreshedSnapshot = await readMonetizationSnapshot({
+      forceRefresh: true,
+      userId: options?.userId,
+    });
+
+    return {
+      ok: true,
+      target: targetId,
+      snapshot: refreshedSnapshot,
+      customerInfo: result.customerInfo,
+      message: `${target.label} purchase completed.`,
+      packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+      productId: String(result.productIdentifier ?? "").trim() || undefined,
+    };
+  } catch (error) {
+    reportRuntimeError("monetization-purchase", error, {
+      packageId: String(selectedPackage.identifier ?? "").trim() || "unknown",
+      target: targetId,
+    });
+
+    return {
+      ok: false,
+      target: targetId,
+      snapshot: await readMonetizationSnapshot({ userId: options?.userId }),
+      customerInfo: null,
+      message: `${target.label} purchase could not be completed.`,
+      packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+    };
+  }
+}
+
+export async function restoreMonetizationAccess(options?: { userId?: string | null }): Promise<MonetizationRestoreOutcome> {
+  const snapshot = await readMonetizationSnapshot({
+    forceRefresh: true,
+    userId: options?.userId,
+  });
+
+  if (!snapshot.configuration.shouldConfigure) {
+    return {
+      ok: false,
+      snapshot,
+      customerInfo: null,
+      message: snapshot.configuration.reason ?? "RevenueCat is not configured for this build.",
+    };
+  }
+
+  try {
+    const customerInfo = await restoreRevenueCatPurchases();
+    const refreshedSnapshot = await readMonetizationSnapshot({
+      forceRefresh: true,
+      userId: options?.userId,
+    });
+
+    return {
+      ok: true,
+      snapshot: refreshedSnapshot,
+      customerInfo,
+      message: "Purchases restored.",
+    };
+  } catch (error) {
+    reportRuntimeError("monetization-restore", error, {
+      userId: options?.userId ?? "anonymous",
+    });
+
+    return {
+      ok: false,
+      snapshot: await readMonetizationSnapshot({ userId: options?.userId }),
+      customerInfo: null,
+      message: "Unable to restore purchases right now.",
+    };
+  }
+}
+
+export async function openManageSubscriptionFlow() {
+  return openRevenueCatManageSubscriptions();
+}
+
 async function readLocalPlan(): Promise<UserPlan> {
   try {
     const raw = await AsyncStorage.getItem(USER_PLAN_KEY);
@@ -173,7 +679,7 @@ async function saveLocalPlan(plan: UserPlan): Promise<void> {
   }
 }
 
-export async function readUserPlan(): Promise<UserPlan> {
+async function readLegacyUserPlan(): Promise<UserPlan> {
   const local = await readLocalPlan();
   const userId = await getSignedInUserId();
   if (!FEATURE_FLAGS.monetization.subscriptions) return local;
@@ -201,6 +707,21 @@ export async function readUserPlan(): Promise<UserPlan> {
   } catch {
     return local;
   }
+}
+
+export async function readUserPlan(): Promise<UserPlan> {
+  const legacy = await readLegacyUserPlan();
+  const runtime = getAppMonetizationRuntimeFeatures();
+  if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return legacy;
+
+  const snapshot = await readMonetizationSnapshot();
+  if (!snapshot.configuration.shouldConfigure || !snapshot.customerInfoLoaded) {
+    return legacy;
+  }
+
+  const plan = derivePlanFromMonetizationSnapshot(snapshot, legacy);
+  await saveLocalPlan(plan);
+  return plan;
 }
 
 export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
@@ -238,7 +759,12 @@ export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
 export async function hasPremiumAccess(): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return true;
-  const plan = await readUserPlan();
+  const snapshot = await readMonetizationSnapshot();
+  if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
+    return snapshot.targets.premium_subscription.hasEntitlement;
+  }
+
+  const plan = await readLegacyUserPlan();
   return plan.tier === "premium";
 }
 
@@ -246,7 +772,18 @@ export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.partyPass || !runtime.partyPassEnabled) return true;
 
-  const plan = await readUserPlan();
+  const snapshot = await readMonetizationSnapshot();
+  if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
+    if (
+      snapshot.targets.premium_subscription.hasEntitlement
+      || snapshot.targets.premium_watch_party_access.hasEntitlement
+      || snapshot.targets.premium_live_access.hasEntitlement
+    ) {
+      return true;
+    }
+  }
+
+  const plan = await readLegacyUserPlan();
   if (plan.watchPartyPerks) return true;
 
   const userId = await getSignedInUserId();

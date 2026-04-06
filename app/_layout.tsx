@@ -6,6 +6,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { trackEvent, trackScreen } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
 import { reportRuntimeError } from "../_lib/logger";
+import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import { getPostHogConfig, posthogFeatureFlags } from "../_lib/posthog";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { SessionProvider, useSession } from "../_lib/session";
@@ -104,6 +105,18 @@ function PostHogRootProvider({ children }: { children: React.ReactNode }) {
       {children}
     </PostHogProvider>
   );
+}
+
+function RevenueCatBootstrap() {
+  const { user } = useSession();
+
+  useEffect(() => {
+    void bootstrapMonetizationFoundation(user?.id ?? null).catch(() => {
+      // runtime error reporting already happens inside the monetization owners
+    });
+  }, [user?.id]);
+
+  return null;
 }
 
 function RootNavigator() {
@@ -240,6 +253,7 @@ export default function RootLayout() {
   return (
     <PostHogRootProvider>
       <SessionProvider>
+        <RevenueCatBootstrap />
         <PostHogSessionBridge />
         <BetaProgramProvider>
           <RootErrorBoundary>

@@ -13,6 +13,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ? existingExtra.runtime
       : {}
   ) as Record<string, unknown>;
+  const existingRevenueCat = (
+    existingRuntime.revenueCat && typeof existingRuntime.revenueCat === "object" && !Array.isArray(existingRuntime.revenueCat)
+      ? existingRuntime.revenueCat
+      : {}
+  ) as Record<string, unknown>;
 
   return {
     ...base,
@@ -28,6 +33,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         betaEnvironment: normalizeRuntimeEnvironment(
           process.env.EXPO_PUBLIC_BETA_ENVIRONMENT || existingRuntime.betaEnvironment,
         ),
+        revenueCat: {
+          ...existingRevenueCat,
+          androidDebugPublicSdkKey: normalizeText(
+            process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV || existingRevenueCat.androidDebugPublicSdkKey,
+          ),
+          androidPublicSdkKey: normalizeText(
+            process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY || existingRevenueCat.androidPublicSdkKey,
+          ),
+          iosPublicSdkKey: normalizeText(
+            process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY || existingRevenueCat.iosPublicSdkKey,
+          ),
+        },
       },
     },
   };

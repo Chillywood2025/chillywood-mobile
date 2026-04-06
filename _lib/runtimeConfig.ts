@@ -2,11 +2,18 @@ import Constants from "expo-constants";
 
 export type RuntimeEnvironment = "closed-beta" | "public-v1";
 
+export type RevenueCatRuntimeConfig = {
+  androidDebugPublicSdkKey: string;
+  androidPublicSdkKey: string;
+  iosPublicSdkKey: string;
+};
+
 export type RuntimeConfig = {
   supabaseUrl: string;
   supabaseAnonKey: string;
   betaOperatorAllowlist: string[];
   betaEnvironment: RuntimeEnvironment;
+  revenueCat: RevenueCatRuntimeConfig;
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => (
@@ -44,6 +51,7 @@ export function getRuntimeConfig(): RuntimeConfig {
   if (cachedConfig) return cachedConfig;
 
   const runtimeExtra = readRuntimeExtra();
+  const revenueCatExtra = isPlainObject(runtimeExtra.revenueCat) ? runtimeExtra.revenueCat : {};
 
   cachedConfig = {
     supabaseUrl: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_URL || runtimeExtra.supabaseUrl),
@@ -54,6 +62,17 @@ export function getRuntimeConfig(): RuntimeConfig {
     betaEnvironment: normalizeRuntimeEnvironment(
       process.env.EXPO_PUBLIC_BETA_ENVIRONMENT || runtimeExtra.betaEnvironment,
     ),
+    revenueCat: {
+      androidDebugPublicSdkKey: normalizeText(
+        process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV || revenueCatExtra.androidDebugPublicSdkKey,
+      ),
+      androidPublicSdkKey: normalizeText(
+        process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY || revenueCatExtra.androidPublicSdkKey,
+      ),
+      iosPublicSdkKey: normalizeText(
+        process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY || revenueCatExtra.iosPublicSdkKey,
+      ),
+    },
   };
 
   return cachedConfig;
