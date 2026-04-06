@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, login-visual, Phase 0 Rachi baseline, the completed Phase 2 moderation/admin minimums, the completed Phase 3 Home/content polish, the completed Phase 4 release hardening, the closed Phase 5 final integration proof, the pushed room campaign through Chapter 3, the now-completed Chapter 4 Phases 1 through 4, and the branded-background restoration truth exactly as already proved. Do not reopen runtime proof, do not reopen earlier room chapters, and do not reopen earlier phases unless a later blocker proves the need. `ROOM_BLUEPRINT.md` remains implementation law for room boundaries, and the monetization foundation plus access model remain owned centrally by `app/_layout.tsx`, `_lib/revenuecat.ts`, `_lib/monetization.ts`, and the shared route-safe gate helpers now used by the waiting-room/title/communication owners. `app/player/[id].tsx` now also carries the closed Phase 4 standalone-player surface integration truth: the route resolves the real premium title row from the backend, stays solo-first, keeps `Watch-Party Live` owned on the player, and opens the shared `TITLE ACCESS` sheet instead of bypassing the gate with local fallback data. `assets/images/chillywood-branded-background.png` is now the exact source-of-truth branded background asset, while `assets/images/chicago-skyline.jpg` remains the restored shared runtime owner for login, support, admin, channel settings, and skyline-fallback poster surfaces. Room-owned backgrounds in Live / Party / Player / Profile / Chat remain intentionally separate. The next exact lane is now Chapter 4, Phase 5: analytics / admin visibility / closeout proof.
+Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, login-visual, Phase 0 Rachi baseline, the completed Phase 2 moderation/admin minimums, the completed Phase 3 Home/content polish, the completed Phase 4 release hardening, the closed Phase 5 final integration proof, the pushed room campaign through Chapter 3, the now-completed Chapter 4 Phases 1 through 5, and the branded-background restoration truth exactly as already proved. Do not reopen runtime proof, do not reopen earlier room chapters, and do not reopen earlier phases unless a later blocker proves the need. `ROOM_BLUEPRINT.md` remains implementation law for room boundaries, and the monetization foundation plus access model remain owned centrally by `app/_layout.tsx`, `_lib/revenuecat.ts`, `_lib/monetization.ts`, the shared route-safe gate helpers, and `components/monetization/access-sheet.tsx`. `app/player/[id].tsx` keeps the closed Phase 4 standalone-player surface-integration truth, while `app/settings.tsx` now adds the bounded owner-safe monetization visibility card and utility handoff without inventing a dashboard. `assets/images/chillywood-branded-background.png` is now the exact source-of-truth branded background asset, while `assets/images/chicago-skyline.jpg` remains the restored shared runtime owner for login, support, admin, channel settings, and skyline-fallback poster surfaces. Room-owned backgrounds in Live / Party / Player / Profile / Chat remain intentionally separate. The next exact lane is now the deferred final combined room-campaign proof / push-readiness pass.
 
 ## Current Plan
 1. Preserve the carried-forward proved baseline without reopening unrelated prior work
@@ -12,8 +12,9 @@ Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, logi
 6. Carry forward the restored branded background truth: the uploaded nighttime city image now lives in-repo as `assets/images/chillywood-branded-background.png`, while the shared branded runtime owner path remains `assets/images/chicago-skyline.jpg` for branded shells and fallback poster usage, and room/content-specific surfaces keep their own owners
 7. Carry forward Chapter 4 Phase 3 as complete: the reusable access sheet now owns visible paywall / offer UX, restore/manage entry points, retry/failure messaging, and honest fallback behavior when the current RevenueCat offering configuration does not expose a live purchase path
 8. Carry forward Chapter 4 Phase 4 as complete: the standalone player now reuses the central title-access policy against the real backend `titles` row, renders the honest missing-entitlement gate on Android dev client, and preserves solo-first player ownership without room drift
-9. Keep iOS out of runtime proof for this chapter; prove on Android dev client only
-10. Keep final combined monetization proof as the closing lane after all Chapter 4 phases are complete
+9. Carry forward Chapter 4 Phase 5 as complete: central monetization analytics/reporting hooks now exist on the project-standard analytics/logger path, `app/settings.tsx` now exposes a bounded owner-safe monetization status surface, and the final Android dev-client proof closed the in-app monetization wave while preserving honest restore/manage behavior and free-route safety
+10. Keep iOS out of runtime proof for this chapter; prove on Android dev client only
+11. Resume the deferred final combined room-campaign proof / push-readiness lane now that Chapter 4 is closed in-app
 
 ## Exact Next Batch
 - preserve the proved current-build baseline exactly as carried-forward truth: logged-out first open lands on `/login`, valid login returns to Home, Home/title/player routes stay correct, Settings/Logout stay visible and working, the restored Chi'llywood login presentation remains intact, and the Phase 5 Android-dev-client proof remains closed
@@ -47,7 +48,7 @@ This next pass should:
 - preserve the completed Chapter 4 Phase 1 monetization foundation exactly as recorded
 - preserve the completed Chapter 4 Phase 2 entitlement plumbing exactly as recorded
 - carry forward the current Rachi foundation without reopening unrelated profile/chat architecture unless a later blocker proves otherwise
-- run only Chapter 4 Phase 4 next, using the smallest file scope that honest entitlement-aware surface integration requires
+- run only the deferred final combined room-campaign proof / push-readiness pass next, using the smallest file scope that honest reconciliation and proof require
 
 ## Out Of Scope
 Do not:
@@ -68,8 +69,8 @@ Do not:
 - reopen the completed Chapter 4 Phase 1 foundation except for a tiny directly-proved dependency needed by later monetization UX
 - reopen the completed Chapter 4 Phase 2 entitlement plumbing except for a tiny directly-proved dependency needed by Phase 3 purchase surfaces
 - treat the expanded room blueprint as approval to scatter AI or premium features into rooms without the correct room owner and maturity fit
-- reopen the completed Chapter 4 Phase 3 paywall / offer UX lane except for a tiny directly-proved dependency needed by Phase 4 surface integration
-- broaden the next pass beyond Phase 4 surface integration into speculative cleanup
+- reopen the completed Chapter 4 Phase 3 paywall / offer UX lane except for a tiny directly-proved dependency needed by final combined proof or later monetization reconciliation
+- broaden the next pass beyond the deferred final combined room-campaign proof / push-readiness lane into speculative cleanup
 - invent a non-canonical Rachi route, fake starter surface, or disconnected messenger pattern
 - rerun emulator/device proof repeatedly without a concrete blocker-driven reason
 
@@ -93,5 +94,5 @@ The next lane is successful when:
 - the completed Chapter 4 Phase 2 entitlement plumbing remains aligned with centralized access-policy ownership, Android-dev-client proof for live / watch-party / title-target gates, and the fixed RevenueCat identity/logging path without contradictory active checkpoint text
 - final integration proof remains recorded as closed on the current build without contradictory active checkpoint text
 - the completed Chapter 4 Phase 3 pass remains aligned with centralized paywall ownership, Android dev-client proof for live / watch-party / title sheets, honest restore/manage/retry utility entry, and explicit fallback behavior when live offer mapping is unavailable
-- the next Chapter 4 Phase 4 pass can integrate entitlement-aware monetization behavior into the real product surfaces without contradictory active checkpoint text
+- the deferred final combined room-campaign proof / push-readiness pass can now resume without contradictory active checkpoint text from the completed Chapter 4 monetization wave
 - `CURRENT_STATE.md`, `NEXT_TASK.md`, and the durable doctrine files tell the same new execution-plan story

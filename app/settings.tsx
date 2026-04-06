@@ -1,8 +1,14 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Alert, ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { trackEvent } from "../_lib/analytics";
+import {
+  getCachedMonetizationSnapshot,
+  openManageSubscriptionFlow,
+  readMonetizationSnapshot,
+  subscribeToMonetizationSnapshot,
+} from "../_lib/monetization";
 import { supabase } from "../_lib/supabase";
 import { useSession } from "../_lib/session";
 
@@ -10,11 +16,86 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { isLoading, isSignedIn, user } = useSession();
   const [signingOut, setSigningOut] = useState(false);
+  const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
+  const [monetizationLoading, setMonetizationLoading] = useState(false);
+  const [managingSubscription, setManagingSubscription] = useState(false);
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;
     router.replace("/(auth)/login");
   }, [isLoading, isSignedIn, router]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToMonetizationSnapshot(() => {
+      setMonetizationSnapshot(getCachedMonetizationSnapshot());
+    });
+    return unsubscribe;
+  }, []);
+
+  const refreshMonetizationStatus = useCallback(async (forceRefresh = true) => {
+    setMonetizationLoading(true);
+    try {
+      const snapshot = await readMonetizationSnapshot({ forceRefresh });
+      setMonetizationSnapshot(snapshot);
+    } finally {
+      setMonetizationLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || !isSignedIn) return;
+    void refreshMonetizationStatus(false);
+  }, [isLoading, isSignedIn, refreshMonetizationStatus]);
+
+  const onPressManageSubscription = useCallback(async () => {
+    if (managingSubscription) return;
+
+    setManagingSubscription(true);
+    try {
+      const opened = await openManageSubscriptionFlow();
+      trackEvent("monetization_manage_subscription_opened", {
+        source: "settings",
+        opened,
+      });
+
+      if (!opened) {
+        Alert.alert("Subscription", "Unable to open subscription management right now.");
+      }
+    } finally {
+      setManagingSubscription(false);
+    }
+  }, [managingSubscription]);
+
+  const monetizationStatusLabel = useMemo(() => {
+    if (!monetizationSnapshot.configuration.shouldConfigure) return "Disabled";
+    if (monetizationSnapshot.status === "ready") return "Ready";
+    if (monetizationSnapshot.status === "store_unavailable") return "Store unavailable";
+    if (monetizationSnapshot.status === "partial") return "Partial";
+    return "Disabled";
+  }, [monetizationSnapshot.configuration.shouldConfigure, monetizationSnapshot.status]);
+
+  const planLabel = useMemo(() => (
+    monetizationSnapshot.targets.premium_subscription?.hasEntitlement ? "Premium active" : "Free account"
+  ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
+
+  const entitlementsLabel = useMemo(() => (
+    monetizationSnapshot.activeEntitlementIds.length
+      ? monetizationSnapshot.activeEntitlementIds.join(", ")
+      : "None active"
+  ), [monetizationSnapshot.activeEntitlementIds]);
+
+  const offeringsLabel = useMemo(() => {
+    if (monetizationSnapshot.currentOfferingId) return monetizationSnapshot.currentOfferingId;
+    if (monetizationSnapshot.availableOfferingIds.length) {
+      return `${monetizationSnapshot.availableOfferingIds.length} offerings loaded`;
+    }
+    return "No live offer loaded";
+  }, [monetizationSnapshot.availableOfferingIds, monetizationSnapshot.currentOfferingId]);
+
+  const issueLabel = useMemo(() => (
+    monetizationSnapshot.issues[0]
+      ?? "Purchases still happen in-context on titles and rooms."
+  ), [monetizationSnapshot.issues]);
 
   const onPressSignOut = async () => {
     if (signingOut) return;
@@ -62,7 +143,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
@@ -93,7 +174,63 @@ export default function SettingsScreen() {
           <Text style={styles.signOutButtonText}>{signingOut ? "Logging out..." : "Log Out"}</Text>
         </TouchableOpacity>
       </View>
-    </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardKicker}>MONETIZATION STATUS</Text>
+        <Text style={styles.secondaryTitle}>Billing & Access</Text>
+        <Text style={styles.body}>
+          This view reports the current account access state only. Purchases and upgrades still happen inside titles and room entry points.
+        </Text>
+
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Plan</Text>
+          <Text style={styles.identityValue}>{planLabel}</Text>
+        </View>
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Status</Text>
+          <Text style={styles.identityValue}>{monetizationStatusLabel}</Text>
+        </View>
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Active entitlements</Text>
+          <Text style={styles.identityValue}>{entitlementsLabel}</Text>
+        </View>
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Offerings</Text>
+          <Text style={styles.identityValue}>{offeringsLabel}</Text>
+        </View>
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Current note</Text>
+          <Text style={styles.statusNote}>{issueLabel}</Text>
+        </View>
+
+        <View style={styles.utilityRow}>
+          <TouchableOpacity
+            style={[styles.utilityButton, monetizationLoading && styles.utilityButtonDisabled]}
+            onPress={() => {
+              void refreshMonetizationStatus(true);
+            }}
+            activeOpacity={0.86}
+            disabled={monetizationLoading}
+          >
+            {monetizationLoading
+              ? <ActivityIndicator color="#E5ECF8" size="small" />
+              : <Text style={styles.utilityButtonText}>Refresh status</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.utilityButton, managingSubscription && styles.utilityButtonDisabled]}
+            onPress={() => {
+              void onPressManageSubscription();
+            }}
+            activeOpacity={0.86}
+            disabled={managingSubscription || !monetizationSnapshot.configuration.shouldConfigure}
+          >
+            {managingSubscription
+              ? <ActivityIndicator color="#E5ECF8" size="small" />
+              : <Text style={styles.utilityButtonText}>Manage subscription</Text>}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -103,6 +240,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#06070B",
     paddingTop: 56,
     paddingHorizontal: 18,
+  },
+  content: {
+    gap: 14,
+    paddingBottom: 28,
   },
   loadingWrap: {
     flex: 1,
@@ -156,6 +297,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "900",
   },
+  secondaryTitle: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "900",
+  },
   body: {
     color: "#B8C1D6",
     fontSize: 13,
@@ -181,6 +327,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  statusNote: {
+    color: "#D9E3F9",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
   signOutButton: {
     minHeight: 48,
     borderRadius: 14,
@@ -196,5 +348,28 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "900",
+  },
+  utilityRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  utilityButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  utilityButtonDisabled: {
+    opacity: 0.72,
+  },
+  utilityButtonText: {
+    color: "#F4F7FC",
+    fontSize: 12.5,
+    fontWeight: "800",
   },
 });

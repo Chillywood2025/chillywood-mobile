@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 
+import { trackEvent } from "../../_lib/analytics";
 import {
   openManageSubscriptionFlow,
   purchaseBlockedAccess,
@@ -155,6 +156,32 @@ export function AccessSheet({
         : actionLabelOverride ?? sheetState?.primaryLabel ?? baseCopy.actionLabel,
   };
   const busy = loadingState || purchaseBusy || restoreBusy || manageBusy;
+  const analyticsPayload = useMemo(() => ({
+    reason,
+    gateReason: String(gate?.reason ?? "").trim().toLowerCase() || "unknown",
+    primaryTargetId: gate?.monetization?.primaryTargetId ?? "none",
+    purchaseTargetId: gate?.monetization?.purchaseTargetId ?? "none",
+    snapshotStatus: sheetState?.snapshot.status ?? "unknown",
+    canPurchase: sheetState?.snapshot.canMakePayments ?? false,
+    offeringAvailable: !!sheetState?.offer,
+    kicker: copy.kicker,
+  }), [
+    copy.kicker,
+    gate?.monetization?.primaryTargetId,
+    gate?.monetization?.purchaseTargetId,
+    gate?.reason,
+    reason,
+    sheetState?.offer,
+    sheetState?.snapshot.canMakePayments,
+    sheetState?.snapshot.status,
+  ]);
+  const onCloseTracked = useCallback((source: "backdrop" | "button" | "system") => {
+    trackEvent("monetization_paywall_dismissed", {
+      ...analyticsPayload,
+      source,
+    });
+    onClose();
+  }, [analyticsPayload, onClose]);
 
   const statusToneStyle = statusTone === "success"
     ? styles.statusCardSuccess
@@ -189,8 +216,16 @@ export function AccessSheet({
     }
 
     setPurchaseBusy(true);
+    trackEvent("monetization_purchase_started", analyticsPayload);
     try {
       const result = await purchaseBlockedAccess({ gate });
+      trackEvent(result.ok ? "monetization_purchase_success" : "monetization_purchase_failed", {
+        ...analyticsPayload,
+        message: result.message,
+        packageId: result.packageId ?? "none",
+        productId: result.productId ?? "none",
+        targetId: result.targetId ?? "none",
+      });
       let feedback: AccessSheetActionFeedback = {
         message: result.ok ? "Purchase completed. Rechecking access…" : result.message,
         tone: result.ok ? "success" : "error",
@@ -210,6 +245,10 @@ export function AccessSheet({
       setStatusMessage(feedback.message ?? "");
       await loadSheetState();
     } catch {
+      trackEvent("monetization_purchase_failed", {
+        ...analyticsPayload,
+        message: "Unable to complete this purchase right now.",
+      });
       setStatusTone("error");
       setStatusMessage("Unable to complete this purchase right now.");
     } finally {
@@ -221,9 +260,16 @@ export function AccessSheet({
     setRestoreBusy(true);
     setStatusMessage("");
     setStatusTone("neutral");
+    trackEvent("monetization_restore_started", analyticsPayload);
 
     try {
       const result = await restoreMonetizationAccess();
+      trackEvent("monetization_restore_result", {
+        ...analyticsPayload,
+        ok: result.ok,
+        message: result.message,
+        activeEntitlementCount: result.snapshot.activeEntitlementIds.length,
+      });
       let feedback: AccessSheetActionFeedback = {
         message: result.ok ? "Purchases restored. Rechecking access…" : result.message,
         tone: result.ok ? "success" : "error",
@@ -243,6 +289,11 @@ export function AccessSheet({
       setStatusMessage(feedback.message ?? "");
       await loadSheetState();
     } catch {
+      trackEvent("monetization_restore_result", {
+        ...analyticsPayload,
+        ok: false,
+        message: "Unable to restore purchases right now.",
+      });
       setStatusTone("error");
       setStatusMessage("Unable to restore purchases right now.");
     } finally {
@@ -257,6 +308,10 @@ export function AccessSheet({
 
     try {
       const opened = await openManageSubscriptionFlow();
+      trackEvent("monetization_manage_subscription_opened", {
+        ...analyticsPayload,
+        opened,
+      });
       if (opened) {
         setStatusTone("neutral");
         setStatusMessage("Subscription management opened in Google Play.");
@@ -274,10 +329,10 @@ export function AccessSheet({
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={() => onCloseTracked("system")}
     >
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => onCloseTracked("backdrop")} />
         <View style={styles.sheet}>
           <Text style={styles.kicker}>{copy.kicker}</Text>
           <Text style={styles.title}>{copy.title}</Text>
@@ -336,7 +391,7 @@ export function AccessSheet({
           ) : null}
 
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.secondaryButton} onPress={onClose} activeOpacity={0.86} disabled={busy}>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => onCloseTracked("button")} activeOpacity={0.86} disabled={busy}>
               <Text style={styles.secondaryText}>Not now</Text>
             </TouchableOpacity>
             <TouchableOpacity

@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CustomerInfo, PurchasesOffering, PurchasesPackage, PurchasesOfferings } from "react-native-purchases";
 
+import { trackEvent } from "./analytics";
 import { FEATURE_FLAGS, getAppMonetizationRuntimeFeatures } from "./featureFlags";
 import { debugLog, reportRuntimeError } from "./logger";
 import {
@@ -298,6 +299,7 @@ let cachedMonetizationSnapshot: MonetizationSnapshot = createEmptyMonetizationSn
   { mode: "disabled", apiKey: "", shouldConfigure: false, reason: "RevenueCat has not been configured yet." },
   null,
 );
+let lastTrackedMonetizationSnapshotSignature = "";
 
 const monetizationSnapshotListeners = new Set<() => void>();
 
@@ -654,6 +656,38 @@ const setCachedMonetizationSnapshot = (snapshot: MonetizationSnapshot) => {
   return snapshot;
 };
 
+const trackMonetizationSnapshotResolution = (snapshot: MonetizationSnapshot) => {
+  const signature = [
+    snapshot.status,
+    snapshot.userId ?? "",
+    snapshot.revenueCatAppUserId,
+    snapshot.isAnonymousCustomer ? "anonymous" : "identified",
+    snapshot.canMakePayments ? "billing-ready" : "billing-blocked",
+    snapshot.currentOfferingId ?? "",
+    snapshot.availableOfferingIds.join(","),
+    snapshot.activeEntitlementIds.join(","),
+    snapshot.issues.join("|"),
+  ].join("::");
+
+  if (signature === lastTrackedMonetizationSnapshotSignature) return;
+  lastTrackedMonetizationSnapshotSignature = signature;
+
+  trackEvent("monetization_entitlement_resolved", {
+    status: snapshot.status,
+    userId: snapshot.userId ?? "anonymous",
+    revenueCatAppUserId: snapshot.revenueCatAppUserId || "none",
+    isAnonymousCustomer: snapshot.isAnonymousCustomer,
+    canMakePayments: snapshot.canMakePayments,
+    customerInfoLoaded: snapshot.customerInfoLoaded,
+    offeringsLoaded: snapshot.offeringsLoaded,
+    currentOfferingId: snapshot.currentOfferingId ?? "none",
+    availableOfferingCount: snapshot.availableOfferingIds.length,
+    activeEntitlementCount: snapshot.activeEntitlementIds.length,
+    activeEntitlements: snapshot.activeEntitlementIds.join(",") || "none",
+    issueCount: snapshot.issues.length,
+  });
+};
+
 export function getMonetizationCatalog() {
   return MONETIZATION_TARGETS;
 }
@@ -680,7 +714,9 @@ export async function readMonetizationSnapshot(options?: {
   const baseSnapshot = createEmptyMonetizationSnapshot(configuration, userId);
 
   if (!configuration.shouldConfigure) {
-    return setCachedMonetizationSnapshot(baseSnapshot);
+    const snapshot = setCachedMonetizationSnapshot(baseSnapshot);
+    trackMonetizationSnapshotResolution(snapshot);
+    return snapshot;
   }
 
   try {
@@ -737,17 +773,21 @@ export async function readMonetizationSnapshot(options?: {
       userId: snapshot.userId,
     });
 
-    return setCachedMonetizationSnapshot(snapshot);
+    const resolvedSnapshot = setCachedMonetizationSnapshot(snapshot);
+    trackMonetizationSnapshotResolution(resolvedSnapshot);
+    return resolvedSnapshot;
   } catch (error) {
     reportRuntimeError("monetization-snapshot", error, {
       userId: userId ?? "anonymous",
     });
-    return setCachedMonetizationSnapshot({
+    const fallbackSnapshot = setCachedMonetizationSnapshot({
       ...baseSnapshot,
       status: "partial",
       issues: [...baseSnapshot.issues, "Failed to refresh the monetization snapshot."],
       updatedAt: Date.now(),
     });
+    trackMonetizationSnapshotResolution(fallbackSnapshot);
+    return fallbackSnapshot;
   }
 }
 
