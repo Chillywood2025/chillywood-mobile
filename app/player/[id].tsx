@@ -195,11 +195,6 @@ export default function PlayerScreen() {
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
-  const [titleParticipantPresentationById, setTitleParticipantPresentationById] = useState<
-    Record<string, "compact" | "expanded" | "minimized">
-  >({});
-  const [titleParticipantFeaturedById, setTitleParticipantFeaturedById] = useState<Record<string, boolean>>({});
-  const [titleActiveParticipantId, setTitleActiveParticipantId] = useState<string | null>(null);
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
   const [showUpNext, setShowUpNext] = useState(false);
   const [upNextCountdown, setUpNextCountdown] = useState(UP_NEXT_COUNTDOWN_SECONDS);
@@ -2602,29 +2597,6 @@ export default function PlayerScreen() {
     () => liveBubbleParticipants.some((entry) => entry.isSpeaking || primaryActiveParticipantIds.includes(entry.id)),
     [liveBubbleParticipants, primaryActiveParticipantIds],
   );
-  const watchPartyContextTitle = useMemo(() => {
-    if (partySyncRole === "host") return "You are hosting the shared playback.";
-    if (partySyncRole === "guest") return "You are following the shared room timeline.";
-    return "You are inside shared Watch-Party playback.";
-  }, [partySyncRole]);
-  const watchPartyContextBody = useMemo(() => {
-    if (partySyncRole === "host") {
-      return "Playback authority lives here while comments, reactions, and room energy stay tied to the party session.";
-    }
-
-    return "Playback stays synced to the room here. Return to Party Room for invites, access changes, and room setup.";
-  }, [partySyncRole]);
-  const watchPartyContextHelper = useMemo(() => {
-    if (partySyncRole === "host") {
-      return "SYNC HELPER · Use Party Room for invites and room controls. Stay here to drive the shared watch moment.";
-    }
-
-    if (partySyncStatus) {
-      return `SYNC HELPER · ${partySyncStatus}. Return to Party Room when you need social setup instead of playback.`;
-    }
-
-    return "SYNC HELPER · Stay here for synced playback. Return to Party Room for room context, invites, and access changes.";
-  }, [partySyncRole, partySyncStatus]);
   const watchPartyAudienceLabel = useMemo(() => {
     if (!inWatchParty) return "";
     if (viewerCount <= 1) return "1 viewer synced";
@@ -3222,148 +3194,19 @@ export default function PlayerScreen() {
 
   const renderTitleParticipantExpandedPanel = () => (
     <View style={styles.titleParticipantFeedWrap}>
-      <ScrollView
-        horizontal
-        style={styles.titleParticipantFeedScroll}
-        contentContainerStyle={styles.titleParticipantFeedStack}
-        showsHorizontalScrollIndicator={false}
-        decelerationRate="fast"
-        bounces={false}
-      >
-        {[
-          ...liveBubbleParticipants.filter((participant) => titleParticipantFeaturedById[participant.id]),
-          ...liveBubbleParticipants.filter((participant) => !titleParticipantFeaturedById[participant.id]),
-        ].map((participant) => {
-          const presentation = titleParticipantPresentationById[participant.id] ?? "compact";
-          const isFeaturedPresentation = !!titleParticipantFeaturedById[participant.id];
-          const isExpandedPresentation = presentation === "expanded";
-          const isMinimizedPresentation = presentation === "minimized";
-          const isFocusedPresentation = titleActiveParticipantId === participant.id;
-          const initials = participant.name
-            .split(" ")
-            .map((part: string) => part[0] ?? "")
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
-
-          return (
-            <View
-              key={`title-sheet-${participant.id}`}
-              style={[
-                styles.titleParticipantFeedCard,
-                isFeaturedPresentation && styles.titleParticipantFeedCardFeatured,
-                isExpandedPresentation && styles.titleParticipantFeedCardExpanded,
-                isMinimizedPresentation && !isFeaturedPresentation && styles.titleParticipantFeedCardMinimized,
-                isFocusedPresentation && !isFeaturedPresentation && styles.titleParticipantFeedCardFocused,
-              ]}
-            >
-              <View style={styles.titleParticipantFeedAvatarPulse}>
-                <View style={styles.titleParticipantFeedAvatarWrap}>
-                  <TouchableOpacity
-                    style={styles.titleParticipantTileTap}
-                    onPress={() => {
-                      setTitleActiveParticipantId(participant.id);
-                      setTitleParticipantPresentationById((prev) => {
-                        const current = prev[participant.id] ?? "compact";
-                        const next =
-                          current === "expanded"
-                            ? "compact"
-                            : current === "minimized"
-                              ? "expanded"
-                              : "expanded";
-                        return { ...prev, [participant.id]: next };
-                      });
-                    }}
-                    onLongPress={() => {
-                      setTitleParticipantFeaturedById((prev) => ({
-                        ...prev,
-                        [participant.id]: !prev[participant.id],
-                      }));
-                    }}
-                    delayLongPress={220}
-                    activeOpacity={0.76}
-                  >
-                    <View
-                      style={[
-                        styles.participantAvatar,
-                        styles.participantAvatarTitleFeed,
-                        isFeaturedPresentation && styles.participantAvatarTitleFeedFeatured,
-                        isExpandedPresentation && styles.participantAvatarTitleFeedExpanded,
-                        isMinimizedPresentation && !isFeaturedPresentation && styles.participantAvatarTitleFeedMinimized,
-                        participant.muted && styles.participantAvatarMuted,
-                      ]}
-                    >
-                      {participant.avatarUrl ? (
-                        <Image source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
-                      ) : (
-                        <Text
-                          style={[
-                            styles.participantInitials,
-                            styles.participantInitialsTitleCompact,
-                            isFeaturedPresentation && styles.participantInitialsTitleFeedFeatured,
-                            isExpandedPresentation && styles.participantInitialsTitleFeedExpanded,
-                            isMinimizedPresentation && !isFeaturedPresentation && styles.participantInitialsTitleFeedMinimized,
-                          ]}
-                        >
-                          {initials}
-                        </Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                  {(participant.role === "host" || participant.role === "co-host") ? (
-                    <View
-                      style={[
-                        styles.participantHostBadge,
-                        styles.participantHostBadgeFeed,
-                        isMinimizedPresentation && !isFeaturedPresentation && styles.participantHostBadgeFeedMinimized,
-                      ]}
-                    >
-                      <Text style={[styles.participantHostBadgeText, styles.participantHostBadgeTextFeed]}>
-                        {participant.role === "host" ? "HOST" : "CO-HOST"}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <View
-                    style={[
-                      styles.titleParticipantFeedLiveDot,
-                      isFeaturedPresentation && styles.titleParticipantFeedLiveDotFeatured,
-                      isMinimizedPresentation && !isFeaturedPresentation && styles.titleParticipantFeedLiveDotMinimized,
-                    ]}
-                  />
-                  {isExpandedPresentation ? (
-                    <TouchableOpacity
-                      style={styles.titleParticipantMinimizeBtn}
-                      onPress={() => {
-                        setTitleParticipantPresentationById((prev) => ({
-                          ...prev,
-                          [participant.id]: "minimized",
-                        }));
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.titleParticipantMinimizeBtnText}>—</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              </View>
-              {(!isMinimizedPresentation || isFeaturedPresentation) ? (
-                <Text
-                  style={[
-                    styles.participantName,
-                    styles.participantNameTitleFeed,
-                    isFocusedPresentation && !isFeaturedPresentation && styles.participantNameTitleFeedFocused,
-                    isFeaturedPresentation && styles.participantNameTitleFeedFeatured,
-                    isExpandedPresentation && styles.participantNameTitleFeedExpanded,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {participant.name}
-                </Text>
-              ) : null}
-            </View>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.watchPartyPlayerBandHeader}>
+        <View style={styles.watchPartyPlayerBandMeta}>
+          <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
+          <Text style={styles.watchPartyPlayerBandBody}>
+            {watchPartyAudienceLabel || "Shared playback syncing"}
+            {watchPartyPreviewLabel ? ` · ${watchPartyPreviewLabel}` : ""}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.watchPartyPlayerBandBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
+          <Text style={styles.watchPartyPlayerBandBtnText}>Party Room</Text>
+        </TouchableOpacity>
+      </View>
+      {renderParticipantPanel(true, true)}
     </View>
   );
 
@@ -3449,39 +3292,6 @@ export default function PlayerScreen() {
               </View>
             </View>
             <Text style={styles.standaloneContextHelper}>{standaloneHelper}</Text>
-          </View>
-        ) : null}
-
-        {isSharedPartyPlayback ? (
-          <View style={styles.watchPartyContextCard}>
-            <View style={styles.watchPartyContextHeaderRow}>
-              <View style={styles.watchPartyContextCopy}>
-                <Text style={styles.watchPartyContextKicker}>WATCH-PARTY LIVE</Text>
-                <Text style={styles.watchPartyContextTitle}>{watchPartyContextTitle}</Text>
-                <Text style={styles.watchPartyContextBody}>{watchPartyContextBody}</Text>
-              </View>
-              <TouchableOpacity style={styles.watchPartyContextBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
-                <Text style={styles.watchPartyContextBtnText}>Party Room</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.watchPartyContextMetaRow}>
-              {watchPartyAudienceLabel ? (
-                <View style={styles.watchPartyContextMetaPill}>
-                  <Text style={styles.watchPartyContextMetaText}>{watchPartyAudienceLabel}</Text>
-                </View>
-              ) : null}
-              {partySyncStatus ? (
-                <View style={styles.watchPartyContextMetaPill}>
-                  <Text style={styles.watchPartyContextMetaText}>{partySyncStatus}</Text>
-                </View>
-              ) : null}
-              {watchPartyPreviewLabel ? (
-                <View style={styles.watchPartyContextMetaPill}>
-                  <Text style={styles.watchPartyContextMetaText}>{watchPartyPreviewLabel}</Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={styles.watchPartyContextHelper}>{watchPartyContextHelper}</Text>
           </View>
         ) : null}
 
@@ -3902,29 +3712,6 @@ export default function PlayerScreen() {
                       >
                         <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
                       </TouchableOpacity>
-
-                      {!isLiveMode ? (
-                        <>
-                          <TouchableOpacity
-                            style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                            onPress={() => setPartyCommentsOpen((value) => !value)}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={styles.partyOverlayChipText}>🗨️</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                            onPress={() => {
-                              const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
-                              triggerLocalPartyReaction(emoji);
-                            }}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={styles.partyOverlayChipText}>🔥</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : null}
                     </Animated.View>
                 </View>
 
@@ -5332,8 +5119,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(7,7,11,0.22)",
     paddingHorizontal: 6,
     paddingVertical: 4,
-    minHeight: 88,
-    maxHeight: 178,
+    minHeight: 98,
+    maxHeight: 146,
   },
   titleWatchPartyRailDockActive: {
     borderColor: "rgba(220,20,60,0.32)",
@@ -5436,6 +5223,42 @@ const styles = StyleSheet.create({
   },
   titleParticipantFeedWrap: {
     width: "100%",
+    gap: 8,
+  },
+  watchPartyPlayerBandHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingHorizontal: 4,
+  },
+  watchPartyPlayerBandMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  watchPartyPlayerBandKicker: {
+    color: "#F0C8D2",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  watchPartyPlayerBandBody: {
+    color: "#E7EBF6",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  watchPartyPlayerBandBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.56)",
+    backgroundColor: "rgba(220,20,60,0.18)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  watchPartyPlayerBandBtnText: {
+    color: "#FFF5F7",
+    fontSize: 11,
+    fontWeight: "900",
   },
   titleParticipantFeedScroll: {
     maxHeight: 228,

@@ -764,76 +764,88 @@ export default function WatchPartyIndexScreen() {
     : (String(branding.partyWaitingRoomTitle || "Party Waiting Room").trim() || "Party Waiting Room");
   const waitingRoomBody = isLiveWaitingRoom
     ? (topRoomCode
-      ? `Pre-entry live setup · code ${topRoomCode}`
+      ? `Pre-entry live control room · code ${topRoomCode}`
       : isPreparingInitialCode
         ? "Preparing a room code and live handoff before the room opens."
         : didInitialCodePrepFail
           ? "Live room code unavailable right now. Generate a new code to continue."
-          : "Orient the room, choose a host or viewer path, and then hand off into the live shell.")
+          : "Choose the host or viewer lane, set the live entry, and then move into Live Room before stage entry.")
     : (topRoomCode
-      ? `${partyTitleName} · code ${topRoomCode}`
+      ? `${partyTitleName} · pre-entry party control room · code ${topRoomCode}`
       : isPreparingInitialCode
         ? "Preparing a room code for this party waiting room."
         : didInitialCodePrepFail
           ? "Room code unavailable right now. Generate a new code to continue."
           : partyTitleId
-            ? `${partyTitleName} · title-first party setup.`
-            : "Create or join a room to start the party waiting room experience.");
+            ? `${partyTitleName} · title-first room setup before shared playback.`
+            : "Choose the title, room code, and entry lane before Party Room opens.");
   const waitingRoomTagline = isLiveWaitingRoom
-    ? "Get ready before the live room opens."
-    : "Watch together, in sync, from anywhere.";
+    ? "Set the live room before stage entry."
+    : "Set the party room before shared playback.";
   const roomCodeCardValue = topRoomCode || (isPreparingInitialCode ? "Preparing code…" : "Room code unavailable");
   const roomCodeActionBusy = refreshingCode || creating || isPreparingInitialCode;
   const liveJoinModes = [
     {
       id: "host",
-      title: "Host path",
-      body: "Create the live room here, share the code, then enter Live Room as host.",
+      title: "Host control lane",
+      body: "Create the live room code here, invite the room, and carry those defaults into Live Room.",
     },
     {
       id: "viewer",
-      title: "Viewer path",
-      body: "Use a live room code to preview the session, then enter as a viewer before the stage takes over.",
+      title: "Viewer entry lane",
+      body: "Join with the live code here, confirm the room path, and then enter Live Room before stage presentation starts.",
+    },
+  ];
+  const partyEntryModes = [
+    {
+      id: "host",
+      title: "Host control lane",
+      body: "Lock the title, generate the room code, and carry the room defaults into Party Room before playback begins.",
+    },
+    {
+      id: "viewer",
+      title: "Viewer entry lane",
+      body: "Join with the party code here, confirm the title, and then enter Party Room before shared Watch-Party Live starts.",
     },
   ];
   const liveReadinessRows = [
     {
-      label: "Identity",
-      status: "Ready",
-      detail: "Your signed-in Chi'llywood identity is attached before you enter the live room.",
-      tone: "ready" as const,
-    },
-    {
-      label: "Room code",
+      label: "Invite path",
       status: topRoomCode ? "Ready" : (isPreparingInitialCode ? "Preparing" : "Needed"),
       detail: topRoomCode
-        ? `Live room code ${topRoomCode} is ready for share or join.`
+        ? `Live room code ${topRoomCode} is ready to share before the room opens.`
         : isPreparingInitialCode
-          ? "The room is preparing a live code before host entry opens."
-          : "Generate a live code before you invite or host this session.",
+          ? "Preparing the live code before host or viewer entry opens."
+          : "Generate a live room code before you invite or host this session.",
       tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
     },
     {
-      label: "Mic / camera",
-      status: "Optional now",
-      detail: "Device setup stays light here. Any deeper mic or camera choices belong in Live Room.",
+      label: "Audience focus",
+      status: "Ready",
+      detail: "Live Room decides who the host sees first, who viewers see first, and how the room opens before stage entry.",
+      tone: "ready" as const,
+    },
+    {
+      label: "Comments / reactions",
+      status: "Set in Live Room",
+      detail: "Comment and reaction expectations stay pre-stage. Live Stage only carries the actual presentation experience.",
       tone: "pending" as const,
     },
     {
-      label: "Next handoff",
+      label: "Next room",
       status: "Live Room",
-      detail: "Join moves into /watch-party/live-stage/[partyId], where Live Room and Live Stage take over.",
+      detail: "Continue into Live Room first. Enter Live Stage from there when the room setup is ready.",
       tone: "ready" as const,
     },
   ];
   const livePermissionsBody = `${getJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
   const liveSmartHelper = topRoomCode
-    ? "Your live room is ready. Share the code if you need guests first, or enter now and let Live Room handle the next-stage controls."
+    ? "Your live room code is ready. Share it here, then use Live Room for focus order, audience visibility, and the handoff into Live Stage."
     : isPreparingInitialCode
-      ? "Stay here while Chi'llywood prepares the live code. This waiting room is only doing pre-entry setup right now."
+      ? "Stay here while Chi'llywood prepares the live code. This surface only handles pre-entry live setup."
       : didInitialCodePrepFail
-        ? "Generate a fresh code before inviting people. This room cannot hand off to the live shell without a valid live identity."
-        : "If you are hosting, create the room first. If you are joining, enter a live room code and preview the session before you continue.";
+        ? "Generate a fresh code before inviting people. Live Room cannot open without a valid live room code."
+        : "Choose the host or viewer lane here, then let Live Room handle the room defaults before stage entry.";
   const partyReadinessRows = [
     {
       label: "Title",
@@ -854,26 +866,24 @@ export default function WatchPartyIndexScreen() {
       tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
     },
     {
-      label: "Access",
-      status: activeRoomContext?.contentAccessRule === "premium" || activeRoomContext?.contentAccessRule === "party_pass" ? "Check access" : "Ready",
-      detail: activeRoomContext
-        ? getPartyContentAccessCopy(activeRoomContext.contentAccessRule)
-        : "Title access will be checked before Party Room opens.",
-      tone: activeRoomContext?.contentAccessRule === "premium" || activeRoomContext?.contentAccessRule === "party_pass" ? "pending" as const : "ready" as const,
+      label: "Room defaults",
+      status: "Party Room",
+      detail: "Who you see first, room privacy, and comments or reactions all stay in Party Room before the shared player opens.",
+      tone: "pending" as const,
     },
     {
-      label: "Next handoff",
+      label: "Next room",
       status: "Party Room",
-      detail: "Join moves into /watch-party/[partyId], where Party Room and shared playback take over.",
+      detail: "Continue into Party Room first. Shared Watch-Party Live playback starts from there, not from this waiting room.",
       tone: "ready" as const,
     },
   ];
   const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
   const partySmartHelper = topRoomCode
-    ? "Your watch-party entry is ready. Share the code if you need guests first, or enter Party Room and let shared playback start there."
+    ? "Your party room code is ready. Share it here, then use Party Room for visibility, privacy, and watch-together setup before shared playback starts."
     : partyTitleId
-      ? "The title is locked in. Create the party when you are ready, or use a valid room code to preview before you join."
-      : "Pick or confirm the title before you host. If you are joining, enter a watch-party code and check the title before you continue.";
+      ? "The title is locked in. Create the party when you are ready, or use a valid room code to open Party Room first."
+      : "Pick or confirm the title here, then let Party Room handle the room setup before shared playback begins.";
   const roomExperienceList = isLiveWaitingRoom
     ? [
         "Pre-entry live identity",
@@ -947,19 +957,19 @@ export default function WatchPartyIndexScreen() {
         {isLiveWaitingRoom ? (
           <>
             <View style={styles.liveContextCard}>
-              <Text style={styles.liveContextLabel}>LIVE PREVIEW</Text>
+              <Text style={styles.liveContextLabel}>LIVE ENTRY</Text>
               <Text style={styles.liveContextTitle}>
-                {topRoomCode ? "Your live entry stays pre-stage here." : "Set up the live room before the stage takes over."}
+                {topRoomCode ? "Your live entry stays pre-stage here." : "Open the live room before Live Stage takes over."}
               </Text>
               <Text style={styles.liveContextBody}>
                 {topRoomCode
-                  ? "This surface keeps identity, access, and invite setup separate from Live Room and Live Stage. Comments, reactions, and mode switching belong after entry."
-                  : "Live Waiting Room handles trust, readiness, and invitation. Live Room and Live Stage stay separate until you enter."}
+                  ? "This surface only handles room code, entry lane, and access context. Live Room owns the actual room controls, and Live Stage stays separate after that."
+                  : "Live Waiting Room prepares the entry lane, code, and access path. Live Room and Live Stage stay separate until you continue."}
               </Text>
             </View>
 
             <View style={styles.modeChoiceCard}>
-              <Text style={styles.modeChoiceLabel}>JOIN MODES</Text>
+              <Text style={styles.modeChoiceLabel}>ENTRY LANES</Text>
               <View style={styles.modeChoiceRow}>
                 {liveJoinModes.map((entry) => (
                   <View key={entry.id} style={styles.modeChoicePane}>
@@ -971,7 +981,7 @@ export default function WatchPartyIndexScreen() {
             </View>
 
             <View style={styles.readinessCard}>
-              <Text style={styles.readinessLabel}>READINESS CHECK</Text>
+              <Text style={styles.readinessLabel}>PRE-ENTRY DEFAULTS</Text>
               {liveReadinessRows.map((entry) => (
                 <View key={entry.label} style={styles.readinessRow}>
                   <View style={[styles.readinessDot, entry.tone === "ready"
@@ -991,33 +1001,45 @@ export default function WatchPartyIndexScreen() {
             </View>
 
             <View style={styles.permissionsCard}>
-              <Text style={styles.permissionsLabel}>VISIBILITY & CONTROL</Text>
+              <Text style={styles.permissionsLabel}>ROOM ACCESS</Text>
               <Text style={styles.permissionsBody}>
                 {livePermissionsBody}
               </Text>
             </View>
 
             <View style={styles.smartHelperCard}>
-              <Text style={styles.smartHelperLabel}>SMART ENTRY HELPER</Text>
+              <Text style={styles.smartHelperLabel}>NEXT ROOM</Text>
               <Text style={styles.smartHelperBody}>{liveSmartHelper}</Text>
             </View>
           </>
         ) : (
           <>
             <View style={styles.partyContextCard}>
-              <Text style={styles.partyContextLabel}>WATCH-PARTY PREVIEW</Text>
+              <Text style={styles.partyContextLabel}>PARTY ENTRY</Text>
               <Text style={styles.partyContextTitle}>{partyTitleName}</Text>
               <Text style={styles.partyContextBody}>
                 {topRoomCode
-                  ? "This waiting room keeps title preview, access, and join choice clear before Party Room and shared playback begin."
+                  ? "This waiting room keeps title preview, access, and room-entry choice clear before Party Room and shared playback begin."
                   : partyTitleId
-                    ? "Confirm the title, decide whether you are hosting or joining, and then move into Party Room when you are ready."
+                    ? "Confirm the title, choose the host or viewer lane, and then move into Party Room when you are ready."
                     : "Pick the title first so the watch-together entry stays social, intentional, and title-driven."}
               </Text>
             </View>
 
+            <View style={styles.modeChoiceCard}>
+              <Text style={styles.modeChoiceLabel}>ENTRY LANES</Text>
+              <View style={styles.modeChoiceRow}>
+                {partyEntryModes.map((entry) => (
+                  <View key={entry.id} style={styles.modeChoicePane}>
+                    <Text style={styles.modeChoiceTitle}>{entry.title}</Text>
+                    <Text style={styles.modeChoiceBody}>{entry.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
             <View style={styles.readinessCard}>
-              <Text style={styles.readinessLabel}>ENTRY CHECK</Text>
+              <Text style={styles.readinessLabel}>PRE-ENTRY DEFAULTS</Text>
               {partyReadinessRows.map((entry) => (
                 <View key={entry.label} style={styles.readinessRow}>
                   <View style={[styles.readinessDot, entry.tone === "ready"
@@ -1037,14 +1059,14 @@ export default function WatchPartyIndexScreen() {
             </View>
 
             <View style={styles.permissionsCard}>
-              <Text style={styles.permissionsLabel}>ACCESS & ENTRY</Text>
+              <Text style={styles.permissionsLabel}>ROOM ACCESS</Text>
               <Text style={styles.permissionsBody}>
                 {partyPermissionsBody}
               </Text>
             </View>
 
             <View style={styles.partyHelperCard}>
-              <Text style={styles.partyHelperLabel}>SMART JOIN HELPER</Text>
+              <Text style={styles.partyHelperLabel}>NEXT ROOM</Text>
               <Text style={styles.partyHelperBody}>{partySmartHelper}</Text>
             </View>
           </>
@@ -1088,7 +1110,7 @@ export default function WatchPartyIndexScreen() {
 
         {/* ── Actions ─────────────────────────────────────────────────── */}
         <View style={styles.actionArea}>
-          <Text style={styles.actionAreaLabel}>ACTIONS</Text>
+          <Text style={styles.actionAreaLabel}>ENTRY CONTROLS</Text>
 
           {!features.watchPartyEnabled ? (
             <View style={styles.joinCard}>
@@ -1103,11 +1125,11 @@ export default function WatchPartyIndexScreen() {
             <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "HOST THIS LIVE SESSION" : "HOST THIS WATCH-PARTY"}</Text>
             {isLiveWaitingRoom ? (
               <Text style={styles.joinSupportText}>
-                Create the live room here, keep the room code handy, and then hand off into Live Room as the host.
+                Create the live room here, keep the room code handy, and then carry your room defaults into Live Room as host.
               </Text>
             ) : partyTitleLocked ? (
               <Text style={styles.joinSupportText}>
-                {partyTitleName} is locked for this entry. Create the room here, share the code, and then hand off into Party Room as host.
+                {partyTitleName} is locked for this entry. Create the room here, share the code, and then shape the room inside Party Room before shared playback starts.
               </Text>
             ) : (
               <TextInput
@@ -1150,7 +1172,7 @@ export default function WatchPartyIndexScreen() {
             <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "JOIN A LIVE ROOM" : "JOIN WATCH-PARTY LIVE"}</Text>
             {isLiveWaitingRoom ? (
               <Text style={styles.joinSupportText}>
-                Enter a live room code to preview the room and join the live shell before any stage mode takes over.
+                Enter a live room code to preview the live lane and join Live Room before any stage mode takes over.
               </Text>
             ) : (
               <Text style={styles.joinSupportText}>

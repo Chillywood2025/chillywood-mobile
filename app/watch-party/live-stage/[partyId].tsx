@@ -13,6 +13,7 @@ import {
     LayoutAnimation,
     Platform,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -38,6 +39,7 @@ import {
     getPartyRoomSnapshot,
     getSafePartyUserId,
     joinPartyRoomSession,
+    setPartyRoomPolicies,
     setPartyParticipantState,
     touchPartyRoomSession,
     type WatchPartyRoomMembership,
@@ -124,6 +126,7 @@ export default function WatchPartyLiveStageScreen() {
   const [myUserId, setMyUserId] = useState<string>("");
   const [myUsername, setMyUsername] = useState<string>("You");
   const [isHost, setIsHost] = useState(false);
+  const [liveSurface, setLiveSurface] = useState<"room" | "stage">("room");
   const [stageMode, setStageMode] = useState<SharedRoomMode>(initialStageMode);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
@@ -257,6 +260,10 @@ export default function WatchPartyLiveStageScreen() {
   useEffect(() => {
     setStageMode(normalizeSharedRoomMode(modeParamValue, "live"));
   }, [modeParamValue]);
+
+  useEffect(() => {
+    setLiveSurface("room");
+  }, [partyId]);
 
   useEffect(() => {
     if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -994,29 +1001,50 @@ export default function WatchPartyLiveStageScreen() {
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
+  const isLiveRoomSurface = liveSurface === "room";
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
   const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
   const liveRoomJoinLabel = room?.joinPolicy === "locked"
     ? "Host approval"
     : "Signed-in access";
+  const liveRoomReactionsLabel = room?.reactionsPolicy === "muted"
+    ? "Host-muted"
+    : "Enabled";
   const liveRoomCaptureLabel = room?.capturePolicy === "host_managed"
     ? "Host-managed capture"
     : "Best-effort capture";
+  const liveRoomShareCode = String(room?.roomCode ?? partyId ?? "").trim().toUpperCase();
   const liveRoomShellTitle = isHost
-    ? "You are controlling the live room."
-    : "You are inside the live room.";
+    ? "Shape the live room before the stage opens."
+    : "This is the live room before stage entry.";
   const liveRoomShellBody = isHost
-    ? "Use the live room shell to manage participation, keep role boundaries visible, and hand presentation down into the stage without leaving this route."
-    : "This is the live social shell. Participation, room policy, and host authority stay clear here while the stage below carries the presentation."
+    ? "Invite people, set room defaults, and decide how the audience meets the presentation before you continue into Live Stage."
+    : "Use the live room to understand the host's defaults, decide who you want to see first, and then enter Live Stage when the presentation begins."
   const liveRoomPermissionCopy = isHost
-    ? "Host authority stays explicit here: you control room mode, participant focus, and any safety-sensitive audience actions."
-    : "The host controls room mode, participant focus, and higher-trust audience actions. You can react, comment, follow the host, and leave safely."
-  const liveRoomHelperCopy = isHost
-    ? `${viewerCount} ${viewerCount === 1 ? "person is" : "people are"} in room right now. Keep the room shell clear here, then let Live Stage carry the presentation.`
-    : `You are in ${liveRoomModeLabel}. Comments and reactions stay open to you here; speaker or visibility changes remain host-controlled.`;
+    ? "Host authority stays in Live Room for access, comments or reactions, capture expectations, and pre-stage audience focus."
+    : "The host controls access, reactions, capture expectations, and the stage handoff here. Live Stage only carries the actual live presentation."
   const liveRoomFocusTarget = isHost
     ? (lowerCommunityParticipants[0] ?? hostParticipant)
     : hostParticipant;
+  const liveRoomFocusLabel = liveRoomFocusTarget
+    ? (liveRoomFocusTarget.userId === currentUserParticipantId ? "You" : liveRoomFocusTarget.displayName)
+    : "Syncing...";
+  const liveRoomAudienceLabel = lowerCommunityParticipants.length > 0
+    ? `${lowerCommunityParticipants.length} ready before stage`
+    : "Audience syncing";
+  const liveRoomControlTitle = isHost
+    ? "Set who the room sees first."
+    : "Set the live view you want before stage entry.";
+  const liveRoomControlBody = isHost
+    ? "Keep room entry purposeful here: invite the audience, set visual priority, and keep presentation controls out of Live Stage until you are ready."
+    : "Choose the host or audience focus you want to follow here. Deeper presentation controls only begin after you enter Live Stage.";
+  const liveRoomPolicyTitle = isHost
+    ? "Room defaults stay in Live Room."
+    : "Live Room shows the current room defaults.";
+  const liveRoomPolicyBody = isHost
+    ? "Access, reactions, and capture expectations belong here before you continue into the actual live presentation."
+    : `Current room defaults are ${liveRoomJoinLabel.toLowerCase()}, ${liveRoomReactionsLabel.toLowerCase()}, and ${liveRoomCaptureLabel.toLowerCase()}.`;
+  const liveRoomEntryLabel = isHost ? "Continue to Live Stage" : "Join Live Stage";
   const stageModeTitle = isLiveFirstMode
     ? "Host-led live focus"
     : "Shared watch moment";
@@ -1039,6 +1067,56 @@ export default function WatchPartyLiveStageScreen() {
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
   }, [router]);
+
+  const onShareLiveRoom = useCallback(async () => {
+    if (!liveRoomShareCode) return;
+    await Share.share({
+      message: `${branding.appDisplayName} live room code: ${liveRoomShareCode}`,
+    }).catch(() => {});
+  }, [branding.appDisplayName, liveRoomShareCode]);
+
+  const updateLiveRoomPolicies = useCallback(async (policies: {
+    joinPolicy?: WatchPartyState["joinPolicy"];
+    reactionsPolicy?: WatchPartyState["reactionsPolicy"];
+    capturePolicy?: WatchPartyState["capturePolicy"];
+  }) => {
+    if (!isHost || !partyId) return;
+    const nextRoom = await setPartyRoomPolicies(partyId, policies).catch(() => null);
+    if (nextRoom) {
+      setRoom(nextRoom);
+    }
+    await refreshStageSnapshot(trackedUserId).catch(() => null);
+  }, [isHost, partyId, refreshStageSnapshot, trackedUserId]);
+
+  const onToggleLiveRoomLock = useCallback(() => {
+    void updateLiveRoomPolicies({
+      joinPolicy: room?.joinPolicy === "locked" ? "open" : "locked",
+    });
+  }, [room?.joinPolicy, updateLiveRoomPolicies]);
+
+  const onToggleLiveRoomReactions = useCallback(() => {
+    void updateLiveRoomPolicies({
+      reactionsPolicy: room?.reactionsPolicy === "muted" ? "enabled" : "muted",
+    });
+  }, [room?.reactionsPolicy, updateLiveRoomPolicies]);
+
+  const onToggleLiveRoomCapture = useCallback(() => {
+    void updateLiveRoomPolicies({
+      capturePolicy: room?.capturePolicy === "host_managed" ? "best_effort" : "host_managed",
+    });
+  }, [room?.capturePolicy, updateLiveRoomPolicies]);
+
+  const onEnterLiveStage = useCallback(() => {
+    setCommentsOpen(false);
+    setReactionPickerOpen(false);
+    setLiveSurface("stage");
+  }, []);
+
+  const onReturnToLiveRoom = useCallback(() => {
+    setCommentsOpen(false);
+    setReactionPickerOpen(false);
+    setLiveSurface("room");
+  }, []);
 
   debugLog("live-stage", "render branch", {
     loading,
@@ -1120,163 +1198,277 @@ export default function WatchPartyLiveStageScreen() {
           </Animated.View>
         </View>
 
-        <View style={styles.liveRoomShellCard}>
-          <Text style={styles.liveRoomShellKicker}>LIVE ROOM</Text>
-          <Text style={styles.liveRoomShellTitle}>{liveRoomShellTitle}</Text>
-          <Text style={styles.liveRoomShellBody}>{liveRoomShellBody}</Text>
+        {isLiveRoomSurface ? (
+          <>
+            <View style={styles.liveRoomShellCard}>
+              <Text style={styles.liveRoomShellKicker}>LIVE ROOM</Text>
+              <Text style={styles.liveRoomShellTitle}>{liveRoomShellTitle}</Text>
+              <Text style={styles.liveRoomShellBody}>{liveRoomShellBody}</Text>
 
-          <View style={styles.liveRoomMetaRow}>
-            <View style={styles.liveRoomMetaPill}>
-              <Text style={styles.liveRoomMetaLabel}>Role</Text>
-              <Text style={styles.liveRoomMetaValue}>{liveRoomRoleLabel}</Text>
-            </View>
-            <View style={styles.liveRoomMetaPill}>
-              <Text style={styles.liveRoomMetaLabel}>Mode</Text>
-              <Text style={styles.liveRoomMetaValue}>{liveRoomModeLabel}</Text>
-            </View>
-            <View style={styles.liveRoomMetaPill}>
-              <Text style={styles.liveRoomMetaLabel}>Join</Text>
-              <Text style={styles.liveRoomMetaValue}>{liveRoomJoinLabel}</Text>
-            </View>
-            <View style={styles.liveRoomMetaPill}>
-              <Text style={styles.liveRoomMetaLabel}>Capture</Text>
-              <Text style={styles.liveRoomMetaValue}>{liveRoomCaptureLabel}</Text>
-            </View>
-          </View>
+              <View style={styles.liveRoomMetaRow}>
+                <View style={styles.liveRoomMetaPill}>
+                  <Text style={styles.liveRoomMetaLabel}>Role</Text>
+                  <Text style={styles.liveRoomMetaValue}>{liveRoomRoleLabel}</Text>
+                </View>
+                <View style={styles.liveRoomMetaPill}>
+                  <Text style={styles.liveRoomMetaLabel}>Mode</Text>
+                  <Text style={styles.liveRoomMetaValue}>{liveRoomModeLabel}</Text>
+                </View>
+                <View style={styles.liveRoomMetaPill}>
+                  <Text style={styles.liveRoomMetaLabel}>Join</Text>
+                  <Text style={styles.liveRoomMetaValue}>{liveRoomJoinLabel}</Text>
+                </View>
+                <View style={styles.liveRoomMetaPill}>
+                  <Text style={styles.liveRoomMetaLabel}>Reactions</Text>
+                  <Text style={styles.liveRoomMetaValue}>{liveRoomReactionsLabel}</Text>
+                </View>
+                <View style={styles.liveRoomMetaPill}>
+                  <Text style={styles.liveRoomMetaLabel}>Capture</Text>
+                  <Text style={styles.liveRoomMetaValue}>{liveRoomCaptureLabel}</Text>
+                </View>
+              </View>
 
-          <Text style={styles.liveRoomPermissionText}>{liveRoomPermissionCopy}</Text>
+              <Text style={styles.liveRoomPermissionText}>{liveRoomPermissionCopy}</Text>
+            </View>
 
-          <View style={styles.liveRoomActionRow}>
-            <TouchableOpacity
-              style={[styles.liveRoomActionBtn, commentsOpen && styles.liveRoomActionBtnActive]}
-              activeOpacity={0.84}
-              onPress={() => {
-                setReactionPickerOpen(false);
-                setCommentsOpen((value) => !value);
-              }}
-            >
-              <Text style={[styles.liveRoomActionText, commentsOpen && styles.liveRoomActionTextActive]}>
-                {commentsOpen ? "Hide comments" : "Open comments"}
+            <View style={styles.liveRoomControlCard}>
+              <Text style={styles.liveRoomControlKicker}>INVITE + SHARE</Text>
+              <Text style={styles.liveRoomControlTitle}>Keep the room ready before the stage starts.</Text>
+              <Text style={styles.liveRoomControlBody}>
+                Share the live room code here. Invite flow belongs in Live Room so Live Stage can stay presentation-first.
               </Text>
+              <View style={styles.liveRoomShareRow}>
+                <View style={styles.liveRoomShareCodePill}>
+                  <Text style={styles.liveRoomShareCodeText}>{liveRoomShareCode || "ROOM"}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.liveRoomShareButton}
+                  activeOpacity={0.86}
+                  onPress={onShareLiveRoom}
+                  disabled={!liveRoomShareCode}
+                >
+                  <Text style={styles.liveRoomShareButtonText}>Share room</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.liveRoomControlCard}>
+              <Text style={styles.liveRoomControlKicker}>VIEWING DEFAULTS</Text>
+              <Text style={styles.liveRoomControlTitle}>{liveRoomControlTitle}</Text>
+              <Text style={styles.liveRoomControlBody}>{liveRoomControlBody}</Text>
+              <View style={styles.liveRoomMetaRow}>
+                <View style={styles.liveRoomMetaPill}>
+                  <Text style={styles.liveRoomMetaLabel}>Focus</Text>
+                  <Text style={styles.liveRoomMetaValue}>{liveRoomFocusLabel}</Text>
+                </View>
+                <View style={styles.liveRoomMetaPill}>
+                  <Text style={styles.liveRoomMetaLabel}>Audience</Text>
+                  <Text style={styles.liveRoomMetaValue}>{liveRoomAudienceLabel}</Text>
+                </View>
+              </View>
+              <View style={styles.liveRoomActionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.liveRoomActionBtn,
+                    !liveRoomFocusTarget?.userId && styles.liveRoomActionBtnDisabled,
+                  ]}
+                  activeOpacity={0.84}
+                  disabled={!liveRoomFocusTarget?.userId}
+                  onPress={() => {
+                    if (!liveRoomFocusTarget?.userId) return;
+                    featureParticipantFirst(liveRoomFocusTarget.userId);
+                    setActiveParticipantId(liveRoomFocusTarget.userId);
+                    setActiveSpeakerUserId(liveRoomFocusTarget.userId);
+                  }}
+                >
+                  <Text style={styles.liveRoomActionText}>
+                    {isHost ? "See audience first" : "See host first"}
+                  </Text>
+                </TouchableOpacity>
+                {hostParticipant ? (
+                  <TouchableOpacity
+                    style={styles.liveRoomActionBtn}
+                    activeOpacity={0.84}
+                    onPress={() => {
+                      featureParticipantFirst(hostParticipant.userId);
+                      setActiveParticipantId(hostParticipant.userId);
+                      setActiveSpeakerUserId(hostParticipant.userId);
+                    }}
+                  >
+                    <Text style={styles.liveRoomActionText}>See host first</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {tailoredFocusParticipant
+                  && tailoredFocusParticipant.userId !== currentUserParticipantId
+                  && tailoredFocusParticipant.role !== "host" ? (
+                  <TouchableOpacity
+                    style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
+                    activeOpacity={0.84}
+                    onPress={() => hideParticipantLocally(tailoredFocusParticipant.userId)}
+                  >
+                    <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>
+                      Hide {tailoredFocusParticipant.displayName}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {hiddenParticipantCount > 0 ? (
+                  <TouchableOpacity
+                    style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
+                    activeOpacity={0.84}
+                    onPress={showEveryoneLocally}
+                  >
+                    <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Show everyone</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
+                  activeOpacity={0.84}
+                  onPress={resetTailoredStageView}
+                >
+                  <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Reset layout</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.liveRoomControlCard}>
+              <Text style={styles.liveRoomControlKicker}>ROOM DEFAULTS</Text>
+              <Text style={styles.liveRoomControlTitle}>{liveRoomPolicyTitle}</Text>
+              <Text style={styles.liveRoomControlBody}>{liveRoomPolicyBody}</Text>
+              <View style={styles.liveRoomActionRow}>
+                {isHost ? (
+                  <>
+                    <TouchableOpacity style={styles.liveRoomActionBtn} activeOpacity={0.84} onPress={onToggleLiveRoomLock}>
+                      <Text style={styles.liveRoomActionText}>
+                        {room?.joinPolicy === "locked" ? "Unlock room" : "Lock room"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.liveRoomActionBtn} activeOpacity={0.84} onPress={onToggleLiveRoomReactions}>
+                      <Text style={styles.liveRoomActionText}>
+                        {room?.reactionsPolicy === "muted" ? "Enable reactions" : "Mute reactions"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.liveRoomActionBtn} activeOpacity={0.84} onPress={onToggleLiveRoomCapture}>
+                      <Text style={styles.liveRoomActionText}>
+                        {room?.capturePolicy === "host_managed" ? "Best-effort capture" : "Host-managed capture"}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
+                    activeOpacity={0.84}
+                    onPress={leaveLiveRoom}
+                  >
+                    <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Leave room</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.liveRoomPrimaryButton} activeOpacity={0.88} onPress={onEnterLiveStage}>
+              <Text style={styles.liveRoomPrimaryButtonText}>{liveRoomEntryLabel}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.liveRoomActionBtn,
-                !liveRoomFocusTarget?.userId && styles.liveRoomActionBtnDisabled,
-              ]}
-              activeOpacity={0.84}
-              disabled={!liveRoomFocusTarget?.userId}
-              onPress={() => {
-                if (!liveRoomFocusTarget?.userId) return;
-                featureParticipantFirst(liveRoomFocusTarget.userId);
-                setActiveParticipantId(liveRoomFocusTarget.userId);
-                setActiveSpeakerUserId(liveRoomFocusTarget.userId);
-              }}
-            >
-              <Text style={styles.liveRoomActionText}>
-                {isHost ? "Focus audience" : "See host first"}
+          </>
+        ) : (
+          <>
+            <View style={styles.stageSectionIntro}>
+              <Text style={styles.stageSectionKicker}>LIVE STAGE</Text>
+              <Text style={styles.stageSectionBody}>
+                This is the presentation surface. Keep room setup in Live Room, then use `Live-First` or `{branding.watchPartyLabel}` here when the live experience begins.
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
-              activeOpacity={0.84}
-              onPress={leaveLiveRoom}
-            >
-              <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Leave room</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.liveRoomHelperCard}>
-            <Text style={styles.liveRoomHelperKicker}>LIVE ROOM HELPER</Text>
-            <Text style={styles.liveRoomHelperBody}>{liveRoomHelperCopy}</Text>
-          </View>
-        </View>
-
-        <View style={styles.stageSectionIntro}>
-          <Text style={styles.stageSectionKicker}>LIVE STAGE</Text>
-          <Text style={styles.stageSectionBody}>
-            Presentation stays inside this room. Switch between `Live-First` and `{branding.watchPartyLabel}` without leaving the live route.
-          </Text>
-        </View>
-
-        <View style={styles.modeRow}>
-          <TouchableOpacity
-            style={[styles.modeBtn, stageMode === "live" && styles.modeBtnOn]}
-            activeOpacity={0.82}
-            onPress={() => setStageMode("live")}
-          >
-            <Text style={[styles.modeBtnText, stageMode === "live" && styles.modeBtnTextOn]}>Live-First</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.modeBtn, stageMode === "hybrid" && styles.modeBtnOn]}
-            activeOpacity={0.82}
-            onPress={() => setStageMode("hybrid")}
-          >
-            <Text style={[styles.modeBtnText, stageMode === "hybrid" && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.stageModeCard}>
-          <Text style={styles.stageModeCardKicker}>STAGE MODE</Text>
-          <Text style={styles.stageModeCardTitle}>{stageModeTitle}</Text>
-          <Text style={styles.stageModeCardBody}>{stageModeBody}</Text>
-          <Text style={styles.stageModeHelperText}>
-            {isLiveFirstMode ? "STAGE HELPER: " : "WATCH MOMENT HELPER: "}
-            {stageHelperCopy}
-          </Text>
-
-          <View style={styles.stageModeMetaRow}>
-            <View style={styles.stageModeMetaPill}>
-              <Text style={styles.stageModeMetaLabel}>Mode</Text>
-              <Text style={styles.stageModeMetaValue}>{liveRoomModeLabel}</Text>
+              <View style={styles.stageSectionActionRow}>
+                <TouchableOpacity
+                  style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
+                  activeOpacity={0.84}
+                  onPress={onReturnToLiveRoom}
+                >
+                  <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Back to Live Room</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.stageModeMetaPill}>
-              <Text style={styles.stageModeMetaLabel}>Focus</Text>
-              <Text style={styles.stageModeMetaValue}>{stageFocusLabel}</Text>
-            </View>
-            <View style={styles.stageModeMetaPill}>
-              <Text style={styles.stageModeMetaLabel}>Community</Text>
-              <Text style={styles.stageModeMetaValue}>{lowerCommunityCountLabel}</Text>
-            </View>
-          </View>
 
-          <View style={styles.stageModeActionRow}>
-            <TouchableOpacity
-              style={[
-                styles.stageModeActionBtn,
-                !stageFocusTarget?.userId && styles.stageModeActionBtnDisabled,
-              ]}
-              activeOpacity={0.84}
-              disabled={!stageFocusTarget?.userId}
-              onPress={() => {
-                if (!stageFocusTarget?.userId) return;
-                featureParticipantFirst(stageFocusTarget.userId);
-              }}
-            >
-              <Text style={styles.stageModeActionText}>{stagePrimaryActionLabel}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.stageModeActionBtn, reactionPickerOpen && styles.stageModeActionBtnActive]}
-              activeOpacity={0.84}
-              onPress={() => {
-                setCommentsOpen(false);
-                setReactionPickerOpen((value) => !value);
-              }}
-            >
-              <Text style={[styles.stageModeActionText, reactionPickerOpen && styles.stageModeActionTextActive]}>
-                {reactionPickerOpen ? "Hide reactions" : "Open reactions"}
+            <View style={styles.modeRow}>
+              <TouchableOpacity
+                style={[styles.modeBtn, stageMode === "live" && styles.modeBtnOn]}
+                activeOpacity={0.82}
+                onPress={() => setStageMode("live")}
+              >
+                <Text style={[styles.modeBtnText, stageMode === "live" && styles.modeBtnTextOn]}>Live-First</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeBtn, stageMode === "hybrid" && styles.modeBtnOn]}
+                activeOpacity={0.82}
+                onPress={() => setStageMode("hybrid")}
+              >
+                <Text style={[styles.modeBtnText, stageMode === "hybrid" && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.stageModeCard}>
+              <Text style={styles.stageModeCardKicker}>STAGE MODE</Text>
+              <Text style={styles.stageModeCardTitle}>{stageModeTitle}</Text>
+              <Text style={styles.stageModeCardBody}>{stageModeBody}</Text>
+              <Text style={styles.stageModeHelperText}>
+                {isLiveFirstMode ? "STAGE HELPER: " : "WATCH MOMENT HELPER: "}
+                {stageHelperCopy}
               </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        <ProtectedSessionNote
-          {...getProtectedSessionCopy("live-stage", {
-            contentAccessRule: room?.contentAccessRule,
-            capturePolicy: room?.capturePolicy,
-          })}
-        />
+              <View style={styles.stageModeMetaRow}>
+                <View style={styles.stageModeMetaPill}>
+                  <Text style={styles.stageModeMetaLabel}>Mode</Text>
+                  <Text style={styles.stageModeMetaValue}>{liveRoomModeLabel}</Text>
+                </View>
+                <View style={styles.stageModeMetaPill}>
+                  <Text style={styles.stageModeMetaLabel}>Focus</Text>
+                  <Text style={styles.stageModeMetaValue}>{stageFocusLabel}</Text>
+                </View>
+                <View style={styles.stageModeMetaPill}>
+                  <Text style={styles.stageModeMetaLabel}>Community</Text>
+                  <Text style={styles.stageModeMetaValue}>{lowerCommunityCountLabel}</Text>
+                </View>
+              </View>
 
+              <View style={styles.stageModeActionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.stageModeActionBtn,
+                    !stageFocusTarget?.userId && styles.stageModeActionBtnDisabled,
+                  ]}
+                  activeOpacity={0.84}
+                  disabled={!stageFocusTarget?.userId}
+                  onPress={() => {
+                    if (!stageFocusTarget?.userId) return;
+                    featureParticipantFirst(stageFocusTarget.userId);
+                  }}
+                >
+                  <Text style={styles.stageModeActionText}>{stagePrimaryActionLabel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.stageModeActionBtn, reactionPickerOpen && styles.stageModeActionBtnActive]}
+                  activeOpacity={0.84}
+                  onPress={() => {
+                    setCommentsOpen(false);
+                    setReactionPickerOpen((value) => !value);
+                  }}
+                >
+                  <Text style={[styles.stageModeActionText, reactionPickerOpen && styles.stageModeActionTextActive]}>
+                    {reactionPickerOpen ? "Hide reactions" : "Open reactions"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ProtectedSessionNote
+              {...getProtectedSessionCopy("live-stage", {
+                contentAccessRule: room?.contentAccessRule,
+                capturePolicy: room?.capturePolicy,
+              })}
+            />
+          </>
+        )}
+
+        {!isLiveRoomSurface ? (
+        <>
         <Animated.View
           style={[
             styles.stageCanvas,
@@ -1348,91 +1540,6 @@ export default function WatchPartyLiveStageScreen() {
           rootStyle={[styles.liveStageLowerDock, { marginBottom: liveDockBottomInset }]}
           participantStrip={(
             <View style={styles.stageParticipantStripWrap}>
-              <View style={styles.stageTailoredCard}>
-                <Text style={styles.stageTailoredKicker}>{isLiveFirstMode ? "LIVE FIRST FOCUS" : "TAILORED LIVE WATCH-PARTY"}</Text>
-                <Text style={styles.stageTailoredTitle}>
-                  {isLiveFirstMode ? "Keep the live room focused" : "Keep the host and community clear"}
-                </Text>
-                <Text style={styles.stageTailoredBody}>
-                  {hostParticipant
-                    ? `${hostParticipant.userId === currentUserParticipantId ? "You are" : `${hostParticipant.displayName} is`} hosting. Use local host-first and hide controls here without opening a separate communication room.`
-                    : "Use local host-first and hide controls here without opening a separate communication room."}
-                </Text>
-                <View style={styles.stageTailoredMetaRow}>
-                  <View style={styles.stageTailoredMetaPill}>
-                    <Text style={styles.stageTailoredMetaText}>
-                      Host: {hostParticipant ? (hostParticipant.userId === currentUserParticipantId ? "You" : hostParticipant.displayName) : "Syncing..."}
-                    </Text>
-                  </View>
-                  <View style={styles.stageTailoredMetaPill}>
-                    <Text style={styles.stageTailoredMetaText}>
-                      Focus: {tailoredFocusParticipant ? (tailoredFocusParticipant.userId === currentUserParticipantId ? "You" : tailoredFocusParticipant.displayName) : "Host"}
-                    </Text>
-                  </View>
-                  {hiddenParticipantCount > 0 ? (
-                    <View style={styles.stageTailoredMetaPill}>
-                      <Text style={styles.stageTailoredMetaText}>Hidden locally: {hiddenParticipantCount}</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.stageTailoredActions}>
-                  <TouchableOpacity
-                    style={styles.stageTailoredActionButton}
-                    activeOpacity={0.86}
-                    onPress={() => {
-                      if (!hostParticipant?.userId) return;
-                      featureParticipantFirst(hostParticipant.userId);
-                    }}
-                    disabled={!hostParticipant?.userId}
-                  >
-                    <Text style={styles.stageTailoredActionText}>See host first</Text>
-                  </TouchableOpacity>
-                  {tailoredFocusParticipant && tailoredFocusParticipant.userId !== hostParticipant?.userId ? (
-                    <TouchableOpacity
-                      style={styles.stageTailoredActionButton}
-                      activeOpacity={0.86}
-                      onPress={() => {
-                        featureParticipantFirst(tailoredFocusParticipant.userId);
-                      }}
-                    >
-                      <Text style={styles.stageTailoredActionText}>
-                        See {tailoredFocusParticipant.userId === currentUserParticipantId ? "yourself" : tailoredFocusParticipant.displayName} first
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  {tailoredFocusParticipant
-                    && tailoredFocusParticipant.userId !== currentUserParticipantId
-                    && tailoredFocusParticipant.role !== "host" ? (
-                    <TouchableOpacity
-                      style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
-                      activeOpacity={0.86}
-                      onPress={() => {
-                        hideParticipantLocally(tailoredFocusParticipant.userId);
-                      }}
-                    >
-                      <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>
-                        Hide {tailoredFocusParticipant.displayName}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  {hiddenParticipantCount > 0 ? (
-                    <TouchableOpacity
-                      style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
-                      activeOpacity={0.86}
-                      onPress={showEveryoneLocally}
-                    >
-                      <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>Show everyone</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  <TouchableOpacity
-                    style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
-                    activeOpacity={0.86}
-                    onPress={resetTailoredStageView}
-                  >
-                    <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>Reset layout</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
               <View style={styles.stageCommunityHeader}>
                 <View style={styles.stageCommunityHeaderLeft}>
                   <View style={styles.stageCommunityDot} />
@@ -1725,6 +1832,8 @@ export default function WatchPartyLiveStageScreen() {
             },
           }}
         />
+        </>
+        ) : null}
       </View>
 
       <ParticipantDetailSheet
@@ -1905,6 +2014,39 @@ const styles = StyleSheet.create({
   liveRoomMetaLabel: { color: "#8E99B0", fontSize: 10, fontWeight: "800", textTransform: "uppercase" },
   liveRoomMetaValue: { color: "#F4F7FF", fontSize: 12, fontWeight: "800" },
   liveRoomPermissionText: { color: "#AEB9CC", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  liveRoomControlCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(138,178,255,0.18)",
+    backgroundColor: "rgba(10,14,24,0.78)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+    marginBottom: 8,
+  },
+  liveRoomControlKicker: { color: "#9DB8FF", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  liveRoomControlTitle: { color: "#F5F8FF", fontSize: 16, fontWeight: "900", lineHeight: 21 },
+  liveRoomControlBody: { color: "#C6D0E2", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  liveRoomShareRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  liveRoomShareCodePill: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  liveRoomShareCodeText: { color: "#F4F7FF", fontSize: 13, fontWeight: "900", letterSpacing: 1 },
+  liveRoomShareButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.48)",
+    backgroundColor: "rgba(220,20,60,0.18)",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  liveRoomShareButtonText: { color: "#FFF5F7", fontSize: 12, fontWeight: "900" },
   liveRoomActionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   liveRoomActionBtn: {
     borderRadius: 999,
@@ -1951,6 +2093,20 @@ const styles = StyleSheet.create({
   },
   stageSectionKicker: { color: "#A5B0C6", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
   stageSectionBody: { color: "#C5CCDA", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+  stageSectionActionRow: { flexDirection: "row", justifyContent: "flex-start" },
+  liveRoomPrimaryButton: {
+    marginTop: 4,
+    marginBottom: 10,
+    borderRadius: 16,
+    backgroundColor: "#DC143C",
+    paddingVertical: 14,
+    alignItems: "center",
+    shadowColor: "#DC143C",
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+  },
+  liveRoomPrimaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900", letterSpacing: 0.3 },
   stageModeCard: {
     borderRadius: 20,
     borderWidth: 1,

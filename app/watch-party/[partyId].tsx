@@ -62,7 +62,6 @@ import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type Us
 import {
     applyHostAction,
     evaluatePartyRoomAccess,
-    emitSyncEvent,
     getActivePartyMemberships,
     getPartyRoom,
     getPartyRoomSnapshot,
@@ -71,7 +70,6 @@ import {
     setPartyRoomPolicies,
     setPartyParticipantState,
     touchPartyRoomSession,
-    updateRoomPlayback,
     type WatchPartyRoomMembership,
     type WatchPartyState,
 } from "../../_lib/watchParty";
@@ -153,17 +151,9 @@ type FloatingReaction = {
   scale: Animated.Value;
 };
 
-const HOST_SEEK_STEP_MILLIS = 10_000;
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
 const ROOM_HEARTBEAT_INTERVAL_MILLIS = 10_000;
-const formatPartyTime = (millis: number) => {
-  const totalSeconds = Math.max(0, Math.floor((millis || 0) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-};
-
 const getSafeRoomTitleLabel = (titleName: string | null, room: WatchPartyState, fallbackLabel: string) => {
   const resolvedTitle = String(titleName ?? "").trim();
   if (resolvedTitle) return resolvedTitle;
@@ -368,8 +358,6 @@ export default function WatchPartyRoomScreen() {
       delete participantReactionTimeoutsRef.current[safeUserId];
     }, 1400);
   }, []);
-
-  const clampMillis = useCallback((value: number) => Math.max(0, Math.floor(value || 0)), []);
 
   const syncRoomFromSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, userId?: string | null) => {
     setRoom(snapshot.room);
@@ -1000,6 +988,13 @@ export default function WatchPartyRoomScreen() {
     await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
   }, [partyId, refreshRoomSnapshot, roomLocked]);
 
+  const onToggleCaptureRoom = useCallback(async () => {
+    if (myRoleRef.current !== "host" || !partyId || !room) return;
+    const nextCapturePolicy = room.capturePolicy === "host_managed" ? "best_effort" : "host_managed";
+    await setPartyRoomPolicies(partyId, { capturePolicy: nextCapturePolicy }).catch(() => {});
+    await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
+  }, [partyId, refreshRoomSnapshot, room]);
+
   const emitParticipantUpdate = useCallback(async (participantId: string, changes: Partial<SharedParticipantLocalState>) => {
     if (!partyId || !participantId || myRoleRef.current !== "host") return;
     const currentMembership = membershipMapRef.current[participantId];
@@ -1292,57 +1287,6 @@ export default function WatchPartyRoomScreen() {
       },
     });
   }, [room?.partyId, room?.titleId, titleIdHint, partyId, router]);
-
-  const onHostTogglePlayPause = useCallback(async () => {
-    if (myRoleRef.current !== "host" || !room || !partyId) return;
-
-    const nextState = room.playbackState === "playing" ? "paused" : "playing";
-    const nextPosition = clampMillis(room.playbackPositionMillis ?? 0);
-    const nowIso = new Date().toISOString();
-
-    setRoom((prev) =>
-      prev
-        ? {
-            ...prev,
-            playbackState: nextState,
-            playbackPositionMillis: nextPosition,
-            updatedAt: nowIso,
-          }
-        : prev,
-    );
-
-    await updateRoomPlayback(partyId, nextPosition, nextState).catch(() => {});
-    if (myUserIdRef.current) {
-      await emitSyncEvent(partyId, myUserIdRef.current, nextState === "playing" ? "play" : "pause", nextPosition).catch(() => {});
-    }
-  }, [clampMillis, partyId, room]);
-
-  const onHostSeek = useCallback(
-    async (deltaMillis: number) => {
-      if (myRoleRef.current !== "host" || !room || !partyId) return;
-
-      const nextPosition = clampMillis((room.playbackPositionMillis ?? 0) + deltaMillis);
-      const nextState = room.playbackState === "playing" ? "playing" : "paused";
-      const nowIso = new Date().toISOString();
-
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              playbackPositionMillis: nextPosition,
-              playbackState: nextState,
-              updatedAt: nowIso,
-            }
-          : prev,
-      );
-
-      await updateRoomPlayback(partyId, nextPosition, nextState).catch(() => {});
-      if (myUserIdRef.current) {
-        await emitSyncEvent(partyId, myUserIdRef.current, "seek", nextPosition).catch(() => {});
-      }
-    },
-    [clampMillis, partyId, room],
-  );
 
   // ── Connection display helpers ───────────────────────────────────────────────
   const connLabel: Record<ConnState, string> = {
@@ -1726,14 +1670,14 @@ export default function WatchPartyRoomScreen() {
   const isHost = myRole === "host";
   const isSyncUnstable = connState === "reconnecting" || connState === "connecting";
   const isWaitingForHost = !isHost && !participants.some((p) => p.role === "host");
-  const roleStatusTitle = isHost ? "Host Controls Active" : "Guest Synced to Host";
+  const roleStatusTitle = isHost ? "Host Room Controls" : "Viewer Room Entry";
   const roleStatusBody = isHost
-    ? `You control room playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.playbackPositionMillis ?? 0)}`
+    ? "Shape the room here before the shared player opens. Invite people, set access, and decide how the audience enters the watch moment."
     : isWaitingForHost
       ? "Waiting for host…"
       : isSyncUnstable
-        ? `Resyncing with host · ${isPlaying ? "Playing" : "Paused"}`
-        : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.playbackPositionMillis ?? 0)}`;
+        ? "Resyncing room setup with the host…"
+        : "You are inside the host's room setup. Shared playback starts only after the room is ready.";
   const accessGatePresentation = accessGate
     ? getMonetizationAccessSheetPresentation({
         gate: accessGate.access,
@@ -1758,7 +1702,14 @@ export default function WatchPartyRoomScreen() {
   const roomCardTitle = roomLabels.roomCardTitle;
   const roomCardSubtext = isLiveRoom
     ? "Host and viewer control room for the live session."
-    : `Watching together: ${partyRoomTitleContext}`;
+    : `Pre-entry control room for ${partyRoomTitleContext}.`;
+  const partyRoomFocusLabel = tailoredFocusParticipant
+    ? (tailoredFocusParticipant.userId === currentUserBubbleId ? "You" : tailoredFocusParticipant.displayName)
+    : "Host";
+  const partyRoomVisibilityLabel = hiddenParticipantCount > 0 ? `${hiddenParticipantCount} hidden locally` : "Everyone visible";
+  const partyRoomJoinLabel = roomLocked ? "Locked" : "Open";
+  const partyRoomReactionLabel = reactionsGloballyMuted ? "Muted" : "Enabled";
+  const partyRoomCaptureLabel = room.capturePolicy === "host_managed" ? "Host-managed" : "Best-effort";
   const { selectedParticipantUserId, selectedParticipantState, canShowProfileAction } = resolveSelectedParticipantContext({
     selectedParticipant,
     participantStateById,
@@ -2080,12 +2031,12 @@ export default function WatchPartyRoomScreen() {
 
         {!isLiveRoom ? (
           <View style={styles.tailoredRoomCard}>
-            <Text style={styles.sectionKicker}>TAILORED WATCH-PARTY LIVE</Text>
-            <Text style={styles.tailoredRoomTitle}>Your room view stays personal</Text>
+            <Text style={styles.sectionKicker}>PARTY ROOM</Text>
+            <Text style={styles.tailoredRoomTitle}>Shape the room before shared playback starts</Text>
             <Text style={styles.tailoredRoomBody}>
               {hostParticipant
-                ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Choose who appears first in your strip and hide guests locally without changing the shared room truth.`
-                : "Choose who appears first in your strip and hide guests locally without changing the shared room truth."}
+                ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Use Party Room to decide who appears first, what the room allows, and how the watch-together moment opens before you enter shared Watch-Party Live.`
+                : "Use Party Room to decide who appears first, what the room allows, and how the shared watch moment opens before playback starts."}
             </Text>
             <View style={styles.tailoredRoomMetaRow}>
               <View style={styles.tailoredRoomMetaPill}>
@@ -2095,14 +2046,12 @@ export default function WatchPartyRoomScreen() {
               </View>
               <View style={styles.tailoredRoomMetaPill}>
                 <Text style={styles.tailoredRoomMetaText}>
-                  Focus: {tailoredFocusParticipant ? (tailoredFocusParticipant.userId === currentUserBubbleId ? "You" : tailoredFocusParticipant.displayName) : "Host"}
+                  Focus: {partyRoomFocusLabel}
                 </Text>
               </View>
-              {hiddenParticipantCount > 0 ? (
-                <View style={styles.tailoredRoomMetaPill}>
-                  <Text style={styles.tailoredRoomMetaText}>Hidden locally: {hiddenParticipantCount}</Text>
-                </View>
-              ) : null}
+              <View style={styles.tailoredRoomMetaPill}>
+                <Text style={styles.tailoredRoomMetaText}>Visibility: {partyRoomVisibilityLabel}</Text>
+              </View>
             </View>
             <View style={styles.tailoredRoomActions}>
               <TouchableOpacity
@@ -2284,17 +2233,17 @@ export default function WatchPartyRoomScreen() {
           <View style={styles.hostWrap}>
             <Text style={styles.sectionKicker}>CONTROLS</Text>
             <View style={styles.hostSection}>
-            <Text style={styles.hostSectionLabel}>HOST CONTROLS</Text>
-            <View style={styles.hostPlaybackRow}>
-              <TouchableOpacity style={styles.hostPlaybackBtn} onPress={() => onHostSeek(-HOST_SEEK_STEP_MILLIS)} activeOpacity={0.8}>
-                <Text style={styles.hostPlaybackBtnText}>-10s</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.hostPlaybackBtn, styles.hostPlaybackBtnPrimary]} onPress={onHostTogglePlayPause} activeOpacity={0.8}>
-                <Text style={[styles.hostPlaybackBtnText, styles.hostPlaybackBtnTextPrimary]}>{isPlaying ? "Pause" : "Play"}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.hostPlaybackBtn} onPress={() => onHostSeek(HOST_SEEK_STEP_MILLIS)} activeOpacity={0.8}>
-                <Text style={styles.hostPlaybackBtnText}>+10s</Text>
-              </TouchableOpacity>
+            <Text style={styles.hostSectionLabel}>ROOM DEFAULTS</Text>
+            <View style={styles.tailoredRoomMetaRow}>
+              <View style={styles.tailoredRoomMetaPill}>
+                <Text style={styles.tailoredRoomMetaText}>Access: {partyRoomJoinLabel}</Text>
+              </View>
+              <View style={styles.tailoredRoomMetaPill}>
+                <Text style={styles.tailoredRoomMetaText}>Reactions: {partyRoomReactionLabel}</Text>
+              </View>
+              <View style={styles.tailoredRoomMetaPill}>
+                <Text style={styles.tailoredRoomMetaText}>Capture: {partyRoomCaptureLabel}</Text>
+              </View>
             </View>
             <View style={styles.hostBtnRow}>
               <TouchableOpacity
@@ -2313,6 +2262,15 @@ export default function WatchPartyRoomScreen() {
               >
                 <Text style={styles.hostBtnText}>
                   {roomLocked ? "🔓  Unlock room" : "🔒  Lock room"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.hostBtn, room.capturePolicy === "host_managed" && styles.hostBtnOn]}
+                onPress={onToggleCaptureRoom}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.hostBtnText}>
+                  {room.capturePolicy === "host_managed" ? "📷  Best-effort capture" : "📷  Host-managed capture"}
                 </Text>
               </TouchableOpacity>
             </View>
