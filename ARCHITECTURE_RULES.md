@@ -112,6 +112,35 @@ Locked meanings:
 - Live Stage belongs only to the separate Live flow
 - Party Room must not hand off to Live Stage
 
+## Room Blueprint Rule
+- `ROOM_BLUEPRINT.md` is the durable room-by-room product reference for Chi'llywood's major rooms and surfaces
+- future room-by-room feature work must align with `ROOM_BLUEPRINT.md` unless the control files are intentionally updated together
+- every major room or surface must answer four questions:
+  1. Why am I here?
+  2. What can I do here that I cannot do elsewhere?
+  3. Who can see or control what here?
+  4. What AI help belongs here without getting in the way?
+- the blueprint must define purpose, entry/exit, controls, permissions/visibility, room-specific AI behavior, MVP scope, later expansion, anti-patterns, and product success tests without contradicting locked naming, routes, or room ownership
+
+## Room Feature Fit Rule
+Before adding a feature to a room or room-adjacent surface, prove:
+1. it fits that room's purpose
+2. it improves clarity, identity, moderation, monetization, engagement, or usability without clutter
+3. it belongs in current scope, near-term expansion, or later expansion
+4. it does not overlap or conflict with another room owner
+5. its permissions, safety, and audit posture are clear when relevant
+
+Do not use active rooms as feature buckets just because they already have UI space.
+
+## Room AI Placement Rule
+AI in Chi'llywood must be room-specific, role-aware, and maturity-aware.
+
+That means:
+- visible AI should appear only when it directly helps the active room task
+- background AI may support moderation, summaries, ranking, recommendations, or recovery without taking over the room
+- AI must not blur locked room meanings or invent new authority over hosts, moderators, official accounts, rights, or entitlements
+- AI features that fit later expansion must stay documented in `ROOM_BLUEPRINT.md` without being treated as approved current-scope implementation work
+
 ## Player Rule
 Player is playback-only.
 
@@ -215,6 +244,7 @@ Do not guess when duplicate surfaces may exist.
 
 ## File Placement Rule
 - permanent product truth belongs in `MASTER_VISION.md` and `ARCHITECTURE_RULES.md`
+- durable room/surface blueprint doctrine belongs in `ROOM_BLUEPRINT.md`
 - roadmap/phasing belongs in `ROADMAP.md`
 - current implementation truth belongs in `CURRENT_STATE.md`
 - immediate execution scope belongs in `NEXT_TASK.md`
