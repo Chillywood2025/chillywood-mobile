@@ -166,6 +166,7 @@ export default function PlayerScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [durationMillis, setDurationMillis] = useState(0);
   const [positionMillis, setPositionMillis] = useState(0);
+  const [resumeCueMillis, setResumeCueMillis] = useState(0);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [myListIds, setMyListIds] = useState<string[]>([]);
@@ -442,16 +443,20 @@ export default function PlayerScreen() {
     const loadResume = async () => {
       if (!titleId) {
         resumePositionRef.current = 0;
+        if (active) setResumeCueMillis(0);
         return;
       }
 
       try {
         const merged = await readMergedWatchProgress();
         if (!active) return;
-        resumePositionRef.current = Math.max(0, merged[titleId]?.positionMillis ?? 0);
+        const nextResumeMillis = Math.max(0, merged[titleId]?.positionMillis ?? 0);
+        resumePositionRef.current = nextResumeMillis;
+        setResumeCueMillis(nextResumeMillis);
       } catch {
         if (!active) return;
         resumePositionRef.current = 0;
+        setResumeCueMillis(0);
       }
     };
 
@@ -2445,8 +2450,10 @@ export default function PlayerScreen() {
     const localVisual = (localTitle ?? fallbackTitle) as any;
     return localVisual?.image || localVisual?.poster || null;
   }, [displayItem, localTitle, fallbackTitle]);
-  const isLiveMode = inWatchParty && (isLiveModeFlag || !source);
-  const shouldUseLiveSpeakerStage = isLiveMode && !source;
+  const isLiveMode = isLiveModeFlag;
+  const isSharedPartyPlayback = inWatchParty && !isLiveMode;
+  const isStandalonePlayer = !inWatchParty && !isLiveMode;
+  const shouldUseLiveSpeakerStage = isLiveMode;
 
   useEffect(() => {
     if (inWatchParty || isLiveMode) {
@@ -2490,6 +2497,30 @@ export default function PlayerScreen() {
     if (partyParticipantPreview.length === 0) return "";
     return partyParticipantPreview.slice(0, 2).join(" · ");
   }, [partyParticipantPreview]);
+  const standaloneContextTitle = useMemo(() => {
+    if (resumeCueMillis > 0) return "Resume your own watch session.";
+    return "You are in solo playback.";
+  }, [resumeCueMillis]);
+  const standaloneContextBody = useMemo(() => {
+    if (resumeCueMillis > 0) {
+      return `Pick up ${displayItem?.title ?? "this title"} from ${formatTime(resumeCueMillis)} or scrub freely without affecting anyone else.`;
+    }
+
+    return "Playback stays private and fully in your control here. Start Watch-Party Live only when you want to bring other people in.";
+  }, [displayItem?.title, resumeCueMillis]);
+  const standaloneResumeLabel = useMemo(() => {
+    if (resumeCueMillis <= 0) return "";
+    return `Resume ${formatTime(resumeCueMillis)}`;
+  }, [resumeCueMillis]);
+  const standaloneProgressLabel = useMemo(() => {
+    if (durationMillis <= 0 || positionMillis <= 0) return "";
+    const percent = Math.max(1, Math.min(99, Math.round((positionMillis / durationMillis) * 100)));
+    return `${percent}% watched`;
+  }, [durationMillis, positionMillis]);
+  const standaloneHelper = useMemo(
+    () => "PLAYER HELPER · Stay here for solo playback, fullscreen, and free scrubbing. Use Watch-Party Live only when you want to move into the party flow.",
+    [],
+  );
 
   useEffect(() => {
     if (!inWatchParty) return;
@@ -3154,7 +3185,31 @@ export default function PlayerScreen() {
           />
         ) : null}
 
-        {inWatchParty && !isLiveMode ? (
+        {isStandalonePlayer ? (
+          <View style={styles.standaloneContextCard}>
+            <Text style={styles.standaloneContextKicker}>SOLO PLAYBACK</Text>
+            <Text style={styles.standaloneContextTitle}>{standaloneContextTitle}</Text>
+            <Text style={styles.standaloneContextBody}>{standaloneContextBody}</Text>
+            <View style={styles.standaloneContextMetaRow}>
+              {standaloneResumeLabel ? (
+                <View style={styles.standaloneContextMetaPill}>
+                  <Text style={styles.standaloneContextMetaText}>{standaloneResumeLabel}</Text>
+                </View>
+              ) : null}
+              {standaloneProgressLabel ? (
+                <View style={styles.standaloneContextMetaPill}>
+                  <Text style={styles.standaloneContextMetaText}>{standaloneProgressLabel}</Text>
+                </View>
+              ) : null}
+              <View style={styles.standaloneContextMetaPill}>
+                <Text style={styles.standaloneContextMetaText}>Watch-Party Live from here</Text>
+              </View>
+            </View>
+            <Text style={styles.standaloneContextHelper}>{standaloneHelper}</Text>
+          </View>
+        ) : null}
+
+        {isSharedPartyPlayback ? (
           <View style={styles.watchPartyContextCard}>
             <View style={styles.watchPartyContextHeaderRow}>
               <View style={styles.watchPartyContextCopy}>
@@ -3495,8 +3550,8 @@ export default function PlayerScreen() {
               </View>
             ) : null}
 
-            {inWatchParty ? (
-              <>
+              {inWatchParty ? (
+                <>
                 <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
                   <Animated.View style={[styles.partyPresencePill, styles.partyPresencePillWatchPartyTitle, { opacity: partyPresenceOpacity }]}> 
                     <View style={styles.partyPresenceRow}>
@@ -3782,7 +3837,7 @@ export default function PlayerScreen() {
             </View>
           </View>
 
-          {inWatchParty && !isLiveMode && source ? (
+          {isSharedPartyPlayback && source ? (
             <View style={[styles.titleParticipantFeedDock, hasActiveRailParticipants && styles.titleWatchPartyRailDockActive]}>
               {renderTitleParticipantExpandedPanel()}
             </View>
@@ -3969,6 +4024,57 @@ const styles = StyleSheet.create({
     color: "#F2DEE4",
     fontSize: 10.5,
     fontWeight: "800",
+  },
+  standaloneContextCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(8,8,12,0.4)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    marginBottom: 6,
+    gap: 7,
+  },
+  standaloneContextKicker: {
+    color: "#C7E7FF",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  standaloneContextTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  standaloneContextBody: {
+    color: "#D3D7E3",
+    fontSize: 11.5,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
+  standaloneContextMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  standaloneContextMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  standaloneContextMetaText: {
+    color: "#EDF0F7",
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  standaloneContextHelper: {
+    color: "#BFC4D2",
+    fontSize: 10.5,
+    fontWeight: "700",
+    lineHeight: 15,
   },
   watchPartyContextCard: {
     borderRadius: 14,
