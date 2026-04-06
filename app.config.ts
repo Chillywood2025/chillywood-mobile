@@ -1,14 +1,12 @@
 import type { ConfigContext, ExpoConfig } from "@expo/config";
 
-const appJson = require("./app.json") as { expo: ExpoConfig };
-
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeRuntimeEnvironment = (value: unknown) => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
 );
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  const base = appJson.expo ?? config;
+  const base = config as ExpoConfig;
   const existingExtra = (base.extra ?? {}) as Record<string, unknown>;
   const existingRuntime = (
     existingExtra.runtime && typeof existingExtra.runtime === "object" && !Array.isArray(existingExtra.runtime)
