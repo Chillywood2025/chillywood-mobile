@@ -86,6 +86,12 @@ const PARTY_MOCK_COMMENTS = [
   { id: "mock-comment-2", username: "Noah", text: "Pause after this for theories" },
   { id: "mock-comment-3", username: "Ava", text: "Soundtrack is perfect here" },
 ] as const;
+const LIVE_FACE_FILTER_OPTIONS = [
+  { id: "none", label: "Natural", subtitle: "No filter" },
+  { id: "studio", label: "Studio Glow", subtitle: "Warm lift" },
+  { id: "cool", label: "City Cool", subtitle: "Blue clarity" },
+  { id: "midnight", label: "Midnight", subtitle: "Deep contrast" },
+] as const;
 const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
   const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
@@ -115,6 +121,42 @@ type PartyParticipant = {
   canSpeak: boolean;
   isSpeaking: boolean;
   isRequestingToSpeak: boolean;
+};
+
+type LiveFaceFilterId = (typeof LIVE_FACE_FILTER_OPTIONS)[number]["id"];
+
+const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
+  switch (filterId) {
+    case "studio":
+      return {
+        label: "Studio Glow",
+        subtitle: "Warm lift across your live camera feed.",
+        overlayColor: "rgba(255,189,122,0.16)",
+        borderColor: "rgba(255,214,168,0.52)",
+      };
+    case "cool":
+      return {
+        label: "City Cool",
+        subtitle: "Blue-edge clarity for night-stage energy.",
+        overlayColor: "rgba(108,166,255,0.18)",
+        borderColor: "rgba(168,203,255,0.52)",
+      };
+    case "midnight":
+      return {
+        label: "Midnight",
+        subtitle: "Deeper contrast with a cooler low-light finish.",
+        overlayColor: "rgba(96,112,255,0.16)",
+        borderColor: "rgba(149,164,255,0.5)",
+      };
+    case "none":
+    default:
+      return {
+        label: "Natural",
+        subtitle: "No filter on your live camera feed.",
+        overlayColor: "transparent",
+        borderColor: "rgba(255,255,255,0.1)",
+      };
+  }
 };
 
 const BASE_SELECT = "id,title,category,year,runtime,synopsis,poster_url,video_url,content_access_rule";
@@ -213,6 +255,8 @@ export default function PlayerScreen() {
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [liveFilterSheetOpen, setLiveFilterSheetOpen] = useState(false);
+  const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [partyComments, setPartyComments] = useState<{ id: string; username: string; text: string }[]>(() =>
     PARTY_MOCK_COMMENTS.map((entry) => ({ ...entry })),
@@ -2165,6 +2209,12 @@ export default function PlayerScreen() {
     setRecentReactionEmojis((prev) => pushRecentReaction(prev, emoji));
   }, [triggerLocalPartyReaction]);
 
+  const onToggleLiveFilters = useCallback(() => {
+    setPartyCommentsOpen(false);
+    setReactionPickerOpen(false);
+    setLiveFilterSheetOpen((value) => !value);
+  }, []);
+
   const progressPercent = useMemo(() => {
     if (!durationMillis || durationMillis <= 0) return 0;
     return clamp((positionMillis / durationMillis) * 100, 0, 100);
@@ -2505,6 +2555,7 @@ export default function PlayerScreen() {
   const isSharedPartyPlayback = inWatchParty && !isLiveMode;
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const shouldUseLiveSpeakerStage = isLiveMode;
+  const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
   const isPremiumStandaloneTitle = isStandalonePlayer
@@ -2585,6 +2636,12 @@ export default function PlayerScreen() {
       setIsStandaloneFullscreen(false);
     }
   }, [inWatchParty, isLiveMode]);
+
+  useEffect(() => {
+    if (!isLiveMode) {
+      setLiveFilterSheetOpen(false);
+    }
+  }, [isLiveMode]);
 
   useEffect(() => {
     if (!isStandalonePlayer || !standalonePlaybackGateActive) return;
@@ -2953,9 +3010,37 @@ export default function PlayerScreen() {
                   >
                     {(showLocalCameraPreview || bubbleMediaUri) ? (
                       showLocalCameraPreview ? (
-                        <CameraView style={styles.participantAvatarImage} facing="front" mute mirror />
+                        <>
+                          <CameraView style={styles.participantAvatarImage} facing="front" mute mirror />
+                          {isCurrentUser && liveFaceFilter !== "none" ? (
+                            <View
+                              pointerEvents="none"
+                              style={[
+                                styles.liveFaceFilterPreviewOverlay,
+                                {
+                                  backgroundColor: activeLiveFaceFilter.overlayColor,
+                                  borderColor: activeLiveFaceFilter.borderColor,
+                                },
+                              ]}
+                            />
+                          ) : null}
+                        </>
                       ) : (
-                        <Image source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
+                        <>
+                          <Image source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
+                          {isCurrentUser && liveFaceFilter !== "none" ? (
+                            <View
+                              pointerEvents="none"
+                              style={[
+                                styles.liveFaceFilterPreviewOverlay,
+                                {
+                                  backgroundColor: activeLiveFaceFilter.overlayColor,
+                                  borderColor: activeLiveFaceFilter.borderColor,
+                                },
+                              ]}
+                            />
+                          ) : null}
+                        </>
                       )
                     ) : (
                       <Text style={[styles.participantInitials, liveLayout && styles.participantInitialsLive, !liveLayout && styles.participantInitialsTitleCompact]}>{initials}</Text>
@@ -3207,6 +3292,45 @@ export default function PlayerScreen() {
         </TouchableOpacity>
       </View>
       {renderParticipantPanel(true, true)}
+    </View>
+  );
+
+  const renderLiveFilterSheet = (sheetStyle?: object) => (
+    <View style={[styles.liveFilterSheet, sheetStyle]}>
+      <View style={styles.liveFilterSheetHeader}>
+        <View style={styles.liveFilterSheetHeaderCopy}>
+          <Text style={styles.liveFilterSheetKicker}>FACE FILTERS</Text>
+          <Text style={styles.liveFilterSheetTitle}>{activeLiveFaceFilter.label}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.liveFilterSheetDismissBtn}
+          onPress={() => setLiveFilterSheetOpen(false)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.liveFilterSheetDismissText}>Done</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.liveFilterSheetBody}>
+        Live filters stay local to your live camera tiles across the active live-player surfaces.
+      </Text>
+      <Text style={styles.liveFilterSheetHelper}>{activeLiveFaceFilter.subtitle}</Text>
+      <View style={styles.liveFilterOptionRow}>
+        {LIVE_FACE_FILTER_OPTIONS.map((option) => {
+          const active = liveFaceFilter === option.id;
+          return (
+            <TouchableOpacity
+              key={option.id}
+              style={[styles.liveFilterOptionChip, active && styles.liveFilterOptionChipActive]}
+              onPress={() => setLiveFaceFilter(option.id)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.liveFilterOptionText, active && styles.liveFilterOptionTextActive]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 
@@ -3475,15 +3599,38 @@ export default function PlayerScreen() {
               <View style={styles.liveModeActionRow}>
                 <TouchableOpacity
                   style={styles.partyOverlayChip}
-                  onPress={() => setPartyCommentsOpen((value) => !value)}
+                  onPress={() => {
+                    setLiveFilterSheetOpen(false);
+                    setPartyCommentsOpen((value) => !value);
+                  }}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.partyOverlayChipText}>🗨️</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
+                  style={[
+                    styles.partyOverlayChip,
+                    (liveFilterSheetOpen || liveFaceFilter !== "none") && styles.watchPartyLiveFooterActiveBtn,
+                  ]}
+                  onPress={onToggleLiveFilters}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.partyOverlayChipText,
+                      (liveFilterSheetOpen || liveFaceFilter !== "none") && styles.watchPartyLiveFooterActiveLabel,
+                    ]}
+                  >
+                    🎭
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   style={styles.partyOverlayChip}
                   onPress={() => {
+                    setLiveFilterSheetOpen(false);
+                    setPartyCommentsOpen(false);
                     const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
                     triggerLocalPartyReaction(emoji);
                   }}
@@ -3542,6 +3689,8 @@ export default function PlayerScreen() {
                 </View>
               </View>
             ) : null}
+
+            {liveFilterSheetOpen && !inWatchParty ? renderLiveFilterSheet(styles.liveFilterSheetStandalone) : null}
               </>
             ) : (
               <>
@@ -3979,8 +4128,9 @@ export default function PlayerScreen() {
           {inWatchParty && isLiveMode && source ? (
             <LiveLowerDock
               rootStyle={[styles.watchPartyLiveBottomDock, hasActiveRailParticipants && styles.watchPartyLiveBottomDockActive]}
-              presenceToast={partyCommentsOpen || livePresenceEvent ? (
+              presenceToast={partyCommentsOpen || livePresenceEvent || liveFilterSheetOpen ? (
                 <View style={styles.watchPartyLivePresenceStack}>
+                  {liveFilterSheetOpen ? renderLiveFilterSheet(styles.liveFilterSheetWatchParty) : null}
                   {partyCommentsOpen ? (
                     <View
                       style={[
@@ -4035,6 +4185,7 @@ export default function PlayerScreen() {
                 label: "Comments",
                 activeOpacity: 0.85,
                 onPress: () => {
+                  setLiveFilterSheetOpen(false);
                   setReactionPickerOpen(false);
                   setPartyCommentsOpen((value) => !value);
                 },
@@ -4043,11 +4194,21 @@ export default function PlayerScreen() {
               }}
               trailingActions={[
                 {
+                  id: "filters",
+                  icon: "🎭",
+                  label: "Filters",
+                  activeOpacity: 0.85,
+                  onPress: onToggleLiveFilters,
+                  buttonStyle: (liveFilterSheetOpen || liveFaceFilter !== "none") ? styles.watchPartyLiveFooterActiveBtn : undefined,
+                  labelStyle: (liveFilterSheetOpen || liveFaceFilter !== "none") ? styles.watchPartyLiveFooterActiveLabel : undefined,
+                },
+                {
                   id: "react",
                   icon: "✨",
                   label: "React",
                   activeOpacity: 0.85,
                   onPress: () => {
+                    setLiveFilterSheetOpen(false);
                     setPartyCommentsOpen(false);
                     setReactionPickerOpen((value) => !value);
                   },
@@ -5542,6 +5703,11 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 999,
   },
+  liveFaceFilterPreviewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 1,
+    borderRadius: 999,
+  },
   participantAvatarLive: {
     width: 50,
     height: 50,
@@ -5779,6 +5945,63 @@ const styles = StyleSheet.create({
   watchPartyLivePresenceStack: {
     gap: 4,
   },
+  liveFilterSheet: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(154,182,246,0.24)",
+    backgroundColor: "rgba(6,10,18,0.92)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  liveFilterSheetStandalone: {
+    marginTop: 10,
+  },
+  liveFilterSheetWatchParty: {
+    marginBottom: 2,
+  },
+  liveFilterSheetHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  liveFilterSheetHeaderCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  liveFilterSheetKicker: { color: "#9DB8FF", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  liveFilterSheetTitle: { color: "#F5F8FF", fontSize: 15, fontWeight: "900", lineHeight: 20 },
+  liveFilterSheetDismissBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  liveFilterSheetDismissText: { color: "#DCE4F5", fontSize: 11, fontWeight: "800" },
+  liveFilterSheetBody: { color: "#C6D0E2", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+  liveFilterSheetHelper: { color: "#EFF4FF", fontSize: 11.5, lineHeight: 16, fontWeight: "700" },
+  liveFilterOptionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  liveFilterOptionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  liveFilterOptionChipActive: {
+    borderColor: "rgba(138,178,255,0.44)",
+    backgroundColor: "rgba(34,52,92,0.86)",
+  },
+  liveFilterOptionText: { color: "#DCE4F5", fontSize: 11.5, fontWeight: "700" },
+  liveFilterOptionTextActive: { color: "#F5F8FF" },
   watchPartyLiveStripWrap: {
     borderRadius: 12,
     borderWidth: 1,

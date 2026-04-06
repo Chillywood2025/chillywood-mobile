@@ -49,7 +49,7 @@ import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../../co
 import { LiveLowerDock } from "../../../components/room/live-lower-dock";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { pushRecentReaction } from "../../../components/room/reaction-picker";
-import { ProtectedSessionNote, getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
+import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
 import {
@@ -87,6 +87,49 @@ type FloatingReaction = {
   rise: Animated.Value;
   opacity: Animated.Value;
   scale: Animated.Value;
+};
+
+const LIVE_FACE_FILTER_OPTIONS = [
+  { id: "none", label: "Natural", subtitle: "No filter" },
+  { id: "studio", label: "Studio Glow", subtitle: "Warm lift" },
+  { id: "cool", label: "City Cool", subtitle: "Blue clarity" },
+  { id: "midnight", label: "Midnight", subtitle: "Deep contrast" },
+] as const;
+
+type LiveFaceFilterId = (typeof LIVE_FACE_FILTER_OPTIONS)[number]["id"];
+
+const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
+  switch (filterId) {
+    case "studio":
+      return {
+        label: "Studio Glow",
+        subtitle: "Warm lift across your live camera feed.",
+        overlayColor: "rgba(255,189,122,0.16)",
+        borderColor: "rgba(255,214,168,0.52)",
+      };
+    case "cool":
+      return {
+        label: "City Cool",
+        subtitle: "Blue-edge clarity for night-stage energy.",
+        overlayColor: "rgba(108,166,255,0.18)",
+        borderColor: "rgba(168,203,255,0.52)",
+      };
+    case "midnight":
+      return {
+        label: "Midnight",
+        subtitle: "Deeper contrast with a cooler low-light finish.",
+        overlayColor: "rgba(96,112,255,0.16)",
+        borderColor: "rgba(149,164,255,0.5)",
+      };
+    case "none":
+    default:
+      return {
+        label: "Natural",
+        subtitle: "No filter on your live camera feed.",
+        overlayColor: "transparent",
+        borderColor: "rgba(255,255,255,0.1)",
+      };
+  }
 };
 
 const STAGE_CHAT_LINES = [
@@ -130,6 +173,9 @@ export default function WatchPartyLiveStageScreen() {
   const [stageMode, setStageMode] = useState<SharedRoomMode>(initialStageMode);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [stageControlsOpen, setStageControlsOpen] = useState(false);
+  const [faceFilterSheetOpen, setFaceFilterSheetOpen] = useState(false);
+  const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [stageMessages, setStageMessages] = useState<StageChatMessage[]>([]);
@@ -986,6 +1032,7 @@ export default function WatchPartyLiveStageScreen() {
   const chatFloat = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
   const chatOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.78, 0.9] });
   const liveDockBottomInset = Math.max(28, safeAreaInsets.bottom + 14);
+  const liveRoomFooterInset = Math.max(16, safeAreaInsets.bottom + 8);
   const commentsLaneBottomOffset = liveDockBottomInset + 188;
   const localHeroPreviewUri = String(myCameraPreviewUrlRef.current || "").trim();
   const hasLocalHeroCamera = Platform.OS !== "web" && !!cameraPermission?.granted;
@@ -1063,6 +1110,20 @@ export default function WatchPartyLiveStageScreen() {
   const stageHelperCopy = isLiveFirstMode
     ? `${lowerCommunityCountLabel}. ${hostParticipant ? `${hostParticipant.userId === currentUserParticipantId ? "You are" : `${hostParticipant.displayName} is`} leading the stage.` : "Host focus is syncing."} Keep comments and reactions additive so the host stays visually clear.`
     : `${lowerCommunityCountLabel}. Shared viewing is active here, so keep the host and community readable while the watch moment leads the stage.`;
+  const stageModeMeaning = isLiveFirstMode
+    ? "Host-led live presentation mode with audience energy at the front."
+    : `${branding.watchPartyLabel} keeps shared content inside the live presentation while comments, reactions, and audience presence stay active.`;
+  const liveStageProtectionCopy = getProtectedSessionCopy("live-stage", {
+    contentAccessRule: room?.contentAccessRule,
+    capturePolicy: room?.capturePolicy,
+  });
+  const liveStageProtectionStatus = room?.capturePolicy === "host_managed"
+    ? "Host-managed"
+    : "Best-effort";
+  const liveStageProtectionHint = room?.capturePolicy === "host_managed"
+    ? "Host capture rules are active, while device blocking still stays best-effort."
+    : "Capture protection stays best-effort on supported devices.";
+  const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
 
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
@@ -1109,13 +1170,31 @@ export default function WatchPartyLiveStageScreen() {
   const onEnterLiveStage = useCallback(() => {
     setCommentsOpen(false);
     setReactionPickerOpen(false);
+    setStageControlsOpen(false);
+    setFaceFilterSheetOpen(false);
     setLiveSurface("stage");
   }, []);
 
   const onReturnToLiveRoom = useCallback(() => {
     setCommentsOpen(false);
     setReactionPickerOpen(false);
+    setStageControlsOpen(false);
+    setFaceFilterSheetOpen(false);
     setLiveSurface("room");
+  }, []);
+
+  const onToggleStageControls = useCallback(() => {
+    setCommentsOpen(false);
+    setReactionPickerOpen(false);
+    setFaceFilterSheetOpen(false);
+    setStageControlsOpen((value) => !value);
+  }, []);
+
+  const onToggleFaceFilters = useCallback(() => {
+    setCommentsOpen(false);
+    setReactionPickerOpen(false);
+    setStageControlsOpen(false);
+    setFaceFilterSheetOpen((value) => !value);
   }, []);
 
   debugLog("live-stage", "render branch", {
@@ -1158,7 +1237,7 @@ export default function WatchPartyLiveStageScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#DC143C" />
-        <Text style={styles.loadingText}>Opening Live Stage…</Text>
+        <Text style={styles.loadingText}>Opening Live Room…</Text>
       </View>
     );
   }
@@ -1185,7 +1264,7 @@ export default function WatchPartyLiveStageScreen() {
       <View style={styles.depthOverlayTop} pointerEvents="none" />
       <View style={styles.depthOverlayBottom} pointerEvents="none" />
 
-      <View style={[styles.screen, { paddingBottom: liveDockBottomInset + 92 }]}> 
+      <View style={[styles.screen, { paddingBottom: isLiveRoomSurface ? 0 : liveDockBottomInset + 92 }]}> 
         <View style={styles.stageHudTop}>
           <Animated.View style={[styles.livePill, { opacity: viewersOpacity }]}>
             <Animated.View style={[styles.liveDot, { opacity: liveDotOpacity, transform: [{ scale: liveDotScale }] }]} />
@@ -1199,7 +1278,13 @@ export default function WatchPartyLiveStageScreen() {
         </View>
 
         {isLiveRoomSurface ? (
-          <>
+          <View style={styles.liveRoomSurface}>
+            <ScrollView
+              style={styles.liveRoomSurfaceScroll}
+              contentContainerStyle={[styles.liveRoomSurfaceContent, { paddingBottom: liveRoomFooterInset + 28 }]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
             <View style={styles.liveRoomShellCard}>
               <Text style={styles.liveRoomShellKicker}>LIVE ROOM</Text>
               <Text style={styles.liveRoomShellTitle}>{liveRoomShellTitle}</Text>
@@ -1365,26 +1450,28 @@ export default function WatchPartyLiveStageScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.liveRoomPrimaryButton} activeOpacity={0.88} onPress={onEnterLiveStage}>
-              <Text style={styles.liveRoomPrimaryButtonText}>{liveRoomEntryLabel}</Text>
-            </TouchableOpacity>
-          </>
+            </ScrollView>
+
+            <View style={[styles.liveRoomFooter, { paddingBottom: liveRoomFooterInset }]}>
+              <TouchableOpacity style={styles.liveRoomPrimaryButton} activeOpacity={0.88} onPress={onEnterLiveStage}>
+                <Text style={styles.liveRoomPrimaryButtonText}>{liveRoomEntryLabel}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
           <>
-            <View style={styles.stageSectionIntro}>
-              <Text style={styles.stageSectionKicker}>LIVE STAGE</Text>
-              <Text style={styles.stageSectionBody}>
-                This is the presentation surface. Keep room setup in Live Room, then use `Live-First` or `{branding.watchPartyLabel}` here when the live experience begins.
-              </Text>
-              <View style={styles.stageSectionActionRow}>
-                <TouchableOpacity
-                  style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
-                  activeOpacity={0.84}
-                  onPress={onReturnToLiveRoom}
-                >
-                  <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Back to Live Room</Text>
-                </TouchableOpacity>
+            <View style={styles.stageSurfaceHeader}>
+              <View style={styles.stageSurfaceHeaderCopy}>
+                <Text style={styles.stageSurfaceKicker}>LIVE STAGE</Text>
+                <Text style={styles.stageSurfaceBody}>{stageModeMeaning}</Text>
               </View>
+              <TouchableOpacity
+                style={styles.stageSurfaceBackButton}
+                activeOpacity={0.84}
+                onPress={onReturnToLiveRoom}
+              >
+                <Text style={styles.stageSurfaceBackText}>Live Room</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.modeRow}>
@@ -1403,67 +1490,6 @@ export default function WatchPartyLiveStageScreen() {
                 <Text style={[styles.modeBtnText, stageMode === "hybrid" && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
               </TouchableOpacity>
             </View>
-
-            <View style={styles.stageModeCard}>
-              <Text style={styles.stageModeCardKicker}>STAGE MODE</Text>
-              <Text style={styles.stageModeCardTitle}>{stageModeTitle}</Text>
-              <Text style={styles.stageModeCardBody}>{stageModeBody}</Text>
-              <Text style={styles.stageModeHelperText}>
-                {isLiveFirstMode ? "STAGE HELPER: " : "WATCH MOMENT HELPER: "}
-                {stageHelperCopy}
-              </Text>
-
-              <View style={styles.stageModeMetaRow}>
-                <View style={styles.stageModeMetaPill}>
-                  <Text style={styles.stageModeMetaLabel}>Mode</Text>
-                  <Text style={styles.stageModeMetaValue}>{liveRoomModeLabel}</Text>
-                </View>
-                <View style={styles.stageModeMetaPill}>
-                  <Text style={styles.stageModeMetaLabel}>Focus</Text>
-                  <Text style={styles.stageModeMetaValue}>{stageFocusLabel}</Text>
-                </View>
-                <View style={styles.stageModeMetaPill}>
-                  <Text style={styles.stageModeMetaLabel}>Community</Text>
-                  <Text style={styles.stageModeMetaValue}>{lowerCommunityCountLabel}</Text>
-                </View>
-              </View>
-
-              <View style={styles.stageModeActionRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.stageModeActionBtn,
-                    !stageFocusTarget?.userId && styles.stageModeActionBtnDisabled,
-                  ]}
-                  activeOpacity={0.84}
-                  disabled={!stageFocusTarget?.userId}
-                  onPress={() => {
-                    if (!stageFocusTarget?.userId) return;
-                    featureParticipantFirst(stageFocusTarget.userId);
-                  }}
-                >
-                  <Text style={styles.stageModeActionText}>{stagePrimaryActionLabel}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.stageModeActionBtn, reactionPickerOpen && styles.stageModeActionBtnActive]}
-                  activeOpacity={0.84}
-                  onPress={() => {
-                    setCommentsOpen(false);
-                    setReactionPickerOpen((value) => !value);
-                  }}
-                >
-                  <Text style={[styles.stageModeActionText, reactionPickerOpen && styles.stageModeActionTextActive]}>
-                    {reactionPickerOpen ? "Hide reactions" : "Open reactions"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <ProtectedSessionNote
-              {...getProtectedSessionCopy("live-stage", {
-                contentAccessRule: room?.contentAccessRule,
-                capturePolicy: room?.capturePolicy,
-              })}
-            />
           </>
         )}
 
@@ -1487,6 +1513,18 @@ export default function WatchPartyLiveStageScreen() {
             <Image
               source={{ uri: localHeroPreviewUri }}
               style={styles.stageHeroMediaFill}
+            />
+          ) : null}
+          {(hasLocalHeroCamera || hasLocalHeroImage) && liveFaceFilter !== "none" ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.stageHeroFilterOverlay,
+                {
+                  backgroundColor: activeLiveFaceFilter.overlayColor,
+                  borderColor: activeLiveFaceFilter.borderColor,
+                },
+              ]}
             />
           ) : null}
           <View pointerEvents="none" style={styles.stageHeroOverlay}>
@@ -1514,6 +1552,111 @@ export default function WatchPartyLiveStageScreen() {
         </Animated.View>
 
         <View style={[styles.overlayBottom, { bottom: commentsLaneBottomOffset }]} pointerEvents="box-none">
+          {stageControlsOpen ? (
+            <View pointerEvents="auto" style={styles.stageUtilitySheet}>
+              <View style={styles.stageUtilityHeader}>
+                <View style={styles.stageUtilityHeaderCopy}>
+                  <Text style={styles.stageUtilityKicker}>STAGE CONTROLS</Text>
+                  <Text style={styles.stageUtilityTitle}>{stageModeTitle}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.stageUtilityDismissBtn}
+                  activeOpacity={0.84}
+                  onPress={() => setStageControlsOpen(false)}
+                >
+                  <Text style={styles.stageUtilityDismissText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.stageUtilityBody}>{stageModeBody}</Text>
+              <Text style={styles.stageUtilityHelper}>{stageHelperCopy}</Text>
+              <View style={styles.stageUtilityMetaRow}>
+                <View style={styles.stageUtilityMetaPill}>
+                  <Text style={styles.stageUtilityMetaLabel}>Mode</Text>
+                  <Text style={styles.stageUtilityMetaValue}>{liveRoomModeLabel}</Text>
+                </View>
+                <View style={styles.stageUtilityMetaPill}>
+                  <Text style={styles.stageUtilityMetaLabel}>Focus</Text>
+                  <Text style={styles.stageUtilityMetaValue}>{stageFocusLabel}</Text>
+                </View>
+                <View style={styles.stageUtilityMetaPill}>
+                  <Text style={styles.stageUtilityMetaLabel}>Community</Text>
+                  <Text style={styles.stageUtilityMetaValue}>{lowerCommunityCountLabel}</Text>
+                </View>
+              </View>
+              <View style={styles.stageUtilityActionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.stageUtilityActionBtn,
+                    !stageFocusTarget?.userId && styles.stageUtilityActionBtnDisabled,
+                  ]}
+                  activeOpacity={0.84}
+                  disabled={!stageFocusTarget?.userId}
+                  onPress={() => {
+                    if (!stageFocusTarget?.userId) return;
+                    featureParticipantFirst(stageFocusTarget.userId);
+                  }}
+                >
+                  <Text style={styles.stageUtilityActionText}>{stagePrimaryActionLabel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.stageUtilityActionBtn, styles.stageUtilityActionBtnGhost]}
+                  activeOpacity={0.84}
+                  onPress={onReturnToLiveRoom}
+                >
+                  <Text style={[styles.stageUtilityActionText, styles.stageUtilityActionTextGhost]}>Back to Live Room</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.stageUtilityStatusRow}>
+                <View style={styles.stageUtilityStatusCopy}>
+                  <Text style={styles.stageUtilityStatusLabel}>{liveStageProtectionCopy.title}</Text>
+                  <Text style={styles.stageUtilityStatusBody}>{liveStageProtectionHint}</Text>
+                </View>
+                <View style={styles.stageUtilityStatusPill}>
+                  <Text style={styles.stageUtilityStatusValue}>{liveStageProtectionStatus}</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {faceFilterSheetOpen ? (
+            <View pointerEvents="auto" style={styles.stageUtilitySheet}>
+              <View style={styles.stageUtilityHeader}>
+                <View style={styles.stageUtilityHeaderCopy}>
+                  <Text style={styles.stageUtilityKicker}>FACE FILTERS</Text>
+                  <Text style={styles.stageUtilityTitle}>{activeLiveFaceFilter.label}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.stageUtilityDismissBtn}
+                  activeOpacity={0.84}
+                  onPress={() => setFaceFilterSheetOpen(false)}
+                >
+                  <Text style={styles.stageUtilityDismissText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.stageUtilityBody}>
+                Live filters stay local to your camera across the stage hero and lower live tiles.
+              </Text>
+              <Text style={styles.stageUtilityHelper}>{activeLiveFaceFilter.subtitle}</Text>
+              <View style={styles.stageFilterRow}>
+                {LIVE_FACE_FILTER_OPTIONS.map((option) => {
+                  const active = liveFaceFilter === option.id;
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.stageFilterChip, active && styles.stageFilterChipActive]}
+                      activeOpacity={0.84}
+                      onPress={() => setLiveFaceFilter(option.id)}
+                    >
+                      <Text style={[styles.stageFilterChipText, active && styles.stageFilterChipTextActive]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
           {commentsOpen ? (
             <Animated.View pointerEvents="auto" style={[styles.chatOverlay, { opacity: chatOpacity, transform: [{ translateY: chatFloat }] }]}>
               <Text style={styles.chatDrawerTitle}>Comments</Text>
@@ -1726,6 +1869,18 @@ export default function WatchPartyLiveStageScreen() {
                                 ]}
                               />
                             )}
+                            {isCurrentUser && liveFaceFilter !== "none" && (showLocalCameraPreview || !!bubbleMediaUri) ? (
+                              <View
+                                pointerEvents="none"
+                                style={[
+                                  styles.stagePresenceFilterOverlay,
+                                  {
+                                    backgroundColor: activeLiveFaceFilter.overlayColor,
+                                    borderColor: activeLiveFaceFilter.borderColor,
+                                  },
+                                ]}
+                              />
+                            ) : null}
                           </View>
                         ) : (
                           <Text
@@ -1778,6 +1933,8 @@ export default function WatchPartyLiveStageScreen() {
             label: "Comments",
             activeOpacity: 0.82,
             onPress: () => {
+              setStageControlsOpen(false);
+              setFaceFilterSheetOpen(false);
               setReactionPickerOpen(false);
               setCommentsOpen((value) => !value);
             },
@@ -1786,11 +1943,31 @@ export default function WatchPartyLiveStageScreen() {
           }}
           trailingActions={[
             {
+              id: "studio",
+              icon: "🎛️",
+              label: "Studio",
+              activeOpacity: 0.82,
+              onPress: onToggleStageControls,
+              buttonStyle: stageControlsOpen ? styles.stageFooterActionActiveBtn : undefined,
+              labelStyle: stageControlsOpen ? styles.stageFooterActionActiveLabel : undefined,
+            },
+            {
+              id: "filters",
+              icon: "🎭",
+              label: "Filters",
+              activeOpacity: 0.82,
+              onPress: onToggleFaceFilters,
+              buttonStyle: (faceFilterSheetOpen || liveFaceFilter !== "none") ? styles.stageFooterActionActiveBtn : undefined,
+              labelStyle: (faceFilterSheetOpen || liveFaceFilter !== "none") ? styles.stageFooterActionActiveLabel : undefined,
+            },
+            {
               id: "react",
               icon: "✨",
               label: "React",
               activeOpacity: 0.82,
               onPress: () => {
+                setStageControlsOpen(false);
+                setFaceFilterSheetOpen(false);
                 setCommentsOpen(false);
                 setReactionPickerOpen((value) => !value);
               },
@@ -1955,6 +2132,16 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent", paddingTop: 56, paddingBottom: 18, paddingHorizontal: 10 },
   center: { flex: 1, backgroundColor: "#050505", alignItems: "center", justifyContent: "center" },
   loadingText: { color: "#888", marginTop: 14, fontSize: 14 },
+  liveRoomSurface: { flex: 1 },
+  liveRoomSurfaceScroll: { flex: 1 },
+  liveRoomSurfaceContent: { paddingBottom: 20 },
+  liveRoomFooter: {
+    paddingTop: 8,
+    paddingHorizontal: 2,
+    backgroundColor: "rgba(6,8,14,0.88)",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+  },
 
   stageHudTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
   livePill: {
@@ -2081,6 +2268,28 @@ const styles = StyleSheet.create({
   },
   liveRoomHelperKicker: { color: "#F8D7DE", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
   liveRoomHelperBody: { color: "#F6F7FB", fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
+  stageSurfaceHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 8,
+  },
+  stageSurfaceHeaderCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  stageSurfaceKicker: { color: "#DDE6FB", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  stageSurfaceBody: { color: "#B8C2D8", fontSize: 11.5, lineHeight: 17, fontWeight: "600" },
+  stageSurfaceBackButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(9,12,20,0.62)",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  stageSurfaceBackText: { color: "#E7EEFF", fontSize: 11, fontWeight: "800" },
   stageSectionIntro: {
     borderRadius: 18,
     borderWidth: 1,
@@ -2151,6 +2360,114 @@ const styles = StyleSheet.create({
   },
   stageModeActionText: { color: "#EEF2FF", fontSize: 12, fontWeight: "800" },
   stageModeActionTextActive: { color: "#FFF5F7" },
+  stageUtilitySheet: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(154,182,246,0.24)",
+    backgroundColor: "rgba(6,10,18,0.92)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  stageUtilityHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  stageUtilityHeaderCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  stageUtilityKicker: { color: "#9DB8FF", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  stageUtilityTitle: { color: "#F5F8FF", fontSize: 16, fontWeight: "900", lineHeight: 21 },
+  stageUtilityDismissBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  stageUtilityDismissText: { color: "#DCE4F5", fontSize: 11, fontWeight: "800" },
+  stageUtilityBody: { color: "#C6D0E2", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  stageUtilityHelper: { color: "#EFF4FF", fontSize: 12, lineHeight: 17, fontWeight: "700" },
+  stageUtilityMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  stageUtilityMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 2,
+  },
+  stageUtilityMetaLabel: { color: "#8E9DBA", fontSize: 10, fontWeight: "800", textTransform: "uppercase" },
+  stageUtilityMetaValue: { color: "#F4F7FF", fontSize: 12, fontWeight: "800" },
+  stageUtilityActionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  stageUtilityActionBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(138,178,255,0.22)",
+    backgroundColor: "rgba(16,28,51,0.82)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  stageUtilityActionBtnGhost: {
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  stageUtilityActionBtnDisabled: {
+    opacity: 0.45,
+  },
+  stageUtilityActionText: { color: "#EEF2FF", fontSize: 12, fontWeight: "800" },
+  stageUtilityActionTextGhost: { color: "#DCE4F5" },
+  stageUtilityStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  stageUtilityStatusCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  stageUtilityStatusLabel: { color: "#E5ECFA", fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
+  stageUtilityStatusBody: { color: "#AEB9CF", fontSize: 11.5, lineHeight: 16, fontWeight: "600" },
+  stageUtilityStatusPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(7,12,22,0.7)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  stageUtilityStatusValue: { color: "#F4F7FF", fontSize: 11, fontWeight: "800" },
+  stageFilterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  stageFilterChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  stageFilterChipActive: {
+    borderColor: "rgba(138,178,255,0.44)",
+    backgroundColor: "rgba(34,52,92,0.86)",
+  },
+  stageFilterChipText: { color: "#DCE4F5", fontSize: 12, fontWeight: "700" },
+  stageFilterChipTextActive: { color: "#F5F8FF" },
 
   modeRow: {
     flexDirection: "row",
@@ -2196,6 +2513,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingBottom: 14,
     backgroundColor: "rgba(0,0,0,0.08)",
+  },
+  stageHeroFilterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 1,
   },
   stageHeroTagRow: {
     alignSelf: "flex-start",
@@ -2598,6 +2919,11 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 13,
     overflow: "hidden",
+  },
+  stagePresenceFilterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 1,
+    borderRadius: 999,
   },
   stagePresenceFaceClipExpanded: { borderRadius: 22 },
   stagePresenceFaceClipFeatured: { borderRadius: 30 },
