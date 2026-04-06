@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, login-visual, Phase 0 Rachi baseline, the completed Phase 2 moderation/admin minimums, the completed Phase 3 Home/content polish, and the completed Phase 4 release hardening exactly as already proved. Do not automatically reopen profile/channel completion or Chi'lly Chat completion; treat the current profile/channel and Chi'lly Chat state as good enough for now unless a later blocker proves otherwise. The next exact lane is now Phase 5: final integration proof, where emulator/device-heavy proof resumes only as required by the final checkpoint.
+Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, login-visual, Phase 0 Rachi baseline, the completed Phase 2 moderation/admin minimums, the completed Phase 3 Home/content polish, and the completed Phase 4 release hardening exactly as already proved. Do not automatically reopen profile/channel completion or Chi'lly Chat completion; treat the current profile/channel and Chi'lly Chat state as good enough for now unless a later blocker proves otherwise. The next exact lane remains Phase 5: final integration proof. A first attempt already proved Expo/Metro startup and captured the active blocker honestly: no runnable Android device/emulator was available, so device-backed runtime proof is still pending.
 
 ## Current Plan
 1. Preserve the carried-forward proved baseline without reopening unrelated prior work
@@ -21,7 +21,7 @@ Carry forward the still-valid Stage 4, PostHog, auth/home, Settings/Logout, logi
 - preserve the new Phase 3 Home/content truth: Continue Watching stays at the top hero when active, Home rails keep the corrected metadata/add-date/live-signal behavior, Favorites stay route-correct, and title detail keeps exact `id` -> exact `title` -> local fallback resolution
 - preserve the new Phase 4 release-hardening truth: Expo config ownership now clears doctor checks, `react-native-svg` remains repo-owned for `posthog-react-native`, `react-native-webrtc` stays intentionally excluded from Expo doctor’s RN directory gate, and runtime validation + Expo doctor + typecheck all stay green
 - carry forward the current profile/channel and Chi'lly Chat implementation as good enough for now, and do not automatically reopen those lanes without a later code-level blocker
-- complete Phase 5 final integration proof: resume emulator/device-heavy proof, verify the carried-forward lanes together, confirm login-first/settings/logout/Home/title/player/Rachi/chat/moderation/admin/content-polish/release-hardening startup behavior, and isolate only true runtime blockers if one appears
+- complete Phase 5 final integration proof: rerun emulator/device-heavy proof only when a runnable Android device/emulator is available, verify the carried-forward lanes together, confirm login-first/settings/logout/Home/title/player/Rachi/chat/moderation/admin/content-polish/release-hardening startup behavior, and isolate only true runtime blockers if one appears
 - keep the next phase scoped: proof and only proof-driven blocker fixes, no speculative product expansion and no reopening already-passed build lanes without direct runtime evidence
 - use the minimum necessary runtime reruns: repeat only the proof that a real blocker invalidates after a fix
 
@@ -34,7 +34,7 @@ This next pass should:
 - preserve the completed release-hardening foundation exactly as recorded
 - carry forward the current profile/channel and Chi'lly Chat state without reopening those lanes unless a later blocker proves otherwise
 - complete final integration proof in the smallest durable way that fits the current architecture
-- allow runtime-heavy proof now because the build phases are closed
+- allow runtime-heavy proof now because the build phases are closed, but keep the current blocker explicit until a runnable Android device/emulator is available
 
 ## Out Of Scope
 Do not:
