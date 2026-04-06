@@ -59,6 +59,47 @@ const getThreadStatusLabel = (thread: ChatThreadSummary | null) => {
   return "Direct thread";
 };
 
+const getThreadKindLabel = (platformOwned: boolean) => {
+  return platformOwned ? "Official thread" : "Direct thread";
+};
+
+const getThreadGuideTitle = ({
+  platformOwned,
+  activeCallType,
+}: {
+  platformOwned: boolean;
+  activeCallType?: ChatCallType;
+}) => {
+  if (platformOwned && activeCallType) {
+    return "Official conversation with live call entry";
+  }
+  if (platformOwned) {
+    return "Official platform conversation";
+  }
+  if (activeCallType) {
+    return "Direct conversation with live call access";
+  }
+  return "Direct conversation, thread first";
+};
+
+const getThreadGuideBody = ({
+  platformOwned,
+  activeCallType,
+}: {
+  platformOwned: boolean;
+  activeCallType?: ChatCallType;
+}) => {
+  if (platformOwned) {
+    return activeCallType
+      ? "Platform-owned updates, concierge follow-up, and call join stay inside this thread. Profile identity stays separate."
+      : "Platform-owned updates and concierge follow-up stay inside this thread. Profile identity stays separate and room-native chat stays in the rooms.";
+  }
+
+  return activeCallType
+    ? "Voice and video stay inside this thread so both people can rejoin from the same place. Profiles stay separate and room-native chat stays in the rooms."
+    : "Use this thread for direct messages and optional voice/video entry. Profiles stay separate and room-native chat stays where it started.";
+};
+
 const buildSmartReplySuggestions = ({
   activeCallType,
   lastIncomingMessage,
@@ -309,6 +350,32 @@ export default function ChillyChatThreadScreen() {
     })),
     [currentUserId, messages, thread?.members],
   );
+
+  const threadKindLabel = getThreadKindLabel(!!officialAccount);
+  const threadGuideTitle = getThreadGuideTitle({
+    platformOwned: !!officialAccount,
+    activeCallType: thread?.activeCallType,
+  });
+  const threadGuideBody = getThreadGuideBody({
+    platformOwned: !!officialAccount,
+    activeCallType: thread?.activeCallType,
+  });
+
+  const latestThreadHint = useMemo(() => {
+    if (renderedMessages.length === 0) {
+      return officialAccount
+        ? `${otherMemberDisplayName} can start here with official prompts while keeping profile and support identity separate.`
+        : "This thread is ready for the first message. Voice and video attach here if you choose to start a call.";
+    }
+
+    const latestMessage = renderedMessages[renderedMessages.length - 1];
+    const author = latestMessage.isMe ? "You" : latestMessage.authorLabel;
+    const preview = latestMessage.body.length > 88
+      ? `${latestMessage.body.slice(0, 85)}...`
+      : latestMessage.body;
+
+    return `Latest in thread: ${author} · ${preview}`;
+  }, [officialAccount, otherMemberDisplayName, renderedMessages]);
 
   const handleSend = useCallback(async (bodyOverride?: string) => {
     const trimmedDraft = String(bodyOverride ?? draft).trim();
@@ -688,6 +755,32 @@ export default function ChillyChatThreadScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={[styles.threadGuideCard, officialAccount && styles.threadGuideCardOfficial]}>
+        <View style={styles.threadGuideHeader}>
+          <Text style={styles.threadGuideKicker}>THREAD GUIDE</Text>
+          <View style={[styles.threadGuideKindPill, officialAccount && styles.threadGuideKindPillOfficial]}>
+            <Text style={[styles.threadGuideKindPillText, officialAccount && styles.threadGuideKindPillTextOfficial]}>
+              {threadKindLabel}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.threadGuideTitle}>{threadGuideTitle}</Text>
+        <Text style={styles.threadGuideBody}>{threadGuideBody}</Text>
+        <View style={styles.threadGuideMetaRow}>
+          <View style={styles.threadGuideMetaPill}>
+            <Text style={styles.threadGuideMetaPillText}>
+              {activeCallRoomId ? "Call ready here" : "Voice/video starts here"}
+            </Text>
+          </View>
+          <View style={styles.threadGuideMetaPill}>
+            <Text style={styles.threadGuideMetaPillText}>
+              {thread.currentMember?.lastReadAt ? "Read sync active" : "Read sync on open"}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.threadGuideHint}>{latestThreadHint}</Text>
+      </View>
+
       {activeCallRoomId && !callPanelOpen ? (
         <View style={styles.callBanner}>
           <Text style={styles.callBannerTitle}>{callTitle}</Text>
@@ -1065,6 +1158,87 @@ const styles = StyleSheet.create({
     color: "#EDF3FF",
     fontSize: 12,
     fontWeight: "900",
+  },
+  threadGuideCard: {
+    gap: 8,
+    marginHorizontal: 18,
+    marginBottom: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 16,
+  },
+  threadGuideCardOfficial: {
+    borderColor: "rgba(242,194,91,0.24)",
+    backgroundColor: "rgba(96,72,20,0.16)",
+  },
+  threadGuideHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  threadGuideKicker: {
+    color: "#8FA0BC",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  threadGuideKindPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(6,10,18,0.28)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  threadGuideKindPillOfficial: {
+    borderColor: "rgba(242,194,91,0.32)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+  },
+  threadGuideKindPillText: {
+    color: "#DFE8F7",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  threadGuideKindPillTextOfficial: {
+    color: "#FFE6A6",
+  },
+  threadGuideTitle: {
+    color: "#F8FBFF",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  threadGuideBody: {
+    color: "#C5D0E2",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  threadGuideMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  threadGuideMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(6,10,18,0.28)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  threadGuideMetaPillText: {
+    color: "#E5EDFB",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  threadGuideHint: {
+    color: "#94A4BD",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
   },
   joinBtnText: {
     color: "#fff",

@@ -38,6 +38,20 @@ function getIdentityLabel(thread: ChatThreadSummary) {
   return thread.currentMember?.unreadCount ? "Unread" : "Caught up";
 }
 
+function getThreadKindLabel(thread: ChatThreadSummary) {
+  return getOfficialPlatformAccount(thread.otherMember?.userId) ? "Official thread" : "Direct thread";
+}
+
+function getThreadRouteHint(thread: ChatThreadSummary) {
+  if (getOfficialPlatformAccount(thread.otherMember?.userId)) {
+    return "Platform-owned updates and concierge follow-up stay here. Profiles stay separate.";
+  }
+  if (thread.activeCommunicationRoomId && thread.activeCallType) {
+    return "Voice and video stay attached to this thread so both people can rejoin from the same place.";
+  }
+  return "Use this thread for direct messaging and thread-based calls without replacing profile or room chat.";
+}
+
 function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
   const query = rawQuery.trim().toLowerCase();
   if (!query) return true;
@@ -111,6 +125,13 @@ export default function ChillyChatInboxScreen() {
     () => threads.filter((thread) => !!thread.activeCommunicationRoomId && !!thread.activeCallType).length,
     [threads],
   );
+
+  const officialThreadCount = useMemo(
+    () => threads.filter((thread) => !!getOfficialPlatformAccount(thread.otherMember?.userId)).length,
+    [threads],
+  );
+
+  const directThreadCount = Math.max(threads.length - officialThreadCount, 0);
 
   const quickActionThread = useMemo(
     () => threads.find((thread) => thread.threadId === quickActionThreadId) ?? null,
@@ -214,6 +235,24 @@ export default function ChillyChatInboxScreen() {
         </View>
         <View style={styles.headerPill}>
           <Text style={styles.headerPillText}>{liveCallCount} live call{liveCallCount === 1 ? "" : "s"}</Text>
+        </View>
+      </View>
+      <View style={styles.inboxGuideCard}>
+        <Text style={styles.inboxGuideKicker}>INBOX HELPER</Text>
+        <Text style={styles.inboxGuideTitle}>Chi&apos;lly Chat owns direct threads and thread-based calls.</Text>
+        <Text style={styles.inboxGuideBody}>
+          Open profiles for identity, keep voice/video entry inside threads, and treat official conversations like platform-owned communication instead of a generic support center.
+        </Text>
+        <View style={styles.inboxGuideMetaRow}>
+          <View style={styles.inboxGuidePill}>
+            <Text style={styles.inboxGuidePillText}>{directThreadCount} direct</Text>
+          </View>
+          <View style={[styles.inboxGuidePill, styles.inboxGuidePillOfficial]}>
+            <Text style={[styles.inboxGuidePillText, styles.inboxGuidePillTextOfficial]}>{officialThreadCount} official</Text>
+          </View>
+          <View style={styles.inboxGuidePill}>
+            <Text style={styles.inboxGuidePillText}>{liveCallCount} call-ready</Text>
+          </View>
         </View>
       </View>
       <View style={styles.officialStarterCard}>
@@ -320,7 +359,20 @@ export default function ChillyChatInboxScreen() {
         />
       </View>
     </View>
-  ), [liveCallCount, openOfficialProfile, openOfficialThread, openProfile, openThread, quickActionThread, searchQuery, starterBusy, threads.length, unreadThreadCount]);
+  ), [
+    directThreadCount,
+    liveCallCount,
+    officialThreadCount,
+    openOfficialProfile,
+    openOfficialThread,
+    openProfile,
+    openThread,
+    quickActionThread,
+    searchQuery,
+    starterBusy,
+    threads.length,
+    unreadThreadCount,
+  ]);
 
   if (loading) {
     return (
@@ -363,13 +415,20 @@ export default function ChillyChatInboxScreen() {
             ? officialAccount.starterWelcomeBody
             : buildPreview(item);
           const identityLabel = getIdentityLabel(item);
+          const threadKindLabel = getThreadKindLabel(item);
+          const threadRouteHint = getThreadRouteHint(item);
           const displayName = officialAccount?.displayName ?? other?.displayName ?? "Chi'lly Chat Thread";
           const tagline = officialAccount?.tagline ?? other?.tagline;
 
           return (
             <TouchableOpacity
               testID={`chat-thread-row-${item.threadId}`}
-              style={styles.threadCard}
+              style={[
+                styles.threadCard,
+                unreadCount > 0 && styles.threadCardUnread,
+                officialAccount && styles.threadCardOfficial,
+                item.activeCommunicationRoomId && item.activeCallType && styles.threadCardLive,
+              ]}
               activeOpacity={0.85}
               onLongPress={() => setQuickActionThreadId(item.threadId)}
               onPress={() => openThread(item)}
@@ -401,17 +460,25 @@ export default function ChillyChatInboxScreen() {
                   <Text style={styles.threadTime}>{formatThreadTime(item.lastMessageAt ?? item.updatedAt)}</Text>
                 </View>
                 <View style={styles.threadMetaRow}>
+                  <View style={[styles.threadKindPill, officialAccount && styles.threadKindPillOfficial]}>
+                    <Text style={[styles.threadKindPillText, officialAccount && styles.threadKindPillTextOfficial]}>
+                      {threadKindLabel}
+                    </Text>
+                  </View>
                   <View style={[styles.identityPill, unreadCount > 0 && styles.identityPillUnread]}>
                     <View style={[styles.identityDot, unreadCount > 0 && styles.identityDotUnread]} />
                     <Text style={[styles.identityPillText, unreadCount > 0 && styles.identityPillTextUnread]}>{identityLabel}</Text>
                   </View>
-                  {tagline ? (
-                    <Text style={styles.threadTagline} numberOfLines={1}>{tagline}</Text>
-                  ) : (
-                    <Text style={styles.threadTagline} numberOfLines={1}>Direct thread</Text>
-                  )}
                 </View>
+                {tagline ? (
+                  <Text style={styles.threadTagline} numberOfLines={1}>{tagline}</Text>
+                ) : (
+                  <Text style={styles.threadTagline} numberOfLines={1}>
+                    {officialAccount ? "Platform-owned conversation" : "Direct conversation"}
+                  </Text>
+                )}
                 <Text style={styles.threadPreview} numberOfLines={2}>{preview}</Text>
+                <Text style={styles.threadRouteHint} numberOfLines={2}>{threadRouteHint}</Text>
                 {item.activeCommunicationRoomId && item.activeCallType ? (
                   <View style={styles.callPill}>
                     <Text style={styles.callPillText}>
@@ -475,6 +542,56 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 17,
     fontWeight: "700",
+  },
+  inboxGuideCard: {
+    gap: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 16,
+  },
+  inboxGuideKicker: {
+    color: "#8FA0BC",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  inboxGuideTitle: {
+    color: "#F8FBFF",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  inboxGuideBody: {
+    color: "#B9C5D9",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  inboxGuideMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  inboxGuidePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(6,10,18,0.28)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  inboxGuidePillOfficial: {
+    borderColor: "rgba(242,194,91,0.32)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+  },
+  inboxGuidePillText: {
+    color: "#E6EEFB",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  inboxGuidePillTextOfficial: {
+    color: "#FFE6A6",
   },
   officialStarterCard: {
     gap: 10,
@@ -579,6 +696,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.04)",
     padding: 14,
   },
+  threadCardUnread: {
+    borderColor: "rgba(243,75,116,0.26)",
+    backgroundColor: "rgba(243,75,116,0.08)",
+  },
+  threadCardOfficial: {
+    borderColor: "rgba(242,194,91,0.24)",
+    backgroundColor: "rgba(96,72,20,0.16)",
+  },
+  threadCardLive: {
+    borderColor: "rgba(243,75,116,0.3)",
+  },
   avatarButton: {
     borderRadius: 26,
   },
@@ -651,7 +779,28 @@ const styles = StyleSheet.create({
   threadMetaRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 8,
+  },
+  threadKindPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(6,10,18,0.28)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  threadKindPillOfficial: {
+    borderColor: "rgba(242,194,91,0.32)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+  },
+  threadKindPillText: {
+    color: "#DFE8F7",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  threadKindPillTextOfficial: {
+    color: "#FFE6A6",
   },
   identityPill: {
     flexDirection: "row",
@@ -689,6 +838,12 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "#90A0B9",
     fontSize: 11,
+    fontWeight: "700",
+  },
+  threadRouteHint: {
+    color: "#91A1BA",
+    fontSize: 11,
+    lineHeight: 16,
     fontWeight: "700",
   },
   callPill: {
