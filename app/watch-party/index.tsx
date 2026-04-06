@@ -31,7 +31,7 @@ import { createPartyRoom, evaluatePartyRoomAccess, getPartyRoom, getSafePartyUse
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
-import { buildSharedRoomLabels, PLAYER_WATCH_PARTY_SOURCE } from "./_lib/_room-shared";
+import { PLAYER_WATCH_PARTY_SOURCE } from "./_lib/_room-shared";
 
 type RoomPreview = {
   room: WatchPartyState;
@@ -48,6 +48,22 @@ const getWaitingRoomPreviewTitle = (preview: RoomPreview) => {
   if (preview.titleName) return preview.titleName;
   return preview.room.roomType === "title" ? "Selected Title" : "Live Room";
 };
+
+const getJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null | undefined) =>
+  joinPolicy === "locked"
+    ? "Entry is locked until the host reopens it or invites returning members back in."
+    : "Signed-in Chi'llywood members can join with the room code while the host keeps the room open.";
+
+const getContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
+  if (contentAccessRule === "premium") return "Premium access is required before this live room will let someone in.";
+  if (contentAccessRule === "party_pass") return "A Party Pass gate is still active before entry.";
+  return "No extra entitlement is needed beyond normal signed-in live access.";
+};
+
+const getCapturePolicyCopy = (capturePolicy: WatchPartyState["capturePolicy"] | null | undefined) =>
+  capturePolicy === "host_managed"
+    ? "Capture expectations are host-managed after you enter the live room."
+    : "Capture expectations are lightweight until the live room opens.";
 
 export default function WatchPartyIndexScreen() {
   const router = useRouter();
@@ -275,6 +291,16 @@ export default function WatchPartyIndexScreen() {
         return;
       }
 
+      if (isLiveEntryMode && !isPlayerWatchPartyLiveFlow && room.roomType !== "live") {
+        trackEvent("room_join_failure", {
+          surface: "watch-party-lobby",
+          reason: "wrong_live_room_type",
+          roomCode: code,
+        });
+        setJoinError("This code belongs to a Watch-Party room. Open Watch-Party Live from the title or player to join it.");
+        return;
+      }
+
       setPreview(await buildRoomPreview(room));
     } catch (error) {
       reportRuntimeError("watch-party-lookup", error, {
@@ -298,6 +324,31 @@ export default function WatchPartyIndexScreen() {
     };
   }, [isPlayerWatchPartyLiveFlow]);
 
+  const navigateToRoom = useCallback((options: {
+    partyId: string;
+    roomType: WatchPartyRoomType;
+    roomCode?: string | null;
+    titleId?: string | null;
+  }) => {
+    const params = buildRoomEntryParams(options.partyId, {
+      roomCode: options.roomCode,
+      titleId: options.titleId,
+    });
+
+    if (options.roomType === "live") {
+      router.push({
+        pathname: "/watch-party/live-stage/[partyId]",
+        params,
+      });
+      return;
+    }
+
+    router.push({
+      pathname: "/watch-party/[partyId]",
+      params,
+    });
+  }, [buildRoomEntryParams, router]);
+
   const navigateToPreviewRoom = useCallback((nextPreview: RoomPreview) => {
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
     if (!nextPartyId) {
@@ -305,14 +356,13 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    router.push({
-      pathname: "/watch-party/[partyId]",
-      params: buildRoomEntryParams(nextPartyId, {
-        roomCode: nextPreview.room.roomCode,
-        titleId: nextPreview.room.titleId,
-      }),
+    navigateToRoom({
+      partyId: nextPartyId,
+      roomType: nextPreview.room.roomType,
+      roomCode: nextPreview.room.roomCode,
+      titleId: nextPreview.room.titleId,
     });
-  }, [buildRoomEntryParams, router]);
+  }, [navigateToRoom]);
 
   const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
@@ -450,7 +500,8 @@ export default function WatchPartyIndexScreen() {
       return;
     }
     const trimmedTitleId = createTitleId.trim();
-    const effectiveTitleId = trimmedTitleId ? trimmedTitleId : null;
+    const activeWaitingRoomType: WatchPartyRoomType = isPlayerWatchPartyLiveFlow ? "title" : "live";
+    const effectiveTitleId = activeWaitingRoomType === "live" ? null : (trimmedTitleId ? trimmedTitleId : null);
     const preparedTargetPartyId = String(preparedRoom?.room.partyId ?? incomingHandoff?.partyId ?? initialRoutePartyId ?? "").trim();
     const preparedTargetRoomCode = String(preparedRoom?.room.roomCode ?? incomingHandoff?.roomCode ?? initialRouteRoomCode ?? "").trim().toUpperCase();
     const preparedTargetTitleId = String(preparedRoom?.room.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim();
@@ -465,19 +516,18 @@ export default function WatchPartyIndexScreen() {
       if (!effectiveTitleId && preparedTargetPartyId) {
         const nextPartyId = preparedTargetPartyId;
         if (nextPartyId) {
-          router.push({
-            pathname: "/watch-party/[partyId]",
-            params: buildRoomEntryParams(nextPartyId, {
-              roomCode: preparedTargetRoomCode,
-              titleId: preparedTargetTitleId,
-            }),
+          navigateToRoom({
+            partyId: nextPartyId,
+            roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
+            roomCode: preparedTargetRoomCode,
+            titleId: preparedTargetTitleId,
           });
           return;
         }
       }
 
       const hostUserId = await getSafePartyUserId();
-      const roomType = effectiveTitleId ? "title" : "live";
+      const roomType = effectiveTitleId ? "title" : activeWaitingRoomType;
 
       const room = await createPartyRoom(effectiveTitleId, hostUserId, 0, "paused", {
         roomType,
@@ -503,12 +553,11 @@ export default function WatchPartyIndexScreen() {
         roomId: nextPartyId,
         roomType,
       });
-      router.push({
-        pathname: "/watch-party/[partyId]",
-        params: buildRoomEntryParams(nextPartyId, {
-          roomCode: room.roomCode,
-          titleId: room.titleId,
-        }),
+      navigateToRoom({
+        partyId: nextPartyId,
+        roomType: room.roomType,
+        roomCode: room.roomCode,
+        titleId: room.titleId,
       });
     } catch (error) {
       reportRuntimeError("watch-party-create", error, {
@@ -584,6 +633,11 @@ export default function WatchPartyIndexScreen() {
     setJoinError(null);
   };
 
+  const activeRoomType: WatchPartyRoomType = preview?.room.roomType
+    ?? preparedRoom?.room.roomType
+    ?? (isPlayerWatchPartyLiveFlow || initialRouteTitleId ? "title" : "live");
+  const isLiveWaitingRoom = activeRoomType === "live" && !isPlayerWatchPartyLiveFlow;
+  const activeRoomContext = preview?.room ?? preparedRoom?.room ?? null;
   const topRoomCode = preparedRoom?.room.roomCode ?? incomingHandoff?.roomCode ?? initialRouteRoomCode ?? "";
   const isPreparingInitialCode = initialCodeStatus === "preparing" && !topRoomCode;
   const didInitialCodePrepFail = initialCodeStatus === "failed" && !topRoomCode;
@@ -598,29 +652,106 @@ export default function WatchPartyIndexScreen() {
       : isLiveEntryMode
         ? "LIVE mode"
         : "";
-  const waitingPresenceLabel = isPreparingInitialCode ? "Preparing room code…" : (topHostLabel || "You are in room");
-  const waitingRoomTitle = buildSharedRoomLabels({
-    isLiveRoom: !isPlayerWatchPartyLiveFlow,
-    isPlayerWatchPartyLiveFlow,
-    branding: {
-      watchPartyLabel: branding.watchPartyLabel,
-      liveWaitingRoomTitle: branding.liveWaitingRoomTitle,
-      partyWaitingRoomTitle: branding.partyWaitingRoomTitle,
-      liveRoomTitle: branding.liveRoomTitle,
-      partyRoomTitle: branding.partyRoomTitle,
-    },
-  }).waitingRoomTitle;
-  const waitingRoomBody = topRoomCode
-    ? `${isPlayerWatchPartyLiveFlow ? "Party waiting room" : "Live waiting room"} · code ${topRoomCode}`
-    : isPreparingInitialCode
-      ? `Preparing a room code for this ${isPlayerWatchPartyLiveFlow ? "party" : "live"} waiting room.`
-      : didInitialCodePrepFail
-        ? "Room code unavailable right now. Generate a new code to continue."
-        : isPlayerWatchPartyLiveFlow
-          ? "Create or join a room to start the party waiting room experience."
-          : "Create or join a room to start the live waiting room experience.";
+  const waitingPresenceLabel = isLiveWaitingRoom
+    ? (isPreparingInitialCode
+      ? "Preparing host-ready live access…"
+      : preparedRoom
+        ? "Host entry ready"
+        : preview
+          ? "Viewer entry ready"
+          : "Signed in and ready to enter")
+    : (isPreparingInitialCode ? "Preparing room code…" : (topHostLabel || "You are in room"));
+  const waitingRoomTitle = isLiveWaitingRoom
+    ? (String(branding.liveWaitingRoomTitle || "Live Waiting Room").trim() || "Live Waiting Room")
+    : (String(branding.partyWaitingRoomTitle || "Party Waiting Room").trim() || "Party Waiting Room");
+  const waitingRoomBody = isLiveWaitingRoom
+    ? (topRoomCode
+      ? `Pre-entry live setup · code ${topRoomCode}`
+      : isPreparingInitialCode
+        ? "Preparing a room code and live handoff before the room opens."
+        : didInitialCodePrepFail
+          ? "Live room code unavailable right now. Generate a new code to continue."
+          : "Orient the room, choose a host or viewer path, and then hand off into the live shell.")
+    : (topRoomCode
+      ? "Party waiting room setup with title-linked room code."
+      : isPreparingInitialCode
+        ? "Preparing a room code for this party waiting room."
+        : didInitialCodePrepFail
+          ? "Room code unavailable right now. Generate a new code to continue."
+          : "Create or join a room to start the party waiting room experience.");
+  const waitingRoomTagline = isLiveWaitingRoom
+    ? "Get ready before the live room opens."
+    : "Watch together, in sync, from anywhere.";
   const roomCodeCardValue = topRoomCode || (isPreparingInitialCode ? "Preparing code…" : "Room code unavailable");
   const roomCodeActionBusy = refreshingCode || creating || isPreparingInitialCode;
+  const liveJoinModes = [
+    {
+      id: "host",
+      title: "Host path",
+      body: "Create the live room here, share the code, then enter Live Room as host.",
+    },
+    {
+      id: "viewer",
+      title: "Viewer path",
+      body: "Use a live room code to preview the session, then enter as a viewer before the stage takes over.",
+    },
+  ];
+  const liveReadinessRows = [
+    {
+      label: "Identity",
+      status: "Ready",
+      detail: "Your signed-in Chi'llywood identity is attached before you enter the live room.",
+      tone: "ready" as const,
+    },
+    {
+      label: "Room code",
+      status: topRoomCode ? "Ready" : (isPreparingInitialCode ? "Preparing" : "Needed"),
+      detail: topRoomCode
+        ? `Live room code ${topRoomCode} is ready for share or join.`
+        : isPreparingInitialCode
+          ? "The room is preparing a live code before host entry opens."
+          : "Generate a live code before you invite or host this session.",
+      tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
+    },
+    {
+      label: "Mic / camera",
+      status: "Optional now",
+      detail: "Device setup stays light here. Any deeper mic or camera choices belong in Live Room.",
+      tone: "pending" as const,
+    },
+    {
+      label: "Next handoff",
+      status: "Live Room",
+      detail: "Join moves into /watch-party/live-stage/[partyId], where Live Room and Live Stage take over.",
+      tone: "ready" as const,
+    },
+  ];
+  const livePermissionsBody = `${getJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
+  const liveSmartHelper = topRoomCode
+    ? "Your live room is ready. Share the code if you need guests first, or enter now and let Live Room handle the next-stage controls."
+    : isPreparingInitialCode
+      ? "Stay here while Chi'llywood prepares the live code. This waiting room is only doing pre-entry setup right now."
+      : didInitialCodePrepFail
+        ? "Generate a fresh code before inviting people. This room cannot hand off to the live shell without a valid live identity."
+        : "If you are hosting, create the room first. If you are joining, enter a live room code and preview the session before you continue.";
+  const roomExperienceList = isLiveWaitingRoom
+    ? [
+        "Pre-entry live identity",
+        "Host or viewer join choice",
+        "Signed-in live access check",
+        "Invite-ready room code",
+        "Visibility and control guidance",
+        "Live Room handoff only",
+      ]
+    : [
+        "Synced play & pause",
+        "Live position sync",
+        "Host & viewer roles",
+        "Party chat",
+        "Emoji reactions",
+        "Host controls",
+        "Live participant list",
+      ];
 
   return (
     <View style={styles.outerFlex}>
@@ -648,15 +779,15 @@ export default function WatchPartyIndexScreen() {
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
         <Text style={styles.kicker}>{branding.appDisplayName.toUpperCase()}</Text>
-        <Text style={styles.tagline}>Watch together, in sync, from anywhere.</Text>
+        <Text style={styles.tagline}>{waitingRoomTagline}</Text>
 
         {/* ── Presence / identity ─────────────────────────────────────── */}
         <View style={styles.presenceCard}>
           <View style={styles.presenceAvatar}>
             <Text style={styles.presenceAvatarText}>Y</Text>
           </View>
-          <View style={styles.presenceMeta}>
-            <Text style={styles.presenceKicker}>YOUR PRESENCE</Text>
+            <View style={styles.presenceMeta}>
+            <Text style={styles.presenceKicker}>{isLiveWaitingRoom ? "LIVE IDENTITY" : "YOUR PRESENCE"}</Text>
             <Text style={styles.presenceTitle}>You</Text>
             <Text style={styles.presenceStatus}>{waitingPresenceLabel}</Text>
           </View>
@@ -674,12 +805,76 @@ export default function WatchPartyIndexScreen() {
           <Text style={styles.roomIdentityBody}>{waitingRoomBody}</Text>
         </View>
 
+        {isLiveWaitingRoom ? (
+          <>
+            <View style={styles.liveContextCard}>
+              <Text style={styles.liveContextLabel}>LIVE PREVIEW</Text>
+              <Text style={styles.liveContextTitle}>
+                {topRoomCode ? "Your live entry stays pre-stage here." : "Set up the live room before the stage takes over."}
+              </Text>
+              <Text style={styles.liveContextBody}>
+                {topRoomCode
+                  ? "This surface keeps identity, access, and invite setup separate from Live Room and Live Stage. Comments, reactions, and mode switching belong after entry."
+                  : "Live Waiting Room handles trust, readiness, and invitation. Live Room and Live Stage stay separate until you enter."}
+              </Text>
+            </View>
+
+            <View style={styles.modeChoiceCard}>
+              <Text style={styles.modeChoiceLabel}>JOIN MODES</Text>
+              <View style={styles.modeChoiceRow}>
+                {liveJoinModes.map((entry) => (
+                  <View key={entry.id} style={styles.modeChoicePane}>
+                    <Text style={styles.modeChoiceTitle}>{entry.title}</Text>
+                    <Text style={styles.modeChoiceBody}>{entry.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.readinessCard}>
+              <Text style={styles.readinessLabel}>READINESS CHECK</Text>
+              {liveReadinessRows.map((entry) => (
+                <View key={entry.label} style={styles.readinessRow}>
+                  <View style={[styles.readinessDot, entry.tone === "ready"
+                    ? styles.readinessDotReady
+                    : entry.tone === "pending"
+                      ? styles.readinessDotPending
+                      : styles.readinessDotNeeded]} />
+                  <View style={styles.readinessMeta}>
+                    <View style={styles.readinessHeadline}>
+                      <Text style={styles.readinessTitle}>{entry.label}</Text>
+                      <Text style={styles.readinessStatus}>{entry.status}</Text>
+                    </View>
+                    <Text style={styles.readinessBody}>{entry.detail}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.permissionsCard}>
+              <Text style={styles.permissionsLabel}>VISIBILITY & CONTROL</Text>
+              <Text style={styles.permissionsBody}>
+                {livePermissionsBody}
+              </Text>
+            </View>
+
+            <View style={styles.smartHelperCard}>
+              <Text style={styles.smartHelperLabel}>SMART ENTRY HELPER</Text>
+              <Text style={styles.smartHelperBody}>{liveSmartHelper}</Text>
+            </View>
+          </>
+        ) : null}
+
         {/* ── Room code / invite ──────────────────────────────────────── */}
         <RoomCodeInviteCard
           roomCode={roomCodeCardValue}
           bodyText={isPreparingInitialCode
-            ? "Preparing a shareable room code for this waiting room."
-            : "Share the room code to invite friends into this waiting room."}
+            ? (isLiveWaitingRoom
+              ? "Preparing a shareable code for this live waiting room."
+              : "Preparing a shareable room code for this waiting room.")
+            : (isLiveWaitingRoom
+              ? "Share the room code before the live room opens so guests enter through the correct live path."
+              : "Share the room code to invite friends into this waiting room.")}
           styles={{
             card: styles.inviteCard,
             left: styles.inviteMeta,
@@ -720,22 +915,28 @@ export default function WatchPartyIndexScreen() {
           ) : null}
 
           <View style={styles.joinCard}>
-            <Text style={styles.joinLabel}>START A ROOM</Text>
-            <TextInput
-              value={createTitleId}
-              onChangeText={(t) => {
-                setCreateTitleId(t.trim());
-                setCreateError(null);
-              }}
-              placeholder="Linked title (optional)"
-              placeholderTextColor="#5A5A5A"
-              style={styles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!creating}
-              returnKeyType="go"
-              onSubmitEditing={onCreateRoom}
-            />
+            <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "HOST THIS LIVE SESSION" : "START A ROOM"}</Text>
+            {isLiveWaitingRoom ? (
+              <Text style={styles.joinSupportText}>
+                Create the live room here, keep the room code handy, and then hand off into Live Room as the host.
+              </Text>
+            ) : (
+              <TextInput
+                value={createTitleId}
+                onChangeText={(t) => {
+                  setCreateTitleId(t.trim());
+                  setCreateError(null);
+                }}
+                placeholder="Linked title (optional)"
+                placeholderTextColor="#5A5A5A"
+                style={styles.input}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!creating}
+                returnKeyType="go"
+                onSubmitEditing={onCreateRoom}
+              />
+            )}
             {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
             <TouchableOpacity
               style={[styles.primaryButton, createActionBusy && styles.primaryButtonDisabled]}
@@ -751,13 +952,18 @@ export default function WatchPartyIndexScreen() {
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.primaryButtonText}>Create Room</Text>
+                <Text style={styles.primaryButtonText}>{isLiveWaitingRoom ? "Create Live Room" : "Create Room"}</Text>
               )}
             </TouchableOpacity>
           </View>
 
           <View style={styles.joinCard}>
-            <Text style={styles.joinLabel}>JOIN A ROOM</Text>
+            <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "JOIN A LIVE ROOM" : "JOIN A ROOM"}</Text>
+            {isLiveWaitingRoom ? (
+              <Text style={styles.joinSupportText}>
+                Enter a live room code to preview the room and join the live shell before any stage mode takes over.
+              </Text>
+            ) : null}
 
             {preview ? (
               /* ── Room preview (found) ─────────────────────────────────── */
@@ -825,15 +1031,7 @@ export default function WatchPartyIndexScreen() {
         {/* ── Room experience list ───────────────────────────────────── */}
         <View style={styles.featuresCard}>
           <Text style={styles.featuresTitle}>ROOM EXPERIENCE</Text>
-          {[
-            "Synced play & pause",
-            "Live position sync",
-            "Host & viewer roles",
-            "Party chat",
-            "Emoji reactions",
-            "Host controls",
-            "Live participant list",
-          ].map((label) => (
+          {roomExperienceList.map((label) => (
             <View key={label} style={styles.featureRow}>
               <Text style={styles.featureDot}>●</Text>
               <Text style={styles.featureLabel}>{label}</Text>
@@ -1002,6 +1200,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   joinLabel: { color: "#6C7488", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  joinSupportText: { color: "#A7B0C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
   input: {
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
@@ -1058,6 +1257,82 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelBtnText: { color: "#888", fontSize: 14, fontWeight: "700" },
+
+  liveContextCard: {
+    backgroundColor: "rgba(15,16,22,0.95)",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    padding: 16,
+    gap: 8,
+  },
+  liveContextLabel: { color: "#F3A6B7", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  liveContextTitle: { color: "#F4F7FF", fontSize: 18, fontWeight: "900", lineHeight: 24 },
+  liveContextBody: { color: "#B4BED3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+
+  modeChoiceCard: {
+    backgroundColor: "rgba(12,12,16,0.92)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    padding: 14,
+    gap: 10,
+  },
+  modeChoiceLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  modeChoiceRow: { flexDirection: "row", gap: 10 },
+  modeChoicePane: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    gap: 6,
+  },
+  modeChoiceTitle: { color: "#F2F5FC", fontSize: 14, fontWeight: "900" },
+  modeChoiceBody: { color: "#A7B0C3", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+
+  readinessCard: {
+    backgroundColor: "rgba(12,12,16,0.92)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    padding: 14,
+    gap: 10,
+  },
+  readinessLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  readinessRow: { flexDirection: "row", gap: 10 },
+  readinessDot: { width: 10, height: 10, borderRadius: 999, marginTop: 5 },
+  readinessDotReady: { backgroundColor: "#32D583" },
+  readinessDotPending: { backgroundColor: "#F79009" },
+  readinessDotNeeded: { backgroundColor: "#DC143C" },
+  readinessMeta: { flex: 1, gap: 4 },
+  readinessHeadline: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  readinessTitle: { color: "#F2F5FC", fontSize: 13, fontWeight: "800" },
+  readinessStatus: { color: "#97A3BC", fontSize: 11.5, fontWeight: "800" },
+  readinessBody: { color: "#A7B0C3", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+
+  permissionsCard: {
+    backgroundColor: "rgba(12,12,16,0.92)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    padding: 14,
+    gap: 8,
+  },
+  permissionsLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  permissionsBody: { color: "#A7B0C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+
+  smartHelperCard: {
+    backgroundColor: "rgba(220,20,60,0.12)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.24)",
+    padding: 14,
+    gap: 8,
+  },
+  smartHelperLabel: { color: "#F7D6DD", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  smartHelperBody: { color: "#F4F7FF", fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
 
   // Features card
   featuresCard: {
