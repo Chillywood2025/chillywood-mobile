@@ -42,6 +42,10 @@ type AccessSheetProps = {
   appDisplayName?: string;
   premiumUpsellTitle?: string;
   premiumUpsellBody?: string;
+  kickerOverride?: string;
+  titleOverride?: string;
+  bodyOverride?: string;
+  actionLabelOverride?: string;
   busy?: boolean;
   onConfirm: () => void;
   onClose: () => void;
@@ -53,16 +57,26 @@ export function AccessSheet({
   appDisplayName,
   premiumUpsellTitle,
   premiumUpsellBody,
+  kickerOverride,
+  titleOverride,
+  bodyOverride,
+  actionLabelOverride,
   busy,
   onConfirm,
   onClose,
 }: AccessSheetProps) {
-  const copy = getAccessSheetCopy({
+  const baseCopy = getAccessSheetCopy({
     reason,
     appDisplayName,
     premiumUpsellTitle,
     premiumUpsellBody,
   });
+  const copy = {
+    kicker: kickerOverride ?? baseCopy.kicker,
+    title: titleOverride ?? baseCopy.title,
+    body: bodyOverride ?? baseCopy.body,
+    actionLabel: actionLabelOverride ?? baseCopy.actionLabel,
+  };
 
   return (
     <Modal

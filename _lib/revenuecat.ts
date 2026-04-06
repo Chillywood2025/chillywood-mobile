@@ -34,15 +34,23 @@ const CHILLYWOOD_ANDROID_PACKAGE = "com.chillywood.mobile";
 const PLAY_STORE_SUBSCRIPTIONS_URL = "https://play.google.com/store/account/subscriptions";
 const APPLE_SUBSCRIPTIONS_URL = "https://apps.apple.com/account/subscriptions";
 const REVENUECAT_ANONYMOUS_PREFIX = "$RCAnonymousID:";
+const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
+const PLAY_STORE_TEST_WARNING = "canMakePayments requires the Google Play Store";
 
 let configuredMode: RevenueCatConfigurationMode | null = null;
 let configuredApiKey = "";
 let configuredAppUserId = "";
 let customerInfoListenerInstalled = false;
+let logHandlerInstalled = false;
 let latestCustomerInfo: CustomerInfo | null = null;
 let latestOfferings: PurchasesOfferings | null = null;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const normalizeIdentityText = (value: unknown) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return "";
+  return INVALID_IDENTITY_LITERALS.has(normalized.toLowerCase()) ? "" : normalized;
+};
 
 const normalizeRevenueCatIdentityState = (
   appUserId: string,
@@ -54,16 +62,34 @@ const normalizeRevenueCatIdentityState = (
       : "identified"
     : "disabled",
   appUserId,
-  sourceUserId: normalizeText(sourceUserId) || null,
+  sourceUserId: normalizeIdentityText(sourceUserId) || null,
   isAnonymous: appUserId.startsWith(REVENUECAT_ANONYMOUS_PREFIX),
 });
+
+const syncConfiguredAppUserId = async (fallbackAppUserId?: string | null) => {
+  const appUserId = normalizeIdentityText(await Purchases.getAppUserID())
+    || normalizeIdentityText(fallbackAppUserId)
+    || configuredAppUserId;
+  configuredAppUserId = appUserId;
+  return appUserId;
+};
+
+const resetRevenueCatCustomerToAnonymous = async () => {
+  const customerInfo = await Purchases.logOut();
+  latestCustomerInfo = customerInfo;
+  const anonymousAppUserId = await syncConfiguredAppUserId(customerInfo.originalAppUserId);
+  debugLog("revenuecat", "Reset RevenueCat customer to anonymous session", {
+    appUserId: anonymousAppUserId,
+  });
+  return anonymousAppUserId;
+};
 
 const installCustomerInfoListener = () => {
   if (customerInfoListenerInstalled) return;
   Purchases.addCustomerInfoUpdateListener((customerInfo) => {
     latestCustomerInfo = customerInfo;
     if (!configuredAppUserId) {
-      configuredAppUserId = normalizeText(customerInfo.originalAppUserId);
+      configuredAppUserId = normalizeIdentityText(customerInfo.originalAppUserId);
     }
     debugLog("revenuecat", "Customer info updated", {
       activeEntitlements: Object.keys(customerInfo.entitlements.active ?? {}).join(","),
@@ -71,6 +97,43 @@ const installCustomerInfoListener = () => {
     });
   });
   customerInfoListenerInstalled = true;
+};
+
+const installRevenueCatLogHandler = () => {
+  if (logHandlerInstalled) return;
+
+  Purchases.setLogHandler((logLevel, message) => {
+    const safeMessage = normalizeText(message);
+    if (!safeMessage) return;
+
+    if (safeMessage.includes(PLAY_STORE_TEST_WARNING)) {
+      debugLog("revenuecat", safeMessage, {
+        level: String(logLevel),
+      });
+      return;
+    }
+
+    const prefixedMessage = `[RevenueCat] ${safeMessage}`;
+    if (logLevel === LOG_LEVEL.ERROR) {
+      console.warn(prefixedMessage);
+      return;
+    }
+    if (logLevel === LOG_LEVEL.WARN) {
+      console.warn(prefixedMessage);
+      return;
+    }
+    if (logLevel === LOG_LEVEL.INFO) {
+      console.info(prefixedMessage);
+      return;
+    }
+    if (logLevel === LOG_LEVEL.DEBUG) {
+      console.debug(prefixedMessage);
+      return;
+    }
+    console.log(prefixedMessage);
+  });
+
+  logHandlerInstalled = true;
 };
 
 export function getRevenueCatConfigurationState(): RevenueCatConfigurationState {
@@ -156,8 +219,10 @@ export function configureRevenueCatOnce() {
       Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     }
 
+    installRevenueCatLogHandler();
     Purchases.configure({
       apiKey: state.apiKey,
+      appUserID: null,
       diagnosticsEnabled: __DEV__,
     });
     configuredMode = state.mode;
@@ -187,7 +252,7 @@ export async function getRevenueCatAppUserId() {
   if (!state.shouldConfigure) return "";
 
   try {
-    const appUserId = normalizeText(await Purchases.getAppUserID());
+    const appUserId = normalizeIdentityText(await Purchases.getAppUserID());
     if (appUserId) {
       configuredAppUserId = appUserId;
     }
@@ -206,21 +271,16 @@ export async function syncRevenueCatCustomerIdentity(sourceUserId?: string | nul
     return normalizeRevenueCatIdentityState("", sourceUserId);
   }
 
-  const safeUserId = normalizeText(sourceUserId);
+  const safeUserId = normalizeIdentityText(sourceUserId);
   const currentAppUserId = await getRevenueCatAppUserId();
   if (!safeUserId) {
-    if (!currentAppUserId || currentAppUserId.startsWith(REVENUECAT_ANONYMOUS_PREFIX)) {
+    if (currentAppUserId.startsWith(REVENUECAT_ANONYMOUS_PREFIX)) {
       return normalizeRevenueCatIdentityState(currentAppUserId, null);
     }
 
     try {
-      const customerInfo = await Purchases.logOut();
-      latestCustomerInfo = customerInfo;
-      configuredAppUserId = normalizeText(customerInfo.originalAppUserId);
-      debugLog("revenuecat", "Reset RevenueCat customer to anonymous session", {
-        appUserId: configuredAppUserId,
-      });
-      return normalizeRevenueCatIdentityState(configuredAppUserId, null);
+      const anonymousAppUserId = await resetRevenueCatCustomerToAnonymous();
+      return normalizeRevenueCatIdentityState(anonymousAppUserId, null);
     } catch (error) {
       reportRuntimeError("revenuecat-log-out", error, {
         mode: state.mode,
@@ -236,7 +296,7 @@ export async function syncRevenueCatCustomerIdentity(sourceUserId?: string | nul
   try {
     const result: LogInResult = await Purchases.logIn(safeUserId);
     latestCustomerInfo = result.customerInfo;
-    configuredAppUserId = safeUserId;
+    configuredAppUserId = await syncConfiguredAppUserId(safeUserId);
     debugLog("revenuecat", "Synced RevenueCat customer identity", {
       appUserId: configuredAppUserId,
       created: result.created,
@@ -264,9 +324,7 @@ export async function readRevenueCatCustomerInfo(options?: { refresh?: boolean }
     const customerInfo = await Purchases.getCustomerInfo();
     latestCustomerInfo = customerInfo;
     if (!configuredAppUserId) {
-      configuredAppUserId = normalizeText(await Purchases.getAppUserID())
-        || normalizeText(customerInfo.originalAppUserId)
-        || configuredAppUserId;
+      configuredAppUserId = await syncConfiguredAppUserId(customerInfo.originalAppUserId);
     }
     return customerInfo;
   } catch (error) {

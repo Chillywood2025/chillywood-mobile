@@ -37,7 +37,11 @@ import {
   type CommunicationIdentity,
 } from "../../_lib/communication";
 import { reportRuntimeError } from "../../_lib/logger";
-import { setUserPlan, unlockPartyPass } from "../../_lib/monetization";
+import {
+  getMonetizationAccessSheetPresentation,
+  purchaseBlockedAccess,
+} from "../../_lib/monetization";
+import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
@@ -69,6 +73,7 @@ export default function CommunicationLobbyScreen() {
   const [accessSheetBusy, setAccessSheetBusy] = useState(false);
   const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
   const [pendingJoinRoom, setPendingJoinRoom] = useState<CommunicationRoomState | null>(null);
+  const [pendingJoinAccess, setPendingJoinAccess] = useState<RoomAccessDecision | null>(null);
 
   const previewStreamRef = useRef<MediaStream | null>(null);
   const isRtcAvailable = !!getCommunicationRTCModule();
@@ -229,6 +234,7 @@ export default function CommunicationLobbyScreen() {
         roomId: room.roomId,
       });
       setPendingJoinRoom(room);
+      setPendingJoinAccess(access);
       setAccessSheetReason(access.reason);
       setAccessSheetVisible(true);
       return false;
@@ -310,7 +316,7 @@ export default function CommunicationLobbyScreen() {
   };
 
   const onResolveJoinAccess = async () => {
-    if (!pendingJoinRoom || !accessSheetReason) return;
+    if (!pendingJoinRoom || !pendingJoinAccess || !accessSheetReason) return;
 
     setAccessSheetBusy(true);
     setError(null);
@@ -322,18 +328,13 @@ export default function CommunicationLobbyScreen() {
         return;
       }
 
-      const unlocked = accessSheetReason === "premium_required"
-        ? true
-        : await unlockPartyPass(accessKey);
-
-      if (accessSheetReason === "premium_required") {
-        await setUserPlan("premium");
-      } else if (!unlocked) {
+      const purchase = await purchaseBlockedAccess({ gate: pendingJoinAccess });
+      if (!purchase.ok) {
         trackEvent("monetization_unlock_failure", {
           surface: "communication-lobby",
           reason: accessSheetReason,
         });
-        setError("Unable to unlock Party Pass for that room yet.");
+        setError(purchase.message);
         return;
       }
 
@@ -348,6 +349,7 @@ export default function CommunicationLobbyScreen() {
 
       if (access?.canJoin) {
         setPendingJoinRoom(null);
+        setPendingJoinAccess(null);
         setAccessSheetReason(null);
         setAccessSheetVisible(false);
         openRoom(roomToUse.roomId);
@@ -355,6 +357,7 @@ export default function CommunicationLobbyScreen() {
       }
 
       if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+        setPendingJoinAccess(access);
         setAccessSheetReason(access.reason);
       } else {
         setError("That communication room still isn't available for your current access level.");
@@ -547,6 +550,30 @@ export default function CommunicationLobbyScreen() {
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={pendingJoinAccess ? getMonetizationAccessSheetPresentation({
+            gate: pendingJoinAccess,
+            appDisplayName: branding.appDisplayName,
+            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+          }).kicker : undefined}
+          titleOverride={pendingJoinAccess ? getMonetizationAccessSheetPresentation({
+            gate: pendingJoinAccess,
+            appDisplayName: branding.appDisplayName,
+            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+          }).title : undefined}
+          bodyOverride={pendingJoinAccess ? getMonetizationAccessSheetPresentation({
+            gate: pendingJoinAccess,
+            appDisplayName: branding.appDisplayName,
+            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+          }).body : undefined}
+          actionLabelOverride={pendingJoinAccess ? getMonetizationAccessSheetPresentation({
+            gate: pendingJoinAccess,
+            appDisplayName: branding.appDisplayName,
+            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+          }).actionLabel : undefined}
           busy={accessSheetBusy}
           onConfirm={() => {
             void onResolveJoinAccess();

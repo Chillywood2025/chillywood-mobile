@@ -52,7 +52,11 @@ import {
 } from "../../_lib/devDebug";
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
-import { setUserPlan, unlockPartyPass } from "../../_lib/monetization";
+import {
+    getMonetizationAccessSheetPresentation,
+    purchaseBlockedAccess,
+} from "../../_lib/monetization";
+import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
@@ -105,7 +109,7 @@ type ConnState = "loading" | "connecting" | "live" | "reconnecting" | "error";
 
 type MonetizationGate = {
   source: "room";
-  reason: AccessSheetReason;
+  access: RoomAccessDecision;
   accessKey: string;
 };
 
@@ -550,7 +554,7 @@ export default function WatchPartyRoomScreen() {
           });
           setAccessGate({
             source: "room",
-            reason: access.reason,
+            access,
             accessKey: snapshot.room.partyId,
           });
           setAccessSheetVisible(true);
@@ -1188,25 +1192,20 @@ export default function WatchPartyRoomScreen() {
     setAccessBusy(true);
 
     try {
-      const unlocked = accessGate.reason === "premium_required"
-        ? true
-        : await unlockPartyPass(accessGate.accessKey);
-
-      if (accessGate.reason === "premium_required") {
-        await setUserPlan("premium");
-      } else if (!unlocked) {
+      const purchase = await purchaseBlockedAccess({ gate: accessGate.access });
+      if (!purchase.ok) {
         trackEvent("monetization_unlock_failure", {
           surface: "watch-party-room",
-          reason: accessGate.reason,
+          reason: accessGate.access.reason,
           roomId: accessGate.accessKey,
         });
-        Alert.alert("Party Pass unavailable", "Unable to unlock Party Pass for this room right now.");
+        Alert.alert("Room access unavailable", purchase.message);
         return;
       }
 
       trackEvent("monetization_unlock_success", {
         surface: "watch-party-room",
-        reason: accessGate.reason,
+        reason: accessGate.access.reason,
         roomId: accessGate.accessKey,
       });
 
@@ -1217,7 +1216,7 @@ export default function WatchPartyRoomScreen() {
     } catch (error) {
       reportRuntimeError("watch-party-access-gate", error, {
         source: accessGate.source,
-        reason: accessGate.reason,
+        reason: accessGate.access.reason,
       });
       Alert.alert("Room access unavailable", "Unable to confirm your room access right now.");
     } finally {
@@ -1586,14 +1585,20 @@ export default function WatchPartyRoomScreen() {
   }
 
   if (accessGate?.source === "room" && room) {
+    const accessGatePresentation = getMonetizationAccessSheetPresentation({
+      gate: accessGate.access,
+      appDisplayName: branding.appDisplayName,
+      premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+      premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+    });
     return (
       <View style={styles.center}>
         <View style={styles.errorCard}>
           <Text style={styles.errorTitle}>
-            {accessGate.reason === "premium_required" ? "Premium room" : "Party Pass room"}
+            {accessGate.access.reason === "premium_required" ? "Premium room" : "Party Pass room"}
           </Text>
           <Text style={styles.errorBody}>
-            {accessGate.reason === "premium_required"
+            {accessGate.access.reason === "premium_required"
               ? monetizationConfig.premiumUpsellBody
               : "This room uses Party Pass access. Unlock it once and jump back in without losing the current room context."}
           </Text>
@@ -1609,7 +1614,7 @@ export default function WatchPartyRoomScreen() {
             activeOpacity={0.85}
           >
             <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-              {accessGate.reason === "premium_required" ? "Unlock Premium" : "Get Party Pass"}
+              {accessGate.access.reason === "premium_required" ? "Unlock Premium" : "Get Party Pass"}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
@@ -1618,10 +1623,14 @@ export default function WatchPartyRoomScreen() {
         </View>
         <AccessSheet
           visible={accessSheetVisible}
-          reason={accessGate.reason}
+          reason={accessGate.access.reason as AccessSheetReason}
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={accessGatePresentation.kicker}
+          titleOverride={accessGatePresentation.title}
+          bodyOverride={accessGatePresentation.body}
+          actionLabelOverride={accessGatePresentation.actionLabel}
           busy={accessBusy}
           onConfirm={() => {
             void onResolveAccessGate();
@@ -1658,6 +1667,14 @@ export default function WatchPartyRoomScreen() {
       : isSyncUnstable
         ? `Resyncing with host · ${isPlaying ? "Playing" : "Paused"}`
         : `Following host playback · ${isPlaying ? "Playing" : "Paused"} at ${formatPartyTime(room.playbackPositionMillis ?? 0)}`;
+  const accessGatePresentation = accessGate
+    ? getMonetizationAccessSheetPresentation({
+        gate: accessGate.access,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
   const partyRoomTitleContext = getSafeRoomTitleLabel(titleName, room, "Selected Title");
   const roomLabels = buildSharedRoomLabels({
     isLiveRoom,
@@ -2241,10 +2258,14 @@ export default function WatchPartyRoomScreen() {
       {accessGate ? (
         <AccessSheet
           visible={accessSheetVisible}
-          reason={accessGate.reason}
+          reason={accessGate.access.reason as AccessSheetReason}
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={accessGatePresentation?.kicker}
+          titleOverride={accessGatePresentation?.title}
+          bodyOverride={accessGatePresentation?.body}
+          actionLabelOverride={accessGatePresentation?.actionLabel}
           busy={accessBusy}
           onConfirm={() => {
             void onResolveAccessGate();

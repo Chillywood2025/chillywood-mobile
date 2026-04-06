@@ -50,6 +50,7 @@ export type ContentAccessDecision = {
   requiresPartyPass: boolean;
   accessKey?: string;
   plan: UserPlan;
+  monetization: MonetizationGateResolution;
 };
 
 export type MonetizationTargetId =
@@ -78,6 +79,18 @@ export type MonetizationTargetState = {
   packageCount: number;
   availablePackageIds: string[];
   recommendedPackageId?: string;
+};
+
+export type MonetizationGateResolution = {
+  primaryTargetId?: MonetizationTargetId;
+  purchaseTargetId?: MonetizationTargetId;
+  qualifyingTargetIds: MonetizationTargetId[];
+  entitledTargetIds: MonetizationTargetId[];
+  availableTargetIds: MonetizationTargetId[];
+  recommendedPackageId?: string;
+  canPurchase: boolean;
+  snapshotStatus: "disabled" | "ready" | "store_unavailable" | "partial";
+  issues: string[];
 };
 
 export type MonetizationSnapshot = {
@@ -113,6 +126,33 @@ export type MonetizationRestoreOutcome = {
   snapshot: MonetizationSnapshot;
   customerInfo: CustomerInfo | null;
   message: string;
+};
+
+export type MonetizationAccessSheetPresentation = {
+  kicker: string;
+  title: string;
+  body: string;
+  actionLabel: string;
+};
+
+export type MonetizationAccessPurchaseOutcome = {
+  ok: boolean;
+  targetId?: MonetizationTargetId;
+  snapshot: MonetizationSnapshot;
+  customerInfo: CustomerInfo | null;
+  message: string;
+  packageId?: string;
+  productId?: string;
+};
+
+type MonetizationAccessPolicy = {
+  primaryTargetId?: MonetizationTargetId;
+  qualifyingTargetIds: MonetizationTargetId[];
+};
+
+type GateLike = {
+  reason?: string | null;
+  monetization?: MonetizationGateResolution | null;
 };
 
 const USER_PLAN_KEY = "@chillywood/user-plan";
@@ -164,6 +204,30 @@ const MONETIZATION_TARGETS: Record<MonetizationTargetId, MonetizationTargetDefin
     entitlementIds: ["premium_watch_party", "premium"],
     accessRule: "party_pass",
   },
+};
+
+const PREMIUM_SUBSCRIPTION_TARGET_IDS: MonetizationTargetId[] = ["premium_subscription"];
+const TITLE_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["paid_title_access", "premium_subscription"];
+const LIVE_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_live_access", "premium_subscription"];
+const WATCH_PARTY_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_watch_party_access", "premium_subscription"];
+const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
+
+export const createEmptyMonetizationGateResolution = (
+  snapshotStatus: MonetizationGateResolution["snapshotStatus"] = "disabled",
+  issues: string[] = [],
+): MonetizationGateResolution => ({
+  qualifyingTargetIds: [],
+  entitledTargetIds: [],
+  availableTargetIds: [],
+  canPurchase: false,
+  snapshotStatus,
+  issues: [...issues],
+});
+
+const normalizeOptionalIdentity = (value: unknown) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
+  return INVALID_IDENTITY_LITERALS.has(normalized.toLowerCase()) ? "" : normalized;
 };
 
 const getDefaultMonetizationTargetState = (
@@ -400,15 +464,83 @@ const derivePlanFromMonetizationSnapshot = (
 ): UserPlan => {
   const premiumTarget = snapshot.targets.premium_subscription;
   const watchPartyTarget = snapshot.targets.premium_watch_party_access;
-  const liveTarget = snapshot.targets.premium_live_access;
   const hasPremium = premiumTarget.hasEntitlement;
-  const watchPartyPerks = hasPremium || watchPartyTarget.hasEntitlement || liveTarget.hasEntitlement;
+  const watchPartyPerks = hasPremium || watchPartyTarget.hasEntitlement;
 
   return {
     tier: hasPremium ? "premium" : "free",
     adFree: hasPremium,
     watchPartyPerks,
     updatedAt: snapshot.updatedAt || fallback.updatedAt,
+  };
+};
+
+const getMonetizationAccessPolicy = (options: {
+  accessRule: MonetizationAccessRule;
+  targetHint?: MonetizationTargetId | null;
+}): MonetizationAccessPolicy => {
+  if (options.accessRule === "party_pass") {
+    return {
+      primaryTargetId: "premium_watch_party_access",
+      qualifyingTargetIds: [...WATCH_PARTY_ACCESS_TARGET_IDS],
+    };
+  }
+
+  if (options.accessRule !== "premium") {
+    return { qualifyingTargetIds: [] };
+  }
+
+  if (options.targetHint === "paid_title_access") {
+    return {
+      primaryTargetId: "paid_title_access",
+      qualifyingTargetIds: [...TITLE_ACCESS_TARGET_IDS],
+    };
+  }
+
+  if (options.targetHint === "premium_live_access") {
+    return {
+      primaryTargetId: "premium_live_access",
+      qualifyingTargetIds: [...LIVE_ACCESS_TARGET_IDS],
+    };
+  }
+
+  if (options.targetHint === "premium_watch_party_access") {
+    return {
+      primaryTargetId: "premium_watch_party_access",
+      qualifyingTargetIds: [...WATCH_PARTY_ACCESS_TARGET_IDS],
+    };
+  }
+
+  return {
+    primaryTargetId: "premium_subscription",
+    qualifyingTargetIds: [...PREMIUM_SUBSCRIPTION_TARGET_IDS],
+  };
+};
+
+const buildMonetizationGateResolution = (
+  snapshot: MonetizationSnapshot,
+  policy: MonetizationAccessPolicy,
+): MonetizationGateResolution => {
+  const entitledTargetIds = policy.qualifyingTargetIds.filter((targetId) => snapshot.targets[targetId]?.hasEntitlement);
+  const availableTargetIds = policy.qualifyingTargetIds.filter((targetId) => {
+    const target = snapshot.targets[targetId];
+    return !!target?.offeringAvailable && target.packageCount > 0;
+  });
+  const purchaseTargetId = [policy.primaryTargetId, ...policy.qualifyingTargetIds]
+    .filter((targetId): targetId is MonetizationTargetId => !!targetId)
+    .find((targetId, index, list) => list.indexOf(targetId) === index && availableTargetIds.includes(targetId));
+  const selectedTargetState = purchaseTargetId ? snapshot.targets[purchaseTargetId] : null;
+
+  return {
+    primaryTargetId: policy.primaryTargetId,
+    purchaseTargetId,
+    qualifyingTargetIds: [...policy.qualifyingTargetIds],
+    entitledTargetIds,
+    availableTargetIds,
+    recommendedPackageId: selectedTargetState?.recommendedPackageId,
+    canPurchase: !!purchaseTargetId && snapshot.configuration.shouldConfigure && snapshot.canMakePayments,
+    snapshotStatus: snapshot.status,
+    issues: [...snapshot.issues],
   };
 };
 
@@ -437,7 +569,9 @@ export async function readMonetizationSnapshot(options?: {
   forceRefresh?: boolean;
   userId?: string | null;
 }): Promise<MonetizationSnapshot> {
-  const userId = String(options?.userId ?? await getSignedInUserId()).trim() || null;
+  const requestedUserId = normalizeOptionalIdentity(options?.userId);
+  const signedInUserId = requestedUserId ? "" : normalizeOptionalIdentity(await getSignedInUserId());
+  const userId = requestedUserId || signedInUserId || null;
   const configuration = configureRevenueCatOnce();
   const baseSnapshot = createEmptyMonetizationSnapshot(configuration, userId);
 
@@ -446,8 +580,8 @@ export async function readMonetizationSnapshot(options?: {
   }
 
   try {
-    const [identity, canMakePayments, customerInfo, offerings] = await Promise.all([
-      syncRevenueCatCustomerIdentity(userId),
+    const identity = await syncRevenueCatCustomerIdentity(userId);
+    const [canMakePayments, customerInfo, offerings] = await Promise.all([
       canMakeRevenueCatPurchases(),
       readRevenueCatCustomerInfo({ refresh: !!options?.forceRefresh }),
       readRevenueCatOfferings(),
@@ -654,6 +788,99 @@ export async function openManageSubscriptionFlow() {
   return openRevenueCatManageSubscriptions();
 }
 
+export function getMonetizationAccessSheetPresentation(options: {
+  gate: GateLike | null | undefined;
+  appDisplayName?: string;
+  premiumUpsellTitle?: string;
+  premiumUpsellBody?: string;
+}): MonetizationAccessSheetPresentation {
+  const appDisplayName = String(options.appDisplayName ?? "Chi'llywood").trim() || "Chi'llywood";
+  const gateReason = String(options.gate?.reason ?? "").trim().toLowerCase();
+  const primaryTargetId = options.gate?.monetization?.primaryTargetId;
+
+  if (primaryTargetId === "paid_title_access") {
+    return {
+      kicker: "TITLE ACCESS",
+      title: "Unlock This Title",
+      body: `This title is gated. Unlock it directly when title access is available, or use an active ${appDisplayName} Premium subscription.`,
+      actionLabel: "Unlock Title",
+    };
+  }
+
+  if (primaryTargetId === "premium_live_access") {
+    return {
+      kicker: "LIVE ACCESS",
+      title: "Unlock Live Access",
+      body: `This live entry point requires premium live access or an active ${appDisplayName} Premium subscription before you can continue.`,
+      actionLabel: "Unlock Live Access",
+    };
+  }
+
+  if (gateReason === "party_pass_required") {
+    return {
+      kicker: "WATCH-PARTY ACCESS",
+      title: "Unlock This Room",
+      body: `This room uses Watch-Party access. Unlock it for shared entry, or use an active ${appDisplayName} Premium subscription when that offer is available.`,
+      actionLabel: "Unlock Access",
+    };
+  }
+
+  return {
+    kicker: "PREMIUM ACCESS",
+    title: String(options.premiumUpsellTitle ?? "").trim() || "Go Premium",
+    body: String(options.premiumUpsellBody ?? "").trim()
+      || `Premium unlocks premium titles and premium-entry rooms inside ${appDisplayName}, while keeping playback ad-free.`,
+    actionLabel: "Unlock Premium",
+  };
+}
+
+export async function purchaseBlockedAccess(options: {
+  gate: GateLike | null | undefined;
+  userId?: string | null;
+}): Promise<MonetizationAccessPurchaseOutcome> {
+  const snapshot = await readMonetizationSnapshot({
+    forceRefresh: true,
+    userId: options.userId,
+  });
+  const gateReason = String(options.gate?.reason ?? "").trim().toLowerCase();
+  const purchaseTargetId = options.gate?.monetization?.purchaseTargetId;
+  const recommendedPackageId = options.gate?.monetization?.recommendedPackageId;
+
+  if (gateReason !== "premium_required" && gateReason !== "party_pass_required") {
+    return {
+      ok: false,
+      snapshot,
+      customerInfo: null,
+      message: "This surface is not currently blocked by a monetization requirement.",
+    };
+  }
+
+  if (!purchaseTargetId) {
+    return {
+      ok: false,
+      snapshot,
+      customerInfo: null,
+      message: snapshot.issues[0]
+        ?? "This purchase path is not available in the current RevenueCat offering configuration yet.",
+    };
+  }
+
+  const result = await purchaseMonetizationTarget(purchaseTargetId, {
+    packageId: recommendedPackageId,
+    userId: options.userId,
+  });
+
+  return {
+    ok: result.ok,
+    targetId: purchaseTargetId,
+    snapshot: result.snapshot,
+    customerInfo: result.customerInfo,
+    message: result.message,
+    packageId: result.packageId,
+    productId: result.productId,
+  };
+}
+
 async function readLocalPlan(): Promise<UserPlan> {
   try {
     const raw = await AsyncStorage.getItem(USER_PLAN_KEY);
@@ -706,6 +933,28 @@ async function readLegacyUserPlan(): Promise<UserPlan> {
     return merged;
   } catch {
     return local;
+  }
+}
+
+async function hasLegacyPartyPassGrant(partyId: string): Promise<boolean> {
+  const safePartyId = String(partyId ?? "").trim();
+  if (!safePartyId) return false;
+
+  const userId = await getSignedInUserId();
+  if (!userId) return false;
+
+  try {
+    const { data, error } = await supabase
+      .from(PARTY_PASS_TABLE)
+      .select("id")
+      .eq("room_id", safePartyId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error || !data) return false;
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -777,7 +1026,6 @@ export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
     if (
       snapshot.targets.premium_subscription.hasEntitlement
       || snapshot.targets.premium_watch_party_access.hasEntitlement
-      || snapshot.targets.premium_live_access.hasEntitlement
     ) {
       return true;
     }
@@ -785,23 +1033,7 @@ export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
 
   const plan = await readLegacyUserPlan();
   if (plan.watchPartyPerks) return true;
-
-  const userId = await getSignedInUserId();
-  if (!userId) return false;
-
-  try {
-    const { data, error } = await supabase
-      .from(PARTY_PASS_TABLE)
-      .select("id")
-      .eq("room_id", partyId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error || !data) return false;
-    return true;
-  } catch {
-    return false;
-  }
+  return hasLegacyPartyPassGrant(partyId);
 }
 
 export async function unlockPartyPass(partyId: string): Promise<boolean> {
@@ -828,7 +1060,8 @@ export async function unlockPartyPass(partyId: string): Promise<boolean> {
 }
 
 export async function readCreatorPermissions(userId?: string | null): Promise<CreatorPermissionSet> {
-  const safeUserId = String(userId ?? await getSignedInUserId()).trim();
+  const explicitUserId = normalizeOptionalIdentity(userId);
+  const safeUserId = explicitUserId || normalizeOptionalIdentity(await getSignedInUserId());
   if (!safeUserId) return normalizeCreatorPermissionSet(null);
 
   try {
@@ -948,14 +1181,29 @@ export async function resolveMonetizationAccess(options: {
   accessRule?: MonetizationAccessRule | string | null;
   accessKey?: string | null;
   plan?: UserPlan | null;
+  targetHint?: MonetizationTargetId | null;
 }): Promise<ContentAccessDecision> {
   const runtime = getAppMonetizationRuntimeFeatures();
   const accessRule = normalizeMonetizationAccessRule(options.accessRule);
-  const accessKey = String(options.accessKey ?? "").trim().toUpperCase() || undefined;
-  const plan = options.plan ?? await readUserPlan();
+  const accessKey = String(options.accessKey ?? "").trim() || undefined;
+  const snapshot = await readMonetizationSnapshot();
+  const fallbackPlan = options.plan ?? await readLegacyUserPlan();
+  const plan = snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded
+    ? derivePlanFromMonetizationSnapshot(snapshot, fallbackPlan)
+    : fallbackPlan;
+  const policy = getMonetizationAccessPolicy({
+    accessRule,
+    targetHint: options.targetHint,
+  });
+  const monetization = buildMonetizationGateResolution(snapshot, policy);
 
   if (accessRule === "premium") {
-    if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled || plan.tier === "premium") {
+    if (
+      !FEATURE_FLAGS.monetization.subscriptions
+      || !runtime.premiumEnabled
+      || plan.tier === "premium"
+      || monetization.entitledTargetIds.length > 0
+    ) {
       return {
         allowed: true,
         reason: "allowed",
@@ -964,6 +1212,7 @@ export async function resolveMonetizationAccess(options: {
         requiresPartyPass: false,
         accessKey,
         plan,
+        monetization,
       };
     }
 
@@ -975,11 +1224,17 @@ export async function resolveMonetizationAccess(options: {
       requiresPartyPass: false,
       accessKey,
       plan,
+      monetization,
     };
   }
 
   if (accessRule === "party_pass") {
-    if (!FEATURE_FLAGS.monetization.partyPass || !runtime.partyPassEnabled || plan.watchPartyPerks) {
+    if (
+      !FEATURE_FLAGS.monetization.partyPass
+      || !runtime.partyPassEnabled
+      || plan.watchPartyPerks
+      || monetization.entitledTargetIds.length > 0
+    ) {
       return {
         allowed: true,
         reason: "allowed",
@@ -988,10 +1243,11 @@ export async function resolveMonetizationAccess(options: {
         requiresPartyPass: false,
         accessKey,
         plan,
+        monetization,
       };
     }
 
-    const hasAccess = accessKey ? await hasPartyPassAccess(accessKey) : false;
+    const hasAccess = accessKey ? await hasLegacyPartyPassGrant(accessKey) : false;
     if (hasAccess) {
       return {
         allowed: true,
@@ -1001,6 +1257,7 @@ export async function resolveMonetizationAccess(options: {
         requiresPartyPass: false,
         accessKey,
         plan,
+        monetization,
       };
     }
 
@@ -1012,6 +1269,7 @@ export async function resolveMonetizationAccess(options: {
       requiresPartyPass: true,
       accessKey,
       plan,
+      monetization,
     };
   }
 
@@ -1023,6 +1281,7 @@ export async function resolveMonetizationAccess(options: {
     requiresPartyPass: false,
     accessKey,
     plan,
+    monetization,
   };
 }
 
@@ -1034,8 +1293,9 @@ export async function evaluateTitleAccess(options: {
   const accessRule = normalizeTitleAccessRule(options.accessRule);
   return resolveMonetizationAccess({
     accessRule,
-    accessKey: String(options.titleId ?? "").trim().toUpperCase() || undefined,
+    accessKey: String(options.titleId ?? "").trim() || undefined,
     plan: options.plan,
+    targetHint: accessRule === "premium" ? "paid_title_access" : null,
   });
 }
 

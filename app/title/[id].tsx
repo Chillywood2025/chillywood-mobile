@@ -11,8 +11,9 @@ import {
 } from "../../_lib/appConfig";
 import {
   evaluateTitleAccess,
+  getMonetizationAccessSheetPresentation,
+  purchaseBlockedAccess,
   resolveSponsorPlacement,
-  setUserPlan,
   type ContentAccessDecision,
   type SponsorPlacement,
   type TitleAccessRule,
@@ -91,6 +92,7 @@ export default function TitleDetails() {
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
   const [detailSponsorPlacement, setDetailSponsorPlacement] = useState<SponsorPlacement>("none");
   const [liveMetadata, setLiveMetadata] = useState<TitleLiveMetadata | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
@@ -308,6 +310,7 @@ export default function TitleDetails() {
 
       if (!active) return;
       setTitleAccess(access);
+      setAccessError(null);
       setDetailSponsorPlacement(sponsorPlacement);
       setAccessLoading(false);
     };
@@ -344,8 +347,18 @@ export default function TitleDetails() {
       return;
     }
     setAccessBusy(true);
+    setAccessError(null);
     try {
-      await setUserPlan("premium");
+      const purchase = await purchaseBlockedAccess({ gate: titleAccess });
+      if (!purchase.ok) {
+        trackEvent("monetization_unlock_failure", {
+          surface: "title-detail",
+          titleId: String(title.id ?? titleId).trim(),
+        });
+        setAccessError(purchase.message);
+        return;
+      }
+
       const refreshed = await evaluateTitleAccess({
         titleId: String(title.id ?? "").trim(),
         accessRule: title.content_access_rule,
@@ -357,12 +370,22 @@ export default function TitleDetails() {
           titleId: String(title.id ?? titleId).trim(),
         });
         setAccessSheetVisible(false);
+      } else {
+        trackEvent("monetization_unlock_failure", {
+          surface: "title-detail",
+          titleId: String(title.id ?? titleId).trim(),
+        });
+        setAccessError(
+          refreshed?.monetization.issues[0]
+            ?? "Access is still locked for this title after the purchase attempt.",
+        );
       }
     } catch {
       trackEvent("monetization_unlock_failure", {
         surface: "title-detail",
         titleId: String(title.id ?? titleId).trim(),
       });
+      setAccessError("Unable to confirm title access right now.");
     } finally {
       setAccessBusy(false);
     }
@@ -432,6 +455,14 @@ export default function TitleDetails() {
   const isPremiumTitle = title.content_access_rule === "premium";
   const infoLine = buildTitleInfoLine(title);
   const addedLabel = formatAddedDate(title.created_at);
+  const accessSheetPresentation = titleAccess
+    ? getMonetizationAccessSheetPresentation({
+        gate: titleAccess,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
 
   return (
     <>
@@ -457,6 +488,12 @@ export default function TitleDetails() {
                   ? `Premium access is active for this title inside ${branding.appDisplayName}.`
                   : `This title is reserved for Premium access inside ${branding.appDisplayName}.`}
               </Text>
+            </View>
+          ) : null}
+
+          {accessError ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorCardText}>{accessError}</Text>
             </View>
           ) : null}
 
@@ -532,6 +569,10 @@ export default function TitleDetails() {
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={accessSheetPresentation?.kicker}
+          titleOverride={accessSheetPresentation?.title}
+          bodyOverride={accessSheetPresentation?.body}
+          actionLabelOverride={accessSheetPresentation?.actionLabel}
           busy={accessBusy}
           onConfirm={() => {
             void onUnlockAccess();
@@ -597,6 +638,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "600",
+  },
+  errorCard: {
+    marginTop: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.34)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+    padding: 14,
+  },
+  errorCardText: {
+    color: "#FFD3DC",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   liveActivityCard: {
     marginTop: 14,

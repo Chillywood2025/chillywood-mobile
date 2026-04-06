@@ -24,7 +24,11 @@ import {
 } from "react-native";
 import { titles as localTitles } from "../../_data/titles";
 import { reportRuntimeError } from "../../_lib/logger";
-import { setUserPlan, unlockPartyPass } from "../../_lib/monetization";
+import {
+    getMonetizationAccessSheetPresentation,
+    purchaseBlockedAccess,
+} from "../../_lib/monetization";
+import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { createPartyRoom, evaluatePartyRoomAccess, getPartyRoom, getSafePartyUserId, type WatchPartyRoomType, type WatchPartyState } from "../../_lib/watchParty";
@@ -133,6 +137,7 @@ export default function WatchPartyIndexScreen() {
   const [accessSheetBusy, setAccessSheetBusy] = useState(false);
   const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
   const [pendingAccessPreview, setPendingAccessPreview] = useState<RoomPreview | null>(null);
+  const [pendingAccessDecision, setPendingAccessDecision] = useState<RoomAccessDecision | null>(null);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
   const branding = resolveBrandingConfig(appConfig);
@@ -461,6 +466,7 @@ export default function WatchPartyIndexScreen() {
         roomId: nextPartyId,
       });
       setPendingAccessPreview(nextPreview);
+      setPendingAccessDecision(access);
       setAccessSheetReason(access.reason);
       setAccessSheetVisible(true);
       return;
@@ -485,7 +491,7 @@ export default function WatchPartyIndexScreen() {
   };
 
   const onResolveJoinAccess = useCallback(async () => {
-    if (!pendingAccessPreview || !accessSheetReason) return;
+    if (!pendingAccessPreview || !pendingAccessDecision || !accessSheetReason) return;
 
     setAccessSheetBusy(true);
     setJoinError(null);
@@ -497,19 +503,14 @@ export default function WatchPartyIndexScreen() {
         return;
       }
 
-      const unlocked = accessSheetReason === "premium_required"
-        ? true
-        : await unlockPartyPass(accessKey);
-
-      if (accessSheetReason === "premium_required") {
-        await setUserPlan("premium");
-      } else if (!unlocked) {
+      const purchase = await purchaseBlockedAccess({ gate: pendingAccessDecision });
+      if (!purchase.ok) {
         trackEvent("monetization_unlock_failure", {
           surface: "watch-party-lobby",
           reason: accessSheetReason,
           roomId: accessKey,
         });
-        setJoinError("Unable to unlock Party Pass for this room yet.");
+        setJoinError(purchase.message);
         return;
       }
 
@@ -532,11 +533,13 @@ export default function WatchPartyIndexScreen() {
         setAccessSheetVisible(false);
         setAccessSheetReason(null);
         setPendingAccessPreview(null);
+        setPendingAccessDecision(null);
         navigateToPreviewRoom(refreshedPreview);
         return;
       }
 
       if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+        setPendingAccessDecision(access);
         setAccessSheetReason(access.reason);
       } else {
         setJoinError("This room still isn't available for your current access level.");
@@ -549,7 +552,7 @@ export default function WatchPartyIndexScreen() {
     } finally {
       setAccessSheetBusy(false);
     }
-  }, [accessSheetReason, navigateToPreviewRoom, pendingAccessPreview]);
+  }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview]);
 
   const onCreateRoom = async () => {
     if (!features.watchPartyEnabled) {
@@ -1207,6 +1210,30 @@ export default function WatchPartyIndexScreen() {
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={pendingAccessDecision ? getMonetizationAccessSheetPresentation({
+            gate: pendingAccessDecision,
+            appDisplayName: branding.appDisplayName,
+            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+          }).kicker : undefined}
+          titleOverride={pendingAccessDecision ? getMonetizationAccessSheetPresentation({
+            gate: pendingAccessDecision,
+            appDisplayName: branding.appDisplayName,
+            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+          }).title : undefined}
+          bodyOverride={pendingAccessDecision ? getMonetizationAccessSheetPresentation({
+            gate: pendingAccessDecision,
+            appDisplayName: branding.appDisplayName,
+            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+          }).body : undefined}
+          actionLabelOverride={pendingAccessDecision ? getMonetizationAccessSheetPresentation({
+            gate: pendingAccessDecision,
+            appDisplayName: branding.appDisplayName,
+            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+          }).actionLabel : undefined}
           busy={accessSheetBusy}
           onConfirm={() => {
             void onResolveJoinAccess();

@@ -1,4 +1,9 @@
-import { resolveMonetizationAccess } from "./monetization";
+import {
+  createEmptyMonetizationGateResolution,
+  resolveMonetizationAccess,
+  type MonetizationGateResolution,
+  type MonetizationTargetId,
+} from "./monetization";
 
 export type JoinPolicy = "open" | "locked";
 export type ReactionsPolicy = "enabled" | "muted";
@@ -21,6 +26,7 @@ export type RoomAccessDecision = {
   contentAccessRule: ContentAccessRule;
   capturePolicy: CapturePolicy;
   requiresAuthIdentity: boolean;
+  monetization: MonetizationGateResolution;
 };
 
 export type RoomCapabilitySet = {
@@ -51,6 +57,8 @@ export type RoomPolicyLike = {
   joinPolicy?: unknown;
   contentAccessRule?: unknown;
   capturePolicy?: unknown;
+  roomType?: unknown;
+  linkedRoomMode?: unknown;
 };
 
 export const ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS = 25_000;
@@ -104,6 +112,22 @@ export const deriveWatchPartyStageRole = (options: {
   return options.canSpeak ? "speaker" as const : "listener" as const;
 };
 
+const resolveRoomMonetizationTargetHint = (room: RoomPolicyLike): MonetizationTargetId | null => {
+  const accessRule = normalizeContentAccessRule(room.contentAccessRule);
+  if (accessRule === "party_pass") return "premium_watch_party_access";
+  if (accessRule !== "premium") return null;
+
+  const roomType = String(room.roomType ?? "").trim().toLowerCase();
+  if (roomType === "live") return "premium_live_access";
+  if (roomType === "title") return "paid_title_access";
+
+  const linkedRoomMode = String(room.linkedRoomMode ?? "").trim().toLowerCase();
+  if (linkedRoomMode === "live") return "premium_live_access";
+  if (linkedRoomMode === "hybrid") return "premium_watch_party_access";
+
+  return "premium_subscription";
+};
+
 export async function evaluateRoomAccess(options: {
   partyId: string;
   room: RoomPolicyLike;
@@ -113,6 +137,7 @@ export async function evaluateRoomAccess(options: {
   const joinPolicy = normalizeJoinPolicy(options.room.joinPolicy);
   const contentAccessRule = normalizeContentAccessRule(options.room.contentAccessRule);
   const capturePolicy = normalizeCapturePolicy(options.room.capturePolicy);
+  const emptyMonetization = createEmptyMonetizationGateResolution();
   const isHost = String(options.room.hostUserId ?? "").trim() === String(options.membership?.userId ?? "").trim();
   const membershipState = normalizeRoomMembershipState(options.membership?.membershipState);
   const isExistingMember = isMembershipActive(options.membership) || membershipState === "left";
@@ -125,6 +150,7 @@ export async function evaluateRoomAccess(options: {
       contentAccessRule,
       capturePolicy,
       requiresAuthIdentity: true,
+      monetization: emptyMonetization,
     };
   }
 
@@ -136,6 +162,7 @@ export async function evaluateRoomAccess(options: {
       contentAccessRule,
       capturePolicy,
       requiresAuthIdentity: true,
+      monetization: emptyMonetization,
     };
   }
 
@@ -147,14 +174,18 @@ export async function evaluateRoomAccess(options: {
       contentAccessRule,
       capturePolicy,
       requiresAuthIdentity: true,
+      monetization: emptyMonetization,
     };
   }
 
+  let monetization = emptyMonetization;
   if (!isHost && contentAccessRule !== "open") {
     const monetizationAccess = await resolveMonetizationAccess({
       accessRule: contentAccessRule,
       accessKey: options.partyId,
+      targetHint: resolveRoomMonetizationTargetHint(options.room),
     });
+    monetization = monetizationAccess.monetization;
     if (!monetizationAccess.allowed) {
       return {
         canJoin: false,
@@ -163,6 +194,7 @@ export async function evaluateRoomAccess(options: {
         contentAccessRule,
         capturePolicy,
         requiresAuthIdentity: true,
+        monetization,
       };
     }
   }
@@ -174,6 +206,7 @@ export async function evaluateRoomAccess(options: {
     contentAccessRule,
     capturePolicy,
     requiresAuthIdentity: true,
+    monetization,
   };
 }
 

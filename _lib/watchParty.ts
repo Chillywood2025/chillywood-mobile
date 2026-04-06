@@ -2,7 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { debugLog, reportRuntimeError } from "./logger";
-import { readCreatorPermissions, sanitizeCreatorRoomAccessRule } from "./monetization";
+import {
+  createEmptyMonetizationGateResolution,
+  readCreatorPermissions,
+  sanitizeCreatorRoomAccessRule,
+} from "./monetization";
 import {
   buildRoomCapabilities,
   deriveWatchPartyStageRole,
@@ -800,6 +804,7 @@ export async function evaluatePartyRoomAccess(options: {
       contentAccessRule: "open",
       capturePolicy: "best_effort",
       requiresAuthIdentity: true,
+      monetization: createEmptyMonetizationGateResolution(),
     };
   }
 
