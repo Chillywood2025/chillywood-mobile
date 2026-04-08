@@ -114,14 +114,17 @@ MVP truth:
 ## Profile / Channel MVP Truth
 Profiles are not just simple account pages.
 
-They are Chi'llywood's social identity hubs and should evolve into each user's mini streaming platform / creator channel.
+They are Chi'llywood's social identity hubs and can optionally grow into each user's mini streaming platform / creator channel without replacing the base profile experience.
 
 MVP truth:
 - the authenticated user's own profile opens their own channel/profile surface
 - viewing another user's profile should support opening or creating a direct Chi'lly Chat thread
 - profile surfaces should naturally connect with Chi'lly Chat, watch-party coordination, live communication, and broader social identity
+- the base profile experience must remain meaningful even when a user never builds out a fuller creator platform layer
 - photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction are approved profile/channel depth
 - future profile/channel depth must extend the same native Chi'llywood profile system instead of inventing a disconnected second app or parallel creator identity
+
+Cross-cutting monetization, compliance, product-phase, and profile/channel-platform doctrine lives in `PRODUCT_DOCTRINE.md`.
 
 ## Official Platform Account Truth
 Rachi is Chi'llywood's official platform-owned seeded account.

@@ -233,6 +233,7 @@ Relationship to other rooms: Live Room is the canonical live-session shell on `/
 - ticketed live sessions
 - creator monetization modules such as boosts, gifts, or paid access
 - richer audience segmentation and live event templates
+- immersive-room ad placements only if a specific compliant, low-interruption strategy is intentionally approved later
 - post-event summaries and highlight reels
 
 ### I. Anti-patterns / what does NOT belong here
@@ -258,6 +259,7 @@ Relationship to other rooms: Live Room is the canonical live-session shell on `/
 ### L. Monetization / growth relevance
 - Growth relevance is high: follows, shares, rejoin behavior, and audience retention belong here.
 - Monetization relevance is medium now and high later: paid live access, creator boosts, sponsored sessions, and premium room templates fit later.
+- This room should not assume ambient ads by default; premium-feeling immersive live surfaces should stay clear unless a specific compliant placement strategy is intentionally chosen later.
 
 ### M. Accessibility / usability considerations
 - room mode and host authority must be obvious
@@ -328,6 +330,8 @@ Relationship to other rooms: Live Stage is the in-room presentation layer inside
 ### H. Future expansion features
 - creator scene presets and branded stage templates
 - multi-camera or multi-pane stage layouts
+- phased `Game Live` support with gameplay capture, mic audio, and an optional face-cam bubble after the core live surface is stable
+- `Game Watch-Party` only after `Game Live`, and only as a later-phase follow-on after the platform has more traction
 - highlight markers and auto-packaged recap moments
 - richer audience participation mechanics tuned by mode
 - sponsor or event-layer stage skins when appropriate
@@ -354,6 +358,7 @@ Relationship to other rooms: Live Stage is the in-room presentation layer inside
 ### L. Monetization / growth relevance
 - Growth relevance is medium now through engagement and session retention.
 - Monetization relevance is higher later through premium stagecraft, sponsored events, branded layouts, and creator live products.
+- This stage should not assume ads by default; premium-feeling immersive stage surfaces should stay clear unless a specific compliant placement strategy is intentionally chosen later.
 
 ### M. Accessibility / usability considerations
 - current stage mode must be unmistakable
@@ -487,14 +492,17 @@ Relationship to other rooms: Party Room is the canonical watch-together room on 
 ### D. Core controls
 - Required quick actions: react, comment, inspect participants, invite, report, and understand who is hosting the room.
 - Host controls: synchronized playback authority, room lock/open state, participant policy, and party-state management.
-- Viewer/user controls: react, comment, follow the shared experience, inspect who is present, and leave.
+- Viewer/user controls: react, comment, follow the shared experience, inspect who is present, leave, and adjust local-only layout or visibility preferences on their own screen without changing host authority.
 - Creator controls: when a creator is hosting, present the room as a creator-led social watch without turning it into Live Room.
 - Owner/admin controls: bounded moderation, official notices, or protected interventions only when warranted.
 - Advanced actions can include co-host permissions, party polls, or structured interaction later.
 
 ### E. Permissions / visibility / roles
 - Host authority governs room state and shared playback direction.
-- Viewers should know what they can influence directly and what follows the host.
+- Local viewer controls can tune layout, visibility, reactions, or comfort on the participant's own screen only.
+- Each participant can choose whether the actual host and featured people stay visible on their own screen when the current experience supports it.
+- Viewers should know what they can influence directly and what still follows the host.
+- The premium social direction should favor a smaller featured or on-camera group, roughly eight live-visible people, with broader attendees participating through chat, reactions, audience presence, and later rotation into featured positions.
 - Public, private, invite-only, or premium room visibility must be explicit.
 - Moderation and role-aware review must use the established safety-report and platform-role systems.
 - Audit logs matter for removals, locks, premium access changes, and official interventions.
@@ -519,6 +527,7 @@ Relationship to other rooms: Party Room is the canonical watch-together room on 
 
 ### H. Future expansion features
 - co-host and temporary control delegation
+- featured-seat rotation around a smaller featured group instead of unlimited equal tiles
 - scene-based trivia or polls
 - party highlights and recap cards
 - clip suggestions or room-memory artifacts
@@ -549,6 +558,7 @@ Relationship to other rooms: Party Room is the canonical watch-together room on 
 ### L. Monetization / growth relevance
 - Growth relevance is high via invites, recurring party behavior, and social retention.
 - Monetization relevance is meaningful through party access products, creator-hosted premieres, premium rooms, or sponsored co-watch events.
+- This room should not assume ads by default; premium-feeling immersive party surfaces should stay clear unless a specific compliant placement strategy is intentionally chosen later.
 
 ### M. Accessibility / usability considerations
 - host authority and room state should be obvious
@@ -586,14 +596,17 @@ Relationship to other rooms: Watch-Party Live is the title/player-driven social 
 ### D. Core controls
 - Required quick actions: play/pause feedback, sync state, reactions/comments, and return-to-room awareness.
 - Host controls: authoritative playback control and limited room-synced media actions.
-- Viewer/user controls: social reactions, comments, and passive sync-following, not silent desync of the shared timeline.
+- Viewer/user controls: social reactions, comments, passive sync-following, and local-only visibility or overlay preferences on their own screen, not silent desync of the shared timeline.
 - Creator controls: not primary here except when a creator is the party host.
 - Owner/admin controls: indirect and minimal, typically through moderation/report paths rather than overt player takeover.
 - Advanced actions can later include richer overlays, co-host sync, or group-specific interactive moments.
 
 ### E. Permissions / visibility / roles
 - Host authority governs the shared timeline.
+- Local viewer controls can tune overlay density, host visibility, or featured-participant visibility on the participant's own screen only.
+- Each participant can choose whether the actual host and featured people stay visible on their own screen when the current experience supports it.
 - Viewers should understand that they are following room sync, not solo playback freedom.
+- When visible participant strips or featured-presence layers exist, the premium social direction should favor a smaller featured group instead of unlimited equal tiles.
 - Overlay visibility should depend on room policy and device constraints.
 - Protected or restricted titles must keep rights-aware controls and anti-capture expectations intact.
 - Audit logs matter for sync-critical host actions and protected content handling if escalations occur.
@@ -617,6 +630,7 @@ Relationship to other rooms: Watch-Party Live is the title/player-driven social 
 
 ### H. Future expansion features
 - richer co-watch overlays and perspective modes
+- featured-seat rotation and audience promotion around a smaller featured group
 - scene-based engagement prompts
 - highlight markers and recap cards
 - clip suggestions subject to rights and moderation policy
@@ -647,6 +661,7 @@ Relationship to other rooms: Watch-Party Live is the title/player-driven social 
 - Monetization relevance is moderate now through entitlement enforcement and room-access logic.
 - It becomes stronger later through premium co-watch layers, premium rooms, and sponsored watch experiences.
 - Growth relevance is high because good shared playback increases repeat room behavior.
+- This surface should not assume ads by default; premium-feeling immersive playback should stay clear unless a specific compliant placement strategy is intentionally chosen later.
 
 ### M. Accessibility / usability considerations
 - overlays must not overwhelm playback

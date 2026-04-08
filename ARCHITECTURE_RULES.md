@@ -8,11 +8,15 @@ Repo control files are the source of truth for:
 - communication behavior
 - product ownership
 - profile behavior
+- cross-cutting monetization doctrine
+- cross-cutting compliance and product-phase doctrine
 - content-action behavior
 
 If code, comments, older docs, screenshots, or stale assumptions conflict with these control files, the control files win until they are intentionally updated.
 
 If an older communication-specific assumption says standalone communication is disallowed or room-only, that older assumption is obsolete and the current Chi'lly Chat rule wins.
+
+If an older monetization, compliance, product-phase, or profile/channel-platform assumption conflicts with `PRODUCT_DOCTRINE.md`, `PRODUCT_DOCTRINE.md` wins unless `ROOM_BLUEPRINT.md` intentionally narrows the rule for a specific room.
 
 ## Canonical Routes
 - Party Room: `/watch-party/[partyId]`
@@ -128,6 +132,11 @@ Locked meanings:
   4. What AI help belongs here without getting in the way?
 - the blueprint must define purpose, entry/exit, controls, permissions/visibility, room-specific AI behavior, MVP scope, later expansion, anti-patterns, and product success tests without contradicting locked naming, routes, or room ownership
 
+## Product Doctrine Rule
+- `PRODUCT_DOCTRINE.md` is the single governing home for cross-cutting monetization, compliance, product-phase, and profile/channel-platform truth
+- `MASTER_VISION.md` should stay identity-level, `ARCHITECTURE_RULES.md` should stay architectural, and `ROOM_BLUEPRINT.md` should only carry room-specific implications of that cross-cutting truth
+- when a product question is not room-specific and is not purely naming/routing/ownership architecture, resolve it in `PRODUCT_DOCTRINE.md`
+
 ## Room Feature Fit Rule
 Before adding a feature to a room or room-adjacent surface, prove:
 1. it fits that room's purpose
@@ -146,6 +155,14 @@ That means:
 - background AI may support moderation, summaries, ranking, recommendations, or recovery without taking over the room
 - AI must not blur locked room meanings or invent new authority over hosts, moderators, official accounts, rights, or entitlements
 - AI features that fit later expansion must stay documented in `ROOM_BLUEPRINT.md` without being treated as approved current-scope implementation work
+
+## Compliance-Sensitive Design Rule
+Before making implementation choices around monetization, billing, payouts, ads, taxes, moderation-sensitive revenue features, or geography, call out the compliance-sensitive constraints first.
+
+Do not:
+- assume Apple or Google billing approval without checking the current product shape
+- assume creator payout, tax-reporting, moderation, or country rollout feasibility without surfacing the constraint
+- bury compliance-sensitive tradeoffs inside later implementation details
 
 ## Player Rule
 Player is playback-only.
@@ -171,10 +188,15 @@ Profiles are not simple account pages.
 
 Locked product direction:
 - profiles are Chi'llywood social identity hubs
-- profiles should evolve into each user's mini streaming platform / creator channel
+- cross-cutting profile/channel-platform doctrine lives in `PRODUCT_DOCTRINE.md`
 - the authenticated user's own profile opens their own channel/profile surface
 - viewing another user's profile should support opening or creating a direct Chi'lly Chat thread
 - photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction must extend the same profile/channel system over time
+
+## Billing / Payout Separation Rule
+- app-store subscriptions and in-app billing are not the creator payout system
+- creator payout infrastructure should assume Stripe Connect or an equivalent marketplace payout layer that stays separate from app-store billing
+- RevenueCat can support subscription and entitlement behavior, but it is not the creator payout layer
 
 ## Official Platform Account Rule
 Rachi is Chi'llywood's official platform-owned seeded account.
@@ -249,7 +271,9 @@ Before editing a route, label, button, or communication behavior:
 Do not guess when duplicate surfaces may exist.
 
 ## File Placement Rule
-- permanent product truth belongs in `MASTER_VISION.md` and `ARCHITECTURE_RULES.md`
+- identity-level product truth belongs in `MASTER_VISION.md`
+- architectural product truth belongs in `ARCHITECTURE_RULES.md`
+- cross-cutting monetization, compliance, product-phase, and profile/channel-platform doctrine belongs in `PRODUCT_DOCTRINE.md`
 - durable room/surface blueprint doctrine belongs in `ROOM_BLUEPRINT.md`
 - roadmap/phasing belongs in `ROADMAP.md`
 - current implementation truth belongs in `CURRENT_STATE.md`
