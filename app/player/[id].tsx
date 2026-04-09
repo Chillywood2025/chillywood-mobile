@@ -81,11 +81,6 @@ const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
 const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
 const PARTY_LOCAL_MAX_REACTIONS = 8;
   const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
-const PARTY_MOCK_COMMENTS = [
-  { id: "mock-comment-1", username: "Mia", text: "This scene is wild 🔥" },
-  { id: "mock-comment-2", username: "Noah", text: "Pause after this for theories" },
-  { id: "mock-comment-3", username: "Ava", text: "Soundtrack is perfect here" },
-] as const;
 const LIVE_FACE_FILTER_OPTIONS = [
   { id: "none", label: "Natural", subtitle: "No filter" },
   { id: "studio", label: "Studio Glow", subtitle: "Warm lift" },
@@ -253,14 +248,10 @@ export default function PlayerScreen() {
   const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
   const [activeParticipantIds, setActiveParticipantIds] = useState<string[]>([]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
-  const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [liveFilterSheetOpen, setLiveFilterSheetOpen] = useState(false);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
-  const [partyComments, setPartyComments] = useState<{ id: string; username: string; text: string }[]>(() =>
-    PARTY_MOCK_COMMENTS.map((entry) => ({ ...entry })),
-  );
   const [, setPartyOverlayMessages] = useState<{ id: string; author: string; body: string }[]>([]);
   const [partyReactionBursts, setPartyReactionBursts] = useState<{ id: string; emoji: string }[]>([]);
   const [partyLocalReactions, setPartyLocalReactions] = useState<{ id: string; emoji: string; rightOffset: number }[]>([]);
@@ -2190,20 +2181,6 @@ export default function PlayerScreen() {
     return () => loop.stop();
   }, [participantActivityPulse]);
 
-  const onSendPartyComment = useCallback(() => {
-    const text = partyCommentDraft.trim();
-    if (!text) return;
-
-    const participantId =
-      activeParticipantId ?? partyParticipants.find((entry) => entry.role === "host")?.id ?? partyParticipants[0]?.id ?? "";
-    if (participantId) markParticipantActive(participantId, 2300);
-
-    const id = `local-comment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setPartyComments((prev) => [...prev, { id, username: "You", text }]);
-    bumpRoomEnergy(0.09);
-    setPartyCommentDraft("");
-  }, [activeParticipantId, bumpRoomEnergy, markParticipantActive, partyCommentDraft, partyParticipants]);
-
   const onSelectReactionFromPicker = useCallback((emoji: string) => {
     triggerLocalPartyReaction(emoji);
     setRecentReactionEmojis((prev) => pushRecentReaction(prev, emoji));
@@ -3666,27 +3643,8 @@ export default function PlayerScreen() {
               <View style={styles.partyCommentsDrawer}>
                 <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
                 <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                  {partyComments.map((comment) => (
-                    <Text key={comment.id} style={styles.partyCommentsLine}>
-                      <Text style={styles.partyCommentsAuthor}>{comment.username}: </Text>
-                      {comment.text}
-                    </Text>
-                  ))}
+                  <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
                 </ScrollView>
-                <View style={styles.partyCommentsInputRow}>
-                  <TextInput
-                    value={partyCommentDraft}
-                    onChangeText={setPartyCommentDraft}
-                    placeholder="Add a comment"
-                    placeholderTextColor="#8B90A0"
-                    style={styles.partyCommentsInput}
-                    returnKeyType="send"
-                    onSubmitEditing={onSendPartyComment}
-                  />
-                  <TouchableOpacity style={styles.partyCommentsSendBtn} onPress={onSendPartyComment} activeOpacity={0.85}>
-                    <Text style={styles.partyCommentsSendBtnText}>Send</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
             ) : null}
 
@@ -3934,27 +3892,8 @@ export default function PlayerScreen() {
                   >
                     <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
                     <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                      {partyComments.map((comment) => (
-                        <Text key={comment.id} style={styles.partyCommentsLine}>
-                          <Text style={styles.partyCommentsAuthor}>{comment.username}: </Text>
-                          {comment.text}
-                        </Text>
-                      ))}
+                      <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
                     </ScrollView>
-                    <View style={styles.partyCommentsInputRow}>
-                      <TextInput
-                        value={partyCommentDraft}
-                        onChangeText={setPartyCommentDraft}
-                        placeholder="Add a comment"
-                        placeholderTextColor="#8B90A0"
-                        style={styles.partyCommentsInput}
-                        returnKeyType="send"
-                        onSubmitEditing={onSendPartyComment}
-                      />
-                      <TouchableOpacity style={styles.partyCommentsSendBtn} onPress={onSendPartyComment} activeOpacity={0.85}>
-                        <Text style={styles.partyCommentsSendBtnText}>Send</Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
                 ) : null}
               </>
@@ -4141,27 +4080,8 @@ export default function PlayerScreen() {
                     >
                       <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
                       <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                        {partyComments.map((comment) => (
-                          <Text key={comment.id} style={styles.partyCommentsLine}>
-                            <Text style={styles.partyCommentsAuthor}>{comment.username}: </Text>
-                            {comment.text}
-                          </Text>
-                        ))}
+                        <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
                       </ScrollView>
-                      <View style={styles.partyCommentsInputRow}>
-                        <TextInput
-                          value={partyCommentDraft}
-                          onChangeText={setPartyCommentDraft}
-                          placeholder="Add a comment"
-                          placeholderTextColor="#8B90A0"
-                          style={styles.partyCommentsInput}
-                          returnKeyType="send"
-                          onSubmitEditing={onSendPartyComment}
-                        />
-                        <TouchableOpacity style={styles.partyCommentsSendBtn} onPress={onSendPartyComment} activeOpacity={0.85}>
-                          <Text style={styles.partyCommentsSendBtnText}>Send</Text>
-                        </TouchableOpacity>
-                      </View>
                     </View>
                   ) : null}
 

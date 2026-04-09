@@ -72,13 +72,6 @@ type StageParticipant = SharedParticipantIdentity & {
   username: string;
 };
 
-type StageChatMessage = {
-  id: string;
-  userId: string;
-  username: string;
-  text: string;
-};
-
 type FloatingReaction = {
   id: string;
   emoji: string;
@@ -132,19 +125,6 @@ const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
   }
 };
 
-const STAGE_CHAT_LINES = [
-  "This stage looks cinematic tonight.",
-  "Hybrid layout is super clean 👏",
-  "Dropping reactions from Lagos 🇳🇬",
-  "Can’t wait for player mode in stage.",
-  "Audio sync test soon?",
-  "Host energy is amazing 🔥",
-  "Love this vibe ✨",
-  "Who else is watching from mobile?",
-  "This feels like TikTok Live already.",
-  "Send hearts if you can hear me ❤️",
-];
-
 const SIM_REACTIONS = ["👍", "🔥", "👏", "❤️", "✨", "😂"];
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
@@ -178,7 +158,6 @@ export default function WatchPartyLiveStageScreen() {
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [stageMessages, setStageMessages] = useState<StageChatMessage[]>([]);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [activeSpeakerUserId, setActiveSpeakerUserId] = useState<string>("");
   const [activeParticipantId, setActiveParticipantId] = useState<string>("");
@@ -202,7 +181,6 @@ export default function WatchPartyLiveStageScreen() {
   const motion = useRef(new Animated.Value(0)).current;
   const reactionTapPulse = useRef(new Animated.Value(0)).current;
   const reactionCounterRef = useRef(0);
-  const chatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micRecordingRef = useRef<Audio.Recording | null>(null);
   const micSpeakingRef = useRef(false);
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -751,64 +729,6 @@ export default function WatchPartyLiveStageScreen() {
       );
     });
   }, [displayParticipants]);
-
-  const pushStageMessage = useCallback((userId: string, username: string, text: string) => {
-    const next: StageChatMessage = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      userId,
-      username,
-      text,
-    };
-    setStageMessages((prev) => [...prev.slice(-39), next]);
-  }, []);
-
-  useEffect(() => {
-    if (displayParticipants.length === 0) return;
-    if (stageMessages.length > 0) return;
-
-    const initial = displayParticipants.slice(0, 3).map((participant, index) => ({
-      id: `hello-${participant.userId}-${index}`,
-      userId: participant.userId,
-      username: participant.userId === myUserId ? "You" : participant.username,
-      text: participant.userId === myUserId ? "joined the live stage" : "joined the room",
-    }));
-    setStageMessages(initial);
-  }, [displayParticipants, stageMessages.length, myUserId]);
-
-  useEffect(() => {
-    if (displayParticipants.length === 0) return;
-    let cancelled = false;
-
-    const schedule = () => {
-      if (cancelled) return;
-      const delay = 2600 + Math.floor(Math.random() * 4200);
-      chatTimeoutRef.current = setTimeout(() => {
-        if (cancelled) return;
-        const speakerPool = displayParticipants.filter((participant) => participant.userId !== myUserId);
-        const speaker = speakerPool[Math.floor(Math.random() * speakerPool.length)] ?? displayParticipants[0];
-        if (!speaker) return;
-        const line = STAGE_CHAT_LINES[Math.floor(Math.random() * STAGE_CHAT_LINES.length)];
-        pushStageMessage(speaker.userId, speaker.username, line);
-
-        if (Math.random() < 0.24) {
-          setTimeout(() => {
-            if (cancelled) return;
-            const second = speakerPool[Math.floor(Math.random() * speakerPool.length)] ?? speaker;
-            const shortLine = STAGE_CHAT_LINES[Math.floor(Math.random() * STAGE_CHAT_LINES.length)].slice(0, 36);
-            pushStageMessage(second.userId, second.username, shortLine);
-          }, 420 + Math.floor(Math.random() * 900));
-        }
-
-        schedule();
-      }, delay);
-    };
-
-    schedule();
-    return () => {
-      cancelled = true;
-      if (chatTimeoutRef.current) clearTimeout(chatTimeoutRef.current);
-    };
-  }, [displayParticipants, myUserId, pushStageMessage]);
 
   const emitFloatingReaction = useCallback((emoji: string) => {
     const dominantCandidate = visibleStripParticipants.find((participant) => {
@@ -1661,19 +1581,7 @@ export default function WatchPartyLiveStageScreen() {
             <Animated.View pointerEvents="auto" style={[styles.chatOverlay, { opacity: chatOpacity, transform: [{ translateY: chatFloat }] }]}>
               <Text style={styles.chatDrawerTitle}>Comments</Text>
               <ScrollView style={styles.chatDrawerList} contentContainerStyle={styles.chatDrawerListContent}>
-                {stageMessages.length === 0 ? (
-                  <Text style={styles.chatOverlayLine}>No comments yet.</Text>
-                ) : (
-                  stageMessages.slice(-20).map((msg) => {
-                    const isMe = msg.userId === myUserId;
-                    return (
-                      <Text key={msg.id} style={styles.chatOverlayLine}>
-                        <Text style={[styles.chatUsername, isMe && styles.chatUsernameMe]}>{isMe ? "You" : msg.username}: </Text>
-                        <Text style={styles.chatMessageText}>{msg.text}</Text>
-                      </Text>
-                    );
-                  })
-                )}
+                <Text style={styles.chatOverlayLine}>Comments are not available in this live room yet.</Text>
               </ScrollView>
             </Animated.View>
           ) : null}
