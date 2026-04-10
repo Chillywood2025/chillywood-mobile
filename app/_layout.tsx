@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { PostHogProvider, useFeatureFlag, usePostHog } from "posthog-react-native";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { trackEvent, trackScreen } from "../_lib/analytics";
+import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
@@ -60,26 +60,46 @@ function PostHogFlagProbe() {
 
 function PostHogSessionBridge() {
   const posthog = usePostHog();
-  const { user } = useSession();
-  const identifiedUserIdRef = useRef("");
+
+  const sanitizeAnalyticsPayload = (payload?: AnalyticsPayload) => {
+    if (!payload) return undefined;
+
+    const sanitized: Record<string, string | number | boolean | null> = {};
+
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === undefined) return;
+      sanitized[key] = value ?? null;
+    });
+
+    return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+  };
 
   useEffect(() => {
-    const userId = String(user?.id ?? "").trim();
-    if (!posthog || userId.length === 0) {
-      if (userId.length === 0) {
-        identifiedUserIdRef.current = "";
-      }
+    if (!posthog) {
+      setAnalyticsSink(null);
       return;
     }
 
-    if (identifiedUserIdRef.current === userId) {
-      return;
-    }
+    setAnalyticsSink({
+      identifyUser(identity) {
+        posthog.identify(identity.id, identity.email ? { email: identity.email } : undefined);
+        void posthog.reloadFeatureFlagsAsync().catch(() => null);
+      },
+      clearUser() {
+        posthog.reset();
+      },
+      trackScreen(screenName, payload) {
+        void posthog.screen(screenName, sanitizeAnalyticsPayload(payload));
+      },
+      trackEvent(eventName, payload) {
+        posthog.capture(eventName, sanitizeAnalyticsPayload(payload));
+      },
+    });
 
-    identifiedUserIdRef.current = userId;
-    posthog.identify(userId, user?.email ? { email: user.email } : undefined);
-    void posthog.reloadFeatureFlagsAsync().catch(() => null);
-  }, [posthog, user?.email, user?.id]);
+    return () => {
+      setAnalyticsSink(null);
+    };
+  }, [posthog]);
 
   return null;
 }
