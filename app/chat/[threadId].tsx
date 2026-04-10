@@ -30,6 +30,7 @@ import {
   type ChatThreadMember,
   type ChatThreadSummary,
 } from "../../_lib/chat";
+import { getCommunicationRoomSnapshot } from "../../_lib/communication";
 import { reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
@@ -218,6 +219,17 @@ export default function ChillyChatThreadScreen() {
   const currentUserId = String(user?.id ?? "").trim();
   const posthogEnabled = getPostHogConfig().isEnabled;
 
+  const reconcileEndedCallState = useCallback(async (nextThread: ChatThreadSummary | null) => {
+    if (!nextThread?.activeCommunicationRoomId) return nextThread;
+
+    const snapshot = await getCommunicationRoomSnapshot(nextThread.activeCommunicationRoomId).catch(() => null);
+    if (snapshot?.room.status === "active") return nextThread;
+
+    await clearEndedChatThreadCall(nextThread.threadId).catch(() => null);
+    setCallPanelOpen(false);
+    return (await getChatThread(nextThread.threadId).catch(() => null)) ?? null;
+  }, []);
+
   const loadThreadState = useCallback(async () => {
     if (!threadId) {
       setError("Missing Chi'lly Chat thread.");
@@ -226,10 +238,12 @@ export default function ChillyChatThreadScreen() {
     }
 
     try {
-      const [nextThread, nextMessages] = await Promise.all([
+      const [loadedThread, nextMessages] = await Promise.all([
         getChatThread(threadId),
         listChatMessages(threadId),
       ]);
+
+      const nextThread = await reconcileEndedCallState(loadedThread);
 
       if (!nextThread) {
         setError("This Chi'lly Chat thread could not be found.");
@@ -249,7 +263,7 @@ export default function ChillyChatThreadScreen() {
       setError(loadError?.message ?? "Unable to load this Chi'lly Chat thread.");
       setLoading(false);
     }
-  }, [threadId]);
+  }, [reconcileEndedCallState, threadId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -472,6 +486,14 @@ export default function ChillyChatThreadScreen() {
     }
 
     if (!callPanelOpen) {
+      const snapshot = await getCommunicationRoomSnapshot(activeCallRoomId).catch(() => null);
+      if (!snapshot || snapshot.room.status !== "active") {
+        await clearEndedChatThreadCall(threadId).catch(() => null);
+        setCallPanelOpen(false);
+        await loadThreadState();
+        return;
+      }
+
       trackEvent("chat_call_join_requested", {
         surface: "chat-thread",
         threadId,
