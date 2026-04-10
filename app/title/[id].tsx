@@ -470,7 +470,7 @@ export default function TitleDetails() {
               <Text style={styles.statusBody}>
                 {titleAccess?.allowed
                   ? `Premium access is active for this title inside ${branding.appDisplayName}.`
-                  : `This title is reserved for Premium access inside ${branding.appDisplayName}.`}
+                  : `This title stays locked in this build while Premium access is being prepared for a later update.`}
               </Text>
             </View>
           ) : null}
@@ -507,7 +507,7 @@ export default function TitleDetails() {
               disabled={accessLoading}
             >
               <Text style={styles.btnPrimaryText}>
-                {accessLoading ? "Checking access..." : titleAccess && !titleAccess.allowed ? "Unlock to Play" : "Play"}
+                {accessLoading ? "Checking access..." : titleAccess && !titleAccess.allowed ? "Coming Soon" : "Play"}
               </Text>
             </Pressable>
 
@@ -554,6 +554,7 @@ export default function TitleDetails() {
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          deferredMonetization
           kickerOverride={accessSheetPresentation?.kicker}
           titleOverride={accessSheetPresentation?.title}
           bodyOverride={accessSheetPresentation?.body}

@@ -2643,10 +2643,10 @@ export default function PlayerScreen() {
   const standaloneContextTitle = useMemo(() => {
     if (standaloneAccessLoading) return "Checking access before playback starts.";
     if (standalonePlaybackUnknown) return "Playback access needs another check.";
-    if (standalonePlaybackBlocked) return standaloneAccessPresentation?.title ?? "Unlock this title before playback starts.";
+    if (standalonePlaybackBlocked) return "Premium playback is coming later.";
     if (resumeCueMillis > 0) return "Resume your own watch session.";
     return "You are in solo playback.";
-  }, [resumeCueMillis, standaloneAccessLoading, standaloneAccessPresentation?.title, standalonePlaybackBlocked, standalonePlaybackUnknown]);
+  }, [resumeCueMillis, standaloneAccessLoading, standalonePlaybackBlocked, standalonePlaybackUnknown]);
   const standaloneContextBody = useMemo(() => {
     if (standaloneAccessLoading) {
       return `Chi'llywood is checking whether ${displayItem?.title ?? "this title"} is ready for solo playback on this account.`;
@@ -2657,8 +2657,7 @@ export default function PlayerScreen() {
     }
 
     if (standalonePlaybackBlocked) {
-      return standaloneAccessPresentation?.body
-        ?? `This title is gated. Unlock it directly when title access is available, or use an active ${branding.appDisplayName} Premium subscription.`;
+      return "This title stays locked in this build while Premium playback is being prepared for a later update.";
     }
 
     if (resumeCueMillis > 0) {
@@ -2687,7 +2686,7 @@ export default function PlayerScreen() {
   const standaloneAccessStatusLabel = useMemo(() => {
     if (!isPremiumStandaloneTitle) return "";
     if (standaloneAccessLoading) return "Checking access";
-    if (standalonePlaybackBlocked) return "Premium locked";
+    if (standalonePlaybackBlocked) return "Premium coming soon";
     if (standalonePlaybackUnknown) return "Access retry needed";
     return "Premium ready";
   }, [isPremiumStandaloneTitle, standaloneAccessLoading, standalonePlaybackBlocked, standalonePlaybackUnknown]);
@@ -2701,7 +2700,7 @@ export default function PlayerScreen() {
     }
 
     if (standalonePlaybackBlocked) {
-      return "PLAYER HELPER · Unlock this title before solo playback starts. Watch-Party Live still routes from this player and will recheck access honestly.";
+      return "PLAYER HELPER · Premium playback is not enabled in this build yet. Watch-Party Live still routes honestly from this player and will recheck access when that later update arrives.";
     }
 
     if (isPremiumStandaloneTitle) {
@@ -3727,9 +3726,9 @@ export default function PlayerScreen() {
                   ) : (
                     <>
                       <Text style={styles.playerAccessKicker}>{standaloneAccessPresentation?.kicker ?? "TITLE ACCESS"}</Text>
-                      <Text style={styles.playerAccessTitle}>{standaloneAccessPresentation?.title ?? "Unlock this title"}</Text>
+                      <Text style={styles.playerAccessTitle}>Premium Coming Soon</Text>
                       <Text style={styles.playerAccessBody}>
-                        {accessError ?? "Solo playback is gated on this account until title access or Chi'llywood Premium is active."}
+                        {accessError ?? "Solo playback stays locked on this account while Premium access is being prepared for a later testing-ready update."}
                       </Text>
                       <View style={styles.playerAccessActions}>
                         <TouchableOpacity
@@ -3745,7 +3744,7 @@ export default function PlayerScreen() {
                           activeOpacity={0.9}
                         >
                           <Text style={styles.playerAccessPrimaryText}>
-                            {standaloneAccessPresentation?.actionLabel ?? "Unlock to Play"}
+                            Coming Soon
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -3933,7 +3932,7 @@ export default function PlayerScreen() {
                       activeOpacity={0.85}
                     >
                       <Text style={styles.partyOverlayChipText}>
-                        {standalonePlaybackBlocked ? "Unlock" : standaloneAccessLoading ? "Checking" : "Retry Access"}
+                        {standalonePlaybackBlocked ? "Coming Soon" : standaloneAccessLoading ? "Checking" : "Retry Access"}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -4042,7 +4041,7 @@ export default function PlayerScreen() {
                         }}
                       >
                         <Text style={styles.compactActionBtnText}>
-                          {standalonePlaybackBlocked ? "Unlock" : standaloneAccessLoading ? "Checking" : "Retry Access"}
+                          {standalonePlaybackBlocked ? "Coming Soon" : standaloneAccessLoading ? "Checking" : "Retry Access"}
                         </Text>
                       </TouchableOpacity>
                     ) : (
@@ -4185,6 +4184,7 @@ export default function PlayerScreen() {
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          deferredMonetization
           kickerOverride={standaloneAccessPresentation?.kicker}
           titleOverride={standaloneAccessPresentation?.title}
           bodyOverride={standaloneAccessPresentation?.body}

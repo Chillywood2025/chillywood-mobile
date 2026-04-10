@@ -5,7 +5,6 @@ import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacit
 import { trackEvent } from "../_lib/analytics";
 import {
   getCachedMonetizationSnapshot,
-  openManageSubscriptionFlow,
   readMonetizationSnapshot,
   subscribeToMonetizationSnapshot,
 } from "../_lib/monetization";
@@ -18,7 +17,6 @@ export default function SettingsScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
   const [monetizationLoading, setMonetizationLoading] = useState(false);
-  const [managingSubscription, setManagingSubscription] = useState(false);
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;
@@ -47,55 +45,37 @@ export default function SettingsScreen() {
     void refreshMonetizationStatus(false);
   }, [isLoading, isSignedIn, refreshMonetizationStatus]);
 
-  const onPressManageSubscription = useCallback(async () => {
-    if (managingSubscription) return;
-
-    setManagingSubscription(true);
-    try {
-      const opened = await openManageSubscriptionFlow();
-      trackEvent("monetization_manage_subscription_opened", {
-        source: "settings",
-        opened,
-      });
-
-      if (!opened) {
-        Alert.alert("Subscription", "Unable to open subscription management right now.");
-      }
-    } finally {
-      setManagingSubscription(false);
-    }
-  }, [managingSubscription]);
-
   const monetizationStatusLabel = useMemo(() => {
-    if (!monetizationSnapshot.configuration.shouldConfigure) return "Disabled";
-    if (monetizationSnapshot.status === "ready") return "Ready";
-    if (monetizationSnapshot.status === "store_unavailable") return "Store unavailable";
-    if (monetizationSnapshot.status === "partial") return "Partial";
-    return "Disabled";
+    if (!monetizationSnapshot.configuration.shouldConfigure) return "Deferred in this build";
+    if (monetizationSnapshot.status === "ready") return "Configured for later rollout";
+    if (monetizationSnapshot.status === "store_unavailable") return "Not active in this build";
+    if (monetizationSnapshot.status === "partial") return "Deferred setup in progress";
+    return "Deferred in this build";
   }, [monetizationSnapshot.configuration.shouldConfigure, monetizationSnapshot.status]);
 
   const planLabel = useMemo(() => (
-    monetizationSnapshot.targets.premium_subscription?.hasEntitlement ? "Premium active" : "Free account"
+    monetizationSnapshot.targets.premium_subscription?.hasEntitlement ? "Premium active on this account" : "Not enabled in this build"
   ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
 
   const entitlementsLabel = useMemo(() => (
     monetizationSnapshot.activeEntitlementIds.length
       ? monetizationSnapshot.activeEntitlementIds.join(", ")
-      : "None active"
+      : "None active in this build"
   ), [monetizationSnapshot.activeEntitlementIds]);
 
   const offeringsLabel = useMemo(() => {
     if (monetizationSnapshot.currentOfferingId) return monetizationSnapshot.currentOfferingId;
     if (monetizationSnapshot.availableOfferingIds.length) {
-      return `${monetizationSnapshot.availableOfferingIds.length} offerings loaded`;
+      return `${monetizationSnapshot.availableOfferingIds.length} deferred setup item${monetizationSnapshot.availableOfferingIds.length === 1 ? "" : "s"} found`;
     }
-    return "No live offer loaded";
+    return "No tester-facing premium rollout is enabled";
   }, [monetizationSnapshot.availableOfferingIds, monetizationSnapshot.currentOfferingId]);
 
   const issueLabel = useMemo(() => (
-    monetizationSnapshot.issues[0]
-      ?? "Purchases still happen in-context on titles and rooms."
-  ), [monetizationSnapshot.issues]);
+    monetizationSnapshot.targets.premium_subscription?.hasEntitlement
+      ? "This account already has Premium access, but tester-facing billing remains deferred in this build."
+      : "Premium surfaces stay locked honestly while billing is deferred for testing and store readiness."
+  ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
 
   const onPressSignOut = async () => {
     if (signingOut) return;
@@ -176,30 +156,30 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardKicker}>MONETIZATION STATUS</Text>
-        <Text style={styles.secondaryTitle}>Billing & Access</Text>
+        <Text style={styles.cardKicker}>PREMIUM PREVIEW</Text>
+        <Text style={styles.secondaryTitle}>Premium Coming Soon</Text>
         <Text style={styles.body}>
-          This view reports the current account access state only. Purchases and upgrades still happen inside titles and room entry points.
+          Premium features are not enabled in this build yet. This screen stays informational only while Public v1 testing and store readiness continue.
         </Text>
 
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Plan</Text>
+          <Text style={styles.identityLabel}>Build access</Text>
           <Text style={styles.identityValue}>{planLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Status</Text>
+          <Text style={styles.identityLabel}>Snapshot</Text>
           <Text style={styles.identityValue}>{monetizationStatusLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Active entitlements</Text>
+          <Text style={styles.identityLabel}>Active premium access</Text>
           <Text style={styles.identityValue}>{entitlementsLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Offerings</Text>
+          <Text style={styles.identityLabel}>Rollout state</Text>
           <Text style={styles.identityValue}>{offeringsLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Current note</Text>
+          <Text style={styles.identityLabel}>Build note</Text>
           <Text style={styles.statusNote}>{issueLabel}</Text>
         </View>
 
@@ -214,19 +194,7 @@ export default function SettingsScreen() {
           >
             {monetizationLoading
               ? <ActivityIndicator color="#E5ECF8" size="small" />
-              : <Text style={styles.utilityButtonText}>Refresh status</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.utilityButton, managingSubscription && styles.utilityButtonDisabled]}
-            onPress={() => {
-              void onPressManageSubscription();
-            }}
-            activeOpacity={0.86}
-            disabled={managingSubscription || !monetizationSnapshot.configuration.shouldConfigure}
-          >
-            {managingSubscription
-              ? <ActivityIndicator color="#E5ECF8" size="small" />
-              : <Text style={styles.utilityButtonText}>Manage subscription</Text>}
+              : <Text style={styles.utilityButtonText}>Refresh snapshot</Text>}
           </TouchableOpacity>
         </View>
       </View>

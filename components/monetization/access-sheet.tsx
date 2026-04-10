@@ -65,6 +65,7 @@ type AccessSheetProps = {
   appDisplayName?: string;
   premiumUpsellTitle?: string;
   premiumUpsellBody?: string;
+  deferredMonetization?: boolean;
   kickerOverride?: string;
   titleOverride?: string;
   bodyOverride?: string;
@@ -81,6 +82,7 @@ export function AccessSheet({
   appDisplayName,
   premiumUpsellTitle,
   premiumUpsellBody,
+  deferredMonetization = false,
   kickerOverride,
   titleOverride,
   bodyOverride,
@@ -119,7 +121,11 @@ export function AccessSheet({
         if (!active) return;
         setSheetState(null);
         setStatusTone("error");
-        setStatusMessage("Unable to load the current Chi'llywood purchase options.");
+        setStatusMessage(
+          deferredMonetization
+            ? "Unable to load the current Premium status for this testing build."
+            : "Unable to load the current Chi'llywood purchase options.",
+        );
       })
       .finally(() => {
         if (active) setLoadingState(false);
@@ -128,7 +134,7 @@ export function AccessSheet({
     return () => {
       active = false;
     };
-  }, [loadSheetState, visible]);
+  }, [deferredMonetization, loadSheetState, visible]);
 
   useEffect(() => {
     if (visible) return;
@@ -147,13 +153,26 @@ export function AccessSheet({
   ), [appDisplayName, premiumUpsellBody, premiumUpsellTitle, reason, sheetState?.presentation]);
 
   const copy = {
-    kicker: kickerOverride ?? baseCopy.kicker,
-    title: titleOverride ?? baseCopy.title,
-    body: bodyOverride ?? baseCopy.body,
-    actionLabel:
-      sheetState?.primaryAction === "retry"
-        ? sheetState.primaryLabel
-        : actionLabelOverride ?? sheetState?.primaryLabel ?? baseCopy.actionLabel,
+    kicker: deferredMonetization
+      ? (reason === "premium_required" ? "PREMIUM COMING SOON" : "ROOM ACCESS COMING SOON")
+      : (kickerOverride ?? baseCopy.kicker),
+    title: deferredMonetization
+      ? (reason === "premium_required" ? "Premium is not enabled yet" : "Room access is coming later")
+      : (titleOverride ?? baseCopy.title),
+    body: deferredMonetization
+      ? (
+          reason === "premium_required"
+            ? "Premium features are not enabled in this build yet. This title stays locked until a later testing-ready update."
+            : "Party Pass purchasing is not enabled in this build yet. This room stays locked until a later testing-ready update."
+        )
+      : (bodyOverride ?? baseCopy.body),
+    actionLabel: deferredMonetization
+      ? "Got it"
+      : (
+          sheetState?.primaryAction === "retry"
+            ? sheetState.primaryLabel
+            : actionLabelOverride ?? sheetState?.primaryLabel ?? baseCopy.actionLabel
+        ),
   };
   const busy = loadingState || purchaseBusy || restoreBusy || manageBusy;
   const analyticsPayload = useMemo(() => ({
@@ -193,10 +212,19 @@ export function AccessSheet({
     : statusTone === "error"
       ? styles.statusTextError
       : styles.statusTextNeutral;
-  const helperToneStyle = sheetState?.helperTone === "warning" ? styles.helperCardWarning : styles.helperCardNeutral;
-  const helperTextStyle = sheetState?.helperTone === "warning" ? styles.helperTextWarning : styles.helperTextNeutral;
+  const helperToneStyle = deferredMonetization
+    ? styles.helperCardNeutral
+    : sheetState?.helperTone === "warning" ? styles.helperCardWarning : styles.helperCardNeutral;
+  const helperTextStyle = deferredMonetization
+    ? styles.helperTextNeutral
+    : sheetState?.helperTone === "warning" ? styles.helperTextWarning : styles.helperTextNeutral;
 
   const onPrimaryPress = useCallback(async () => {
+    if (deferredMonetization) {
+      onCloseTracked("button");
+      return;
+    }
+
     if (sheetState?.primaryDisabled) return;
 
     setStatusMessage("");
@@ -254,7 +282,7 @@ export function AccessSheet({
     } finally {
       setPurchaseBusy(false);
     }
-  }, [gate, loadSheetState, onPurchaseResult, sheetState?.primaryAction, sheetState?.primaryDisabled]);
+  }, [deferredMonetization, gate, loadSheetState, onCloseTracked, onPurchaseResult, sheetState?.primaryAction, sheetState?.primaryDisabled]);
 
   const onRestorePress = useCallback(async () => {
     setRestoreBusy(true);
@@ -338,7 +366,7 @@ export function AccessSheet({
           <Text style={styles.title}>{copy.title}</Text>
           <Text style={styles.body}>{copy.body}</Text>
 
-          {sheetState?.offer ? (
+          {!deferredMonetization && sheetState?.offer ? (
             <View style={styles.offerCard}>
               {sheetState.offer.badge ? <Text style={styles.offerBadge}>{sheetState.offer.badge}</Text> : null}
               <Text style={styles.offerTitle}>{sheetState.offer.title}</Text>
@@ -348,10 +376,16 @@ export function AccessSheet({
             </View>
           ) : null}
 
-          {sheetState ? (
+          {sheetState || deferredMonetization ? (
             <View style={[styles.helperCard, helperToneStyle]}>
-              <Text style={styles.helperKicker}>{sheetState.helperKicker}</Text>
-              <Text style={[styles.helperText, helperTextStyle]}>{sheetState.helperBody}</Text>
+              <Text style={styles.helperKicker}>
+                {deferredMonetization ? "TESTING BUILD" : sheetState?.helperKicker}
+              </Text>
+              <Text style={[styles.helperText, helperTextStyle]}>
+                {deferredMonetization
+                  ? "Purchases, restore flows, and subscription management are deferred while Public v1 store-readiness testing is in progress."
+                  : sheetState?.helperBody}
+              </Text>
             </View>
           ) : null}
 
@@ -361,7 +395,7 @@ export function AccessSheet({
             </View>
           ) : null}
 
-          {(sheetState?.canRestore || sheetState?.canManage) ? (
+          {!deferredMonetization && (sheetState?.canRestore || sheetState?.canManage) ? (
             <View style={styles.utilityRow}>
               {sheetState?.canRestore ? (
                 <TouchableOpacity

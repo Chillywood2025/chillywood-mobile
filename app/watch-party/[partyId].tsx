@@ -1576,16 +1576,16 @@ export default function WatchPartyRoomScreen() {
       premiumUpsellBody: monetizationConfig.premiumUpsellBody,
     });
     return (
-      <View style={styles.center}>
-        <View style={styles.errorCard}>
-          <Text style={styles.errorTitle}>
-            {accessGate.access.reason === "premium_required" ? "Premium room" : "Party Pass room"}
-          </Text>
-          <Text style={styles.errorBody}>
+        <View style={styles.center}>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>
+            {accessGate.access.reason === "premium_required" ? "Premium room coming soon" : "Party Pass coming soon"}
+            </Text>
+            <Text style={styles.errorBody}>
             {accessGate.access.reason === "premium_required"
-              ? monetizationConfig.premiumUpsellBody
-              : "This room uses Party Pass access. Unlock it once and jump back in without losing the current room context."}
-          </Text>
+              ? "This room stays locked in this build while Premium room access is being prepared for a later update."
+              : "This room stays locked in this build while Party Pass purchasing is being prepared for a later update."}
+            </Text>
           <ProtectedSessionNote
             {...getProtectedSessionCopy(sharedRoomMode === "live" ? "live-room" : "party-room", {
               contentAccessRule: room.contentAccessRule,
@@ -1598,7 +1598,7 @@ export default function WatchPartyRoomScreen() {
             activeOpacity={0.85}
           >
             <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-              {accessGate.access.reason === "premium_required" ? "Unlock Premium" : "Get Party Pass"}
+              Coming Soon
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
@@ -1612,6 +1612,7 @@ export default function WatchPartyRoomScreen() {
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          deferredMonetization
           kickerOverride={accessGatePresentation.kicker}
           titleOverride={accessGatePresentation.title}
           bodyOverride={accessGatePresentation.body}
@@ -2288,6 +2289,7 @@ export default function WatchPartyRoomScreen() {
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          deferredMonetization
           kickerOverride={accessGatePresentation?.kicker}
           titleOverride={accessGatePresentation?.title}
           bodyOverride={accessGatePresentation?.body}
