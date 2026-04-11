@@ -13,7 +13,6 @@ import {
   Image,
   View,
 } from "react-native";
-import { useFeatureFlag } from "posthog-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
@@ -34,7 +33,6 @@ import { getCommunicationRoomSnapshot } from "../../_lib/communication";
 import { reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
-import { getPostHogConfig, isPostHogFlagEnabled, posthogFeatureFlags } from "../../_lib/posthog";
 import { useSession } from "../../_lib/session";
 import { InRoomCommunicationPanel } from "../../components/communication/in-room-communication-panel";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -144,64 +142,16 @@ const buildSmartReplySuggestions = ({
   return [`Hey ${firstName}, I'm here`, "Let's do a voice call", "Send me the details"];
 };
 
-function GatedSmartReplySuggestions({
-  activeCallType,
-  currentUserId,
-  messages,
-  onSelectSuggestion,
-  otherMemberName,
-}: {
+function GatedSmartReplySuggestions(_: {
   activeCallType?: ChatCallType;
   currentUserId: string;
   messages: ChatMessage[];
   onSelectSuggestion: (suggestion: string) => void;
   otherMemberName?: string;
 }) {
-  const chillyChatExpandedFlag = useFeatureFlag(posthogFeatureFlags.chillyChatExpandedV1);
-  const aiChatSuggestionsFlag = useFeatureFlag(posthogFeatureFlags.aiChatSuggestionsV1);
-
-  const isExpandedEnabled = isPostHogFlagEnabled(chillyChatExpandedFlag);
-  const isAiSuggestionsEnabled = isPostHogFlagEnabled(aiChatSuggestionsFlag);
-  const latestIncomingMessage = useMemo(
-    () => [...messages].reverse().find((message) => message.senderUserId !== currentUserId)?.body ?? "",
-    [currentUserId, messages],
-  );
-  const suggestions = useMemo(
-    () => buildSmartReplySuggestions({
-      activeCallType,
-      lastIncomingMessage: latestIncomingMessage,
-      otherMemberName,
-    }),
-    [activeCallType, latestIncomingMessage, otherMemberName],
-  );
-
-  if (!isExpandedEnabled || !isAiSuggestionsEnabled || suggestions.length === 0) {
-    return null;
-  }
-
-  return (
-    <View style={styles.smartReplyCard}>
-      <View style={styles.smartReplyHeader}>
-        <Text style={styles.smartReplyKicker}>AI SMART REPLIES</Text>
-        <Text style={styles.smartReplyMeta}>PostHog gated</Text>
-      </View>
-      <Text style={styles.smartReplyBody}>
-        Smart suggestions stay additive inside this thread and do not change default messaging behavior unless the remote flags are enabled.
-      </Text>
-      <View style={styles.smartReplyRow}>
-        {suggestions.map((suggestion) => (
-          <TouchableOpacity
-            key={suggestion}
-            style={styles.smartReplyChip}
-            activeOpacity={0.86}
-            onPress={() => onSelectSuggestion(suggestion)}
-          >
-            <Text style={styles.smartReplyChipText}>{suggestion}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
+  // Smart replies are nonessential for the live invite/call proof lane.
+  // Keep the thread path free of PostHog React hooks until runtime proof is closed.
+  return null;
 }
 
 export default function ChillyChatThreadScreen() {
@@ -227,8 +177,6 @@ export default function ChillyChatThreadScreen() {
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
-  const posthogEnabled = getPostHogConfig().isEnabled;
-
   const reconcileEndedCallState = useCallback(async (nextThread: ChatThreadSummary | null) => {
     logChatCall("reconcile_start", {
       threadId: nextThread?.threadId ?? threadId,
@@ -933,33 +881,6 @@ export default function ChillyChatThreadScreen() {
         </View>
       ) : null}
 
-      {callPanelOpen ? (
-        <View style={styles.panelWrap}>
-          <InRoomCommunicationPanel
-            surfaceLabel="Chi'lly Chat"
-            titleText={callTitle}
-            bodyText={callBody}
-            loadingText="Connecting Chi'lly Chat call…"
-            emptyStateText="Waiting for the other participant to join this Chi'lly Chat call."
-            roomCode={callRoom?.roomCode}
-            participantCount={participantCount}
-            isHost={!!callRoom?.hostUserId && callRoom.hostUserId === currentUserId}
-            channelState={callChannelState}
-            loading={callLoading}
-            statusMessage={callError}
-            participants={participants}
-            cameraEnabled={cameraEnabled}
-            micEnabled={micEnabled}
-            showControls={!!activeCallRoomId && !callError && !callLoading}
-            onToggleCamera={toggleCamera}
-            onToggleMic={toggleMic}
-            onLeave={() => {
-              void handleJoinOrCloseCall();
-            }}
-          />
-        </View>
-      ) : null}
-
       <ScrollView
         style={styles.messages}
         contentContainerStyle={styles.messagesContent}
@@ -1032,22 +953,20 @@ export default function ChillyChatThreadScreen() {
           </View>
           <Text style={styles.composerAssistText}>Text send is live now. Media and reactions land next.</Text>
         </View>
-        {posthogEnabled ? (
-          <GatedSmartReplySuggestions
-            activeCallType={thread?.activeCallType}
-            currentUserId={currentUserId}
-            messages={messages}
-            otherMemberName={otherMemberDisplayName}
-            onSelectSuggestion={(suggestion) => {
-              trackEvent("chat_thread_ai_suggestion_selected", {
-                surface: "chat-thread",
-                threadId,
-                suggestion,
-              });
-              setDraft((current) => (current.trim() ? `${current.trim()} ${suggestion}` : suggestion));
-            }}
-          />
-        ) : null}
+        <GatedSmartReplySuggestions
+          activeCallType={thread?.activeCallType}
+          currentUserId={currentUserId}
+          messages={messages}
+          otherMemberName={otherMemberDisplayName}
+          onSelectSuggestion={(suggestion) => {
+            trackEvent("chat_thread_ai_suggestion_selected", {
+              surface: "chat-thread",
+              threadId,
+              suggestion,
+            });
+            setDraft((current) => (current.trim() ? `${current.trim()} ${suggestion}` : suggestion));
+          }}
+        />
         <View style={styles.composerInputRow}>
           <TextInput
             testID="chat-thread-input"
@@ -1073,6 +992,35 @@ export default function ChillyChatThreadScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {callPanelOpen ? (
+        <View style={styles.callOverlay}>
+          <InRoomCommunicationPanel
+            surfaceLabel="Chi'lly Chat"
+            titleText={callTitle}
+            bodyText={callBody}
+            loadingText="Connecting Chi'lly Chat call…"
+            emptyStateText="Waiting for the other participant to join this Chi'lly Chat call."
+            roomCode={callRoom?.roomCode}
+            participantCount={participantCount}
+            isHost={!!callRoom?.hostUserId && callRoom.hostUserId === currentUserId}
+            channelState={callChannelState}
+            loading={callLoading}
+            statusMessage={callError}
+            participants={participants}
+            cameraEnabled={cameraEnabled}
+            micEnabled={micEnabled}
+            showControls={!!activeCallRoomId && !callError && !callLoading}
+            presentation="fullscreen"
+            onToggleCamera={toggleCamera}
+            onToggleMic={toggleMic}
+            onLeave={() => {
+              void handleJoinOrCloseCall();
+            }}
+            onCloseSurface={() => setCallPanelOpen(false)}
+          />
+        </View>
+      ) : null}
 
       <ReportSheet
         visible={reportVisible}
@@ -1454,9 +1402,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "600",
   },
-  panelWrap: {
-    paddingHorizontal: 18,
-    paddingBottom: 12,
+  callOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
   },
   messages: {
     flex: 1,

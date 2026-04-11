@@ -1,10 +1,11 @@
 import React, { useEffect } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { getCommunicationRTCModule, type CommunicationParticipantView } from "../../_lib/communication";
 
 type CommunicationParticipantGridProps = {
   participants: CommunicationParticipantView[];
+  presentation?: "embedded" | "fullscreen";
 };
 
 const RTCView = getCommunicationRTCModule()?.RTCView as React.ComponentType<{
@@ -31,11 +32,38 @@ const getConnectionLabel = (participant: CommunicationParticipantView) => {
   return "Waiting";
 };
 
-export function CommunicationParticipantGrid({ participants }: CommunicationParticipantGridProps) {
+export function CommunicationParticipantGrid({
+  participants,
+  presentation = "embedded",
+}: CommunicationParticipantGridProps) {
+  const { width, height } = useWindowDimensions();
+  const isFullscreen = presentation === "fullscreen";
+  const isLandscape = width > height;
+  const gap = 12;
+  const availableWidth = Math.max(width - 32, 240);
+  const availableHeight = Math.max(height - 260, 280);
+
+  const getGridColumns = () => {
+    if (participants.length <= 2) return 1;
+    if (participants.length === 3) return isLandscape ? 3 : 2;
+    if (participants.length === 4) return 2;
+    return isLandscape ? 3 : 2;
+  };
+
+  const fullscreenColumns = getGridColumns();
+  const fullscreenRows = participants.length <= 2 ? 2 : Math.ceil(participants.length / fullscreenColumns);
+  const fullscreenTileWidth = participants.length === 2
+    ? availableWidth
+    : Math.max(120, Math.floor((availableWidth - gap * (fullscreenColumns - 1)) / fullscreenColumns));
+  const fullscreenTileHeight = participants.length === 2
+    ? Math.max(180, Math.floor((availableHeight - gap) / 2))
+    : Math.max(132, Math.floor((availableHeight - gap * (fullscreenRows - 1)) / fullscreenRows));
+
   useEffect(() => {
     if (!__DEV__) return;
-    console.error("[CH_CALL]", "participant_grid_render", {
+    console.log("[CH_CALL]", "participant_grid_render", {
       participantCount: participants.length,
+      presentation,
       remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL && participant.cameraOn).length,
       fallbackCount: participants.filter((participant) => !(!!RTCView && !!participant.streamURL && participant.cameraOn)).length,
       participants: participants.map((participant) => ({
@@ -47,26 +75,74 @@ export function CommunicationParticipantGrid({ participants }: CommunicationPart
         connectionState: participant.connectionState,
       })),
     });
-  }, [participants]);
+  }, [participants, presentation]);
 
   return (
-    <View style={styles.grid}>
-      {participants.map((participant) => {
+    <View
+      style={[
+        styles.grid,
+        isFullscreen && styles.gridFullscreen,
+        isFullscreen && participants.length === 2 && (isLandscape ? styles.gridFullscreenTwoLandscape : styles.gridFullscreenTwoPortrait),
+      ]}
+    >
+      {participants.map((participant, index) => {
         const showVideo = !!RTCView && !!participant.streamURL && participant.cameraOn;
         const tileWide = participants.length <= 1;
+        const compactTile = participants.length > 2;
+        const oddLastTile = isFullscreen
+          && participants.length > 2
+          && fullscreenColumns === 2
+          && participants.length % 2 === 1
+          && index === participants.length - 1;
 
         return (
-          <View key={participant.userId} style={[styles.tile, tileWide && styles.tileWide]}>
-            <View style={styles.mediaFrame}>
+          <View
+            key={participant.userId}
+            style={[
+              styles.tile,
+              tileWide && styles.tileWide,
+              compactTile && styles.tileCompact,
+              isFullscreen && styles.tileFullscreen,
+              isFullscreen && participants.length === 2 && styles.tileFullscreenSplit,
+              isFullscreen && participants.length === 2 && (isLandscape ? styles.tileFullscreenSplitLandscape : styles.tileFullscreenSplitPortrait),
+              isFullscreen && participants.length > 2 && {
+                width: oddLastTile ? availableWidth : fullscreenTileWidth,
+                minHeight: fullscreenTileHeight,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.mediaFrame,
+                compactTile && styles.mediaFrameCompact,
+                isFullscreen && styles.mediaFrameFullscreen,
+                isFullscreen && participants.length === 2 && { minHeight: fullscreenTileHeight, height: fullscreenTileHeight },
+                isFullscreen && participants.length > 2 && { minHeight: fullscreenTileHeight, height: fullscreenTileHeight },
+              ]}
+            >
               {showVideo && RTCView ? (
                 <RTCView
                   streamURL={participant.streamURL as string}
-                  style={styles.video}
+                  style={[
+                    styles.video,
+                    compactTile && styles.videoCompact,
+                    isFullscreen && styles.videoFullscreen,
+                    isFullscreen && participants.length === 2 && { height: fullscreenTileHeight },
+                    isFullscreen && participants.length > 2 && { height: fullscreenTileHeight },
+                  ]}
                   objectFit="cover"
                   mirror={participant.isSelf}
                 />
               ) : (
-                <View style={styles.avatarFrame}>
+                <View
+                  style={[
+                    styles.avatarFrame,
+                    compactTile && styles.avatarFrameCompact,
+                    isFullscreen && styles.avatarFrameFullscreen,
+                    isFullscreen && participants.length === 2 && { minHeight: fullscreenTileHeight, height: fullscreenTileHeight },
+                    isFullscreen && participants.length > 2 && { minHeight: fullscreenTileHeight, height: fullscreenTileHeight },
+                  ]}
+                >
                   {participant.avatarUrl ? (
                     <Image source={{ uri: participant.avatarUrl }} style={styles.avatarImage} />
                   ) : (
@@ -115,12 +191,40 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
   },
+  gridFullscreen: {
+    flex: 1,
+    alignContent: "stretch",
+  },
+  gridFullscreenTwoPortrait: {
+    flexDirection: "column",
+    flexWrap: "nowrap",
+  },
+  gridFullscreenTwoLandscape: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+  },
   tile: {
     width: "48%",
     minHeight: 216,
   },
   tileWide: {
     width: "100%",
+  },
+  tileFullscreen: {
+    width: "100%",
+    minHeight: 0,
+  },
+  tileFullscreenSplit: {
+    flex: 1,
+  },
+  tileFullscreenSplitPortrait: {
+    width: "100%",
+  },
+  tileFullscreenSplitLandscape: {
+    width: 0,
+  },
+  tileCompact: {
+    minHeight: 132,
   },
   mediaFrame: {
     overflow: "hidden",
@@ -130,10 +234,24 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "#090B10",
   },
+  mediaFrameFullscreen: {
+    flex: 1,
+    minHeight: 0,
+  },
+  mediaFrameCompact: {
+    minHeight: 132,
+  },
   video: {
     width: "100%",
     height: 216,
     backgroundColor: "#050608",
+  },
+  videoFullscreen: {
+    flex: 1,
+    height: undefined,
+  },
+  videoCompact: {
+    height: 132,
   },
   avatarFrame: {
     width: "100%",
@@ -143,6 +261,14 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 18,
     backgroundColor: "#090B10",
+  },
+  avatarFrameFullscreen: {
+    flex: 1,
+    minHeight: 0,
+  },
+  avatarFrameCompact: {
+    minHeight: 132,
+    paddingHorizontal: 14,
   },
   avatarImage: {
     width: 72,

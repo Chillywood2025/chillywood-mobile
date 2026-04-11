@@ -20,7 +20,7 @@ export function CommunicationControlBar({
 }: CommunicationControlBarProps) {
   useEffect(() => {
     if (!__DEV__) return;
-    console.error("[CH_CALL]", "control_bar_render", {
+    console.log("[CH_CALL]", "control_bar_render", {
       cameraEnabled,
       micEnabled,
       leaveLabel,

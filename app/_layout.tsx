@@ -104,6 +104,16 @@ function PostHogSessionBridge() {
   return null;
 }
 
+function PostHogEnabledShell({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <PostHogFlagProbe />
+      <PostHogSessionBridge />
+      {children}
+    </>
+  );
+}
+
 function PostHogRootProvider({ children }: { children: React.ReactNode }) {
   const { apiKey, host, isEnabled } = getPostHogConfig();
 
@@ -121,8 +131,7 @@ function PostHogRootProvider({ children }: { children: React.ReactNode }) {
         sendFeatureFlagEvent: false,
       }}
     >
-      <PostHogFlagProbe />
-      {children}
+      <PostHogEnabledShell>{children}</PostHogEnabledShell>
     </PostHogProvider>
   );
 }
@@ -274,7 +283,6 @@ export default function RootLayout() {
     <PostHogRootProvider>
       <SessionProvider>
         <RevenueCatBootstrap />
-        <PostHogSessionBridge />
         <BetaProgramProvider>
           <RootErrorBoundary>
             <AuthRouteGate />

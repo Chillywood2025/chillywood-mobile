@@ -12,6 +12,7 @@ import {
     ImageBackground,
     LayoutAnimation,
     Platform,
+    Pressable,
     ScrollView,
     Share,
     StyleSheet,
@@ -1046,6 +1047,7 @@ export default function WatchPartyLiveStageScreen() {
     ? "Host capture rules are active, while device blocking still stays best-effort."
     : "Capture protection stays best-effort on supported devices.";
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
+  const inviteSheetAutolaunchedRef = useRef<string | null>(null);
 
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
@@ -1055,6 +1057,13 @@ export default function WatchPartyLiveStageScreen() {
     if (!liveRoomShareCode) return;
     setInviteSheetVisible(true);
   }, [liveRoomShareCode]);
+
+  useEffect(() => {
+    if (!__DEV__ || !isHost || liveSurface !== "room" || !liveRoomShareCode) return;
+    if (inviteSheetAutolaunchedRef.current === liveRoomShareCode) return;
+    inviteSheetAutolaunchedRef.current = liveRoomShareCode;
+    setInviteSheetVisible(true);
+  }, [isHost, liveRoomShareCode, liveSurface]);
 
   const onSystemShareLiveRoom = useCallback(async () => {
     if (!liveRoomShareCode) return;
@@ -1250,19 +1259,22 @@ export default function WatchPartyLiveStageScreen() {
               <Text style={styles.liveRoomControlBody}>
                 Invite people inside Chi&apos;llywood from Live Room first, then fall back to system share only if needed so Live Stage stays presentation-first.
               </Text>
-              <View style={styles.liveRoomShareRow}>
+              <Pressable
+                style={styles.liveRoomShareRow}
+                onPress={onShareLiveRoom}
+                disabled={!liveRoomShareCode}
+                hitSlop={8}
+              >
                 <View style={styles.liveRoomShareCodePill}>
                   <Text style={styles.liveRoomShareCodeText}>{liveRoomShareCode || "ROOM"}</Text>
                 </View>
-                <TouchableOpacity
+                <View
                   style={styles.liveRoomShareButton}
-                  activeOpacity={0.86}
-                  onPress={onShareLiveRoom}
-                  disabled={!liveRoomShareCode}
+                  pointerEvents="none"
                 >
                   <Text style={styles.liveRoomShareButtonText}>Invite in app</Text>
-                </TouchableOpacity>
-              </View>
+                </View>
+              </Pressable>
             </View>
 
             <View style={styles.liveRoomControlCard}>

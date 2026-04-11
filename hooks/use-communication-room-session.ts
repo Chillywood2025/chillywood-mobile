@@ -116,6 +116,7 @@ export function useCommunicationRoomSession({
   const presenceStateRef = useRef<Record<string, PresenceStatePayload>>({});
   const cameraEnabledRef = useRef(cameraEnabled);
   const micEnabledRef = useRef(micEnabled);
+  const channelStateRef = useRef(channelState);
   const cameraPermissionGrantedRef = useRef(!!cameraPermission?.granted);
   const onRoomEndedRef = useRef(onRoomEnded);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -132,6 +133,8 @@ export function useCommunicationRoomSession({
       : cameraPermission
         ? "denied"
         : "unknown";
+  const cameraPermissionStateRef = useRef<CommunicationPermissionState>(cameraPermissionState);
+  const microphonePermissionStateRef = useRef<CommunicationPermissionState>(microphonePermissionState);
 
   const isRtcAvailable = !!getCommunicationRTCModule();
   const analyticsSurface = analyticsContext?.surface ?? "communication-room";
@@ -155,6 +158,10 @@ export function useCommunicationRoomSession({
   }, [micEnabled]);
 
   useEffect(() => {
+    channelStateRef.current = channelState;
+  }, [channelState]);
+
+  useEffect(() => {
     if (typeof initialMediaPreferences?.cameraEnabled === "boolean") {
       setCameraEnabled(initialMediaPreferences.cameraEnabled);
     }
@@ -170,6 +177,14 @@ export function useCommunicationRoomSession({
   useEffect(() => {
     cameraPermissionGrantedRef.current = !!cameraPermission?.granted;
   }, [cameraPermission?.granted]);
+
+  useEffect(() => {
+    cameraPermissionStateRef.current = cameraPermissionState;
+  }, [cameraPermissionState]);
+
+  useEffect(() => {
+    microphonePermissionStateRef.current = microphonePermissionState;
+  }, [microphonePermissionState]);
 
   useEffect(() => {
     roomRef.current = room;
@@ -270,7 +285,7 @@ export function useCommunicationRoomSession({
   const ensureMicrophonePermission = useCallback(async () => {
     logChatRtc("mic_permission_request_start", {
       roomId,
-      currentState: microphonePermissionState,
+      currentState: microphonePermissionStateRef.current,
     });
     const permission = await Audio.requestPermissionsAsync();
     const nextState = mapMicrophonePermission(permission);
@@ -282,13 +297,13 @@ export function useCommunicationRoomSession({
       nextState,
     });
     return permission.granted;
-  }, [microphonePermissionState, roomId]);
+  }, [roomId]);
 
   const ensureCameraPermission = useCallback(async () => {
     if (cameraPermissionGrantedRef.current) return true;
     logChatRtc("camera_permission_request_start", {
       roomId,
-      currentState: cameraPermissionState,
+      currentState: cameraPermissionStateRef.current,
     });
     const nextPermission = await requestCameraPermission();
     logChatRtc("camera_permission_request_result", {
@@ -297,7 +312,7 @@ export function useCommunicationRoomSession({
       canAskAgain: !!nextPermission.canAskAgain,
     });
     return !!nextPermission.granted;
-  }, [cameraPermissionState, requestCameraPermission, roomId]);
+  }, [requestCameraPermission, roomId]);
 
   const sendBroadcast = useCallback(async (event: string, payload: Record<string, unknown>) => {
     const channel = channelRef.current;
@@ -389,7 +404,7 @@ export function useCommunicationRoomSession({
     await touchCommunicationRoomSession({
       roomId: resolvedRoom.roomId,
       userId: resolvedIdentity.userId,
-      membershipState: channelState === "reconnecting" ? "reconnecting" : "active",
+      membershipState: channelStateRef.current === "reconnecting" ? "reconnecting" : "active",
       cameraEnabled: nextCameraEnabled,
       micEnabled: nextMicEnabled,
       displayName: resolvedIdentity.displayName,
@@ -407,7 +422,7 @@ export function useCommunicationRoomSession({
         joinedAt: localJoinedAtRef.current,
       }),
     ).catch(() => {});
-  }, [channelState]);
+  }, []);
 
   const ensureInitialLocalStream = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
@@ -837,8 +852,22 @@ export function useCommunicationRoomSession({
 
       await ensureInitialLocalStream();
 
+      const stateChannelName = `comm-room-state-${snapshot.room.roomId}`;
+      const presenceChannelName = buildCommunicationChannelName(snapshot.room.roomId);
+
+      supabase.getChannels().forEach((existingChannel) => {
+        if (
+          existingChannel.topic === stateChannelName
+          || existingChannel.topic === `realtime:${stateChannelName}`
+          || existingChannel.topic === presenceChannelName
+          || existingChannel.topic === `realtime:${presenceChannelName}`
+        ) {
+          supabase.removeChannel(existingChannel);
+        }
+      });
+
       const stateChannel = supabase
-        .channel(`comm-room-state-${snapshot.room.roomId}`)
+        .channel(stateChannelName)
         .on(
           "postgres_changes",
           {
@@ -867,7 +896,7 @@ export function useCommunicationRoomSession({
 
       snapshotChannelRef.current = stateChannel;
 
-      const channel = supabase.channel(buildCommunicationChannelName(snapshot.room.roomId), {
+      const channel = supabase.channel(presenceChannelName, {
         config: {
           presence: { key: resolvedIdentity.userId },
         },
@@ -914,7 +943,8 @@ export function useCommunicationRoomSession({
         });
         await peerConnection.setLocalDescription(answer);
         await sendBroadcast("webrtc:answer", {
-          targetUserId,
+          // Route the answer back to the original offer sender.
+          targetUserId: fromUserId,
           fromUserId: currentIdentity.userId,
           description: {
             type: answer.type,
