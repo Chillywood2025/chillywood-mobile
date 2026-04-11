@@ -12,7 +12,6 @@ import {
 import {
   evaluateTitleAccess,
   getMonetizationAccessSheetPresentation,
-  resolveSponsorPlacement,
   type ContentAccessDecision,
   type SponsorPlacement,
   type TitleAccessRule,
@@ -23,7 +22,6 @@ import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
 import { AccessSheet } from "../../components/monetization/access-sheet";
-import AdBannerPlaceholder from "../../components/monetization/ad-banner-placeholder";
 import { ReportSheet } from "../../components/safety/report-sheet";
 
 const ACCENT = "#DC143C";
@@ -91,7 +89,6 @@ export default function TitleDetails() {
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
-  const [detailSponsorPlacement, setDetailSponsorPlacement] = useState<SponsorPlacement>("none");
   const [liveMetadata, setLiveMetadata] = useState<TitleLiveMetadata | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -284,7 +281,6 @@ export default function TitleDetails() {
     const syncAccess = async () => {
       if (!title) {
         setTitleAccess(null);
-        setDetailSponsorPlacement("none");
         setAccessLoading(false);
         return;
       }
@@ -297,19 +293,8 @@ export default function TitleDetails() {
 
       if (!active) return;
 
-      const sponsorPlacement = await resolveSponsorPlacement({
-        accessRule: title.content_access_rule,
-        placement: title.sponsor_placement,
-        adsEnabled: title.ads_enabled,
-        plan: access?.plan ?? null,
-        isRoomContext: false,
-        isLiveContext: false,
-      }).catch(() => "none" as SponsorPlacement);
-
-      if (!active) return;
       setTitleAccess(access);
       setAccessError(null);
-      setDetailSponsorPlacement(sponsorPlacement);
       setAccessLoading(false);
     };
 
@@ -532,11 +517,6 @@ export default function TitleDetails() {
               <Text style={styles.btnText}>Report</Text>
             </Pressable>
           </View>
-
-          {detailSponsorPlacement === "detail_banner" ? (
-            <AdBannerPlaceholder label={title.sponsor_label ?? monetizationConfig.defaultSponsorLabel} />
-          ) : null}
-
           <Text style={styles.sectionTitle}>About</Text>
           <Text style={styles.body}>{title.synopsis ?? "No synopsis yet."}</Text>
 
