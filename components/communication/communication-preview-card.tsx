@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
 import { getCommunicationRTCModule } from "../../_lib/communication";
@@ -47,6 +47,19 @@ export function CommunicationPreviewCard({
   microphonePermissionState,
 }: CommunicationPreviewCardProps) {
   const showVideo = !!RTCView && !!streamURL && cameraEnabled;
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log("[CH_CALL]", "local_preview_render", {
+      displayName,
+      streamReady: !!streamURL,
+      showVideo,
+      cameraEnabled,
+      micEnabled,
+      cameraPermissionState,
+      microphonePermissionState,
+    });
+  }, [cameraEnabled, cameraPermissionState, displayName, micEnabled, microphonePermissionState, showVideo, streamURL]);
 
   return (
     <View style={styles.card}>

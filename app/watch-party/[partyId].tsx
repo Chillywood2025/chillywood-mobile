@@ -2385,6 +2385,7 @@ export default function WatchPartyRoomScreen() {
 
       <InternalInviteSheet
         visible={inviteSheetVisible}
+        sourceSurface="party-room"
         title="Invite people to this party room"
         body="Find a Chi'llywood member, send the party-room code inside Chi'lly Chat, or fall back to system share if you need to leave the app."
         inviteMessage={internalInviteMessage}

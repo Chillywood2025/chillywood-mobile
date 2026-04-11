@@ -1,5 +1,5 @@
 import type { CommunicationParticipantView } from "../../_lib/communication";
-import React from "react";
+import React, { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { CommunicationControlBar } from "./communication-control-bar";
@@ -54,6 +54,19 @@ export function InRoomCommunicationPanel({
   onToggleMic,
   onLeave,
 }: InRoomCommunicationPanelProps) {
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log("[CH_CALL]", "panel_render", {
+      surfaceLabel,
+      participantCount,
+      channelState,
+      loading,
+      hasStatusMessage: !!statusMessage,
+      showControls,
+      participantRenderCount: participants.length,
+    });
+  }, [channelState, loading, participantCount, participants.length, showControls, statusMessage, surfaceLabel]);
+
   return (
     <View style={styles.card}>
       <View style={styles.copyBlock}>

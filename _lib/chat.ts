@@ -114,6 +114,26 @@ const CHAT_USER_SEARCH_SELECT =
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
+const logChatSearch = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[CH_SEARCH]", event, details ?? {});
+};
+
+const logChatInvite = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[CH_INVITE]", event, details ?? {});
+};
+
+const logChatThread = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[CH_THREAD]", event, details ?? {});
+};
+
+const logChatCall = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[CH_CALL]", event, details ?? {});
+};
+
 const normalizeCallType = (value: unknown): ChatCallType | undefined => {
   const normalized = toText(value).toLowerCase();
   if (normalized === "voice" || normalized === "video") return normalized;
@@ -306,6 +326,13 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     throw new Error("Missing participant identities for Chi'lly Chat thread.");
   }
 
+  logChatThread("direct_thread_start", {
+    currentUserId,
+    targetUserId,
+    targetDisplayName: toText(target.displayName) || "",
+    pairKey: participantPairKey,
+  });
+
   const existing = await supabase
     .from(CHAT_THREADS_TABLE)
     .select(CHAT_THREAD_SELECT)
@@ -319,7 +346,14 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
 
   if (!existing.error && existing.data) {
     const thread = parseChatThread(existing.data as ChatThreadRow, currentUserId);
-    if (thread?.currentMember && thread.otherMember) return thread;
+    if (thread?.currentMember && thread.otherMember) {
+      logChatThread("direct_thread_existing", {
+        threadId: thread.threadId,
+        currentUserId,
+        targetUserId,
+      });
+      return thread;
+    }
 
     const existingThreadId = toText((existing.data as ChatThreadRow).id);
     if (existingThreadId) {
@@ -335,11 +369,24 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
         .upsert(repairedMembers, { onConflict: "thread_id,user_id" });
 
       if (repairInsert.error) {
+        logChatThread("direct_thread_repair_failed", {
+          threadId: existingThreadId,
+          currentUserId,
+          targetUserId,
+          message: repairInsert.error.message,
+        });
         throw repairInsert.error;
       }
 
       const repaired = await getChatThread(existingThreadId);
-      if (repaired) return repaired;
+      if (repaired) {
+        logChatThread("direct_thread_repaired", {
+          threadId: repaired.threadId,
+          currentUserId,
+          targetUserId,
+        });
+        return repaired;
+      }
     }
   }
 
@@ -357,8 +404,20 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     const errorCode = toText((inserted.error as { code?: unknown })?.code);
     if (errorCode === "23505") {
       const raced = await getChatThreadByPairKey(participantPairKey);
-      if (raced) return raced;
+      if (raced) {
+        logChatThread("direct_thread_race_reused", {
+          threadId: raced.threadId,
+          currentUserId,
+          targetUserId,
+        });
+        return raced;
+      }
     }
+    logChatThread("direct_thread_insert_failed", {
+      currentUserId,
+      targetUserId,
+      message: inserted.error.message,
+    });
     throw inserted.error;
   }
 
@@ -375,13 +434,30 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     .upsert(memberRows, { onConflict: "thread_id,user_id" });
 
   if (membershipInsert.error) {
+    logChatThread("direct_thread_membership_failed", {
+      threadId,
+      currentUserId,
+      targetUserId,
+      message: membershipInsert.error.message,
+    });
     throw membershipInsert.error;
   }
 
   const thread = await getChatThread(threadId);
   if (!thread) {
+    logChatThread("direct_thread_refresh_failed", {
+      threadId,
+      currentUserId,
+      targetUserId,
+    });
     throw new Error("Failed to load the new Chi'lly Chat thread.");
   }
+
+  logChatThread("direct_thread_created", {
+    threadId: thread.threadId,
+    currentUserId,
+    targetUserId,
+  });
 
   return thread;
 }
@@ -389,7 +465,19 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
 export async function searchChatPeople(rawQuery: string, limit = 12): Promise<ChatUserSearchResult[]> {
   const currentUserId = await getRequiredChatUserId();
   const query = escapeIlikeValue(rawQuery);
-  if (query.length < 2) return [];
+  logChatSearch("search_start", {
+    currentUserId,
+    rawQuery,
+    query,
+    limit,
+  });
+  if (query.length < 2) {
+    logChatSearch("search_skipped_short_query", {
+      currentUserId,
+      query,
+    });
+    return [];
+  }
 
   const { data, error } = await supabase
     .from(CHAT_USER_PROFILES_TABLE)
@@ -398,11 +486,29 @@ export async function searchChatPeople(rawQuery: string, limit = 12): Promise<Ch
     .order("updated_at", { ascending: false })
     .limit(limit);
 
-  if (error || !data) return [];
+  if (error || !data) {
+    logChatSearch("search_failed", {
+      currentUserId,
+      query,
+      message: error?.message ?? "no_data",
+    });
+    return [];
+  }
 
-  return (data as ChatUserProfileRow[])
+  const results = (data as ChatUserProfileRow[])
     .map(parseChatUserSearchResult)
     .filter((entry): entry is ChatUserSearchResult => !!entry && entry.userId !== currentUserId);
+  logChatSearch("search_success", {
+    currentUserId,
+    query,
+    resultCount: results.length,
+    results: results.slice(0, 5).map((entry) => ({
+      userId: entry.userId,
+      username: entry.username ?? "",
+      displayName: entry.displayName ?? "",
+    })),
+  });
+  return results;
 }
 
 async function getChatThreadByPairKey(pairKey: string) {
@@ -425,6 +531,12 @@ export async function sendChatMessage(threadId: string, body: string): Promise<C
     throw new Error("Message text is required.");
   }
 
+  logChatInvite("send_message_start", {
+    currentUserId,
+    threadId: normalizedThreadId,
+    bodyPreview: trimmedBody.slice(0, 80),
+  });
+
   const { data, error } = await supabase
     .from(CHAT_MESSAGES_TABLE)
     .insert({
@@ -437,13 +549,27 @@ export async function sendChatMessage(threadId: string, body: string): Promise<C
     .single();
 
   if (error || !data) {
+    logChatInvite("send_message_failed", {
+      currentUserId,
+      threadId: normalizedThreadId,
+      message: error?.message ?? "no_data",
+    });
     throw error ?? new Error("Failed to send Chi'lly Chat message.");
   }
 
   const message = parseChatMessage(data as ChatMessageRow);
   if (!message) {
+    logChatInvite("send_message_parse_failed", {
+      currentUserId,
+      threadId: normalizedThreadId,
+    });
     throw new Error("Failed to parse Chi'lly Chat message.");
   }
+  logChatInvite("send_message_success", {
+    currentUserId,
+    threadId: normalizedThreadId,
+    messageId: message.id,
+  });
   return message;
 }
 
@@ -451,8 +577,18 @@ export async function sendDirectInviteMessage(target: ChatTargetIdentity, body: 
   thread: ChatThreadSummary;
   message: ChatMessage;
 }> {
+  logChatInvite("send_direct_invite_start", {
+    targetUserId: toText(target.userId),
+    targetDisplayName: toText(target.displayName) || "",
+    bodyPreview: toText(body).slice(0, 80),
+  });
   const thread = await getOrCreateDirectThread(target);
   const message = await sendChatMessage(thread.threadId, body);
+  logChatInvite("send_direct_invite_success", {
+    targetUserId: toText(target.userId),
+    threadId: thread.threadId,
+    messageId: message.id,
+  });
   return { thread, message };
 }
 
@@ -490,8 +626,18 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   callType: ChatCallType;
 }> {
   const currentUserId = await getRequiredChatUserId();
+  logChatCall("thread_call_start", {
+    currentUserId,
+    threadId: toText(threadId),
+    mode,
+  });
   const thread = await getChatThread(threadId);
   if (!thread) {
+    logChatCall("thread_call_missing_thread", {
+      currentUserId,
+      threadId: toText(threadId),
+      mode,
+    });
     throw new Error("Unable to load Chi'lly Chat thread.");
   }
 
@@ -499,6 +645,12 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   if (existingRoomId) {
     const snapshot = await getCommunicationRoomSnapshot(existingRoomId);
     if (snapshot?.room.status === "active") {
+      logChatCall("thread_call_reuse_active_room", {
+        currentUserId,
+        threadId: thread.threadId,
+        roomId: existingRoomId,
+        mode: thread.activeCallType ?? mode,
+      });
       return {
         thread,
         roomId: existingRoomId,
@@ -506,6 +658,12 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       };
     }
 
+    logChatCall("thread_call_clear_stale_room", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId: existingRoomId,
+      snapshotStatus: snapshot?.room.status ?? "missing",
+    });
     await clearEndedChatThreadCall(thread.threadId);
   }
 
@@ -514,6 +672,12 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   });
 
   if ("error" in created) {
+    logChatCall("thread_call_room_create_failed", {
+      currentUserId,
+      threadId: thread.threadId,
+      mode,
+      message: created.error.message,
+    });
     throw new Error(created.error.message);
   }
 
@@ -528,8 +692,21 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
 
   const updated = await getChatThread(thread.threadId);
   if (!updated) {
+    logChatCall("thread_call_refresh_failed", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId,
+      mode,
+    });
     throw new Error("Unable to refresh Chi'lly Chat call state.");
   }
+
+  logChatCall("thread_call_start_success", {
+    currentUserId,
+    threadId: updated.threadId,
+    roomId,
+    mode,
+  });
 
   return {
     thread: updated,
@@ -596,7 +773,13 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
         table: CHAT_MESSAGES_TABLE,
         filter: `thread_id=eq.${normalizedThreadId}`,
       },
-      () => onChange(),
+      () => {
+        logChatThread("thread_subscription_event", {
+          threadId: normalizedThreadId,
+          table: CHAT_MESSAGES_TABLE,
+        });
+        onChange();
+      },
     )
     .on(
       "postgres_changes",
@@ -606,7 +789,13 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
         table: CHAT_THREAD_MEMBERS_TABLE,
         filter: `thread_id=eq.${normalizedThreadId}`,
       },
-      () => onChange(),
+      () => {
+        logChatThread("thread_subscription_event", {
+          threadId: normalizedThreadId,
+          table: CHAT_THREAD_MEMBERS_TABLE,
+        });
+        onChange();
+      },
     )
     .on(
       "postgres_changes",
@@ -616,9 +805,20 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
         table: CHAT_THREADS_TABLE,
         filter: `id=eq.${normalizedThreadId}`,
       },
-      () => onChange(),
+      () => {
+        logChatThread("thread_subscription_event", {
+          threadId: normalizedThreadId,
+          table: CHAT_THREADS_TABLE,
+        });
+        onChange();
+      },
     )
-    .subscribe();
+    .subscribe((status) => {
+      logChatThread("thread_subscription_status", {
+        threadId: normalizedThreadId,
+        status,
+      });
+    });
 
   return () => {
     supabase.removeChannel(channel);

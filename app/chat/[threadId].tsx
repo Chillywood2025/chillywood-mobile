@@ -40,6 +40,16 @@ import { InRoomCommunicationPanel } from "../../components/communication/in-room
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { useCommunicationRoomSession } from "../../hooks/use-communication-room-session";
 
+const logChatThread = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[CH_THREAD]", event, details ?? {});
+};
+
+const logChatCall = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[CH_CALL]", event, details ?? {});
+};
+
 const buildAuthor = (members: ChatThreadMember[], senderUserId: string) => {
   return members.find((member) => member.userId === senderUserId)?.displayName ?? "User";
 };
@@ -220,15 +230,32 @@ export default function ChillyChatThreadScreen() {
   const posthogEnabled = getPostHogConfig().isEnabled;
 
   const reconcileEndedCallState = useCallback(async (nextThread: ChatThreadSummary | null) => {
+    logChatCall("reconcile_start", {
+      threadId: nextThread?.threadId ?? threadId,
+      activeCommunicationRoomId: nextThread?.activeCommunicationRoomId ?? "",
+      activeCallType: nextThread?.activeCallType ?? "",
+    });
     if (!nextThread?.activeCommunicationRoomId) return nextThread;
 
     const snapshot = await getCommunicationRoomSnapshot(nextThread.activeCommunicationRoomId).catch(() => null);
-    if (snapshot?.room.status === "active") return nextThread;
+    if (snapshot?.room.status === "active") {
+      logChatCall("reconcile_keep_active", {
+        threadId: nextThread.threadId,
+        roomId: nextThread.activeCommunicationRoomId,
+        roomStatus: snapshot.room.status,
+      });
+      return nextThread;
+    }
 
     await clearEndedChatThreadCall(nextThread.threadId).catch(() => null);
     setCallPanelOpen(false);
+    logChatCall("reconcile_cleared_stale", {
+      threadId: nextThread.threadId,
+      roomId: nextThread.activeCommunicationRoomId,
+      roomStatus: snapshot?.room.status ?? "missing",
+    });
     return (await getChatThread(nextThread.threadId).catch(() => null)) ?? null;
-  }, []);
+  }, [threadId]);
 
   const loadThreadState = useCallback(async () => {
     if (!threadId) {
@@ -238,6 +265,7 @@ export default function ChillyChatThreadScreen() {
     }
 
     try {
+      logChatThread("load_state_start", { threadId });
       const [loadedThread, nextMessages] = await Promise.all([
         getChatThread(threadId),
         listChatMessages(threadId),
@@ -255,11 +283,21 @@ export default function ChillyChatThreadScreen() {
       setMessages(nextMessages);
       setError(null);
       setLoading(false);
+      logChatThread("load_state_success", {
+        threadId,
+        messageCount: nextMessages.length,
+        activeCommunicationRoomId: nextThread.activeCommunicationRoomId ?? "",
+        activeCallType: nextThread.activeCallType ?? "",
+      });
 
       await markChatThreadRead(threadId).catch(() => null);
 
       setCallPanelOpen((wasOpen) => (wasOpen ? !!nextThread.activeCommunicationRoomId : false));
     } catch (loadError: any) {
+      logChatThread("load_state_failed", {
+        threadId,
+        message: loadError?.message ?? "unknown_error",
+      });
       setError(loadError?.message ?? "Unable to load this Chi'lly Chat thread.");
       setLoading(false);
     }
@@ -279,6 +317,7 @@ export default function ChillyChatThreadScreen() {
       }
 
       const unsubscribe = subscribeToThread(threadId, () => {
+        logChatThread("thread_subscription_refresh", { threadId });
         void loadThreadState();
       });
 
@@ -435,6 +474,12 @@ export default function ChillyChatThreadScreen() {
   }, [currentUserId, draft, sending, thread, threadId]);
 
   const handleStartCall = useCallback(async (mode: ChatCallType) => {
+    logChatCall("handle_start_call", {
+      threadId,
+      mode,
+      callBusy,
+      activeCommunicationRoomId: activeCallRoomId,
+    });
     if (!threadId || callBusy || !!activeCallRoomId) return;
 
     try {
@@ -442,12 +487,23 @@ export default function ChillyChatThreadScreen() {
       const result = await startChatThreadCall(threadId, mode);
       setThread(result.thread);
       setCallPanelOpen(true);
+      logChatCall("handle_start_call_success", {
+        threadId,
+        mode,
+        roomId: result.roomId,
+        activeCommunicationRoomIdAfter: result.thread.activeCommunicationRoomId ?? "",
+      });
       trackEvent("chat_call_started", {
         surface: "chat-thread",
         threadId,
         mode,
       });
     } catch (callStartError) {
+      logChatCall("handle_start_call_failed", {
+        threadId,
+        mode,
+        message: callStartError instanceof Error ? callStartError.message : "unknown_error",
+      });
       const message = callStartError instanceof Error ? callStartError.message : "Unable to start Chi'lly Chat call.";
       setError(message);
       reportRuntimeError("chat-thread-start-call", callStartError, {
@@ -478,18 +534,38 @@ export default function ChillyChatThreadScreen() {
   }, [activeCallRoomId, callBusy, handleStartCall, loading, requestedCallMode, thread, threadId]);
 
   const handleJoinOrCloseCall = useCallback(async () => {
+    logChatCall("handle_join_or_close", {
+      threadId,
+      activeCommunicationRoomId: activeCallRoomId,
+      callPanelOpen,
+      activeCallType: thread?.activeCallType ?? "",
+    });
     if (!threadId) return;
 
     if (!activeCallRoomId) {
+      logChatCall("handle_join_or_close_decision", {
+        threadId,
+        decision: "start_fresh_video",
+      });
       await handleStartCall("video");
       return;
     }
 
     if (!callPanelOpen) {
       const snapshot = await getCommunicationRoomSnapshot(activeCallRoomId).catch(() => null);
+      logChatCall("pre_join_snapshot", {
+        threadId,
+        roomId: activeCallRoomId,
+        snapshotStatus: snapshot?.room.status ?? "missing",
+      });
       if (!snapshot || snapshot.room.status !== "active") {
         await clearEndedChatThreadCall(threadId).catch(() => null);
         setCallPanelOpen(false);
+        logChatCall("handle_join_or_close_decision", {
+          threadId,
+          decision: "blocked_stale_room",
+          roomId: activeCallRoomId,
+        });
         await loadThreadState();
         return;
       }
@@ -500,11 +576,21 @@ export default function ChillyChatThreadScreen() {
         mode: thread?.activeCallType ?? null,
       });
       setCallPanelOpen(true);
+      logChatCall("handle_join_or_close_decision", {
+        threadId,
+        decision: "open_existing_call",
+        roomId: activeCallRoomId,
+      });
       return;
     }
 
     const isHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
     try {
+      logChatCall("handle_join_or_close_decision", {
+        threadId,
+        decision: isHost ? "end_call_as_host" : "leave_call",
+        roomId: activeCallRoomId,
+      });
       await leaveRoom({ endRoomIfHost: isHost });
       if (isHost) {
         await clearEndedChatThreadCall(threadId);
@@ -512,12 +598,27 @@ export default function ChillyChatThreadScreen() {
       setCallPanelOpen(false);
       await loadThreadState();
     } catch (leaveError) {
+      logChatCall("handle_join_or_close_failed", {
+        threadId,
+        roomId: activeCallRoomId,
+        role: isHost ? "host" : "viewer",
+        message: leaveError instanceof Error ? leaveError.message : "unknown_error",
+      });
       reportRuntimeError("chat-thread-close-call", leaveError, {
         threadId,
         role: isHost ? "host" : "viewer",
       });
     }
   }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, leaveRoom, loadThreadState, thread?.activeCallType, threadId]);
+
+  useEffect(() => {
+    logChatCall("panel_state_changed", {
+      threadId,
+      callPanelOpen,
+      activeCommunicationRoomId: activeCallRoomId,
+      activeCallType: thread?.activeCallType ?? "",
+    });
+  }, [activeCallRoomId, callPanelOpen, thread?.activeCallType, threadId]);
 
   const handleOpenProfile = useCallback(() => {
     if (!otherMember?.userId) return;

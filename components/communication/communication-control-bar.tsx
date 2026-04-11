@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 type CommunicationControlBarProps = {
@@ -18,26 +18,56 @@ export function CommunicationControlBar({
   onLeave,
   leaveLabel = "Leave",
 }: CommunicationControlBarProps) {
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log("[CH_CALL]", "control_bar_render", {
+      cameraEnabled,
+      micEnabled,
+      leaveLabel,
+    });
+  }, [cameraEnabled, leaveLabel, micEnabled]);
+
   return (
     <View style={styles.row}>
       <TouchableOpacity
         style={[styles.control, cameraEnabled ? styles.controlOn : styles.controlOff]}
         activeOpacity={0.86}
-        onPress={onToggleCamera}
+        onPress={() => {
+          if (__DEV__) {
+            console.log("[CH_CALL]", "toggle_camera_pressed", {
+              nextCameraEnabled: !cameraEnabled,
+            });
+          }
+          onToggleCamera();
+        }}
       >
         <Text style={styles.controlLabel}>{cameraEnabled ? "Camera On" : "Camera Off"}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.control, micEnabled ? styles.controlOn : styles.controlOff]}
         activeOpacity={0.86}
-        onPress={onToggleMic}
+        onPress={() => {
+          if (__DEV__) {
+            console.log("[CH_CALL]", "toggle_mic_pressed", {
+              nextMicEnabled: !micEnabled,
+            });
+          }
+          onToggleMic();
+        }}
       >
         <Text style={styles.controlLabel}>{micEnabled ? "Mic On" : "Mic Muted"}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.control, styles.controlLeave]}
         activeOpacity={0.86}
-        onPress={onLeave}
+        onPress={() => {
+          if (__DEV__) {
+            console.log("[CH_CALL]", "leave_pressed", {
+              leaveLabel,
+            });
+          }
+          onLeave();
+        }}
       >
         <Text style={[styles.controlLabel, styles.controlLeaveLabel]}>{leaveLabel}</Text>
       </TouchableOpacity>

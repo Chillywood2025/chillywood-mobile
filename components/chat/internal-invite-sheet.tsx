@@ -15,6 +15,7 @@ import { sendDirectInviteMessage, searchChatPeople, type ChatThreadSummary, type
 
 type InternalInviteSheetProps = {
   visible: boolean;
+  sourceSurface?: string;
   title: string;
   body: string;
   inviteMessage: string;
@@ -25,6 +26,7 @@ type InternalInviteSheetProps = {
 
 export function InternalInviteSheet({
   visible,
+  sourceSurface = "unknown",
   title,
   body,
   inviteMessage,
@@ -39,6 +41,12 @@ export function InternalInviteSheet({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (visible && __DEV__) {
+      console.log("[CH_INVITE]", "sheet_opened", {
+        sourceSurface,
+        title,
+      });
+    }
     if (!visible) {
       setQuery("");
       setResults([]);
@@ -51,6 +59,12 @@ export function InternalInviteSheet({
   useEffect(() => {
     if (!visible) return;
     const trimmed = query.trim();
+    if (__DEV__) {
+      console.log("[CH_SEARCH]", "query_changed", {
+        sourceSurface,
+        query: trimmed,
+      });
+    }
     if (trimmed.length < 2) {
       setResults([]);
       setLoading(false);
@@ -66,11 +80,30 @@ export function InternalInviteSheet({
       searchChatPeople(trimmed)
         .then((nextResults) => {
           if (!cancelled) {
+            if (__DEV__) {
+              console.log("[CH_SEARCH]", "sheet_results_loaded", {
+                sourceSurface,
+                query: trimmed,
+                resultCount: nextResults.length,
+                results: nextResults.slice(0, 5).map((person) => ({
+                  userId: person.userId,
+                  username: person.username ?? "",
+                  displayName: person.displayName ?? "",
+                })),
+              });
+            }
             setResults(nextResults);
           }
         })
         .catch((searchError: any) => {
           if (!cancelled) {
+            if (__DEV__) {
+              console.log("[CH_SEARCH]", "sheet_results_failed", {
+                sourceSurface,
+                query: trimmed,
+                message: searchError?.message ?? "unknown_error",
+              });
+            }
             setError(searchError?.message ?? "Unable to search Chi'llywood people right now.");
           }
         })
@@ -97,10 +130,32 @@ export function InternalInviteSheet({
     setSendingUserId(target.userId);
     setError(null);
     try {
+      if (__DEV__) {
+        console.log("[CH_INVITE]", "target_selected", {
+          sourceSurface,
+          targetUserId: target.userId,
+          username: target.username ?? "",
+          displayName: target.displayName ?? "",
+        });
+      }
       const outcome = await sendDirectInviteMessage(target, inviteMessage);
+      if (__DEV__) {
+        console.log("[CH_INVITE]", "thread_open_after_invite", {
+          sourceSurface,
+          targetUserId: target.userId,
+          threadId: outcome.thread.threadId,
+        });
+      }
       onInviteSent?.(outcome.thread);
       onClose();
     } catch (inviteError: any) {
+      if (__DEV__) {
+        console.log("[CH_INVITE]", "send_failed", {
+          sourceSurface,
+          targetUserId: target.userId,
+          message: inviteError?.message ?? "unknown_error",
+        });
+      }
       setError(inviteError?.message ?? "Unable to send this Chi'llywood invite right now.");
     } finally {
       setSendingUserId("");
@@ -173,6 +228,11 @@ export function InternalInviteSheet({
                 style={[styles.footerButton, styles.footerButtonGhost]}
                 activeOpacity={0.84}
                 onPress={() => {
+                  if (__DEV__) {
+                    console.log("[CH_INVITE]", "system_share_fallback", {
+                      sourceSurface,
+                    });
+                  }
                   onClose();
                   onSystemShareFallback();
                 }}

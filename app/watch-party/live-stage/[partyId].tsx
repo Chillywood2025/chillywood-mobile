@@ -2011,6 +2011,7 @@ export default function WatchPartyLiveStageScreen() {
       />
       <InternalInviteSheet
         visible={inviteSheetVisible}
+        sourceSurface="live-room"
         title="Invite people to this live room"
         body="Find a Chi'llywood member, send the live-room code inside Chi'lly Chat, or fall back to system share if you need to leave the app."
         inviteMessage={`Join me in a Chi'llywood live room.\n\nRoom code: ${liveRoomShareCode}\n\nOpen Chi'llywood -> Live Watch-Party -> enter the code to join the live room.`}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
 import { getCommunicationRTCModule, type CommunicationParticipantView } from "../../_lib/communication";
@@ -32,6 +32,23 @@ const getConnectionLabel = (participant: CommunicationParticipantView) => {
 };
 
 export function CommunicationParticipantGrid({ participants }: CommunicationParticipantGridProps) {
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log("[CH_CALL]", "participant_grid_render", {
+      participantCount: participants.length,
+      remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL && participant.cameraOn).length,
+      fallbackCount: participants.filter((participant) => !(!!RTCView && !!participant.streamURL && participant.cameraOn)).length,
+      participants: participants.map((participant) => ({
+        userId: participant.userId,
+        isSelf: participant.isSelf,
+        streamReady: !!participant.streamURL,
+        cameraOn: participant.cameraOn,
+        micOn: participant.micOn,
+        connectionState: participant.connectionState,
+      })),
+    });
+  }, [participants]);
+
   return (
     <View style={styles.grid}>
       {participants.map((participant) => {

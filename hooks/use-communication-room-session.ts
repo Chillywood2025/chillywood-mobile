@@ -64,6 +64,11 @@ type PresenceStatePayload = {
 
 const HEARTBEAT_INTERVAL_MILLIS = 10_000;
 
+const logChatRtc = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[CH_RTC]", event, details ?? {});
+};
+
 const mapMicrophonePermission = (permission: { granted: boolean; canAskAgain: boolean }): CommunicationPermissionState => {
   if (permission.granted) return "granted";
   return permission.canAskAgain ? "denied" : "blocked";
@@ -133,6 +138,15 @@ export function useCommunicationRoomSession({
   const analyticsRole = analyticsContext?.role ?? null;
 
   useEffect(() => {
+    logChatRtc("rtc_availability", {
+      roomId,
+      enabled,
+      isRtcAvailable,
+      surface: analyticsSurface,
+    });
+  }, [analyticsSurface, enabled, isRtcAvailable, roomId]);
+
+  useEffect(() => {
     cameraEnabledRef.current = cameraEnabled;
   }, [cameraEnabled]);
 
@@ -188,6 +202,10 @@ export function useCommunicationRoomSession({
   }, []);
 
   const cleanupRemotePeer = useCallback((userId: string) => {
+    logChatRtc("remote_peer_cleanup", {
+      roomId,
+      userId,
+    });
     const existing = peerConnectionsRef.current[userId];
     if (existing) {
       try {
@@ -213,13 +231,21 @@ export function useCommunicationRoomSession({
   }, []);
 
   const cleanupSessionMedia = useCallback(() => {
+    logChatRtc("session_media_cleanup_start", {
+      roomId,
+      remotePeerCount: Object.keys(peerConnectionsRef.current).length,
+      hasLocalStream: !!localStreamRef.current,
+    });
     Object.keys(peerConnectionsRef.current).forEach(cleanupRemotePeer);
     stopCommunicationStream(localStreamRef.current);
     localStreamRef.current = null;
     setLocalStreamURL("");
     auxiliaryStreamsRef.current.forEach((stream) => stopCommunicationStream(stream));
     auxiliaryStreamsRef.current = [];
-  }, [cleanupRemotePeer]);
+    logChatRtc("session_media_cleanup_complete", {
+      roomId,
+    });
+  }, [cleanupRemotePeer, roomId]);
 
   const cleanupChannel = useCallback(async () => {
     const channel = channelRef.current;
@@ -242,17 +268,36 @@ export function useCommunicationRoomSession({
   }, []);
 
   const ensureMicrophonePermission = useCallback(async () => {
+    logChatRtc("mic_permission_request_start", {
+      roomId,
+      currentState: microphonePermissionState,
+    });
     const permission = await Audio.requestPermissionsAsync();
     const nextState = mapMicrophonePermission(permission);
     setMicrophonePermissionState(nextState);
+    logChatRtc("mic_permission_request_result", {
+      roomId,
+      granted: permission.granted,
+      canAskAgain: permission.canAskAgain,
+      nextState,
+    });
     return permission.granted;
-  }, []);
+  }, [microphonePermissionState, roomId]);
 
   const ensureCameraPermission = useCallback(async () => {
     if (cameraPermissionGrantedRef.current) return true;
+    logChatRtc("camera_permission_request_start", {
+      roomId,
+      currentState: cameraPermissionState,
+    });
     const nextPermission = await requestCameraPermission();
+    logChatRtc("camera_permission_request_result", {
+      roomId,
+      granted: !!nextPermission.granted,
+      canAskAgain: !!nextPermission.canAskAgain,
+    });
     return !!nextPermission.granted;
-  }, [requestCameraPermission]);
+  }, [cameraPermissionState, requestCameraPermission, roomId]);
 
   const sendBroadcast = useCallback(async (event: string, payload: Record<string, unknown>) => {
     const channel = channelRef.current;
@@ -298,6 +343,16 @@ export function useCommunicationRoomSession({
     }).filter(Boolean) as CommunicationParticipantPresence[];
 
     setPresenceParticipants(nextParticipants);
+    logChatRtc("participant_sources_applied", {
+      roomId,
+      participantCount: nextParticipants.length,
+      participants: nextParticipants.map((participant) => ({
+        userId: participant.userId,
+        isHost: participant.isHost,
+        cameraOn: participant.cameraOn,
+        micOn: participant.micOn,
+      })),
+    });
   }, []);
 
   const refreshSnapshot = useCallback(async (targetRoomId?: string) => {
@@ -305,13 +360,23 @@ export function useCommunicationRoomSession({
     if (!resolvedRoomId) return null;
 
     const snapshot = await getCommunicationRoomSnapshot(resolvedRoomId);
-    if (!snapshot) return null;
+    if (!snapshot) {
+      logChatRtc("snapshot_missing", {
+        roomId: resolvedRoomId,
+      });
+      return null;
+    }
 
     roomRef.current = snapshot.room;
     membershipsRef.current = snapshot.memberships;
     setRoom(snapshot.room);
     setMemberships(snapshot.memberships);
     await applyParticipantsFromSources();
+    logChatRtc("snapshot_loaded", {
+      roomId: resolvedRoomId,
+      roomStatus: snapshot.room.status,
+      membershipCount: snapshot.memberships.length,
+    });
     return snapshot;
   }, [applyParticipantsFromSources, roomId]);
 
@@ -349,11 +414,21 @@ export function useCommunicationRoomSession({
 
     const wantsCamera = cameraEnabledRef.current;
     const wantsMic = micEnabledRef.current;
+    logChatRtc("local_stream_start", {
+      roomId,
+      wantsCamera,
+      wantsMic,
+    });
     const canUseCamera = wantsCamera ? await ensureCameraPermission() : false;
     const canUseMic = wantsMic ? await ensureMicrophonePermission() : false;
 
     if (!canUseCamera && !canUseMic) {
       setLocalStreamURL("");
+      logChatRtc("local_stream_skipped_no_permissions", {
+        roomId,
+        canUseCamera,
+        canUseMic,
+      });
       return null;
     }
 
@@ -364,6 +439,11 @@ export function useCommunicationRoomSession({
 
     if (!stream) {
       setLocalStreamURL("");
+      logChatRtc("local_stream_failed", {
+        roomId,
+        canUseCamera,
+        canUseMic,
+      });
       return null;
     }
 
@@ -372,8 +452,14 @@ export function useCommunicationRoomSession({
 
     localStreamRef.current = stream;
     setLocalStreamURL(getCommunicationStreamURL(stream));
+    logChatRtc("local_stream_success", {
+      roomId,
+      canUseCamera,
+      canUseMic,
+      streamURL: getCommunicationStreamURL(stream),
+    });
     return stream;
-  }, [ensureCameraPermission, ensureMicrophonePermission]);
+  }, [ensureCameraPermission, ensureMicrophonePermission, roomId]);
 
   const attachMissingLocalTracks = useCallback(async (peerConnection: any) => {
     const localStream = await ensureInitialLocalStream();
@@ -391,6 +477,10 @@ export function useCommunicationRoomSession({
     if (!rtc || !resolvedIdentity) return null;
 
     if (peerConnectionsRef.current[remoteUserId]) {
+      logChatRtc("peer_connection_reuse", {
+        roomId,
+        remoteUserId,
+      });
       await attachMissingLocalTracks(peerConnectionsRef.current[remoteUserId]);
       return peerConnectionsRef.current[remoteUserId];
     }
@@ -398,12 +488,21 @@ export function useCommunicationRoomSession({
     const peerConnection = new rtc.RTCPeerConnection({
       iceServers: COMMUNICATION_DEFAULT_ICE_SERVERS,
     });
+    logChatRtc("peer_connection_created", {
+      roomId,
+      remoteUserId,
+    });
 
     await attachMissingLocalTracks(peerConnection);
 
     (peerConnection as any).addEventListener("icecandidate", (event: any) => {
       const currentIdentity = identityRef.current;
       if (!event?.candidate || !currentIdentity) return;
+      logChatRtc("ice_candidate_local", {
+        roomId,
+        remoteUserId,
+        hasCandidate: !!event?.candidate,
+      });
       void sendBroadcast("webrtc:ice", {
         targetUserId: remoteUserId,
         fromUserId: currentIdentity.userId,
@@ -418,6 +517,10 @@ export function useCommunicationRoomSession({
     (peerConnection as any).addEventListener("track", (event: any) => {
       const stream = event?.streams?.[0];
       if (!stream) return;
+      logChatRtc("remote_stream_attached", {
+        roomId,
+        remoteUserId,
+      });
       setRemoteStreamURLByUserId((prev) => ({
         ...prev,
         [remoteUserId]: stream.toURL(),
@@ -437,6 +540,11 @@ export function useCommunicationRoomSession({
         ...prev,
         [remoteUserId]: mappedState,
       }));
+      logChatRtc("peer_connection_state", {
+        roomId,
+        remoteUserId,
+        state: mappedState,
+      });
     });
 
     peerConnectionsRef.current[remoteUserId] = peerConnection;
@@ -445,7 +553,7 @@ export function useCommunicationRoomSession({
       [remoteUserId]: "connecting",
     }));
     return peerConnection;
-  }, [attachMissingLocalTracks, sendBroadcast]);
+  }, [attachMissingLocalTracks, roomId, sendBroadcast]);
 
   const createAndSendOffer = useCallback(async (remoteUserId: string) => {
     const resolvedIdentity = identityRef.current;
@@ -458,6 +566,10 @@ export function useCommunicationRoomSession({
       offerToReceiveAudio: true,
       offerToReceiveVideo: true,
     });
+    logChatRtc("offer_created", {
+      roomId,
+      remoteUserId,
+    });
     await peerConnection.setLocalDescription(offer);
 
     await sendBroadcast("webrtc:offer", {
@@ -468,12 +580,17 @@ export function useCommunicationRoomSession({
         sdp: offer.sdp ?? null,
       },
     });
-  }, [ensurePeerConnection, sendBroadcast]);
+  }, [ensurePeerConnection, roomId, sendBroadcast]);
 
   const syncPeerConnections = useCallback(async (nextParticipants: CommunicationParticipantPresence[]) => {
     const resolvedIdentity = identityRef.current;
     if (!resolvedIdentity) return;
 
+    logChatRtc("sync_peer_connections", {
+      roomId,
+      participantCount: nextParticipants.length,
+      remoteTargetCount: nextParticipants.filter((participant) => participant.userId !== resolvedIdentity.userId).length,
+    });
     const ordered = [...nextParticipants].sort((a, b) => {
       if (a.joinedAt !== b.joinedAt) return a.joinedAt.localeCompare(b.joinedAt);
       return a.userId.localeCompare(b.userId);
@@ -524,6 +641,7 @@ export function useCommunicationRoomSession({
     cleanupSessionMedia,
     createAndSendOffer,
     ensurePeerConnection,
+    roomId,
   ]);
 
   const setPresenceFromChannel = useCallback(async () => {
@@ -532,6 +650,11 @@ export function useCommunicationRoomSession({
 
     const mapped = mapPresenceState(channel.presenceState<PresenceStatePayload>());
     presenceStateRef.current = mapped;
+    logChatRtc("presence_sync", {
+      roomId,
+      participantCount: Object.keys(mapped).length,
+      participantIds: Object.keys(mapped),
+    });
     await applyParticipantsFromSources(mapped);
     await syncPeerConnections(
       [...Object.keys(mapped)].map((userId) => ({
@@ -547,11 +670,15 @@ export function useCommunicationRoomSession({
         || participant.userId === identityRef.current?.userId,
       ),
     );
-  }, [applyParticipantsFromSources, syncPeerConnections]);
+  }, [applyParticipantsFromSources, roomId, syncPeerConnections]);
 
   const leaveRoom = useCallback(async (options?: { endRoomIfHost?: boolean }) => {
     if (endingRef.current) return;
     endingRef.current = true;
+    logChatRtc("leave_room_start", {
+      roomId,
+      endRoomIfHost: !!options?.endRoomIfHost,
+    });
 
     const resolvedRoom = roomRef.current;
     const resolvedIdentity = identityRef.current;
@@ -584,7 +711,11 @@ export function useCommunicationRoomSession({
     cleanupSnapshotChannel();
     cleanupSessionMedia();
     endingRef.current = false;
-  }, [cleanupChannel, cleanupSessionMedia, cleanupSnapshotChannel, sendBroadcast]);
+    logChatRtc("leave_room_complete", {
+      roomId,
+      endRoomIfHost: !!options?.endRoomIfHost,
+    });
+  }, [cleanupChannel, cleanupSessionMedia, cleanupSnapshotChannel, roomId, sendBroadcast]);
 
   useEffect(() => {
     let active = true;
@@ -609,6 +740,9 @@ export function useCommunicationRoomSession({
         return;
       }
       if (!isRtcAvailable) {
+        logChatRtc("init_blocked_no_rtc", {
+          roomId,
+        });
         setError("Communication rooms need a native development build on this device.");
         setLoading(false);
         return;
@@ -632,7 +766,18 @@ export function useCommunicationRoomSession({
         avatarUrl: resolvedIdentity.avatarUrl,
         cameraEnabled: cameraEnabledRef.current,
         micEnabled: micEnabledRef.current,
-      }).catch(() => null);
+      }).catch((error) => {
+        logChatRtc("join_room_failed", {
+          roomId,
+          message: error instanceof Error ? error.message : "unknown_error",
+        });
+        return null;
+      });
+      logChatRtc("join_room_result", {
+        roomId,
+        joined: !!joinedMembership,
+        userId: resolvedIdentity.userId,
+      });
 
       if (!active) return;
 
@@ -640,6 +785,10 @@ export function useCommunicationRoomSession({
       if (!active) return;
 
       if (!snapshot || snapshot.room.status === "ended") {
+        logChatRtc("init_room_unavailable", {
+          roomId,
+          roomStatus: snapshot?.room.status ?? "missing",
+        });
         setError("This communication room is unavailable.");
         setLoading(false);
         return;
@@ -654,6 +803,10 @@ export function useCommunicationRoomSession({
         });
         const activeMemberships = getActiveCommunicationMemberships(snapshot.memberships);
         if (access.canJoin && !currentMembership && activeMemberships.length >= COMMUNICATION_ROOM_MAX_PARTICIPANTS) {
+          logChatRtc("join_room_blocked_full", {
+            roomId,
+            activeMembershipCount: activeMemberships.length,
+          });
           setError("Room is full. This communication room is limited to four active participants.");
           setLoading(false);
           trackEvent("room_join_failure", {
@@ -666,6 +819,11 @@ export function useCommunicationRoomSession({
           return;
         }
 
+        logChatRtc("join_room_blocked_unavailable", {
+          roomId,
+          hasCurrentMembership: !!currentMembership,
+          activeMembershipCount: activeMemberships.length,
+        });
         setError("This communication room is unavailable.");
         setLoading(false);
         trackEvent("room_join_failure", {
@@ -722,6 +880,10 @@ export function useCommunicationRoomSession({
       channel.on("presence", { event: "leave" }, ({ key }: { key: string }) => {
         const departingUserId = String(key ?? "").trim();
         if (!departingUserId) return;
+        logChatRtc("presence_leave", {
+          roomId: snapshot.room.roomId,
+          userId: departingUserId,
+        });
         cleanupRemotePeer(departingUserId);
         delete presenceStateRef.current[departingUserId];
         void applyParticipantsFromSources();
@@ -735,12 +897,21 @@ export function useCommunicationRoomSession({
         const targetUserId = String(payload?.targetUserId ?? "").trim();
         const fromUserId = String(payload?.fromUserId ?? "").trim();
         if (!targetUserId || targetUserId !== currentIdentity.userId || !fromUserId) return;
+        logChatRtc("offer_received", {
+          roomId: snapshot.room.roomId,
+          fromUserId,
+          targetUserId,
+        });
 
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection) return;
 
         await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription(payload?.description as any));
         const answer = await peerConnection.createAnswer();
+        logChatRtc("answer_created", {
+          roomId: snapshot.room.roomId,
+          fromUserId,
+        });
         await peerConnection.setLocalDescription(answer);
         await sendBroadcast("webrtc:answer", {
           targetUserId,
@@ -760,6 +931,11 @@ export function useCommunicationRoomSession({
         const targetUserId = String(payload?.targetUserId ?? "").trim();
         const fromUserId = String(payload?.fromUserId ?? "").trim();
         if (!targetUserId || targetUserId !== currentIdentity.userId || !fromUserId) return;
+        logChatRtc("answer_received", {
+          roomId: snapshot.room.roomId,
+          fromUserId,
+          targetUserId,
+        });
 
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection) return;
@@ -774,6 +950,11 @@ export function useCommunicationRoomSession({
         const targetUserId = String(payload?.targetUserId ?? "").trim();
         const fromUserId = String(payload?.fromUserId ?? "").trim();
         if (!targetUserId || targetUserId !== currentIdentity.userId || !fromUserId || !payload?.candidate) return;
+        logChatRtc("ice_received", {
+          roomId: snapshot.room.roomId,
+          fromUserId,
+          targetUserId,
+        });
 
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection) return;
@@ -796,6 +977,10 @@ export function useCommunicationRoomSession({
       channel.on("broadcast", { event: "room:end" }, ({ payload }: { payload: Record<string, unknown> }) => {
         const reason = String(payload?.reason ?? "ended").trim() === "host-left" ? "host-left" : "ended";
         if (!active) return;
+        logChatRtc("room_end_received", {
+          roomId: snapshot.room.roomId,
+          reason,
+        });
         setError(reason === "host-left" ? "The host ended this communication room." : "This communication room has ended.");
         void cleanupChannel();
         cleanupSessionMedia();
@@ -806,6 +991,10 @@ export function useCommunicationRoomSession({
         if (!active) return;
 
         if (status === "SUBSCRIBED") {
+          logChatRtc("presence_subscription_status", {
+            roomId: snapshot.room.roomId,
+            status,
+          });
           channelRef.current = channel;
           setChannelState("live");
           setError(null);
@@ -824,6 +1013,10 @@ export function useCommunicationRoomSession({
         }
 
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          logChatRtc("presence_subscription_status", {
+            roomId: snapshot.room.roomId,
+            status,
+          });
           setChannelState("reconnecting");
           setError("Communication room reconnecting…");
           if (!reconnectTrackedRef.current) {
@@ -859,6 +1052,10 @@ export function useCommunicationRoomSession({
     };
 
     void init().catch((error) => {
+      logChatRtc("init_failed", {
+        roomId,
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
       reportRuntimeError("communication-init", error, {
         roomId,
       });

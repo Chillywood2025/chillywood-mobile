@@ -114,6 +114,11 @@ const normalizeTextValue = (value: unknown) => {
   return normalized || undefined;
 };
 
+const logChatProfile = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[CH_PROFILE]", event, details ?? {});
+};
+
 export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): UserProfile => {
   const fallbackUsername = normalizeTextValue(profile?.username) ?? `Studio Guest ${Math.floor(1000 + Math.random() * 9000)}`;
   const avatarIndex = Number.isFinite(Number(profile?.avatarIndex))
@@ -280,7 +285,7 @@ async function getSignedInUserSnapshot() {
   try {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user ?? null;
-    return {
+    const snapshot = {
       userId: user?.id ?? null,
       email: normalizeTextValue(user?.email),
       displayName: normalizeTextValue(
@@ -289,7 +294,14 @@ async function getSignedInUserSnapshot() {
         ?? user?.user_metadata?.name,
       ),
     };
+    logChatProfile("auth_snapshot", {
+      userId: snapshot.userId ?? "none",
+      email: snapshot.email ?? "",
+      displayName: snapshot.displayName ?? "",
+    });
+    return snapshot;
   } catch {
+    logChatProfile("auth_snapshot_failed");
     return {
       userId: null,
       email: undefined,
@@ -309,6 +321,7 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
   if (!normalizedUserId) return null;
 
   try {
+    logChatProfile("remote_read_start", { userId: normalizedUserId });
     const { data, error } = await supabase
       .from(USER_PROFILES_TABLE)
       .select(
@@ -317,9 +330,25 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
       .eq("user_id", normalizedUserId)
       .maybeSingle();
 
-    if (error || !data) return null;
-    return parseRemoteUserProfile(data as UserProfileRow);
-  } catch {
+    if (error || !data) {
+      logChatProfile("remote_read_empty", {
+        userId: normalizedUserId,
+        hasError: !!error,
+      });
+      return null;
+    }
+    const parsed = parseRemoteUserProfile(data as UserProfileRow);
+    logChatProfile("remote_read_success", {
+      userId: normalizedUserId,
+      username: parsed?.username ?? "",
+      displayName: parsed?.displayName ?? "",
+    });
+    return parsed;
+  } catch (error) {
+    logChatProfile("remote_read_failed", {
+      userId: normalizedUserId,
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
     return null;
   }
 }
@@ -329,10 +358,35 @@ async function syncUserProfileToRemote(profile: UserProfile): Promise<void> {
   if (!userId) return;
 
   try {
-    await supabase
+    logChatProfile("remote_upsert_start", {
+      userId,
+      username: profile.username,
+      displayName: profile.displayName ?? "",
+    });
+    const { error } = await supabase
       .from(USER_PROFILES_TABLE)
       .upsert(toUserProfileUpsertRow(userId, profile), { onConflict: "user_id" });
-  } catch {
+    if (error) {
+      logChatProfile("remote_upsert_failed", {
+        userId,
+        username: profile.username,
+        displayName: profile.displayName ?? "",
+        message: error.message,
+      });
+      return;
+    }
+    logChatProfile("remote_upsert_success", {
+      userId,
+      username: profile.username,
+      displayName: profile.displayName ?? "",
+    });
+  } catch (error) {
+    logChatProfile("remote_upsert_failed", {
+      userId,
+      username: profile.username,
+      displayName: profile.displayName ?? "",
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
     // social identity foundation is best-effort for now
   }
 }
@@ -790,6 +844,11 @@ export async function readUserProfile(): Promise<UserProfile> {
   const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
   if (cached.username) {
     const normalized = normalizeUserProfile(cached);
+    logChatProfile("local_profile_loaded", {
+      source: "async_storage",
+      username: normalized.username,
+      displayName: normalized.displayName ?? "",
+    });
     await syncUserProfileToRemote(normalized);
     return normalized;
   }
@@ -797,17 +856,30 @@ export async function readUserProfile(): Promise<UserProfile> {
   const signedInUser = await getSignedInUserSnapshot();
   const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;
   if (remoteProfile?.username) {
+    logChatProfile("profile_selected", {
+      source: "remote_profile",
+      userId: signedInUser.userId ?? "none",
+      username: remoteProfile.username,
+      displayName: remoteProfile.displayName ?? "",
+    });
     await writeJsonValue(USER_PROFILE_KEY, remoteProfile);
     await syncUserProfileToRemote(remoteProfile);
     return remoteProfile;
   }
 
   // Generate if missing
+  const emailDerivedUsername = buildFallbackUsernameFromEmail(signedInUser.email);
   const generated = normalizeUserProfile({
-    username: buildFallbackUsernameFromEmail(signedInUser.email)
+    username: emailDerivedUsername
       ?? `Studio Guest ${Math.floor(1000 + Math.random() * 9000)}`,
     avatarIndex: Math.floor(Math.random() * AVATARS.length),
     displayName: signedInUser.displayName,
+  });
+  logChatProfile("fallback_identity_chosen", {
+    userId: signedInUser.userId ?? "none",
+    username: generated.username,
+    displayName: generated.displayName ?? "",
+    emailDerivedUsername: emailDerivedUsername ?? "",
   });
   await saveUserProfile(generated);
   return generated;
@@ -815,6 +887,10 @@ export async function readUserProfile(): Promise<UserProfile> {
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
   const normalized = normalizeUserProfile(profile);
+  logChatProfile("local_profile_save", {
+    username: normalized.username,
+    displayName: normalized.displayName ?? "",
+  });
   await writeJsonValue(USER_PROFILE_KEY, normalized);
   await syncUserProfileToRemote(normalized);
 }

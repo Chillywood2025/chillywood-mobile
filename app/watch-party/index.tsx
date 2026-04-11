@@ -1332,6 +1332,7 @@ export default function WatchPartyIndexScreen() {
       ) : null}
       <InternalInviteSheet
         visible={inviteSheetVisible}
+        sourceSurface={isLiveWaitingRoom ? "live-waiting-room" : "party-waiting-room"}
         title={isLiveWaitingRoom ? "Invite people to this live room" : "Invite people to this watch-party"}
         body={isLiveWaitingRoom
           ? "Find a Chi'llywood member, send the live-room code in Chi'lly Chat, or fall back to system share if you need to leave the app."
