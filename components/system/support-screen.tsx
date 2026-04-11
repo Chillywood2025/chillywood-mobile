@@ -1,8 +1,9 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
   ImageBackground,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +12,7 @@ import {
 } from "react-native";
 
 import { getBetaAccessBlockCopy, submitBetaFeedback, useBetaProgram } from "../../_lib/betaProgram";
-import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
+import { getRuntimeLegalConfig, isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { useSession } from "../../_lib/session";
 import { BetaFeedbackSheet } from "../beta/beta-feedback-sheet";
 
@@ -36,12 +37,15 @@ const CLOSED_BETA_FLOWS = [
 
 export function SupportScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ topic?: string }>();
   const { isSignedIn, user } = useSession();
   const { accessState, isActive } = useBetaProgram();
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const closedBeta = isClosedBetaEnvironment();
   const routePath = closedBeta ? "/beta-support" : "/support";
+  const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
+  const topic = String(params.topic ?? "").trim().toLowerCase();
 
   const blockedCopy = useMemo(
     () => getBetaAccessBlockCopy(accessState.status, closedBeta ? "Support tools" : "Support"),
@@ -49,6 +53,86 @@ export function SupportScreen() {
   );
 
   const focusFlows = closedBeta ? CLOSED_BETA_FLOWS : PUBLIC_SUPPORT_FLOWS;
+  const legalBody = useMemo(() => {
+    if (topic === "account-deletion") {
+      return legalConfig.accountDeletionUrl
+        ? "Open the account deletion request in your browser, or use support from this signed-in account if you need help completing it."
+        : "Use this support surface to request permanent account deletion from the signed-in Chi'llywood account. The support team reviews and confirms manual deletion requests until a dedicated deletion portal is published.";
+    }
+
+    if (topic === "privacy") {
+      return legalConfig.privacyPolicyUrl
+        ? "Open the current Privacy Policy in your browser, or use support if you need help reviewing the latest policy for your account."
+        : "Use this support surface if you need the current Privacy Policy while the public legal URL is not configured in this build.";
+    }
+
+    if (topic === "terms") {
+      return legalConfig.termsOfServiceUrl
+        ? "Open the current Terms of Use in your browser, or use support if you need help reviewing the latest terms for your account."
+        : "Use this support surface if you need the current Terms of Use while the public legal URL is not configured in this build.";
+    }
+
+    return "Open the current Privacy Policy, review the Terms of Use, or request account deletion from the same support surface that already owns signed-in feedback and launch help.";
+  }, [legalConfig.accountDeletionUrl, legalConfig.privacyPolicyUrl, legalConfig.termsOfServiceUrl, topic]);
+
+  const openExternalDestination = async (url: string, label: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert(label, `Unable to open ${label.toLowerCase()} right now.`);
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(label, `Unable to open ${label.toLowerCase()} right now.`);
+    }
+  };
+
+  const onPressPrivacyPolicy = async () => {
+    if (legalConfig.privacyPolicyUrl) {
+      await openExternalDestination(legalConfig.privacyPolicyUrl, "Privacy Policy");
+      return;
+    }
+
+    Alert.alert(
+      "Privacy Policy",
+      "Use Chi'llywood Support from this screen if you need the current Privacy Policy for your account.",
+    );
+  };
+
+  const onPressTerms = async () => {
+    if (legalConfig.termsOfServiceUrl) {
+      await openExternalDestination(legalConfig.termsOfServiceUrl, "Terms of Use");
+      return;
+    }
+
+    Alert.alert(
+      "Terms of Use",
+      "Use Chi'llywood Support from this screen if you need the current Terms of Use for your account.",
+    );
+  };
+
+  const onPressAccountDeletion = () => {
+    if (legalConfig.accountDeletionUrl) {
+      void openExternalDestination(legalConfig.accountDeletionUrl, "Account Deletion");
+      return;
+    }
+
+    if (!isSignedIn) {
+      router.push({ pathname: "/(auth)/login", params: { redirectTo: `${routePath}?topic=account-deletion` } });
+      return;
+    }
+
+    Alert.alert(
+      "Request Account Deletion",
+      "Use Send Feedback from this screen to request permanent account deletion from your signed-in Chi'llywood account. The support team verifies and processes manual deletion requests.",
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "Continue", onPress: () => setFeedbackVisible(true) },
+      ],
+    );
+  };
 
   const onSubmitFeedback = async (input: {
     feedbackType: "bug" | "product_feedback" | "onboarding_feedback";
@@ -170,6 +254,25 @@ export function SupportScreen() {
         </View>
 
         <View style={styles.card}>
+          <Text style={styles.cardTitle}>Privacy, terms, and account help</Text>
+          <Text style={styles.cardBody}>{legalBody}</Text>
+          <View style={styles.list}>
+            <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={() => { void onPressPrivacyPolicy(); }}>
+              <Text style={styles.primaryButtonText}>Privacy Policy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={() => { void onPressTerms(); }}>
+              <Text style={styles.secondaryButtonText}>Terms of Use</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={onPressAccountDeletion}>
+              <Text style={styles.secondaryButtonText}>Request Account Deletion</Text>
+            </TouchableOpacity>
+          </View>
+          {legalConfig.supportEmail ? (
+            <Text style={styles.metaText}>Support contact: {legalConfig.supportEmail}</Text>
+          ) : null}
+        </View>
+
+        <View style={styles.card}>
           <Text style={styles.cardTitle}>Privacy and capture reminder</Text>
           <Text style={styles.cardBody}>
             Capture protection remains best-effort on supported devices. Do not assume DRM-grade guarantees, and report any misleading copy or unsafe capture behavior through the support flow.
@@ -281,6 +384,20 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#0A0C12",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  secondaryButton: {
+    marginTop: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    color: "#E9EDF7",
     fontSize: 13,
     fontWeight: "900",
   },

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { trackEvent } from "../_lib/analytics";
 import {
@@ -8,6 +8,7 @@ import {
   readMonetizationSnapshot,
   subscribeToMonetizationSnapshot,
 } from "../_lib/monetization";
+import { getRuntimeLegalConfig, getSupportRoutePath } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
 import { useSession } from "../_lib/session";
 
@@ -17,6 +18,8 @@ export default function SettingsScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
   const [monetizationLoading, setMonetizationLoading] = useState(false);
+  const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
+  const supportRoutePath = useMemo(() => getSupportRoutePath(), []);
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;
@@ -113,6 +116,72 @@ export default function SettingsScreen() {
     }
   };
 
+  const openExternalDestination = useCallback(async (url: string, label: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert(label, `Unable to open ${label.toLowerCase()} right now.`);
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(label, `Unable to open ${label.toLowerCase()} right now.`);
+    }
+  }, []);
+
+  const openSupportFallback = useCallback((topic: "privacy" | "terms" | "account-deletion") => {
+    router.push({
+      pathname: supportRoutePath as Parameters<typeof router.push>[0] extends { pathname: infer P } ? P : "/support",
+      params: { topic },
+    } as Parameters<typeof router.push>[0]);
+  }, [router, supportRoutePath]);
+
+  const onPressPrivacyPolicy = useCallback(() => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "privacy_policy",
+      destination: legalConfig.privacyPolicyUrl ? "external" : "support",
+    });
+
+    if (legalConfig.privacyPolicyUrl) {
+      void openExternalDestination(legalConfig.privacyPolicyUrl, "Privacy Policy");
+      return;
+    }
+
+    openSupportFallback("privacy");
+  }, [legalConfig.privacyPolicyUrl, openExternalDestination, openSupportFallback]);
+
+  const onPressTerms = useCallback(() => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "terms_of_use",
+      destination: legalConfig.termsOfServiceUrl ? "external" : "support",
+    });
+
+    if (legalConfig.termsOfServiceUrl) {
+      void openExternalDestination(legalConfig.termsOfServiceUrl, "Terms of Use");
+      return;
+    }
+
+    openSupportFallback("terms");
+  }, [legalConfig.termsOfServiceUrl, openExternalDestination, openSupportFallback]);
+
+  const onPressAccountDeletion = useCallback(() => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "account_deletion",
+      destination: legalConfig.accountDeletionUrl ? "external" : "support",
+    });
+
+    if (legalConfig.accountDeletionUrl) {
+      void openExternalDestination(legalConfig.accountDeletionUrl, "Account Deletion");
+      return;
+    }
+
+    openSupportFallback("account-deletion");
+  }, [legalConfig.accountDeletionUrl, openExternalDestination, openSupportFallback]);
+
   if (isLoading) {
     return (
       <View style={styles.loadingWrap}>
@@ -153,6 +222,28 @@ export default function SettingsScreen() {
         >
           <Text style={styles.signOutButtonText}>{signingOut ? "Logging out..." : "Log Out"}</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardKicker}>LEGAL & SUPPORT</Text>
+        <Text style={styles.secondaryTitle}>Privacy, Terms, and Account Help</Text>
+        <Text style={styles.body}>
+          Open the current Privacy Policy, review the Terms of Use, or request account deletion from the canonical account path.
+        </Text>
+        <View style={styles.utilityRow}>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressPrivacyPolicy}>
+            <Text style={styles.utilityButtonText}>Privacy Policy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressTerms}>
+            <Text style={styles.utilityButtonText}>Terms of Use</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressAccountDeletion}>
+          <Text style={styles.secondaryActionButtonText}>Request Account Deletion</Text>
+        </TouchableOpacity>
+        <Text style={styles.metaText}>
+          If a public legal or deletion URL is not configured for this build yet, Settings routes you into Chi&apos;llywood Support so the request still lands on the official account/help path.
+        </Text>
       </View>
 
       <View style={styles.card}>
@@ -339,5 +430,26 @@ const styles = StyleSheet.create({
     color: "#F4F7FC",
     fontSize: 12.5,
     fontWeight: "800",
+  },
+  secondaryActionButton: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.34)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  secondaryActionButtonText: {
+    color: "#FFE4EA",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  metaText: {
+    color: "#8D97AE",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
   },
 });

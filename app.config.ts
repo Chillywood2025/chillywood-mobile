@@ -23,6 +23,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ? existingRuntime.communication
       : {}
   ) as Record<string, unknown>;
+  const existingLegal = (
+    existingRuntime.legal && typeof existingRuntime.legal === "object" && !Array.isArray(existingRuntime.legal)
+      ? existingRuntime.legal
+      : {}
+  ) as Record<string, unknown>;
 
   return {
     ...base,
@@ -38,6 +43,21 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         betaEnvironment: normalizeRuntimeEnvironment(
           process.env.EXPO_PUBLIC_BETA_ENVIRONMENT || existingRuntime.betaEnvironment,
         ),
+        legal: {
+          ...existingLegal,
+          privacyPolicyUrl: normalizeText(
+            process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL || existingLegal.privacyPolicyUrl,
+          ),
+          termsOfServiceUrl: normalizeText(
+            process.env.EXPO_PUBLIC_TERMS_OF_SERVICE_URL || existingLegal.termsOfServiceUrl,
+          ),
+          accountDeletionUrl: normalizeText(
+            process.env.EXPO_PUBLIC_ACCOUNT_DELETION_URL || existingLegal.accountDeletionUrl,
+          ),
+          supportEmail: normalizeText(
+            process.env.EXPO_PUBLIC_SUPPORT_EMAIL || existingLegal.supportEmail,
+          ),
+        },
         communication: {
           ...existingCommunication,
           iceServers: normalizeText(

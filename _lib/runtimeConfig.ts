@@ -8,11 +8,19 @@ export type RevenueCatRuntimeConfig = {
   iosPublicSdkKey: string;
 };
 
+export type LegalRuntimeConfig = {
+  privacyPolicyUrl: string;
+  termsOfServiceUrl: string;
+  accountDeletionUrl: string;
+  supportEmail: string;
+};
+
 export type RuntimeConfig = {
   supabaseUrl: string;
   supabaseAnonKey: string;
   betaOperatorAllowlist: string[];
   betaEnvironment: RuntimeEnvironment;
+  legal: LegalRuntimeConfig;
   revenueCat: RevenueCatRuntimeConfig;
 };
 
@@ -51,6 +59,7 @@ export function getRuntimeConfig(): RuntimeConfig {
   if (cachedConfig) return cachedConfig;
 
   const runtimeExtra = readRuntimeExtra();
+  const legalExtra = isPlainObject(runtimeExtra.legal) ? runtimeExtra.legal : {};
   const revenueCatExtra = isPlainObject(runtimeExtra.revenueCat) ? runtimeExtra.revenueCat : {};
 
   cachedConfig = {
@@ -62,6 +71,20 @@ export function getRuntimeConfig(): RuntimeConfig {
     betaEnvironment: normalizeRuntimeEnvironment(
       process.env.EXPO_PUBLIC_BETA_ENVIRONMENT || runtimeExtra.betaEnvironment,
     ),
+    legal: {
+      privacyPolicyUrl: normalizeText(
+        process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL || legalExtra.privacyPolicyUrl,
+      ),
+      termsOfServiceUrl: normalizeText(
+        process.env.EXPO_PUBLIC_TERMS_OF_SERVICE_URL || legalExtra.termsOfServiceUrl,
+      ),
+      accountDeletionUrl: normalizeText(
+        process.env.EXPO_PUBLIC_ACCOUNT_DELETION_URL || legalExtra.accountDeletionUrl,
+      ),
+      supportEmail: normalizeText(
+        process.env.EXPO_PUBLIC_SUPPORT_EMAIL || legalExtra.supportEmail,
+      ),
+    },
     revenueCat: {
       androidDebugPublicSdkKey: normalizeText(
         process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV || revenueCatExtra.androidDebugPublicSdkKey,
@@ -105,6 +128,10 @@ export function isPublicV1Environment(config = getRuntimeConfig()) {
 
 export function getSupportRoutePath(config = getRuntimeConfig()) {
   return isClosedBetaEnvironment(config) ? "/beta-support" : "/support";
+}
+
+export function getRuntimeLegalConfig(config = getRuntimeConfig()) {
+  return config.legal;
 }
 
 export function isBetaOperatorIdentity(identity?: {
