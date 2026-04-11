@@ -220,6 +220,9 @@ This blueprint exists to:
 - profile-to-thread handoff works
 - direct-message-first posture remains intact
 - official Rachi starter presence remains intact
+- active thread video calls present as a full-page Chi'lly Chat call surface instead of an embedded bottom-thread strip
+- exactly 2 participants use a true 50/50 split
+- 3+ participants use a balanced full-page grid
 - Explicitly out of scope:
 - group threads
 - translation
