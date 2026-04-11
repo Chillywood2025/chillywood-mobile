@@ -3,6 +3,8 @@ import { Image, StyleSheet, Text, View } from "react-native";
 
 import { getCommunicationRTCModule } from "../../_lib/communication";
 
+const logCallDebug = (..._args: unknown[]) => {};
+
 type CommunicationPreviewCardProps = {
   displayName: string;
   avatarUrl?: string;
@@ -50,7 +52,7 @@ export function CommunicationPreviewCard({
 
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("[CH_CALL]", "local_preview_render", {
+    logCallDebug("[CH_CALL]", "local_preview_render", {
       displayName,
       streamReady: !!streamURL,
       showVideo,

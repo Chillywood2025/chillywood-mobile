@@ -115,23 +115,23 @@ const CHAT_USER_SEARCH_SELECT =
 const toText = (value: unknown) => String(value ?? "").trim();
 
 const logChatSearch = (event: string, details?: Record<string, unknown>) => {
-  if (!__DEV__) return;
-  console.error("[CH_SEARCH]", event, details ?? {});
+  void event;
+  void details;
 };
 
 const logChatInvite = (event: string, details?: Record<string, unknown>) => {
-  if (!__DEV__) return;
-  console.error("[CH_INVITE]", event, details ?? {});
+  void event;
+  void details;
 };
 
 const logChatThread = (event: string, details?: Record<string, unknown>) => {
-  if (!__DEV__) return;
-  console.error("[CH_THREAD]", event, details ?? {});
+  void event;
+  void details;
 };
 
 const logChatCall = (event: string, details?: Record<string, unknown>) => {
-  if (!__DEV__) return;
-  console.error("[CH_CALL]", event, details ?? {});
+  void event;
+  void details;
 };
 
 const normalizeCallType = (value: unknown): ChatCallType | undefined => {

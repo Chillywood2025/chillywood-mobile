@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+const logCallDebug = (..._args: unknown[]) => {};
+
 type CommunicationControlBarProps = {
   cameraEnabled: boolean;
   micEnabled: boolean;
@@ -20,7 +22,7 @@ export function CommunicationControlBar({
 }: CommunicationControlBarProps) {
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("[CH_CALL]", "control_bar_render", {
+    logCallDebug("[CH_CALL]", "control_bar_render", {
       cameraEnabled,
       micEnabled,
       leaveLabel,
@@ -34,7 +36,7 @@ export function CommunicationControlBar({
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
-            console.error("[CH_CALL]", "toggle_camera_pressed", {
+            logCallDebug("[CH_CALL]", "toggle_camera_pressed", {
               nextCameraEnabled: !cameraEnabled,
             });
           }
@@ -48,7 +50,7 @@ export function CommunicationControlBar({
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
-            console.error("[CH_CALL]", "toggle_mic_pressed", {
+            logCallDebug("[CH_CALL]", "toggle_mic_pressed", {
               nextMicEnabled: !micEnabled,
             });
           }
@@ -62,7 +64,7 @@ export function CommunicationControlBar({
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
-            console.error("[CH_CALL]", "leave_pressed", {
+            logCallDebug("[CH_CALL]", "leave_pressed", {
               leaveLabel,
             });
           }

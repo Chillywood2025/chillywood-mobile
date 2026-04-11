@@ -65,8 +65,8 @@ type PresenceStatePayload = {
 const HEARTBEAT_INTERVAL_MILLIS = 10_000;
 
 const logChatRtc = (event: string, details?: Record<string, unknown>) => {
-  if (!__DEV__) return;
-  console.error("[CH_RTC]", event, details ?? {});
+  void event;
+  void details;
 };
 
 const mapMicrophonePermission = (permission: { granted: boolean; canAskAgain: boolean }): CommunicationPermissionState => {

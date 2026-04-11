@@ -20,10 +20,11 @@ export const isPostHogFlagEnabled = (value: unknown) => {
 export const getPostHogConfig = () => {
   const apiKey = normalizeText(process.env.EXPO_PUBLIC_POSTHOG_API_KEY);
   const host = normalizeText(process.env.EXPO_PUBLIC_POSTHOG_HOST) || DEFAULT_POSTHOG_HOST;
+  const devEnabled = isPostHogFlagEnabled(process.env.EXPO_PUBLIC_POSTHOG_DEV_ENABLED);
 
   return {
     apiKey,
     host,
-    isEnabled: apiKey.length > 0,
+    isEnabled: apiKey.length > 0 && (!__DEV__ || devEnabled),
   };
 };

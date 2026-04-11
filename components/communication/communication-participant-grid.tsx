@@ -3,6 +3,8 @@ import { Image, StyleSheet, Text, useWindowDimensions, View } from "react-native
 
 import { getCommunicationRTCModule, type CommunicationParticipantView } from "../../_lib/communication";
 
+const logCallDebug = (..._args: unknown[]) => {};
+
 type CommunicationParticipantGridProps = {
   participants: CommunicationParticipantView[];
   presentation?: "embedded" | "fullscreen";
@@ -61,7 +63,7 @@ export function CommunicationParticipantGrid({
 
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("[CH_CALL]", "participant_grid_render", {
+    logCallDebug("[CH_CALL]", "participant_grid_render", {
       participantCount: participants.length,
       presentation,
       remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL && participant.cameraOn).length,

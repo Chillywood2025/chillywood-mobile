@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CommunicationControlBar } from "./communication-control-bar";
 import { CommunicationParticipantGrid } from "./communication-participant-grid";
 
+const logCallDebug = (..._args: unknown[]) => {};
+
 type InRoomCommunicationPanelProps = {
   surfaceLabel: string;
   titleText?: string;
@@ -64,7 +66,7 @@ export function InRoomCommunicationPanel({
 
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("[CH_CALL]", "panel_render", {
+    logCallDebug("[CH_CALL]", "panel_render", {
       surfaceLabel,
       participantCount,
       channelState,

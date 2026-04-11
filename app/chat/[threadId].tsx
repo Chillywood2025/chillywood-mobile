@@ -39,13 +39,13 @@ import { ReportSheet } from "../../components/safety/report-sheet";
 import { useCommunicationRoomSession } from "../../hooks/use-communication-room-session";
 
 const logChatThread = (event: string, details?: Record<string, unknown>) => {
-  if (!__DEV__) return;
-  console.error("[CH_THREAD]", event, details ?? {});
+  void event;
+  void details;
 };
 
 const logChatCall = (event: string, details?: Record<string, unknown>) => {
-  if (!__DEV__) return;
-  console.error("[CH_CALL]", event, details ?? {});
+  void event;
+  void details;
 };
 
 const buildAuthor = (members: ChatThreadMember[], senderUserId: string) => {
