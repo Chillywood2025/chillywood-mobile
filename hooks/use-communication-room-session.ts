@@ -63,10 +63,182 @@ type PresenceStatePayload = {
 };
 
 const HEARTBEAT_INTERVAL_MILLIS = 10_000;
+const PREFERRED_VIDEO_CODEC = "VP8";
 
 const logChatRtc = (event: string, details?: Record<string, unknown>) => {
-  void event;
-  void details;
+  if (!__DEV__) return;
+  const shouldLog = event.startsWith("diag_")
+    || event === "remote_stream_attached"
+    || event === "peer_connection_state"
+    || event === "offer_received"
+    || event === "answer_received";
+  if (!shouldLog) return;
+  console.log("[CH_RTC]", event, details ?? {});
+};
+
+const describeTrack = (track: { id?: unknown; kind?: unknown; enabled?: unknown; muted?: unknown; readyState?: unknown } | null | undefined) => ({
+  id: String(track?.id ?? ""),
+  kind: String(track?.kind ?? ""),
+  enabled: typeof track?.enabled === "boolean" ? track.enabled : null,
+  muted: typeof track?.muted === "boolean" ? track.muted : null,
+  readyState: String(track?.readyState ?? ""),
+});
+
+const describeStream = (stream: MediaStream | null | undefined) => ({
+  id: String((stream as { id?: unknown } | null | undefined)?.id ?? ""),
+  url: getCommunicationStreamURL(stream ?? null),
+  videoTracks: typeof stream?.getVideoTracks === "function"
+    ? stream.getVideoTracks().map((track) => describeTrack(track as any))
+    : [],
+  audioTracks: typeof stream?.getAudioTracks === "function"
+    ? stream.getAudioTracks().map((track) => describeTrack(track as any))
+    : [],
+});
+
+const describePeerConnection = (peerConnection: any) => ({
+  connectionState: String(peerConnection?.connectionState ?? ""),
+  iceConnectionState: String(peerConnection?.iceConnectionState ?? ""),
+  iceGatheringState: String(peerConnection?.iceGatheringState ?? ""),
+  signalingState: String(peerConnection?.signalingState ?? ""),
+  transceivers: typeof peerConnection?.getTransceivers === "function"
+    ? peerConnection.getTransceivers().map((transceiver: any) => ({
+        mid: transceiver?.mid ?? null,
+        direction: String(transceiver?.direction ?? ""),
+        currentDirection: String(transceiver?.currentDirection ?? ""),
+        senderTrack: describeTrack(transceiver?.sender?.track),
+        receiverTrack: describeTrack(transceiver?.receiver?.track),
+      }))
+    : [],
+  receivers: typeof peerConnection?.getReceivers === "function"
+    ? peerConnection.getReceivers().map((receiver: any) => describeTrack(receiver?.track))
+    : [],
+});
+
+const buildRemoteRenderStream = (
+  rtc: NonNullable<ReturnType<typeof getCommunicationRTCModule>>,
+  peerConnection: any,
+  fallbackStream: MediaStream | null | undefined,
+  preferredTrack?: any,
+) => {
+  const nextStream = new rtc.MediaStream();
+  const addedTrackIds = new Set<string>();
+  const addTrack = (track: any) => {
+    const descriptor = describeTrack(track);
+    if (descriptor.kind !== "audio" && descriptor.kind !== "video") return;
+    if (!descriptor.id || addedTrackIds.has(descriptor.id)) return;
+    addedTrackIds.add(descriptor.id);
+    nextStream.addTrack(track);
+  };
+
+  if (preferredTrack) addTrack(preferredTrack);
+  if (typeof fallbackStream?.getVideoTracks === "function") {
+    fallbackStream.getVideoTracks().forEach((track) => addTrack(track));
+  }
+  if (typeof fallbackStream?.getAudioTracks === "function") {
+    fallbackStream.getAudioTracks().forEach((track) => addTrack(track));
+  }
+  if (typeof peerConnection?.getReceivers === "function") {
+    peerConnection.getReceivers().forEach((receiver: any) => addTrack(receiver?.track));
+  }
+
+  return nextStream;
+};
+
+const summarizeInboundVideoStats = async (peerConnection: any) => {
+  if (typeof peerConnection?.getStats !== "function") return [];
+  const statsReport = await peerConnection.getStats();
+  const entries = Array.isArray(statsReport)
+    ? statsReport
+    : typeof statsReport?.forEach === "function"
+      ? (() => {
+          const next: any[] = [];
+          statsReport.forEach((value: any) => next.push(value));
+          return next;
+        })()
+      : Object.values(statsReport ?? {});
+
+  return entries
+    .filter((entry: any) => {
+      const type = String(entry?.type ?? "");
+      const kind = String(entry?.kind ?? entry?.mediaType ?? "");
+      return type === "inbound-rtp" && kind === "video";
+    })
+    .map((entry: any) => ({
+      id: String(entry?.id ?? ""),
+      kind: String(entry?.kind ?? entry?.mediaType ?? ""),
+      bytesReceived: typeof entry?.bytesReceived === "number" ? entry.bytesReceived : null,
+      framesReceived: typeof entry?.framesReceived === "number" ? entry.framesReceived : null,
+      framesDecoded: typeof entry?.framesDecoded === "number" ? entry.framesDecoded : null,
+      framesDropped: typeof entry?.framesDropped === "number" ? entry.framesDropped : null,
+      packetsReceived: typeof entry?.packetsReceived === "number" ? entry.packetsReceived : null,
+      packetsLost: typeof entry?.packetsLost === "number" ? entry.packetsLost : null,
+      decoderImplementation: String(entry?.decoderImplementation ?? ""),
+      frameWidth: typeof entry?.frameWidth === "number" ? entry.frameWidth : null,
+      frameHeight: typeof entry?.frameHeight === "number" ? entry.frameHeight : null,
+    }));
+};
+
+const summarizeOutboundRtpStats = async (peerConnection: any, kind: "audio" | "video") => {
+  if (typeof peerConnection?.getStats !== "function") return [];
+  const statsReport = await peerConnection.getStats();
+  const entries = Array.isArray(statsReport)
+    ? statsReport
+    : typeof statsReport?.forEach === "function"
+      ? (() => {
+          const next: any[] = [];
+          statsReport.forEach((value: any) => next.push(value));
+          return next;
+        })()
+      : Object.values(statsReport ?? {});
+
+  return entries
+    .filter((entry: any) => {
+      const type = String(entry?.type ?? "");
+      const mediaKind = String(entry?.kind ?? entry?.mediaType ?? "");
+      return type === "outbound-rtp" && mediaKind === kind;
+    })
+    .map((entry: any) => ({
+      id: String(entry?.id ?? ""),
+      kind: String(entry?.kind ?? entry?.mediaType ?? ""),
+      bytesSent: typeof entry?.bytesSent === "number" ? entry.bytesSent : null,
+      packetsSent: typeof entry?.packetsSent === "number" ? entry.packetsSent : null,
+      framesEncoded: typeof entry?.framesEncoded === "number" ? entry.framesEncoded : null,
+      frameWidth: typeof entry?.frameWidth === "number" ? entry.frameWidth : null,
+      frameHeight: typeof entry?.frameHeight === "number" ? entry.frameHeight : null,
+      qualityLimitationReason: String(entry?.qualityLimitationReason ?? ""),
+      encoderImplementation: String(entry?.encoderImplementation ?? ""),
+      active: typeof entry?.active === "boolean" ? entry.active : null,
+    }));
+};
+
+const summarizeInboundRtpStats = async (peerConnection: any, kind: "audio" | "video") => {
+  if (kind === "video") return summarizeInboundVideoStats(peerConnection);
+  if (typeof peerConnection?.getStats !== "function") return [];
+  const statsReport = await peerConnection.getStats();
+  const entries = Array.isArray(statsReport)
+    ? statsReport
+    : typeof statsReport?.forEach === "function"
+      ? (() => {
+          const next: any[] = [];
+          statsReport.forEach((value: any) => next.push(value));
+          return next;
+        })()
+      : Object.values(statsReport ?? {});
+
+  return entries
+    .filter((entry: any) => {
+      const type = String(entry?.type ?? "");
+      const mediaKind = String(entry?.kind ?? entry?.mediaType ?? "");
+      return type === "inbound-rtp" && mediaKind === kind;
+    })
+    .map((entry: any) => ({
+      id: String(entry?.id ?? ""),
+      kind: String(entry?.kind ?? entry?.mediaType ?? ""),
+      bytesReceived: typeof entry?.bytesReceived === "number" ? entry.bytesReceived : null,
+      packetsReceived: typeof entry?.packetsReceived === "number" ? entry.packetsReceived : null,
+      packetsLost: typeof entry?.packetsLost === "number" ? entry.packetsLost : null,
+      jitter: typeof entry?.jitter === "number" ? entry.jitter : null,
+    }));
 };
 
 const mapMicrophonePermission = (permission: { granted: boolean; canAskAgain: boolean }): CommunicationPermissionState => {
@@ -104,7 +276,7 @@ export function useCommunicationRoomSession({
   const [micEnabled, setMicEnabled] = useState(initialMediaPreferences?.micEnabled ?? true);
   const [presenceParticipants, setPresenceParticipants] = useState<CommunicationParticipantPresence[]>([]);
   const [localStreamURL, setLocalStreamURL] = useState("");
-  const [remoteStreamURLByUserId, setRemoteStreamURLByUserId] = useState<Record<string, string>>({});
+  const [remoteStreamsByUserId, setRemoteStreamsByUserId] = useState<Record<string, MediaStream>>({});
   const [connectionStateByUserId, setConnectionStateByUserId] = useState<Record<string, PeerConnectionState>>({});
 
   const localJoinedAtRef = useRef(new Date().toISOString());
@@ -231,7 +403,7 @@ export function useCommunicationRoomSession({
       delete peerConnectionsRef.current[userId];
     }
 
-    setRemoteStreamURLByUserId((prev) => {
+    setRemoteStreamsByUserId((prev) => {
       if (!prev[userId]) return prev;
       const next = { ...prev };
       delete next[userId];
@@ -484,7 +656,41 @@ export function useCommunicationRoomSession({
       const alreadyAdded = senders.some((sender: any) => sender?.track?.id === track.id);
       if (!alreadyAdded) peerConnection.addTrack(track, localStream);
     });
+    logChatRtc("diag_local_tracks_attached", {
+      roomId,
+      localStream: describeStream(localStream),
+      peer: describePeerConnection(peerConnection),
+    });
   }, [ensureInitialLocalStream]);
+
+  const logInboundVideoDiagnostics = useCallback(async (remoteUserId: string, peerConnection: any, reason: string) => {
+    if (!__DEV__) return;
+    try {
+      const [inboundVideo, inboundAudio, outboundVideo, outboundAudio] = await Promise.all([
+        summarizeInboundRtpStats(peerConnection, "video"),
+        summarizeInboundRtpStats(peerConnection, "audio"),
+        summarizeOutboundRtpStats(peerConnection, "video"),
+        summarizeOutboundRtpStats(peerConnection, "audio"),
+      ]);
+      logChatRtc("diag_rtp_stats", {
+        roomId,
+        remoteUserId,
+        reason,
+        inboundVideo,
+        inboundAudio,
+        outboundVideo,
+        outboundAudio,
+        peer: describePeerConnection(peerConnection),
+      });
+    } catch (error) {
+      logChatRtc("diag_rtp_stats_failed", {
+        roomId,
+        remoteUserId,
+        reason,
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
+    }
+  }, [roomId]);
 
   const ensurePeerConnection = useCallback(async (remoteUserId: string) => {
     const rtc = getCommunicationRTCModule();
@@ -530,16 +736,49 @@ export function useCommunicationRoomSession({
     });
 
     (peerConnection as any).addEventListener("track", (event: any) => {
-      const stream = event?.streams?.[0];
-      if (!stream) return;
+      const track = event?.track;
+      const primaryStream = event?.streams?.[0];
+      const hasVideoTrack =
+        typeof primaryStream?.getVideoTracks === "function"
+          ? primaryStream.getVideoTracks().length > 0
+          : false;
+
+      // Android can surface the audio stream first. Only bind RTCView
+      // once we have a stream that actually carries video frames.
+      if (track?.kind !== "video" && !hasVideoTrack) return;
+
+      const stream = buildRemoteRenderStream(
+        rtc,
+        peerConnection,
+        primaryStream,
+        track,
+      );
+
       logChatRtc("remote_stream_attached", {
         roomId,
         remoteUserId,
+        trackKind: String(track?.kind ?? ""),
+        eventTrack: describeTrack(track),
+        receiverTrack: describeTrack(event?.receiver?.track),
+        primaryStream: describeStream(primaryStream),
+        boundStream: describeStream(stream),
+        peer: describePeerConnection(peerConnection),
       });
-      setRemoteStreamURLByUserId((prev) => ({
+      setRemoteStreamsByUserId((prev) => ({
         ...prev,
-        [remoteUserId]: stream.toURL(),
+        [remoteUserId]: stream,
       }));
+      setConnectionStateByUserId((prev) => ({
+        ...prev,
+        [remoteUserId]: "connected",
+      }));
+      void logInboundVideoDiagnostics(remoteUserId, peerConnection, "track");
+      setTimeout(() => {
+        void logInboundVideoDiagnostics(remoteUserId, peerConnection, "track_delayed");
+      }, 1500);
+      setTimeout(() => {
+        void logInboundVideoDiagnostics(remoteUserId, peerConnection, "track_settled");
+      }, 4000);
     });
 
     (peerConnection as any).addEventListener("connectionstatechange", () => {
@@ -559,6 +798,26 @@ export function useCommunicationRoomSession({
         roomId,
         remoteUserId,
         state: mappedState,
+        peer: describePeerConnection(peerConnection),
+      });
+      if (mappedState === "connected" || mappedState === "connecting") {
+        void logInboundVideoDiagnostics(remoteUserId, peerConnection, `pc_${mappedState}`);
+      }
+    });
+
+    (peerConnection as any).addEventListener("iceconnectionstatechange", () => {
+      logChatRtc("diag_ice_connection_state", {
+        roomId,
+        remoteUserId,
+        peer: describePeerConnection(peerConnection),
+      });
+    });
+
+    (peerConnection as any).addEventListener("signalingstatechange", () => {
+      logChatRtc("diag_signaling_state", {
+        roomId,
+        remoteUserId,
+        peer: describePeerConnection(peerConnection),
       });
     });
 
@@ -568,7 +827,7 @@ export function useCommunicationRoomSession({
       [remoteUserId]: "connecting",
     }));
     return peerConnection;
-  }, [attachMissingLocalTracks, roomId, sendBroadcast]);
+  }, [attachMissingLocalTracks, logInboundVideoDiagnostics, roomId, sendBroadcast]);
 
   const createAndSendOffer = useCallback(async (remoteUserId: string) => {
     const resolvedIdentity = identityRef.current;
@@ -581,18 +840,23 @@ export function useCommunicationRoomSession({
       offerToReceiveAudio: true,
       offerToReceiveVideo: true,
     });
+    const normalizedOffer = {
+      ...offer,
+      sdp: preferVideoCodecInSdp(offer.sdp, PREFERRED_VIDEO_CODEC),
+    };
     logChatRtc("offer_created", {
       roomId,
       remoteUserId,
+      peer: describePeerConnection(peerConnection),
     });
-    await peerConnection.setLocalDescription(offer);
+    await peerConnection.setLocalDescription(normalizedOffer);
 
     await sendBroadcast("webrtc:offer", {
       targetUserId: remoteUserId,
       fromUserId: resolvedIdentity.userId,
       description: {
-        type: offer.type,
-        sdp: offer.sdp ?? null,
+        type: normalizedOffer.type,
+        sdp: normalizedOffer.sdp ?? null,
       },
     });
   }, [ensurePeerConnection, roomId, sendBroadcast]);
@@ -658,6 +922,14 @@ export function useCommunicationRoomSession({
     ensurePeerConnection,
     roomId,
   ]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    if (!roomRef.current || !identityRef.current || loading) return;
+    if (presenceParticipants.length === 0) return;
+
+    void syncPeerConnections(presenceParticipants);
+  }, [enabled, loading, presenceParticipants, syncPeerConnections]);
 
   const setPresenceFromChannel = useCallback(async () => {
     const channel = channelRef.current;
@@ -741,7 +1013,7 @@ export function useCommunicationRoomSession({
         setIdentity(null);
         setMemberships([]);
         setPresenceParticipants([]);
-        setRemoteStreamURLByUserId({});
+        setRemoteStreamsByUserId({});
         setConnectionStateByUserId({});
         setLocalStreamURL("");
         setLoading(false);
@@ -936,19 +1208,29 @@ export function useCommunicationRoomSession({
         if (!peerConnection) return;
 
         await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription(payload?.description as any));
+        logChatRtc("diag_offer_remote_description_set", {
+          roomId: snapshot.room.roomId,
+          fromUserId,
+          peer: describePeerConnection(peerConnection),
+        });
+        void logInboundVideoDiagnostics(fromUserId, peerConnection, "offer_remote_description_set");
         const answer = await peerConnection.createAnswer();
+        const normalizedAnswer = {
+          ...answer,
+          sdp: preferVideoCodecInSdp(answer.sdp, PREFERRED_VIDEO_CODEC),
+        };
         logChatRtc("answer_created", {
           roomId: snapshot.room.roomId,
           fromUserId,
         });
-        await peerConnection.setLocalDescription(answer);
+        await peerConnection.setLocalDescription(normalizedAnswer);
         await sendBroadcast("webrtc:answer", {
           // Route the answer back to the original offer sender.
           targetUserId: fromUserId,
           fromUserId: currentIdentity.userId,
           description: {
-            type: answer.type,
-            sdp: answer.sdp ?? null,
+            type: normalizedAnswer.type,
+            sdp: normalizedAnswer.sdp ?? null,
           },
         });
       });
@@ -970,6 +1252,12 @@ export function useCommunicationRoomSession({
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection) return;
         await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription(payload?.description as any));
+        logChatRtc("diag_answer_remote_description_set", {
+          roomId: snapshot.room.roomId,
+          fromUserId,
+          peer: describePeerConnection(peerConnection),
+        });
+        void logInboundVideoDiagnostics(fromUserId, peerConnection, "answer_remote_description_set");
       });
 
       channel.on("broadcast", { event: "webrtc:ice" }, async ({ payload }: { payload: Record<string, unknown> }) => {
@@ -1124,6 +1412,7 @@ export function useCommunicationRoomSession({
     cleanupSessionMedia,
     cleanupSnapshotChannel,
     ensureInitialLocalStream,
+    logInboundVideoDiagnostics,
     ensurePeerConnection,
     isRtcAvailable,
     refreshSnapshot,
@@ -1341,7 +1630,7 @@ export function useCommunicationRoomSession({
         isSelf: participant.userId === localUserId,
         streamURL: participant.userId === localUserId
           ? localStreamURL || undefined
-          : remoteStreamURLByUserId[participant.userId],
+          : getCommunicationStreamURL(remoteStreamsByUserId[participant.userId] ?? null) || undefined,
         connectionState: participant.userId === localUserId
           ? "connected"
           : (connectionStateByUserId[participant.userId] ?? "waiting"),
@@ -1376,7 +1665,26 @@ export function useCommunicationRoomSession({
       },
       ...merged,
     ];
-  }, [cameraEnabled, connectionStateByUserId, identity, localStreamURL, memberships, micEnabled, presenceParticipants, remoteStreamURLByUserId, room?.hostUserId]);
+  }, [cameraEnabled, connectionStateByUserId, identity, localStreamURL, memberships, micEnabled, presenceParticipants, remoteStreamsByUserId, room?.hostUserId]);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const localUserId = identity?.userId ?? "";
+    const remoteParticipants = presenceParticipants
+      .filter((participant) => participant.userId !== localUserId)
+      .map((participant) => ({
+        userId: participant.userId,
+        cameraOn: participant.cameraOn,
+        micOn: participant.micOn,
+        connectionState: connectionStateByUserId[participant.userId] ?? "waiting",
+        stream: describeStream(remoteStreamsByUserId[participant.userId] ?? null),
+      }));
+    if (remoteParticipants.length === 0) return;
+    logChatRtc("diag_render_binding", {
+      roomId,
+      remoteParticipants,
+    });
+  }, [connectionStateByUserId, identity?.userId, presenceParticipants, remoteStreamsByUserId, roomId]);
 
   return {
     room,
@@ -1400,4 +1708,33 @@ export function useCommunicationRoomSession({
 
 function formatRoomId(value: string) {
   return String(value ?? "").trim().toUpperCase();
+}
+
+function preferVideoCodecInSdp(sdp: string | null | undefined, codec: string) {
+  const normalizedSdp = String(sdp ?? "");
+  if (!normalizedSdp) return sdp ?? null;
+
+  const lines = normalizedSdp.split("\r\n");
+  const mLineIndex = lines.findIndex((line) => line.startsWith("m=video "));
+  if (mLineIndex < 0) return normalizedSdp;
+
+  const codecPattern = new RegExp(`a=rtpmap:(\\d+) ${codec}/`, "i");
+  const codecPayloadType = lines
+    .map((line) => line.match(codecPattern)?.[1] ?? "")
+    .find(Boolean);
+
+  if (!codecPayloadType) return normalizedSdp;
+
+  const mLineParts = lines[mLineIndex].split(" ");
+  if (mLineParts.length <= 3) return normalizedSdp;
+
+  const header = mLineParts.slice(0, 3);
+  const payloads = mLineParts.slice(3);
+  const reorderedPayloads = [
+    codecPayloadType,
+    ...payloads.filter((payload) => payload !== codecPayloadType),
+  ];
+
+  lines[mLineIndex] = [...header, ...reorderedPayloads].join(" ");
+  return lines.join("\r\n");
 }

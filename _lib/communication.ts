@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import type { MediaStream } from "react-native-webrtc";
 
@@ -23,8 +24,13 @@ export const COMMUNICATION_ROOMS_TABLE = "communication_rooms";
 export const COMMUNICATION_ROOM_MEMBERSHIPS_TABLE = "communication_room_memberships";
 export const COMMUNICATION_ROOM_MAX_PARTICIPANTS = 4;
 export const COMMUNICATION_CHANNEL_PREFIX = "comm-room-";
-export const COMMUNICATION_DEFAULT_ICE_SERVERS = [{ urls: ["stun:stun.l.google.com:19302"] }];
 export const COMMUNICATION_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS;
+
+type CommunicationIceServer = {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+};
 
 const COMMUNICATION_ROOM_BASE_SELECT =
   "room_id,room_code,host_user_id,status,created_at,updated_at,linked_party_id,linked_room_code,linked_room_mode";
@@ -149,6 +155,127 @@ export type CreateCommunicationRoomResult =
 type RTCModule = typeof import("react-native-webrtc");
 
 let cachedRTCModule: RTCModule | null | undefined;
+let cachedCommunicationIceServers: CommunicationIceServer[] | null = null;
+
+const COMMUNICATION_FALLBACK_ICE_SERVERS: CommunicationIceServer[] = [
+  { urls: ["stun:stun.l.google.com:19302"] },
+];
+
+const normalizeIceUrlList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry ?? "").trim())
+      .filter(Boolean);
+  }
+
+  return String(value ?? "")
+    .split(/[,\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const normalizeCommunicationIceServer = (value: unknown): CommunicationIceServer | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const urls = normalizeIceUrlList(raw.urls);
+  if (urls.length === 0) return null;
+
+  const username = String(raw.username ?? "").trim();
+  const credential = String(raw.credential ?? "").trim();
+
+  return {
+    urls: urls.length === 1 ? urls[0] : urls,
+    username: username || undefined,
+    credential: credential || undefined,
+  };
+};
+
+const parseIceServersJson = (value: unknown): CommunicationIceServer[] => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return [];
+
+  try {
+    const parsed = JSON.parse(normalized);
+    return (Array.isArray(parsed) ? parsed : [])
+      .map((entry) => normalizeCommunicationIceServer(entry))
+      .filter(Boolean) as CommunicationIceServer[];
+  } catch {
+    return [];
+  }
+};
+
+const readCommunicationRuntimeConfig = () => {
+  const expoRuntime = Constants.expoConfig?.extra?.runtime;
+  const runtimeObject = expoRuntime && typeof expoRuntime === "object" && !Array.isArray(expoRuntime)
+    ? expoRuntime as Record<string, unknown>
+    : {};
+  const communication = runtimeObject.communication && typeof runtimeObject.communication === "object" && !Array.isArray(runtimeObject.communication)
+    ? runtimeObject.communication as Record<string, unknown>
+    : {};
+
+  return {
+    iceServers: String(
+      process.env.EXPO_PUBLIC_COMMUNICATION_ICE_SERVERS
+      || communication.iceServers
+      || "",
+    ).trim(),
+    stunUrls: String(
+      process.env.EXPO_PUBLIC_COMMUNICATION_STUN_URLS
+      || communication.stunUrls
+      || "",
+    ).trim(),
+    turnUrls: String(
+      process.env.EXPO_PUBLIC_COMMUNICATION_TURN_URLS
+      || communication.turnUrls
+      || "",
+    ).trim(),
+    turnUsername: String(
+      process.env.EXPO_PUBLIC_COMMUNICATION_TURN_USERNAME
+      || communication.turnUsername
+      || "",
+    ).trim(),
+    turnCredential: String(
+      process.env.EXPO_PUBLIC_COMMUNICATION_TURN_CREDENTIAL
+      || communication.turnCredential
+      || "",
+    ).trim(),
+  };
+};
+
+const resolveCommunicationIceServers = (): CommunicationIceServer[] => {
+  if (cachedCommunicationIceServers) return cachedCommunicationIceServers;
+
+  const runtimeConfig = readCommunicationRuntimeConfig();
+  const parsedServers = parseIceServersJson(runtimeConfig.iceServers);
+  if (parsedServers.length > 0) {
+    cachedCommunicationIceServers = parsedServers;
+    return parsedServers;
+  }
+
+  const stunUrls = normalizeIceUrlList(runtimeConfig.stunUrls);
+  const turnUrls = normalizeIceUrlList(runtimeConfig.turnUrls);
+  const nextServers: CommunicationIceServer[] = [];
+
+  if (stunUrls.length > 0) {
+    nextServers.push({ urls: stunUrls.length === 1 ? stunUrls[0] : stunUrls });
+  }
+
+  if (turnUrls.length > 0) {
+    nextServers.push({
+      urls: turnUrls.length === 1 ? turnUrls[0] : turnUrls,
+      username: runtimeConfig.turnUsername || undefined,
+      credential: runtimeConfig.turnCredential || undefined,
+    });
+  }
+
+  cachedCommunicationIceServers = nextServers.length > 0
+    ? nextServers
+    : COMMUNICATION_FALLBACK_ICE_SERVERS;
+
+  return cachedCommunicationIceServers;
+};
+
+export const COMMUNICATION_DEFAULT_ICE_SERVERS = resolveCommunicationIceServers();
 
 export const getCommunicationRTCModule = (): RTCModule | null => {
   if (Platform.OS === "web") return null;
@@ -691,6 +818,9 @@ export async function createCommunicationMediaStream(options: {
     video: options.video
       ? {
           facingMode: "user",
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 15, max: 24 },
         }
       : false,
   });

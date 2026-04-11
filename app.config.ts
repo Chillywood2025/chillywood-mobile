@@ -18,6 +18,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ? existingRuntime.revenueCat
       : {}
   ) as Record<string, unknown>;
+  const existingCommunication = (
+    existingRuntime.communication && typeof existingRuntime.communication === "object" && !Array.isArray(existingRuntime.communication)
+      ? existingRuntime.communication
+      : {}
+  ) as Record<string, unknown>;
 
   return {
     ...base,
@@ -33,6 +38,24 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         betaEnvironment: normalizeRuntimeEnvironment(
           process.env.EXPO_PUBLIC_BETA_ENVIRONMENT || existingRuntime.betaEnvironment,
         ),
+        communication: {
+          ...existingCommunication,
+          iceServers: normalizeText(
+            process.env.EXPO_PUBLIC_COMMUNICATION_ICE_SERVERS || existingCommunication.iceServers,
+          ),
+          stunUrls: normalizeText(
+            process.env.EXPO_PUBLIC_COMMUNICATION_STUN_URLS || existingCommunication.stunUrls,
+          ),
+          turnUrls: normalizeText(
+            process.env.EXPO_PUBLIC_COMMUNICATION_TURN_URLS || existingCommunication.turnUrls,
+          ),
+          turnUsername: normalizeText(
+            process.env.EXPO_PUBLIC_COMMUNICATION_TURN_USERNAME || existingCommunication.turnUsername,
+          ),
+          turnCredential: normalizeText(
+            process.env.EXPO_PUBLIC_COMMUNICATION_TURN_CREDENTIAL || existingCommunication.turnCredential,
+          ),
+        },
         revenueCat: {
           ...existingRevenueCat,
           androidDebugPublicSdkKey: normalizeText(
