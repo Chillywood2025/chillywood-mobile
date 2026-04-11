@@ -4,11 +4,16 @@
 
 1. Confirm `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and `EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST` are set.
 2. Set `EXPO_PUBLIC_BETA_ENVIRONMENT=public-v1`.
-3. Apply migrations through `202603270009_public_v1_feedback_policy.sql`.
+3. Apply migrations through `202603270010_public_v1_feedback_policy.sql`.
 4. Confirm real sign-in is enabled in the launch build. Do not treat temporary no-login behavior as release-ready.
 5. Run `npm run validate:runtime`.
 6. Run `npm run lint`.
 7. Run `npm run typecheck`.
+8. Confirm Android legal/support env values are ready for the launch build:
+   - `EXPO_PUBLIC_PRIVACY_POLICY_URL`
+   - `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`
+   - `EXPO_PUBLIC_ACCOUNT_DELETION_URL`
+   - `EXPO_PUBLIC_SUPPORT_EMAIL`
 
 ## Public V1 Smoke Tests
 
@@ -21,8 +26,15 @@
 7. Sign in with a second distinct account and confirm communication room join, leave, and reconnect still behave correctly.
 8. Submit one title report, one room or participant report, and confirm no client error is shown.
 9. Open `/support`, submit one feedback item, and confirm it lands in `beta_feedback_items`.
-10. Confirm a non-allowlisted signed-in account is blocked from `/admin`.
-11. Build Android production with the `production` EAS profile and confirm the bundle succeeds.
+10. Open `/settings` on Android and confirm:
+    - `Privacy Policy` opens the configured policy destination
+    - `Terms of Use` opens the configured terms destination
+    - `Request Account Deletion` reaches the configured deletion destination or the canonical support fallback path
+11. Open Login, Signup, Settings, and Support on Android and confirm top spacing/safe-area treatment looks consistent and the auth forms remain usable with the keyboard open.
+12. Open a title detail route on Android and confirm no literal ad placeholder copy appears.
+13. Confirm Android-facing premium lock surfaces use neutral availability language rather than tester/placeholder wording.
+14. Confirm a non-allowlisted signed-in account is blocked from `/admin`.
+15. Build Android production with the `production` EAS profile and confirm the bundle succeeds.
 
 ## EAS Update Rollout
 
@@ -50,6 +62,9 @@
 - Signed-in safety-report verification completed
 - Distinct-account two-device watch-party verification completed
 - Distinct-account two-device communication verification completed
+- Android account-policy handoffs verified on the launch build
+- Android public monetization copy no longer reads as placeholder/test-only copy
+- Android title detail no longer shows literal ad placeholder content
 - Zero open `blocking` feedback items
 - Zero open `before_public` feedback items
 - Preview-channel OTA publish verified on the current runtime before any production rollout
