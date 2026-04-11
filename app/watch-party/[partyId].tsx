@@ -1590,12 +1590,12 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.center}>
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>
-            {accessGate.access.reason === "premium_required" ? "Premium room coming soon" : "Party Pass coming soon"}
+            {accessGate.access.reason === "premium_required" ? "Premium room access not currently available" : "Party Pass access not currently available"}
             </Text>
             <Text style={styles.errorBody}>
             {accessGate.access.reason === "premium_required"
-              ? "This room stays locked in this build while Premium room access is being prepared for a later update."
-              : "This room stays locked in this build while Party Pass purchasing is being prepared for a later update."}
+              ? "This room stays locked because premium room access is not currently available for this device or account."
+              : "This room stays locked because Party Pass access is not currently available for this device or account."}
             </Text>
           <ProtectedSessionNote
             {...getProtectedSessionCopy(sharedRoomMode === "live" ? "live-room" : "party-room", {

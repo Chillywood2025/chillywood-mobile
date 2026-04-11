@@ -49,35 +49,35 @@ export default function SettingsScreen() {
   }, [isLoading, isSignedIn, refreshMonetizationStatus]);
 
   const monetizationStatusLabel = useMemo(() => {
-    if (!monetizationSnapshot.configuration.shouldConfigure) return "Deferred in this build";
+    if (!monetizationSnapshot.configuration.shouldConfigure) return "Not currently available";
     if (monetizationSnapshot.status === "ready") return "Configured for later rollout";
-    if (monetizationSnapshot.status === "store_unavailable") return "Not active in this build";
-    if (monetizationSnapshot.status === "partial") return "Deferred setup in progress";
-    return "Deferred in this build";
+    if (monetizationSnapshot.status === "store_unavailable") return "Not currently available on this device";
+    if (monetizationSnapshot.status === "partial") return "Availability still being finalized";
+    return "Not currently available";
   }, [monetizationSnapshot.configuration.shouldConfigure, monetizationSnapshot.status]);
 
   const planLabel = useMemo(() => (
-    monetizationSnapshot.targets.premium_subscription?.hasEntitlement ? "Premium active on this account" : "Not enabled in this build"
+    monetizationSnapshot.targets.premium_subscription?.hasEntitlement ? "Premium active on this account" : "Not currently available on this account"
   ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
 
   const entitlementsLabel = useMemo(() => (
     monetizationSnapshot.activeEntitlementIds.length
       ? monetizationSnapshot.activeEntitlementIds.join(", ")
-      : "None active in this build"
+      : "None active on this account"
   ), [monetizationSnapshot.activeEntitlementIds]);
 
   const offeringsLabel = useMemo(() => {
     if (monetizationSnapshot.currentOfferingId) return monetizationSnapshot.currentOfferingId;
     if (monetizationSnapshot.availableOfferingIds.length) {
-      return `${monetizationSnapshot.availableOfferingIds.length} deferred setup item${monetizationSnapshot.availableOfferingIds.length === 1 ? "" : "s"} found`;
+      return `${monetizationSnapshot.availableOfferingIds.length} offer configuration item${monetizationSnapshot.availableOfferingIds.length === 1 ? "" : "s"} found`;
     }
-    return "No tester-facing premium rollout is enabled";
+    return "No premium offer is currently available";
   }, [monetizationSnapshot.availableOfferingIds, monetizationSnapshot.currentOfferingId]);
 
   const issueLabel = useMemo(() => (
     monetizationSnapshot.targets.premium_subscription?.hasEntitlement
-      ? "This account already has Premium access, but tester-facing billing remains deferred in this build."
-      : "Premium surfaces stay locked honestly while billing is deferred for testing and store readiness."
+      ? "This account already has Premium access, but new premium purchases are not currently available from this surface."
+      : "Premium access is not currently available from this surface. Access options will appear here when they are available for this device and account."
   ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
 
   const onPressSignOut = async () => {
@@ -248,9 +248,9 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardKicker}>PREMIUM PREVIEW</Text>
-        <Text style={styles.secondaryTitle}>Premium Coming Soon</Text>
+        <Text style={styles.secondaryTitle}>Premium Access</Text>
         <Text style={styles.body}>
-          Premium features are not enabled in this build yet. This screen stays informational only while Public v1 testing and store readiness continue.
+          This screen shows the current premium access state for your account. If premium access is not currently available, this screen stays informational until access options are available here.
         </Text>
 
         <View style={styles.identityBlock}>

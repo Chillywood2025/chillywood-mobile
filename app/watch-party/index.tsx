@@ -60,8 +60,8 @@ const getJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null | un
     : "Signed-in Chi'llywood members can join with the room code while the host keeps the room open.";
 
 const getContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
-  if (contentAccessRule === "premium") return "Premium live-room access is not enabled in this build yet, so this room stays locked for now.";
-  if (contentAccessRule === "party_pass") return "Party Pass purchasing is not enabled in this build yet, so this room stays locked for now.";
+  if (contentAccessRule === "premium") return "Premium live-room access is not currently available for this device or account, so this room stays locked right now.";
+  if (contentAccessRule === "party_pass") return "Party Pass access is not currently available for this device or account, so this room stays locked right now.";
   return "No extra entitlement is needed beyond normal signed-in live access.";
 };
 
@@ -76,8 +76,8 @@ const getPartyJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null
     : "Signed-in Chi'llywood members can join with the room code while the host keeps the party open.";
 
 const getPartyContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
-  if (contentAccessRule === "premium") return "Premium title access is not enabled in this build yet, so this party room stays locked for now.";
-  if (contentAccessRule === "party_pass") return "Party Pass purchasing is not enabled in this build yet, so this party room stays locked for now.";
+  if (contentAccessRule === "premium") return "Premium title access is not currently available for this device or account, so this party room stays locked right now.";
+  if (contentAccessRule === "party_pass") return "Party Pass access is not currently available for this device or account, so this party room stays locked right now.";
   return "No extra entitlement is needed beyond normal signed-in title access.";
 };
 

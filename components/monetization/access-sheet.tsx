@@ -123,7 +123,7 @@ export function AccessSheet({
         setStatusTone("error");
         setStatusMessage(
           deferredMonetization
-            ? "Unable to load the current Premium status for this testing build."
+            ? "Unable to load the current Premium access status right now."
             : "Unable to load the current Chi'llywood purchase options.",
         );
       })
@@ -154,16 +154,16 @@ export function AccessSheet({
 
   const copy = {
     kicker: deferredMonetization
-      ? (reason === "premium_required" ? "PREMIUM COMING SOON" : "ROOM ACCESS COMING SOON")
+      ? (reason === "premium_required" ? "PREMIUM ACCESS" : "ROOM ACCESS")
       : (kickerOverride ?? baseCopy.kicker),
     title: deferredMonetization
-      ? (reason === "premium_required" ? "Premium is not enabled yet" : "Room access is coming later")
+      ? (reason === "premium_required" ? "Premium access is not currently available" : "Room access is not currently available")
       : (titleOverride ?? baseCopy.title),
     body: deferredMonetization
       ? (
           reason === "premium_required"
-            ? "Premium features are not enabled in this build yet. This title stays locked until a later testing-ready update."
-            : "Party Pass purchasing is not enabled in this build yet. This room stays locked until a later testing-ready update."
+            ? "Premium access is not currently available for this title on this device or account. Access will appear here when it becomes available."
+            : "Party Pass access is not currently available for this room on this device or account. Access will appear here when it becomes available."
         )
       : (bodyOverride ?? baseCopy.body),
     actionLabel: deferredMonetization

@@ -2686,7 +2686,7 @@ export default function PlayerScreen() {
   const standaloneAccessStatusLabel = useMemo(() => {
     if (!isPremiumStandaloneTitle) return "";
     if (standaloneAccessLoading) return "Checking access";
-    if (standalonePlaybackBlocked) return "Premium coming soon";
+    if (standalonePlaybackBlocked) return "Premium access not currently available";
     if (standalonePlaybackUnknown) return "Access retry needed";
     return "Premium ready";
   }, [isPremiumStandaloneTitle, standaloneAccessLoading, standalonePlaybackBlocked, standalonePlaybackUnknown]);
@@ -2700,7 +2700,7 @@ export default function PlayerScreen() {
     }
 
     if (standalonePlaybackBlocked) {
-      return "PLAYER HELPER · Premium playback is not enabled in this build yet. Watch-Party Live still routes honestly from this player and will recheck access when that later update arrives.";
+      return "PLAYER HELPER · Premium playback is not currently available for this title on this device or account. Watch-Party Live still routes honestly from this player and will recheck access when premium access becomes available.";
     }
 
     if (isPremiumStandaloneTitle) {
