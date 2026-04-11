@@ -46,6 +46,7 @@ import {
     type WatchPartyState,
 } from "../../../_lib/watchParty";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../../components/room/control-style-tokens";
+import { InternalInviteSheet } from "../../../components/chat/internal-invite-sheet";
 import { LiveLowerDock } from "../../../components/room/live-lower-dock";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { pushRecentReaction } from "../../../components/room/reaction-picker";
@@ -171,6 +172,7 @@ export default function WatchPartyLiveStageScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ userId: string; label: string } | null>(null);
+  const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const myCameraPreviewUrlRef = useRef<string>("");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
@@ -1051,8 +1053,14 @@ export default function WatchPartyLiveStageScreen() {
 
   const onShareLiveRoom = useCallback(async () => {
     if (!liveRoomShareCode) return;
+    setInviteSheetVisible(true);
+  }, [liveRoomShareCode]);
+
+  const onSystemShareLiveRoom = useCallback(async () => {
+    if (!liveRoomShareCode) return;
     await Share.share({
-      message: `${branding.appDisplayName} live room code: ${liveRoomShareCode}`,
+      message: `${branding.appDisplayName} live room code: ${liveRoomShareCode}\n\nOpen ${branding.appDisplayName} -> Live Watch-Party -> enter the code to join the live room.`,
+      title: "Live Room Invite",
     }).catch(() => {});
   }, [branding.appDisplayName, liveRoomShareCode]);
 
@@ -1240,7 +1248,7 @@ export default function WatchPartyLiveStageScreen() {
               <Text style={styles.liveRoomControlKicker}>INVITE + SHARE</Text>
               <Text style={styles.liveRoomControlTitle}>Keep the room ready before the stage starts.</Text>
               <Text style={styles.liveRoomControlBody}>
-                Share the live room code here. Invite flow belongs in Live Room so Live Stage can stay presentation-first.
+                Invite people inside Chi&apos;llywood from Live Room first, then fall back to system share only if needed so Live Stage stays presentation-first.
               </Text>
               <View style={styles.liveRoomShareRow}>
                 <View style={styles.liveRoomShareCodePill}>
@@ -1252,7 +1260,7 @@ export default function WatchPartyLiveStageScreen() {
                   onPress={onShareLiveRoom}
                   disabled={!liveRoomShareCode}
                 >
-                  <Text style={styles.liveRoomShareButtonText}>Share room</Text>
+                  <Text style={styles.liveRoomShareButtonText}>Invite in app</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1999,6 +2007,22 @@ export default function WatchPartyLiveStageScreen() {
         onClose={() => {
           setReportVisible(false);
           setReportTarget(null);
+        }}
+      />
+      <InternalInviteSheet
+        visible={inviteSheetVisible}
+        title="Invite people to this live room"
+        body="Find a Chi'llywood member, send the live-room code inside Chi'lly Chat, or fall back to system share if you need to leave the app."
+        inviteMessage={`Join me in a Chi'llywood live room.\n\nRoom code: ${liveRoomShareCode}\n\nOpen Chi'llywood -> Live Watch-Party -> enter the code to join the live room.`}
+        onClose={() => setInviteSheetVisible(false)}
+        onInviteSent={(thread) => {
+          router.push({
+            pathname: "/chat/[threadId]",
+            params: { threadId: thread.threadId },
+          });
+        }}
+        onSystemShareFallback={() => {
+          void onSystemShareLiveRoom();
         }}
       />
 

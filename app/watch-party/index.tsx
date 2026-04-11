@@ -16,6 +16,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TextInput,
@@ -27,6 +28,7 @@ import { reportRuntimeError } from "../../_lib/logger";
 import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
+import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
@@ -136,6 +138,7 @@ export default function WatchPartyIndexScreen() {
   const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
   const [pendingAccessPreview, setPendingAccessPreview] = useState<RoomPreview | null>(null);
   const [pendingAccessDecision, setPendingAccessDecision] = useState<RoomAccessDecision | null>(null);
+  const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
   const branding = resolveBrandingConfig(appConfig);
@@ -784,6 +787,9 @@ export default function WatchPartyIndexScreen() {
     : "Set the party room before shared playback.";
   const roomCodeCardValue = topRoomCode || (isPreparingInitialCode ? "Preparing code…" : "Room code unavailable");
   const roomCodeActionBusy = refreshingCode || creating || isPreparingInitialCode;
+  const waitingRoomInviteMessage = isLiveWaitingRoom
+    ? `Join me in a Chi'llywood live room.\n\nRoom code: ${topRoomCode}\n\nOpen Chi'llywood -> Live Watch-Party -> enter the code to join the live room.`
+    : `Join me in Chi'llywood Watch-Party Live.\n\nRoom code: ${topRoomCode}\n\nOpen Chi'llywood -> Watch-Party Live -> enter the code to join the party room.`;
   const liveJoinModes = [
     {
       id: "host",
@@ -1080,14 +1086,21 @@ export default function WatchPartyIndexScreen() {
               ? "Preparing a shareable code for this live waiting room."
               : "Preparing a shareable room code for this waiting room.")
             : (isLiveWaitingRoom
-              ? "Share the room code before the live room opens so guests enter through the correct live path."
-              : "Share the room code to invite friends into this waiting room.")}
+              ? "Invite people inside Chi'llywood before the live room opens so guests enter through the correct live path."
+              : "Invite people inside Chi'llywood before the party opens, then fall back to system share only if needed.")}
+          actionLabel="Invite in app"
+          onActionPress={() => {
+            if (!topRoomCode || roomCodeActionBusy) return;
+            setInviteSheetVisible(true);
+          }}
           styles={{
             card: styles.inviteCard,
             left: styles.inviteMeta,
             label: styles.inviteLabel,
             code: styles.inviteCode,
             body: styles.inviteBody,
+            actionBtn: styles.generateCodeButton,
+            actionText: styles.generateCodeButtonText,
           }}
         />
         <TouchableOpacity
@@ -1317,6 +1330,30 @@ export default function WatchPartyIndexScreen() {
           onClose={() => setAccessSheetVisible(false)}
         />
       ) : null}
+      <InternalInviteSheet
+        visible={inviteSheetVisible}
+        title={isLiveWaitingRoom ? "Invite people to this live room" : "Invite people to this watch-party"}
+        body={isLiveWaitingRoom
+          ? "Find a Chi'llywood member, send the live-room code in Chi'lly Chat, or fall back to system share if you need to leave the app."
+          : "Find a Chi'llywood member, send the party-room code in Chi'lly Chat, or fall back to system share if you need to leave the app."}
+        inviteMessage={waitingRoomInviteMessage}
+        onClose={() => setInviteSheetVisible(false)}
+        onInviteSent={(thread) => {
+          router.push({
+            pathname: "/chat/[threadId]",
+            params: { threadId: thread.threadId },
+          });
+        }}
+        onSystemShareFallback={() => {
+          if (!topRoomCode) return;
+          Share.share({
+            message: isLiveWaitingRoom
+              ? `${branding.appDisplayName} live room code: ${topRoomCode}\n\nOpen ${branding.appDisplayName} -> Live Watch-Party -> enter the code to join.`
+              : `Join my ${branding.appDisplayName} Watch-Party Live!\n\nRoom code: ${topRoomCode}\n\nOpen ${branding.appDisplayName} -> Watch-Party Live -> enter the code to join.`,
+            title: isLiveWaitingRoom ? "Live Room Invite" : "Watch-Party Live Invite",
+          }).catch(() => {});
+        }}
+      />
     </View>
   );
 }

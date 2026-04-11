@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the closed fake-comment cleanup, the re-proved Live Waiting Room / Live Room / Live Stage path, the now-closed shared analytics sink fix in `app/_layout.tsx`, the now-re-proved auth/session path on the current owners, the now-closed Premium/store repo-proof lane, the new tester/store-facing monetization hardening on `components/monetization/access-sheet.tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/settings.tsx`, and the new Chi'lly Chat thread-call stale-session fix on `app/chat/[threadId].tsx`. Do not reopen the resolved room-flow, analytics, auth/session, monetization, or direct-thread call owners unless a later regression proves a direct break. The next exact operational step is still testing/store-readiness closure rather than monetization closure: fix the remaining release/store identity blockers for public testing and store submission, starting with the missing iOS store identity truth and the release-minded config proof that goes with it.
+Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the closed fake-comment cleanup, the re-proved Live Waiting Room / Live Room / Live Stage path, the now-closed shared analytics sink fix in `app/_layout.tsx`, the now-re-proved auth/session path on the current owners, the now-closed Premium/store repo-proof lane, the new tester/store-facing monetization hardening on `components/monetization/access-sheet.tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/settings.tsx`, the new Chi'lly Chat thread-call stale-session fix on `app/chat/[threadId].tsx`, and the new Chi'llywood-native internal invite path on `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/watch-party/live-stage/[partyId].tsx`. Do not reopen the resolved room-flow, analytics, auth/session, monetization, direct-thread call, or internal-invite owners unless a later regression proves a direct break. The next exact operational step is still testing/store-readiness closure rather than monetization closure: fix the remaining release/store identity blockers for public testing and store submission, starting with the missing iOS store identity truth and the release-minded config proof that goes with it.
 
 ## Current Plan
 1. Preserve the carried-forward proved baseline exactly as recorded.
@@ -11,7 +11,8 @@ Carry forward the still-valid proved baseline exactly as recorded, including the
 5. Keep the resolved Premium/store repo-proof lane closed and keep monetization setup deferred while testing/store readiness work continues.
 6. Keep the new tester/store-facing surface hardening closed and do not reopen `components/monetization/access-sheet.tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, or `app/settings.tsx` unless a later regression proves a direct misleading-billing surface issue.
 7. Keep the new Chi'lly Chat direct-thread call stale-session fix closed and do not reopen `app/chat/[threadId].tsx` unless a later regression proves a direct calling-owner issue.
-8. Narrow the next lane to release/store identity readiness rather than RevenueCat/store-offer closure, and keep unrelated local dirt out of any future checkpoint.
+8. Keep the new Chi'llywood-native internal invite path closed and do not reopen `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, or `app/watch-party/live-stage/[partyId].tsx` unless a later regression proves a direct sharing-owner issue.
+9. Narrow the next lane to release/store identity readiness rather than RevenueCat/store-offer closure, and keep unrelated local dirt out of any future checkpoint.
 
 ## Exact Next Batch
 - preserve the now-re-proved waiting-room and live-stage handoff on the current owners without reopening those routes
@@ -20,6 +21,7 @@ Carry forward the still-valid proved baseline exactly as recorded, including the
 - preserve the now-closed Premium/store repo-proof lane on the current monetization owners without reopening monetization logic
 - preserve the new tester/store-facing monetization surface hardening on the current owners without reopening live purchase language
 - preserve the new Chi'lly Chat direct-thread stale-call reconciliation on the current thread owner without reopening calling architecture
+- preserve the new Chi'llywood-native internal invite path on the current chat and room-share owners without reopening those files
 - fix the remaining release/store identity blockers needed for public testing and store submission
 - re-prove the release-minded config and store-identity state after that targeted readiness change lands
 - preserve the carried-forward runtime and room-boundary truth exactly as already recorded
@@ -44,6 +46,7 @@ Do not:
 - reopen `app/(auth)/login.tsx`, `_lib/session.tsx`, `app/settings.tsx`, or broader auth/session work now that the proof lane is closed
 - reopen deferred Premium/store surface copy unless a tester/store-readiness regression proves those surfaces are misleading again
 - reopen `app/chat/[threadId].tsx` or broader Chi'lly Chat calling architecture unless a later regression proves a direct thread-call owner bug
+- reopen `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, or `app/watch-party/live-stage/[partyId].tsx` unless a later regression proves a direct internal invite/share owner bug
 - rewrite Chi'lly Chat doctrine beyond preserving current locked truth
 - rewrite Rachi official-account doctrine beyond preserving current locked truth
 - refactor app code, Maestro flows, migrations, packages, or runtime config as part of the proof pass

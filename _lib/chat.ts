@@ -12,6 +12,7 @@ import { getWritablePartyUserId } from "./watchParty";
 export const CHAT_THREADS_TABLE = "chat_threads";
 export const CHAT_THREAD_MEMBERS_TABLE = "chat_thread_members";
 export const CHAT_MESSAGES_TABLE = "chat_messages";
+export const CHAT_USER_PROFILES_TABLE = "user_profiles";
 
 export type ChatCallType = "voice" | "video";
 
@@ -20,6 +21,10 @@ export type ChatTargetIdentity = {
   displayName?: string;
   avatarUrl?: string | null;
   tagline?: string | null;
+};
+
+export type ChatUserSearchResult = ChatTargetIdentity & {
+  username?: string;
 };
 
 export type ChatThreadMember = {
@@ -90,12 +95,22 @@ type ChatMessageRow = {
   created_at?: string | null;
 };
 
+type ChatUserProfileRow = {
+  user_id?: string | null;
+  username?: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  tagline?: string | null;
+};
+
 const CHAT_THREAD_MEMBER_SELECT =
   "thread_id,user_id,display_name,avatar_url,tagline,joined_at,last_read_at,unread_count";
 const CHAT_THREAD_SELECT =
   `id,participant_pair_key,created_by,created_at,updated_at,last_message_at,last_message_preview,active_communication_room_id,active_call_type,members:${CHAT_THREAD_MEMBERS_TABLE}(${CHAT_THREAD_MEMBER_SELECT})`;
 const CHAT_MESSAGE_SELECT =
   "id,thread_id,sender_user_id,body,message_type,created_at";
+const CHAT_USER_SEARCH_SELECT =
+  "user_id,username,display_name,avatar_url,tagline";
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -210,6 +225,23 @@ function parseChatMessage(row: ChatMessageRow): ChatMessage | null {
     body,
     messageType: "text",
     createdAt: toText(row.created_at) || new Date().toISOString(),
+  };
+}
+
+function escapeIlikeValue(value: string) {
+  return value.replace(/[%_,()]/g, "").trim();
+}
+
+function parseChatUserSearchResult(row: ChatUserProfileRow): ChatUserSearchResult | null {
+  const userId = toText(row.user_id);
+  if (!userId) return null;
+
+  return {
+    userId,
+    username: toText(row.username) || undefined,
+    displayName: toText(row.display_name) || toText(row.username) || "User",
+    avatarUrl: toText(row.avatar_url) || undefined,
+    tagline: toText(row.tagline) || undefined,
   };
 }
 
@@ -354,6 +386,25 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
   return thread;
 }
 
+export async function searchChatPeople(rawQuery: string, limit = 12): Promise<ChatUserSearchResult[]> {
+  const currentUserId = await getRequiredChatUserId();
+  const query = escapeIlikeValue(rawQuery);
+  if (query.length < 2) return [];
+
+  const { data, error } = await supabase
+    .from(CHAT_USER_PROFILES_TABLE)
+    .select(CHAT_USER_SEARCH_SELECT)
+    .or(`display_name.ilike.%${query}%,username.ilike.%${query}%,tagline.ilike.%${query}%`)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) return [];
+
+  return (data as ChatUserProfileRow[])
+    .map(parseChatUserSearchResult)
+    .filter((entry): entry is ChatUserSearchResult => !!entry && entry.userId !== currentUserId);
+}
+
 async function getChatThreadByPairKey(pairKey: string) {
   const currentUserId = await getRequiredChatUserId();
   const { data, error } = await supabase
@@ -394,6 +445,15 @@ export async function sendChatMessage(threadId: string, body: string): Promise<C
     throw new Error("Failed to parse Chi'lly Chat message.");
   }
   return message;
+}
+
+export async function sendDirectInviteMessage(target: ChatTargetIdentity, body: string): Promise<{
+  thread: ChatThreadSummary;
+  message: ChatMessage;
+}> {
+  const thread = await getOrCreateDirectThread(target);
+  const message = await sendChatMessage(thread.threadId, body);
+  return { thread, message };
 }
 
 export async function markChatThreadRead(threadId: string): Promise<void> {

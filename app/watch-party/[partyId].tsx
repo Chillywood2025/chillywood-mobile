@@ -75,6 +75,7 @@ import {
 } from "../../_lib/watchParty";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
+import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
@@ -211,6 +212,7 @@ export default function WatchPartyRoomScreen() {
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
+  const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ type: "room" | "participant"; targetId: string; label: string } | null>(null);
@@ -1166,8 +1168,17 @@ export default function WatchPartyRoomScreen() {
   // ── Share / invite ───────────────────────────────────────────────────────────
   const displayRoomCode = String(room?.roomCode ?? "").trim().toUpperCase() || roomCodeHint;
   const roomCodeCardValue = displayRoomCode || "Room code unavailable";
+  const internalInviteMessage = `Join me in Chi'llywood Watch-Party Live.\n\nRoom code: ${displayRoomCode}\n\nOpen Chi'llywood -> Watch-Party Live -> enter the code to join the party room.`;
 
   const onShareCode = useCallback(() => {
+    if (!displayRoomCode) {
+      Alert.alert("Room code unavailable", "This room code is still syncing. Try sharing again in a moment.");
+      return;
+    }
+    setInviteSheetVisible(true);
+  }, [displayRoomCode]);
+
+  const onSystemShareCode = useCallback(() => {
     const roomCode = displayRoomCode;
     if (!roomCode) {
       Alert.alert("Room code unavailable", "This room code is still syncing. Try sharing again in a moment.");
@@ -2117,7 +2128,7 @@ export default function WatchPartyRoomScreen() {
         {/* ── Invite card ────────────────────────────────────────────── */}
         <RoomCodeInviteCard
           roomCode={roomCodeCardValue}
-          actionLabel="Share invite ↗"
+          actionLabel="Invite in app"
           onActionPress={onShareCode}
           codeSelectable
           styles={{
@@ -2370,6 +2381,21 @@ export default function WatchPartyRoomScreen() {
             }),
           });
         } : undefined}
+      />
+
+      <InternalInviteSheet
+        visible={inviteSheetVisible}
+        title="Invite people to this party room"
+        body="Find a Chi'llywood member, send the party-room code inside Chi'lly Chat, or fall back to system share if you need to leave the app."
+        inviteMessage={internalInviteMessage}
+        onClose={() => setInviteSheetVisible(false)}
+        onInviteSent={(thread) => {
+          router.push({
+            pathname: "/chat/[threadId]",
+            params: { threadId: thread.threadId },
+          });
+        }}
+        onSystemShareFallback={onSystemShareCode}
       />
 
       <ReportSheet
