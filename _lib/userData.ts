@@ -276,6 +276,34 @@ async function getSignedInUserId() {
   }
 }
 
+async function getSignedInUserSnapshot() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user ?? null;
+    return {
+      userId: user?.id ?? null,
+      email: normalizeTextValue(user?.email),
+      displayName: normalizeTextValue(
+        user?.user_metadata?.display_name
+        ?? user?.user_metadata?.full_name
+        ?? user?.user_metadata?.name,
+      ),
+    };
+  } catch {
+    return {
+      userId: null,
+      email: undefined,
+      displayName: undefined,
+    };
+  }
+}
+
+const buildFallbackUsernameFromEmail = (email?: string) => {
+  const localPart = String(email ?? "").split("@")[0]?.trim().toLowerCase() ?? "";
+  const normalized = localPart.replace(/[^a-z0-9._-]/g, "");
+  return normalized || undefined;
+};
+
 async function readRemoteUserProfile(userId: string): Promise<UserProfile | null> {
   const normalizedUserId = toIdString(userId);
   if (!normalizedUserId) return null;
@@ -766,8 +794,8 @@ export async function readUserProfile(): Promise<UserProfile> {
     return normalized;
   }
 
-  const userId = await getSignedInUserId();
-  const remoteProfile = userId ? await readRemoteUserProfile(userId) : null;
+  const signedInUser = await getSignedInUserSnapshot();
+  const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;
   if (remoteProfile?.username) {
     await writeJsonValue(USER_PROFILE_KEY, remoteProfile);
     await syncUserProfileToRemote(remoteProfile);
@@ -776,8 +804,10 @@ export async function readUserProfile(): Promise<UserProfile> {
 
   // Generate if missing
   const generated = normalizeUserProfile({
-    username: `Studio Guest ${Math.floor(1000 + Math.random() * 9000)}`,
+    username: buildFallbackUsernameFromEmail(signedInUser.email)
+      ?? `Studio Guest ${Math.floor(1000 + Math.random() * 9000)}`,
     avatarIndex: Math.floor(Math.random() * AVATARS.length),
+    displayName: signedInUser.displayName,
   });
   await saveUserProfile(generated);
   return generated;

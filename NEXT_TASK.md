@@ -1,14 +1,14 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the closed fake-comment cleanup, the re-proved Live Waiting Room / Live Room / Live Stage path, the now-closed shared analytics sink fix in `app/_layout.tsx`, the now-re-proved auth/session path on the current owners, the now-closed Premium/store repo-proof lane, the tester/store-facing monetization hardening on `components/monetization/access-sheet.tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/settings.tsx`, the Chi'lly Chat thread-call stale-session fix on `app/chat/[threadId].tsx`, the Chi'llywood-native internal invite path on `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/watch-party/live-stage/[partyId].tsx`, and the new social-identity sync hardening on `_lib/userData.ts` that keeps signed-in member profiles searchable through `public.user_profiles`. Do not reopen the resolved room-flow, analytics, auth/session, monetization, Party/Live, or broader chat architecture owners unless a later regression proves a direct break. The next exact operational step is now a two-real-phone Expo dev-client proof pass for the current Chi'lly Chat social path: verify internal invite search can find the other signed-in user, verify the invite lands in the correct direct thread, verify a fresh video call can start and join from `/chat/[threadId]`, then verify end/restart, leave/rejoin, and kill/reopen stale-state cleanup. After that runtime proof closes, return to the broader testing/store-readiness sequence already recorded.
+Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the closed fake-comment cleanup, the re-proved Live Waiting Room / Live Room / Live Stage path, the now-closed shared analytics sink fix in `app/_layout.tsx`, the now-re-proved auth/session path on the current owners, the now-closed Premium/store repo-proof lane, the tester/store-facing monetization hardening on `components/monetization/access-sheet.tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/settings.tsx`, the Chi'lly Chat thread-call stale-session fix on `app/chat/[threadId].tsx`, the Chi'llywood-native internal invite path on `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/watch-party/live-stage/[partyId].tsx`, and the two-step `_lib/userData.ts` hardening that now both syncs signed-in member profiles into `public.user_profiles` and seeds first-run fallback identity from auth email / metadata instead of an unpredictable guest-only label. Do not reopen the resolved room-flow, analytics, auth/session, monetization, Party/Live, or broader chat architecture owners unless a later regression proves a direct break. The next exact operational step is still the two-real-phone Expo dev-client proof pass for the current Chi'lly Chat social path: verify internal invite search can find the other signed-in user, verify the invite lands in the correct direct thread, verify a fresh video call can start and join from `/chat/[threadId]`, then verify end/restart, leave/rejoin, and kill/reopen stale-state cleanup. After that runtime proof closes, return to the broader testing/store-readiness sequence already recorded.
 
 ## Current Plan
 1. Preserve the carried-forward proved baseline exactly as recorded.
 2. Preserve locked Chi'lly Chat communication doctrine and locked Rachi official-account doctrine exactly as recorded.
 3. Keep the resolved direct-thread stale-session fix closed and do not reopen `app/chat/[threadId].tsx` unless a later regression proves a direct calling-owner issue.
 4. Keep the resolved Chi'llywood-native internal invite path closed and do not reopen `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, or `app/watch-party/live-stage/[partyId].tsx` unless a later regression proves a direct sharing-owner issue.
-5. Keep the new `_lib/userData.ts` remote profile-sync hardening closed and do not reopen it unless a later regression proves a direct `user_profiles` searchability issue.
+5. Keep the new `_lib/userData.ts` profile hardening closed and do not reopen it unless a later regression proves a direct `user_profiles` searchability or fallback-identity issue.
 6. Narrow the next proof lane to two-real-phone Expo dev-client verification of internal invite plus thread video-call behavior.
 7. Return to the broader testing/store-readiness closure sequence only after that focused social runtime proof completes.
 
@@ -19,7 +19,7 @@ Carry forward the still-valid proved baseline exactly as recorded, including the
 - preserve the tester/store-facing monetization hardening without reopening billing-language work
 - preserve the Chi'lly Chat direct-thread stale-call reconciliation on the current thread owner without reopening calling architecture
 - preserve the Chi'llywood-native internal invite path on the current chat and room-share owners without reopening those files
-- preserve the new `_lib/userData.ts` `user_profiles` sync hardening without reopening unrelated profile architecture
+- preserve the new `_lib/userData.ts` profile-sync plus auth-derived fallback-identity hardening without reopening unrelated profile architecture
 - run the two-real-phone Expo dev-client proof for invite search, direct-thread invite delivery, fresh start/join, end/restart, leave/rejoin, and kill/reopen stale-state cleanup
 - record the result honestly, then return to the broader testing/store-readiness queue
 
@@ -29,7 +29,7 @@ This next pass should:
 - preserve the carried-forward proved Chapters 1 through 4 baseline exactly as recorded
 - preserve the canonical Chi'lly Chat messenger doctrine exactly as recorded
 - preserve the canonical Rachi official seeded-account doctrine exactly as recorded
-- preserve the internal invite/search path, direct-thread call path, and new social-identity sync hardening exactly as they now work
+- preserve the internal invite/search path, direct-thread call path, and new social-identity hardening exactly as they now work
 - keep unrelated local dirt out of any future checkpoint
 
 ## Out Of Scope
