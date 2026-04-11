@@ -1,65 +1,56 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the closed fake-comment cleanup, the re-proved Live Waiting Room / Live Room / Live Stage path, the now-closed shared analytics sink fix in `app/_layout.tsx`, the now-re-proved auth/session path on the current owners, the now-closed Premium/store repo-proof lane, the new tester/store-facing monetization hardening on `components/monetization/access-sheet.tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/settings.tsx`, the new Chi'lly Chat thread-call stale-session fix on `app/chat/[threadId].tsx`, and the new Chi'llywood-native internal invite path on `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/watch-party/live-stage/[partyId].tsx`. Do not reopen the resolved room-flow, analytics, auth/session, monetization, direct-thread call, or internal-invite owners unless a later regression proves a direct break. The next exact operational step is still testing/store-readiness closure rather than monetization closure: fix the remaining release/store identity blockers for public testing and store submission, starting with the missing iOS store identity truth and the release-minded config proof that goes with it.
+Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the closed fake-comment cleanup, the re-proved Live Waiting Room / Live Room / Live Stage path, the now-closed shared analytics sink fix in `app/_layout.tsx`, the now-re-proved auth/session path on the current owners, the now-closed Premium/store repo-proof lane, the tester/store-facing monetization hardening on `components/monetization/access-sheet.tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/settings.tsx`, the Chi'lly Chat thread-call stale-session fix on `app/chat/[threadId].tsx`, the Chi'llywood-native internal invite path on `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, and `app/watch-party/live-stage/[partyId].tsx`, and the new social-identity sync hardening on `_lib/userData.ts` that keeps signed-in member profiles searchable through `public.user_profiles`. Do not reopen the resolved room-flow, analytics, auth/session, monetization, Party/Live, or broader chat architecture owners unless a later regression proves a direct break. The next exact operational step is now a two-real-phone Expo dev-client proof pass for the current Chi'lly Chat social path: verify internal invite search can find the other signed-in user, verify the invite lands in the correct direct thread, verify a fresh video call can start and join from `/chat/[threadId]`, then verify end/restart, leave/rejoin, and kill/reopen stale-state cleanup. After that runtime proof closes, return to the broader testing/store-readiness sequence already recorded.
 
 ## Current Plan
 1. Preserve the carried-forward proved baseline exactly as recorded.
 2. Preserve locked Chi'lly Chat communication doctrine and locked Rachi official-account doctrine exactly as recorded.
-3. Carry forward the proved `Home -> Live Watch-Party -> Live Waiting Room -> Create Live Room -> Live Room -> Live Stage` path exactly as now re-proved.
-4. Keep the resolved analytics/error-monitoring sink closure closed and do not reopen `app/_layout.tsx` for this blocker.
-5. Keep the resolved Premium/store repo-proof lane closed and keep monetization setup deferred while testing/store readiness work continues.
-6. Keep the new tester/store-facing surface hardening closed and do not reopen `components/monetization/access-sheet.tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, or `app/settings.tsx` unless a later regression proves a direct misleading-billing surface issue.
-7. Keep the new Chi'lly Chat direct-thread call stale-session fix closed and do not reopen `app/chat/[threadId].tsx` unless a later regression proves a direct calling-owner issue.
-8. Keep the new Chi'llywood-native internal invite path closed and do not reopen `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, or `app/watch-party/live-stage/[partyId].tsx` unless a later regression proves a direct sharing-owner issue.
-9. Narrow the next lane to release/store identity readiness rather than RevenueCat/store-offer closure, and keep unrelated local dirt out of any future checkpoint.
+3. Keep the resolved direct-thread stale-session fix closed and do not reopen `app/chat/[threadId].tsx` unless a later regression proves a direct calling-owner issue.
+4. Keep the resolved Chi'llywood-native internal invite path closed and do not reopen `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, or `app/watch-party/live-stage/[partyId].tsx` unless a later regression proves a direct sharing-owner issue.
+5. Keep the new `_lib/userData.ts` remote profile-sync hardening closed and do not reopen it unless a later regression proves a direct `user_profiles` searchability issue.
+6. Narrow the next proof lane to two-real-phone Expo dev-client verification of internal invite plus thread video-call behavior.
+7. Return to the broader testing/store-readiness closure sequence only after that focused social runtime proof completes.
 
 ## Exact Next Batch
 - preserve the now-re-proved waiting-room and live-stage handoff on the current owners without reopening those routes
 - preserve the now-closed analytics/error-monitoring bridge on the current owner without reopening that shell file
 - preserve the now-re-proved login-first, valid sign-in, settings, and logout behavior on the current owners without reopening auth/session files
-- preserve the now-closed Premium/store repo-proof lane on the current monetization owners without reopening monetization logic
-- preserve the new tester/store-facing monetization surface hardening on the current owners without reopening live purchase language
-- preserve the new Chi'lly Chat direct-thread stale-call reconciliation on the current thread owner without reopening calling architecture
-- preserve the new Chi'llywood-native internal invite path on the current chat and room-share owners without reopening those files
-- fix the remaining release/store identity blockers needed for public testing and store submission
-- re-prove the release-minded config and store-identity state after that targeted readiness change lands
-- preserve the carried-forward runtime and room-boundary truth exactly as already recorded
-- preserve locked Chi'lly Chat and locked Rachi truth exactly as already recorded
-- keep auth/session rewrites beyond direct proof-driven fixes, repo-side monetization/store rewrites, waiting-room rewrites, player/comment rewrites, analytics rewrites, admin work, and unrelated polish out of the next blocker lane
+- preserve the tester/store-facing monetization hardening without reopening billing-language work
+- preserve the Chi'lly Chat direct-thread stale-call reconciliation on the current thread owner without reopening calling architecture
+- preserve the Chi'llywood-native internal invite path on the current chat and room-share owners without reopening those files
+- preserve the new `_lib/userData.ts` `user_profiles` sync hardening without reopening unrelated profile architecture
+- run the two-real-phone Expo dev-client proof for invite search, direct-thread invite delivery, fresh start/join, end/restart, leave/rejoin, and kill/reopen stale-state cleanup
+- record the result honestly, then return to the broader testing/store-readiness queue
 
 ## Scope
 This next pass should:
-- stay focused on testing/store-readiness closure rather than monetization closure
+- stay focused on the two-real-phone Expo dev-client proof for the current Chi'lly Chat invite and thread-call path
 - preserve the carried-forward proved Chapters 1 through 4 baseline exactly as recorded
 - preserve the canonical Chi'lly Chat messenger doctrine exactly as recorded
 - preserve the canonical Rachi official seeded-account doctrine exactly as recorded
-- preserve the re-proved live waiting-room and live-stage path, the active Party Room real message path, the title-adjacent live metadata path, the now-closed analytics sink path, the now-re-proved auth/session path, the now-honest Premium/store owners, and the new deferred-monetization surface state exactly as they already work
+- preserve the internal invite/search path, direct-thread call path, and new social-identity sync hardening exactly as they now work
 - keep unrelated local dirt out of any future checkpoint
 
 ## Out Of Scope
 Do not:
 - reopen monetization/store logic or broader room chapters as coding lanes unless a later regression exposes a new direct repo bug
-- reopen `app/watch-party/index.tsx` or `app/watch-party/live-stage/[partyId].tsx` for the resolved handoff blocker
-- reopen `app/player/[id].tsx` or broader fake-comment work now that the player and live-stage proof are closed
+- reopen `app/watch-party/index.tsx` or `app/watch-party/live-stage/[partyId].tsx` for resolved handoff/debugging work
 - reopen `app/_layout.tsx` or broader analytics/error-monitoring work now that the shared sink blocker is closed
 - reopen `app/(auth)/login.tsx`, `_lib/session.tsx`, `app/settings.tsx`, or broader auth/session work now that the proof lane is closed
 - reopen deferred Premium/store surface copy unless a tester/store-readiness regression proves those surfaces are misleading again
-- reopen `app/chat/[threadId].tsx` or broader Chi'lly Chat calling architecture unless a later regression proves a direct thread-call owner bug
-- reopen `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, or `app/watch-party/live-stage/[partyId].tsx` unless a later regression proves a direct internal invite/share owner bug
+- reopen `app/chat/[threadId].tsx`, `_lib/chat.ts`, `components/chat/internal-invite-sheet.tsx`, or `_lib/userData.ts` unless a later regression proves a direct thread-call, invite-handoff, or searchability-owner bug
 - rewrite Chi'lly Chat doctrine beyond preserving current locked truth
 - rewrite Rachi official-account doctrine beyond preserving current locked truth
-- refactor app code, Maestro flows, migrations, packages, or runtime config as part of the proof pass
+- refactor app code, Maestro flows, migrations, packages, or runtime config as part of this social proof lane
 - mix unrelated local dirt into any future checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the remaining release/store identity blockers are corrected for public testing and store submission
-- the release-minded runtime/config proof re-passes after that targeted readiness change
-- the current premium gate remains honest without implying that tester-facing billing is live yet
-- the already-closed analytics/error-monitoring sink remains intact without reopening its owner
-- the now-re-proved auth/session path remains intact without reopening its owners
-- the already-re-proved waiting-room, live-stage, and player proof remain intact
+- two real phones running the Expo dev client can find each other through the internal invite sheet
+- the invite lands in the correct direct thread on `/chat/[threadId]`
+- a fresh thread video call can start on one device and join on the other
+- end/restart, leave/rejoin, and kill/reopen stale-state cleanup all behave honestly
 - the active Party / Live / Profile / Chi'lly Chat / Rachi baseline remains intact
 - locked Chi'lly Chat and Rachi truth remain carried forward unchanged
-- the repo stays ready for the next Public v1 blocker lane with task-pure checkpointing
+- the repo is ready to return to the broader testing/store-readiness queue with this social proof lane honestly closed

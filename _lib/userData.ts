@@ -19,6 +19,7 @@ export const LAST_PARTY_KEY = "@chillywood/last-party";
 export const USER_WATCH_TABLE = "watch_history";
 export const USER_MY_LIST_TABLE = "user_list";
 export const USER_WATCH_HISTORY_TABLE = "watch_history";
+export const USER_PROFILES_TABLE = "user_profiles";
 
 export type WatchProgressEntry = {
   positionMillis: number;
@@ -83,6 +84,22 @@ type WatchHistoryRow = {
   updated_at?: string | null;
   completed?: boolean | null;
   play_count?: number | null;
+};
+
+type UserProfileRow = {
+  user_id?: string | null;
+  username?: string | null;
+  avatar_index?: number | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  tagline?: string | null;
+  channel_role?: string | null;
+  default_watch_party_join_policy?: string | null;
+  default_watch_party_reactions_policy?: string | null;
+  default_watch_party_content_access_rule?: string | null;
+  default_watch_party_capture_policy?: string | null;
+  default_communication_content_access_rule?: string | null;
+  default_communication_capture_policy?: string | null;
 };
 
 const toIdString = (value: string | number | null | undefined) => String(value ?? "").trim();
@@ -170,6 +187,43 @@ const normalizeChannelRole = (value: unknown): UserChannelRole => {
   return "viewer";
 };
 
+const toUserProfileUpsertRow = (userId: string, profile: UserProfile) => ({
+  user_id: userId,
+  username: profile.username,
+  avatar_index: profile.avatarIndex,
+  display_name: profile.displayName ?? null,
+  avatar_url: profile.avatarUrl ?? null,
+  tagline: profile.tagline ?? null,
+  channel_role: profile.channelRole ?? null,
+  default_watch_party_join_policy: profile.defaultWatchPartyJoinPolicy,
+  default_watch_party_reactions_policy: profile.defaultWatchPartyReactionsPolicy,
+  default_watch_party_content_access_rule: profile.defaultWatchPartyContentAccessRule,
+  default_watch_party_capture_policy: profile.defaultWatchPartyCapturePolicy,
+  default_communication_content_access_rule: profile.defaultCommunicationContentAccessRule,
+  default_communication_capture_policy: profile.defaultCommunicationCapturePolicy,
+});
+
+const parseRemoteUserProfile = (row: UserProfileRow | null | undefined): UserProfile | null => {
+  if (!row) return null;
+  const username = normalizeTextValue(row.username);
+  if (!username) return null;
+
+  return normalizeUserProfile({
+    username,
+    avatarIndex: Number.isFinite(Number(row.avatar_index)) ? Number(row.avatar_index) : undefined,
+    displayName: normalizeTextValue(row.display_name),
+    avatarUrl: normalizeTextValue(row.avatar_url),
+    tagline: normalizeTextValue(row.tagline),
+    channelRole: normalizeChannelRole(row.channel_role),
+    defaultWatchPartyJoinPolicy: normalizeJoinPolicy(row.default_watch_party_join_policy),
+    defaultWatchPartyReactionsPolicy: normalizeReactionsPolicy(row.default_watch_party_reactions_policy),
+    defaultWatchPartyContentAccessRule: normalizeContentAccessRule(row.default_watch_party_content_access_rule),
+    defaultWatchPartyCapturePolicy: normalizeCapturePolicy(row.default_watch_party_capture_policy),
+    defaultCommunicationContentAccessRule: normalizeContentAccessRule(row.default_communication_content_access_rule),
+    defaultCommunicationCapturePolicy: normalizeCapturePolicy(row.default_communication_capture_policy),
+  });
+};
+
 export const buildUserChannelProfile = (options: {
   id?: unknown;
   profile?: UserProfile | null;
@@ -219,6 +273,39 @@ async function getSignedInUserId() {
     return data.session?.user?.id ?? null;
   } catch {
     return null;
+  }
+}
+
+async function readRemoteUserProfile(userId: string): Promise<UserProfile | null> {
+  const normalizedUserId = toIdString(userId);
+  if (!normalizedUserId) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from(USER_PROFILES_TABLE)
+      .select(
+        "user_id,username,avatar_index,display_name,avatar_url,tagline,channel_role,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
+      )
+      .eq("user_id", normalizedUserId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return parseRemoteUserProfile(data as UserProfileRow);
+  } catch {
+    return null;
+  }
+}
+
+async function syncUserProfileToRemote(profile: UserProfile): Promise<void> {
+  const userId = await getSignedInUserId();
+  if (!userId) return;
+
+  try {
+    await supabase
+      .from(USER_PROFILES_TABLE)
+      .upsert(toUserProfileUpsertRow(userId, profile), { onConflict: "user_id" });
+  } catch {
+    // social identity foundation is best-effort for now
   }
 }
 
@@ -673,7 +760,19 @@ export function getAvatarEmoji(index: number): string {
 
 export async function readUserProfile(): Promise<UserProfile> {
   const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
-  if (cached.username) return normalizeUserProfile(cached);
+  if (cached.username) {
+    const normalized = normalizeUserProfile(cached);
+    await syncUserProfileToRemote(normalized);
+    return normalized;
+  }
+
+  const userId = await getSignedInUserId();
+  const remoteProfile = userId ? await readRemoteUserProfile(userId) : null;
+  if (remoteProfile?.username) {
+    await writeJsonValue(USER_PROFILE_KEY, remoteProfile);
+    await syncUserProfileToRemote(remoteProfile);
+    return remoteProfile;
+  }
 
   // Generate if missing
   const generated = normalizeUserProfile({
@@ -685,7 +784,9 @@ export async function readUserProfile(): Promise<UserProfile> {
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
-  await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile(profile));
+  const normalized = normalizeUserProfile(profile);
+  await writeJsonValue(USER_PROFILE_KEY, normalized);
+  await syncUserProfileToRemote(normalized);
 }
 
 // ── Last Party Session (for auto-rejoin) ──────────────────────────────────────
