@@ -1,6 +1,17 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
@@ -9,6 +20,7 @@ import { supabase } from "../../_lib/supabase";
 export default function Signup() {
   const router = useRouter();
   const params = useLocalSearchParams<{ redirectTo?: string }>();
+  const insets = useSafeAreaInsets();
   const redirectTo = String(params.redirectTo ?? "").trim() || "/(tabs)";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -65,42 +77,69 @@ export default function Signup() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{isClosedBetaEnvironment() ? "Create Closed Beta Account" : "Create Account"}</Text>
-      <Text style={styles.subtitle}>
-        {isClosedBetaEnvironment()
-          ? "Sign up with the invited email for this small Chi'llywood beta. Accounts that are not on the invite list will stay blocked from invite-only flows."
-          : "Create an account so you can join rooms, manage your channel, and send in-app support feedback."}
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        value={email}
-        onChangeText={setEmail}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-
-      <Pressable style={styles.button} onPress={signUp} disabled={loading}>
-        <Text style={styles.buttonText}>
-          {loading ? "Creating..." : "Sign Up"}
+    <KeyboardAvoidingView
+      style={styles.keyboardShell}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingTop: Math.max(insets.top + 32, 72),
+            paddingBottom: Math.max(insets.bottom + 24, 24),
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <Text style={styles.title}>{isClosedBetaEnvironment() ? "Create Closed Beta Account" : "Create Account"}</Text>
+        <Text style={styles.subtitle}>
+          {isClosedBetaEnvironment()
+            ? "Sign up with the invited email for this small Chi'llywood beta. Accounts that are not on the invite list will stay blocked from invite-only flows."
+            : "Create an account so you can join rooms, manage your channel, and send in-app support feedback."}
         </Text>
-      </Pressable>
-    </View>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          returnKeyType="next"
+          value={email}
+          onChangeText={setEmail}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          secureTextEntry
+          returnKeyType="done"
+          value={password}
+          onChangeText={setPassword}
+          onSubmitEditing={() => {
+            void signUp();
+          }}
+        />
+
+        <Pressable style={styles.button} onPress={signUp} disabled={loading}>
+          <Text style={styles.buttonText}>
+            {loading ? "Creating..." : "Sign Up"}
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  keyboardShell: {
     flex: 1,
+    backgroundColor: "#0B0B0F",
+  },
+  container: {
+    flexGrow: 1,
     backgroundColor: "#0B0B0F",
     padding: 24,
     justifyContent: "center",

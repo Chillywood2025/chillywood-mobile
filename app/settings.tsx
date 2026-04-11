@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import {
@@ -14,6 +15,7 @@ import { useSession } from "../_lib/session";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isLoading, isSignedIn, user } = useSession();
   const [signingOut, setSigningOut] = useState(false);
   const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
@@ -192,7 +194,17 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: Math.max(insets.top + 16, 24),
+          paddingBottom: Math.max(insets.bottom + 28, 28),
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
@@ -297,12 +309,10 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#06070B",
-    paddingTop: 56,
     paddingHorizontal: 18,
   },
   content: {
     gap: 14,
-    paddingBottom: 28,
   },
   loadingWrap: {
     flex: 1,

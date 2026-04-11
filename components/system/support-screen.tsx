@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { getBetaAccessBlockCopy, submitBetaFeedback, useBetaProgram } from "../../_lib/betaProgram";
 import { getRuntimeLegalConfig, isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
@@ -37,6 +38,7 @@ const CLOSED_BETA_FLOWS = [
 
 export function SupportScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ topic?: string }>();
   const { isSignedIn, user } = useSession();
   const { accessState, isActive } = useBetaProgram();
@@ -171,7 +173,15 @@ export function SupportScreen() {
     <ImageBackground source={SKYLINE_SOURCE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay} />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: Math.max(insets.top + 16, 24),
+            paddingBottom: Math.max(insets.bottom + 48, 48),
+          },
+        ]}
+      >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
@@ -302,8 +312,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(7,10,16,0.74)",
   },
   content: {
-    paddingTop: 56,
-    paddingBottom: 48,
     paddingHorizontal: 18,
     gap: 14,
   },

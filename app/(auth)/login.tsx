@@ -1,6 +1,18 @@
 import { Link, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
-import { Alert, ImageBackground, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
@@ -10,6 +22,7 @@ const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg
 
 export default function Login() {
   const params = useLocalSearchParams<{ redirectTo?: string }>();
+  const insets = useSafeAreaInsets();
   const redirectTo = String(params.redirectTo ?? "").trim() || "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -57,47 +70,69 @@ export default function Login() {
     <ImageBackground source={LOGIN_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay} />
 
-      <View style={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
-          <Text style={styles.title}>{isClosedBetaEnvironment() ? "Closed Beta Sign In" : "Sign In"}</Text>
-          <Text style={styles.subtitle}>
-            {isClosedBetaEnvironment()
-              ? "Use the invited Chi'llywood account for room access, feedback capture, and rollout verification."
-              : "Sign in to join rooms, manage your channel, unlock eligible access, and send support reports."}
-          </Text>
+      <KeyboardAvoidingView
+        style={styles.keyboardShell}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.container,
+            {
+              paddingTop: Math.max(insets.top + 32, 72),
+              paddingBottom: Math.max(insets.bottom + 24, 24),
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.card}>
+            <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
+            <Text style={styles.title}>{isClosedBetaEnvironment() ? "Closed Beta Sign In" : "Sign In"}</Text>
+            <Text style={styles.subtitle}>
+              {isClosedBetaEnvironment()
+                ? "Use the invited Chi'llywood account for room access, feedback capture, and rollout verification."
+                : "Sign in to join rooms, manage your channel, unlock eligible access, and send support reports."}
+            </Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#7A859A"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#7A859A"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoCorrect={false}
+              returnKeyType="next"
+              value={email}
+              onChangeText={setEmail}
+            />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#7A859A"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#7A859A"
+              secureTextEntry
+              returnKeyType="done"
+              value={password}
+              onChangeText={setPassword}
+              onSubmitEditing={() => {
+                void signIn();
+              }}
+            />
 
-          <Pressable style={styles.button} onPress={signIn} disabled={loading}>
-            <Text style={styles.buttonText}>{loading ? "Signing in..." : "Log In"}</Text>
-          </Pressable>
+            <Pressable style={styles.button} onPress={signIn} disabled={loading}>
+              <Text style={styles.buttonText}>{loading ? "Signing in..." : "Log In"}</Text>
+            </Pressable>
 
-          <View style={styles.row}>
-            <Text style={styles.muted}>No account?</Text>
-            <Link href={{ pathname: "/(auth)/signup", params: { redirectTo } }} style={styles.link}>
-              Sign up
-            </Link>
+            <View style={styles.row}>
+              <Text style={styles.muted}>No account?</Text>
+              <Link href={{ pathname: "/(auth)/signup", params: { redirectTo } }} style={styles.link}>
+                Sign up
+              </Link>
+            </View>
           </View>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ImageBackground>
   );
 }
@@ -111,11 +146,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(7,10,16,0.74)",
   },
-  container: {
+  keyboardShell: {
     flex: 1,
+  },
+  container: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 304,
-    paddingBottom: 24,
     justifyContent: "center",
   },
   card: {
