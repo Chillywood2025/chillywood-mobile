@@ -136,6 +136,14 @@ export function SupportScreen() {
     );
   };
 
+  const onPressSupportEmail = async () => {
+    if (!legalConfig.supportEmail) {
+      return;
+    }
+
+    await openExternalDestination(`mailto:${legalConfig.supportEmail}`, "Support Email");
+  };
+
   const onSubmitFeedback = async (input: {
     feedbackType: "bug" | "product_feedback" | "onboarding_feedback";
     category: "auth" | "onboarding" | "home" | "player" | "watch_party" | "live_stage" | "communication" | "monetization" | "moderation" | "performance" | "ui_copy" | "other";
@@ -278,7 +286,9 @@ export function SupportScreen() {
             </TouchableOpacity>
           </View>
           {legalConfig.supportEmail ? (
-            <Text style={styles.metaText}>Support contact: {legalConfig.supportEmail}</Text>
+            <TouchableOpacity activeOpacity={0.86} onPress={() => { void onPressSupportEmail(); }}>
+              <Text style={styles.metaText}>Support contact: {legalConfig.supportEmail}</Text>
+            </TouchableOpacity>
           ) : null}
         </View>
 
