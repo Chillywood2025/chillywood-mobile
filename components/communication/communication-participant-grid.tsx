@@ -34,7 +34,7 @@ const getConnectionLabel = (participant: CommunicationParticipantView) => {
 export function CommunicationParticipantGrid({ participants }: CommunicationParticipantGridProps) {
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("[CH_CALL]", "participant_grid_render", {
+    console.error("[CH_CALL]", "participant_grid_render", {
       participantCount: participants.length,
       remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL && participant.cameraOn).length,
       fallbackCount: participants.filter((participant) => !(!!RTCView && !!participant.streamURL && participant.cameraOn)).length,

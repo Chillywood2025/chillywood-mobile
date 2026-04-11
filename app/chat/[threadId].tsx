@@ -42,12 +42,12 @@ import { useCommunicationRoomSession } from "../../hooks/use-communication-room-
 
 const logChatThread = (event: string, details?: Record<string, unknown>) => {
   if (!__DEV__) return;
-  console.log("[CH_THREAD]", event, details ?? {});
+  console.error("[CH_THREAD]", event, details ?? {});
 };
 
 const logChatCall = (event: string, details?: Record<string, unknown>) => {
   if (!__DEV__) return;
-  console.log("[CH_CALL]", event, details ?? {});
+  console.error("[CH_CALL]", event, details ?? {});
 };
 
 const buildAuthor = (members: ChatThreadMember[], senderUserId: string) => {

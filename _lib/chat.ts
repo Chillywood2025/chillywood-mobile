@@ -116,22 +116,22 @@ const toText = (value: unknown) => String(value ?? "").trim();
 
 const logChatSearch = (event: string, details?: Record<string, unknown>) => {
   if (!__DEV__) return;
-  console.log("[CH_SEARCH]", event, details ?? {});
+  console.error("[CH_SEARCH]", event, details ?? {});
 };
 
 const logChatInvite = (event: string, details?: Record<string, unknown>) => {
   if (!__DEV__) return;
-  console.log("[CH_INVITE]", event, details ?? {});
+  console.error("[CH_INVITE]", event, details ?? {});
 };
 
 const logChatThread = (event: string, details?: Record<string, unknown>) => {
   if (!__DEV__) return;
-  console.log("[CH_THREAD]", event, details ?? {});
+  console.error("[CH_THREAD]", event, details ?? {});
 };
 
 const logChatCall = (event: string, details?: Record<string, unknown>) => {
   if (!__DEV__) return;
-  console.log("[CH_CALL]", event, details ?? {});
+  console.error("[CH_CALL]", event, details ?? {});
 };
 
 const normalizeCallType = (value: unknown): ChatCallType | undefined => {

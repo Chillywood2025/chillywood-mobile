@@ -116,7 +116,7 @@ const normalizeTextValue = (value: unknown) => {
 
 const logChatProfile = (event: string, details?: Record<string, unknown>) => {
   if (!__DEV__) return;
-  console.log("[CH_PROFILE]", event, details ?? {});
+  console.error("[CH_PROFILE]", event, details ?? {});
 };
 
 export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): UserProfile => {

@@ -50,7 +50,7 @@ export function CommunicationPreviewCard({
 
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("[CH_CALL]", "local_preview_render", {
+    console.error("[CH_CALL]", "local_preview_render", {
       displayName,
       streamReady: !!streamURL,
       showVideo,

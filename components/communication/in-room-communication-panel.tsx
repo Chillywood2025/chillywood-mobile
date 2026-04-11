@@ -56,7 +56,7 @@ export function InRoomCommunicationPanel({
 }: InRoomCommunicationPanelProps) {
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("[CH_CALL]", "panel_render", {
+    console.error("[CH_CALL]", "panel_render", {
       surfaceLabel,
       participantCount,
       channelState,

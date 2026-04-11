@@ -20,7 +20,7 @@ export function CommunicationControlBar({
 }: CommunicationControlBarProps) {
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("[CH_CALL]", "control_bar_render", {
+    console.error("[CH_CALL]", "control_bar_render", {
       cameraEnabled,
       micEnabled,
       leaveLabel,
@@ -34,7 +34,7 @@ export function CommunicationControlBar({
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
-            console.log("[CH_CALL]", "toggle_camera_pressed", {
+            console.error("[CH_CALL]", "toggle_camera_pressed", {
               nextCameraEnabled: !cameraEnabled,
             });
           }
@@ -48,7 +48,7 @@ export function CommunicationControlBar({
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
-            console.log("[CH_CALL]", "toggle_mic_pressed", {
+            console.error("[CH_CALL]", "toggle_mic_pressed", {
               nextMicEnabled: !micEnabled,
             });
           }
@@ -62,7 +62,7 @@ export function CommunicationControlBar({
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
-            console.log("[CH_CALL]", "leave_pressed", {
+            console.error("[CH_CALL]", "leave_pressed", {
               leaveLabel,
             });
           }

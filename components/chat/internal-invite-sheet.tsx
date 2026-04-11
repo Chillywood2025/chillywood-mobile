@@ -42,7 +42,7 @@ export function InternalInviteSheet({
 
   useEffect(() => {
     if (visible && __DEV__) {
-      console.log("[CH_INVITE]", "sheet_opened", {
+      console.error("[CH_INVITE]", "sheet_opened", {
         sourceSurface,
         title,
       });
@@ -60,7 +60,7 @@ export function InternalInviteSheet({
     if (!visible) return;
     const trimmed = query.trim();
     if (__DEV__) {
-      console.log("[CH_SEARCH]", "query_changed", {
+      console.error("[CH_SEARCH]", "query_changed", {
         sourceSurface,
         query: trimmed,
       });
@@ -81,7 +81,7 @@ export function InternalInviteSheet({
         .then((nextResults) => {
           if (!cancelled) {
             if (__DEV__) {
-              console.log("[CH_SEARCH]", "sheet_results_loaded", {
+              console.error("[CH_SEARCH]", "sheet_results_loaded", {
                 sourceSurface,
                 query: trimmed,
                 resultCount: nextResults.length,
@@ -98,7 +98,7 @@ export function InternalInviteSheet({
         .catch((searchError: any) => {
           if (!cancelled) {
             if (__DEV__) {
-              console.log("[CH_SEARCH]", "sheet_results_failed", {
+              console.error("[CH_SEARCH]", "sheet_results_failed", {
                 sourceSurface,
                 query: trimmed,
                 message: searchError?.message ?? "unknown_error",
@@ -131,7 +131,7 @@ export function InternalInviteSheet({
     setError(null);
     try {
       if (__DEV__) {
-        console.log("[CH_INVITE]", "target_selected", {
+        console.error("[CH_INVITE]", "target_selected", {
           sourceSurface,
           targetUserId: target.userId,
           username: target.username ?? "",
@@ -140,7 +140,7 @@ export function InternalInviteSheet({
       }
       const outcome = await sendDirectInviteMessage(target, inviteMessage);
       if (__DEV__) {
-        console.log("[CH_INVITE]", "thread_open_after_invite", {
+        console.error("[CH_INVITE]", "thread_open_after_invite", {
           sourceSurface,
           targetUserId: target.userId,
           threadId: outcome.thread.threadId,
@@ -150,7 +150,7 @@ export function InternalInviteSheet({
       onClose();
     } catch (inviteError: any) {
       if (__DEV__) {
-        console.log("[CH_INVITE]", "send_failed", {
+        console.error("[CH_INVITE]", "send_failed", {
           sourceSurface,
           targetUserId: target.userId,
           message: inviteError?.message ?? "unknown_error",
@@ -229,7 +229,7 @@ export function InternalInviteSheet({
                 activeOpacity={0.84}
                 onPress={() => {
                   if (__DEV__) {
-                    console.log("[CH_INVITE]", "system_share_fallback", {
+                    console.error("[CH_INVITE]", "system_share_fallback", {
                       sourceSurface,
                     });
                   }
