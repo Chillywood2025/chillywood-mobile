@@ -2643,7 +2643,7 @@ export default function PlayerScreen() {
   const standaloneContextTitle = useMemo(() => {
     if (standaloneAccessLoading) return "Checking access before playback starts.";
     if (standalonePlaybackUnknown) return "Playback access needs another check.";
-    if (standalonePlaybackBlocked) return "Premium playback is coming later.";
+    if (standalonePlaybackBlocked) return "Premium playback is not currently available.";
     if (resumeCueMillis > 0) return "Resume your own watch session.";
     return "You are in solo playback.";
   }, [resumeCueMillis, standaloneAccessLoading, standalonePlaybackBlocked, standalonePlaybackUnknown]);
@@ -2657,7 +2657,7 @@ export default function PlayerScreen() {
     }
 
     if (standalonePlaybackBlocked) {
-      return "This title stays locked in this build while Premium playback is being prepared for a later update.";
+      return "This title stays locked because Premium playback is not currently available for this device or account.";
     }
 
     if (resumeCueMillis > 0) {
@@ -3726,9 +3726,9 @@ export default function PlayerScreen() {
                   ) : (
                     <>
                       <Text style={styles.playerAccessKicker}>{standaloneAccessPresentation?.kicker ?? "TITLE ACCESS"}</Text>
-                      <Text style={styles.playerAccessTitle}>Premium Coming Soon</Text>
+                      <Text style={styles.playerAccessTitle}>Premium Access Unavailable</Text>
                       <Text style={styles.playerAccessBody}>
-                        {accessError ?? "Solo playback stays locked on this account while Premium access is being prepared for a later testing-ready update."}
+                        {accessError ?? "Solo playback stays locked because premium access is not currently available for this device or account."}
                       </Text>
                       <View style={styles.playerAccessActions}>
                         <TouchableOpacity
@@ -3744,7 +3744,7 @@ export default function PlayerScreen() {
                           activeOpacity={0.9}
                         >
                           <Text style={styles.playerAccessPrimaryText}>
-                            Coming Soon
+                            Retry Access
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -3932,7 +3932,7 @@ export default function PlayerScreen() {
                       activeOpacity={0.85}
                     >
                       <Text style={styles.partyOverlayChipText}>
-                        {standalonePlaybackBlocked ? "Coming Soon" : standaloneAccessLoading ? "Checking" : "Retry Access"}
+                        {standalonePlaybackBlocked ? "Retry Access" : standaloneAccessLoading ? "Checking" : "Retry Access"}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -4041,7 +4041,7 @@ export default function PlayerScreen() {
                         }}
                       >
                         <Text style={styles.compactActionBtnText}>
-                          {standalonePlaybackBlocked ? "Coming Soon" : standaloneAccessLoading ? "Checking" : "Retry Access"}
+                          {standalonePlaybackBlocked ? "Retry Access" : standaloneAccessLoading ? "Checking" : "Retry Access"}
                         </Text>
                       </TouchableOpacity>
                     ) : (

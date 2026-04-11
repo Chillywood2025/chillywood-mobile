@@ -455,7 +455,7 @@ export default function TitleDetails() {
               <Text style={styles.statusBody}>
                 {titleAccess?.allowed
                   ? `Premium access is active for this title inside ${branding.appDisplayName}.`
-                  : `This title stays locked in this build while Premium access is being prepared for a later update.`}
+                  : "Premium access is not currently available for this title on this device or account."}
               </Text>
             </View>
           ) : null}
@@ -492,7 +492,7 @@ export default function TitleDetails() {
               disabled={accessLoading}
             >
               <Text style={styles.btnPrimaryText}>
-                {accessLoading ? "Checking access..." : titleAccess && !titleAccess.allowed ? "Coming Soon" : "Play"}
+                {accessLoading ? "Checking access..." : titleAccess && !titleAccess.allowed ? "Access Unavailable" : "Play"}
               </Text>
             </Pressable>
 

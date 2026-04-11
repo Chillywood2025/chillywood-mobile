@@ -77,17 +77,24 @@ export function SupportScreen() {
     return "Open the current Privacy Policy, review the Terms of Use, or request account deletion from the same support surface that already owns signed-in feedback and launch help.";
   }, [legalConfig.accountDeletionUrl, legalConfig.privacyPolicyUrl, legalConfig.termsOfServiceUrl, topic]);
 
-  const openExternalDestination = async (url: string, label: string) => {
+  const openExternalDestination = async (
+    url: string,
+    label: string,
+    fallbackMessage?: string,
+  ) => {
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        Alert.alert(label, `Unable to open ${label.toLowerCase()} right now.`);
-        return;
+      const isMailto = url.startsWith("mailto:");
+      if (!isMailto) {
+        const supported = await Linking.canOpenURL(url);
+        if (!supported) {
+          Alert.alert(label, fallbackMessage ?? `Unable to open ${label.toLowerCase()} right now.`);
+          return;
+        }
       }
 
       await Linking.openURL(url);
     } catch {
-      Alert.alert(label, `Unable to open ${label.toLowerCase()} right now.`);
+      Alert.alert(label, fallbackMessage ?? `Unable to open ${label.toLowerCase()} right now.`);
     }
   };
 
@@ -141,7 +148,11 @@ export function SupportScreen() {
       return;
     }
 
-    await openExternalDestination(`mailto:${legalConfig.supportEmail}`, "Support Email");
+    await openExternalDestination(
+      `mailto:${legalConfig.supportEmail}`,
+      "Support Email",
+      `No email compose app is available right now. Contact Chi'llywood Support at ${legalConfig.supportEmail}.`,
+    );
   };
 
   const onSubmitFeedback = async (input: {
