@@ -17,6 +17,7 @@ import {
     Share,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     UIManager,
     View,
@@ -40,6 +41,7 @@ import {
     getPartyRoomSnapshot,
     getSafePartyUserId,
     joinPartyRoomSession,
+    sendPartyMessage,
     setPartyRoomPolicies,
     setPartyParticipantState,
     touchPartyRoomSession,
@@ -87,6 +89,23 @@ type FloatingReaction = {
   rise: Animated.Value;
   opacity: Animated.Value;
   scale: Animated.Value;
+};
+
+type LiveStageComment = {
+  id: string;
+  userId: string;
+  authorLabel: string;
+  body: string;
+  createdAt: string;
+  isMe: boolean;
+};
+
+type LiveStageCommentRow = {
+  id?: string | null;
+  user_id?: string | null;
+  username?: string | null;
+  text?: string | null;
+  created_at?: string | null;
 };
 
 const LIVE_FACE_FILTER_OPTIONS = [
@@ -172,6 +191,9 @@ export default function WatchPartyLiveStageScreen() {
   const [stageControlsOpen, setStageControlsOpen] = useState(false);
   const [faceFilterSheetOpen, setFaceFilterSheetOpen] = useState(false);
   const [stageMenuOpen, setStageMenuOpen] = useState(false);
+  const [hybridComments, setHybridComments] = useState<LiveStageComment[]>([]);
+  const [hybridCommentDraft, setHybridCommentDraft] = useState("");
+  const [hybridCommentSending, setHybridCommentSending] = useState(false);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
@@ -196,8 +218,11 @@ export default function WatchPartyLiveStageScreen() {
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const roomRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const roomMessagesChannelRef = useRef<RealtimeChannel | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const membershipMapRef = useRef<Record<string, WatchPartyRoomMembership>>({});
+  const hybridCommentsScrollRef = useRef<ScrollView | null>(null);
+  const hybridCommentInputRef = useRef<TextInput | null>(null);
   const motion = useRef(new Animated.Value(0)).current;
   const reactionTapPulse = useRef(new Animated.Value(0)).current;
   const stageOverlayMotion = useRef(new Animated.Value(1)).current;
@@ -886,6 +911,7 @@ export default function WatchPartyLiveStageScreen() {
     setReactionPickerOpen(false);
     setStageControlsOpen(false);
     setFaceFilterSheetOpen(false);
+    hybridCommentInputRef.current?.blur();
   }, []);
 
   const hideStageOverlay = useCallback((options?: { closePanels?: boolean }) => {
@@ -1091,7 +1117,7 @@ export default function WatchPartyLiveStageScreen() {
   const liveRoomFooterInset = Math.max(16, safeAreaInsets.bottom + 8);
   const isLiveFirstMode = stageMode === "live";
   const isHybridMode = stageMode === "hybrid";
-  const commentsLaneBottomOffset = liveDockBottomInset + (isHybridMode ? 214 : 172);
+  const commentsLaneBottomOffset = liveDockBottomInset + (isHybridMode ? 292 : 172);
   const lowerCommunityParticipants = useMemo(() => {
     if (isLiveFirstMode) {
       return visibleStripParticipants.filter((participant) => participant.role !== "host");
@@ -1197,6 +1223,33 @@ export default function WatchPartyLiveStageScreen() {
   const heroFallbackInitial = String(heroParticipant?.displayName || "H").trim().slice(0, 1).toUpperCase();
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const inviteSheetAutolaunchedRef = useRef<string | null>(null);
+  const hybridCommentCountLabel = hybridComments.length === 1 ? "1 comment" : `${hybridComments.length} comments`;
+  const hybridCommentPlaceholder = isHost ? "Comment as host" : "Add a comment";
+
+  const mapLiveStageCommentRow = useCallback((row: LiveStageCommentRow): LiveStageComment | null => {
+    const id = String(row.id ?? "").trim();
+    const userId = String(row.user_id ?? "").trim();
+    const body = String(row.text ?? "").trim();
+    if (!id || !userId || !body) return null;
+
+    const rowUsername = String(row.username ?? "").trim();
+    const membership = membershipMapRef.current[userId];
+    const fallbackAuthor = userId === trackedUserId
+      ? resolvedCurrentUsername
+      : (membership?.displayName || "Guest");
+    const authorLabel = userId === trackedUserId
+      ? "You"
+      : resolveIdentityName(rowUsername, fallbackAuthor);
+
+    return {
+      id,
+      userId,
+      authorLabel,
+      body,
+      createdAt: String(row.created_at ?? new Date().toISOString()),
+      isMe: userId === trackedUserId,
+    };
+  }, [resolvedCurrentUsername, trackedUserId]);
 
   useEffect(() => {
     if (!__DEV__ || isLiveRoomSurface) return;
@@ -1228,6 +1281,89 @@ export default function WatchPartyLiveStageScreen() {
     isLiveRoomSurface,
     stageMediaParticipants,
   ]);
+
+  useEffect(() => {
+    if (!canUseBetaStage || !partyId || !isHybridMode) {
+      setHybridComments([]);
+      if (roomMessagesChannelRef.current) {
+        supabase.removeChannel(roomMessagesChannelRef.current);
+        roomMessagesChannelRef.current = null;
+      }
+      return;
+    }
+
+    let active = true;
+
+    const loadHybridComments = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("watch_party_room_messages")
+          .select("id,user_id,username,text,created_at")
+          .eq("party_id", partyId)
+          .order("created_at", { ascending: true })
+          .limit(120);
+
+        if (!active) return;
+        if (error || !data) {
+          setHybridComments([]);
+          return;
+        }
+
+        const nextComments = (data as LiveStageCommentRow[])
+          .map((row) => mapLiveStageCommentRow(row))
+          .filter(Boolean) as LiveStageComment[];
+        setHybridComments(nextComments);
+      } catch {
+        if (active) setHybridComments([]);
+      }
+    };
+
+    void loadHybridComments();
+
+    if (roomMessagesChannelRef.current) {
+      supabase.removeChannel(roomMessagesChannelRef.current);
+      roomMessagesChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`live-stage-comments-${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "watch_party_room_messages",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          const nextComment = mapLiveStageCommentRow(payload.new as LiveStageCommentRow);
+          if (!nextComment) return;
+          setHybridComments((prev) => {
+            if (prev.some((comment) => comment.id === nextComment.id)) return prev;
+            return [...prev.slice(-119), nextComment];
+          });
+        },
+      )
+      .subscribe();
+
+    roomMessagesChannelRef.current = channel;
+
+    return () => {
+      active = false;
+      if (roomMessagesChannelRef.current === channel) {
+        supabase.removeChannel(channel);
+        roomMessagesChannelRef.current = null;
+      }
+    };
+  }, [canUseBetaStage, isHybridMode, mapLiveStageCommentRow, partyId]);
+
+  useEffect(() => {
+    if (!isHybridMode || hybridComments.length === 0) return;
+    const scrollTimeout = setTimeout(() => {
+      hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
+    }, 40);
+    return () => clearTimeout(scrollTimeout);
+  }, [hybridComments, isHybridMode]);
 
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
@@ -1326,6 +1462,44 @@ export default function WatchPartyLiveStageScreen() {
     setFaceFilterSheetOpen(false);
     setStageMenuOpen((value) => !value);
   }, [revealStageOverlay]);
+
+  const onOpenStageComments = useCallback(() => {
+    revealStageOverlay();
+    setStageMenuOpen(false);
+    setStageControlsOpen(false);
+    setFaceFilterSheetOpen(false);
+    setReactionPickerOpen(false);
+
+    if (isHybridMode) {
+      setCommentsOpen(true);
+      setTimeout(() => {
+        hybridCommentInputRef.current?.focus();
+        hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
+      }, 80);
+      return;
+    }
+
+    setCommentsOpen((value) => !value);
+  }, [isHybridMode, revealStageOverlay]);
+
+  const onSendHybridComment = useCallback(async () => {
+    const safeBody = hybridCommentDraft.trim();
+    if (!safeBody || !partyId || hybridCommentSending) return;
+
+    setHybridCommentSending(true);
+    try {
+      await sendPartyMessage(partyId, trackedUserId, "chat", safeBody, {
+        username: resolvedCurrentUsername,
+      });
+      setHybridCommentDraft("");
+      setCommentsOpen(true);
+      setTimeout(() => {
+        hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
+      }, 40);
+    } finally {
+      setHybridCommentSending(false);
+    }
+  }, [hybridCommentDraft, hybridCommentSending, partyId, resolvedCurrentUsername, trackedUserId]);
 
   useEffect(() => {
     if (isLiveRoomSurface) {
@@ -1756,7 +1930,7 @@ export default function WatchPartyLiveStageScreen() {
             </TouchableOpacity>
           ) : (
             <Pressable
-              style={styles.stageTapRevealSurface}
+              style={[styles.stageTapRevealSurface, styles.stageTapRevealSurfaceHybrid]}
               onPress={revealStageOverlay}
             />
           )
@@ -1817,20 +1991,15 @@ export default function WatchPartyLiveStageScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Open Live Stage Comments"
                 hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-                onPress={() => {
-                  revealStageOverlay();
-                  setStageMenuOpen(false);
-                  setStageControlsOpen(false);
-                  setFaceFilterSheetOpen(false);
-                  setReactionPickerOpen(false);
-                  setCommentsOpen((value) => !value);
-                }}
+                onPress={onOpenStageComments}
                 testID="live-stage-comments-button"
               >
                 <Text style={styles.stageTopMenuItemIcon}>🗨️</Text>
                 <View style={styles.stageTopMenuItemCopy}>
                   <Text style={styles.stageTopMenuItemTitle}>Comments</Text>
-                  <Text style={styles.stageTopMenuItemBody}>Read the live room response lane.</Text>
+                  <Text style={styles.stageTopMenuItemBody}>
+                    {isHybridMode ? "Jump to the bottom comment lane." : "Read the live room response lane."}
+                  </Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1909,38 +2078,18 @@ export default function WatchPartyLiveStageScreen() {
         </View>
         {isHybridMode ? (
           <View style={[styles.stageHybridDeck, { top: safeAreaInsets.top + 96 }]} pointerEvents="box-none">
-            <View pointerEvents="none" style={styles.stageHybridHeroCard}>
-              <View style={styles.stageHybridHeroGlow} />
-              <View style={styles.stageHybridHeroScrim} />
-              <View style={styles.stageHybridHeroCopy}>
-                <View style={styles.stageHeroTagRow}>
-                  <View style={styles.stageHeroLiveDot} />
-                  <Text style={styles.stageHeroTagText}>{branding.watchPartyLabel.toUpperCase()} LIVE</Text>
-                </View>
-                <Text numberOfLines={1} style={styles.stageHybridHeroTitle}>{stageFocusLabel}</Text>
-                <Text numberOfLines={3} style={styles.stageHybridHeroBody}>{stageHelperCopy}</Text>
-                <View style={styles.stageHybridHeroMetaRow}>
-                  <View style={styles.stageTailoredMetaPill}>
-                    <Text style={styles.stageTailoredMetaText}>{lowerCommunityCountLabel}</Text>
-                  </View>
-                  <View style={styles.stageTailoredMetaPill}>
-                    <Text style={styles.stageTailoredMetaText}>{liveStageProtectionStatus}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
             <View pointerEvents="auto" style={styles.stageHybridCommunityCard}>
               <View style={styles.stageCommunityHeader}>
                 <View style={styles.stageCommunityHeaderLeft}>
                   <View style={styles.stageCommunityDot} />
-                  <Text style={styles.stageCommunityLabel}>Community grid</Text>
+                  <Text style={styles.stageCommunityLabelHybrid}>Chi'lly Party Members</Text>
                 </View>
                 <Text style={styles.stageCommunityCount}>{lowerCommunityCountLabel}</Text>
               </View>
 
               {lowerCommunityParticipants.length > 0 ? (
                 <ScrollView
+                  nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
                   style={styles.stageHybridCommunityScroll}
                   contentContainerStyle={styles.stageHybridCommunityGrid}
@@ -2178,7 +2327,7 @@ export default function WatchPartyLiveStageScreen() {
                 </ScrollView>
               ) : (
                 <View style={styles.stageCommunityEmptyState}>
-                  <Text style={styles.stageCommunityEmptyText}>Community syncing</Text>
+                  <Text style={styles.stageCommunityEmptyText}>No party members in view yet.</Text>
                 </View>
               )}
             </View>
@@ -2290,7 +2439,7 @@ export default function WatchPartyLiveStageScreen() {
             </View>
           ) : null}
 
-          {commentsOpen ? (
+          {commentsOpen && !isHybridMode ? (
             <Animated.View pointerEvents="auto" style={[styles.chatOverlay, { opacity: chatOpacity, transform: [{ translateY: chatFloat }] }]}>
               <Text style={styles.chatDrawerTitle}>Comments</Text>
               <ScrollView style={styles.chatDrawerList} contentContainerStyle={styles.chatDrawerListContent}>
@@ -2332,53 +2481,89 @@ export default function WatchPartyLiveStageScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.stageBottomInfoCard}>
-                <View style={styles.stageBottomInfoHeader}>
-                  <Text style={styles.stageBottomInfoKicker}>COMMENTS + REACTIONS</Text>
-                  <Text style={styles.stageBottomInfoCount}>{lowerCommunityCountLabel}</Text>
+              <View style={[styles.stageHybridCommentsCard, commentsOpen && styles.stageHybridCommentsCardActive]}>
+                <View style={styles.stageHybridCommentsHeader}>
+                  <Text style={styles.stageHybridCommentsTitle}>Room comments</Text>
+                  <Text style={styles.stageHybridCommentsCount}>{hybridCommentCountLabel}</Text>
                 </View>
-                <Text numberOfLines={1} style={styles.stageBottomInfoTitle}>Keep room response below the watch moment.</Text>
-                <Text style={styles.stageBottomInfoBody}>
-                  The hero and community grid stay up top while comments, reactions, and studio controls stay lower and easier to reach.
-                </Text>
-              </View>
 
-              <View style={styles.stageTailoredActions}>
-                <TouchableOpacity
-                  style={styles.stageTailoredActionButton}
-                  activeOpacity={0.84}
-                  onPress={() => {
-                    revealStageOverlay();
-                    setStageMenuOpen(false);
-                    setStageControlsOpen(false);
-                    setFaceFilterSheetOpen(false);
-                    setReactionPickerOpen(false);
-                    setCommentsOpen((value) => !value);
-                  }}
+                <ScrollView
+                  ref={hybridCommentsScrollRef}
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  style={styles.stageHybridCommentsList}
+                  contentContainerStyle={styles.stageHybridCommentsListContent}
                 >
-                  <Text style={styles.stageTailoredActionText}>Comments</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.stageTailoredActionButton}
-                  activeOpacity={0.84}
-                  onPress={() => {
-                    revealStageOverlay();
-                    setStageMenuOpen(false);
-                    setStageControlsOpen(false);
-                    setFaceFilterSheetOpen(false);
-                    setCommentsOpen(false);
-                    setReactionPickerOpen((value) => !value);
-                  }}
-                >
-                  <Text style={styles.stageTailoredActionText}>Reactions</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
-                  activeOpacity={0.84}
-                  onPress={onToggleStageControls}
-                >
-                  <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>Studio</Text>
-                </TouchableOpacity>
+                  {hybridComments.length > 0 ? (
+                    hybridComments.map((comment) => (
+                      <View
+                        key={comment.id}
+                        style={[
+                          styles.stageHybridCommentRow,
+                          comment.isMe && styles.stageHybridCommentRowMe,
+                        ]}
+                      >
+                        <View style={styles.stageHybridCommentMeta}>
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.stageHybridCommentAuthor,
+                              comment.isMe && styles.stageHybridCommentAuthorMe,
+                            ]}
+                          >
+                            {comment.authorLabel}
+                          </Text>
+                        </View>
+                        <Text style={styles.stageHybridCommentBody}>{comment.body}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.stageHybridCommentEmpty}>
+                      Comments from the room will land here. Say something to get the watch-party chat moving.
+                    </Text>
+                  )}
+                </ScrollView>
+
+                <View style={styles.stageHybridCommentInputRow}>
+                  <TextInput
+                    ref={hybridCommentInputRef}
+                    value={hybridCommentDraft}
+                    onChangeText={setHybridCommentDraft}
+                    onFocus={() => {
+                      revealStageOverlay();
+                      setStageMenuOpen(false);
+                      setStageControlsOpen(false);
+                      setFaceFilterSheetOpen(false);
+                      setReactionPickerOpen(false);
+                      setCommentsOpen(true);
+                    }}
+                    placeholder={hybridCommentPlaceholder}
+                    placeholderTextColor="rgba(190,206,232,0.72)"
+                    returnKeyType="send"
+                    blurOnSubmit={false}
+                    editable={!hybridCommentSending}
+                    onSubmitEditing={() => {
+                      void onSendHybridComment();
+                    }}
+                    style={styles.stageHybridCommentInput}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.stageHybridCommentSendButton,
+                      (!hybridCommentDraft.trim() || hybridCommentSending) && styles.stageHybridCommentSendButtonDisabled,
+                    ]}
+                    activeOpacity={0.84}
+                    disabled={!hybridCommentDraft.trim() || hybridCommentSending}
+                    onPress={() => {
+                      void onSendHybridComment();
+                    }}
+                  >
+                    <Text style={styles.stageHybridCommentSendText}>
+                      {hybridCommentSending ? "Sending" : "Send"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </>
           ) : null}
@@ -3095,6 +3280,12 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     backgroundColor: "rgba(4,8,18,0.01)",
   },
+  stageTapRevealSurfaceHybrid: {
+    left: -10,
+    right: -10,
+    paddingHorizontal: 18,
+    backgroundColor: "transparent",
+  },
   stageTapRevealContent: {
     alignSelf: "stretch",
     gap: 10,
@@ -3110,6 +3301,7 @@ const styles = StyleSheet.create({
     zIndex: 31,
     flexDirection: "row",
     alignItems: "stretch",
+    justifyContent: "flex-end",
     gap: 12,
   },
   stageHybridHeroCard: {
@@ -3163,29 +3355,29 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   stageHybridCommunityCard: {
-    width: 164,
+    width: 228,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(154,182,246,0.24)",
-    backgroundColor: "rgba(6,10,18,0.76)",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 8,
+    borderColor: "rgba(168,192,245,0.2)",
+    backgroundColor: "rgba(6,10,18,0.54)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
   },
   stageHybridCommunityScroll: {
-    maxHeight: 248,
+    maxHeight: 388,
   },
   stageHybridCommunityGrid: {
     width: "100%",
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 8,
-    paddingBottom: 2,
+    gap: 9,
+    paddingBottom: 4,
   },
   stageHeroTagRow: {
     alignSelf: "flex-start",
@@ -3490,10 +3682,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
     marginBottom: 2,
     paddingHorizontal: 4,
   },
   stageCommunityHeaderLeft: {
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -3511,10 +3706,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.35,
     textTransform: "uppercase",
   },
+  stageCommunityLabelHybrid: {
+    color: "#E7EEFF",
+    fontSize: 11,
+    fontWeight: "800",
+    flexShrink: 1,
+  },
   stageCommunityCount: {
-    color: "#AEB9CF",
-    fontSize: 9.5,
+    color: "#C5D1E6",
+    fontSize: 10,
     fontWeight: "700",
+    flexShrink: 0,
+    marginLeft: 12,
+    textAlign: "right",
   },
   stagePresenceScroll: { marginTop: 0, maxHeight: 112 },
   stagePresenceScrollContent: { flexDirection: "row", alignItems: "stretch", gap: 8, paddingRight: 8, paddingVertical: 2 },
@@ -3532,6 +3736,124 @@ const styles = StyleSheet.create({
     color: "#AEB9CF",
     fontSize: 10,
     fontWeight: "700",
+  },
+  stageHybridCommentsCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(168,192,245,0.18)",
+    backgroundColor: "rgba(6,10,18,0.76)",
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 12,
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  stageHybridCommentsCardActive: {
+    borderColor: "rgba(186,208,255,0.28)",
+    backgroundColor: "rgba(7,12,22,0.84)",
+  },
+  stageHybridCommentsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  stageHybridCommentsTitle: {
+    color: "#F4F7FF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  stageHybridCommentsCount: {
+    color: "#AFC0DE",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  stageHybridCommentsList: {
+    maxHeight: 158,
+  },
+  stageHybridCommentsListContent: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  stageHybridCommentRow: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    gap: 4,
+  },
+  stageHybridCommentRowMe: {
+    borderColor: "rgba(186,208,255,0.18)",
+    backgroundColor: "rgba(72,92,132,0.2)",
+  },
+  stageHybridCommentMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  stageHybridCommentAuthor: {
+    color: "#E5EDFC",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  stageHybridCommentAuthorMe: {
+    color: "#FFFFFF",
+  },
+  stageHybridCommentBody: {
+    color: "#C9D4E9",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
+  stageHybridCommentEmpty: {
+    color: "#AEB9CF",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "600",
+    paddingVertical: 8,
+  },
+  stageHybridCommentInputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  stageHybridCommentInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 88,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: "#F3F7FF",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  stageHybridCommentSendButton: {
+    minHeight: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(186,208,255,0.22)",
+    backgroundColor: "rgba(56,80,126,0.78)",
+    paddingHorizontal: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stageHybridCommentSendButtonDisabled: {
+    opacity: 0.48,
+  },
+  stageHybridCommentSendText: {
+    color: "#F7FAFF",
+    fontSize: 12,
+    fontWeight: "800",
   },
   stageParticipantTile: {
     width: 68,
