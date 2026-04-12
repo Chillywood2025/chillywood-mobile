@@ -334,8 +334,16 @@ export default function WatchPartyLiveStageScreen() {
     });
   }, []);
 
+  const updateStageMode = useCallback((nextMode: SharedRoomMode) => {
+    setStageMode(nextMode);
+    if (modeParamValue !== nextMode) {
+      router.setParams({ mode: nextMode });
+    }
+  }, [modeParamValue, router]);
+
   useEffect(() => {
-    setStageMode(normalizeSharedRoomMode(modeParamValue, "live"));
+    const normalizedRouteMode = normalizeSharedRoomMode(modeParamValue, "live");
+    setStageMode((currentMode) => (currentMode === normalizedRouteMode ? currentMode : normalizedRouteMode));
   }, [modeParamValue]);
 
   useEffect(() => {
@@ -2400,14 +2408,14 @@ export default function WatchPartyLiveStageScreen() {
             <TouchableOpacity
               style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
               activeOpacity={0.82}
-              onPress={() => setStageMode("live")}
+              onPress={() => updateStageMode("live")}
             >
               <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
               activeOpacity={0.82}
-              onPress={() => setStageMode("hybrid")}
+              onPress={() => updateStageMode("hybrid")}
             >
               <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
             </TouchableOpacity>
