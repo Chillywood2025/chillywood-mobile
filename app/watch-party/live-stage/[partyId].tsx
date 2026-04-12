@@ -1108,8 +1108,6 @@ export default function WatchPartyLiveStageScreen() {
   const viewersScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] });
   const viewersOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
   const liveGlowOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.24, 0.48] });
-  const chatFloat = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
-  const chatOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.78, 0.9] });
   const stageOverlayOpacity = stageOverlayMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
   const stageOverlayTranslate = stageOverlayMotion.interpolate({ inputRange: [0, 1], outputRange: [26, 0] });
   const stageMenuSheetVisible = stageMenuOpen && !commentsOpen && !reactionPickerOpen && !stageControlsOpen && !faceFilterSheetOpen;
@@ -1117,7 +1115,8 @@ export default function WatchPartyLiveStageScreen() {
   const liveRoomFooterInset = Math.max(16, safeAreaInsets.bottom + 8);
   const isLiveFirstMode = stageMode === "live";
   const isHybridMode = stageMode === "hybrid";
-  const commentsLaneBottomOffset = liveDockBottomInset + (isHybridMode ? 292 : 172);
+  const usesSharedStageCommentLane = isLiveFirstMode || isHybridMode;
+  const commentsLaneBottomOffset = liveDockBottomInset + (usesSharedStageCommentLane ? 292 : 172);
   const lowerCommunityParticipants = useMemo(() => {
     if (isLiveFirstMode) {
       return visibleStripParticipants.filter((participant) => participant.role !== "host");
@@ -1283,7 +1282,7 @@ export default function WatchPartyLiveStageScreen() {
   ]);
 
   useEffect(() => {
-    if (!canUseBetaStage || !partyId || !isHybridMode) {
+    if (!canUseBetaStage || !partyId || !usesSharedStageCommentLane) {
       setHybridComments([]);
       if (roomMessagesChannelRef.current) {
         supabase.removeChannel(roomMessagesChannelRef.current);
@@ -1355,15 +1354,15 @@ export default function WatchPartyLiveStageScreen() {
         roomMessagesChannelRef.current = null;
       }
     };
-  }, [canUseBetaStage, isHybridMode, mapLiveStageCommentRow, partyId]);
+  }, [canUseBetaStage, mapLiveStageCommentRow, partyId, usesSharedStageCommentLane]);
 
   useEffect(() => {
-    if (!isHybridMode || hybridComments.length === 0) return;
+    if (!usesSharedStageCommentLane || hybridComments.length === 0) return;
     const scrollTimeout = setTimeout(() => {
       hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
     }, 40);
     return () => clearTimeout(scrollTimeout);
-  }, [hybridComments, isHybridMode]);
+  }, [hybridComments, usesSharedStageCommentLane]);
 
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
@@ -1470,7 +1469,7 @@ export default function WatchPartyLiveStageScreen() {
     setFaceFilterSheetOpen(false);
     setReactionPickerOpen(false);
 
-    if (isHybridMode) {
+    if (usesSharedStageCommentLane) {
       setCommentsOpen(true);
       setTimeout(() => {
         hybridCommentInputRef.current?.focus();
@@ -1480,7 +1479,7 @@ export default function WatchPartyLiveStageScreen() {
     }
 
     setCommentsOpen((value) => !value);
-  }, [isHybridMode, revealStageOverlay]);
+  }, [revealStageOverlay, usesSharedStageCommentLane]);
 
   const onSendHybridComment = useCallback(async () => {
     const safeBody = hybridCommentDraft.trim();
@@ -1872,22 +1871,6 @@ export default function WatchPartyLiveStageScreen() {
               ]}
             />
           ) : null}
-          {isLiveFirstMode ? (
-            <View pointerEvents="none" style={styles.stageHeroOverlay}>
-              <View style={styles.stageHeroTagRow}>
-                <View style={styles.stageHeroLiveDot} />
-                <Text style={styles.stageHeroTagText}>LIVE FIRST</Text>
-              </View>
-              <View style={styles.stageHeroCaption}>
-                <Text numberOfLines={1} style={styles.stageHeroCaptionTitle}>
-                  {heroParticipantIsCurrentUser ? "You" : heroParticipant?.displayName || "Live Stage"}
-                </Text>
-                <Text numberOfLines={1} style={styles.stageHeroCaptionBody}>
-                  Host view stays centered while viewers react below.
-                </Text>
-              </View>
-            </View>
-          ) : null}
           <View pointerEvents="none" style={styles.floatingReactionsLayer}>
             {floatingReactions.map((reaction) => (
               <Animated.Text
@@ -1907,33 +1890,10 @@ export default function WatchPartyLiveStageScreen() {
         </View>
 
         {!stageOverlayVisible ? (
-          isLiveFirstMode ? (
-            <TouchableOpacity
-              activeOpacity={1}
-              style={styles.stageTapRevealSurface}
-              onPress={revealStageOverlay}
-            >
-              <View style={styles.stageTapRevealContent}>
-                <View style={styles.stageHeroTagRow}>
-                  <View style={styles.stageHeroLiveDot} />
-                  <Text style={styles.stageHeroTagText}>LIVE FIRST</Text>
-                </View>
-                <View style={styles.stageHeroCaption}>
-                  <Text numberOfLines={1} style={styles.stageHeroCaptionTitle}>
-                    {heroParticipantIsCurrentUser ? "You" : heroParticipant?.displayName || "Live Stage"}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.stageHeroCaptionBody}>
-                    Host view stays centered while viewers react below.
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ) : (
-            <Pressable
-              style={[styles.stageTapRevealSurface, styles.stageTapRevealSurfaceHybrid]}
-              onPress={revealStageOverlay}
-            />
-          )
+          <Pressable
+            style={[styles.stageTapRevealSurface, styles.stageTapRevealSurfaceHybrid]}
+            onPress={revealStageOverlay}
+          />
         ) : null}
 
         <Animated.View
@@ -1998,7 +1958,7 @@ export default function WatchPartyLiveStageScreen() {
                 <View style={styles.stageTopMenuItemCopy}>
                   <Text style={styles.stageTopMenuItemTitle}>Comments</Text>
                   <Text style={styles.stageTopMenuItemBody}>
-                    {isHybridMode ? "Jump to the bottom comment lane." : "Read the live room response lane."}
+                    {usesSharedStageCommentLane ? "Jump to the bottom comment lane." : "Read the live room response lane."}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -2057,24 +2017,6 @@ export default function WatchPartyLiveStageScreen() {
             </View>
           ) : null}
 
-          {!isHybridMode ? (
-            <View style={styles.modeRow}>
-              <TouchableOpacity
-                style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
-                activeOpacity={0.82}
-                onPress={() => setStageMode("live")}
-              >
-                <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modeBtn, !isLiveFirstMode && styles.modeBtnOn]}
-                activeOpacity={0.82}
-                onPress={() => setStageMode("hybrid")}
-              >
-                <Text style={[styles.modeBtnText, !isLiveFirstMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
         </View>
         {isHybridMode ? (
           <View style={[styles.stageHybridDeck, { top: safeAreaInsets.top + 96 }]} pointerEvents="box-none">
@@ -2439,14 +2381,6 @@ export default function WatchPartyLiveStageScreen() {
             </View>
           ) : null}
 
-          {commentsOpen && !isHybridMode ? (
-            <Animated.View pointerEvents="auto" style={[styles.chatOverlay, { opacity: chatOpacity, transform: [{ translateY: chatFloat }] }]}>
-              <Text style={styles.chatDrawerTitle}>Comments</Text>
-              <ScrollView style={styles.chatDrawerList} contentContainerStyle={styles.chatDrawerListContent}>
-                <Text style={styles.chatOverlayLine}>Comments are not available in this live room yet.</Text>
-              </ScrollView>
-            </Animated.View>
-          ) : null}
         </View>
         </Animated.View>
 
@@ -2461,137 +2395,108 @@ export default function WatchPartyLiveStageScreen() {
           ]}
           pointerEvents={stageOverlayVisible ? "auto" : "none"}
         >
-        <View style={[styles.liveStageLowerDock, isHybridMode && styles.liveStageLowerDockHybrid]}>
-          {isHybridMode ? (
-            <>
-              <View style={[styles.modeRow, styles.modeRowHybrid]}>
-                <TouchableOpacity
-                  style={[styles.modeBtn, !isHybridMode && styles.modeBtnOn]}
-                  activeOpacity={0.82}
-                  onPress={() => setStageMode("live")}
-                >
-                  <Text style={[styles.modeBtnText, !isHybridMode && styles.modeBtnTextOn]}>Live-First</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
-                  activeOpacity={0.82}
-                  onPress={() => setStageMode("hybrid")}
-                >
-                  <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
-                </TouchableOpacity>
-              </View>
+        <View style={[styles.liveStageLowerDock, styles.liveStageLowerDockHybrid]}>
+          <View style={[styles.modeRow, styles.modeRowHybrid]}>
+            <TouchableOpacity
+              style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
+              activeOpacity={0.82}
+              onPress={() => setStageMode("live")}
+            >
+              <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
+              activeOpacity={0.82}
+              onPress={() => setStageMode("hybrid")}
+            >
+              <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
+            </TouchableOpacity>
+          </View>
 
-              <View style={[styles.stageHybridCommentsCard, commentsOpen && styles.stageHybridCommentsCardActive]}>
-                <View style={styles.stageHybridCommentsHeader}>
-                  <Text style={styles.stageHybridCommentsTitle}>Room comments</Text>
-                  <Text style={styles.stageHybridCommentsCount}>{hybridCommentCountLabel}</Text>
-                </View>
+          <View style={[styles.stageHybridCommentsCard, commentsOpen && styles.stageHybridCommentsCardActive]}>
+            <View style={styles.stageHybridCommentsHeader}>
+              <Text style={styles.stageHybridCommentsTitle}>Room comments</Text>
+              <Text style={styles.stageHybridCommentsCount}>{hybridCommentCountLabel}</Text>
+            </View>
 
-                <ScrollView
-                  ref={hybridCommentsScrollRef}
-                  nestedScrollEnabled
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                  style={styles.stageHybridCommentsList}
-                  contentContainerStyle={styles.stageHybridCommentsListContent}
-                >
-                  {hybridComments.length > 0 ? (
-                    hybridComments.map((comment) => (
-                      <View
-                        key={comment.id}
+            <ScrollView
+              ref={hybridCommentsScrollRef}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={styles.stageHybridCommentsList}
+              contentContainerStyle={styles.stageHybridCommentsListContent}
+            >
+              {hybridComments.length > 0 ? (
+                hybridComments.map((comment) => (
+                  <View
+                    key={comment.id}
+                    style={[
+                      styles.stageHybridCommentRow,
+                      comment.isMe && styles.stageHybridCommentRowMe,
+                    ]}
+                  >
+                    <View style={styles.stageHybridCommentMeta}>
+                      <Text
+                        numberOfLines={1}
                         style={[
-                          styles.stageHybridCommentRow,
-                          comment.isMe && styles.stageHybridCommentRowMe,
+                          styles.stageHybridCommentAuthor,
+                          comment.isMe && styles.stageHybridCommentAuthorMe,
                         ]}
                       >
-                        <View style={styles.stageHybridCommentMeta}>
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.stageHybridCommentAuthor,
-                              comment.isMe && styles.stageHybridCommentAuthorMe,
-                            ]}
-                          >
-                            {comment.authorLabel}
-                          </Text>
-                        </View>
-                        <Text style={styles.stageHybridCommentBody}>{comment.body}</Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.stageHybridCommentEmpty}>
-                      Comments from the room will land here. Say something to get the watch-party chat moving.
-                    </Text>
-                  )}
-                </ScrollView>
-
-                <View style={styles.stageHybridCommentInputRow}>
-                  <TextInput
-                    ref={hybridCommentInputRef}
-                    value={hybridCommentDraft}
-                    onChangeText={setHybridCommentDraft}
-                    onFocus={() => {
-                      revealStageOverlay();
-                      setStageMenuOpen(false);
-                      setStageControlsOpen(false);
-                      setFaceFilterSheetOpen(false);
-                      setReactionPickerOpen(false);
-                      setCommentsOpen(true);
-                    }}
-                    placeholder={hybridCommentPlaceholder}
-                    placeholderTextColor="rgba(190,206,232,0.72)"
-                    returnKeyType="send"
-                    blurOnSubmit={false}
-                    editable={!hybridCommentSending}
-                    onSubmitEditing={() => {
-                      void onSendHybridComment();
-                    }}
-                    style={styles.stageHybridCommentInput}
-                  />
-                  <TouchableOpacity
-                    style={[
-                      styles.stageHybridCommentSendButton,
-                      (!hybridCommentDraft.trim() || hybridCommentSending) && styles.stageHybridCommentSendButtonDisabled,
-                    ]}
-                    activeOpacity={0.84}
-                    disabled={!hybridCommentDraft.trim() || hybridCommentSending}
-                    onPress={() => {
-                      void onSendHybridComment();
-                    }}
-                  >
-                    <Text style={styles.stageHybridCommentSendText}>
-                      {hybridCommentSending ? "Sending" : "Send"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </>
-          ) : null}
-          {isLiveFirstMode ? (
-            <View style={styles.stageParticipantStripWrap}>
-              <View style={styles.stageBottomInfoCard}>
-                <View style={styles.stageBottomInfoHeader}>
-                  <Text style={styles.stageBottomInfoKicker}>LIVE WITH AUDIENCE</Text>
-                  <Text style={styles.stageBottomInfoCount}>{lowerCommunityCountLabel}</Text>
-                </View>
-                <Text numberOfLines={1} style={styles.stageBottomInfoTitle}>{stageFocusLabel}</Text>
-                <Text numberOfLines={1} style={styles.stageBottomInfoBody}>{stageHelperCopy}</Text>
-              </View>
-
-              <View style={styles.stageAudienceResponseCard}>
-                <View style={styles.stageCommunityHeader}>
-                  <View style={styles.stageCommunityHeaderLeft}>
-                    <View style={styles.stageCommunityDot} />
-                    <Text style={styles.stageCommunityLabel}>Audience response</Text>
+                        {comment.authorLabel}
+                      </Text>
+                    </View>
+                    <Text style={styles.stageHybridCommentBody}>{comment.body}</Text>
                   </View>
-                  <Text style={styles.stageCommunityCount}>{lowerCommunityCountLabel}</Text>
-                </View>
-                <Text style={styles.stageAudienceResponseText}>
-                  Viewers stay in comments and reactions here while the host remains the main focus.
+                ))
+              ) : (
+                <Text style={styles.stageHybridCommentEmpty}>
+                  Comments from the room will land here. Say something to get the live room moving.
                 </Text>
-              </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.stageHybridCommentInputRow}>
+              <TextInput
+                ref={hybridCommentInputRef}
+                value={hybridCommentDraft}
+                onChangeText={setHybridCommentDraft}
+                onFocus={() => {
+                  revealStageOverlay();
+                  setStageMenuOpen(false);
+                  setStageControlsOpen(false);
+                  setFaceFilterSheetOpen(false);
+                  setReactionPickerOpen(false);
+                  setCommentsOpen(true);
+                }}
+                placeholder={hybridCommentPlaceholder}
+                placeholderTextColor="rgba(190,206,232,0.72)"
+                returnKeyType="send"
+                blurOnSubmit={false}
+                editable={!hybridCommentSending}
+                onSubmitEditing={() => {
+                  void onSendHybridComment();
+                }}
+                style={styles.stageHybridCommentInput}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.stageHybridCommentSendButton,
+                  (!hybridCommentDraft.trim() || hybridCommentSending) && styles.stageHybridCommentSendButtonDisabled,
+                ]}
+                activeOpacity={0.84}
+                disabled={!hybridCommentDraft.trim() || hybridCommentSending}
+                onPress={() => {
+                  void onSendHybridComment();
+                }}
+              >
+                <Text style={styles.stageHybridCommentSendText}>
+                  {hybridCommentSending ? "Sending" : "Send"}
+                </Text>
+              </TouchableOpacity>
             </View>
-          ) : null}
+          </View>
         </View>
         <RoomReactionPicker
           visible={reactionPickerOpen}
