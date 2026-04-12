@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -46,6 +46,13 @@ import {
     type WatchPartyRoomMembership,
     type WatchPartyState,
 } from "../../../_lib/watchParty";
+import {
+    getCommunicationRTCModule,
+    getLinkedCommunicationRoom,
+    getOrCreateLinkedCommunicationRoom,
+    type CommunicationParticipantView,
+} from "../../../_lib/communication";
+import { useCommunicationRoomSession } from "../../../hooks/use-communication-room-session";
 import { InternalInviteSheet } from "../../../components/chat/internal-invite-sheet";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { RoomReactionPicker, pushRecentReaction } from "../../../components/room/reaction-picker";
@@ -130,6 +137,14 @@ const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
 const STAGE_HEARTBEAT_INTERVAL_MILLIS = 10_000;
 const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 5_000;
+const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as const;
+const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
+const RTCView = getCommunicationRTCModule()?.RTCView as React.ComponentType<{
+  streamURL: string;
+  style?: object;
+  objectFit?: "cover" | "contain";
+  mirror?: boolean;
+}> | undefined;
 
 export default function WatchPartyLiveStageScreen() {
   const safeAreaInsets = useSafeAreaInsets();
@@ -171,6 +186,7 @@ export default function WatchPartyLiveStageScreen() {
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
+  const [communicationRoomId, setCommunicationRoomId] = useState("");
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ userId: string; label: string } | null>(null);
@@ -187,6 +203,7 @@ export default function WatchPartyLiveStageScreen() {
   const stageOverlayMotion = useRef(new Animated.Value(1)).current;
   const reactionCounterRef = useRef(0);
   const stageOverlayLastInteractionAtRef = useRef(Date.now());
+  const stageOverlayAutoHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageOverlayFinalizeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micRecordingRef = useRef<Audio.Recording | null>(null);
   const micSpeakingRef = useRef(false);
@@ -209,6 +226,10 @@ export default function WatchPartyLiveStageScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setCommunicationRoomId("");
+  }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
     setRoom(snapshot.room);
@@ -521,6 +542,49 @@ export default function WatchPartyLiveStageScreen() {
   }, [buildStageParticipantsFromPresence, canUseBetaStage, partyId, partyIdParam, refreshStageSnapshot, syncStageSnapshot]);
 
   useEffect(() => {
+    if (!canUseBetaStage || !partyId || !room?.hostUserId || liveSurface === "room" || communicationRoomId) return;
+
+    let cancelled = false;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRetry = () => {
+      if (retryTimeout || isHost) return;
+      retryTimeout = setTimeout(() => {
+        retryTimeout = null;
+        void ensureCommunicationRoom();
+      }, 1_200);
+    };
+
+    const ensureCommunicationRoom = async () => {
+      const linkedRoom = await (isHost
+        ? getOrCreateLinkedCommunicationRoom({
+            partyId,
+            roomCode: room.roomCode,
+            roomMode: initialStageMode,
+            hostUserId: room.hostUserId,
+          })
+        : getLinkedCommunicationRoom(partyId)
+      ).catch(() => null);
+
+      if (cancelled) return;
+      if (!linkedRoom || "error" in linkedRoom) {
+        scheduleRetry();
+        return;
+      }
+      setCommunicationRoomId(linkedRoom.roomId);
+    };
+
+    void ensureCommunicationRoom();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
+  }, [canUseBetaStage, communicationRoomId, initialStageMode, isHost, liveSurface, partyId, room?.hostUserId, room?.roomCode]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setSessionSeconds((value) => value + 1);
     }, 1000);
@@ -578,6 +642,18 @@ export default function WatchPartyLiveStageScreen() {
 
   const trackedUserId = myUserId || "anon";
   const resolvedCurrentUsername = resolveIdentityName(myUsername, "You");
+  const isLiveRoomSurface = liveSurface === "room";
+  const {
+    localStreamURL,
+    participants: stageMediaParticipants,
+  } = useCommunicationRoomSession({
+    roomId: communicationRoomId,
+    enabled: canUseBetaStage && !isLiveRoomSurface && !!communicationRoomId,
+    analyticsContext: {
+      surface: "live-room",
+      role: isHost ? "host" : "viewer",
+    },
+  });
 
   const selfFallbackParticipant = useMemo<StageParticipant>(() => {
     const selfFallbackIdentity = buildSharedParticipantIdentity({
@@ -797,6 +873,13 @@ export default function WatchPartyLiveStageScreen() {
     }
   }, []);
 
+  const clearStageOverlayAutoHideTimeout = useCallback(() => {
+    if (stageOverlayAutoHideTimeoutRef.current) {
+      clearTimeout(stageOverlayAutoHideTimeoutRef.current);
+      stageOverlayAutoHideTimeoutRef.current = null;
+    }
+  }, []);
+
   const closeStageOverlayPanels = useCallback(() => {
     setStageMenuOpen(false);
     setCommentsOpen(false);
@@ -806,6 +889,7 @@ export default function WatchPartyLiveStageScreen() {
   }, []);
 
   const hideStageOverlay = useCallback((options?: { closePanels?: boolean }) => {
+    clearStageOverlayAutoHideTimeout();
     clearStageOverlayFinalizeHideTimeout();
     if (options?.closePanels !== false) {
       closeStageOverlayPanels();
@@ -819,9 +903,10 @@ export default function WatchPartyLiveStageScreen() {
       setStageOverlayVisible(false);
       stageOverlayFinalizeHideTimeoutRef.current = null;
     }, 220);
-  }, [clearStageOverlayFinalizeHideTimeout, closeStageOverlayPanels, stageOverlayMotion]);
+  }, [clearStageOverlayAutoHideTimeout, clearStageOverlayFinalizeHideTimeout, closeStageOverlayPanels, stageOverlayMotion]);
 
   const revealStageOverlay = useCallback(() => {
+    clearStageOverlayAutoHideTimeout();
     clearStageOverlayFinalizeHideTimeout();
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
@@ -831,7 +916,7 @@ export default function WatchPartyLiveStageScreen() {
       duration: 220,
       useNativeDriver: true,
     }).start();
-  }, [clearStageOverlayFinalizeHideTimeout, hideStageOverlay, stageOverlayMotion]);
+  }, [clearStageOverlayAutoHideTimeout, clearStageOverlayFinalizeHideTimeout, stageOverlayMotion]);
 
   const emitParticipantUpdate = useCallback(async (participantId: string, changes: Partial<SharedParticipantLocalState>) => {
     if (!partyId || !participantId || !isHost) return;
@@ -992,8 +1077,6 @@ export default function WatchPartyLiveStageScreen() {
   const timeLabel = `${Math.floor(sessionSeconds / 60).toString().padStart(2, "0")}:${(sessionSeconds % 60).toString().padStart(2, "0")}`;
   const motionOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.46] });
   const motionTranslate = motion.interpolate({ inputRange: [0, 1], outputRange: [-16, 16] });
-  const stageScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.016] });
-  const stageOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] });
   const liveDotScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] });
   const liveDotOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.58, 1] });
   const viewersScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] });
@@ -1003,6 +1086,7 @@ export default function WatchPartyLiveStageScreen() {
   const chatOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.78, 0.9] });
   const stageOverlayOpacity = stageOverlayMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
   const stageOverlayTranslate = stageOverlayMotion.interpolate({ inputRange: [0, 1], outputRange: [26, 0] });
+  const stageMenuSheetVisible = stageMenuOpen && !commentsOpen && !reactionPickerOpen && !stageControlsOpen && !faceFilterSheetOpen;
   const liveDockBottomInset = Math.max(28, safeAreaInsets.bottom + 14);
   const liveRoomFooterInset = Math.max(16, safeAreaInsets.bottom + 8);
   const commentsLaneBottomOffset = liveDockBottomInset + 172;
@@ -1016,7 +1100,6 @@ export default function WatchPartyLiveStageScreen() {
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
-  const isLiveRoomSurface = liveSurface === "room";
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
   const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
   const liveRoomJoinLabel = room?.joinPolicy === "locked"
@@ -1095,18 +1178,55 @@ export default function WatchPartyLiveStageScreen() {
     ? "Host capture rules are active, while device blocking still stays best-effort."
     : "Capture protection stays best-effort on supported devices.";
   const heroParticipant = stageFocusTarget ?? hostParticipant ?? selfFallbackParticipant;
+  const stageMediaParticipantsByUserId = useMemo(
+    () => Object.fromEntries(stageMediaParticipants.map((participant) => [participant.userId, participant])),
+    [stageMediaParticipants],
+  );
+  const heroMediaParticipant = heroParticipant ? stageMediaParticipantsByUserId[heroParticipant.userId] as CommunicationParticipantView | undefined : undefined;
   const heroParticipantIsCurrentUser = heroParticipant?.userId === currentUserParticipantId;
+  const showHeroLocalRtcVideo = heroParticipantIsCurrentUser && !!RTCView && !!localStreamURL;
+  const showHeroRemoteVideo = !heroParticipantIsCurrentUser && !!RTCView && !!heroMediaParticipant?.streamURL && heroMediaParticipant.cameraOn;
   const heroParticipantPreviewUri = String(
     heroParticipantIsCurrentUser
       ? (myCameraPreviewUrlRef.current || heroParticipant?.cameraPreviewUrl || heroParticipant?.avatarUrl || "")
       : (heroParticipant?.cameraPreviewUrl || heroParticipant?.avatarUrl || ""),
   ).trim();
-  const showHeroLocalCamera = Platform.OS !== "web" && heroParticipantIsCurrentUser && !!cameraPermission?.granted;
-  const showHeroRemoteImage = !showHeroLocalCamera && !!heroParticipantPreviewUri;
+  const showHeroRemoteImage = !showHeroLocalRtcVideo && !showHeroRemoteVideo && !!heroParticipantPreviewUri;
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
   const heroFallbackInitial = String(heroParticipant?.displayName || "H").trim().slice(0, 1).toUpperCase();
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const inviteSheetAutolaunchedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!__DEV__ || isLiveRoomSurface) return;
+    debugLog("live-stage", "stage media binding", {
+      communicationRoomId,
+      heroUserId: heroParticipant?.userId ?? "",
+      heroStreamReady: !!heroMediaParticipant?.streamURL,
+      heroCameraOn: heroMediaParticipant?.cameraOn ?? null,
+      stageMediaParticipants: stageMediaParticipants.map((participant) => ({
+        userId: participant.userId,
+        isSelf: participant.isSelf,
+        cameraOn: participant.cameraOn,
+        micOn: participant.micOn,
+        streamReady: !!participant.streamURL,
+        connectionState: participant.connectionState,
+      })),
+      stageParticipants: displayParticipants.map((participant) => ({
+        userId: participant.userId,
+        role: participant.role,
+        displayName: participant.displayName,
+      })),
+    });
+  }, [
+    communicationRoomId,
+    displayParticipants,
+    heroMediaParticipant?.cameraOn,
+    heroMediaParticipant?.streamURL,
+    heroParticipant?.userId,
+    isLiveRoomSurface,
+    stageMediaParticipants,
+  ]);
 
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
@@ -1169,10 +1289,7 @@ export default function WatchPartyLiveStageScreen() {
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
     setLiveSurface("stage");
-    requestAnimationFrame(() => {
-      revealStageOverlay();
-    });
-  }, [closeStageOverlayPanels, revealStageOverlay, stageOverlayMotion]);
+  }, [closeStageOverlayPanels, stageOverlayMotion]);
 
   const onReturnToLiveRoom = useCallback(() => {
     closeStageOverlayPanels();
@@ -1221,21 +1338,38 @@ export default function WatchPartyLiveStageScreen() {
   }, [isLiveRoomSurface, revealStageOverlay, stageOverlayMotion]);
 
   useEffect(() => {
-    if (isLiveRoomSurface || !stageOverlayVisible) return;
-    if (Date.now() - stageOverlayLastInteractionAtRef.current < STAGE_OVERLAY_AUTO_HIDE_MILLIS) return;
-    clearStageOverlayFinalizeHideTimeout();
-    closeStageOverlayPanels();
-    stageOverlayMotion.stopAnimation();
-    stageOverlayMotion.setValue(0);
-    setStageOverlayVisible(false);
+    if (isLiveRoomSurface || !stageOverlayVisible) {
+      clearStageOverlayAutoHideTimeout();
+      return;
+    }
+
+    clearStageOverlayAutoHideTimeout();
+    stageOverlayAutoHideTimeoutRef.current = setTimeout(() => {
+      hideStageOverlay();
+    }, STAGE_OVERLAY_AUTO_HIDE_MILLIS);
+
+    return () => {
+      clearStageOverlayAutoHideTimeout();
+    };
   }, [
-    clearStageOverlayFinalizeHideTimeout,
-    closeStageOverlayPanels,
+    clearStageOverlayAutoHideTimeout,
+    commentsOpen,
+    faceFilterSheetOpen,
+    hideStageOverlay,
     isLiveRoomSurface,
-    sessionSeconds,
-    stageOverlayMotion,
+    reactionPickerOpen,
+    stageControlsOpen,
+    stageMenuOpen,
     stageOverlayVisible,
   ]);
+
+  useEffect(() => {
+    if (!commentsOpen && !reactionPickerOpen && !stageControlsOpen && !faceFilterSheetOpen) {
+      return;
+    }
+
+    setStageMenuOpen(false);
+  }, [commentsOpen, faceFilterSheetOpen, reactionPickerOpen, stageControlsOpen]);
 
   useEffect(() => {
     return () => undefined;
@@ -1243,9 +1377,10 @@ export default function WatchPartyLiveStageScreen() {
 
   useEffect(() => {
     return () => {
+      clearStageOverlayAutoHideTimeout();
       clearStageOverlayFinalizeHideTimeout();
     };
-  }, [clearStageOverlayFinalizeHideTimeout]);
+  }, [clearStageOverlayAutoHideTimeout, clearStageOverlayFinalizeHideTimeout]);
 
   debugLog("live-stage", "render branch", {
     loading,
@@ -1516,22 +1651,28 @@ export default function WatchPartyLiveStageScreen() {
 
         {!isLiveRoomSurface ? (
         <>
-        {!stageOverlayVisible ? (
-          <Pressable style={styles.stageTapRevealSurface} onPress={revealStageOverlay} />
-        ) : null}
-        <Animated.View
+        <View
           style={[
             styles.stageCanvas,
             stageMode === "hybrid" && styles.stageCanvasHybrid,
-            { transform: [{ scale: stageScale }], opacity: stageOpacity },
           ]}
+          collapsable={false}
         >
-          {showHeroLocalCamera ? (
-            <CameraView
+          {showHeroLocalRtcVideo && RTCView ? (
+            <RTCView
+              key={`${heroParticipant?.userId ?? "hero"}:${localStreamURL ?? "no-local-stream"}`}
+              streamURL={localStreamURL as string}
               style={styles.stageHeroMediaFill}
-              facing="front"
-              mute
+              objectFit="cover"
               mirror
+            />
+          ) : showHeroRemoteVideo && RTCView ? (
+            <RTCView
+              key={`${heroParticipant?.userId ?? "hero"}:${heroMediaParticipant?.streamURL ?? "no-stream"}`}
+              streamURL={heroMediaParticipant.streamURL as string}
+              style={styles.stageHeroMediaFill}
+              objectFit="cover"
+              mirror={false}
             />
           ) : showHeroRemoteImage ? (
             <Image
@@ -1543,7 +1684,7 @@ export default function WatchPartyLiveStageScreen() {
               <Text style={styles.stageHeroFallbackInitial}>{heroFallbackInitial}</Text>
             </View>
           )}
-          {(showHeroLocalCamera || showHeroRemoteImage) && liveFaceFilter !== "none" ? (
+          {(showHeroLocalRtcVideo || showHeroRemoteImage) && liveFaceFilter !== "none" ? (
             <View
               pointerEvents="none"
               style={[
@@ -1555,20 +1696,22 @@ export default function WatchPartyLiveStageScreen() {
               ]}
             />
           ) : null}
-          <View pointerEvents="none" style={styles.stageHeroOverlay}>
-            <View style={styles.stageHeroTagRow}>
-              <View style={styles.stageHeroLiveDot} />
-              <Text style={styles.stageHeroTagText}>{isLiveFirstMode ? "LIVE FIRST" : "LIVE WATCH-PARTY"}</Text>
+          {isLiveFirstMode ? (
+            <View pointerEvents="none" style={styles.stageHeroOverlay}>
+              <View style={styles.stageHeroTagRow}>
+                <View style={styles.stageHeroLiveDot} />
+                <Text style={styles.stageHeroTagText}>LIVE FIRST</Text>
+              </View>
+              <View style={styles.stageHeroCaption}>
+                <Text numberOfLines={1} style={styles.stageHeroCaptionTitle}>
+                  {heroParticipantIsCurrentUser ? "You" : heroParticipant?.displayName || "Live Stage"}
+                </Text>
+                <Text numberOfLines={1} style={styles.stageHeroCaptionBody}>
+                  Host view stays centered while viewers react below.
+                </Text>
+              </View>
             </View>
-            <View style={styles.stageHeroCaption}>
-              <Text numberOfLines={1} style={styles.stageHeroCaptionTitle}>
-                {heroParticipantIsCurrentUser ? "You" : heroParticipant?.displayName || "Live Stage"}
-              </Text>
-              <Text numberOfLines={1} style={styles.stageHeroCaptionBody}>
-                {isLiveFirstMode ? "Host view stays centered while viewers react below." : "Shared watch view keeps the live audience visible."}
-              </Text>
-            </View>
-          </View>
+          ) : null}
           <View pointerEvents="none" style={styles.floatingReactionsLayer}>
             {floatingReactions.map((reaction) => (
               <Animated.Text
@@ -1585,7 +1728,32 @@ export default function WatchPartyLiveStageScreen() {
               </Animated.Text>
             ))}
           </View>
-        </Animated.View>
+        </View>
+
+        {!stageOverlayVisible ? (
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.stageTapRevealSurface}
+            onPress={revealStageOverlay}
+          >
+            {isLiveFirstMode ? (
+              <View style={styles.stageTapRevealContent}>
+                <View style={styles.stageHeroTagRow}>
+                  <View style={styles.stageHeroLiveDot} />
+                  <Text style={styles.stageHeroTagText}>LIVE FIRST</Text>
+                </View>
+                <View style={styles.stageHeroCaption}>
+                  <Text numberOfLines={1} style={styles.stageHeroCaptionTitle}>
+                    {heroParticipantIsCurrentUser ? "You" : heroParticipant?.displayName || "Live Stage"}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.stageHeroCaptionBody}>
+                    Host view stays centered while viewers react below.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        ) : null}
 
         <Animated.View
           style={[
@@ -1610,27 +1778,38 @@ export default function WatchPartyLiveStageScreen() {
             </View>
             <View style={styles.stageTopChromeActions}>
               <TouchableOpacity
-                style={[styles.stageTopMenuButton, stageMenuOpen && styles.stageTopMenuButtonActive]}
+                style={[styles.stageTopMenuButton, stageMenuSheetVisible && styles.stageTopMenuButtonActive]}
                 activeOpacity={0.84}
+                accessibilityRole="button"
+                accessibilityLabel="Live Stage Menu"
+                hitSlop={STAGE_CONTROL_HIT_SLOP}
                 onPress={onToggleStageMenu}
+                testID="live-stage-menu-button"
               >
                 <Text style={styles.stageTopMenuButtonText}>Menu</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.stageSurfaceBackButton}
                 activeOpacity={0.84}
+                accessibilityRole="button"
+                accessibilityLabel="Return to Live Room"
+                hitSlop={STAGE_CONTROL_HIT_SLOP}
                 onPress={onReturnToLiveRoom}
+                testID="live-stage-live-room-button"
               >
                 <Text style={styles.stageSurfaceBackText}>Live Room</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {stageMenuOpen ? (
+          {stageMenuSheetVisible ? (
             <View style={styles.stageTopMenuSheet}>
               <TouchableOpacity
                 style={[styles.stageTopMenuItem, commentsOpen && styles.stageTopMenuItemActive]}
                 activeOpacity={0.84}
+                accessibilityRole="button"
+                accessibilityLabel="Open Live Stage Comments"
+                hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
                 onPress={() => {
                   revealStageOverlay();
                   setStageMenuOpen(false);
@@ -1639,6 +1818,7 @@ export default function WatchPartyLiveStageScreen() {
                   setReactionPickerOpen(false);
                   setCommentsOpen((value) => !value);
                 }}
+                testID="live-stage-comments-button"
               >
                 <Text style={styles.stageTopMenuItemIcon}>🗨️</Text>
                 <View style={styles.stageTopMenuItemCopy}>
@@ -1649,7 +1829,11 @@ export default function WatchPartyLiveStageScreen() {
               <TouchableOpacity
                 style={[styles.stageTopMenuItem, stageControlsOpen && styles.stageTopMenuItemActive]}
                 activeOpacity={0.84}
+                accessibilityRole="button"
+                accessibilityLabel="Open Live Stage Studio Controls"
+                hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
                 onPress={onToggleStageControls}
+                testID="live-stage-studio-button"
               >
                 <Text style={styles.stageTopMenuItemIcon}>🎛️</Text>
                 <View style={styles.stageTopMenuItemCopy}>
@@ -1660,7 +1844,11 @@ export default function WatchPartyLiveStageScreen() {
               <TouchableOpacity
                 style={[styles.stageTopMenuItem, (faceFilterSheetOpen || liveFaceFilter !== "none") && styles.stageTopMenuItemActive]}
                 activeOpacity={0.84}
+                accessibilityRole="button"
+                accessibilityLabel="Open Live Stage Filters"
+                hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
                 onPress={onToggleFaceFilters}
+                testID="live-stage-filters-button"
               >
                 <Text style={styles.stageTopMenuItemIcon}>🎭</Text>
                 <View style={styles.stageTopMenuItemCopy}>
@@ -1671,6 +1859,9 @@ export default function WatchPartyLiveStageScreen() {
               <TouchableOpacity
                 style={[styles.stageTopMenuItem, reactionPickerOpen && styles.stageTopMenuItemActive]}
                 activeOpacity={0.84}
+                accessibilityRole="button"
+                accessibilityLabel="Open Live Stage Reactions"
+                hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
                 onPress={() => {
                   revealStageOverlay();
                   setStageMenuOpen(false);
@@ -1679,6 +1870,7 @@ export default function WatchPartyLiveStageScreen() {
                   setCommentsOpen(false);
                   setReactionPickerOpen((value) => !value);
                 }}
+                testID="live-stage-react-button"
               >
                 <Text style={styles.stageTopMenuItemIcon}>✨</Text>
                 <View style={styles.stageTopMenuItemCopy}>
@@ -1836,14 +2028,16 @@ export default function WatchPartyLiveStageScreen() {
         >
         <View style={styles.liveStageLowerDock}>
           <View style={styles.stageParticipantStripWrap}>
-            <View style={styles.stageBottomInfoCard}>
-              <View style={styles.stageBottomInfoHeader}>
-                <Text style={styles.stageBottomInfoKicker}>{isLiveFirstMode ? "LIVE WITH AUDIENCE" : "LIVE WATCH-PARTY"}</Text>
-                <Text style={styles.stageBottomInfoCount}>{lowerCommunityCountLabel}</Text>
+            {isLiveFirstMode ? (
+              <View style={styles.stageBottomInfoCard}>
+                <View style={styles.stageBottomInfoHeader}>
+                  <Text style={styles.stageBottomInfoKicker}>LIVE WITH AUDIENCE</Text>
+                  <Text style={styles.stageBottomInfoCount}>{lowerCommunityCountLabel}</Text>
+                </View>
+                <Text numberOfLines={1} style={styles.stageBottomInfoTitle}>{stageFocusLabel}</Text>
+                <Text numberOfLines={1} style={styles.stageBottomInfoBody}>{stageHelperCopy}</Text>
               </View>
-              <Text numberOfLines={1} style={styles.stageBottomInfoTitle}>{stageFocusLabel}</Text>
-              <Text numberOfLines={1} style={styles.stageBottomInfoBody}>{stageHelperCopy}</Text>
-            </View>
+            ) : null}
 
             {isLiveFirstMode ? (
               <View style={styles.stageAudienceResponseCard}>
@@ -1858,28 +2052,16 @@ export default function WatchPartyLiveStageScreen() {
                   Viewers stay in comments and reactions here while the host remains the main focus.
                 </Text>
               </View>
-            ) : (
-              <>
-                <View style={styles.stageCommunityHeader}>
-                  <View style={styles.stageCommunityHeaderLeft}>
-                    <View style={styles.stageCommunityDot} />
-                    <Text style={styles.stageCommunityLabel}>Live Community</Text>
-                  </View>
-                  <Text style={styles.stageCommunityCount}>{lowerCommunityCountLabel}</Text>
-                </View>
-                {lowerCommunityParticipants.length === 0 ? (
-                  <View style={styles.stageCommunityEmptyState}>
-                    <Text style={styles.stageCommunityEmptyText}>No audience in room yet.</Text>
-                  </View>
-                ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.stagePresenceScroll}
-                    contentContainerStyle={styles.stagePresenceScrollContent}
-                  >
+            ) : lowerCommunityParticipants.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.stagePresenceScroll}
+                contentContainerStyle={styles.stagePresenceScrollContent}
+              >
                     {lowerCommunityParticipants.map((participant) => {
                       const isCurrentUser = participant.userId === currentUserParticipantId;
+                      const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
                       const participantState = participantStateById[participant.userId] ?? {
                         isMuted: !!participant.isMuted,
                         role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
@@ -1897,7 +2079,8 @@ export default function WatchPartyLiveStageScreen() {
                       const canModerateParticipant = participantState.role !== "host";
                       const roleLabel = getParticipantRoleLabel(participantState);
                       const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
-                      const showLocalCameraPreview = Platform.OS !== "web" && isCurrentUser && !!cameraPermission?.granted && !heroOwnsLocalFeed;
+                      const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
+                      const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
                       const bubbleMediaUri = isCurrentUser
                         ? (heroOwnsLocalFeed ? (participant.avatarUrl || "") : (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || ""))
                         : (participant.cameraPreviewUrl || participant.avatarUrl || "");
@@ -2019,7 +2202,7 @@ export default function WatchPartyLiveStageScreen() {
                               ]}
                             >
                               {isHostBubble ? <View style={styles.stagePresenceHostDot} /> : null}
-                              {(showLocalCameraPreview || bubbleMediaUri) ? (
+                              {(showLocalRtcPreview || bubbleMediaUri) ? (
                                 <View
                                   style={[
                                     styles.stagePresenceFaceClip,
@@ -2027,12 +2210,19 @@ export default function WatchPartyLiveStageScreen() {
                                     isFeatured && styles.stagePresenceFaceClipFeatured,
                                   ]}
                                 >
-                                  {showLocalCameraPreview ? (
-                                    <CameraView
+                                  {showLocalRtcPreview && RTCView ? (
+                                    <RTCView
+                                      streamURL={localStreamURL as string}
                                       style={styles.stagePresenceCameraFill}
-                                      facing="front"
-                                      mute
+                                      objectFit="cover"
                                       mirror
+                                    />
+                                  ) : showRemoteLiveVideo && RTCView ? (
+                                    <RTCView
+                                      streamURL={mediaParticipant.streamURL as string}
+                                      style={styles.stagePresenceCameraFill}
+                                      objectFit="cover"
+                                      mirror={false}
                                     />
                                   ) : (
                                     <Image
@@ -2044,7 +2234,7 @@ export default function WatchPartyLiveStageScreen() {
                                       ]}
                                     />
                                   )}
-                                  {isCurrentUser && liveFaceFilter !== "none" && (showLocalCameraPreview || !!bubbleMediaUri) ? (
+                                  {isCurrentUser && liveFaceFilter !== "none" && (showLocalRtcPreview || !!bubbleMediaUri) ? (
                                     <View
                                       pointerEvents="none"
                                       style={[
@@ -2093,10 +2283,8 @@ export default function WatchPartyLiveStageScreen() {
                         </TouchableOpacity>
                       );
                     })}
-                  </ScrollView>
-                )}
-              </>
-            )}
+              </ScrollView>
+            ) : null}
           </View>
         </View>
         <RoomReactionPicker
@@ -2770,13 +2958,22 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     backgroundColor: "rgba(0,0,0,0.08)",
   },
+  stageTapRevealSurface: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 31,
+    elevation: 31,
+    justifyContent: "flex-end",
+    paddingHorizontal: 8,
+    paddingBottom: 14,
+    backgroundColor: "rgba(4,8,18,0.01)",
+  },
+  stageTapRevealContent: {
+    alignSelf: "stretch",
+    gap: 10,
+  },
   stageHeroFilterOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
-  },
-  stageTapRevealSurface: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 18,
   },
   stageHeroTagRow: {
     alignSelf: "flex-start",
