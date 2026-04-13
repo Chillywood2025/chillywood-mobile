@@ -1,9 +1,11 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { VideoView, useVideoPlayer } from "expo-video";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
@@ -22,7 +24,9 @@ import {
     UIManager,
     View,
     type GestureResponderEvent,
-    type ImageSourcePropType
+    type ImageSourcePropType,
+    type StyleProp,
+    type ViewStyle
 } from "react-native";
 
 import { titles } from "../../_data/titles";
@@ -126,6 +130,160 @@ type PartyParticipant = {
 
 type LiveFaceFilterId = (typeof LIVE_FACE_FILTER_OPTIONS)[number]["id"];
 
+type PlayerController = {
+  setPositionAsync: (positionMillis: number) => Promise<void>;
+  playAsync: () => Promise<void>;
+  pauseAsync: () => Promise<void>;
+  setRateAsync: (rate: number, shouldCorrectPitch: boolean) => Promise<void>;
+};
+
+type SharedAndroidVideoSurfaceProps = {
+  source: any;
+  style: StyleProp<ViewStyle>;
+  contentFit: "contain" | "cover";
+  shouldPlay: boolean;
+  playbackRate: number;
+  onPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
+  onLoad: (status: AVPlaybackStatus) => void;
+};
+
+const buildLoadedPlaybackStatus = ({
+  durationMillis,
+  positionMillis,
+  isPlaying,
+  didJustFinish = false,
+}: {
+  durationMillis: number;
+  positionMillis: number;
+  isPlaying: boolean;
+  didJustFinish?: boolean;
+}) =>
+  ({
+    isLoaded: true,
+    durationMillis,
+    positionMillis,
+    isPlaying,
+    didJustFinish,
+  }) as AVPlaybackStatus;
+
+const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVideoSurfaceProps>(
+  function SharedAndroidVideoSurface(
+    { source, style, contentFit, shouldPlay, playbackRate, onPlaybackStatusUpdate, onLoad },
+    ref,
+  ) {
+    const videoViewKey = useMemo(() => {
+      if (typeof source === "number") return `asset-${source}`;
+      if (typeof source === "string") return `uri-${source}`;
+      if (source && typeof source === "object" && "uri" in source) {
+        return `uri-${String((source as { uri?: unknown }).uri ?? "")}`;
+      }
+      return "shared-android-video";
+    }, [source]);
+    const player = useVideoPlayer(source, (createdPlayer) => {
+      createdPlayer.loop = false;
+      createdPlayer.preservesPitch = true;
+      createdPlayer.playbackRate = playbackRate;
+      createdPlayer.timeUpdateEventInterval = 0.25;
+    });
+    const durationMillisRef = useRef(0);
+    const positionMillisRef = useRef(0);
+    const isPlayingRef = useRef(false);
+
+    const emitStatus = useCallback(
+      (overrides?: Partial<{ durationMillis: number; positionMillis: number; isPlaying: boolean; didJustFinish: boolean }>) => {
+        const status = buildLoadedPlaybackStatus({
+          durationMillis: overrides?.durationMillis ?? durationMillisRef.current,
+          positionMillis: overrides?.positionMillis ?? positionMillisRef.current,
+          isPlaying: overrides?.isPlaying ?? isPlayingRef.current,
+          didJustFinish: overrides?.didJustFinish ?? false,
+        });
+        onPlaybackStatusUpdate(status);
+      },
+      [onPlaybackStatusUpdate],
+    );
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        async setPositionAsync(positionMillis: number) {
+          const safePositionMillis = Math.max(0, positionMillis);
+          positionMillisRef.current = safePositionMillis;
+          player.currentTime = safePositionMillis / 1000;
+          emitStatus({ positionMillis: safePositionMillis });
+        },
+        async playAsync() {
+          player.play();
+        },
+        async pauseAsync() {
+          player.pause();
+        },
+        async setRateAsync(rate: number) {
+          player.playbackRate = rate;
+        },
+      }),
+      [emitStatus, player],
+    );
+
+    useEffect(() => {
+      player.playbackRate = playbackRate;
+      player.preservesPitch = true;
+      player.timeUpdateEventInterval = 0.25;
+    }, [player, playbackRate]);
+
+    useEffect(() => {
+      if (shouldPlay) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }, [player, shouldPlay]);
+
+    useEventListener(player, "sourceLoad", ({ duration }) => {
+      const nextDurationMillis = Math.max(0, Math.round((duration ?? 0) * 1000));
+      durationMillisRef.current = nextDurationMillis;
+      const status = buildLoadedPlaybackStatus({
+        durationMillis: nextDurationMillis,
+        positionMillis: positionMillisRef.current,
+        isPlaying: isPlayingRef.current,
+      });
+      onLoad(status);
+      onPlaybackStatusUpdate(status);
+    });
+
+    useEventListener(player, "timeUpdate", ({ currentTime }) => {
+      positionMillisRef.current = Math.max(0, Math.round((currentTime ?? 0) * 1000));
+      emitStatus();
+    });
+
+    useEventListener(player, "playingChange", ({ isPlaying }) => {
+      isPlayingRef.current = isPlaying;
+      emitStatus({ isPlaying });
+    });
+
+    useEventListener(player, "playToEnd", () => {
+      positionMillisRef.current = durationMillisRef.current;
+      isPlayingRef.current = false;
+      emitStatus({
+        positionMillis: durationMillisRef.current,
+        isPlaying: false,
+        didJustFinish: true,
+      });
+    });
+
+    return (
+      <VideoView
+        key={videoViewKey}
+        player={player}
+        style={style}
+        nativeControls={false}
+        contentFit={contentFit}
+        surfaceType="textureView"
+        useExoShutter={false}
+      />
+    );
+  },
+);
+
 const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
   switch (filterId) {
     case "studio":
@@ -216,7 +374,7 @@ export default function PlayerScreen() {
   const fallbackVideo = getVideoSource(localTitle ?? fallbackTitle ?? {});
   const showProtectedSessionNote = isLiveModeFlag;
 
-  const videoRef = useRef<Video>(null);
+  const videoRef = useRef<PlayerController | null>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
   const [titleLoading, setTitleLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
@@ -2672,6 +2830,7 @@ export default function PlayerScreen() {
   }, [displayItem, localTitle, fallbackTitle]);
   const isLiveMode = isLiveModeFlag;
   const isSharedPartyPlayback = inWatchParty && !isLiveMode;
+  const shouldUseSharedAndroidVideoSurface = Platform.OS === "android" && isSharedPartyPlayback;
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
@@ -4057,19 +4216,34 @@ export default function PlayerScreen() {
             {inWatchParty && entryBoostActive ? (
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
-            <Animated.View style={[styles.videoAnimatedWrap, { transform: [{ scale: zoomScale }] }]}> 
+            <Animated.View style={[styles.videoAnimatedWrap, { transform: [{ scale: zoomScale }] }]}>
               {playbackSource ? (
-                <Video
-                  ref={videoRef}
-                  source={playbackSource}
-                  style={styles.video}
-                  resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
-                  shouldPlay={isLiveMode ? true : isPlaying}
-                  isLooping={false}
-                  useNativeControls={false}
-                  onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-                  onLoad={onVideoLoad}
-                />
+                shouldUseSharedAndroidVideoSurface ? (
+                  <SharedAndroidVideoSurface
+                    ref={videoRef}
+                    source={playbackSource}
+                    style={styles.video}
+                    contentFit={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? "cover" : "contain"}
+                    shouldPlay={isLiveMode ? true : isPlaying}
+                    playbackRate={playbackRate}
+                    onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+                    onLoad={onVideoLoad}
+                  />
+                ) : (
+                  <Video
+                    ref={(node) => {
+                      videoRef.current = node as unknown as PlayerController | null;
+                    }}
+                    source={playbackSource}
+                    style={styles.video}
+                    resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
+                    shouldPlay={isLiveMode ? true : isPlaying}
+                    isLooping={false}
+                    useNativeControls={false}
+                    onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+                    onLoad={onVideoLoad}
+                  />
+                )
               ) : (
                 <View style={styles.videoLoadingFallback}>
                   <ActivityIndicator color={ACCENT} />
