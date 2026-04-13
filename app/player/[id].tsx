@@ -1263,17 +1263,7 @@ export default function PlayerScreen() {
       (durationRef.current > 0 && currentPositionRef.current >= durationRef.current - 1500);
 
     if (reachedEnd) {
-      videoRef.current
-        ?.setPositionAsync(0)
-        .then(() => videoRef.current?.playAsync())
-        .then(() => {
-          didJustFinishRef.current = false;
-          currentPositionRef.current = 0;
-          setPositionMillis(0);
-          setIsPlaying(true);
-          if (titleId) writeProgressForTitle(titleId, 0, durationRef.current || undefined).catch(() => {});
-        })
-        .catch(() => {});
+      void replayFromStart();
       return;
     }
 
