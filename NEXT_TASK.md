@@ -1,18 +1,18 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the re-proved Live Waiting Room / Live Room / Live Stage path, and the now-reconciled Watch-Party Live player surface on `app/player/[id].tsx`. Preserve as now true that the intended refined Watch-Party Live layout is landed on `main`, and do not reopen this owner speculatively. The exact next lane is a fresh two-phone Watch-Party Live device proof on the reconciled surface so repo truth can honestly close or narrow the remaining runtime items against the real intended layout instead of the old shell.
+Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the re-proved Live Waiting Room / Live Room / Live Stage path, and the now-corrected Watch-Party Live player surface on `app/player/[id].tsx`. Preserve as now true that the refined Watch-Party Live participant dock on `main` is side-by-side, floating on the branded background, and free of the old card-shell / white-border treatment. The exact next lane is a fresh two-phone Watch-Party Live runtime-proof pass that focuses only on any remaining honest gaps after this dock fix, especially active-playback auto-hide, reactions if exposed on the refined surface, and high-count participant-scale behavior.
 
 ## Current Plan
 1. Preserve the carried-forward proved baseline exactly as recorded.
-2. Preserve the now-landed refined Watch-Party Live player surface on `app/player/[id].tsx`.
-3. Re-run two-phone Watch-Party proof on that reconciled surface.
+2. Preserve the now-landed refined Watch-Party Live player surface and the corrected floating participant dock on `app/player/[id].tsx`.
+3. Re-run two-phone Watch-Party proof on that refined surface for only the remaining honest runtime items.
 4. Reopen the player owner only if the fresh proof shows a real runtime regression.
 
 ## Exact Next Batch
-- preserve the now-landed refined Watch-Party Live owner exactly as pushed
-- run two-phone proof against the reconciled `Watch-Party Live` surface, not the old shell
-- verify the intended refined layout elements and the remaining runtime items honestly on-device
+- preserve the now-landed refined Watch-Party Live owner and the corrected floating participant dock exactly as pushed
+- run two-phone proof against the refined `Watch-Party Live` surface, not the old shell
+- verify the remaining runtime items honestly on-device, especially active-playback auto-hide, reactions if exposed, and participant-scale behavior
 - reopen `app/player/[id].tsx` only if that proof exposes a real regression
 
 ## Scope
@@ -34,6 +34,6 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the reconciled `app/player/[id].tsx` surface proves correctly on two real phones
-- the remaining Watch-Party runtime items are closed or narrowed against the real intended layout
+- the reconciled `app/player/[id].tsx` surface proves correctly on two real phones with the corrected floating participant dock intact
+- the remaining Watch-Party runtime items are closed or narrowed against the real intended layout without reopening participant-card chrome
 - the repo can move forward without stale old-shell ambiguity in the Watch-Party player lane

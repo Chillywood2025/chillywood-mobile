@@ -2984,203 +2984,6 @@ export default function PlayerScreen() {
   ]);
 
   const renderParticipantPanel = (liveLayout = false, dockLayout = false) => {
-    if (dockLayout) {
-      return (
-        <View
-          style={[
-            styles.partyFeedCard,
-            styles.partyFeedCardLive,
-            styles.partyFeedCardLiveDock,
-            styles.watchPartyParticipantDockCard,
-          ]}
-        >
-          <ScrollView
-            style={styles.watchPartyParticipantScroll}
-            contentContainerStyle={styles.watchPartyParticipantScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {liveBubbleParticipants.map((participant) => {
-              const isCurrentUser = participant.id === trackedUserId;
-              const isHost = partySyncRole === "host";
-              const isSpeaking = participant.isSpeaking && participant.canSpeak;
-              const isActive = primaryActiveParticipantIds.includes(participant.id);
-              const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
-              const shouldDim = primaryActiveParticipantIds.length > 0 && !isActive;
-              const isReactionBoosted = participantReactionBoostIds.includes(participant.id);
-              const participantReactions = partyParticipantReactions
-                .filter((entry) => entry.participantId === participant.id)
-                .slice(-2);
-              const focusScale = participantFocusScaleMapRef.current[participant.id] ?? 1;
-              const focusOpacity = participantFocusOpacityMapRef.current[participant.id] ?? 1;
-              const idleScale = !isSpeaking ? (participantIdleScaleMapRef.current[participant.id] ?? 1) : 1;
-              const pressScale = participantPressScaleMapRef.current[participant.id] ?? 1;
-              const joinScale = participantJoinScaleMapRef.current[participant.id] ?? 1;
-              const isOnlineActive = isSpeaking || isActive;
-              const showLocalCameraPreview = Platform.OS !== "web" && isCurrentUser && !!cameraPermission?.granted;
-              const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
-              const initials = getInitials(participant.name);
-              const statusLabel = getLiveParticipantStatusText({
-                isSpeaking,
-                isRequesting,
-                isMuted: participant.muted,
-                role: participant.role,
-              });
-
-              return (
-                <Animated.View
-                  key={participant.id}
-                  style={[
-                    styles.watchPartyParticipantRow,
-                    shouldDim && styles.participantBubbleInactive,
-                    isReactionBoosted && styles.watchPartyParticipantRowBoosted,
-                    {
-                      opacity: focusOpacity,
-                      transform: [
-                        { scale: focusScale },
-                        { scale: joinScale },
-                        { scale: idleScale },
-                        { scale: pressScale },
-                      ],
-                    },
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={styles.watchPartyParticipantRowTap}
-                    onPressIn={() => {
-                      const press = participantPressScaleMapRef.current[participant.id];
-                      if (!press) return;
-                      Animated.timing(press, {
-                        toValue: 0.98,
-                        duration: 90,
-                        easing: Easing.out(Easing.quad),
-                        useNativeDriver: true,
-                      }).start();
-                    }}
-                    onPressOut={() => {
-                      const press = participantPressScaleMapRef.current[participant.id];
-                      if (!press) return;
-                      Animated.timing(press, {
-                        toValue: 1,
-                        duration: 120,
-                        easing: Easing.out(Easing.quad),
-                        useNativeDriver: true,
-                      }).start();
-                    }}
-                    onPress={() => {
-                      markParticipantActive(participant.id, 2400);
-                      bumpRoomEnergy(0.03);
-                      if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
-                        setPartyParticipants((prev) =>
-                          prev.map((entry) =>
-                            entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
-                          ),
-                        );
-                      }
-                      if (!isHost) return;
-                      setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <View style={styles.watchPartyParticipantIdentity}>
-                      <View style={[styles.partyParticipantAvatarWrap, styles.partyParticipantAvatarWrapDock, styles.watchPartyParticipantAvatarWrap]}>
-                        <View
-                          style={[
-                            styles.participantAvatar,
-                            styles.participantAvatarLiveDock,
-                            styles.watchPartyParticipantAvatar,
-                            participant.muted && styles.participantAvatarMuted,
-                          ]}
-                        >
-                          {(showLocalCameraPreview || bubbleMediaUri) ? (
-                            showLocalCameraPreview ? (
-                              <>
-                                <CameraView style={styles.participantAvatarImage} facing="front" mute mirror />
-                                {isCurrentUser && liveFaceFilter !== "none" ? (
-                                  <View
-                                    pointerEvents="none"
-                                    style={[
-                                      styles.liveFaceFilterPreviewOverlay,
-                                      {
-                                        backgroundColor: activeLiveFaceFilter.overlayColor,
-                                        borderColor: activeLiveFaceFilter.borderColor,
-                                      },
-                                    ]}
-                                  />
-                                ) : null}
-                              </>
-                            ) : (
-                              <>
-                                <Image source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
-                                {isCurrentUser && liveFaceFilter !== "none" ? (
-                                  <View
-                                    pointerEvents="none"
-                                    style={[
-                                      styles.liveFaceFilterPreviewOverlay,
-                                      {
-                                        backgroundColor: activeLiveFaceFilter.overlayColor,
-                                        borderColor: activeLiveFaceFilter.borderColor,
-                                      },
-                                    ]}
-                                  />
-                                ) : null}
-                              </>
-                            )
-                          ) : (
-                            <Text style={[styles.participantInitials, styles.participantInitialsLive]}>{initials}</Text>
-                          )}
-                        </View>
-                        {isRequesting ? <View pointerEvents="none" style={styles.participantRequestRing} /> : null}
-                        <View style={[styles.participantPresenceDot, isOnlineActive ? styles.participantPresenceDotActive : styles.participantPresenceDotIdle]} />
-                        {participant.role === "host" || participant.role === "co-host" ? (
-                          <View style={styles.participantHostBadge}>
-                            <Text style={styles.participantHostBadgeText}>{participant.role === "host" ? "HOST" : "CO-HOST"}</Text>
-                          </View>
-                        ) : null}
-                        {isRequesting ? (
-                          <View style={styles.participantRequestBadge}>
-                            <Text style={styles.participantRequestBadgeText}>✋</Text>
-                          </View>
-                        ) : null}
-                        {participant.muted ? (
-                          <View style={styles.participantMutedOverlay}>
-                            <Text style={styles.participantMutedOverlayText}>🔇</Text>
-                          </View>
-                        ) : null}
-                      </View>
-
-                      <View style={styles.watchPartyParticipantTextWrap}>
-                        <View style={styles.watchPartyParticipantNameRow}>
-                          <Text style={styles.watchPartyParticipantName} numberOfLines={1}>
-                            {participant.id === trackedUserId ? "You" : participant.name}
-                          </Text>
-                          {isSpeaking || isActive ? (
-                            <View style={styles.watchPartyParticipantLivePill}>
-                              <Text style={styles.watchPartyParticipantLivePillText}>{isSpeaking ? "LIVE" : "HERE"}</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        <Text style={styles.watchPartyParticipantStatus} numberOfLines={1}>
-                          {statusLabel}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.watchPartyParticipantMeta}>
-                      {participantReactions.length > 0 ? (
-                        <Text style={styles.watchPartyParticipantReaction}>
-                          {participantReactions[participantReactions.length - 1]?.emoji}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                </Animated.View>
-              );
-            })}
-          </ScrollView>
-        </View>
-      );
-    }
-
     return (
       <View
         style={[
@@ -3289,6 +3092,7 @@ export default function PlayerScreen() {
                       styles.participantAvatar,
                       liveLayout && styles.participantAvatarLive,
                       dockLayout && styles.participantAvatarLiveDock,
+                      dockLayout && styles.watchPartyParticipantAvatar,
                       !liveLayout && styles.participantAvatarTitleCompact,
                       participant.muted && styles.participantAvatarMuted,
                     ]}
@@ -3371,21 +3175,19 @@ export default function PlayerScreen() {
                     </Animated.View>
                   ))}
                 </View>
-                {!dockLayout ? (
-                  <Text
-                    style={[
-                      styles.participantName,
-                      liveLayout && styles.participantNameLive,
-                      dockLayout && styles.participantNameLiveDock,
-                      !liveLayout && styles.participantNameTitleCompact,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {participant.id === trackedUserId ? "You" : participant.name}
-                  </Text>
-                ) : null}
-                {liveLayout && !dockLayout ? (
-                  <Text style={styles.partyParticipantStatus}>
+                <Text
+                  style={[
+                    styles.participantName,
+                    liveLayout && styles.participantNameLive,
+                    dockLayout && styles.participantNameLiveDock,
+                    !liveLayout && styles.participantNameTitleCompact,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {participant.id === trackedUserId ? "You" : participant.name}
+                </Text>
+                {liveLayout ? (
+                  <Text style={[styles.partyParticipantStatus, dockLayout && styles.partyParticipantStatusDock]}>
                     {getLiveParticipantStatusText({
                       isSpeaking,
                       isRequesting,
@@ -6001,10 +5803,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   participantBubbleScrollLiveDock: {
-    gap: 8,
-    alignItems: "center",
-    paddingHorizontal: 12,
-    minHeight: 88,
+    gap: 5,
+    alignItems: "flex-start",
+    paddingHorizontal: 0,
+    paddingVertical: 2,
+    minHeight: 80,
   },
   participantBubbleItem: {
     width: 74,
@@ -6038,8 +5841,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   participantBubbleItemLiveDock: {
-    width: 56,
-    borderRadius: 999,
+    width: 68,
+    borderRadius: 0,
     borderWidth: 0,
     paddingHorizontal: 0,
     paddingVertical: 0,
@@ -6067,7 +5870,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   partyParticipantBubbleTapDock: {
-    gap: 0,
+    gap: 2,
   },
   watchPartyParticipantRow: {
     borderRadius: 18,
@@ -6160,10 +5963,10 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   participantAvatarLiveDock: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderColor: "rgba(255,255,255,0.24)",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderColor: "transparent",
     backgroundColor: "rgba(0,0,0,0.44)",
   },
   watchPartyParticipantAvatar: {
@@ -6367,8 +6170,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   participantNameLiveDock: {
+    maxWidth: "100%",
     fontSize: 9,
-    color: "#E9EDF8",
+    color: "#F3F6FD",
+    textAlign: "center",
   },
   watchPartyParticipantScroll: {
     maxHeight: 188,
@@ -6421,7 +6226,7 @@ const styles = StyleSheet.create({
   watchPartyLiveBottomDock: {
     marginTop: 6,
     marginBottom: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingTop: 6,
     paddingBottom: 6,
     borderRadius: 14,
@@ -6673,6 +6478,12 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "700",
     marginTop: 1,
+  },
+  partyParticipantStatusDock: {
+    maxWidth: "100%",
+    color: "#C0C8D9",
+    fontSize: 8,
+    textAlign: "center",
   },
   participantExpandedControls: {
     marginTop: 7,
