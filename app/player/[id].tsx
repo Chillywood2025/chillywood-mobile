@@ -5639,6 +5639,7 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     borderColor: "rgba(255,255,255,0.24)",
     backgroundColor: "rgba(0,0,0,0.44)",
+    overflow: "hidden",
   },
   participantActiveRing: {
     position: "absolute",
