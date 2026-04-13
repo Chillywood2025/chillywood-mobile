@@ -57,6 +57,7 @@ import {
     fetchPartyMessages,
     getPartyRoom,
     getSafePartyUserId,
+    sendPartyMessage,
     updateRoomPlayback,
     type WatchPartyState,
 } from "../../_lib/watchParty";
@@ -84,7 +85,7 @@ const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
 const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
 const PARTY_LOCAL_MAX_REACTIONS = 8;
-  const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
+const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
 const LIVE_FACE_FILTER_OPTIONS = [
   { id: "none", label: "Natural", subtitle: "No filter" },
   { id: "studio", label: "Studio Glow", subtitle: "Warm lift" },
@@ -93,8 +94,9 @@ const LIVE_FACE_FILTER_OPTIONS = [
 ] as const;
 const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
-  const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
-  const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
+const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
 type TitleRow = {
   id: string;
   title: string;
@@ -212,7 +214,7 @@ export default function PlayerScreen() {
         : "none";
   const fallbackTitle = (titles[0] as any) ?? null;
   const fallbackVideo = getVideoSource(localTitle ?? fallbackTitle ?? {});
-  const showProtectedSessionNote = inWatchParty || isLiveModeFlag;
+  const showProtectedSessionNote = isLiveModeFlag;
 
   const videoRef = useRef<Video>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
@@ -247,17 +249,20 @@ export default function PlayerScreen() {
   const [, setPartyViewerCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(1);
   const [partyParticipantPreview, setPartyParticipantPreview] = useState<string[]>([]);
-  const [partyChatOpen, setPartyChatOpen] = useState(false);
-  const [partyMessages, setPartyMessages] = useState<{ id: string; text: string }[]>([]);
+  const [, setPartyChatOpen] = useState(false);
+  const [, setPartyMessages] = useState<{ id: string; text: string }[]>([]);
   const [partyParticipants, setPartyParticipants] = useState<PartyParticipant[]>([]);
   const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
   const [activeParticipantIds, setActiveParticipantIds] = useState<string[]>([]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
+  const [partyCommentDraft, setPartyCommentDraft] = useState("");
+  const [partyCommentSending, setPartyCommentSending] = useState(false);
+  const [watchPartyMenuOpen, setWatchPartyMenuOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [liveFilterSheetOpen, setLiveFilterSheetOpen] = useState(false);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
-  const [, setPartyOverlayMessages] = useState<{ id: string; author: string; body: string }[]>([]);
+  const [partyOverlayMessages, setPartyOverlayMessages] = useState<{ id: string; author: string; body: string }[]>([]);
   const [partyReactionBursts, setPartyReactionBursts] = useState<{ id: string; emoji: string }[]>([]);
   const [partyLocalReactions, setPartyLocalReactions] = useState<{ id: string; emoji: string; rightOffset: number }[]>([]);
   const [partyParticipantReactions, setPartyParticipantReactions] = useState<
@@ -293,6 +298,7 @@ export default function PlayerScreen() {
   const lastJoinToastAtRef = useRef(0);
   const roomEnergyRef = useRef(0);
   const myCameraPreviewUrlRef = useRef("");
+  const partyDisplayNameRef = useRef("You");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const zoomScale = useRef(new Animated.Value(1)).current;
@@ -360,6 +366,16 @@ export default function PlayerScreen() {
     if (!nextTitle) return "";
     return String(nextTitle.id ?? "").trim();
   }, [nextTitle]);
+
+  const pushPartyOverlayMessage = useCallback((msg: { id: string; author: string; body: string }) => {
+    const safeBody = String(msg.body ?? "").trim();
+    if (!safeBody) return;
+
+    setPartyOverlayMessages((prev) => {
+      if (prev.some((entry) => entry.id === msg.id)) return prev;
+      return [...prev.slice(-11), { ...msg, body: safeBody }];
+    });
+  }, []);
 
   useEffect(() => {
     const listener = zoomScale.addListener(({ value }) => {
@@ -707,6 +723,8 @@ export default function PlayerScreen() {
       setPartyParticipants([]);
       setPartyUserId("");
       setPartyChatOpen(false);
+      setPartyCommentDraft("");
+      setPartyCommentSending(false);
       setPartyOverlayMessages([]);
       setPartyReactionBursts([]);
       Object.values(partyReactionTimersRef.current).forEach((timer) => clearTimeout(timer));
@@ -719,10 +737,6 @@ export default function PlayerScreen() {
     }
 
     let active = true;
-
-    const pushOverlayMessage = (msg: { id: string; author: string; body: string }) => {
-      setPartyOverlayMessages((prev) => [...prev.slice(-11), msg]);
-    };
 
     const pushReactionBurst = (emojiRaw: unknown) => {
       const emoji = String(emojiRaw ?? "").trim();
@@ -802,6 +816,7 @@ export default function PlayerScreen() {
       } catch {
         // keep fallback displayName
       }
+      partyDisplayNameRef.current = displayName;
       myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
       const selfIdentityIds = new Set([
         trackedUserId,
@@ -825,12 +840,21 @@ export default function PlayerScreen() {
         }));
       setPartyOverlayMessages(chatHistory);
 
-      if (partySocialChannelRef.current) {
-        supabase.removeChannel(partySocialChannelRef.current);
-        partySocialChannelRef.current = null;
+      const channelName = `party-chat-${partyId}`;
+      const channelsToRemove = supabase
+        .getChannels()
+        .filter(
+          (existingChannel) =>
+            existingChannel === partySocialChannelRef.current ||
+            existingChannel.topic === channelName ||
+            existingChannel.topic === `realtime:${channelName}`,
+        );
+      partySocialChannelRef.current = null;
+      if (channelsToRemove.length > 0) {
+        await Promise.all(channelsToRemove.map((existingChannel) => supabase.removeChannel(existingChannel).catch(() => null)));
       }
 
-      const channel = supabase.channel(`party-chat-${partyId}`, {
+      const channel = supabase.channel(channelName, {
         config: { presence: { key: trackedUserId } },
       });
 
@@ -981,9 +1005,10 @@ export default function PlayerScreen() {
         const body = String(payload?.body ?? "").trim();
         if (!body) return;
         const authorLabel = String(payload?.authorLabel ?? "User");
-        pushOverlayMessage({
+        const incomingUserId = String(payload?.userId ?? "").trim();
+        pushPartyOverlayMessage({
           id: String(payload?.id ?? `party-msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-          author: authorLabel,
+          author: isCurrentIdentity(incomingUserId) ? "You" : authorLabel,
           body,
         });
       });
@@ -1017,7 +1042,7 @@ export default function PlayerScreen() {
         partySocialChannelRef.current = null;
       }
     };
-  }, [inWatchParty, partyId]);
+  }, [inWatchParty, partyId, pushPartyOverlayMessage]);
 
   useEffect(() => {
     return () => {
@@ -1247,6 +1272,52 @@ export default function PlayerScreen() {
       }, CONTROLS_AUTO_HIDE_MILLIS);
     }
   }, [controlsVisible, isPlaying]);
+
+  const onSendPartyComment = useCallback(async () => {
+    if (!inWatchParty || !partyId || partyCommentSending) return;
+
+    const body = String(partyCommentDraft ?? "").trim();
+    if (!body) return;
+
+    const commentUserId = String(partyUserId || (await getSafePartyUserId().catch(() => "")) || "").trim();
+    const localId = `party-msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const authorLabel = String(partyDisplayNameRef.current ?? "").trim() || "Guest";
+
+    pushPartyOverlayMessage({
+      id: localId,
+      author: "You",
+      body,
+    });
+    setPartyCommentDraft("");
+    setControlsVisible(true);
+    resetAutoHideTimer();
+    setPartyCommentSending(true);
+
+    try {
+      await sendPartyMessage(partyId, commentUserId, "chat", body, { username: authorLabel });
+      await partySocialChannelRef.current?.send({
+        type: "broadcast",
+        event: "message",
+        payload: {
+          id: localId,
+          kind: "chat",
+          body,
+          userId: commentUserId,
+          authorLabel,
+        },
+      }).catch(() => {});
+    } finally {
+      setPartyCommentSending(false);
+    }
+  }, [
+    inWatchParty,
+    partyCommentDraft,
+    partyCommentSending,
+    partyId,
+    partyUserId,
+    pushPartyOverlayMessage,
+    resetAutoHideTimer,
+  ]);
 
   const handleSingleTap = () => {
     if (isStandalonePlayer && standaloneAccessLoading) return;
@@ -1839,6 +1910,37 @@ export default function PlayerScreen() {
       // ignore unsupported rate transitions
     }
   }, [resetAutoHideTimer]);
+
+  const onToggleWatchPartyComments = useCallback(() => {
+    if (!inWatchParty || isLiveModeFlag) return;
+    resetAutoHideTimer();
+    setWatchPartyMenuOpen(false);
+    setPartyCommentsOpen((value) => !value);
+  }, [inWatchParty, isLiveModeFlag, resetAutoHideTimer]);
+
+  const onToggleWatchPartyMenu = useCallback(() => {
+    if (!inWatchParty || isLiveModeFlag) return;
+    resetAutoHideTimer();
+    setPartyCommentsOpen(false);
+    setWatchPartyMenuOpen((value) => !value);
+  }, [inWatchParty, isLiveModeFlag, resetAutoHideTimer]);
+
+  const onSelectWatchPartyRate = useCallback((rate: number) => {
+    resetAutoHideTimer();
+    setWatchPartyMenuOpen(false);
+    void onSelectRate(rate);
+  }, [onSelectRate, resetAutoHideTimer]);
+
+  const onToggleWatchPartyMyList = useCallback(() => {
+    resetAutoHideTimer();
+    setWatchPartyMenuOpen(false);
+    void onToggleMyList();
+  }, [onToggleMyList, resetAutoHideTimer]);
+
+  const onPressWatchPartyRoom = useCallback(() => {
+    setWatchPartyMenuOpen(false);
+    onReturnToPartyRoom();
+  }, [onReturnToPartyRoom]);
 
   const showLivePresenceEvent = useCallback((message: string) => {
     setLivePresenceEvent(message);
@@ -2667,6 +2769,20 @@ export default function PlayerScreen() {
     videoRef.current?.pauseAsync().catch(() => {});
   }, [isStandalonePlayer, standalonePlaybackGateActive]);
 
+  useEffect(() => {
+    if (!isSharedPartyPlayback) {
+      setWatchPartyMenuOpen(false);
+      return;
+    }
+
+    setSpeedMenuOpen(false);
+
+    if (!controlsVisible) {
+      setWatchPartyMenuOpen(false);
+      setPartyCommentsOpen(false);
+    }
+  }, [controlsVisible, isSharedPartyPlayback]);
+
   const hasActiveRailParticipants = useMemo(
     () => liveBubbleParticipants.some((entry) => entry.isSpeaking || primaryActiveParticipantIds.includes(entry.id)),
     [liveBubbleParticipants, primaryActiveParticipantIds],
@@ -2703,6 +2819,11 @@ export default function PlayerScreen() {
 
     return "SYNC HELPER · Stay here for synced playback. Return to Party Room for invites, access, and room context.";
   }, [partySyncRole, partySyncStatus]);
+  const watchPartySyncLabel = useMemo(() => {
+    if (!isSharedPartyPlayback) return "";
+    const syncLead = partySyncRole === "host" ? "Hosting the room" : "Synced with the host";
+    return partySyncStatus ? `${syncLead} · ${partySyncStatus}` : syncLead;
+  }, [isSharedPartyPlayback, partySyncRole, partySyncStatus]);
   const standaloneContextTitle = useMemo(() => {
     if (standaloneAccessLoading) return "Checking access before playback starts.";
     if (standalonePlaybackUnknown) return "Playback access needs another check.";
@@ -2935,15 +3056,213 @@ export default function PlayerScreen() {
     triggerParticipantReactionBoost,
   ]);
 
-  const renderParticipantPanel = (liveLayout = false, dockLayout = false) => (
-    <View
-      style={[
-        styles.partyFeedCard,
-        liveLayout && styles.partyFeedCardLive,
-        dockLayout && styles.partyFeedCardLiveDock,
-        !liveLayout && styles.partyFeedCardTitleCompact,
-      ]}
-    >
+  const renderParticipantPanel = (liveLayout = false, dockLayout = false) => {
+    if (dockLayout) {
+      return (
+        <View
+          style={[
+            styles.partyFeedCard,
+            styles.partyFeedCardLive,
+            styles.partyFeedCardLiveDock,
+            styles.watchPartyParticipantDockCard,
+          ]}
+        >
+          <ScrollView
+            style={styles.watchPartyParticipantScroll}
+            contentContainerStyle={styles.watchPartyParticipantScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {liveBubbleParticipants.map((participant) => {
+              const isCurrentUser = participant.id === trackedUserId;
+              const isHost = partySyncRole === "host";
+              const isSpeaking = participant.isSpeaking && participant.canSpeak;
+              const isActive = primaryActiveParticipantIds.includes(participant.id);
+              const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
+              const shouldDim = primaryActiveParticipantIds.length > 0 && !isActive;
+              const isReactionBoosted = participantReactionBoostIds.includes(participant.id);
+              const participantReactions = partyParticipantReactions
+                .filter((entry) => entry.participantId === participant.id)
+                .slice(-2);
+              const focusScale = participantFocusScaleMapRef.current[participant.id] ?? 1;
+              const focusOpacity = participantFocusOpacityMapRef.current[participant.id] ?? 1;
+              const idleScale = !isSpeaking ? (participantIdleScaleMapRef.current[participant.id] ?? 1) : 1;
+              const pressScale = participantPressScaleMapRef.current[participant.id] ?? 1;
+              const joinScale = participantJoinScaleMapRef.current[participant.id] ?? 1;
+              const isOnlineActive = isSpeaking || isActive;
+              const showLocalCameraPreview = Platform.OS !== "web" && isCurrentUser && !!cameraPermission?.granted;
+              const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
+              const initials = getInitials(participant.name);
+              const statusLabel = getLiveParticipantStatusText({
+                isSpeaking,
+                isRequesting,
+                isMuted: participant.muted,
+                role: participant.role,
+              });
+
+              return (
+                <Animated.View
+                  key={participant.id}
+                  style={[
+                    styles.watchPartyParticipantRow,
+                    shouldDim && styles.participantBubbleInactive,
+                    isReactionBoosted && styles.watchPartyParticipantRowBoosted,
+                    {
+                      opacity: focusOpacity,
+                      transform: [
+                        { scale: focusScale },
+                        { scale: joinScale },
+                        { scale: idleScale },
+                        { scale: pressScale },
+                      ],
+                    },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.watchPartyParticipantRowTap}
+                    onPressIn={() => {
+                      const press = participantPressScaleMapRef.current[participant.id];
+                      if (!press) return;
+                      Animated.timing(press, {
+                        toValue: 0.98,
+                        duration: 90,
+                        easing: Easing.out(Easing.quad),
+                        useNativeDriver: true,
+                      }).start();
+                    }}
+                    onPressOut={() => {
+                      const press = participantPressScaleMapRef.current[participant.id];
+                      if (!press) return;
+                      Animated.timing(press, {
+                        toValue: 1,
+                        duration: 120,
+                        easing: Easing.out(Easing.quad),
+                        useNativeDriver: true,
+                      }).start();
+                    }}
+                    onPress={() => {
+                      markParticipantActive(participant.id, 2400);
+                      bumpRoomEnergy(0.03);
+                      if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
+                        setPartyParticipants((prev) =>
+                          prev.map((entry) =>
+                            entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
+                          ),
+                        );
+                      }
+                      if (!isHost) return;
+                      setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <View style={styles.watchPartyParticipantIdentity}>
+                      <View style={[styles.partyParticipantAvatarWrap, styles.partyParticipantAvatarWrapDock, styles.watchPartyParticipantAvatarWrap]}>
+                        <View
+                          style={[
+                            styles.participantAvatar,
+                            styles.participantAvatarLiveDock,
+                            styles.watchPartyParticipantAvatar,
+                            participant.muted && styles.participantAvatarMuted,
+                          ]}
+                        >
+                          {(showLocalCameraPreview || bubbleMediaUri) ? (
+                            showLocalCameraPreview ? (
+                              <>
+                                <CameraView style={styles.participantAvatarImage} facing="front" mute mirror />
+                                {isCurrentUser && liveFaceFilter !== "none" ? (
+                                  <View
+                                    pointerEvents="none"
+                                    style={[
+                                      styles.liveFaceFilterPreviewOverlay,
+                                      {
+                                        backgroundColor: activeLiveFaceFilter.overlayColor,
+                                        borderColor: activeLiveFaceFilter.borderColor,
+                                      },
+                                    ]}
+                                  />
+                                ) : null}
+                              </>
+                            ) : (
+                              <>
+                                <Image source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
+                                {isCurrentUser && liveFaceFilter !== "none" ? (
+                                  <View
+                                    pointerEvents="none"
+                                    style={[
+                                      styles.liveFaceFilterPreviewOverlay,
+                                      {
+                                        backgroundColor: activeLiveFaceFilter.overlayColor,
+                                        borderColor: activeLiveFaceFilter.borderColor,
+                                      },
+                                    ]}
+                                  />
+                                ) : null}
+                              </>
+                            )
+                          ) : (
+                            <Text style={[styles.participantInitials, styles.participantInitialsLive]}>{initials}</Text>
+                          )}
+                        </View>
+                        {isRequesting ? <View pointerEvents="none" style={styles.participantRequestRing} /> : null}
+                        <View style={[styles.participantPresenceDot, isOnlineActive ? styles.participantPresenceDotActive : styles.participantPresenceDotIdle]} />
+                        {participant.role === "host" || participant.role === "co-host" ? (
+                          <View style={styles.participantHostBadge}>
+                            <Text style={styles.participantHostBadgeText}>{participant.role === "host" ? "HOST" : "CO-HOST"}</Text>
+                          </View>
+                        ) : null}
+                        {isRequesting ? (
+                          <View style={styles.participantRequestBadge}>
+                            <Text style={styles.participantRequestBadgeText}>✋</Text>
+                          </View>
+                        ) : null}
+                        {participant.muted ? (
+                          <View style={styles.participantMutedOverlay}>
+                            <Text style={styles.participantMutedOverlayText}>🔇</Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.watchPartyParticipantTextWrap}>
+                        <View style={styles.watchPartyParticipantNameRow}>
+                          <Text style={styles.watchPartyParticipantName} numberOfLines={1}>
+                            {participant.id === trackedUserId ? "You" : participant.name}
+                          </Text>
+                          {isSpeaking || isActive ? (
+                            <View style={styles.watchPartyParticipantLivePill}>
+                              <Text style={styles.watchPartyParticipantLivePillText}>{isSpeaking ? "LIVE" : "HERE"}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <Text style={styles.watchPartyParticipantStatus} numberOfLines={1}>
+                          {statusLabel}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.watchPartyParticipantMeta}>
+                      {participantReactions.length > 0 ? (
+                        <Text style={styles.watchPartyParticipantReaction}>
+                          {participantReactions[participantReactions.length - 1]?.emoji}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <View
+        style={[
+          styles.partyFeedCard,
+          liveLayout && styles.partyFeedCardLive,
+          dockLayout && styles.partyFeedCardLiveDock,
+          !liveLayout && styles.partyFeedCardTitleCompact,
+        ]}
+      >
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -3319,10 +3638,24 @@ export default function PlayerScreen() {
         })}
       </ScrollView>
     </View>
-  );
+    );
+  };
 
   const renderTitleParticipantExpandedPanel = () => (
     <View style={styles.titleParticipantFeedWrap}>
+      <View style={styles.watchPartyPlayerBandHeader}>
+        <View style={styles.watchPartyPlayerBandMeta}>
+          <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
+          <Text style={styles.watchPartyPlayerBandBody}>
+            {watchPartyAudienceLabel || "Shared playback syncing"}
+            {watchPartyPreviewLabel ? ` · ${watchPartyPreviewLabel}` : ""}
+          </Text>
+          {watchPartySyncLabel ? (
+            <Text style={styles.watchPartyPlayerBandSubtle}>{watchPartySyncLabel}</Text>
+          ) : null}
+        </View>
+      </View>
+
       <View style={styles.watchPartySocialShell}>
         <View style={styles.watchPartySocialMetaRow}>
           <View style={styles.watchPartySocialMetaPill}>
@@ -3358,8 +3691,134 @@ export default function PlayerScreen() {
           </View>
         )}
       </View>
+
+      <Animated.View
+        pointerEvents={controlsVisible ? "auto" : "none"}
+        style={[
+          styles.watchPartyDockOverlay,
+          {
+            opacity: partyOverlayControlsOpacity,
+            transform: [{ translateY: partyOverlayControlsTranslateY }],
+          },
+        ]}
+      >
+        <View style={styles.watchPartyDockActionRow}>
+          <TouchableOpacity
+            style={[styles.watchPartyDockActionBtn, partyCommentsOpen && styles.watchPartyDockActionBtnActive]}
+            onPress={onToggleWatchPartyComments}
+            activeOpacity={0.88}
+          >
+            <Text style={[styles.watchPartyDockActionText, partyCommentsOpen && styles.watchPartyDockActionTextActive]}>Comments</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.watchPartyDockActionBtn, watchPartyMenuOpen && styles.watchPartyDockActionBtnActive]}
+            onPress={onToggleWatchPartyMenu}
+            activeOpacity={0.88}
+          >
+            <Text style={[styles.watchPartyDockActionText, watchPartyMenuOpen && styles.watchPartyDockActionTextActive]}>Menu</Text>
+          </TouchableOpacity>
+        </View>
+
+        {partyCommentsOpen ? (
+          <View style={styles.watchPartyDockCard}>{renderPartyCommentsContent()}</View>
+        ) : null}
+
+        {watchPartyMenuOpen ? (
+          <View style={styles.watchPartyDockCard}>
+            <Text style={styles.watchPartyDockCardTitle}>Room Menu</Text>
+            <View style={styles.watchPartyDockMenuRow}>
+              <TouchableOpacity style={styles.watchPartyDockMenuBtn} onPress={onPressWatchPartyRoom} activeOpacity={0.88}>
+                <Text style={styles.watchPartyDockMenuBtnText}>Party Room</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.watchPartyDockMenuBtn, myListBusy && styles.secondaryBtnDisabled]}
+                onPress={onToggleWatchPartyMyList}
+                disabled={myListBusy}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.watchPartyDockMenuBtnText}>
+                  {myListBusy ? "Saving..." : inMyList ? "In My List" : "Add to My List"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.watchPartyDockRateRow}>
+              {SPEED_OPTIONS.map((option) => {
+                const active = playbackRate === option;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.watchPartyDockRateChip, active && styles.watchPartyDockRateChipActive]}
+                    onPress={() => onSelectWatchPartyRate(option)}
+                    activeOpacity={0.88}
+                  >
+                    <Text style={[styles.watchPartyDockRateChipText, active && styles.watchPartyDockRateChipTextActive]}>
+                      {option}x
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+      </Animated.View>
+
       {renderParticipantPanel(true, true)}
     </View>
+  );
+
+  const renderPartyCommentsContent = () => (
+    <>
+      <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
+      <ScrollView
+        style={styles.partyCommentsList}
+        contentContainerStyle={styles.partyCommentsListContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {partyOverlayMessages.length > 0 ? (
+          partyOverlayMessages.map((msg) => (
+            <Text key={msg.id} style={styles.partyCommentsLine}>
+              <Text style={styles.partyCommentsAuthor}>{msg.author}: </Text>
+              {msg.body}
+            </Text>
+          ))
+        ) : (
+          <Text style={styles.partyCommentsLine}>No comments yet. Start the conversation.</Text>
+        )}
+      </ScrollView>
+      {inWatchParty ? (
+        <View style={styles.partyCommentsInputRow}>
+          <TextInput
+            value={partyCommentDraft}
+            onChangeText={(value) => {
+              setPartyCommentDraft(value);
+              resetAutoHideTimer();
+            }}
+            onFocus={() => {
+              setControlsVisible(true);
+              resetAutoHideTimer();
+            }}
+            onSubmitEditing={() => {
+              void onSendPartyComment();
+            }}
+            style={styles.partyCommentsInput}
+            placeholder="Say something"
+            placeholderTextColor="rgba(212,216,226,0.7)"
+            editable={!partyCommentSending}
+            returnKeyType="send"
+          />
+          <TouchableOpacity
+            style={styles.partyCommentsSendBtn}
+            onPress={() => {
+              void onSendPartyComment();
+            }}
+            disabled={partyCommentSending || !partyCommentDraft.trim()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.partyCommentsSendBtnText}>{partyCommentSending ? "..." : "Send"}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </>
   );
 
   const renderLiveFilterSheet = (sheetStyle?: object) => (
@@ -3425,22 +3884,31 @@ export default function PlayerScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.playerFrameworkRoot}>
-        {frameworkBackgroundSource ? (
+        {isSharedPartyPlayback ? (
+          <>
+            <ImageBackground source={WATCH_PARTY_BRANDED_BACKGROUND} style={styles.playerFrameworkBackground} resizeMode="cover" />
+            {frameworkBackgroundSource ? (
+              <ImageBackground source={frameworkBackgroundSource} style={styles.watchPartyFrameworkPosterWash} resizeMode="cover" />
+            ) : null}
+          </>
+        ) : frameworkBackgroundSource ? (
           <ImageBackground source={frameworkBackgroundSource} style={styles.playerFrameworkBackground} resizeMode="cover" />
         ) : (
           <View style={styles.playerFrameworkBackgroundFallback} />
         )}
-        <View style={styles.playerFrameworkOverlay} pointerEvents="none" />
-        <View style={styles.playerFrameworkDepthTop} pointerEvents="none" />
-        <View style={styles.playerFrameworkDepthBottom} pointerEvents="none" />
+        <View style={[styles.playerFrameworkOverlay, isSharedPartyPlayback && styles.playerFrameworkOverlayWatchParty]} pointerEvents="none" />
+        <View style={[styles.playerFrameworkDepthTop, isSharedPartyPlayback && styles.playerFrameworkDepthTopWatchParty]} pointerEvents="none" />
+        <View style={[styles.playerFrameworkDepthBottom, isSharedPartyPlayback && styles.playerFrameworkDepthBottomWatchParty]} pointerEvents="none" />
 
-        <View style={styles.container}>
+        <View style={[styles.container, isSharedPartyPlayback && styles.containerWatchParty]}>
         {!inWatchParty && !isLiveMode && isStandaloneFullscreen ? null : (
-        <View style={[styles.topSection, styles.topSectionFramework]}>
-          <Text style={styles.kicker}>CHI&apos;LLYWOOD · PLAYER</Text>
-          <Text style={styles.header} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
+        <View style={[styles.topSection, styles.topSectionFramework, isSharedPartyPlayback && styles.topSectionWatchParty]}>
+          <Text style={[styles.kicker, isSharedPartyPlayback && styles.kickerWatchParty]}>
+            {isSharedPartyPlayback ? "CHI&apos;LLYWOOD · WATCH-PARTY LIVE" : "CHI&apos;LLYWOOD · PLAYER"}
+          </Text>
+          <Text style={[styles.header, isSharedPartyPlayback && styles.headerWatchParty]} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
           {inWatchParty && isLiveMode ? <Text style={styles.liveModeTopLabel}>LIVE SESSION</Text> : null}
-          {inWatchParty && partySyncRole ? (
+          {inWatchParty && partySyncRole && !isSharedPartyPlayback ? (
             <View style={[styles.partySyncPill, styles.partySyncPillFramework]}>
               <Text style={styles.partySyncPillText}>
                 {partySyncRole === "host" ? "Host" : "You"}
@@ -3764,10 +4232,7 @@ export default function PlayerScreen() {
 
             {partyCommentsOpen && !inWatchParty ? (
               <View style={styles.partyCommentsDrawer}>
-                <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
-                <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                  <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
-                </ScrollView>
+                {renderPartyCommentsContent()}
               </View>
             ) : null}
 
@@ -3902,7 +4367,7 @@ export default function PlayerScreen() {
 
               {inWatchParty ? (
                 <>
-                <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
+                <View style={[styles.partyOverlayTopRow, styles.partyOverlayTopRowWatchParty]} pointerEvents="box-none">
                   <Animated.View style={[styles.partyPresencePill, styles.partyPresencePillWatchPartyTitle, { opacity: partyPresenceOpacity }]}> 
                     <View style={styles.partyPresenceRow}>
                       <Text style={styles.partyPresenceIcon}>👥</Text>
@@ -3914,35 +4379,6 @@ export default function PlayerScreen() {
                       </Text>
                     ) : null}
                   </Animated.View>
-
-                  <Animated.View
-                    pointerEvents={controlsVisible ? "auto" : "none"}
-                    style={[
-                      styles.partyOverlayActions,
-                      styles.partyOverlayActionsWatchPartyTitle,
-                      {
-                        opacity: partyOverlayControlsOpacity,
-                        transform: [{ translateY: partyOverlayControlsTranslateY }],
-                      },
-                    ]}
-                  >
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
-                        onPress={onToggleMyList}
-                        disabled={myListBusy}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                        onPress={() => setSpeedMenuOpen((value) => !value)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
-                      </TouchableOpacity>
-                    </Animated.View>
                 </View>
 
                 {partyReactionBursts.length > 0 ? (
@@ -3988,37 +4424,6 @@ export default function PlayerScreen() {
                     <Text style={styles.partyLocalReactionText}>{entry.emoji}</Text>
                   </Animated.View>
                 ))}
-
-                {partyChatOpen && !isLiveMode ? (
-                  <View style={[styles.partyChatDrawer, styles.partyChatDrawerWatchPartyTitle]}>
-                    <Text style={styles.partyChatDrawerTitle}>Live Chat</Text>
-                    <ScrollView
-                      style={{ maxHeight: 140 }}
-                      contentContainerStyle={{ paddingVertical: 8 }}
-                      showsVerticalScrollIndicator={false}
-                    >
-                      {partyMessages.map((msg) => (
-                        <Text key={msg.id} style={styles.partyMessageText}>
-                          {msg.text}
-                        </Text>
-                      ))}
-                    </ScrollView>
-                  </View>
-                ) : null}
-
-                {partyCommentsOpen && !isLiveMode ? (
-                  <View
-                    style={[
-                      styles.partyCommentsDrawer,
-                      styles.partyCommentsDrawerWatchPartyTitle,
-                    ]}
-                  >
-                    <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
-                    <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                      <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
-                    </ScrollView>
-                  </View>
-                ) : null}
               </>
             ) : (
               <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
@@ -4088,7 +4493,7 @@ export default function PlayerScreen() {
               </>
             )}
 
-            {!isLiveMode && controlsVisible && speedMenuOpen ? (
+            {isStandalonePlayer && controlsVisible && speedMenuOpen ? (
               <View style={styles.partySpeedOverlayMenu}>
                 {SPEED_OPTIONS.map((option) => {
                   const active = playbackRate === option;
@@ -4201,10 +4606,7 @@ export default function PlayerScreen() {
                         styles.watchPartyLiveCommentsDrawer,
                       ]}
                     >
-                      <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
-                      <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                        <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
-                      </ScrollView>
+                      {renderPartyCommentsContent()}
                     </View>
                   ) : null}
 
@@ -4338,8 +4740,13 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   playerFrameworkRoot: { flex: 1 },
   playerFrameworkBackground: { ...StyleSheet.absoluteFillObject },
+  watchPartyFrameworkPosterWash: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.22,
+  },
   playerFrameworkBackgroundFallback: { ...StyleSheet.absoluteFillObject, backgroundColor: "#0B0B10" },
   playerFrameworkOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(8,8,12,0.58)" },
+  playerFrameworkOverlayWatchParty: { backgroundColor: "rgba(7,6,12,0.68)" },
   playerFrameworkDepthTop: {
     position: "absolute",
     top: 0,
@@ -4347,6 +4754,9 @@ const styles = StyleSheet.create({
     right: 0,
     height: 132,
     backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  playerFrameworkDepthTopWatchParty: {
+    backgroundColor: "rgba(34,18,28,0.22)",
   },
   playerFrameworkDepthBottom: {
     position: "absolute",
@@ -4356,7 +4766,11 @@ const styles = StyleSheet.create({
     height: 210,
     backgroundColor: "rgba(0,0,0,0.32)",
   },
+  playerFrameworkDepthBottomWatchParty: {
+    backgroundColor: "rgba(10,10,18,0.54)",
+  },
   container: { flex: 1, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 8 },
+  containerWatchParty: { paddingTop: 2, paddingBottom: 10 },
   topSection: { marginBottom: 2, gap: 2 },
   topSectionFramework: {
     borderRadius: 12,
@@ -4367,8 +4781,18 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginBottom: 4,
   },
+  topSectionWatchParty: {
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+    paddingHorizontal: 2,
+    paddingVertical: 0,
+    marginBottom: 2,
+  },
   kicker: { color: "#5B5B5B", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.1 },
+  kickerWatchParty: { color: "#D2A7B5" },
   header: { color: "white", fontSize: 23, fontWeight: "900", lineHeight: 27 },
+  headerWatchParty: { fontSize: 21, lineHeight: 24 },
   liveModeTopLabel: {
     color: "#FFCCD7",
     fontSize: 11,
@@ -4873,6 +5297,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
   },
+  partyOverlayTopRowWatchParty: {
+    justifyContent: "flex-start",
+  },
   partyOverlaySpacer: { flex: 1 },
   partyPresencePill: {
     borderRadius: 999,
@@ -5318,22 +5745,25 @@ const styles = StyleSheet.create({
     overflow: "visible",
   },
   titleParticipantFeedDock: {
-    marginTop: 6,
-    borderRadius: 10,
+    marginTop: 4,
+    borderRadius: 22,
     borderWidth: 0,
-    backgroundColor: "rgba(7,7,11,0.22)",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    minHeight: 98,
-    maxHeight: 146,
+    backgroundColor: "rgba(8,10,18,0.46)",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    minHeight: 176,
+    maxHeight: 312,
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
   titleWatchPartyRailDockActive: {
-    borderColor: "rgba(220,20,60,0.32)",
-    backgroundColor: "rgba(12,8,12,0.5)",
-    shadowColor: "#DC143C",
+    backgroundColor: "rgba(12,10,20,0.62)",
+    shadowColor: "#130710",
     shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
   titleWatchPartyRailPeekFade: {
     position: "absolute",
@@ -5428,7 +5858,14 @@ const styles = StyleSheet.create({
   },
   titleParticipantFeedWrap: {
     width: "100%",
-    gap: 8,
+    gap: 10,
+  },
+  watchPartyPlayerBandHeader: {
+    paddingHorizontal: 4,
+  },
+  watchPartyPlayerBandMeta: {
+    flex: 1,
+    gap: 3,
   },
   watchPartySocialShell: {
     borderRadius: 18,
@@ -5485,6 +5922,12 @@ const styles = StyleSheet.create({
   watchPartySocialMediaFrameInner: {
     flex: 1,
   },
+  watchPartyPlayerBandKicker: {
+    color: "#E7C0CD",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
   watchPartySocialPlaceholder: {
     borderRadius: 16,
     borderWidth: 1,
@@ -5498,12 +5941,21 @@ const styles = StyleSheet.create({
     color: "#F0C8D2",
     fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 0.8,
+    letterSpacing: 1,
+  },
+  watchPartyPlayerBandBody: {
+    color: "#E7EBF6",
+    fontSize: 11.5,
+    fontWeight: "700",
   },
   watchPartySocialPlaceholderBody: {
     color: "#E7EBF6",
     fontSize: 12,
     lineHeight: 18,
+  },
+  watchPartyPlayerBandSubtle: {
+    color: "#AEB4C6",
+    fontSize: 10.5,
     fontWeight: "700",
   },
   titleParticipantFeedScroll: {
@@ -5639,12 +6091,106 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   partyFeedCardLiveDock: {
-    minHeight: 88,
-    maxHeight: 88,
+    minHeight: 124,
+    maxHeight: 188,
     backgroundColor: "transparent",
     borderWidth: 0,
     paddingHorizontal: 0,
     paddingVertical: 0,
+  },
+  watchPartyParticipantDockCard: {
+    minHeight: 124,
+    maxHeight: 188,
+  },
+  watchPartyDockOverlay: {
+    gap: 8,
+  },
+  watchPartyDockActionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  watchPartyDockActionBtn: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 0,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  watchPartyDockActionBtnActive: {
+    backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  watchPartyDockActionText: {
+    color: "#EDF1F9",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  watchPartyDockActionTextActive: {
+    color: "#FFFFFF",
+  },
+  watchPartyDockCard: {
+    borderRadius: 18,
+    backgroundColor: "rgba(6,8,16,0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 10,
+  },
+  watchPartyDockCardTitle: {
+    color: "#F5F7FC",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  watchPartyDockCardBody: {
+    color: "#CCD3E4",
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 17,
+  },
+  watchPartyDockMenuRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  watchPartyDockMenuBtn: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 0,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  watchPartyDockMenuBtnText: {
+    color: "#F4F7FE",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  watchPartyDockRateRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  watchPartyDockRateChip: {
+    borderRadius: 999,
+    borderWidth: 0,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  watchPartyDockRateChipActive: {
+    backgroundColor: "rgba(220,20,60,0.26)",
+  },
+  watchPartyDockRateChipText: {
+    color: "#D9E0EF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  watchPartyDockRateChipTextActive: {
+    color: "#FFFFFF",
   },
   participantBubbleScroll: {
     gap: 8,
@@ -5732,12 +6278,36 @@ const styles = StyleSheet.create({
   partyParticipantBubbleTapDock: {
     gap: 0,
   },
+  watchPartyParticipantRow: {
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  watchPartyParticipantRowBoosted: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  watchPartyParticipantRowTap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  watchPartyParticipantIdentity: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   partyParticipantAvatarWrap: {
     position: "relative",
     marginBottom: 6,
   },
   partyParticipantAvatarWrapDock: {
     marginBottom: 0,
+  },
+  watchPartyParticipantAvatarWrap: {
+    marginRight: 0,
   },
   participantAvatar: {
     width: 40,
@@ -5804,6 +6374,12 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     borderColor: "rgba(255,255,255,0.24)",
     backgroundColor: "rgba(0,0,0,0.44)",
+  },
+  watchPartyParticipantAvatar: {
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "rgba(10,12,20,0.64)",
+    overflow: "hidden",
   },
   participantActiveRing: {
     position: "absolute",
@@ -6002,6 +6578,54 @@ const styles = StyleSheet.create({
   participantNameLiveDock: {
     fontSize: 9,
     color: "#E9EDF8",
+  },
+  watchPartyParticipantScroll: {
+    maxHeight: 188,
+  },
+  watchPartyParticipantScrollContent: {
+    gap: 8,
+    paddingRight: 2,
+  },
+  watchPartyParticipantTextWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  watchPartyParticipantNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  watchPartyParticipantName: {
+    flex: 1,
+    color: "#F4F7FD",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  watchPartyParticipantStatus: {
+    color: "#AEB4C6",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  watchPartyParticipantLivePill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  watchPartyParticipantLivePillText: {
+    color: "#F5F7FC",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  watchPartyParticipantMeta: {
+    minWidth: 22,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  watchPartyParticipantReaction: {
+    fontSize: 18,
+    fontWeight: "900",
   },
   watchPartyLiveBottomDock: {
     marginTop: 6,
