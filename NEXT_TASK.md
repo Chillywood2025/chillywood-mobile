@@ -1,40 +1,36 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, and the now-corrected Watch-Party participant-scale truth on both active owners: `app/player/[id].tsx` and `app/watch-party/live-stage/[partyId].tsx` now use virtualized participant collections instead of raw mapped scroll content, so large-count participant browsing is structurally supported on both Watch-Party surfaces without changing the rest of those rooms. Preserve as still true that this does not mean 500 simultaneous equal live video feeds now exist; the reusable communication-room RTC transport is still capped to four active live seats. The exact next lane should be an honest runtime/proof pass on the updated participant collections for both Watch-Party surfaces, and only after that should the repo decide whether a separate future transport lane is needed for broader featured-live scaling beyond the current four-seat RTC path.
+Carry forward the newly locked room-scale doctrine exactly as saved: `Watch-Party Live`, `Party Room`, `Live Watch-Party`, `Live Room`, and `Live Stage` must treat room membership, featured/social presence, and true live seats as separate layers; `500+` joined presence is an approved product direction; `500+` equal live camera feeds is not the current product/runtime assumption; and ticketed or premium events must still follow layered participation rather than granting every attendee a live seat. The exact next implementation lane should stay narrow and owner-local to whichever active room surface still implies equal live video or equal room authority for all joined users. Any future runtime work must preserve the current honest live-seat limits until stronger media infrastructure is intentionally adopted.
 
 ## Current Plan
-1. Preserve the carried-forward proved baseline exactly as recorded.
-2. Preserve the now-landed virtualized participant collections on `app/player/[id].tsx` and `app/watch-party/live-stage/[partyId].tsx` without pretending they already mean unlimited equal live media.
-3. Re-run honest runtime proof on both Watch-Party participant surfaces.
-4. Reopen transport only if future proof or product truth requires a separate featured-live scaling lane beyond the current four-seat RTC path.
+1. Preserve the layered room-scale doctrine exactly as just recorded.
+2. Keep future Party and Live room work honest about the difference between joined presence scale, UI scale, and true live-media seat scale.
+3. Reopen only the proven active room owner if a surface still falsely implies equal live video or equal authority for all joined users.
+4. Treat any broader media-scale expansion as a separate infrastructure lane, not an implicit Public v1 assumption.
 
 ## Exact Next Batch
-- preserve the now-landed virtualized participant collections on `app/player/[id].tsx` and `app/watch-party/live-stage/[partyId].tsx`
-- run honest proof against both Watch-Party participant surfaces so the new scaling structure is verified without overclaiming 500 equal live feeds
-- keep the current RTC truth explicit: active live seats remain capped at four while large-count participant browsing is structurally supported
-- reopen either owner only if that proof exposes a real regression
+- preserve the newly locked layered room-participation truth across Watch-Party and Live surfaces
+- do not overclaim `500+` equal live feeds where only joined-presence scale is approved today
+- reopen only the exact active owner if a current room surface still implies false live-seat behavior
+- keep premium/ticketed room planning aligned with layered participation and host/co-host approval flows
 
 ## Scope
 This next pass should:
-- preserve the carried-forward proved baseline exactly as recorded
-- preserve the now-landed Watch-Party participant-scale structure on both active owners
-- keep the next lane focused on runtime proof of the participant collections, not a broad transport rewrite
-- avoid speculative additional player/live-stage churn outside the active Watch-Party owners
-- keep unrelated local dirt out of the checkpoint
+- preserve the new room-scale doctrine without diluting it into vague aspiration
+- keep the next lane owner-local to the room surface that actually needs runtime honesty work
+- avoid broad transport/media rewrites unless an explicit infrastructure lane is opened
+- keep unrelated code and worktree dirt out of any checkpoint
 
 ## Out Of Scope
 Do not:
-- reopen transport/media/TURN/ICE debugging as if the new list virtualization had already solved 500 live feeds
-- treat structural participant-scale support as proof of unlimited equal RTC video
-- broaden beyond the active Watch-Party owners unless fresh proof first forces it
-- reopen already-closed Live Stage clutter work without fresh regression proof
-- broaden into Premium, analytics, or broader chat work
-- mix unrelated local dirt into any future checkpoint
+- reinterpret `500+` joined presence as permission to promise `500+` equal live camera feeds today
+- broaden into a new RTC/SFU architecture lane without explicitly opening one
+- reopen unrelated player, chat, or live-stage lanes without fresh proof
+- mix unrelated runtime or local dirt into any future checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- both Watch-Party participant surfaces prove correctly with the new virtualized participant collections intact
-- the repo can honestly say large-count participant browsing is structurally supported on both Watch-Party surfaces
-- the repo does not overclaim unlimited equal live media while the current RTC path remains capped at four active seats
-- future transport work, if needed, can be framed as a separate featured-live scaling lane instead of a participant-list bottleneck
+- the active room surface matches the layered room-scale doctrine instead of implying equal live seats for everyone
+- Public v1 room behavior stays honest about current live-seat limits while preserving large joined-presence direction
+- any future premium/ticketed room work stays aligned with the same layered participation model

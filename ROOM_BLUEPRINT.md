@@ -75,6 +75,95 @@ Only use these where they actually fit the room:
 - Profile / Channel and Chi'lly Chat connect people, titles, rooms, and official presence across the product.
 - Rachi is the official platform-owned presence that must remain canonical, protected, and moderation-ready.
 
+## Room-Scale Participation Doctrine
+This section is the durable room-scale truth for `Watch-Party Live`, `Party Room`, `Live Watch-Party`, `Live Room`, and `Live Stage`.
+
+### A. Core participation model
+- Every social room should be understood as three participation layers, not one flat participant list:
+  - live seats / on-camera speakers
+  - visible social presence / featured participants
+  - audience presence
+- `Joined` does not automatically mean equal live camera broadcast, equal visible tile, equal room authority, or equal interruption rights.
+- `Joined` should mean present in the room, able to watch or listen, able to react/comment/chat as allowed, and able to request richer participation when the room permits it.
+
+### B. Durable room roles
+- `Host`: owns room state, primary authority, and final approval power.
+- `Co-host / moderator`: shares bounded operational or moderation authority granted by the host or platform policy.
+- `Seated speaker / on-camera participant`: occupies a true live seat and can be heard or seen in the active live layer.
+- `Featured participant`: receives extra visibility or emphasis without automatically becoming a full live seat or global authority.
+- `Audience participant`: is present in the room, can consume the experience, and can interact through allowed audience tools without taking over the room.
+- `Low-visibility / private presence participant`: is present but intentionally de-emphasized in the visible social layer when privacy, entitlement, or room format calls for it.
+
+### C. Public v1 and near-term scale truth
+- `500+` joined users is a valid product direction for both `Watch-Party Live` and `Live Watch-Party` / `Live Room`.
+- Current truth must still stay honest about the difference between:
+  - room membership scale
+  - UI/rendering scale
+  - true simultaneous live media scale
+- Public v1 does not assume `500+` equal live camera feeds in either Party or Live flow.
+- The current repo-owned live-media reality remains a small active-seat model, with the reusable communication-room transport still grounded in a small-room reference cap of `4` active live seats until stronger infrastructure is intentionally adopted.
+- `Watch-Party Live` stays content-first: host visibility and a curated social presence layer matter, but broader membership should not be modeled as equal live tiles for everyone.
+- `Live Watch-Party` / `Live Stage` stays host-anchored: a limited number of true live seats can be active at once while the broader audience participates through comments, reactions, requests, and selective featuring.
+
+### D. Required scale behavior
+- Large rooms should not be modeled as "everyone gets equal live video."
+- The default room-scale pattern is:
+  - a small active live-seat layer
+  - a larger featured/social-presence layer
+  - a broader audience layer
+- Participant ordering should favor, in order:
+  - host
+  - co-hosts / moderators
+  - active speakers
+  - featured or pinned users
+  - socially relevant or recently active users
+  - everyone else
+- At scale, the visible participant rail or collection should represent a curated or windowed subset of the room rather than pretending to show all participants equally at once.
+
+### E. Non-seat participant truth and local/global control split
+- Non-seat participants can:
+  - watch or listen
+  - react, comment, or chat when the room allows it
+  - inspect who is present and who is featured
+  - personalize parts of their own view such as overlay density, participant visibility, or bubble size when the surface supports it
+  - request richer participation when that room format allows it
+- Non-seat participants should not automatically control:
+  - the global timeline or room state
+  - stage mode or shared playback direction
+  - who becomes globally visible
+  - moderation policy
+  - premium access or seating policy
+- Host and co-host roles keep global authority.
+- Individual participants may still personalize parts of their own screen without mutating the room for everyone else.
+
+### F. Request and promotion system truth
+- Room systems may support:
+  - request to speak
+  - request camera
+  - request seat
+  - request feature / promotion
+- Host or co-host approval queues are the durable product direction for moving people between audience, featured, and seated states.
+- Promotion and demotion between audience, featured, and seated participation should be explicit and auditable when the room format requires it.
+- Being socially relevant or algorithmically surfaced does not automatically grant a live seat, and losing a featured state does not remove ordinary audience membership.
+
+### G. Scalability and media honesty truth
+- `500+` joined presence is a valid target for Chi'llywood rooms.
+- `500+` equal live camera feeds is not the current product or runtime assumption.
+- Large-room UI scalability and large-room media scalability are not the same problem.
+- Participant rails, grids, and lists may be built to browse large membership counts before the live-media layer expands to match them.
+- Future infrastructure can safely raise the true live-seat limit over time, but present room truth must stay honest about the current smaller active-seat model.
+
+### H. Ticketed-event and premium room direction
+- Future paid or premium rooms should still use layered participation rather than assuming every attendee is a live camera seat.
+- Ticketed access should grant the right room entry, entitlements, and audience privileges defined by that room type; it should not automatically grant a live seat, featured status, or room authority.
+- Chi'llywood may later support:
+  - paid ticketed live events
+  - premium room access tiers
+  - larger featured stage capacities
+  - stronger moderation and entitlement controls
+  - differentiated room types for premium events versus normal social rooms
+- As infrastructure improves, future phases may expand live-seat capacity beyond Public v1, but ticketed or premium scale should still follow the layered-participation model.
+
 ## 1. Live Waiting Room
 Relationship to other rooms: Live Waiting Room is the pre-entry layer for Live Room. It prepares handoff into `/watch-party/live-stage/[partyId]` and must not become a second Live Room, a Party Waiting Room clone, or a generic group page.
 

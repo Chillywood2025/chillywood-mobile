@@ -20,12 +20,15 @@
 - Premium subscription gate
 - moderation basics
 - analytics, error monitoring, and admin visibility
+- layered room participation truth with limited active live seats, scalable participant browsing, and a clear distinction between joined presence and true live-seat media
 - Public v1 should stay focused on the core social streaming experience instead of the full long-term platform vision
 
 ## Post-v1
 - heavier creator monetization rollout
 - fuller creator mini-platform builder
 - deeper room personalization
+- request-to-speak / request-camera / request-seat flows with host approval queues
+- stronger featured-vs-audience room controls and premium/ticketed room tooling
 - instant payout / instant cash out lane foundations
 - light compliant ad systems
 - tighter monetization and creator-ops planning derived from `PRODUCT_DOCTRINE.md`
@@ -33,6 +36,8 @@
 ## Later Phase
 - broader Game Live rollout after the Public v1 window
 - Game Watch-Party after Game Live has traction
+- larger premium or ticketed live-event formats with stronger audience tooling
+- higher simultaneous live-seat capacity as media infrastructure improves
 - advanced payouts and tax automation
 - overseas creator payouts
 - broader ad systems
