@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
     Animated,
     Easing,
+    FlatList,
     Image,
     ImageBackground,
     LayoutAnimation,
@@ -3225,17 +3226,33 @@ export default function PlayerScreen() {
           !liveLayout && styles.partyFeedCardTitleCompact,
         ]}
       >
-      <ScrollView
+      <FlatList
         horizontal
+        data={liveBubbleParticipants}
+        keyExtractor={(participant) => participant.id}
         showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={Platform.OS === "android"}
+        initialNumToRender={dockLayout ? 18 : liveLayout ? 12 : 10}
+        maxToRenderPerBatch={dockLayout ? 20 : 16}
+        windowSize={7}
+        extraData={{
+          trackedUserId,
+          partySyncRole,
+          activeParticipantId,
+          primaryActiveParticipantIds,
+          participantReactionBoostIds,
+          partyParticipantReactions,
+          liveFaceFilter,
+          cameraGranted: !!cameraPermission?.granted,
+        }}
         contentContainerStyle={[
           styles.participantBubbleScroll,
           liveLayout && styles.participantBubbleScrollLive,
           dockLayout && styles.participantBubbleScrollLiveDock,
           !liveLayout && styles.participantBubbleScrollTitleCompact,
         ]}
-      >
-        {liveBubbleParticipants.map((participant) => {
+        renderItem={({ item: participant }) => {
           const isCurrentUser = participant.id === trackedUserId;
           const isHost = partySyncRole === "host";
           const isExpanded = liveLayout && !dockLayout && isHost && activeParticipantId === participant.id;
@@ -3265,7 +3282,6 @@ export default function PlayerScreen() {
 
           return (
             <Animated.View
-              key={participant.id}
               style={[
                 styles.participantBubbleItem,
                 liveLayout && styles.participantBubbleItemLive,
@@ -3596,9 +3612,9 @@ export default function PlayerScreen() {
               ) : null}
             </Animated.View>
           );
-        })}
-      </ScrollView>
-    </View>
+        }}
+      />
+      </View>
     );
   };
 
