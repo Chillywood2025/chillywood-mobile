@@ -9,7 +9,11 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import type { SharedParticipantIdentity, SharedParticipantLocalState } from "../../app/watch-party/_lib/_room-shared";
+import {
+  getParticipantLayerLabel,
+  type SharedParticipantIdentity,
+  type SharedParticipantLocalState,
+} from "../../app/watch-party/_lib/_room-shared";
 
 type ParticipantDetailSheetProps = {
   visible: boolean;
@@ -20,6 +24,8 @@ type ParticipantDetailSheetProps = {
   onViewProfile?: () => void;
   onReportParticipant?: () => void;
   onClose: () => void;
+  isFeatured?: boolean;
+  isRequesting?: boolean;
   kicker?: string;
   overlayStyle?: StyleProp<ViewStyle>;
   sheetStyle?: StyleProp<ViewStyle>;
@@ -34,10 +40,22 @@ export function ParticipantDetailSheet({
   onViewProfile,
   onReportParticipant,
   onClose,
+  isFeatured = false,
+  isRequesting = false,
   kicker = "IN ROOM PARTICIPANT",
   overlayStyle,
   sheetStyle,
 }: ParticipantDetailSheetProps) {
+  const roleLabel = participantState
+    ? getParticipantLayerLabel({
+      state: participantState,
+      isFeatured,
+      isRequesting,
+    })
+    : participant?.role === "host"
+      ? "Host"
+      : "Audience";
+
   return (
     <Modal
       visible={visible}
@@ -64,7 +82,7 @@ export function ParticipantDetailSheet({
           <View style={styles.identityRow}>
             <View style={[styles.rolePill, participant?.role === "host" && styles.rolePillHost]}>
               <Text style={[styles.roleText, participant?.role === "host" && styles.roleTextHost]}>
-                {participant?.role === "host" ? "Host" : "Viewer"}
+                {roleLabel}
               </Text>
             </View>
             <View style={styles.statusRow}>

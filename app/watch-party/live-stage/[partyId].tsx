@@ -71,8 +71,9 @@ import {
     buildOrderedParticipantsWithSelf,
     buildParticipantProfileParams,
     buildSharedParticipantIdentity,
+    canRequestSeat,
     createDefaultParticipantState,
-    getParticipantRoleLabel,
+    getParticipantLayerLabel,
     mergeMissingParticipantStates,
     normalizeSharedRoomMode,
     prioritizeParticipantStripOrder,
@@ -191,6 +192,7 @@ export default function WatchPartyLiveStageScreen() {
   const [featuredParticipantById, setFeaturedParticipantById] = useState<Record<string, boolean>>({});
   const [participantPresentationById, setParticipantPresentationById] = useState<Record<string, "compact" | "expanded">>({});
   const [participantStateById, setParticipantStateById] = useState<Record<string, SharedParticipantLocalState>>({});
+  const [seatRequestsById, setSeatRequestsById] = useState<Record<string, boolean>>({});
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
@@ -257,6 +259,17 @@ export default function WatchPartyLiveStageScreen() {
       };
     });
     setParticipantStateById(nextParticipantStateById);
+    setSeatRequestsById((prev) => {
+      const next: Record<string, boolean> = {};
+      Object.entries(prev).forEach(([participantId, pending]) => {
+        if (!pending) return;
+        const participantState = nextParticipantStateById[participantId];
+        if (participantState && !participantState.isRemoved && participantState.role === "listener") {
+          next[participantId] = true;
+        }
+      });
+      return next;
+    });
   }, []);
 
   const refreshStageSnapshot = useCallback(async (trackedUserId?: string) => {
@@ -334,6 +347,7 @@ export default function WatchPartyLiveStageScreen() {
 
   useEffect(() => {
     setLiveSurface("room");
+    setSeatRequestsById({});
   }, [partyId]);
 
   useEffect(() => {
@@ -455,6 +469,54 @@ export default function WatchPartyLiveStageScreen() {
           ...prev,
           [participantId]: speaking,
         }));
+      });
+
+      channel.on("broadcast", { event: "participant:seat-request" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const pending = !!payload?.pending;
+        setSeatRequestsById((prev) => {
+          if (!pending) {
+            if (!prev[participantId]) return prev;
+            const next = { ...prev };
+            delete next[participantId];
+            return next;
+          }
+          return { ...prev, [participantId]: true };
+        });
+      });
+
+      channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const roleValue = String(payload?.role ?? "").trim();
+        const nextRole: SharedParticipantLocalState["role"] = roleValue === "host" || roleValue === "speaker" ? roleValue : "listener";
+        const nextIsMuted = !!payload?.isMuted;
+        const nextIsRemoved = !!payload?.isRemoved;
+        const pending = !!payload?.pending;
+
+        setParticipantStateById((prev) => ({
+          ...prev,
+          [participantId]: {
+            ...(prev[participantId] ?? {
+              isMuted: nextIsMuted,
+              role: nextRole,
+              isRemoved: nextIsRemoved,
+            }),
+            isMuted: nextIsMuted,
+            role: nextRole,
+            isRemoved: nextIsRemoved,
+          },
+        }));
+        setSeatRequestsById((prev) => {
+          if (pending && nextRole === "listener" && !nextIsRemoved) {
+            return { ...prev, [participantId]: true };
+          }
+          if (!prev[participantId]) return prev;
+          const next = { ...prev };
+          delete next[participantId];
+          return next;
+        });
       });
 
         channel.subscribe((status) => {
@@ -966,6 +1028,60 @@ export default function WatchPartyLiveStageScreen() {
       .catch(() => {});
   }, []);
 
+  const broadcastSeatRequest = useCallback((participantId: string, pending: boolean) => {
+    const channel = channelRef.current;
+    if (!channel || !participantId) return;
+    channel
+      .send({ type: "broadcast", event: "participant:seat-request", payload: { participantId, pending } })
+      .catch(() => {});
+  }, []);
+
+  const broadcastSeatState = useCallback((participantId: string, payload: {
+    role: SharedParticipantLocalState["role"];
+    isMuted: boolean;
+    isRemoved?: boolean;
+    pending?: boolean;
+  }) => {
+    const channel = channelRef.current;
+    if (!channel || !participantId) return;
+    channel
+      .send({
+        type: "broadcast",
+        event: "participant:seat-state",
+        payload: {
+          participantId,
+          role: payload.role,
+          isMuted: payload.isMuted,
+          isRemoved: !!payload.isRemoved,
+          pending: !!payload.pending,
+        },
+      })
+      .catch(() => {});
+  }, []);
+
+  const requestStageSeat = useCallback(async (participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    const selfParticipantId = String(myUserId || "").trim() || "anon";
+    if (!nextParticipantId || isHost || nextParticipantId !== selfParticipantId) return;
+    const currentState = participantStateById[nextParticipantId] ?? createDefaultParticipantState({
+      role: "viewer",
+      isSpeaking: false,
+      isMuted: false,
+    });
+    if (!canRequestSeat(currentState) || seatRequestsById[nextParticipantId]) return;
+
+    revealStageOverlay();
+    setSeatRequestsById((prev) => ({ ...prev, [nextParticipantId]: true }));
+    broadcastSeatRequest(nextParticipantId, true);
+  }, [
+    broadcastSeatRequest,
+    isHost,
+    myUserId,
+    participantStateById,
+    revealStageOverlay,
+    seatRequestsById,
+  ]);
+
   useEffect(() => {
     if (!canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
     debugLog("live-stage", "mic setup start");
@@ -1126,8 +1242,11 @@ export default function WatchPartyLiveStageScreen() {
     if (isLiveFirstMode) {
       return visibleStripParticipants.filter((participant) => participant.role !== "host");
     }
-    return visibleStripParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
-  }, [isLiveFirstMode, visibleStripParticipants, currentUserParticipantId]);
+    if (isHost) {
+      return visibleStripParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
+    }
+    return visibleStripParticipants;
+  }, [currentUserParticipantId, isHost, isLiveFirstMode, visibleStripParticipants]);
   const lowerCommunityRows = useMemo(() => {
     const rows: typeof lowerCommunityParticipants[] = [];
     let pendingRow: typeof lowerCommunityParticipants = [];
@@ -2059,6 +2178,7 @@ export default function WatchPartyLiveStageScreen() {
                     featuredParticipantById,
                     participantPresentationById,
                     participantStateById,
+                    seatRequestsById,
                     stageMediaParticipantsByUserId,
                     localStreamURL,
                     liveFaceFilter,
@@ -2082,10 +2202,15 @@ export default function WatchPartyLiveStageScreen() {
                         const isSpeakerRole = participantState.role === "speaker";
                         const isRemoved = participantState.isRemoved;
                         const isFeatured = !!featuredParticipantById[participant.userId];
+                        const isRequesting = !!seatRequestsById[participant.userId] && participantState.role === "listener" && !isRemoved;
                         const presentation = participantPresentationById[participant.userId] ?? "compact";
                         const isExpanded = presentation === "expanded";
                         const canModerateParticipant = participantState.role !== "host";
-                        const roleLabel = getParticipantRoleLabel(participantState);
+                        const roleLabel = getParticipantLayerLabel({
+                          state: participantState,
+                          isFeatured,
+                          isRequesting,
+                        });
                         const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
                         const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
                         const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
@@ -2110,6 +2235,9 @@ export default function WatchPartyLiveStageScreen() {
                                 debugLog("live-stage", "host tap user", { userId: participant.userId });
                               } else {
                                 debugLog("live-stage", "request mic", { userId: participant.userId });
+                                if (isCurrentUser && canRequestSeat(participantState) && !isRequesting) {
+                                  requestStageSeat(participant.userId).catch(() => {});
+                                }
                               }
                               setActiveSpeakerUserId(participant.userId);
                               setActiveParticipantId(participant.userId);
@@ -2129,6 +2257,52 @@ export default function WatchPartyLiveStageScreen() {
                           >
                             {isHost && isActiveParticipant && canModerateParticipant ? (
                               <View style={[styles.stageParticipantActionMenu, styles.stageParticipantActionMenuGrid]}>
+                                {isRequesting ? (
+                                  <>
+                                    <TouchableOpacity
+                                      style={styles.stageParticipantActionBtn}
+                                      activeOpacity={0.82}
+                                      onPress={() => {
+                                        setParticipantStateById((prev) => ({
+                                          ...prev,
+                                          [participant.userId]: {
+                                            ...(prev[participant.userId] ?? participantState),
+                                            role: "speaker",
+                                          },
+                                        }));
+                                        setSeatRequestsById((prev) => {
+                                          if (!prev[participant.userId]) return prev;
+                                          const next = { ...prev };
+                                          delete next[participant.userId];
+                                          return next;
+                                        });
+                                        emitParticipantUpdate(participant.userId, { role: "speaker" });
+                                        broadcastSeatState(participant.userId, {
+                                          role: "speaker",
+                                          isMuted,
+                                          pending: false,
+                                        });
+                                      }}
+                                    >
+                                      <Text style={styles.stageParticipantActionText}>Approve Seat</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      style={styles.stageParticipantActionBtn}
+                                      activeOpacity={0.82}
+                                      onPress={() => {
+                                        setSeatRequestsById((prev) => {
+                                          if (!prev[participant.userId]) return prev;
+                                          const next = { ...prev };
+                                          delete next[participant.userId];
+                                          return next;
+                                        });
+                                        broadcastSeatRequest(participant.userId, false);
+                                      }}
+                                    >
+                                      <Text style={styles.stageParticipantActionText}>Deny</Text>
+                                    </TouchableOpacity>
+                                  </>
+                                ) : null}
                                 <TouchableOpacity
                                   style={styles.stageParticipantActionBtn}
                                   activeOpacity={0.82}
@@ -2171,9 +2345,20 @@ export default function WatchPartyLiveStageScreen() {
                                       };
                                     });
                                     emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
+                                    broadcastSeatState(participant.userId, {
+                                      role: isSpeakerRole ? "listener" : "speaker",
+                                      isMuted,
+                                      pending: false,
+                                    });
+                                    setSeatRequestsById((prev) => {
+                                      if (!prev[participant.userId]) return prev;
+                                      const next = { ...prev };
+                                      delete next[participant.userId];
+                                      return next;
+                                    });
                                   }}
                                 >
-                                  <Text style={styles.stageParticipantActionText}>{isSpeakerRole ? "Listener" : "Speaker"}</Text>
+                                  <Text style={styles.stageParticipantActionText}>{isSpeakerRole ? "Move to Audience" : "Seat Participant"}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                   style={[styles.stageParticipantActionBtn, styles.stageParticipantActionBtnDanger]}
@@ -2194,6 +2379,18 @@ export default function WatchPartyLiveStageScreen() {
                                       };
                                     });
                                     emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
+                                    broadcastSeatState(participant.userId, {
+                                      role: participantState.role,
+                                      isMuted,
+                                      isRemoved: !isRemoved,
+                                      pending: false,
+                                    });
+                                    setSeatRequestsById((prev) => {
+                                      if (!prev[participant.userId]) return prev;
+                                      const next = { ...prev };
+                                      delete next[participant.userId];
+                                      return next;
+                                    });
                                   }}
                                 >
                                   <Text style={[styles.stageParticipantActionText, styles.stageParticipantActionTextDanger]}>
@@ -2292,7 +2489,7 @@ export default function WatchPartyLiveStageScreen() {
                               {participantDisplayName}
                             </Text>
                             <Text style={[styles.stageParticipantRole, styles.stageParticipantRoleGrid]}>
-                              {isMuted ? `${roleLabel} · Muted` : roleLabel}
+                              {isMuted && !isRemoved ? `${roleLabel} · Muted` : roleLabel}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -2549,6 +2746,8 @@ export default function WatchPartyLiveStageScreen() {
         visible={!!selectedParticipant}
         participant={selectedParticipant}
         participantState={selectedParticipantState}
+        isFeatured={!!(selectedParticipant && featuredParticipantById[selectedParticipant.userId])}
+        isRequesting={!!(selectedParticipant && seatRequestsById[selectedParticipant.userId])}
         canShowProfileAction={canShowProfileAction}
         safeAreaBottom={safeAreaInsets.bottom}
         onClose={closeParticipantModal}

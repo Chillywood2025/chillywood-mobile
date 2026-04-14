@@ -1,4 +1,5 @@
 export type SharedParticipantRole = "host" | "speaker" | "listener";
+export type SharedParticipantSeatLayer = "host" | "featured" | "seated" | "audience";
 
 export type SharedRoomMode = "live" | "hybrid";
 
@@ -331,8 +332,47 @@ export const resolveSelectedParticipantContext = <T extends {
 export const getParticipantRoleLabel = (state: SharedParticipantLocalState) => {
   if (state.isRemoved) return "Removed";
   if (state.role === "host") return "Host";
-  if (state.role === "speaker") return "Speaker";
-  return "Listener";
+  if (state.role === "speaker") return "Seated";
+  return "Audience";
+};
+
+export const getParticipantSeatLayer = (options: {
+  state: SharedParticipantLocalState;
+  isFeatured?: boolean;
+}) => {
+  if (options.state.role === "host") return "host" as SharedParticipantSeatLayer;
+  if (options.isFeatured) return "featured" as SharedParticipantSeatLayer;
+  if (options.state.role === "speaker") return "seated" as SharedParticipantSeatLayer;
+  return "audience" as SharedParticipantSeatLayer;
+};
+
+export const canRequestSeat = (state: SharedParticipantLocalState) =>
+  !state.isRemoved && state.role !== "host" && state.role !== "speaker";
+
+export const getParticipantLayerLabel = (options: {
+  state: SharedParticipantLocalState;
+  isFeatured?: boolean;
+  isRequesting?: boolean;
+}) => {
+  if (options.state.isRemoved) return "Removed";
+  if (options.isRequesting && canRequestSeat(options.state)) return "Seat request pending";
+
+  const layer = getParticipantSeatLayer({
+    state: options.state,
+    isFeatured: options.isFeatured,
+  });
+
+  switch (layer) {
+    case "host":
+      return "Host";
+    case "featured":
+      return "Featured";
+    case "seated":
+      return "Seated";
+    case "audience":
+    default:
+      return "Audience";
+  }
 };
 
 export const getLiveParticipantStatusText = (options: {
@@ -340,13 +380,17 @@ export const getLiveParticipantStatusText = (options: {
   isRequesting: boolean;
   isMuted: boolean;
   role: "host" | "co-host" | "viewer";
+  canSpeak?: boolean;
+  isFeatured?: boolean;
 }) => {
   if (options.isSpeaking) return "🎤 Speaking";
-  if (options.isRequesting) return "✋ Requesting";
-  if (options.isMuted) return "🔇 Muted";
+  if (options.isRequesting) return "✋ Requesting seat";
   if (options.role === "host") return "👑 Host";
   if (options.role === "co-host") return "⭐ Co-host";
-  return "👤 Member";
+  if (options.isFeatured) return "✨ Featured";
+  if (options.canSpeak) return options.isMuted ? "🔇 Seated muted" : "🎙️ Seated";
+  if (options.isMuted) return "🔇 Audience muted";
+  return "👥 Audience";
 };
 
 type PresenceParticipantLike = {
