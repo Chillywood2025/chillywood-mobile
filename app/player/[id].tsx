@@ -57,10 +57,16 @@ import {
     createPartyRoom,
     emitSyncEvent,
     fetchPartyMessages,
+    getActivePartyMemberships,
     getPartyRoom,
+    getPartyRoomSnapshot,
     getSafePartyUserId,
+    joinPartyRoomSession,
     sendPartyMessage,
+    setPartyParticipantState,
     updateRoomPlayback,
+    type WatchPartyRoomMembership,
+    type WatchPartyRoomSnapshot,
     type WatchPartyState,
 } from "../../_lib/watchParty";
 import { AccessSheet } from "../../components/monetization/access-sheet";
@@ -118,11 +124,25 @@ type PartyParticipant = {
   role: "host" | "co-host" | "viewer";
   avatarUrl?: string;
   cameraPreviewUrl?: string;
+  stageRole: "host" | "speaker" | "listener";
   isLive?: boolean;
   muted: boolean;
   canSpeak: boolean;
   isSpeaking: boolean;
   isRequestingToSpeak: boolean;
+};
+
+const derivePartyStageRole = (options: {
+  role: "host" | "co-host" | "viewer";
+  canSpeak: boolean;
+  currentStageRole?: string | null;
+}): "host" | "speaker" | "listener" => {
+  const currentStageRole = String(options.currentStageRole ?? "").trim().toLowerCase();
+  if (options.role === "host") return "host" as const;
+  if (currentStageRole === "speaker" || currentStageRole === "listener") {
+    return currentStageRole;
+  }
+  return options.canSpeak ? "speaker" : "listener";
 };
 
 type LiveFaceFilterId = (typeof LIVE_FACE_FILTER_OPTIONS)[number]["id"];
@@ -453,6 +473,8 @@ export default function PlayerScreen() {
   const roomEnergyRef = useRef(0);
   const myCameraPreviewUrlRef = useRef("");
   const partyDisplayNameRef = useRef("You");
+  const partyAvatarUrlRef = useRef("");
+  const partyMembershipMapRef = useRef<Record<string, WatchPartyRoomMembership>>({});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const zoomScale = useRef(new Animated.Value(1)).current;
@@ -868,6 +890,84 @@ export default function PlayerScreen() {
     };
   }, [applyPartyRoomStateToGuest, inWatchParty, partyId]);
 
+  const updatePartyMembershipMap = useCallback((memberships: WatchPartyRoomMembership[]) => {
+    partyMembershipMapRef.current = Object.fromEntries(
+      memberships.map((membership) => [membership.userId, membership]),
+    );
+  }, []);
+
+  const refreshPartyMembershipSnapshot = useCallback(async () => {
+    if (!partyId) return null;
+    const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
+    if (!snapshot) return null;
+    updatePartyMembershipMap(snapshot.memberships);
+    return snapshot;
+  }, [partyId, updatePartyMembershipMap]);
+
+  const syncCurrentPartyPresence = useCallback(async (overrides?: Partial<{
+    canSpeak: boolean;
+    stageRole: "host" | "speaker" | "listener";
+    isRequestingToSpeak: boolean;
+  }>) => {
+    const channel = partySocialChannelRef.current;
+    const trackedUserId = String(partySyncUserIdRef.current ?? partyUserId ?? "").trim();
+    if (!channel || !trackedUserId) return;
+
+    const membership = partyMembershipMapRef.current[trackedUserId];
+    const role = membership?.role === "host" ? "host" : "viewer";
+    const currentParticipant = partyParticipants.find((entry) => entry.id === trackedUserId);
+    const canSpeak = overrides?.canSpeak ?? membership?.canSpeak ?? role === "host";
+    const stageRole = overrides?.stageRole ?? derivePartyStageRole({
+      role: role === "host" ? "host" : "viewer",
+      canSpeak,
+      currentStageRole: membership?.stageRole,
+    });
+
+    await channel.track({
+      userId: trackedUserId,
+      username: partyDisplayNameRef.current,
+      avatarUrl: partyAvatarUrlRef.current || undefined,
+      cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
+      role,
+      displayName: partyDisplayNameRef.current,
+      isLive: true,
+      avatarIndex: Number.parseInt(trackedUserId.slice(-3), 16) % 70,
+      canSpeak,
+      stageRole,
+      isRequestingToSpeak: overrides?.isRequestingToSpeak ?? currentParticipant?.isRequestingToSpeak ?? false,
+    }).catch(() => {});
+  }, [partyParticipants, partyUserId]);
+
+  const broadcastPartySeatRequest = useCallback(async (participantId: string, pending: boolean) => {
+    if (!partySocialChannelRef.current) return;
+    await partySocialChannelRef.current.send({
+      type: "broadcast",
+      event: "participant:seat-request",
+      payload: {
+        participantId,
+        pending,
+      },
+    }).catch(() => {});
+  }, []);
+
+  const broadcastPartySeatState = useCallback(async (participantId: string, options: {
+    canSpeak: boolean;
+    stageRole: "host" | "speaker" | "listener";
+    isRequestingToSpeak?: boolean;
+  }) => {
+    if (!partySocialChannelRef.current) return;
+    await partySocialChannelRef.current.send({
+      type: "broadcast",
+      event: "participant:seat-state",
+      payload: {
+        participantId,
+        canSpeak: options.canSpeak,
+        stageRole: options.stageRole,
+        isRequestingToSpeak: !!options.isRequestingToSpeak,
+      },
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!inWatchParty || !partyId) {
       setPartyViewerCount(0);
@@ -880,6 +980,8 @@ export default function PlayerScreen() {
       setPartyCommentSending(false);
       setPartyOverlayMessages([]);
       setPartyReactionBursts([]);
+      partyMembershipMapRef.current = {};
+      partyAvatarUrlRef.current = "";
       Object.values(partyReactionTimersRef.current).forEach((timer) => clearTimeout(timer));
       partyReactionTimersRef.current = {};
       if (partySocialChannelRef.current) {
@@ -970,6 +1072,7 @@ export default function PlayerScreen() {
         // keep fallback displayName
       }
       partyDisplayNameRef.current = displayName;
+      partyAvatarUrlRef.current = profileAvatarUrl;
       myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
       const selfIdentityIds = new Set([
         trackedUserId,
@@ -980,6 +1083,101 @@ export default function PlayerScreen() {
         const resolved = String(value ?? "").trim();
         return !!resolved && selfIdentityIds.has(resolved);
       };
+
+      const applyMembershipSnapshotToParticipants = (snapshot: WatchPartyRoomSnapshot | null) => {
+        if (!snapshot) return;
+        const activeMemberships = getActivePartyMemberships(snapshot.memberships);
+        if (activeMemberships.length === 0) return;
+
+        setPartyViewerCount(activeMemberships.length);
+        setViewerCount(activeMemberships.length);
+        setPartyParticipantPreview(
+          activeMemberships.slice(0, 3).map((membership) =>
+            isCurrentIdentity(membership.userId)
+              ? "You"
+              : resolveIdentityName(membership.displayName, membership.displayName, "Guest", "Guest"),
+          ),
+        );
+
+        setPartyParticipants((prev) => {
+          const previousById = new Map(prev.map((entry) => [entry.id, entry]));
+          const next = activeMemberships.map((membership) => {
+            const existing = previousById.get(membership.userId);
+            const role: "host" | "co-host" | "viewer" = membership.role === "host" ? "host" : "viewer";
+            const isCurrentUser = isCurrentIdentity(membership.userId);
+
+            return {
+              id: membership.userId,
+              name: isCurrentUser
+                ? "You"
+                : resolveIdentityName(
+                    membership.displayName,
+                    membership.displayName,
+                    existing?.name,
+                    "Guest",
+                  ),
+              role,
+              avatarUrl:
+                membership.avatarUrl
+                || existing?.avatarUrl
+                || (isCurrentUser ? profileAvatarUrl || undefined : undefined),
+              cameraPreviewUrl:
+                membership.cameraPreviewUrl
+                || existing?.cameraPreviewUrl
+                || (isCurrentUser ? profileCameraPreviewUrl || undefined : undefined),
+              stageRole: derivePartyStageRole({
+                role,
+                canSpeak: membership.canSpeak,
+                currentStageRole: membership.stageRole,
+              }),
+              isLive: true,
+              muted: membership.isMuted,
+              canSpeak: membership.canSpeak,
+              isSpeaking: existing?.isSpeaking ?? false,
+              isRequestingToSpeak: existing?.isRequestingToSpeak ?? false,
+            } satisfies PartyParticipant;
+          });
+
+          next.sort((a, b) => {
+            const aMe = isCurrentIdentity(a.id) ? 1 : 0;
+            const bMe = isCurrentIdentity(b.id) ? 1 : 0;
+            if (aMe !== bMe) return bMe - aMe;
+            const rank = (participant: PartyParticipant) => {
+              if (participant.role === "host") return 0;
+              if (participant.canSpeak) return 1;
+              if (participant.isRequestingToSpeak) return 2;
+              return 3;
+            };
+            const roleDiff = rank(a) - rank(b);
+            if (roleDiff !== 0) return roleDiff;
+            return a.name.localeCompare(b.name);
+          });
+
+          return next;
+        });
+      };
+
+      const initialSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
+      if (!active) return;
+      applyMembershipSnapshotToParticipants(initialSnapshot);
+
+      if (initialSnapshot) {
+        const existingMembership = initialSnapshot.memberships.find((membership) => membership.userId === trackedUserId) ?? null;
+        await joinPartyRoomSession({
+          partyId,
+          userId: trackedUserId,
+          role: trackedUserId === initialSnapshot.room.hostUserId ? "host" : existingMembership?.role ?? "viewer",
+          stageRole: existingMembership?.stageRole,
+          canSpeak: existingMembership?.canSpeak ?? trackedUserId === initialSnapshot.room.hostUserId,
+          cameraEnabled: !!profileCameraPreviewUrl,
+          micEnabled: true,
+          displayName,
+          avatarUrl: profileAvatarUrl,
+          cameraPreviewUrl: profileCameraPreviewUrl,
+        }).catch(() => null);
+        const refreshedSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
+        applyMembershipSnapshotToParticipants(refreshedSnapshot);
+      }
 
       const history = await fetchPartyMessages(partyId, 30).catch(() => []);
       if (!active) return;
@@ -1010,12 +1208,14 @@ export default function PlayerScreen() {
       const channel = supabase.channel(channelName, {
         config: { presence: { key: trackedUserId } },
       });
+      partySocialChannelRef.current = channel;
 
       channel.on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{
           userId?: string;
           username?: string;
           role?: string;
+          stageRole?: string;
           displayName?: string;
           avatarIndex?: number;
           avatarUrl?: string;
@@ -1038,6 +1238,7 @@ export default function PlayerScreen() {
                   userId?: string;
                   username?: string;
                   role?: string;
+                  stageRole?: string;
                   displayName?: string;
                   avatarIndex?: number;
                   avatarUrl?: string;
@@ -1067,6 +1268,7 @@ export default function PlayerScreen() {
                   userId?: string;
                   username?: string;
                   role?: string;
+                  stageRole?: string;
                   displayName?: string;
                   avatarIndex?: number;
                   avatarUrl?: string;
@@ -1081,25 +1283,46 @@ export default function PlayerScreen() {
               : undefined;
             const resolvedUserId = String(presence?.userId ?? key).trim();
             const existing = previousById.get(resolvedUserId);
-            const rawRole = String(presence?.role ?? existing?.role ?? "").trim().toLowerCase();
+            const membership = partyMembershipMapRef.current[resolvedUserId];
+            const rawRole = String(
+              membership?.role
+              ?? presence?.role
+              ?? existing?.role
+              ?? "",
+            ).trim().toLowerCase();
             const role: "host" | "co-host" | "viewer" =
               rawRole === "host" ? "host" : rawRole === "co-host" || rawRole === "cohost" ? "co-host" : "viewer";
             const canSpeakFromPresence =
-              typeof presence?.canSpeak === "boolean"
-                ? presence.canSpeak
-                : typeof existing?.canSpeak === "boolean"
-                  ? existing.canSpeak
-                  : role === "host" || role === "co-host";
+              typeof membership?.canSpeak === "boolean"
+                ? membership.canSpeak
+                : typeof presence?.canSpeak === "boolean"
+                  ? presence.canSpeak
+                  : typeof existing?.canSpeak === "boolean"
+                    ? existing.canSpeak
+                    : role === "host" || role === "co-host";
+            const stageRole = derivePartyStageRole({
+              role,
+              canSpeak: canSpeakFromPresence,
+              currentStageRole:
+                membership?.stageRole
+                ?? presence?.stageRole
+                ?? existing?.stageRole,
+            });
             const isCurrentUser = isCurrentIdentity(resolvedUserId);
             const resolvedName = resolveIdentityName(
               presence?.username,
               presence?.displayName,
+              membership?.displayName,
               existing?.name,
               isCurrentUser ? displayName : "",
               "Guest",
             );
-            const resolvedAvatarUrl = String(presence?.avatarUrl ?? "").trim() || (isCurrentUser ? profileAvatarUrl : "");
-            const resolvedCameraPreviewUrl = String(presence?.cameraPreviewUrl ?? presence?.camera_preview_url ?? "").trim() || (isCurrentUser ? profileCameraPreviewUrl : "");
+            const resolvedAvatarUrl =
+              String(presence?.avatarUrl ?? membership?.avatarUrl ?? "").trim()
+              || (isCurrentUser ? profileAvatarUrl : "");
+            const resolvedCameraPreviewUrl =
+              String(presence?.cameraPreviewUrl ?? presence?.camera_preview_url ?? membership?.cameraPreviewUrl ?? "").trim()
+              || (isCurrentUser ? profileCameraPreviewUrl : "");
 
             return {
               id: resolvedUserId,
@@ -1107,8 +1330,9 @@ export default function PlayerScreen() {
               role,
               avatarUrl: resolvedAvatarUrl || existing?.avatarUrl,
               cameraPreviewUrl: resolvedCameraPreviewUrl || existing?.cameraPreviewUrl,
+              stageRole,
               isLive: typeof presence?.isLive === "boolean" ? presence.isLive : existing?.isLive,
-              muted: typeof presence?.muted === "boolean" ? presence.muted : existing?.muted ?? false,
+              muted: typeof presence?.muted === "boolean" ? presence.muted : membership?.isMuted ?? existing?.muted ?? false,
               canSpeak: canSpeakFromPresence,
               isSpeaking: typeof presence?.isSpeaking === "boolean" ? presence.isSpeaking : existing?.isSpeaking ?? false,
               isRequestingToSpeak:
@@ -1120,15 +1344,21 @@ export default function PlayerScreen() {
 
           const hasSelf = next.some((entry) => isCurrentIdentity(entry.id));
           if (!hasSelf) {
+            const selfMembership = partyMembershipMapRef.current[trackedUserId];
             next.unshift({
               id: trackedUserId,
               name: "You",
-              role: partySyncRoleRef.current === "host" ? "host" : "viewer",
-              avatarUrl: previousById.get(trackedUserId)?.avatarUrl,
+              role: selfMembership?.role === "host" ? "host" : "viewer",
+              avatarUrl: previousById.get(trackedUserId)?.avatarUrl || profileAvatarUrl || undefined,
               cameraPreviewUrl: previousById.get(trackedUserId)?.cameraPreviewUrl || profileCameraPreviewUrl || undefined,
+              stageRole: derivePartyStageRole({
+                role: selfMembership?.role === "host" ? "host" : "viewer",
+                canSpeak: selfMembership?.canSpeak ?? partySyncRoleRef.current === "host",
+                currentStageRole: selfMembership?.stageRole,
+              }),
               isLive: true,
-              muted: previousById.get(trackedUserId)?.muted ?? false,
-              canSpeak: previousById.get(trackedUserId)?.canSpeak ?? partySyncRoleRef.current === "host",
+              muted: previousById.get(trackedUserId)?.muted ?? selfMembership?.isMuted ?? false,
+              canSpeak: previousById.get(trackedUserId)?.canSpeak ?? selfMembership?.canSpeak ?? partySyncRoleRef.current === "host",
               isSpeaking: previousById.get(trackedUserId)?.isSpeaking ?? false,
               isRequestingToSpeak: previousById.get(trackedUserId)?.isRequestingToSpeak ?? false,
             });
@@ -1138,14 +1368,77 @@ export default function PlayerScreen() {
             const aMe = isCurrentIdentity(a.id) ? 1 : 0;
             const bMe = isCurrentIdentity(b.id) ? 1 : 0;
             if (aMe !== bMe) return bMe - aMe;
-            const rank = (role: "host" | "co-host" | "viewer") => (role === "host" ? 0 : role === "co-host" ? 1 : 2);
-            const roleDiff = rank(a.role) - rank(b.role);
+            const rank = (participant: PartyParticipant) => {
+              if (participant.role === "host") return 0;
+              if (participant.canSpeak) return 1;
+              if (participant.isRequestingToSpeak) return 2;
+              return 3;
+            };
+            const roleDiff = rank(a) - rank(b);
             if (roleDiff !== 0) return roleDiff;
             return a.name.localeCompare(b.name);
           });
 
           return next;
         });
+      });
+
+      channel.on("broadcast", { event: "participant:seat-request" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const pending = !!payload?.pending;
+        setPartyParticipants((prev) =>
+          prev.map((entry) =>
+            entry.id === participantId
+              ? { ...entry, isRequestingToSpeak: pending && !entry.canSpeak }
+              : entry,
+          ),
+        );
+        if (participantId === trackedUserId) {
+          syncCurrentPartyPresence({ isRequestingToSpeak: pending }).catch(() => {});
+        }
+      });
+
+      channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const nextCanSpeak = !!payload?.canSpeak;
+        const nextStageRole = derivePartyStageRole({
+          role: partyMembershipMapRef.current[participantId]?.role === "host" ? "host" : "viewer",
+          canSpeak: nextCanSpeak,
+          currentStageRole: String(payload?.stageRole ?? ""),
+        });
+
+        const currentMembership = partyMembershipMapRef.current[participantId];
+        if (currentMembership) {
+          partyMembershipMapRef.current[participantId] = {
+            ...currentMembership,
+            canSpeak: nextCanSpeak,
+            stageRole: nextStageRole,
+          };
+        }
+
+        setPartyParticipants((prev) =>
+          prev.map((entry) =>
+            entry.id === participantId
+              ? {
+                  ...entry,
+                  canSpeak: nextCanSpeak,
+                  stageRole: nextStageRole,
+                  isRequestingToSpeak: !!payload?.isRequestingToSpeak,
+                  isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
+                }
+              : entry,
+          ),
+        );
+
+        if (participantId === trackedUserId) {
+          syncCurrentPartyPresence({
+            canSpeak: nextCanSpeak,
+            stageRole: nextStageRole,
+            isRequestingToSpeak: !!payload?.isRequestingToSpeak,
+          }).catch(() => {});
+        }
       });
 
       channel.on("broadcast", { event: "reaction" }, ({ payload }: { payload: Record<string, unknown> }) => {
@@ -1168,20 +1461,9 @@ export default function PlayerScreen() {
 
       channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await channel.track({
-            userId: trackedUserId,
-            username: displayName,
-            avatarUrl: profileAvatarUrl || undefined,
-            cameraPreviewUrl: profileCameraPreviewUrl || undefined,
-            role: partySyncRoleRef.current === "host" ? "host" : "viewer",
-            displayName,
-            isLive: true,
-            avatarIndex: Number.parseInt(trackedUserId.slice(-3), 16) % 70,
-          });
+          await syncCurrentPartyPresence();
         }
       });
-
-      partySocialChannelRef.current = channel;
     };
 
     bootstrapPartySocial();
@@ -1195,7 +1477,7 @@ export default function PlayerScreen() {
         partySocialChannelRef.current = null;
       }
     };
-  }, [inWatchParty, partyId, pushPartyOverlayMessage]);
+  }, [inWatchParty, partyId, pushPartyOverlayMessage, refreshPartyMembershipSnapshot, syncCurrentPartyPresence]);
 
   useEffect(() => {
     return () => {
@@ -1471,6 +1753,65 @@ export default function PlayerScreen() {
     pushPartyOverlayMessage,
     resetAutoHideTimer,
   ]);
+
+  const requestPartySeat = useCallback(async () => {
+    const trackedUserId = String(partyUserId || partySyncUserIdRef.current || "").trim();
+    if (!inWatchParty || !partyId || !trackedUserId) return;
+    const currentParticipant = partyParticipants.find((entry) => entry.id === trackedUserId);
+    if (!currentParticipant || currentParticipant.role === "host" || currentParticipant.canSpeak || currentParticipant.isRequestingToSpeak) {
+      return;
+    }
+
+    setPartyParticipants((prev) =>
+      prev.map((entry) =>
+        entry.id === trackedUserId ? { ...entry, isRequestingToSpeak: true } : entry,
+      ),
+    );
+    setControlsVisible(true);
+    resetAutoHideTimer();
+    await syncCurrentPartyPresence({ isRequestingToSpeak: true }).catch(() => {});
+    await broadcastPartySeatRequest(trackedUserId, true);
+  }, [broadcastPartySeatRequest, inWatchParty, partyId, partyParticipants, partyUserId, resetAutoHideTimer, syncCurrentPartyPresence]);
+
+  const persistPartySeatState = useCallback(async (participantId: string, options: {
+    canSpeak: boolean;
+    stageRole: "host" | "speaker" | "listener";
+    isRequestingToSpeak?: boolean;
+  }) => {
+    if (!inWatchParty || !partyId || !participantId || partySyncRoleRef.current !== "host") return;
+
+    const existingMembership = partyMembershipMapRef.current[participantId];
+    const nextMembership = await setPartyParticipantState(partyId, participantId, {
+      role: existingMembership?.role ?? "viewer",
+      stageRole: options.stageRole,
+      canSpeak: options.canSpeak,
+      isMuted: options.canSpeak ? existingMembership?.isMuted : false,
+      membershipState: existingMembership?.membershipState ?? "active",
+    }).catch(() => null);
+
+    if (nextMembership) {
+      partyMembershipMapRef.current[participantId] = nextMembership;
+    }
+
+    setPartyParticipants((prev) =>
+      prev.map((entry) =>
+        entry.id === participantId
+          ? {
+              ...entry,
+              canSpeak: options.canSpeak,
+              stageRole: options.stageRole,
+              isRequestingToSpeak: !!options.isRequestingToSpeak,
+              isSpeaking: options.canSpeak ? entry.isSpeaking : false,
+            }
+          : entry,
+      ),
+    );
+
+    await broadcastPartySeatState(participantId, options);
+    if (participantId === String(partyUserId || partySyncUserIdRef.current || "").trim()) {
+      await syncCurrentPartyPresence(options).catch(() => {});
+    }
+  }, [broadcastPartySeatState, inWatchParty, partyId, partyUserId, syncCurrentPartyPresence]);
 
   const handleSingleTap = () => {
     if (isStandalonePlayer && standaloneAccessLoading) return;
@@ -2739,12 +3080,29 @@ export default function PlayerScreen() {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo]);
-  const [playbackSource, setPlaybackSource] = useState<any>(() => (typeof source === "number" ? null : source));
+  const sharedPartyResolvedSource = useMemo(() => {
+    if (!inWatchParty) return source;
+    if (displayItem?.video_url && displayItem.video_url.trim()) {
+      return { uri: displayItem.video_url.trim() };
+    }
+    if (titleLoading) return null;
+    return displayItem?.video || fallbackVideo;
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, source, titleLoading]);
+  const [playbackSource, setPlaybackSource] = useState<any>(() =>
+    typeof sharedPartyResolvedSource === "number" ? null : sharedPartyResolvedSource,
+  );
   useEffect(() => {
     let cancelled = false;
 
-    if (typeof source !== "number") {
-      setPlaybackSource(source);
+    if (!sharedPartyResolvedSource) {
+      setPlaybackSource(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (typeof sharedPartyResolvedSource !== "number") {
+      setPlaybackSource(sharedPartyResolvedSource);
       return () => {
         cancelled = true;
       };
@@ -2753,24 +3111,24 @@ export default function PlayerScreen() {
     setPlaybackSource(null);
 
     // Android preview builds need the bundled asset resolved to a local URI before expo-av can play it.
-    const asset = Asset.fromModule(source);
+    const asset = Asset.fromModule(sharedPartyResolvedSource);
     void asset
       .downloadAsync()
       .then(() => {
         if (cancelled) return;
         const localUri = asset.localUri ?? asset.uri;
-        setPlaybackSource(localUri ? { uri: localUri } : source);
+        setPlaybackSource(localUri ? { uri: localUri } : sharedPartyResolvedSource);
       })
       .catch(() => {
         if (!cancelled) {
-          setPlaybackSource(source);
+          setPlaybackSource(sharedPartyResolvedSource);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [source]);
+  }, [sharedPartyResolvedSource]);
   const frameworkBackgroundSource = useMemo<ImageSourcePropType | null>(() => {
     const poster = String((displayItem as any)?.poster_url ?? "").trim();
     if (poster) return { uri: poster };
@@ -3182,9 +3540,10 @@ export default function PlayerScreen() {
         renderItem={({ item: participant }) => {
           const isCurrentUser = participant.id === trackedUserId;
           const isHost = partySyncRole === "host";
-          const isExpanded = liveLayout && !dockLayout && isHost && activeParticipantId === participant.id;
+          const isExpanded = liveLayout && isHost && activeParticipantId === participant.id;
           const isSpeaking = participant.isSpeaking && participant.canSpeak;
           const isActive = primaryActiveParticipantIds.includes(participant.id);
+          const isFeatured = participant.canSpeak && (isActive || activeParticipantId === participant.id) && participant.role !== "host";
           const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
           const shouldDim = primaryActiveParticipantIds.length > 0 && !isActive;
           const isReactionBoosted = participantReactionBoostIds.includes(participant.id);
@@ -3250,11 +3609,7 @@ export default function PlayerScreen() {
                   markParticipantActive(participant.id, 2400);
                   bumpRoomEnergy(0.03);
                   if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
-                    setPartyParticipants((prev) =>
-                      prev.map((entry) =>
-                        entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
-                      ),
-                    );
+                    requestPartySeat().catch(() => {});
                   }
                   if (!isHost) return;
                   setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
@@ -3368,48 +3723,37 @@ export default function PlayerScreen() {
                       isRequesting,
                       isMuted: participant.muted,
                       role: participant.role,
+                      canSpeak: participant.canSpeak,
+                      isFeatured,
                     })}
                   </Text>
                 ) : null}
               </TouchableOpacity>
 
               {isExpanded ? (
-                <View style={styles.participantExpandedControls}>
+                <View style={[styles.participantExpandedControls, dockLayout && styles.participantExpandedControlsDock]}>
                   {isRequesting ? (
                     <>
                       <TouchableOpacity
-                        style={styles.partyParticipantControlBtn}
+                        style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                         onPress={() => {
                           suppressNextSpeakingEventRef.current[participant.id] = "start";
-                          setPartyParticipants((prev) => {
-                            let nextParticipants = prev.map((entry) =>
+                          setPartyParticipants((prev) =>
+                            prev.map((entry) =>
                               entry.id === participant.id
-                                ? { ...entry, canSpeak: true, isSpeaking: true, isRequestingToSpeak: false }
+                                ? { ...entry, canSpeak: true, stageRole: "speaker", isSpeaking: true, isRequestingToSpeak: false }
                                 : entry,
-                            );
-
-                            speakingOrderRef.current = [
-                              ...speakingOrderRef.current.filter((id) => id !== participant.id),
-                              participant.id,
-                            ];
-
-                            const currentlySpeakingIds = nextParticipants
-                              .filter((entry) => entry.canSpeak && entry.isSpeaking)
-                              .map((entry) => entry.id);
-
-                            if (currentlySpeakingIds.length > 2) {
-                              const orderedSpeaking = speakingOrderRef.current.filter((id) => currentlySpeakingIds.includes(id));
-                              const toDropCount = orderedSpeaking.length - 2;
-                              const dropIds = new Set(orderedSpeaking.slice(0, toDropCount));
-
-                              nextParticipants = nextParticipants.map((entry) =>
-                                dropIds.has(entry.id) ? { ...entry, isSpeaking: false } : entry,
-                              );
-                              speakingOrderRef.current = orderedSpeaking.slice(toDropCount);
-                            }
-
-                            return nextParticipants;
-                          });
+                            ),
+                          );
+                          speakingOrderRef.current = [
+                            ...speakingOrderRef.current.filter((id) => id !== participant.id),
+                            participant.id,
+                          ];
+                          persistPartySeatState(participant.id, {
+                            canSpeak: true,
+                            stageRole: "speaker",
+                            isRequestingToSpeak: false,
+                          }).catch(() => {});
                           showLivePresenceEvent(`✅ ${participant.name} is now allowed to speak`);
                           bumpRoomEnergy(0.11);
                           markParticipantActive(participant.id, 2400);
@@ -3420,13 +3764,17 @@ export default function PlayerScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.partyParticipantControlBtn}
+                        style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                         onPress={() => {
                           setPartyParticipants((prev) =>
                             prev.map((entry) =>
                               entry.id === participant.id ? { ...entry, isRequestingToSpeak: false } : entry,
                             ),
                           );
+                          if (participant.id === trackedUserId) {
+                            syncCurrentPartyPresence({ isRequestingToSpeak: false }).catch(() => {});
+                          }
+                          broadcastPartySeatRequest(participant.id, false).catch(() => {});
                           showLivePresenceEvent(`❌ ${participant.name} request denied`);
                           bumpRoomEnergy(0.04);
                         }}
@@ -3438,7 +3786,7 @@ export default function PlayerScreen() {
                   ) : null}
 
                   <TouchableOpacity
-                    style={styles.partyParticipantControlBtn}
+                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                     onPress={() => {
                       setPartyParticipants((prev) => {
                         const target = prev.find((entry) => entry.id === participant.id);
@@ -3491,20 +3839,27 @@ export default function PlayerScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.partyParticipantControlBtn}
+                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                     onPress={() => {
+                      const nextCanSpeak = !participant.canSpeak;
                       setPartyParticipants((prev) =>
                         prev.map((entry) => {
                           if (entry.id !== participant.id) return entry;
-                          const nextCanSpeak = !entry.canSpeak;
                           return {
                             ...entry,
                             canSpeak: nextCanSpeak,
+                            stageRole: nextCanSpeak ? "speaker" : "listener",
                             isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
-                            isRequestingToSpeak: nextCanSpeak ? false : entry.isRequestingToSpeak,
+                            isRequestingToSpeak: false,
                           };
                         }),
                       );
+
+                      persistPartySeatState(participant.id, {
+                        canSpeak: nextCanSpeak,
+                        stageRole: nextCanSpeak ? "speaker" : "listener",
+                        isRequestingToSpeak: false,
+                      }).catch(() => {});
 
                       if (participant.canSpeak) {
                         speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
@@ -3513,11 +3868,11 @@ export default function PlayerScreen() {
                     }}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.partyParticipantControlBtnText}>{participant.canSpeak ? "Revoke Mic" : "Grant Mic"}</Text>
+                    <Text style={styles.partyParticipantControlBtnText}>{participant.canSpeak ? "Move to Audience" : "Seat Participant"}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.partyParticipantControlBtn}
+                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                     onPress={() => {
                       setPartyParticipants((prev) =>
                         prev.map((entry) =>
@@ -3904,11 +4259,7 @@ export default function PlayerScreen() {
                           markParticipantActive(participant.id, 2400);
                           bumpRoomEnergy(0.03);
                           if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
-                            setPartyParticipants((prev) =>
-                              prev.map((entry) =>
-                                entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
-                              ),
-                            );
+                            requestPartySeat().catch(() => {});
                           }
                           if (!isHost) return;
                           setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
@@ -6680,6 +7031,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 6,
   },
+  participantExpandedControlsDock: {
+    width: "100%",
+    flexDirection: "column",
+  },
   partyParticipantControlBtn: {
     flex: 1,
     borderRadius: 999,
@@ -6689,6 +7044,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     alignItems: "center",
+  },
+  partyParticipantControlBtnDock: {
+    width: "100%",
   },
   partyParticipantControlBtnText: {
     color: "#EEF1F8",
