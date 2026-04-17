@@ -2,14 +2,25 @@ import * as Clipboard from "expo-clipboard";
 import { useGlobalSearchParams, usePathname } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
 import {
-    getDebugSnapshot,
-    hydrateDevDebugEnabled,
-    reportDebugAuth,
-    reportDebugRoute,
-    setDevDebugEnabled,
-    subscribeDebugState,
-    type DebugState
+  didFirebaseCrashlyticsCrashPreviously,
+  runFirebaseCrashlyticsNonFatalTest,
+  triggerFirebaseCrashlyticsTestCrash,
+} from "../../_lib/firebaseCrashlytics";
+import {
+  runFirebasePerformanceNetworkProbe,
+  runFirebasePerformanceTraceTest,
+} from "../../_lib/firebasePerformance";
+import { reportRuntimeError } from "../../_lib/logger";
+import {
+  getDebugSnapshot,
+  hydrateDevDebugEnabled,
+  reportDebugAuth,
+  reportDebugRoute,
+  setDevDebugEnabled,
+  subscribeDebugState,
+  type DebugState,
 } from "../../_lib/devDebug";
 import { supabase } from "../../_lib/supabase";
 
@@ -33,6 +44,7 @@ export default function DevDebugOverlay() {
   const [enabled, setEnabled] = useState(false);
   const [open, setOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<DebugState>(getDebugSnapshot());
+  const [monitoringStatus, setMonitoringStatus] = useState("Monitoring proof idle.");
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -74,6 +86,19 @@ export default function DevDebugOverlay() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!__DEV__) return;
+
+    didFirebaseCrashlyticsCrashPreviously()
+      .then((result) => {
+        if (!result.ok || !result.didCrash) return;
+        setMonitoringStatus("Crashlytics reports that the previous app execution ended in a native crash.");
+      })
+      .catch(() => {
+        // noop
+      });
+  }, []);
+
   const summary = useMemo(() => {
     const s = snapshot;
     return [
@@ -100,6 +125,44 @@ export default function DevDebugOverlay() {
 
   const onCopy = async () => {
     await Clipboard.setStringAsync(summary).catch(() => {});
+  };
+
+  const onRunCrashlyticsNonFatal = async () => {
+    try {
+      const result = await runFirebaseCrashlyticsNonFatalTest();
+      setMonitoringStatus(
+        result.ok
+          ? "Crashlytics non-fatal test logged. Verify it in Firebase Crashlytics."
+          : `Crashlytics non-fatal test unavailable: ${result.reason}.`,
+      );
+    } catch (error) {
+      reportRuntimeError("dev-debug-crashlytics-nonfatal", error);
+      setMonitoringStatus("Crashlytics non-fatal test failed locally.");
+    }
+  };
+
+  const onRunPerformanceProbe = async () => {
+    try {
+      const traceResult = await runFirebasePerformanceTraceTest();
+      const networkResult = await runFirebasePerformanceNetworkProbe();
+      const parts = [
+        traceResult.ok ? "custom trace queued" : `custom trace unavailable: ${traceResult.reason}`,
+        "status" in networkResult
+          ? `network metric status ${networkResult.status}`
+          : `network metric unavailable: ${networkResult.reason}`,
+      ];
+      setMonitoringStatus(`Performance probe complete: ${parts.join("; ")}.`);
+    } catch (error) {
+      reportRuntimeError("dev-debug-performance-probe", error);
+      setMonitoringStatus("Performance probe failed locally.");
+    }
+  };
+
+  const onTriggerCrashlyticsCrash = () => {
+    setMonitoringStatus(
+      "Triggering native Crashlytics test crash. In Expo dev-client this may be intercepted before Crashlytics receives it.",
+    );
+    triggerFirebaseCrashlyticsTestCrash();
   };
 
   if (!__DEV__) return null;
@@ -131,12 +194,77 @@ export default function DevDebugOverlay() {
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-              <View style={styles.section}><Text style={styles.sectionTitle}>APP / ROUTE</Text><Text style={styles.row}>Route: {snapshot.app.route ?? "-"}</Text><Text style={styles.row}>Title ID: {snapshot.app.titleId ?? "-"}</Text><Text style={styles.row}>Party ID: {snapshot.app.partyId ?? "-"}</Text><Text style={styles.json}>{json(snapshot.app.params)}</Text></View>
-              <View style={styles.section}><Text style={styles.sectionTitle}>AUTH / SESSION</Text><Text style={styles.row}>Signed In: {String(!!snapshot.auth.signedIn)}</Text><Text style={styles.row}>Session Exists: {String(!!snapshot.auth.sessionExists)}</Text><Text style={styles.row}>User ID: {snapshot.auth.userId ?? "-"}</Text><Text style={styles.row}>Email: {snapshot.auth.email ?? "-"}</Text></View>
-              <View style={styles.section}><Text style={styles.sectionTitle}>PLAYER STATE</Text><Text style={styles.row}>Title ID: {snapshot.player.titleId ?? "-"}</Text><Text style={styles.row}>Loading: {String(!!snapshot.player.loading)}</Text><Text style={styles.row}>Has Title: {String(!!snapshot.player.hasTitle)}</Text><Text style={styles.row}>Has video_url: {String(!!snapshot.player.hasVideoUrl)}</Text><Text style={styles.row}>Position: {fmtMs(snapshot.player.positionMillis)}</Text><Text style={styles.row}>Duration: {fmtMs(snapshot.player.durationMillis)}</Text><Text style={styles.row}>Playing: {String(!!snapshot.player.isPlaying)}</Text><Text style={styles.row}>Error: {snapshot.player.playbackError ?? "-"}</Text></View>
-              <View style={styles.section}><Text style={styles.sectionTitle}>HOME / DISCOVERY</Text><Text style={styles.row}>Hero ID: {snapshot.home.heroTitleId ?? "-"}</Text><Text style={styles.row}>Continue Watching: {snapshot.home.continueWatchingCount ?? 0}</Text><Text style={styles.row}>My List: {snapshot.home.myListCount ?? 0}</Text><Text style={styles.row}>Trending: {snapshot.home.trendingCount ?? 0}</Text><Text style={styles.row}>Top Picks: {snapshot.home.topPicksCount ?? 0}</Text></View>
-              <View style={styles.section}><Text style={styles.sectionTitle}>WATCH PARTY</Text><Text style={styles.row}>Room ID: {snapshot.party.roomId ?? "-"}</Text><Text style={styles.row}>Role: {snapshot.party.role ?? "-"}</Text><Text style={styles.row}>Realtime: {snapshot.party.realtimeState ?? "-"}</Text><Text style={styles.row}>Participants: {snapshot.party.participantCount ?? 0}</Text><Text style={styles.row}>Last Sync: {snapshot.party.lastSyncAt ? new Date(snapshot.party.lastSyncAt).toISOString() : "-"}</Text><Text style={styles.row}>Room updatedAt: {snapshot.party.roomUpdatedAt ?? "-"}</Text><Text style={styles.row}>Fallback Poll Active: {String(!!snapshot.party.fallbackPollActive)}</Text></View>
-              <View style={styles.section}><Text style={styles.sectionTitle}>LAST ERROR / QUERY</Text><Text style={styles.row}>Query: {snapshot.query.name ?? "-"}</Text><Text style={styles.row}>Status: {snapshot.query.status ?? "idle"}</Text><Text style={styles.row}>Query Error: {snapshot.query.error ?? "-"}</Text><Text style={styles.row}>Last Error: {snapshot.lastError ?? "-"}</Text></View>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>APP / ROUTE</Text>
+                <Text style={styles.row}>Route: {snapshot.app.route ?? "-"}</Text>
+                <Text style={styles.row}>Title ID: {snapshot.app.titleId ?? "-"}</Text>
+                <Text style={styles.row}>Party ID: {snapshot.app.partyId ?? "-"}</Text>
+                <Text style={styles.json}>{json(snapshot.app.params)}</Text>
+              </View>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>AUTH / SESSION</Text>
+                <Text style={styles.row}>Signed In: {String(!!snapshot.auth.signedIn)}</Text>
+                <Text style={styles.row}>Session Exists: {String(!!snapshot.auth.sessionExists)}</Text>
+                <Text style={styles.row}>User ID: {snapshot.auth.userId ?? "-"}</Text>
+                <Text style={styles.row}>Email: {snapshot.auth.email ?? "-"}</Text>
+              </View>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>PLAYER STATE</Text>
+                <Text style={styles.row}>Title ID: {snapshot.player.titleId ?? "-"}</Text>
+                <Text style={styles.row}>Loading: {String(!!snapshot.player.loading)}</Text>
+                <Text style={styles.row}>Has Title: {String(!!snapshot.player.hasTitle)}</Text>
+                <Text style={styles.row}>Has video_url: {String(!!snapshot.player.hasVideoUrl)}</Text>
+                <Text style={styles.row}>Position: {fmtMs(snapshot.player.positionMillis)}</Text>
+                <Text style={styles.row}>Duration: {fmtMs(snapshot.player.durationMillis)}</Text>
+                <Text style={styles.row}>Playing: {String(!!snapshot.player.isPlaying)}</Text>
+                <Text style={styles.row}>Error: {snapshot.player.playbackError ?? "-"}</Text>
+              </View>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>HOME / DISCOVERY</Text>
+                <Text style={styles.row}>Hero ID: {snapshot.home.heroTitleId ?? "-"}</Text>
+                <Text style={styles.row}>Continue Watching: {snapshot.home.continueWatchingCount ?? 0}</Text>
+                <Text style={styles.row}>My List: {snapshot.home.myListCount ?? 0}</Text>
+                <Text style={styles.row}>Trending: {snapshot.home.trendingCount ?? 0}</Text>
+                <Text style={styles.row}>Top Picks: {snapshot.home.topPicksCount ?? 0}</Text>
+              </View>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>WATCH PARTY</Text>
+                <Text style={styles.row}>Room ID: {snapshot.party.roomId ?? "-"}</Text>
+                <Text style={styles.row}>Role: {snapshot.party.role ?? "-"}</Text>
+                <Text style={styles.row}>Realtime: {snapshot.party.realtimeState ?? "-"}</Text>
+                <Text style={styles.row}>Participants: {snapshot.party.participantCount ?? 0}</Text>
+                <Text style={styles.row}>
+                  Last Sync: {snapshot.party.lastSyncAt ? new Date(snapshot.party.lastSyncAt).toISOString() : "-"}
+                </Text>
+                <Text style={styles.row}>Room updatedAt: {snapshot.party.roomUpdatedAt ?? "-"}</Text>
+                <Text style={styles.row}>Fallback Poll Active: {String(!!snapshot.party.fallbackPollActive)}</Text>
+              </View>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>LAST ERROR / QUERY</Text>
+                <Text style={styles.row}>Query: {snapshot.query.name ?? "-"}</Text>
+                <Text style={styles.row}>Status: {snapshot.query.status ?? "idle"}</Text>
+                <Text style={styles.row}>Query Error: {snapshot.query.error ?? "-"}</Text>
+                <Text style={styles.row}>Last Error: {snapshot.lastError ?? "-"}</Text>
+              </View>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>FIREBASE MONITORING PROOF</Text>
+                <Text style={styles.row}>{monitoringStatus}</Text>
+                <View style={styles.monitoringActions}>
+                  <TouchableOpacity style={styles.btn} onPress={() => void onRunCrashlyticsNonFatal()} activeOpacity={0.8}>
+                    <Text style={styles.btnText}>Log Crashlytics Non-Fatal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.btn} onPress={() => void onRunPerformanceProbe()} activeOpacity={0.8}>
+                    <Text style={styles.btnText}>Run Perf Trace + Network Probe</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.btn} onPress={onTriggerCrashlyticsCrash} activeOpacity={0.8}>
+                    <Text style={styles.btnText}>Trigger Native Test Crash</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.helper}>
+                  Forced native crashes are not reliable proof inside Expo dev-client because development tooling can
+                  intercept them first.
+                </Text>
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -197,6 +325,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   btn: {
@@ -246,5 +375,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 14,
     marginTop: 2,
+  },
+  monitoringActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  helper: {
+    color: "#8F99B1",
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 8,
   },
 });

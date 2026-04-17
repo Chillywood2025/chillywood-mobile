@@ -1,36 +1,38 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the re-proved Live Waiting Room / Live Room / Live Stage path, the two-phone-proved Live Stage overlay/menu interaction lane, the role-aware `Live Watch-Party` split already proved on the live-stage owner, and the now-cleaned default `Live Watch-Party` bottom-overlay presentation on `app/watch-party/live-stage/[partyId].tsx`. Preserve as now proved that `Live Watch-Party` no longer shows the default repeated pills / duplicated name-body stack / informational bottom card clutter in `Live Stage`, while `Live First` still renders its preserved caption UI. Do not reopen this owner speculatively. Only return to `app/watch-party/live-stage/[partyId].tsx` if a fresh runtime proof shows a real regression; otherwise move to the next user-prioritized lane from the broader queue already recorded in repo truth.
+Carry forward the new Firebase-native monitoring baseline exactly as now landed on the Firebase branch: Firebase Analytics and Remote Config remain the analytics/config owners, Crashlytics is now the repo-owned crash/error owner through `_lib/firebaseCrashlytics.ts` and `_lib/logger.ts`, Performance Monitoring is now the repo-owned perf owner through `_lib/firebasePerformance.ts`, `app/_layout.tsx` is the single bootstrap owner, `components/dev/dev-debug-overlay.tsx` is the dev-only proof owner, and repo truth still contains no checked-in Sentry integration to remove. The exact next task is native/device proof on Android: run a dev build or release-style build with Firebase configured, trigger the logged non-fatal error, trigger the forced native crash, run the performance probe, and verify all three surfaces arrive in Firebase console truth. Do not broaden into unrelated watch-party/profile/admin work while doing that proof.
 
 ## Current Plan
-1. Preserve the carried-forward proved baseline exactly as recorded.
-2. Preserve the now-cleaned Live Stage `Live Watch-Party` presentation without reopening speculative UI churn in the live-stage owner.
-3. Reopen `app/watch-party/live-stage/[partyId].tsx` only if a fresh runtime proof shows a real regression.
-4. Otherwise continue to the next user-prioritized lane from the broader queue already recorded in repo truth.
+1. Preserve the new Firebase monitoring owners exactly as landed.
+2. Rebuild and run the Android dev build or equivalent native build required for Crashlytics/Performance proof.
+3. Verify the non-fatal test, forced native crash, and performance trace/network probe in Firebase console.
+4. Only after that proof, decide whether any non-repo Sentry infrastructure still exists outside the checked-in app surface.
 
 ## Exact Next Batch
-- preserve the now-proved Live Stage overlay/menu interaction behavior and the cleaned default `Live Watch-Party` presentation
-- do not reopen the live-stage owner unless a fresh runtime proof shows a real regression
-- continue with the next user-prioritized lane from the broader queue once live-stage regression-free status is maintained
+- preserve the landed Firebase monitoring owners
+- run the Android native/device proof for Crashlytics and Performance
+- verify Firebase console receipt for non-fatal, forced crash, and performance data
+- keep unrelated lanes out of the proof pass
 
 ## Scope
 This next pass should:
-- preserve the carried-forward proved baseline exactly as recorded
-- preserve the cleaned `Live Watch-Party` default stage presentation without overstating broader closure
-- avoid speculative additional live-stage churn
+- preserve the landed Firebase monitoring baseline exactly as recorded
+- prove the Firebase monitoring surfaces on a native Android runtime
+- avoid speculative monitoring refactors before device proof
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- reopen transport/media/TURN/ICE debugging
-- treat dark RTC screenshots as proof of media failure
-- reopen already-closed Live Stage `Live Watch-Party` clutter work without fresh regression proof
-- broaden into Party Room, Player, Premium, analytics, or broader chat work
+- remove legacy communication or other unrelated runtime systems
+- invent or add Sentry cleanup that is not actually present in repo truth
+- broaden into watch-party/profile/admin/docs work
+- fake Firebase console proof from static code alone
 - mix unrelated local dirt into any future checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the preserved Live Stage baseline remains true
-- the cleaned default `Live Watch-Party` stage presentation remains regression-free
-- the repo can move to the next user-prioritized lane without reopening solved live-stage clutter work
+- Firebase Crashlytics receives a logged non-fatal error from the app
+- Firebase Crashlytics receives a forced native test crash from a native build/runtime that does not intercept it first
+- Firebase Performance Monitoring receives the first app/custom trace plus the explicit network probe
+- the repo can move forward without inventing nonexistent Sentry cleanup work

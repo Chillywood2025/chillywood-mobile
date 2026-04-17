@@ -12,6 +12,12 @@ import {
   trackFirebaseAnalyticsEvent,
   trackFirebaseAnalyticsScreen,
 } from "../_lib/firebaseAnalytics";
+import {
+  bootstrapFirebaseCrashlytics,
+  clearFirebaseCrashlyticsUser,
+  identifyFirebaseCrashlyticsUser,
+} from "../_lib/firebaseCrashlytics";
+import { bootstrapFirebasePerformance } from "../_lib/firebasePerformance";
 import { bootstrapFirebaseRemoteConfig, getRemoteConfigBoolean } from "../_lib/firebaseRemoteConfig";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
@@ -54,6 +60,8 @@ const serializeRedirectTarget = (pathname: string, params: Record<string, unknow
 };
 
 function FirebaseRuntimeBridge() {
+  const { user } = useSession();
+
   const sanitizeAnalyticsPayload = (payload?: AnalyticsPayload) => {
     if (!payload) return undefined;
 
@@ -69,6 +77,8 @@ function FirebaseRuntimeBridge() {
 
   useEffect(() => {
     void bootstrapFirebaseAnalytics();
+    void bootstrapFirebaseCrashlytics();
+    void bootstrapFirebasePerformance();
     void bootstrapFirebaseRemoteConfig().then(() => {
       void getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.liveWaitingRoomEnabled);
       void getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.partyWaitingRoomEnabled);
@@ -97,6 +107,21 @@ function FirebaseRuntimeBridge() {
       setAnalyticsSink(null);
     };
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      const identity = {
+        id: user.id,
+        email: user.email ?? null,
+      };
+      void identifyFirebaseAnalyticsUser(identity);
+      void identifyFirebaseCrashlyticsUser(identity);
+      return;
+    }
+
+    void clearFirebaseAnalyticsUser();
+    void clearFirebaseCrashlyticsUser();
+  }, [user]);
 
   return null;
 }

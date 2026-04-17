@@ -7,13 +7,14 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeRuntimeEnvironment = (value: unknown) => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
 );
+const CONFIG_DIR = process.cwd();
 
 const resolveExistingFile = (...candidates: Array<string | undefined>) => {
   for (const candidate of candidates) {
     const normalized = normalizeText(candidate);
     if (!normalized) continue;
 
-    const absolutePath = path.resolve(__dirname, normalized);
+    const absolutePath = path.resolve(CONFIG_DIR, normalized);
     if (fs.existsSync(absolutePath)) return normalized;
   }
 
@@ -96,6 +97,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     plugins: mergePlugins(base.plugins, [
       "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
+      "@react-native-firebase/perf",
       [
         "expo-build-properties",
         {
