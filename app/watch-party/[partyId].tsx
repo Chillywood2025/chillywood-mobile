@@ -51,6 +51,7 @@ import {
     reportDebugQuery,
 } from "../../_lib/devDebug";
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
+import { prepareLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
     getMonetizationAccessSheetPresentation,
@@ -1289,6 +1290,36 @@ export default function WatchPartyRoomScreen() {
       return;
     }
 
+    const joinBoundary = await prepareLiveKitJoinBoundary({
+      surface: "watch-party-live",
+      roomId: nextPartyId,
+      participantRole: (myRole ?? myRoleRef.current ?? "viewer") === "host" ? "host" : "viewer",
+      metadata: {
+        titleId: targetTitleId,
+        roomMode: sharedRoomMode,
+        source: source || null,
+      },
+    });
+    debugLog("watch-party", "watch-party-live boundary", {
+      roomId: nextPartyId,
+      status: joinBoundary.status,
+      provider: joinBoundary.provider,
+      participantRole: joinBoundary.participantRole,
+      requestedGrants: joinBoundary.requestedGrants,
+      ...(joinBoundary.status === "ready"
+        ? {
+            roomName: joinBoundary.roomName,
+            tokenEndpoint: joinBoundary.tokenEndpoint,
+          }
+        : {
+            reason: joinBoundary.reason,
+            tokenEndpoint: joinBoundary.tokenEndpoint,
+          }),
+    });
+    if (joinBoundary.status === "unavailable" && joinBoundary.reason !== "not_configured") {
+      Alert.alert("Live media join pending", joinBoundary.message);
+    }
+
     debugLog("watch-party", "open player", { targetTitleId });
     router.push({
       pathname: "/player/[id]",
@@ -1297,7 +1328,7 @@ export default function WatchPartyRoomScreen() {
         partyId: nextPartyId,
       },
     });
-  }, [room?.partyId, room?.titleId, titleIdHint, partyId, router]);
+  }, [myRole, partyId, room?.partyId, room?.titleId, router, sharedRoomMode, source, titleIdHint]);
 
   // ── Connection display helpers ───────────────────────────────────────────────
   const connLabel: Record<ConnState, string> = {

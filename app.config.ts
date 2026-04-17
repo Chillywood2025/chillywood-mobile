@@ -18,6 +18,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ? existingRuntime.revenueCat
       : {}
   ) as Record<string, unknown>;
+  const existingLiveKit = (
+    existingRuntime.livekit && typeof existingRuntime.livekit === "object" && !Array.isArray(existingRuntime.livekit)
+      ? existingRuntime.livekit
+      : {}
+  ) as Record<string, unknown>;
   const existingCommunication = (
     existingRuntime.communication && typeof existingRuntime.communication === "object" && !Array.isArray(existingRuntime.communication)
       ? existingRuntime.communication
@@ -86,6 +91,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           ),
           iosPublicSdkKey: normalizeText(
             process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY || existingRevenueCat.iosPublicSdkKey,
+          ),
+        },
+        livekit: {
+          ...existingLiveKit,
+          serverUrl: normalizeText(
+            process.env.EXPO_PUBLIC_LIVEKIT_SERVER_URL || existingLiveKit.serverUrl,
+          ),
+          tokenEndpoint: normalizeText(
+            process.env.EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT || existingLiveKit.tokenEndpoint,
           ),
         },
       },

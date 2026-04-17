@@ -33,6 +33,7 @@ import {
 } from "../../../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
+import { prepareLiveKitJoinBoundary } from "../../../_lib/livekit/join-boundary";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
 import { useSession } from "../../../_lib/session";
 import { supabase } from "../../../_lib/supabase";
@@ -1575,13 +1576,42 @@ export default function WatchPartyLiveStageScreen() {
     });
   }, [room?.capturePolicy, updateLiveRoomPolicies]);
 
-  const onEnterLiveStage = useCallback(() => {
+  const onEnterLiveStage = useCallback(async () => {
+    const joinBoundary = await prepareLiveKitJoinBoundary({
+      surface: "live-stage",
+      roomId: partyId,
+      participantRole: isHost ? "host" : "viewer",
+      metadata: {
+        stageMode,
+        source: source || null,
+      },
+    });
+    debugLog("live-stage", "live-stage boundary", {
+      roomId: partyId,
+      status: joinBoundary.status,
+      provider: joinBoundary.provider,
+      participantRole: joinBoundary.participantRole,
+      requestedGrants: joinBoundary.requestedGrants,
+      ...(joinBoundary.status === "ready"
+        ? {
+            roomName: joinBoundary.roomName,
+            tokenEndpoint: joinBoundary.tokenEndpoint,
+          }
+        : {
+            reason: joinBoundary.reason,
+            tokenEndpoint: joinBoundary.tokenEndpoint,
+          }),
+    });
+    if (joinBoundary.status === "unavailable" && joinBoundary.reason !== "not_configured") {
+      Alert.alert("Live media join pending", joinBoundary.message);
+    }
+
     closeStageOverlayPanels();
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
     setLiveSurface("stage");
-  }, [closeStageOverlayPanels, stageOverlayMotion]);
+  }, [closeStageOverlayPanels, isHost, partyId, source, stageMode, stageOverlayMotion]);
 
   const onReturnToLiveRoom = useCallback(() => {
     closeStageOverlayPanels();
