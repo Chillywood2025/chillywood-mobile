@@ -30,8 +30,13 @@ import {
     resolveBrandingConfig,
 } from "../../../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
+import {
+  requestLiveKitParticipantToken,
+  type LiveKitTokenReady,
+} from "../../../_lib/livekit/token-contract";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
+import { isLiveKitRuntimeConfigured } from "../../../_lib/runtimeConfig";
 import { useSession } from "../../../_lib/session";
 import { supabase } from "../../../_lib/supabase";
 import { readUserProfile } from "../../../_lib/userData";
@@ -651,6 +656,8 @@ export default function WatchPartyLiveStageScreen() {
   const trackedUserId = myUserId || "anon";
   const resolvedCurrentUsername = resolveIdentityName(myUsername, "You");
   const isLiveRoomSurface = liveSurface === "room";
+  const liveKitFoundationEnabled = isLiveKitRuntimeConfigured();
+  const liveKitJoinRef = useRef<LiveKitTokenReady | null>(null);
   const {
     localStreamURL,
     participants: stageMediaParticipants,
@@ -1292,13 +1299,62 @@ export default function WatchPartyLiveStageScreen() {
     });
   }, [room?.capturePolicy, updateLiveRoomPolicies]);
 
-  const onEnterLiveStage = useCallback(() => {
+  const onEnterLiveStage = useCallback(async () => {
+    if (liveKitFoundationEnabled && partyId) {
+      const joinResult = await requestLiveKitParticipantToken({
+        surface: "live-stage",
+        roomName: partyId,
+        participantIdentity: trackedUserId,
+        participantName: resolvedCurrentUsername,
+        participantRole: isHost ? "host" : "viewer",
+        metadata: {
+          roomCode: room?.roomCode ?? null,
+          stageMode,
+          source: source || null,
+        },
+      });
+
+      if (joinResult.status === "ready") {
+        liveKitJoinRef.current = joinResult;
+        debugLog("livekit", "prepared live-stage join contract", {
+          roomName: joinResult.roomName,
+          endpoint: joinResult.endpoint,
+          participantRole: joinResult.participantRole,
+          requestedGrants: joinResult.requestedGrants,
+        });
+      } else {
+        liveKitJoinRef.current = null;
+        debugLog("livekit", "live-stage join contract unavailable", {
+          reason: joinResult.reason,
+          roomName: joinResult.roomName,
+          endpoint: joinResult.endpoint,
+        });
+        if (joinResult.reason === "request_failed" || joinResult.reason === "invalid_response") {
+          reportRuntimeError("livekit-stage-contract", new Error(joinResult.message), {
+            reason: joinResult.reason,
+            roomName: joinResult.roomName,
+          });
+        }
+      }
+    }
+
     closeStageOverlayPanels();
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
     setLiveSurface("stage");
-  }, [closeStageOverlayPanels, stageOverlayMotion]);
+  }, [
+    closeStageOverlayPanels,
+    isHost,
+    liveKitFoundationEnabled,
+    partyId,
+    resolvedCurrentUsername,
+    room?.roomCode,
+    source,
+    stageMode,
+    stageOverlayMotion,
+    trackedUserId,
+  ]);
 
   const onReturnToLiveRoom = useCallback(() => {
     closeStageOverlayPanels();

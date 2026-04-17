@@ -13,6 +13,7 @@ import {
   trackFirebaseAnalyticsScreen,
 } from "../_lib/firebaseAnalytics";
 import { bootstrapFirebaseRemoteConfig, getRemoteConfigBoolean } from "../_lib/firebaseRemoteConfig";
+import { bootstrapLiveKitFoundation } from "../_lib/livekit/bootstrap";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
@@ -68,6 +69,7 @@ function FirebaseRuntimeBridge() {
   };
 
   useEffect(() => {
+    bootstrapLiveKitFoundation();
     void bootstrapFirebaseAnalytics();
     void bootstrapFirebaseRemoteConfig().then(() => {
       void getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.liveWaitingRoomEnabled);

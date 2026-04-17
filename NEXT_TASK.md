@@ -1,36 +1,40 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Rachi official-account foundation, the re-proved Live Waiting Room / Live Room / Live Stage path, the two-phone-proved Live Stage overlay/menu interaction lane, the role-aware `Live Watch-Party` split already proved on the live-stage owner, and the now-cleaned default `Live Watch-Party` bottom-overlay presentation on `app/watch-party/live-stage/[partyId].tsx`. Preserve as now proved that `Live Watch-Party` no longer shows the default repeated pills / duplicated name-body stack / informational bottom card clutter in `Live Stage`, while `Live First` still renders its preserved caption UI. Do not reopen this owner speculatively. Only return to `app/watch-party/live-stage/[partyId].tsx` if a fresh runtime proof shows a real regression; otherwise move to the next user-prioritized lane from the broader queue already recorded in repo truth.
+Carry forward the still-valid proved baseline exactly as recorded, including the locked Party / Live / Profile / Chi'lly Chat semantics, the preserved Firebase runtime base on this branch, and the new repo-safe LiveKit foundation that now exists without overclaiming migration completion. The exact next lane should finish the missing LiveKit runtime path end to end for one canonical realtime surface: add the secure backend token endpoint in the correct service layer, then wire the client join/render flow through the already-guarded `Live Room -> Continue to Live Stage` seam on `app/watch-party/live-stage/[partyId].tsx`, while keeping the current communication-room/WebRTC fallback path intact until the new path is actually stable and re-proved. Do not reopen OVH/Hetzner or broader production-infrastructure decisions in that next lane.
 
 ## Current Plan
 1. Preserve the carried-forward proved baseline exactly as recorded.
-2. Preserve the now-cleaned Live Stage `Live Watch-Party` presentation without reopening speculative UI churn in the live-stage owner.
-3. Reopen `app/watch-party/live-stage/[partyId].tsx` only if a fresh runtime proof shows a real regression.
-4. Otherwise continue to the next user-prioritized lane from the broader queue already recorded in repo truth.
+2. Preserve the new LiveKit foundation honestly as partial only: package/plugin/bootstrap/config/token-contract are landed, but secure token issuance and actual LiveKit room join are not.
+3. Reopen only the backend token issuance layer and the single canonical `Live Room -> Live Stage` join/render seam next.
+4. Keep the legacy communication-room/WebRTC path available until the LiveKit path is genuinely working and re-proved.
 
 ## Exact Next Batch
-- preserve the now-proved Live Stage overlay/menu interaction behavior and the cleaned default `Live Watch-Party` presentation
-- do not reopen the live-stage owner unless a fresh runtime proof shows a real regression
-- continue with the next user-prioritized lane from the broader queue once live-stage regression-free status is maintained
+- keep the new LiveKit foundation package/plugin/bootstrap/config truth intact
+- implement the secure backend token endpoint outside the mobile client with no app-side secret logic
+- wire one real LiveKit client join/render path through `app/watch-party/live-stage/[partyId].tsx`
+- preserve the current legacy communication-room/WebRTC path as fallback until proof is complete
+- rerun proof only after the backend endpoint and one real client join path exist
 
 ## Scope
 This next pass should:
 - preserve the carried-forward proved baseline exactly as recorded
-- preserve the cleaned `Live Watch-Party` default stage presentation without overstating broader closure
-- avoid speculative additional live-stage churn
+- preserve the new LiveKit foundation honestly as partial groundwork rather than full completion
+- stay focused on one canonical realtime surface only
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- reopen transport/media/TURN/ICE debugging
-- treat dark RTC screenshots as proof of media failure
-- reopen already-closed Live Stage `Live Watch-Party` clutter work without fresh regression proof
-- broaden into Party Room, Player, Premium, analytics, or broader chat work
+- put LiveKit API keys or secrets into the mobile app
+- generate LiveKit JWTs in the client
+- delete the legacy communication-room/WebRTC path yet
+- broaden into Party Room, Player, Profile, admin, or unrelated chat work
+- force OVH/Hetzner or broader production-infrastructure work into the next mobile pass
 - mix unrelated local dirt into any future checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the preserved Live Stage baseline remains true
-- the cleaned default `Live Watch-Party` stage presentation remains regression-free
-- the repo can move to the next user-prioritized lane without reopening solved live-stage clutter work
+- the current LiveKit foundation remains intact and truthful
+- a secure backend token endpoint exists and serves the guarded mobile contract
+- one canonical realtime surface can actually join/render through LiveKit
+- the legacy communication-room/WebRTC path remains available until the new path is stable and honestly re-proved
