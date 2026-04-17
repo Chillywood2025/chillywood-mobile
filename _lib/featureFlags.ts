@@ -9,6 +9,25 @@ export const FEATURE_FLAGS = {
   },
 } as const;
 
+export const REMOTE_CONFIG_KEYS = {
+  liveWaitingRoomEnabled: "live_waiting_room_enabled",
+  partyWaitingRoomEnabled: "party_waiting_room_enabled",
+  watchPartyLiveHandoffV2: "watch_party_live_handoff_v2",
+  chillyChatExpandedV1: "chilly_chat_expanded_v1",
+  aiChatSuggestionsV1: "ai_chat_suggestions_v1",
+} as const;
+
+export const REMOTE_CONFIG_DEFAULTS: Record<
+  (typeof REMOTE_CONFIG_KEYS)[keyof typeof REMOTE_CONFIG_KEYS],
+  boolean | string | number
+> = {
+  [REMOTE_CONFIG_KEYS.liveWaitingRoomEnabled]: false,
+  [REMOTE_CONFIG_KEYS.partyWaitingRoomEnabled]: false,
+  [REMOTE_CONFIG_KEYS.watchPartyLiveHandoffV2]: false,
+  [REMOTE_CONFIG_KEYS.chillyChatExpandedV1]: false,
+  [REMOTE_CONFIG_KEYS.aiChatSuggestionsV1]: false,
+};
+
 export type FeatureFlags = typeof FEATURE_FLAGS;
 
 export const APP_RUNTIME_FEATURE_DEFAULTS: {

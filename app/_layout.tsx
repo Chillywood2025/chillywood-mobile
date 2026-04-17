@@ -1,13 +1,20 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { PostHogProvider, useFeatureFlag, usePostHog } from "posthog-react-native";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
+import { REMOTE_CONFIG_KEYS } from "../_lib/featureFlags";
+import {
+  bootstrapFirebaseAnalytics,
+  clearFirebaseAnalyticsUser,
+  identifyFirebaseAnalyticsUser,
+  trackFirebaseAnalyticsEvent,
+  trackFirebaseAnalyticsScreen,
+} from "../_lib/firebaseAnalytics";
+import { bootstrapFirebaseRemoteConfig, getRemoteConfigBoolean } from "../_lib/firebaseRemoteConfig";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
-import { getPostHogConfig, posthogFeatureFlags } from "../_lib/posthog";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { SessionProvider, useSession } from "../_lib/session";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
@@ -46,21 +53,7 @@ const serializeRedirectTarget = (pathname: string, params: Record<string, unknow
   return query ? `${pathname}?${query}` : pathname;
 };
 
-function PostHogFlagProbe() {
-  const liveWaitingRoomEnabled = useFeatureFlag(posthogFeatureFlags.liveWaitingRoomEnabled);
-  const partyWaitingRoomEnabled = useFeatureFlag(posthogFeatureFlags.partyWaitingRoomEnabled);
-  const watchPartyLiveHandoffV2 = useFeatureFlag(posthogFeatureFlags.watchPartyLiveHandoffV2);
-
-  void liveWaitingRoomEnabled;
-  void partyWaitingRoomEnabled;
-  void watchPartyLiveHandoffV2;
-
-  return null;
-}
-
-function PostHogSessionBridge() {
-  const posthog = usePostHog();
-
+function FirebaseRuntimeBridge() {
   const sanitizeAnalyticsPayload = (payload?: AnalyticsPayload) => {
     if (!payload) return undefined;
 
@@ -75,65 +68,37 @@ function PostHogSessionBridge() {
   };
 
   useEffect(() => {
-    if (!posthog) {
-      setAnalyticsSink(null);
-      return;
-    }
+    void bootstrapFirebaseAnalytics();
+    void bootstrapFirebaseRemoteConfig().then(() => {
+      void getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.liveWaitingRoomEnabled);
+      void getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.partyWaitingRoomEnabled);
+      void getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.watchPartyLiveHandoffV2);
+      void getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.chillyChatExpandedV1);
+      void getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.aiChatSuggestionsV1);
+    });
 
     setAnalyticsSink({
       identifyUser(identity) {
-        posthog.identify(identity.id, identity.email ? { email: identity.email } : undefined);
-        void posthog.reloadFeatureFlagsAsync().catch(() => null);
+        void identifyFirebaseAnalyticsUser(identity);
       },
       clearUser() {
-        posthog.reset();
+        void clearFirebaseAnalyticsUser();
       },
       trackScreen(screenName, payload) {
-        void posthog.screen(screenName, sanitizeAnalyticsPayload(payload));
+        void payload;
+        void trackFirebaseAnalyticsScreen(screenName);
       },
       trackEvent(eventName, payload) {
-        posthog.capture(eventName, sanitizeAnalyticsPayload(payload));
+        void trackFirebaseAnalyticsEvent(eventName, sanitizeAnalyticsPayload(payload));
       },
     });
 
     return () => {
       setAnalyticsSink(null);
     };
-  }, [posthog]);
+  }, []);
 
   return null;
-}
-
-function PostHogEnabledShell({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <PostHogFlagProbe />
-      <PostHogSessionBridge />
-      {children}
-    </>
-  );
-}
-
-function PostHogRootProvider({ children }: { children: React.ReactNode }) {
-  const { apiKey, host, isEnabled } = getPostHogConfig();
-
-  if (!isEnabled) {
-    return <>{children}</>;
-  }
-
-  return (
-    <PostHogProvider
-      apiKey={apiKey}
-      autocapture={false}
-      options={{
-        host,
-        captureAppLifecycleEvents: false,
-        sendFeatureFlagEvent: false,
-      }}
-    >
-      <PostHogEnabledShell>{children}</PostHogEnabledShell>
-    </PostHogProvider>
-  );
 }
 
 function RevenueCatBootstrap() {
@@ -280,17 +245,16 @@ export default function RootLayout() {
   }
 
   return (
-    <PostHogRootProvider>
-      <SessionProvider>
-        <RevenueCatBootstrap />
-        <BetaProgramProvider>
-          <RootErrorBoundary>
-            <AuthRouteGate />
-          </RootErrorBoundary>
-          <BetaWelcomeController />
-        </BetaProgramProvider>
-      </SessionProvider>
-    </PostHogRootProvider>
+    <SessionProvider>
+      <FirebaseRuntimeBridge />
+      <RevenueCatBootstrap />
+      <BetaProgramProvider>
+        <RootErrorBoundary>
+          <AuthRouteGate />
+        </RootErrorBoundary>
+        <BetaWelcomeController />
+      </BetaProgramProvider>
+    </SessionProvider>
   );
 }
 
