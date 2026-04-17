@@ -1,4 +1,5 @@
 import { reportDebugError } from "./devDebug";
+import { recordFirebaseCrashlyticsError } from "./firebaseCrashlytics";
 import { trackEvent, type AnalyticsPayload } from "./analytics";
 
 type SerializableMeta = AnalyticsPayload | Record<string, unknown> | undefined;
@@ -46,6 +47,7 @@ export function debugLog(scope: string, message: string, meta?: SerializableMeta
 export function reportRuntimeError(scope: string, error: unknown, meta?: SerializableMeta) {
   const normalized = serializeError(error);
   reportDebugError(`${scope}: ${normalized.message}`);
+  recordFirebaseCrashlyticsError(scope, error, meta);
 
   if (__DEV__) {
     console.error(`[${scope}] ${normalized.message}`, {
