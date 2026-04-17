@@ -8,6 +8,8 @@ const normalizeRuntimeEnvironment = (value: unknown) => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
 );
 const CONFIG_DIR = process.cwd();
+const DEPLOYED_LIVEKIT_SERVER_URL = "wss://chillywood-realtime-eu251vsu.livekit.cloud";
+const DEPLOYED_LIVEKIT_TOKEN_ENDPOINT = "https://bmkkhihfbmsnnmcqkoly.supabase.co/functions/v1/livekit-token";
 
 const resolveExistingFile = (...candidates: Array<string | undefined>) => {
   for (const candidate of candidates) {
@@ -173,10 +175,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         livekit: {
           ...existingLiveKit,
           serverUrl: normalizeText(
-            process.env.EXPO_PUBLIC_LIVEKIT_URL || existingLiveKit.serverUrl,
+            process.env.EXPO_PUBLIC_LIVEKIT_URL || existingLiveKit.serverUrl || DEPLOYED_LIVEKIT_SERVER_URL,
           ),
           tokenEndpoint: normalizeText(
-            process.env.EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT || existingLiveKit.tokenEndpoint,
+            process.env.EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT || existingLiveKit.tokenEndpoint || DEPLOYED_LIVEKIT_TOKEN_ENDPOINT,
           ),
         },
       },

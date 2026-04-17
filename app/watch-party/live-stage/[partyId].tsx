@@ -64,6 +64,7 @@ import { RoomReactionPicker, pushRecentReaction } from "../../../components/room
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
+import { LiveKitStageMediaSurface } from "../../../components/watch-party-live/livekit-stage-media-surface";
 import {
     buildOrderedParticipantsWithSelf,
     buildParticipantProfileParams,
@@ -196,6 +197,7 @@ export default function WatchPartyLiveStageScreen() {
   const [reportBusy, setReportBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ userId: string; label: string } | null>(null);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
+  const [liveKitJoinContract, setLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
   const myCameraPreviewUrlRef = useRef<string>("");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
@@ -234,6 +236,7 @@ export default function WatchPartyLiveStageScreen() {
 
   useEffect(() => {
     setCommunicationRoomId("");
+    setLiveKitJoinContract(null);
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -657,13 +660,13 @@ export default function WatchPartyLiveStageScreen() {
   const resolvedCurrentUsername = resolveIdentityName(myUsername, "You");
   const isLiveRoomSurface = liveSurface === "room";
   const liveKitFoundationEnabled = isLiveKitRuntimeConfigured();
-  const liveKitJoinRef = useRef<LiveKitTokenReady | null>(null);
+  const shouldRenderLiveKitStage = !isLiveRoomSurface && Platform.OS !== "web" && !!liveKitJoinContract;
   const {
     localStreamURL,
     participants: stageMediaParticipants,
   } = useCommunicationRoomSession({
     roomId: communicationRoomId,
-    enabled: canUseBetaStage && !isLiveRoomSurface && !!communicationRoomId,
+    enabled: canUseBetaStage && !isLiveRoomSurface && !!communicationRoomId && !shouldRenderLiveKitStage,
     analyticsContext: {
       surface: "live-room",
       role: isHost ? "host" : "viewer",
@@ -1299,6 +1302,14 @@ export default function WatchPartyLiveStageScreen() {
     });
   }, [room?.capturePolicy, updateLiveRoomPolicies]);
 
+  const onLiveKitStageFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
+    debugLog("livekit", "falling back to legacy live-stage media path", {
+      reason,
+      roomName: liveKitJoinContract?.roomName ?? partyId,
+    });
+    setLiveKitJoinContract(null);
+  }, [liveKitJoinContract?.roomName, partyId]);
+
   const onEnterLiveStage = useCallback(async () => {
     if (liveKitFoundationEnabled && partyId) {
       const joinResult = await requestLiveKitParticipantToken({
@@ -1315,7 +1326,7 @@ export default function WatchPartyLiveStageScreen() {
       });
 
       if (joinResult.status === "ready") {
-        liveKitJoinRef.current = joinResult;
+        setLiveKitJoinContract(joinResult);
         debugLog("livekit", "prepared live-stage join contract", {
           roomName: joinResult.roomName,
           endpoint: joinResult.endpoint,
@@ -1323,7 +1334,7 @@ export default function WatchPartyLiveStageScreen() {
           requestedGrants: joinResult.requestedGrants,
         });
       } else {
-        liveKitJoinRef.current = null;
+        setLiveKitJoinContract(null);
         debugLog("livekit", "live-stage join contract unavailable", {
           reason: joinResult.reason,
           roomName: joinResult.roomName,
@@ -1336,6 +1347,8 @@ export default function WatchPartyLiveStageScreen() {
           });
         }
       }
+    } else {
+      setLiveKitJoinContract(null);
     }
 
     closeStageOverlayPanels();
@@ -1361,6 +1374,7 @@ export default function WatchPartyLiveStageScreen() {
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
+    setLiveKitJoinContract(null);
     setLiveSurface("room");
   }, [closeStageOverlayPanels, stageOverlayMotion]);
 
@@ -1724,7 +1738,12 @@ export default function WatchPartyLiveStageScreen() {
           ]}
           collapsable={false}
         >
-          {showHeroLocalRtcVideo && RTCView ? (
+          {shouldRenderLiveKitStage && liveKitJoinContract ? (
+            <LiveKitStageMediaSurface
+              joinContract={liveKitJoinContract}
+              onFallback={onLiveKitStageFallback}
+            />
+          ) : showHeroLocalRtcVideo && RTCView ? (
             <RTCView
               key={`${heroParticipant?.userId ?? "hero"}:${localStreamURL ?? "no-local-stream"}`}
               streamURL={localStreamURL as string}
