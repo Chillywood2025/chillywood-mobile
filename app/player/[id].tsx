@@ -39,6 +39,9 @@ import {
     type ContentAccessDecision,
     type TitleAccessRule,
 } from "../../_lib/monetization";
+import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
+import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
+import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { supabase } from "../../_lib/supabase";
 import {
@@ -62,6 +65,7 @@ import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../compo
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
+import { LiveKitStageMediaSurface } from "../../components/watch-party-live/livekit-stage-media-surface";
 import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/_room-shared";
 
 const ACCENT = "#DC143C";
@@ -238,6 +242,7 @@ export default function PlayerScreen() {
   const [upNextCanceled, setUpNextCanceled] = useState(false);
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
+  const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
   const [partyUserId, setPartyUserId] = useState("");
   const [, setPartyViewerCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(1);
@@ -695,6 +700,7 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!inWatchParty || !partyId) {
+      setWatchPartyLiveKitJoinContract(null);
       setPartyViewerCount(0);
       setViewerCount(1);
       setPartyParticipantPreview([]);
@@ -2236,11 +2242,49 @@ export default function PlayerScreen() {
     () => liveBubbleParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
     [liveBubbleParticipants],
   );
+  const currentWatchPartyParticipantName = useMemo(
+    () => liveBubbleParticipants.find((participant) => participant.id === trackedUserId)?.name || "You",
+    [liveBubbleParticipants, trackedUserId],
+  );
+  const shouldRenderWatchPartyLiveKit = inWatchParty && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
     if (livePrimarySpeakers.length === 1) return `🎤 ${livePrimarySpeakers[0].name} speaking`;
     return `🎤 ${livePrimarySpeakers[0].name} +1 speaking`;
   }, [livePrimarySpeakers]);
+
+  useEffect(() => {
+    if (!inWatchParty || !partyId || Platform.OS === "web") {
+      setWatchPartyLiveKitJoinContract(null);
+      return;
+    }
+
+    if (watchPartyLiveKitJoinContract?.roomName === partyId) return;
+    if (!trackedUserId || trackedUserId === "anon") return;
+
+    const preparedContract = consumePreparedLiveKitJoinBoundary({
+      surface: "watch-party-live",
+      roomName: partyId,
+      participantIdentity: trackedUserId,
+    });
+    if (!preparedContract) return;
+
+    setWatchPartyLiveKitJoinContract(preparedContract);
+    debugLog("livekit", "consumed watch-party-live join contract", {
+      roomName: preparedContract.roomName,
+      endpoint: preparedContract.endpoint,
+      participantRole: preparedContract.participantRole,
+      requestedGrants: preparedContract.requestedGrants,
+    });
+  }, [inWatchParty, partyId, trackedUserId, watchPartyLiveKitJoinContract?.roomName]);
+
+  const onWatchPartyLiveKitFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
+    debugLog("livekit", "falling back to legacy watch-party-live playback path", {
+      reason,
+      roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
+    });
+    setWatchPartyLiveKitJoinContract(null);
+  }, [partyId, watchPartyLiveKitJoinContract?.roomName]);
 
   useEffect(() => {
     if (!activeParticipantId) return;
@@ -3267,6 +3311,30 @@ export default function PlayerScreen() {
           <Text style={styles.watchPartyPlayerBandBtnText}>Party Room</Text>
         </TouchableOpacity>
       </View>
+      {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
+        <View style={styles.watchPartyLiveKitCard}>
+          <View style={styles.watchPartyLiveKitCardHeader}>
+            <View style={styles.watchPartyLiveKitCardCopy}>
+              <Text style={styles.watchPartyLiveKitCardKicker}>LIVEKIT MEDIA</Text>
+              <Text style={styles.watchPartyLiveKitCardTitle}>
+                {currentWatchPartyParticipantName === "You"
+                  ? "Watch-Party Live is connected"
+                  : `${currentWatchPartyParticipantName} is connected`}
+              </Text>
+            </View>
+            <Text style={styles.watchPartyLiveKitCardRole}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
+          </View>
+          <View style={styles.watchPartyLiveKitCardSurface}>
+            <LiveKitStageMediaSurface
+              joinContract={watchPartyLiveKitJoinContract}
+              onFallback={onWatchPartyLiveKitFallback}
+              fillParent={false}
+              surfaceLabel="Watch-Party Live"
+              containerStyle={styles.watchPartyLiveKitCardSurfaceInner}
+            />
+          </View>
+        </View>
+      ) : null}
       {renderParticipantPanel(true, true)}
     </View>
   );
@@ -5340,6 +5408,50 @@ const styles = StyleSheet.create({
     color: "#FFF5F7",
     fontSize: 11,
     fontWeight: "900",
+  },
+  watchPartyLiveKitCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(132, 205, 255, 0.24)",
+    backgroundColor: "rgba(8, 12, 22, 0.86)",
+    padding: 10,
+    gap: 8,
+  },
+  watchPartyLiveKitCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  watchPartyLiveKitCardCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  watchPartyLiveKitCardKicker: {
+    color: "#8FD7FF",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  watchPartyLiveKitCardTitle: {
+    color: "#F4F7FF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  watchPartyLiveKitCardRole: {
+    color: "#D9EEF9",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  watchPartyLiveKitCardSurface: {
+    height: 132,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#05070E",
+  },
+  watchPartyLiveKitCardSurfaceInner: {
+    flex: 1,
   },
   titleParticipantFeedScroll: {
     maxHeight: 228,

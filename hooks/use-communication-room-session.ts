@@ -3,7 +3,7 @@ import { Audio } from "expo-av";
 import { useCameraPermissions } from "expo-camera";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
-import type { MediaStream } from "react-native-webrtc";
+import type { MediaStream } from "@livekit/react-native-webrtc";
 
 import { trackEvent } from "../_lib/analytics";
 import {

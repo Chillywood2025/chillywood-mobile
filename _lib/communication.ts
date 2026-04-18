@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import type { MediaStream } from "react-native-webrtc";
+import type { MediaStream } from "@livekit/react-native-webrtc";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { readCreatorPermissions, sanitizeCreatorRoomAccessRule } from "./monetization";
@@ -152,7 +152,7 @@ export type CreateCommunicationRoomResult =
       };
     };
 
-type RTCModule = typeof import("react-native-webrtc");
+type RTCModule = typeof import("@livekit/react-native-webrtc");
 
 let cachedRTCModule: RTCModule | null | undefined;
 let cachedCommunicationIceServers: CommunicationIceServer[] | null = null;
@@ -282,7 +282,7 @@ export const getCommunicationRTCModule = (): RTCModule | null => {
   if (cachedRTCModule !== undefined) return cachedRTCModule;
 
   try {
-    cachedRTCModule = require("react-native-webrtc") as RTCModule;
+    cachedRTCModule = require("@livekit/react-native-webrtc") as RTCModule;
   } catch {
     cachedRTCModule = null;
   }

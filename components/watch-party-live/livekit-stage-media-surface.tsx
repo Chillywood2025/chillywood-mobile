@@ -1,25 +1,32 @@
-import {
+import "../../_lib/livekit/dom-exception-polyfill";
+
+import { Track } from "livekit-client";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+
+import { reportRuntimeError } from "../../_lib/logger";
+import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
+
+const {
   AudioSession,
   LiveKitRoom,
   VideoTrack,
   isTrackReference,
   useConnectionState,
   useTracks,
-} from "@livekit/react-native";
-import { Track } from "livekit-client";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-
-import { reportRuntimeError } from "../../_lib/logger";
-import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
+} = require("@livekit/react-native") as typeof import("@livekit/react-native");
 
 type LiveKitStageMediaSurfaceProps = {
   joinContract: LiveKitTokenReady;
   onFallback: (reason: "connection_timeout" | "disconnected" | "room_error") => void;
+  containerStyle?: StyleProp<ViewStyle>;
+  fillParent?: boolean;
+  surfaceLabel?: string;
 };
 
 type LiveKitStageMediaContentProps = {
   joinContract: LiveKitTokenReady;
+  surfaceLabel: string;
 };
 
 const LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
@@ -30,7 +37,7 @@ const toConnectionLabel = (connectionState: unknown) => {
   return normalized.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
-function LiveKitStageMediaContent({ joinContract }: LiveKitStageMediaContentProps) {
+function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMediaContentProps) {
   const connectionState = useConnectionState();
   const tracks = useTracks(
     [
@@ -62,7 +69,7 @@ function LiveKitStageMediaContent({ joinContract }: LiveKitStageMediaContentProp
     <View style={styles.placeholderSurface}>
       {isConnecting ? <ActivityIndicator color="#FFFFFF" /> : null}
       <Text style={styles.placeholderTitle}>
-        {isConnecting ? "Connecting Live Stage…" : "Live Stage connected"}
+        {isConnecting ? `Connecting ${surfaceLabel}…` : `${surfaceLabel} connected`}
       </Text>
       <Text style={styles.placeholderBody}>
         {isConnecting
@@ -77,6 +84,9 @@ function LiveKitStageMediaContent({ joinContract }: LiveKitStageMediaContentProp
 export function LiveKitStageMediaSurface({
   joinContract,
   onFallback,
+  containerStyle,
+  fillParent = true,
+  surfaceLabel = "Live Stage",
 }: LiveKitStageMediaSurfaceProps) {
   const fallbackTriggeredRef = useRef(false);
   const [didConnectOnce, setDidConnectOnce] = useState(false);
@@ -138,7 +148,7 @@ export function LiveKitStageMediaSurface({
   }, [didConnectOnce, triggerFallback]);
 
   return (
-    <View style={styles.surface} pointerEvents="none">
+    <View style={[styles.surface, fillParent && styles.surfaceFill, containerStyle]} pointerEvents="none">
       <LiveKitRoom
         serverUrl={joinContract.serverUrl}
         token={joinContract.participantToken}
@@ -160,7 +170,7 @@ export function LiveKitStageMediaSurface({
           triggerFallback("room_error", error);
         }}
       >
-        <LiveKitStageMediaContent joinContract={joinContract} />
+        <LiveKitStageMediaContent joinContract={joinContract} surfaceLabel={surfaceLabel} />
       </LiveKitRoom>
     </View>
   );
@@ -168,8 +178,11 @@ export function LiveKitStageMediaSurface({
 
 const styles = StyleSheet.create({
   surface: {
-    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
     backgroundColor: "#05070E",
+  },
+  surfaceFill: {
+    ...StyleSheet.absoluteFillObject,
   },
   placeholderSurface: {
     flex: 1,

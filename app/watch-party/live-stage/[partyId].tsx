@@ -22,6 +22,7 @@ import {
     View,
     type ImageSourcePropType,
 } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../../_data/titles";
 import {
@@ -31,9 +32,9 @@ import {
 } from "../../../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
 import {
-  requestLiveKitParticipantToken,
   type LiveKitTokenReady,
 } from "../../../_lib/livekit/token-contract";
+import { prepareLiveKitJoinBoundary } from "../../../_lib/livekit/join-boundary";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
 import { isLiveKitRuntimeConfigured } from "../../../_lib/runtimeConfig";
@@ -154,6 +155,7 @@ const RTCView = getCommunicationRTCModule()?.RTCView as React.ComponentType<{
 
 export default function WatchPartyLiveStageScreen() {
   const safeAreaInsets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { isLoading: authLoading, isSignedIn } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const { partyId: partyIdParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{ partyId?: string; mode?: string; source?: string }>();
@@ -558,7 +560,7 @@ export default function WatchPartyLiveStageScreen() {
   }, [buildStageParticipantsFromPresence, canUseBetaStage, partyId, partyIdParam, refreshStageSnapshot, syncStageSnapshot]);
 
   useEffect(() => {
-    if (!canUseBetaStage || !partyId || !room?.hostUserId || liveSurface === "room" || communicationRoomId) return;
+    if (!canUseBetaStage || !isFocused || !partyId || !room?.hostUserId || liveSurface === "room" || communicationRoomId) return;
 
     let cancelled = false;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -598,7 +600,7 @@ export default function WatchPartyLiveStageScreen() {
         clearTimeout(retryTimeout);
       }
     };
-  }, [canUseBetaStage, communicationRoomId, initialStageMode, isHost, liveSurface, partyId, room?.hostUserId, room?.roomCode]);
+  }, [canUseBetaStage, communicationRoomId, initialStageMode, isFocused, isHost, liveSurface, partyId, room?.hostUserId, room?.roomCode]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -660,13 +662,14 @@ export default function WatchPartyLiveStageScreen() {
   const resolvedCurrentUsername = resolveIdentityName(myUsername, "You");
   const isLiveRoomSurface = liveSurface === "room";
   const liveKitFoundationEnabled = isLiveKitRuntimeConfigured();
-  const shouldRenderLiveKitStage = !isLiveRoomSurface && Platform.OS !== "web" && !!liveKitJoinContract;
+  const canOwnActiveStageSurface = isFocused && !isLiveRoomSurface;
+  const shouldRenderLiveKitStage = canOwnActiveStageSurface && Platform.OS !== "web" && !!liveKitJoinContract;
   const {
     localStreamURL,
     participants: stageMediaParticipants,
   } = useCommunicationRoomSession({
     roomId: communicationRoomId,
-    enabled: canUseBetaStage && !isLiveRoomSurface && !!communicationRoomId && !shouldRenderLiveKitStage,
+    enabled: canUseBetaStage && canOwnActiveStageSurface && !!communicationRoomId && !shouldRenderLiveKitStage,
     analyticsContext: {
       surface: "live-room",
       role: isHost ? "host" : "viewer",
@@ -963,6 +966,7 @@ export default function WatchPartyLiveStageScreen() {
   }, []);
 
   useEffect(() => {
+    if (!canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
     debugLog("live-stage", "mic setup start");
     const currentUserId = String(myUserId || "").trim();
 
@@ -1081,7 +1085,7 @@ export default function WatchPartyLiveStageScreen() {
         recording.stopAndUnloadAsync().catch(() => {});
       }
     };
-  }, [myUserId, emitParticipantSpeaking]);
+  }, [canOwnActiveStageSurface, shouldRenderLiveKitStage, myUserId, emitParticipantSpeaking]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -1162,6 +1166,12 @@ export default function WatchPartyLiveStageScreen() {
     ? "Access, reactions, and capture expectations belong here before you continue into the actual live presentation."
     : `Current room defaults are ${liveRoomJoinLabel.toLowerCase()}, ${liveRoomReactionsLabel.toLowerCase()}, and ${liveRoomCaptureLabel.toLowerCase()}.`;
   const liveRoomEntryLabel = isHost ? "Continue to Live Stage" : "Join Live Stage";
+  const liveKitParticipantRole = isHost
+    ? "host"
+    : participantStateById[trackedUserId]?.role === "speaker"
+      || membershipMapRef.current[trackedUserId]?.canSpeak
+      ? "speaker"
+      : "viewer";
   const stageModeTitle = isLiveFirstMode
     ? "Host-led live focus"
     : "Shared watch moment";
@@ -1217,7 +1227,7 @@ export default function WatchPartyLiveStageScreen() {
   const inviteSheetAutolaunchedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!__DEV__ || isLiveRoomSurface) return;
+    if (!__DEV__ || !canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
     debugLog("live-stage", "stage media binding", {
       communicationRoomId,
       heroUserId: heroParticipant?.userId ?? "",
@@ -1243,7 +1253,8 @@ export default function WatchPartyLiveStageScreen() {
     heroMediaParticipant?.cameraOn,
     heroMediaParticipant?.streamURL,
     heroParticipant?.userId,
-    isLiveRoomSurface,
+    canOwnActiveStageSurface,
+    shouldRenderLiveKitStage,
     stageMediaParticipants,
   ]);
 
@@ -1312,12 +1323,12 @@ export default function WatchPartyLiveStageScreen() {
 
   const onEnterLiveStage = useCallback(async () => {
     if (liveKitFoundationEnabled && partyId) {
-      const joinResult = await requestLiveKitParticipantToken({
+      const joinResult = await prepareLiveKitJoinBoundary({
         surface: "live-stage",
         roomName: partyId,
         participantIdentity: trackedUserId,
         participantName: resolvedCurrentUsername,
-        participantRole: isHost ? "host" : "viewer",
+        participantRole: liveKitParticipantRole,
         metadata: {
           roomCode: room?.roomCode ?? null,
           stageMode,
@@ -1358,7 +1369,7 @@ export default function WatchPartyLiveStageScreen() {
     setLiveSurface("stage");
   }, [
     closeStageOverlayPanels,
-    isHost,
+    liveKitParticipantRole,
     liveKitFoundationEnabled,
     partyId,
     resolvedCurrentUsername,
