@@ -8,6 +8,11 @@ export type RevenueCatRuntimeConfig = {
   iosPublicSdkKey: string;
 };
 
+export type LiveKitRuntimeConfig = {
+  serverUrl: string;
+  tokenEndpoint: string;
+};
+
 export type LegalRuntimeConfig = {
   privacyPolicyUrl: string;
   termsOfServiceUrl: string;
@@ -22,6 +27,7 @@ export type RuntimeConfig = {
   betaEnvironment: RuntimeEnvironment;
   legal: LegalRuntimeConfig;
   revenueCat: RevenueCatRuntimeConfig;
+  livekit: LiveKitRuntimeConfig;
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => (
@@ -61,6 +67,7 @@ export function getRuntimeConfig(): RuntimeConfig {
   const runtimeExtra = readRuntimeExtra();
   const legalExtra = isPlainObject(runtimeExtra.legal) ? runtimeExtra.legal : {};
   const revenueCatExtra = isPlainObject(runtimeExtra.revenueCat) ? runtimeExtra.revenueCat : {};
+  const liveKitExtra = isPlainObject(runtimeExtra.livekit) ? runtimeExtra.livekit : {};
 
   cachedConfig = {
     supabaseUrl: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_URL || runtimeExtra.supabaseUrl),
@@ -94,6 +101,14 @@ export function getRuntimeConfig(): RuntimeConfig {
       ),
       iosPublicSdkKey: normalizeText(
         process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY || revenueCatExtra.iosPublicSdkKey,
+      ),
+    },
+    livekit: {
+      serverUrl: normalizeText(
+        process.env.EXPO_PUBLIC_LIVEKIT_URL || liveKitExtra.serverUrl,
+      ),
+      tokenEndpoint: normalizeText(
+        process.env.EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT || liveKitExtra.tokenEndpoint,
       ),
     },
   };
@@ -132,6 +147,14 @@ export function getSupportRoutePath(config = getRuntimeConfig()) {
 
 export function getRuntimeLegalConfig(config = getRuntimeConfig()) {
   return config.legal;
+}
+
+export function getRuntimeLiveKitConfig(config = getRuntimeConfig()) {
+  return config.livekit;
+}
+
+export function isLiveKitRuntimeConfigured(config = getRuntimeConfig()) {
+  return !!config.livekit.serverUrl && !!config.livekit.tokenEndpoint;
 }
 
 export function isBetaOperatorIdentity(identity?: {
