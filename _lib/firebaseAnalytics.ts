@@ -1,7 +1,7 @@
-import analytics from "@react-native-firebase/analytics";
 import { Platform } from "react-native";
 
 import type { AnalyticsPayload } from "./analytics";
+import { ensureFirebaseDefaultApp } from "./firebaseApp";
 
 const sanitizeAnalyticsEventName = (value: string) => {
   const normalized = String(value ?? "")
@@ -29,28 +29,42 @@ const sanitizeAnalyticsPayload = (payload?: AnalyticsPayload) => {
 
 const canUseFirebaseAnalytics = () => Platform.OS !== "web";
 
+let cachedAnalyticsModule: typeof import("@react-native-firebase/analytics").default | null = null;
+
 const maybeWarn = (scope: string, error: unknown) => {
   if (!__DEV__) return;
   const message = error instanceof Error ? error.message : String(error ?? "Unknown error");
   console.warn(`[firebase-analytics] ${scope}: ${message}`);
 };
 
+const getAnalyticsModule = () => {
+  if (!canUseFirebaseAnalytics()) return null;
+  if (!ensureFirebaseDefaultApp()) return null;
+
+  cachedAnalyticsModule ??=
+    require("@react-native-firebase/analytics").default as typeof import("@react-native-firebase/analytics").default;
+
+  return cachedAnalyticsModule;
+};
+
 export async function bootstrapFirebaseAnalytics() {
-  if (!canUseFirebaseAnalytics()) return;
+  const analyticsModule = getAnalyticsModule();
+  if (!analyticsModule) return;
 
   try {
-    await analytics().setAnalyticsCollectionEnabled(true);
+    await analyticsModule().setAnalyticsCollectionEnabled(true);
   } catch (error) {
     maybeWarn("bootstrap", error);
   }
 }
 
 export async function identifyFirebaseAnalyticsUser(identity: { id: string; email?: string | null }) {
-  if (!canUseFirebaseAnalytics()) return;
+  const analyticsModule = getAnalyticsModule();
+  if (!analyticsModule) return;
 
   try {
-    await analytics().setUserId(identity.id);
-    await analytics().setUserProperties({
+    await analyticsModule().setUserId(identity.id);
+    await analyticsModule().setUserProperties({
       email: identity.email ?? null,
     });
   } catch (error) {
@@ -59,24 +73,26 @@ export async function identifyFirebaseAnalyticsUser(identity: { id: string; emai
 }
 
 export async function clearFirebaseAnalyticsUser() {
-  if (!canUseFirebaseAnalytics()) return;
+  const analyticsModule = getAnalyticsModule();
+  if (!analyticsModule) return;
 
   try {
-    await analytics().setUserId(null);
-    await analytics().setUserProperties({
+    await analyticsModule().setUserId(null);
+    await analyticsModule().setUserProperties({
       email: null,
     });
-    await analytics().resetAnalyticsData();
+    await analyticsModule().resetAnalyticsData();
   } catch (error) {
     maybeWarn("clear-user", error);
   }
 }
 
 export async function trackFirebaseAnalyticsScreen(screenName: string) {
-  if (!canUseFirebaseAnalytics()) return;
+  const analyticsModule = getAnalyticsModule();
+  if (!analyticsModule) return;
 
   try {
-    await analytics().logScreenView({
+    await analyticsModule().logScreenView({
       screen_name: screenName,
       screen_class: "ExpoRouterScreen",
     });
@@ -86,10 +102,11 @@ export async function trackFirebaseAnalyticsScreen(screenName: string) {
 }
 
 export async function trackFirebaseAnalyticsEvent(eventName: string, payload?: AnalyticsPayload) {
-  if (!canUseFirebaseAnalytics()) return;
+  const analyticsModule = getAnalyticsModule();
+  if (!analyticsModule) return;
 
   try {
-    await analytics().logEvent(
+    await analyticsModule().logEvent(
       sanitizeAnalyticsEventName(eventName),
       sanitizeAnalyticsPayload(payload),
     );
