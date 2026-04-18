@@ -4205,7 +4205,7 @@ export default function PlayerScreen() {
         {!inWatchParty && !isLiveMode && isStandaloneFullscreen ? null : (
         <View style={[styles.topSection, styles.topSectionFramework, isSharedPartyPlayback && styles.topSectionWatchParty]}>
           <Text style={[styles.kicker, isSharedPartyPlayback && styles.kickerWatchParty]}>
-            {isSharedPartyPlayback ? "CHI&apos;LLYWOOD · WATCH-PARTY LIVE" : "CHI&apos;LLYWOOD · PLAYER"}
+            {isSharedPartyPlayback ? "CHI'LLYWOOD · WATCH-PARTY LIVE" : "CHI'LLYWOOD · PLAYER"}
           </Text>
           <Text style={[styles.header, isSharedPartyPlayback && styles.headerWatchParty]} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
           {inWatchParty && isLiveMode ? <Text style={styles.liveModeTopLabel}>LIVE SESSION</Text> : null}

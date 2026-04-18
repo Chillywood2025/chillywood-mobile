@@ -2155,7 +2155,7 @@ export default function WatchPartyLiveStageScreen() {
           ]}
           pointerEvents={stageOverlayVisible ? "box-none" : "none"}
         >
-        <View style={[styles.stageTopChrome, { top: safeAreaInsets.top + 10 }]} pointerEvents="box-none">
+        <View style={[styles.stageTopChrome, { top: safeAreaInsets.top + 50 }]} pointerEvents="box-none">
           <View style={styles.stageTopChromeRow}>
             <View style={styles.stageTopChromeCopy}>
               <Text style={styles.stageSurfaceKicker}>LIVE STAGE</Text>
@@ -2268,7 +2268,7 @@ export default function WatchPartyLiveStageScreen() {
 
         </View>
         {isHybridMode ? (
-          <View style={[styles.stageHybridDeck, { top: safeAreaInsets.top + 96 }]} pointerEvents="box-none">
+          <View style={[styles.stageHybridDeck, { top: safeAreaInsets.top + 140 }]} pointerEvents="box-none">
             <View pointerEvents="auto" style={styles.stageHybridCommunityCard}>
               <View style={styles.stageCommunityHeader}>
                 <View style={styles.stageCommunityHeaderLeft}>
