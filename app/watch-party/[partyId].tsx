@@ -2,6 +2,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 
 
 
@@ -45,6 +46,7 @@ import {
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
+import { prepareLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
 import {
     reportDebugError,
     reportDebugParty,
@@ -163,6 +165,7 @@ const getSafeRoomTitleLabel = (titleName: string | null, room: WatchPartyState, 
 
 export default function WatchPartyRoomScreen() {
   const safeAreaInsets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { isLoading: authLoading, isSignedIn } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const { partyId: partyIdParam, titleId: titleIdParam, roomCode: roomCodeParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{
@@ -1047,7 +1050,7 @@ export default function WatchPartyRoomScreen() {
   }, [myUserId, cameraPermission, requestCameraPermission, isNativeCameraPlatform]);
 
   useEffect(() => {
-    if (!myUserId) return;
+    if (!myUserId || !isFocused) return;
 
     let cancelled = false;
 
@@ -1163,7 +1166,7 @@ export default function WatchPartyRoomScreen() {
         recording.stopAndUnloadAsync().catch(() => {});
       }
     };
-  }, [myUserId, emitParticipantSpeaking]);
+  }, [isFocused, myUserId, emitParticipantSpeaking]);
 
   // ── Share / invite ───────────────────────────────────────────────────────────
   const displayRoomCode = String(room?.roomCode ?? "").trim().toUpperCase() || roomCodeHint;
@@ -1289,6 +1292,48 @@ export default function WatchPartyRoomScreen() {
       return;
     }
 
+    const participantIdentity = String(myUserIdRef.current ?? "").trim() || "anon";
+    const participantName = resolveIdentityName(
+      myProfileUsernameRef.current,
+      myUsernameRef.current,
+      "Guest",
+    );
+    const participantRole = myRoleRef.current === "host" ? "host" : "speaker";
+
+    const joinResult = await prepareLiveKitJoinBoundary({
+      surface: "watch-party-live",
+      roomName: nextPartyId,
+      participantIdentity,
+      participantName,
+      participantRole,
+      metadata: {
+        roomCode: room?.roomCode ?? null,
+        titleId: targetTitleId,
+        source: "party-room-watch-party-live",
+      },
+    });
+
+    if (joinResult.status === "ready") {
+      debugLog("livekit", "prepared watch-party-live join contract", {
+        roomName: joinResult.roomName,
+        endpoint: joinResult.endpoint,
+        participantRole: joinResult.participantRole,
+        requestedGrants: joinResult.requestedGrants,
+      });
+    } else {
+      debugLog("livekit", "watch-party-live join contract unavailable", {
+        reason: joinResult.reason,
+        roomName: joinResult.roomName,
+        endpoint: joinResult.endpoint,
+      });
+      if (joinResult.reason === "request_failed" || joinResult.reason === "invalid_response") {
+        reportRuntimeError("livekit-watch-party-contract", new Error(joinResult.message), {
+          reason: joinResult.reason,
+          roomName: joinResult.roomName,
+        });
+      }
+    }
+
     debugLog("watch-party", "open player", { targetTitleId });
     router.push({
       pathname: "/player/[id]",
@@ -1297,7 +1342,14 @@ export default function WatchPartyRoomScreen() {
         partyId: nextPartyId,
       },
     });
-  }, [room?.partyId, room?.titleId, titleIdHint, partyId, router]);
+  }, [
+    partyId,
+    room?.partyId,
+    room?.roomCode,
+    room?.titleId,
+    router,
+    titleIdHint,
+  ]);
 
   // ── Connection display helpers ───────────────────────────────────────────────
   const connLabel: Record<ConnState, string> = {

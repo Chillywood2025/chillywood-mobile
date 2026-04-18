@@ -44,6 +44,9 @@ import {
     type ContentAccessDecision,
     type TitleAccessRule,
 } from "../../_lib/monetization";
+import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
+import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
+import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { supabase } from "../../_lib/supabase";
 import {
@@ -74,6 +77,7 @@ import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../compo
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
+import { LiveKitStageMediaSurface } from "../../components/watch-party-live/livekit-stage-media-surface";
 import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/_room-shared";
 
 const ACCENT = "#DC143C";
@@ -419,6 +423,7 @@ export default function PlayerScreen() {
   const [upNextCanceled, setUpNextCanceled] = useState(false);
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
+  const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
   const [partyUserId, setPartyUserId] = useState("");
   const [, setPartyViewerCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(1);
@@ -970,6 +975,7 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!inWatchParty || !partyId) {
+      setWatchPartyLiveKitJoinContract(null);
       setPartyViewerCount(0);
       setViewerCount(1);
       setPartyParticipantPreview([]);
@@ -2828,11 +2834,49 @@ export default function PlayerScreen() {
     () => liveBubbleParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
     [liveBubbleParticipants],
   );
+  const currentWatchPartyParticipantName = useMemo(
+    () => liveBubbleParticipants.find((participant) => participant.id === trackedUserId)?.name || "You",
+    [liveBubbleParticipants, trackedUserId],
+  );
+  const shouldRenderWatchPartyLiveKit = inWatchParty && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
     if (livePrimarySpeakers.length === 1) return `🎤 ${livePrimarySpeakers[0].name} speaking`;
     return `🎤 ${livePrimarySpeakers[0].name} +1 speaking`;
   }, [livePrimarySpeakers]);
+
+  useEffect(() => {
+    if (!inWatchParty || !partyId || Platform.OS === "web") {
+      setWatchPartyLiveKitJoinContract(null);
+      return;
+    }
+
+    if (watchPartyLiveKitJoinContract?.roomName === partyId) return;
+    if (!trackedUserId || trackedUserId === "anon") return;
+
+    const preparedContract = consumePreparedLiveKitJoinBoundary({
+      surface: "watch-party-live",
+      roomName: partyId,
+      participantIdentity: trackedUserId,
+    });
+    if (!preparedContract) return;
+
+    setWatchPartyLiveKitJoinContract(preparedContract);
+    debugLog("livekit", "consumed watch-party-live join contract", {
+      roomName: preparedContract.roomName,
+      endpoint: preparedContract.endpoint,
+      participantRole: preparedContract.participantRole,
+      requestedGrants: preparedContract.requestedGrants,
+    });
+  }, [inWatchParty, partyId, trackedUserId, watchPartyLiveKitJoinContract?.roomName]);
+
+  const onWatchPartyLiveKitFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
+    debugLog("livekit", "falling back to legacy watch-party-live playback path", {
+      reason,
+      roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
+    });
+    setWatchPartyLiveKitJoinContract(null);
+  }, [partyId, watchPartyLiveKitJoinContract?.roomName]);
 
   useEffect(() => {
     if (!activeParticipantId) return;
@@ -3557,7 +3601,12 @@ export default function PlayerScreen() {
           const pressScale = participantPressScaleMapRef.current[participant.id] ?? 1;
           const joinScale = participantJoinScaleMapRef.current[participant.id] ?? 1;
           const isOnlineActive = isSpeaking || isActive;
-          const showLocalCameraPreview = Platform.OS !== "web" && isCurrentUser && !!cameraPermission?.granted;
+          const showLocalCameraPreview = (
+            Platform.OS !== "web"
+            && isCurrentUser
+            && !!cameraPermission?.granted
+            && !shouldRenderWatchPartyLiveKit
+          );
           const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
           const initials = getInitials(participant.name);
 
@@ -3909,6 +3958,41 @@ export default function PlayerScreen() {
           ) : null}
         </View>
       </View>
+      <View style={styles.watchPartySocialShell}>
+        <View style={styles.watchPartySocialMetaRow}>
+          <View style={styles.watchPartySocialMetaPill}>
+            <Text style={styles.watchPartySocialMetaText}>{watchPartyAudienceLabel || "Shared playback syncing"}</Text>
+          </View>
+          {watchPartyPreviewLabel ? (
+            <View style={styles.watchPartySocialMetaPill}>
+              <Text style={styles.watchPartySocialMetaText} numberOfLines={1}>{watchPartyPreviewLabel}</Text>
+            </View>
+          ) : null}
+          {watchPartyLiveKitJoinContract ? (
+            <View style={[styles.watchPartySocialMetaPill, styles.watchPartySocialMetaPillRole]}>
+              <Text style={styles.watchPartySocialRoleText}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
+            </View>
+          ) : null}
+        </View>
+        {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
+          <View style={styles.watchPartySocialMediaFrame}>
+            <LiveKitStageMediaSurface
+              joinContract={watchPartyLiveKitJoinContract}
+              onFallback={onWatchPartyLiveKitFallback}
+              fillParent={false}
+              surfaceLabel="Watch-Party Live"
+              containerStyle={styles.watchPartySocialMediaFrameInner}
+            />
+          </View>
+        ) : (
+          <View style={styles.watchPartySocialPlaceholder}>
+            <Text style={styles.watchPartySocialPlaceholderKicker}>SHARED PLAYER</Text>
+            <Text style={styles.watchPartySocialPlaceholderBody}>
+              Shared party video syncs here after Watch-Party Live reconnects to the room.
+            </Text>
+          </View>
+        )}
+      </View>
 
       <Animated.View
         pointerEvents={controlsVisible ? "auto" : "none"}
@@ -3979,7 +4063,6 @@ export default function PlayerScreen() {
           </View>
         ) : null}
       </Animated.View>
-
       {renderParticipantPanel(true, true)}
     </View>
   );
@@ -6091,6 +6174,125 @@ const styles = StyleSheet.create({
     color: "#FFF5F7",
     fontSize: 11,
     fontWeight: "900",
+  },
+  watchPartyLiveKitCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(132, 205, 255, 0.24)",
+    backgroundColor: "rgba(8, 12, 22, 0.86)",
+    padding: 10,
+    gap: 8,
+  },
+  watchPartyLiveKitCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  watchPartyLiveKitCardCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  watchPartyLiveKitCardKicker: {
+    color: "#8FD7FF",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  watchPartyLiveKitCardTitle: {
+    color: "#F4F7FF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  watchPartyLiveKitCardRole: {
+    color: "#D9EEF9",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  watchPartyLiveKitCardSurface: {
+    height: 132,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#05070E",
+  },
+  watchPartyLiveKitCardSurfaceInner: {
+    flex: 1,
+  },
+  watchPartySocialShell: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(8, 10, 18, 0.88)",
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 8,
+    shadowColor: "#000000",
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  watchPartySocialMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+  },
+  watchPartySocialMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: "100%",
+  },
+  watchPartySocialMetaPillRole: {
+    borderColor: "rgba(220,20,60,0.24)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+  },
+  watchPartySocialMetaText: {
+    color: "#DCE4F6",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  watchPartySocialRoleText: {
+    color: "#FFF5F7",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  watchPartySocialMediaFrame: {
+    height: 152,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#05070E",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  watchPartySocialMediaFrameInner: {
+    flex: 1,
+  },
+  watchPartySocialPlaceholder: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(4, 6, 12, 0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    gap: 6,
+  },
+  watchPartySocialPlaceholderKicker: {
+    color: "#F0C8D2",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  watchPartySocialPlaceholderBody: {
+    color: "#E7EBF6",
+    fontSize: 12,
+    lineHeight: 18,
   },
   titleParticipantFeedScroll: {
     maxHeight: 228,

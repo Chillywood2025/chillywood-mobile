@@ -7,13 +7,16 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeRuntimeEnvironment = (value: unknown) => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
 );
+const CONFIG_DIR = process.cwd();
+const DEPLOYED_LIVEKIT_SERVER_URL = "wss://chillywood-realtime-eu251vsu.livekit.cloud";
+const DEPLOYED_LIVEKIT_TOKEN_ENDPOINT = "https://bmkkhihfbmsnnmcqkoly.supabase.co/functions/v1/livekit-token";
 
 const resolveExistingFile = (...candidates: Array<string | undefined>) => {
   for (const candidate of candidates) {
     const normalized = normalizeText(candidate);
     if (!normalized) continue;
 
-    const absolutePath = path.resolve(__dirname, normalized);
+    const absolutePath = path.resolve(CONFIG_DIR, normalized);
     if (fs.existsSync(absolutePath)) return normalized;
   }
 
@@ -69,6 +72,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ? existingRuntime.communication
       : {}
   ) as Record<string, unknown>;
+  const existingLiveKit = (
+    existingRuntime.livekit && typeof existingRuntime.livekit === "object" && !Array.isArray(existingRuntime.livekit)
+      ? existingRuntime.livekit
+      : {}
+  ) as Record<string, unknown>;
   const existingLegal = (
     existingRuntime.legal && typeof existingRuntime.legal === "object" && !Array.isArray(existingRuntime.legal)
       ? existingRuntime.legal
@@ -95,6 +103,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
     },
     plugins: mergePlugins(base.plugins, [
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "@react-native-firebase/perf",
@@ -162,6 +172,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           ),
           iosPublicSdkKey: normalizeText(
             process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY || existingRevenueCat.iosPublicSdkKey,
+          ),
+        },
+        livekit: {
+          ...existingLiveKit,
+          serverUrl: normalizeText(
+            process.env.EXPO_PUBLIC_LIVEKIT_URL || existingLiveKit.serverUrl || DEPLOYED_LIVEKIT_SERVER_URL,
+          ),
+          tokenEndpoint: normalizeText(
+            process.env.EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT || existingLiveKit.tokenEndpoint || DEPLOYED_LIVEKIT_TOKEN_ENDPOINT,
           ),
         },
       },

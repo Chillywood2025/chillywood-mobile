@@ -19,6 +19,7 @@ import {
 } from "../_lib/firebaseCrashlytics";
 import { bootstrapFirebasePerformance } from "../_lib/firebasePerformance";
 import { bootstrapFirebaseRemoteConfig, getRemoteConfigBoolean } from "../_lib/firebaseRemoteConfig";
+import { bootstrapLiveKitFoundation } from "../_lib/livekit/bootstrap";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
@@ -76,6 +77,7 @@ function FirebaseRuntimeBridge() {
   };
 
   useEffect(() => {
+    bootstrapLiveKitFoundation();
     void bootstrapFirebaseAnalytics();
     void bootstrapFirebaseCrashlytics();
     void bootstrapFirebasePerformance();
