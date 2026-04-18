@@ -2954,7 +2954,12 @@ export default function PlayerScreen() {
           const pressScale = participantPressScaleMapRef.current[participant.id] ?? 1;
           const joinScale = participantJoinScaleMapRef.current[participant.id] ?? 1;
           const isOnlineActive = isSpeaking || isActive;
-          const showLocalCameraPreview = Platform.OS !== "web" && isCurrentUser && !!cameraPermission?.granted;
+          const showLocalCameraPreview = (
+            Platform.OS !== "web"
+            && isCurrentUser
+            && !!cameraPermission?.granted
+            && !shouldRenderWatchPartyLiveKit
+          );
           const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
           const initials = getInitials(participant.name);
 
