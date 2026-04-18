@@ -38,6 +38,10 @@ const toConnectionLabel = (connectionState: unknown) => {
   return normalized.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
+const getParticipantLabel = (identity: string, currentIdentity: string) => (
+  identity === currentIdentity ? "You" : "Guest"
+);
+
 function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMediaContentProps) {
   const connectionState = useConnectionState();
   const {
@@ -54,12 +58,13 @@ function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMe
     ],
     { onlySubscribed: true },
   );
-  const primaryRemoteTrack = useMemo(
-    () => tracks.find((trackRef) => (
+  const remoteTracks = useMemo(
+    () => tracks.filter((trackRef) => (
       isTrackReference(trackRef) && trackRef.participant.identity !== localParticipant.identity
-    )) ?? null,
+    )),
     [localParticipant.identity, tracks],
   );
+  const primaryRemoteTrack = remoteTracks[0] ?? null;
   const localCameraTrackRef = useMemo(() => {
     if (!shouldPublishLocalCamera || !cameraTrack) return null;
     return {
@@ -68,8 +73,18 @@ function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMe
       source: Track.Source.Camera,
     };
   }, [cameraTrack, localParticipant, shouldPublishLocalCamera]);
-  const primaryTrack = localCameraTrackRef ?? primaryRemoteTrack;
-  const isShowingLocalPreview = !!localCameraTrackRef && primaryTrack?.participant.identity === localParticipant.identity;
+  const primaryTrack = useMemo(
+    () => primaryRemoteTrack ?? localCameraTrackRef,
+    [localCameraTrackRef, primaryRemoteTrack],
+  );
+  const secondaryTrack = useMemo(() => {
+    if (primaryRemoteTrack && localCameraTrackRef) return localCameraTrackRef;
+    if (!primaryRemoteTrack && remoteTracks.length > 1) return remoteTracks[1] ?? null;
+    return null;
+  }, [localCameraTrackRef, primaryRemoteTrack, remoteTracks]);
+  const isShowingLocalPreview = !!primaryTrack && primaryTrack.participant.identity === localParticipant.identity;
+  const isShowingSecondaryLocalPreview = !!secondaryTrack && secondaryTrack.participant.identity === localParticipant.identity;
+  const visibleTrackCount = (primaryTrack ? 1 : 0) + (secondaryTrack ? 1 : 0);
 
   useEffect(() => {
     debugLog("livekit", "stage media publish state", {
@@ -80,6 +95,8 @@ function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMe
       isCameraEnabled,
       hasLocalCameraTrack: !!cameraTrack,
       hasRemoteTrack: !!primaryRemoteTrack,
+      remoteTrackCount: remoteTracks.length,
+      visibleTrackCount,
       connectionState: String(connectionState ?? ""),
     });
   }, [
@@ -89,18 +106,44 @@ function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMe
     joinContract.participantRole,
     joinContract.roomName,
     primaryRemoteTrack,
+    remoteTracks.length,
     shouldPublishLocalCamera,
     surfaceLabel,
+    visibleTrackCount,
   ]);
 
   if (primaryTrack && isTrackReference(primaryTrack)) {
     return (
-      <VideoTrack
-        trackRef={primaryTrack}
-        style={StyleSheet.absoluteFillObject}
-        objectFit="cover"
-        mirror={isShowingLocalPreview}
-      />
+      <View style={styles.videoSurfaceStack}>
+        <VideoTrack
+          trackRef={primaryTrack}
+          style={StyleSheet.absoluteFillObject}
+          objectFit="cover"
+          mirror={isShowingLocalPreview}
+        />
+        <View pointerEvents="none" style={styles.videoOverlay}>
+          <View style={styles.videoBadge}>
+            <Text style={styles.videoBadgeText}>
+              {getParticipantLabel(primaryTrack.participant.identity, localParticipant.identity)}
+            </Text>
+          </View>
+        </View>
+        {secondaryTrack && isTrackReference(secondaryTrack) ? (
+          <View style={styles.secondaryVideoWrap} pointerEvents="none">
+            <VideoTrack
+              trackRef={secondaryTrack}
+              style={styles.secondaryVideo}
+              objectFit="cover"
+              mirror={isShowingSecondaryLocalPreview}
+            />
+            <View style={styles.secondaryVideoBadge}>
+              <Text style={styles.secondaryVideoBadgeText}>
+                {getParticipantLabel(secondaryTrack.participant.identity, localParticipant.identity)}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+      </View>
     );
   }
 
@@ -245,6 +288,66 @@ const styles = StyleSheet.create({
   },
   surfaceFill: {
     ...StyleSheet.absoluteFillObject,
+  },
+  videoSurfaceStack: {
+    flex: 1,
+    backgroundColor: "#05070E",
+  },
+  videoOverlay: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+  },
+  videoBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(4,8,20,0.66)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  videoBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  secondaryVideoWrap: {
+    position: "absolute",
+    right: 14,
+    bottom: 14,
+    width: 118,
+    height: 168,
+    borderRadius: 22,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(5,7,14,0.94)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+  },
+  secondaryVideo: {
+    width: "100%",
+    height: "100%",
+  },
+  secondaryVideoBadge: {
+    position: "absolute",
+    left: 8,
+    bottom: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(4,8,20,0.72)",
+  },
+  secondaryVideoBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
   },
   placeholderSurface: {
     flex: 1,
