@@ -3304,42 +3304,56 @@ export default function PlayerScreen() {
 
   const renderTitleParticipantExpandedPanel = () => (
     <View style={styles.titleParticipantFeedWrap}>
-      <View style={styles.watchPartyPlayerBandHeader}>
-        <View style={styles.watchPartyPlayerBandMeta}>
-          <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
-          <Text style={styles.watchPartyPlayerBandBody}>
-            {watchPartyAudienceLabel || "Shared playback syncing"}
-            {watchPartyPreviewLabel ? ` · ${watchPartyPreviewLabel}` : ""}
-          </Text>
-        </View>
-        <TouchableOpacity style={styles.watchPartyPlayerBandBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
-          <Text style={styles.watchPartyPlayerBandBtnText}>Party Room</Text>
-        </TouchableOpacity>
-      </View>
-      {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
-        <View style={styles.watchPartyLiveKitCard}>
-          <View style={styles.watchPartyLiveKitCardHeader}>
-            <View style={styles.watchPartyLiveKitCardCopy}>
-              <Text style={styles.watchPartyLiveKitCardKicker}>LIVEKIT MEDIA</Text>
-              <Text style={styles.watchPartyLiveKitCardTitle}>
-                {currentWatchPartyParticipantName === "You"
-                  ? "Watch-Party Live is connected"
-                  : `${currentWatchPartyParticipantName} is connected`}
-              </Text>
-            </View>
-            <Text style={styles.watchPartyLiveKitCardRole}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
+      <View style={styles.watchPartySessionShell}>
+        <View style={styles.watchPartyPlayerBandHeader}>
+          <View style={styles.watchPartyPlayerBandMeta}>
+            <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
+            <Text style={styles.watchPartyPlayerBandBody}>
+              {watchPartyAudienceLabel || "Shared playback syncing"}
+              {watchPartyPreviewLabel ? ` · ${watchPartyPreviewLabel}` : ""}
+            </Text>
           </View>
-          <View style={styles.watchPartyLiveKitCardSurface}>
+          <TouchableOpacity style={styles.watchPartyPlayerBandBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
+            <Text style={styles.watchPartyPlayerBandBtnText}>Party Room</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.watchPartySessionBody}>
+          Shared playback stays centered here while Party Room keeps the social setup, audience defaults, and room controls.
+        </Text>
+        <View style={styles.watchPartySessionMetaRow}>
+          <View style={styles.watchPartySessionMetaPill}>
+            <Text style={styles.watchPartySessionMetaText}>{watchPartyAudienceLabel || "Shared playback syncing"}</Text>
+          </View>
+          {watchPartyPreviewLabel ? (
+            <View style={styles.watchPartySessionMetaPill}>
+              <Text style={styles.watchPartySessionMetaText} numberOfLines={1}>{watchPartyPreviewLabel}</Text>
+            </View>
+          ) : null}
+          {watchPartyLiveKitJoinContract ? (
+            <View style={[styles.watchPartySessionMetaPill, styles.watchPartySessionMetaPillRole]}>
+              <Text style={styles.watchPartySessionRoleText}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
+            </View>
+          ) : null}
+        </View>
+        {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
+          <View style={styles.watchPartySessionMediaFrame}>
             <LiveKitStageMediaSurface
               joinContract={watchPartyLiveKitJoinContract}
               onFallback={onWatchPartyLiveKitFallback}
               fillParent={false}
               surfaceLabel="Watch-Party Live"
-              containerStyle={styles.watchPartyLiveKitCardSurfaceInner}
+              containerStyle={styles.watchPartySessionMediaFrameInner}
             />
           </View>
-        </View>
-      ) : null}
+        ) : (
+          <View style={styles.watchPartySessionPlaceholder}>
+            <Text style={styles.watchPartySessionPlaceholderKicker}>SHARED PLAYER</Text>
+            <Text style={styles.watchPartySessionPlaceholderBody}>
+              Watch-Party Live opens the synchronized party surface here after Party Room finishes the room setup.
+            </Text>
+          </View>
+        )}
+      </View>
       {renderParticipantPanel(true, true)}
     </View>
   );
@@ -5379,12 +5393,25 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: 8,
   },
+  watchPartySessionShell: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(8, 10, 18, 0.88)",
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 10,
+    shadowColor: "#000000",
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+  },
   watchPartyPlayerBandHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    paddingHorizontal: 4,
   },
   watchPartyPlayerBandMeta: {
     flex: 1,
@@ -5401,6 +5428,42 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
   },
+  watchPartySessionBody: {
+    color: "rgba(231,235,246,0.78)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  watchPartySessionMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+  },
+  watchPartySessionMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: "100%",
+  },
+  watchPartySessionMetaPillRole: {
+    borderColor: "rgba(220,20,60,0.24)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+  },
+  watchPartySessionMetaText: {
+    color: "#DCE4F6",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  watchPartySessionRoleText: {
+    color: "#FFF5F7",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
   watchPartyPlayerBandBtn: {
     borderRadius: 999,
     borderWidth: 1,
@@ -5414,49 +5477,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
-  watchPartyLiveKitCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(132, 205, 255, 0.24)",
-    backgroundColor: "rgba(8, 12, 22, 0.86)",
-    padding: 10,
-    gap: 8,
-  },
-  watchPartyLiveKitCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  watchPartyLiveKitCardCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  watchPartyLiveKitCardKicker: {
-    color: "#8FD7FF",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-  watchPartyLiveKitCardTitle: {
-    color: "#F4F7FF",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  watchPartyLiveKitCardRole: {
-    color: "#D9EEF9",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-  watchPartyLiveKitCardSurface: {
-    height: 132,
-    borderRadius: 12,
+  watchPartySessionMediaFrame: {
+    height: 152,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#05070E",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
-  watchPartyLiveKitCardSurfaceInner: {
+  watchPartySessionMediaFrameInner: {
     flex: 1,
+  },
+  watchPartySessionPlaceholder: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(4, 6, 12, 0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    gap: 6,
+  },
+  watchPartySessionPlaceholderKicker: {
+    color: "#F0C8D2",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  watchPartySessionPlaceholderBody: {
+    color: "#E7EBF6",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   titleParticipantFeedScroll: {
     maxHeight: 228,
