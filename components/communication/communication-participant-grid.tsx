@@ -10,12 +10,12 @@ type CommunicationParticipantGridProps = {
   presentation?: "embedded" | "fullscreen";
 };
 
-const RTCView = getCommunicationRTCModule()?.RTCView as React.ComponentType<{
+type CommunicationRTCViewComponent = React.ComponentType<{
   streamURL: string;
   style?: object;
   objectFit?: "cover" | "contain";
   mirror?: boolean;
-}> | undefined;
+}>;
 
 const getInitials = (value: string) => {
   const normalized = String(value ?? "").trim();
@@ -38,6 +38,7 @@ export function CommunicationParticipantGrid({
   participants,
   presentation = "embedded",
 }: CommunicationParticipantGridProps) {
+  const RTCView = getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
   const { width, height } = useWindowDimensions();
   const isFullscreen = presentation === "fullscreen";
   const isLandscape = width > height;

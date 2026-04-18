@@ -16,12 +16,12 @@ type CommunicationPreviewCardProps = {
   microphonePermissionState: "unknown" | "granted" | "denied" | "blocked";
 };
 
-const RTCView = getCommunicationRTCModule()?.RTCView as React.ComponentType<{
+type CommunicationRTCViewComponent = React.ComponentType<{
   streamURL: string;
   style?: object;
   objectFit?: "cover" | "contain";
   mirror?: boolean;
-}> | undefined;
+}>;
 
 const getInitials = (value: string) => {
   const normalized = String(value ?? "").trim();
@@ -48,6 +48,7 @@ export function CommunicationPreviewCard({
   cameraPermissionState,
   microphonePermissionState,
 }: CommunicationPreviewCardProps) {
+  const RTCView = getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
   const showVideo = !!RTCView && !!streamURL && cameraEnabled;
 
   useEffect(() => {

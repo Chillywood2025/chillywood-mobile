@@ -308,7 +308,10 @@ export function useCommunicationRoomSession({
   const cameraPermissionStateRef = useRef<CommunicationPermissionState>(cameraPermissionState);
   const microphonePermissionStateRef = useRef<CommunicationPermissionState>(microphonePermissionState);
 
-  const isRtcAvailable = !!getCommunicationRTCModule();
+  const isRtcAvailable = useMemo(() => {
+    if (!enabled) return false;
+    return !!getCommunicationRTCModule();
+  }, [enabled]);
   const analyticsSurface = analyticsContext?.surface ?? "communication-room";
   const analyticsRole = analyticsContext?.role ?? null;
 

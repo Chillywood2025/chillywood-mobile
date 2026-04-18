@@ -167,12 +167,12 @@ const STAGE_HEARTBEAT_INTERVAL_MILLIS = 10_000;
 const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 5_000;
 const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as const;
 const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
-const RTCView = getCommunicationRTCModule()?.RTCView as React.ComponentType<{
+type CommunicationRTCViewComponent = React.ComponentType<{
   streamURL: string;
   style?: object;
   objectFit?: "cover" | "contain";
   mirror?: boolean;
-}> | undefined;
+}>;
 
 export default function WatchPartyLiveStageScreen() {
   const safeAreaInsets = useSafeAreaInsets();
@@ -752,12 +752,17 @@ export default function WatchPartyLiveStageScreen() {
   const liveKitFoundationEnabled = isLiveKitRuntimeConfigured();
   const canOwnActiveStageSurface = isFocused && !isLiveRoomSurface;
   const shouldRenderLiveKitStage = canOwnActiveStageSurface && Platform.OS !== "web" && !!liveKitJoinContract;
+  const shouldRenderLegacyStageRtc = canUseBetaStage && canOwnActiveStageSurface && !!communicationRoomId && !shouldRenderLiveKitStage;
+  const RTCView = useMemo<CommunicationRTCViewComponent | undefined>(() => {
+    if (!shouldRenderLegacyStageRtc) return undefined;
+    return getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
+  }, [shouldRenderLegacyStageRtc]);
   const {
     localStreamURL,
     participants: stageMediaParticipants,
   } = useCommunicationRoomSession({
     roomId: communicationRoomId,
-    enabled: canUseBetaStage && canOwnActiveStageSurface && !!communicationRoomId && !shouldRenderLiveKitStage,
+    enabled: shouldRenderLegacyStageRtc,
     analyticsContext: {
       surface: "live-room",
       role: isHost ? "host" : "viewer",
