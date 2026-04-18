@@ -1,3 +1,5 @@
+import "./dom-exception-polyfill";
+
 import { Platform } from "react-native";
 
 import { reportRuntimeError } from "../logger";
