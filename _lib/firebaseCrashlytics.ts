@@ -1,9 +1,11 @@
-import crashlytics from "@react-native-firebase/crashlytics";
 import { Platform } from "react-native";
+import { ensureFirebaseDefaultApp } from "./firebaseApp";
 
 type CrashlyticsMeta = Record<string, unknown> | undefined;
 
 const canUseFirebaseCrashlytics = () => Platform.OS !== "web";
+
+let cachedCrashlyticsModule: typeof import("@react-native-firebase/crashlytics").default | null = null;
 
 const normalizeError = (error: unknown) => {
   if (error instanceof Error) return error;
@@ -51,12 +53,23 @@ const maybeWarn = (scope: string, error: unknown) => {
   console.warn(`[firebase-crashlytics] ${scope}: ${message}`);
 };
 
+const getCrashlyticsModule = () => {
+  if (!canUseFirebaseCrashlytics()) return null;
+  if (!ensureFirebaseDefaultApp()) return null;
+
+  cachedCrashlyticsModule ??=
+    require("@react-native-firebase/crashlytics").default as typeof import("@react-native-firebase/crashlytics").default;
+
+  return cachedCrashlyticsModule;
+};
+
 export async function bootstrapFirebaseCrashlytics() {
-  if (!canUseFirebaseCrashlytics()) return false;
+  const crashlyticsModule = getCrashlyticsModule();
+  if (!crashlyticsModule) return false;
 
   try {
-    await crashlytics().setCrashlyticsCollectionEnabled(true);
-    crashlytics().log("Chi'llywood Crashlytics bootstrap complete.");
+    await crashlyticsModule().setCrashlyticsCollectionEnabled(true);
+    crashlyticsModule().log("Chi'llywood Crashlytics bootstrap complete.");
     return true;
   } catch (error) {
     maybeWarn("bootstrap", error);
@@ -65,13 +78,14 @@ export async function bootstrapFirebaseCrashlytics() {
 }
 
 export async function identifyFirebaseCrashlyticsUser(identity: { id: string; email?: string | null }) {
-  if (!canUseFirebaseCrashlytics()) return;
+  const crashlyticsModule = getCrashlyticsModule();
+  if (!crashlyticsModule) return;
 
   try {
-    await crashlytics().setUserId(identity.id);
+    await crashlyticsModule().setUserId(identity.id);
     const email = String(identity.email ?? "").trim();
     if (email) {
-      await crashlytics().setAttribute("email", email.slice(0, 100));
+      await crashlyticsModule().setAttribute("email", email.slice(0, 100));
     }
   } catch (error) {
     maybeWarn("identify-user", error);
@@ -79,28 +93,30 @@ export async function identifyFirebaseCrashlyticsUser(identity: { id: string; em
 }
 
 export async function clearFirebaseCrashlyticsUser() {
-  if (!canUseFirebaseCrashlytics()) return;
+  const crashlyticsModule = getCrashlyticsModule();
+  if (!crashlyticsModule) return;
 
   try {
-    await crashlytics().setUserId("");
-    await crashlytics().setAttribute("email", "");
+    await crashlyticsModule().setUserId("");
+    await crashlyticsModule().setAttribute("email", "");
   } catch (error) {
     maybeWarn("clear-user", error);
   }
 }
 
 export function logFirebaseCrashlyticsMessage(message: string, meta?: CrashlyticsMeta) {
-  if (!canUseFirebaseCrashlytics()) return;
+  const crashlyticsModule = getCrashlyticsModule();
+  if (!crashlyticsModule) return;
 
   try {
     const normalizedMessage = sanitizeLogLine(message);
     if (normalizedMessage) {
-      crashlytics().log(normalizedMessage);
+      crashlyticsModule().log(normalizedMessage);
     }
 
     const serializedMeta = serializeMeta(meta);
     if (serializedMeta) {
-      crashlytics().log(serializedMeta);
+      crashlyticsModule().log(serializedMeta);
     }
   } catch (error) {
     maybeWarn("log", error);
@@ -108,32 +124,34 @@ export function logFirebaseCrashlyticsMessage(message: string, meta?: Crashlytic
 }
 
 export function recordFirebaseCrashlyticsError(scope: string, error: unknown, meta?: CrashlyticsMeta) {
-  if (!canUseFirebaseCrashlytics()) return;
+  const crashlyticsModule = getCrashlyticsModule();
+  if (!crashlyticsModule) return;
 
   try {
     const normalizedError = normalizeError(error);
-    crashlytics().log(`[${scope}] ${sanitizeLogLine(normalizedError.message)}`);
+    crashlyticsModule().log(`[${scope}] ${sanitizeLogLine(normalizedError.message)}`);
 
     const serializedMeta = serializeMeta(meta);
     if (serializedMeta) {
-      crashlytics().log(`[${scope}] ${serializedMeta}`);
+      crashlyticsModule().log(`[${scope}] ${serializedMeta}`);
     }
 
-    crashlytics().recordError(normalizedError, scope);
+    crashlyticsModule().recordError(normalizedError, scope);
   } catch (recordErrorError) {
     maybeWarn("record-error", recordErrorError);
   }
 }
 
 export async function runFirebaseCrashlyticsNonFatalTest() {
-  if (!canUseFirebaseCrashlytics()) {
+  const crashlyticsModule = getCrashlyticsModule();
+  if (!crashlyticsModule) {
     return { ok: false as const, reason: "unsupported_platform" };
   }
 
   try {
-    await crashlytics().setAttribute("monitoring_test", "non_fatal");
-    crashlytics().log("Running Firebase Crashlytics non-fatal monitoring test.");
-    crashlytics().recordError(
+    await crashlyticsModule().setAttribute("monitoring_test", "non_fatal");
+    crashlyticsModule().log("Running Firebase Crashlytics non-fatal monitoring test.");
+    crashlyticsModule().recordError(
       new Error("Firebase Crashlytics non-fatal monitoring test"),
       "FirebaseCrashlyticsNonFatalTest",
     );
@@ -145,20 +163,22 @@ export async function runFirebaseCrashlyticsNonFatalTest() {
 }
 
 export function triggerFirebaseCrashlyticsTestCrash() {
-  if (!canUseFirebaseCrashlytics()) return;
-  crashlytics().log("Running Firebase Crashlytics forced native crash test.");
-  crashlytics().crash();
+  const crashlyticsModule = getCrashlyticsModule();
+  if (!crashlyticsModule) return;
+  crashlyticsModule().log("Running Firebase Crashlytics forced native crash test.");
+  crashlyticsModule().crash();
 }
 
 export async function didFirebaseCrashlyticsCrashPreviously() {
-  if (!canUseFirebaseCrashlytics()) {
+  const crashlyticsModule = getCrashlyticsModule();
+  if (!crashlyticsModule) {
     return { ok: false as const, reason: "unsupported_platform" };
   }
 
   try {
     return {
       ok: true as const,
-      didCrash: await crashlytics().didCrashOnPreviousExecution(),
+      didCrash: await crashlyticsModule().didCrashOnPreviousExecution(),
     };
   } catch (error) {
     maybeWarn("did-crash-previously", error);
