@@ -25,6 +25,13 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - if app currency is used for tipping, it should be treated as internal app coins or credits, not crypto or blockchain tokens
 - the current preferred Chi'llywood platform cut for paid content is 20% of net receipts
 
+## Premium And Ticketed Room Doctrine
+- Premium access, ticketed events, and paid room entry are approved Chi'llywood directions, but they must stay compatible with the layered room-participation model defined in `ROOM_BLUEPRINT.md`.
+- Paid or premium access should grant room entry, entitlements, and audience privileges first; it should not automatically imply equal live-camera rights, equal visible tiles, or equal room authority.
+- Public v1 and near-term room truth must stay honest that large membership scale and true live-seat scale are different.
+- Future premium rooms may expand featured capacity, moderation tooling, entitlements, and audience controls, but should still treat host, seated, featured, and audience layers as distinct.
+- Future infrastructure may raise simultaneous live-seat limits over time, but ticketed or premium growth should not be described as `500+` equal live feeds until the media stack actually supports that.
+
 ## Compliance Standing Rule
 - future monetization guidance must proactively stay compliant with Apple and Google billing rules, creator payouts, tax reporting, moderation requirements, and country rollout constraints
 - compliance-sensitive design choices must be called out before implementation decisions are made
@@ -61,6 +68,7 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 ## Public Product Phasing
 - Public v1 should focus on the core social streaming experience, not the full long-term platform vision
 - Public v1 includes login/settings/logout, home/discovery, customizable basic profiles, standalone player, Watch-Party Live core flow, Live Watch-Party / Live Stage core flow, comments/reactions/basic social interaction, basic Chi'lly Chat or simple direct messaging, Premium subscription gating, moderation basics, and analytics/error monitoring/admin visibility
-- Post-v1 can expand into heavier creator monetization rollout, a fuller creator mini-platform builder, deeper room personalization, instant payout lane foundations, and light compliant ad systems
-- Later phase holds Game Live rollout beyond the Public v1 window, Game Watch-Party after Game Live, advanced payouts and tax automation, overseas creator payouts, and broader ad systems
+- Public v1 should keep room-scale truth honest: `500+` joined presence can be a valid product target, but Public v1 does not assume `500+` equal live camera feeds.
+- Post-v1 can expand into heavier creator monetization rollout, a fuller creator mini-platform builder, deeper room personalization, request/promote room controls, premium/ticketed room tooling, instant payout lane foundations, and light compliant ad systems
+- Later phase holds Game Live rollout beyond the Public v1 window, Game Watch-Party after Game Live, larger premium stages, higher simultaneous live-seat capacity as infrastructure improves, advanced payouts and tax automation, overseas creator payouts, and broader ad systems
 - `ROADMAP.md` should operationalize the active Public v1 / Post-v1 / Later phase split and the current dependencies, blockers, and compliance-sensitive areas

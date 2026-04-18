@@ -8,6 +8,7 @@ import {
     ActivityIndicator,
     Animated,
     AppState,
+    FlatList,
     Image,
     ImageBackground,
     LayoutAnimation,
@@ -17,11 +18,13 @@ import {
     Share,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     UIManager,
     View,
     type ImageSourcePropType,
 } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../../_data/titles";
 import {
@@ -30,8 +33,13 @@ import {
     resolveBrandingConfig,
 } from "../../../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
+import {
+  type LiveKitTokenReady,
+} from "../../../_lib/livekit/token-contract";
+import { prepareLiveKitJoinBoundary } from "../../../_lib/livekit/join-boundary";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
+import { isLiveKitRuntimeConfigured } from "../../../_lib/runtimeConfig";
 import { useSession } from "../../../_lib/session";
 import { supabase } from "../../../_lib/supabase";
 import { readUserProfile } from "../../../_lib/userData";
@@ -40,6 +48,7 @@ import {
     getPartyRoomSnapshot,
     getSafePartyUserId,
     joinPartyRoomSession,
+    sendPartyMessage,
     setPartyRoomPolicies,
     setPartyParticipantState,
     touchPartyRoomSession,
@@ -59,12 +68,14 @@ import { RoomReactionPicker, pushRecentReaction } from "../../../components/room
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
+import { LiveKitStageMediaSurface } from "../../../components/watch-party-live/livekit-stage-media-surface";
 import {
     buildOrderedParticipantsWithSelf,
     buildParticipantProfileParams,
     buildSharedParticipantIdentity,
+    canRequestSeat,
     createDefaultParticipantState,
-    getParticipantRoleLabel,
+    getParticipantLayerLabel,
     mergeMissingParticipantStates,
     normalizeSharedRoomMode,
     prioritizeParticipantStripOrder,
@@ -87,6 +98,23 @@ type FloatingReaction = {
   rise: Animated.Value;
   opacity: Animated.Value;
   scale: Animated.Value;
+};
+
+type LiveStageComment = {
+  id: string;
+  userId: string;
+  authorLabel: string;
+  body: string;
+  createdAt: string;
+  isMe: boolean;
+};
+
+type LiveStageCommentRow = {
+  id?: string | null;
+  user_id?: string | null;
+  username?: string | null;
+  text?: string | null;
+  created_at?: string | null;
 };
 
 const LIVE_FACE_FILTER_OPTIONS = [
@@ -148,6 +176,7 @@ const RTCView = getCommunicationRTCModule()?.RTCView as React.ComponentType<{
 
 export default function WatchPartyLiveStageScreen() {
   const safeAreaInsets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { isLoading: authLoading, isSignedIn } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const { partyId: partyIdParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{ partyId?: string; mode?: string; source?: string }>();
@@ -172,6 +201,9 @@ export default function WatchPartyLiveStageScreen() {
   const [stageControlsOpen, setStageControlsOpen] = useState(false);
   const [faceFilterSheetOpen, setFaceFilterSheetOpen] = useState(false);
   const [stageMenuOpen, setStageMenuOpen] = useState(false);
+  const [hybridComments, setHybridComments] = useState<LiveStageComment[]>([]);
+  const [hybridCommentDraft, setHybridCommentDraft] = useState("");
+  const [hybridCommentSending, setHybridCommentSending] = useState(false);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
@@ -182,6 +214,7 @@ export default function WatchPartyLiveStageScreen() {
   const [featuredParticipantById, setFeaturedParticipantById] = useState<Record<string, boolean>>({});
   const [participantPresentationById, setParticipantPresentationById] = useState<Record<string, "compact" | "expanded">>({});
   const [participantStateById, setParticipantStateById] = useState<Record<string, SharedParticipantLocalState>>({});
+  const [seatRequestsById, setSeatRequestsById] = useState<Record<string, boolean>>({});
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
@@ -191,13 +224,17 @@ export default function WatchPartyLiveStageScreen() {
   const [reportBusy, setReportBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ userId: string; label: string } | null>(null);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
+  const [liveKitJoinContract, setLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
   const myCameraPreviewUrlRef = useRef<string>("");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const roomRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const roomMessagesChannelRef = useRef<RealtimeChannel | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const membershipMapRef = useRef<Record<string, WatchPartyRoomMembership>>({});
+  const hybridCommentsScrollRef = useRef<ScrollView | null>(null);
+  const hybridCommentInputRef = useRef<TextInput | null>(null);
   const motion = useRef(new Animated.Value(0)).current;
   const reactionTapPulse = useRef(new Animated.Value(0)).current;
   const stageOverlayMotion = useRef(new Animated.Value(1)).current;
@@ -229,6 +266,7 @@ export default function WatchPartyLiveStageScreen() {
 
   useEffect(() => {
     setCommunicationRoomId("");
+    setLiveKitJoinContract(null);
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -246,6 +284,17 @@ export default function WatchPartyLiveStageScreen() {
       };
     });
     setParticipantStateById(nextParticipantStateById);
+    setSeatRequestsById((prev) => {
+      const next: Record<string, boolean> = {};
+      Object.entries(prev).forEach(([participantId, pending]) => {
+        if (!pending) return;
+        const participantState = nextParticipantStateById[participantId];
+        if (participantState && !participantState.isRemoved && participantState.role === "listener") {
+          next[participantId] = true;
+        }
+      });
+      return next;
+    });
   }, []);
 
   const refreshStageSnapshot = useCallback(async (trackedUserId?: string) => {
@@ -323,6 +372,7 @@ export default function WatchPartyLiveStageScreen() {
 
   useEffect(() => {
     setLiveSurface("room");
+    setSeatRequestsById({});
   }, [partyId]);
 
   useEffect(() => {
@@ -446,6 +496,54 @@ export default function WatchPartyLiveStageScreen() {
         }));
       });
 
+      channel.on("broadcast", { event: "participant:seat-request" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const pending = !!payload?.pending;
+        setSeatRequestsById((prev) => {
+          if (!pending) {
+            if (!prev[participantId]) return prev;
+            const next = { ...prev };
+            delete next[participantId];
+            return next;
+          }
+          return { ...prev, [participantId]: true };
+        });
+      });
+
+      channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const roleValue = String(payload?.role ?? "").trim();
+        const nextRole: SharedParticipantLocalState["role"] = roleValue === "host" || roleValue === "speaker" ? roleValue : "listener";
+        const nextIsMuted = !!payload?.isMuted;
+        const nextIsRemoved = !!payload?.isRemoved;
+        const pending = !!payload?.pending;
+
+        setParticipantStateById((prev) => ({
+          ...prev,
+          [participantId]: {
+            ...(prev[participantId] ?? {
+              isMuted: nextIsMuted,
+              role: nextRole,
+              isRemoved: nextIsRemoved,
+            }),
+            isMuted: nextIsMuted,
+            role: nextRole,
+            isRemoved: nextIsRemoved,
+          },
+        }));
+        setSeatRequestsById((prev) => {
+          if (pending && nextRole === "listener" && !nextIsRemoved) {
+            return { ...prev, [participantId]: true };
+          }
+          if (!prev[participantId]) return prev;
+          const next = { ...prev };
+          delete next[participantId];
+          return next;
+        });
+      });
+
         channel.subscribe((status) => {
           debugLog("live-stage", "channel status", { status });
           if (status !== "SUBSCRIBED") return;
@@ -550,7 +648,7 @@ export default function WatchPartyLiveStageScreen() {
   }, [buildStageParticipantsFromPresence, canUseBetaStage, partyId, partyIdParam, refreshStageSnapshot, syncStageSnapshot]);
 
   useEffect(() => {
-    if (!canUseBetaStage || !partyId || !room?.hostUserId || liveSurface === "room" || communicationRoomId) return;
+    if (!canUseBetaStage || !isFocused || !partyId || !room?.hostUserId || liveSurface === "room" || communicationRoomId) return;
 
     let cancelled = false;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -590,7 +688,7 @@ export default function WatchPartyLiveStageScreen() {
         clearTimeout(retryTimeout);
       }
     };
-  }, [canUseBetaStage, communicationRoomId, initialStageMode, isHost, liveSurface, partyId, room?.hostUserId, room?.roomCode]);
+  }, [canUseBetaStage, communicationRoomId, initialStageMode, isFocused, isHost, liveSurface, partyId, room?.hostUserId, room?.roomCode]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -651,12 +749,15 @@ export default function WatchPartyLiveStageScreen() {
   const trackedUserId = myUserId || "anon";
   const resolvedCurrentUsername = resolveIdentityName(myUsername, "You");
   const isLiveRoomSurface = liveSurface === "room";
+  const liveKitFoundationEnabled = isLiveKitRuntimeConfigured();
+  const canOwnActiveStageSurface = isFocused && !isLiveRoomSurface;
+  const shouldRenderLiveKitStage = canOwnActiveStageSurface && Platform.OS !== "web" && !!liveKitJoinContract;
   const {
     localStreamURL,
     participants: stageMediaParticipants,
   } = useCommunicationRoomSession({
     roomId: communicationRoomId,
-    enabled: canUseBetaStage && !isLiveRoomSurface && !!communicationRoomId,
+    enabled: canUseBetaStage && canOwnActiveStageSurface && !!communicationRoomId && !shouldRenderLiveKitStage,
     analyticsContext: {
       surface: "live-room",
       role: isHost ? "host" : "viewer",
@@ -894,6 +995,7 @@ export default function WatchPartyLiveStageScreen() {
     setReactionPickerOpen(false);
     setStageControlsOpen(false);
     setFaceFilterSheetOpen(false);
+    hybridCommentInputRef.current?.blur();
   }, []);
 
   const hideStageOverlay = useCallback((options?: { closePanels?: boolean }) => {
@@ -952,7 +1054,62 @@ export default function WatchPartyLiveStageScreen() {
       .catch(() => {});
   }, []);
 
+  const broadcastSeatRequest = useCallback((participantId: string, pending: boolean) => {
+    const channel = channelRef.current;
+    if (!channel || !participantId) return;
+    channel
+      .send({ type: "broadcast", event: "participant:seat-request", payload: { participantId, pending } })
+      .catch(() => {});
+  }, []);
+
+  const broadcastSeatState = useCallback((participantId: string, payload: {
+    role: SharedParticipantLocalState["role"];
+    isMuted: boolean;
+    isRemoved?: boolean;
+    pending?: boolean;
+  }) => {
+    const channel = channelRef.current;
+    if (!channel || !participantId) return;
+    channel
+      .send({
+        type: "broadcast",
+        event: "participant:seat-state",
+        payload: {
+          participantId,
+          role: payload.role,
+          isMuted: payload.isMuted,
+          isRemoved: !!payload.isRemoved,
+          pending: !!payload.pending,
+        },
+      })
+      .catch(() => {});
+  }, []);
+
+  const requestStageSeat = useCallback(async (participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    const selfParticipantId = String(myUserId || "").trim() || "anon";
+    if (!nextParticipantId || isHost || nextParticipantId !== selfParticipantId) return;
+    const currentState = participantStateById[nextParticipantId] ?? createDefaultParticipantState({
+      role: "viewer",
+      isSpeaking: false,
+      isMuted: false,
+    });
+    if (!canRequestSeat(currentState) || seatRequestsById[nextParticipantId]) return;
+
+    revealStageOverlay();
+    setSeatRequestsById((prev) => ({ ...prev, [nextParticipantId]: true }));
+    broadcastSeatRequest(nextParticipantId, true);
+  }, [
+    broadcastSeatRequest,
+    isHost,
+    myUserId,
+    participantStateById,
+    revealStageOverlay,
+    seatRequestsById,
+  ]);
+
   useEffect(() => {
+    if (!canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
     debugLog("live-stage", "mic setup start");
     const currentUserId = String(myUserId || "").trim();
 
@@ -1071,7 +1228,7 @@ export default function WatchPartyLiveStageScreen() {
         recording.stopAndUnloadAsync().catch(() => {});
       }
     };
-  }, [myUserId, emitParticipantSpeaking]);
+  }, [canOwnActiveStageSurface, shouldRenderLiveKitStage, myUserId, emitParticipantSpeaking]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -1090,8 +1247,6 @@ export default function WatchPartyLiveStageScreen() {
   const viewersScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] });
   const viewersOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
   const liveGlowOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.24, 0.48] });
-  const chatFloat = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
-  const chatOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.78, 0.9] });
   const stageOverlayOpacity = stageOverlayMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
   const stageOverlayTranslate = stageOverlayMotion.interpolate({ inputRange: [0, 1], outputRange: [26, 0] });
   const stageMenuSheetVisible = stageMenuOpen && !commentsOpen && !reactionPickerOpen && !stageControlsOpen && !faceFilterSheetOpen;
@@ -1099,13 +1254,45 @@ export default function WatchPartyLiveStageScreen() {
   const liveRoomFooterInset = Math.max(16, safeAreaInsets.bottom + 8);
   const isLiveFirstMode = stageMode === "live";
   const isHybridMode = stageMode === "hybrid";
-  const commentsLaneBottomOffset = liveDockBottomInset + (isHybridMode ? 214 : 172);
+  const usesSharedStageCommentLane = isLiveFirstMode || isHybridMode;
+  const commentsLaneBottomOffset = liveDockBottomInset + (usesSharedStageCommentLane ? 292 : 172);
   const lowerCommunityParticipants = useMemo(() => {
     if (isLiveFirstMode) {
       return visibleStripParticipants.filter((participant) => participant.role !== "host");
     }
-    return visibleStripParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
-  }, [isLiveFirstMode, visibleStripParticipants, currentUserParticipantId]);
+    if (isHost) {
+      return visibleStripParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
+    }
+    return visibleStripParticipants;
+  }, [currentUserParticipantId, isHost, isLiveFirstMode, visibleStripParticipants]);
+  const lowerCommunityRows = useMemo(() => {
+    const rows: typeof lowerCommunityParticipants[] = [];
+    let pendingRow: typeof lowerCommunityParticipants = [];
+
+    lowerCommunityParticipants.forEach((participant) => {
+      const isFeatured = !!featuredParticipantById[participant.userId];
+      if (isFeatured) {
+        if (pendingRow.length > 0) {
+          rows.push(pendingRow);
+          pendingRow = [];
+        }
+        rows.push([participant]);
+        return;
+      }
+
+      pendingRow.push(participant);
+      if (pendingRow.length === 2) {
+        rows.push(pendingRow);
+        pendingRow = [];
+      }
+    });
+
+    if (pendingRow.length > 0) {
+      rows.push(pendingRow);
+    }
+
+    return rows;
+  }, [featuredParticipantById, lowerCommunityParticipants]);
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
@@ -1152,6 +1339,14 @@ export default function WatchPartyLiveStageScreen() {
     ? "Access, reactions, and capture expectations belong here before you continue into the actual live presentation."
     : `Current room defaults are ${liveRoomJoinLabel.toLowerCase()}, ${liveRoomReactionsLabel.toLowerCase()}, and ${liveRoomCaptureLabel.toLowerCase()}.`;
   const liveRoomEntryLabel = isHost ? "Continue to Live Stage" : "Join Live Stage";
+  const liveKitParticipantRole = isHost
+    ? "host"
+    : !isLiveFirstMode
+      ? "speaker"
+      : participantStateById[trackedUserId]?.role === "speaker"
+        || membershipMapRef.current[trackedUserId]?.canSpeak
+        ? "speaker"
+        : "viewer";
   const stageModeTitle = isLiveFirstMode
     ? "Host-led live focus"
     : "Shared watch moment";
@@ -1205,9 +1400,36 @@ export default function WatchPartyLiveStageScreen() {
   const heroFallbackInitial = String(heroParticipant?.displayName || "H").trim().slice(0, 1).toUpperCase();
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const inviteSheetAutolaunchedRef = useRef<string | null>(null);
+  const hybridCommentCountLabel = hybridComments.length === 1 ? "1 comment" : `${hybridComments.length} comments`;
+  const hybridCommentPlaceholder = isHost ? "Comment as host" : "Add a comment";
+
+  const mapLiveStageCommentRow = useCallback((row: LiveStageCommentRow): LiveStageComment | null => {
+    const id = String(row.id ?? "").trim();
+    const userId = String(row.user_id ?? "").trim();
+    const body = String(row.text ?? "").trim();
+    if (!id || !userId || !body) return null;
+
+    const rowUsername = String(row.username ?? "").trim();
+    const membership = membershipMapRef.current[userId];
+    const fallbackAuthor = userId === trackedUserId
+      ? resolvedCurrentUsername
+      : (membership?.displayName || "Guest");
+    const authorLabel = userId === trackedUserId
+      ? "You"
+      : resolveIdentityName(rowUsername, fallbackAuthor);
+
+    return {
+      id,
+      userId,
+      authorLabel,
+      body,
+      createdAt: String(row.created_at ?? new Date().toISOString()),
+      isMe: userId === trackedUserId,
+    };
+  }, [resolvedCurrentUsername, trackedUserId]);
 
   useEffect(() => {
-    if (!__DEV__ || isLiveRoomSurface) return;
+    if (!__DEV__ || !canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
     debugLog("live-stage", "stage media binding", {
       communicationRoomId,
       heroUserId: heroParticipant?.userId ?? "",
@@ -1233,9 +1455,93 @@ export default function WatchPartyLiveStageScreen() {
     heroMediaParticipant?.cameraOn,
     heroMediaParticipant?.streamURL,
     heroParticipant?.userId,
-    isLiveRoomSurface,
+    canOwnActiveStageSurface,
+    shouldRenderLiveKitStage,
     stageMediaParticipants,
   ]);
+
+  useEffect(() => {
+    if (!canUseBetaStage || !partyId || !usesSharedStageCommentLane) {
+      setHybridComments([]);
+      if (roomMessagesChannelRef.current) {
+        supabase.removeChannel(roomMessagesChannelRef.current);
+        roomMessagesChannelRef.current = null;
+      }
+      return;
+    }
+
+    let active = true;
+
+    const loadHybridComments = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("watch_party_room_messages")
+          .select("id,user_id,username,text,created_at")
+          .eq("party_id", partyId)
+          .order("created_at", { ascending: true })
+          .limit(120);
+
+        if (!active) return;
+        if (error || !data) {
+          setHybridComments([]);
+          return;
+        }
+
+        const nextComments = (data as LiveStageCommentRow[])
+          .map((row) => mapLiveStageCommentRow(row))
+          .filter(Boolean) as LiveStageComment[];
+        setHybridComments(nextComments);
+      } catch {
+        if (active) setHybridComments([]);
+      }
+    };
+
+    void loadHybridComments();
+
+    if (roomMessagesChannelRef.current) {
+      supabase.removeChannel(roomMessagesChannelRef.current);
+      roomMessagesChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`live-stage-comments-${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "watch_party_room_messages",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          const nextComment = mapLiveStageCommentRow(payload.new as LiveStageCommentRow);
+          if (!nextComment) return;
+          setHybridComments((prev) => {
+            if (prev.some((comment) => comment.id === nextComment.id)) return prev;
+            return [...prev.slice(-119), nextComment];
+          });
+        },
+      )
+      .subscribe();
+
+    roomMessagesChannelRef.current = channel;
+
+    return () => {
+      active = false;
+      if (roomMessagesChannelRef.current === channel) {
+        supabase.removeChannel(channel);
+        roomMessagesChannelRef.current = null;
+      }
+    };
+  }, [canUseBetaStage, mapLiveStageCommentRow, partyId, usesSharedStageCommentLane]);
+
+  useEffect(() => {
+    if (!usesSharedStageCommentLane || hybridComments.length === 0) return;
+    const scrollTimeout = setTimeout(() => {
+      hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
+    }, 40);
+    return () => clearTimeout(scrollTimeout);
+  }, [hybridComments, usesSharedStageCommentLane]);
 
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
@@ -1292,19 +1598,79 @@ export default function WatchPartyLiveStageScreen() {
     });
   }, [room?.capturePolicy, updateLiveRoomPolicies]);
 
-  const onEnterLiveStage = useCallback(() => {
+  const onLiveKitStageFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
+    debugLog("livekit", "falling back to legacy live-stage media path", {
+      reason,
+      roomName: liveKitJoinContract?.roomName ?? partyId,
+    });
+    setLiveKitJoinContract(null);
+  }, [liveKitJoinContract?.roomName, partyId]);
+
+  const onEnterLiveStage = useCallback(async () => {
+    if (liveKitFoundationEnabled && partyId) {
+      const joinResult = await prepareLiveKitJoinBoundary({
+        surface: "live-stage",
+        roomName: partyId,
+        participantIdentity: trackedUserId,
+        participantName: resolvedCurrentUsername,
+        participantRole: liveKitParticipantRole,
+        metadata: {
+          roomCode: room?.roomCode ?? null,
+          stageMode,
+          source: source || null,
+        },
+      });
+
+      if (joinResult.status === "ready") {
+        setLiveKitJoinContract(joinResult);
+        debugLog("livekit", "prepared live-stage join contract", {
+          roomName: joinResult.roomName,
+          endpoint: joinResult.endpoint,
+          participantRole: joinResult.participantRole,
+          requestedGrants: joinResult.requestedGrants,
+        });
+      } else {
+        setLiveKitJoinContract(null);
+        debugLog("livekit", "live-stage join contract unavailable", {
+          reason: joinResult.reason,
+          roomName: joinResult.roomName,
+          endpoint: joinResult.endpoint,
+        });
+        if (joinResult.reason === "request_failed" || joinResult.reason === "invalid_response") {
+          reportRuntimeError("livekit-stage-contract", new Error(joinResult.message), {
+            reason: joinResult.reason,
+            roomName: joinResult.roomName,
+          });
+        }
+      }
+    } else {
+      setLiveKitJoinContract(null);
+    }
+
     closeStageOverlayPanels();
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
     setLiveSurface("stage");
-  }, [closeStageOverlayPanels, stageOverlayMotion]);
+  }, [
+    closeStageOverlayPanels,
+    liveKitParticipantRole,
+    liveKitFoundationEnabled,
+    partyId,
+    resolvedCurrentUsername,
+    room?.roomCode,
+    source,
+    stageMode,
+    stageOverlayMotion,
+    trackedUserId,
+  ]);
 
   const onReturnToLiveRoom = useCallback(() => {
     closeStageOverlayPanels();
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
+    setLiveKitJoinContract(null);
     setLiveSurface("room");
   }, [closeStageOverlayPanels, stageOverlayMotion]);
 
@@ -1334,6 +1700,44 @@ export default function WatchPartyLiveStageScreen() {
     setFaceFilterSheetOpen(false);
     setStageMenuOpen((value) => !value);
   }, [revealStageOverlay]);
+
+  const onOpenStageComments = useCallback(() => {
+    revealStageOverlay();
+    setStageMenuOpen(false);
+    setStageControlsOpen(false);
+    setFaceFilterSheetOpen(false);
+    setReactionPickerOpen(false);
+
+    if (usesSharedStageCommentLane) {
+      setCommentsOpen(true);
+      setTimeout(() => {
+        hybridCommentInputRef.current?.focus();
+        hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
+      }, 80);
+      return;
+    }
+
+    setCommentsOpen((value) => !value);
+  }, [revealStageOverlay, usesSharedStageCommentLane]);
+
+  const onSendHybridComment = useCallback(async () => {
+    const safeBody = hybridCommentDraft.trim();
+    if (!safeBody || !partyId || hybridCommentSending) return;
+
+    setHybridCommentSending(true);
+    try {
+      await sendPartyMessage(partyId, trackedUserId, "chat", safeBody, {
+        username: resolvedCurrentUsername,
+      });
+      setHybridCommentDraft("");
+      setCommentsOpen(true);
+      setTimeout(() => {
+        hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
+      }, 40);
+    } finally {
+      setHybridCommentSending(false);
+    }
+  }, [hybridCommentDraft, hybridCommentSending, partyId, resolvedCurrentUsername, trackedUserId]);
 
   useEffect(() => {
     if (isLiveRoomSurface) {
@@ -1664,11 +2068,16 @@ export default function WatchPartyLiveStageScreen() {
           style={[
             styles.stageCanvas,
             stageMode === "hybrid" && styles.stageCanvasHybrid,
-            styles.stageCanvasFullBleed,
+            stageMode === "hybrid" && styles.stageCanvasFullBleed,
           ]}
           collapsable={false}
         >
-          {showHeroLocalRtcVideo && RTCView ? (
+          {shouldRenderLiveKitStage && liveKitJoinContract ? (
+            <LiveKitStageMediaSurface
+              joinContract={liveKitJoinContract}
+              onFallback={onLiveKitStageFallback}
+            />
+          ) : showHeroLocalRtcVideo && RTCView ? (
             <RTCView
               key={`${heroParticipant?.userId ?? "hero"}:${localStreamURL ?? "no-local-stream"}`}
               streamURL={localStreamURL as string}
@@ -1726,7 +2135,7 @@ export default function WatchPartyLiveStageScreen() {
 
         {!stageOverlayVisible ? (
           <Pressable
-            style={styles.stageTapRevealSurface}
+            style={[styles.stageTapRevealSurface, styles.stageTapRevealSurfaceHybrid]}
             onPress={revealStageOverlay}
           />
         ) : null}
@@ -1786,20 +2195,15 @@ export default function WatchPartyLiveStageScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Open Live Stage Comments"
                 hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-                onPress={() => {
-                  revealStageOverlay();
-                  setStageMenuOpen(false);
-                  setStageControlsOpen(false);
-                  setFaceFilterSheetOpen(false);
-                  setReactionPickerOpen(false);
-                  setCommentsOpen((value) => !value);
-                }}
+                onPress={onOpenStageComments}
                 testID="live-stage-comments-button"
               >
                 <Text style={styles.stageTopMenuItemIcon}>🗨️</Text>
                 <View style={styles.stageTopMenuItemCopy}>
                   <Text style={styles.stageTopMenuItemTitle}>Comments</Text>
-                  <Text style={styles.stageTopMenuItemBody}>Read the live room response lane.</Text>
+                  <Text style={styles.stageTopMenuItemBody}>
+                    {usesSharedStageCommentLane ? "Jump to the bottom comment lane." : "Read the live room response lane."}
+                  </Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1857,297 +2261,361 @@ export default function WatchPartyLiveStageScreen() {
             </View>
           ) : null}
 
-          {!isHybridMode ? (
-            <View style={styles.modeRow}>
-              <TouchableOpacity
-                style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
-                activeOpacity={0.82}
-                onPress={() => updateStageMode("live")}
-              >
-                <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modeBtn, !isLiveFirstMode && styles.modeBtnOn]}
-                activeOpacity={0.82}
-                onPress={() => updateStageMode("hybrid")}
-              >
-                <Text style={[styles.modeBtnText, !isLiveFirstMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
         </View>
         {isHybridMode ? (
           <View style={[styles.stageHybridDeck, { top: safeAreaInsets.top + 96 }]} pointerEvents="box-none">
-            <View pointerEvents="none" style={styles.stageHybridHeroCard}>
-              <View style={styles.stageHybridHeroGlow} />
-              <View style={styles.stageHybridHeroScrim} />
-              <View style={styles.stageHybridHeroCopy}>
-                <View style={styles.stageHeroTagRow}>
-                  <View style={styles.stageHeroLiveDot} />
-                  <Text style={styles.stageHeroTagText}>{branding.watchPartyLabel.toUpperCase()} LIVE</Text>
-                </View>
-                <Text numberOfLines={1} style={styles.stageHybridHeroTitle}>{stageFocusLabel}</Text>
-                <Text numberOfLines={3} style={styles.stageHybridHeroBody}>{stageHelperCopy}</Text>
-                <View style={styles.stageHybridHeroMetaRow}>
-                  <View style={styles.stageTailoredMetaPill}>
-                    <Text style={styles.stageTailoredMetaText}>{lowerCommunityCountLabel}</Text>
-                  </View>
-                  <View style={styles.stageTailoredMetaPill}>
-                    <Text style={styles.stageTailoredMetaText}>{liveStageProtectionStatus}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
             <View pointerEvents="auto" style={styles.stageHybridCommunityCard}>
               <View style={styles.stageCommunityHeader}>
                 <View style={styles.stageCommunityHeaderLeft}>
                   <View style={styles.stageCommunityDot} />
-                  <Text style={styles.stageCommunityLabel}>Community grid</Text>
+                  <Text style={styles.stageCommunityLabelHybrid}>Chi'lly Party Members</Text>
                 </View>
                 <Text style={styles.stageCommunityCount}>{lowerCommunityCountLabel}</Text>
               </View>
 
               {lowerCommunityParticipants.length > 0 ? (
-                <ScrollView
+                <FlatList
+                  data={lowerCommunityRows}
+                  keyExtractor={(row, index) => row.map((participant) => participant.userId).join("|") || `community-row-${index}`}
+                  nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
                   style={styles.stageHybridCommunityScroll}
                   contentContainerStyle={styles.stageHybridCommunityGrid}
-                >
-                  {lowerCommunityParticipants.map((participant) => {
-                    const isCurrentUser = participant.userId === currentUserParticipantId;
-                    const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
-                    const participantState = participantStateById[participant.userId] ?? {
-                      isMuted: !!participant.isMuted,
-                      role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                      isRemoved: false,
-                    };
-                    const isHostBubble = participantState.role === "host";
-                    const isActiveParticipant = participant.userId === activeParticipantId;
-                    const isLiveParticipant = participant.isLive;
-                    const isMuted = participantState.isMuted;
-                    const isSpeakerRole = participantState.role === "speaker";
-                    const isRemoved = participantState.isRemoved;
-                    const isFeatured = !!featuredParticipantById[participant.userId];
-                    const presentation = participantPresentationById[participant.userId] ?? "compact";
-                    const isExpanded = presentation === "expanded";
-                    const canModerateParticipant = participantState.role !== "host";
-                    const roleLabel = getParticipantRoleLabel(participantState);
-                    const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
-                    const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
-                    const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
-                    const bubbleMediaUri = isCurrentUser
-                      ? (heroOwnsLocalFeed ? (participant.avatarUrl || "") : (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || ""))
-                      : (participant.cameraPreviewUrl || participant.avatarUrl || "");
+                  removeClippedSubviews={Platform.OS === "android"}
+                  initialNumToRender={10}
+                  maxToRenderPerBatch={16}
+                  windowSize={7}
+                  extraData={{
+                    activeParticipantId,
+                    currentUserParticipantId,
+                    featuredParticipantById,
+                    participantPresentationById,
+                    participantStateById,
+                    seatRequestsById,
+                    stageMediaParticipantsByUserId,
+                    localStreamURL,
+                    liveFaceFilter,
+                    heroOwnsLocalFeed,
+                    isHost,
+                  }}
+                  renderItem={({ item: participantRow }) => (
+                    <View style={styles.stageHybridCommunityRow}>
+                      {participantRow.map((participant) => {
+                        const isCurrentUser = participant.userId === currentUserParticipantId;
+                        const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
+                        const participantState = participantStateById[participant.userId] ?? {
+                          isMuted: !!participant.isMuted,
+                          role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                          isRemoved: false,
+                        };
+                        const isHostBubble = participantState.role === "host";
+                        const isActiveParticipant = participant.userId === activeParticipantId;
+                        const isLiveParticipant = participant.isLive;
+                        const isMuted = participantState.isMuted;
+                        const isSpeakerRole = participantState.role === "speaker";
+                        const isRemoved = participantState.isRemoved;
+                        const isFeatured = !!featuredParticipantById[participant.userId];
+                        const isRequesting = !!seatRequestsById[participant.userId] && participantState.role === "listener" && !isRemoved;
+                        const presentation = participantPresentationById[participant.userId] ?? "compact";
+                        const isExpanded = presentation === "expanded";
+                        const canModerateParticipant = participantState.role !== "host";
+                        const roleLabel = getParticipantLayerLabel({
+                          state: participantState,
+                          isFeatured,
+                          isRequesting,
+                        });
+                        const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
+                        const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
+                        const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
+                        const bubbleMediaUri = isCurrentUser
+                          ? (heroOwnsLocalFeed ? (participant.avatarUrl || "") : (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || ""))
+                          : (participant.cameraPreviewUrl || participant.avatarUrl || "");
 
-                    return (
-                      <TouchableOpacity
-                        key={`hybrid-presence-${participant.userId}`}
-                        activeOpacity={0.74}
-                        style={[
-                          styles.stageParticipantTile,
-                          styles.stageParticipantTileGrid,
-                          isExpanded && styles.stageParticipantTileExpandedGrid,
-                          isFeatured && styles.stageParticipantTileFeaturedGrid,
-                          isActiveParticipant && !isFeatured && styles.stageParticipantTileActive,
-                          isRemoved && styles.stageParticipantTileRemoved,
-                        ]}
-                        onPress={() => {
-                          if (isHost) {
-                            debugLog("live-stage", "host tap user", { userId: participant.userId });
-                          } else {
-                            debugLog("live-stage", "request mic", { userId: participant.userId });
-                          }
-                          setActiveSpeakerUserId(participant.userId);
-                          setActiveParticipantId(participant.userId);
-                          setParticipantPresentationById((prev) => ({
-                            ...prev,
-                            [participant.userId]: (prev[participant.userId] ?? "compact") === "expanded" ? "compact" : "expanded",
-                          }));
-                          setSelectedParticipantId(participant.userId);
-                        }}
-                        onLongPress={() => {
-                          setFeaturedParticipantById((prev) => ({
-                            ...prev,
-                            [participant.userId]: !prev[participant.userId],
-                          }));
-                        }}
-                        delayLongPress={220}
-                      >
-                        {isHost && isActiveParticipant && canModerateParticipant ? (
-                          <View style={[styles.stageParticipantActionMenu, styles.stageParticipantActionMenuGrid]}>
-                            <TouchableOpacity
-                              style={styles.stageParticipantActionBtn}
-                              activeOpacity={0.82}
-                              onPress={() => {
-                                setParticipantStateById((prev) => {
-                                  const current = prev[participant.userId] ?? {
-                                    isMuted: !!participant.isMuted,
-                                    role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                    isRemoved: false,
-                                  };
-                                  return {
-                                    ...prev,
-                                    [participant.userId]: {
-                                      ...current,
-                                      isMuted: current.role === "host" ? current.isMuted : !current.isMuted,
-                                    },
-                                  };
-                                });
-                                emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
-                              }}
-                            >
-                              <Text style={styles.stageParticipantActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.stageParticipantActionBtn}
-                              activeOpacity={0.82}
-                              onPress={() => {
-                                setParticipantStateById((prev) => {
-                                  const current = prev[participant.userId] ?? {
-                                    isMuted: !!participant.isMuted,
-                                    role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                    isRemoved: false,
-                                  };
-                                  return {
-                                    ...prev,
-                                    [participant.userId]: {
-                                      ...current,
-                                      role: current.role === "host" ? "host" : current.role === "speaker" ? "listener" : "speaker",
-                                    },
-                                  };
-                                });
-                                emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
-                              }}
-                            >
-                              <Text style={styles.stageParticipantActionText}>{isSpeakerRole ? "Listener" : "Speaker"}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.stageParticipantActionBtn, styles.stageParticipantActionBtnDanger]}
-                              activeOpacity={0.82}
-                              onPress={() => {
-                                setParticipantStateById((prev) => {
-                                  const current = prev[participant.userId] ?? {
-                                    isMuted: !!participant.isMuted,
-                                    role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                    isRemoved: false,
-                                  };
-                                  return {
-                                    ...prev,
-                                    [participant.userId]: {
-                                      ...current,
-                                      isRemoved: current.role === "host" ? current.isRemoved : !current.isRemoved,
-                                    },
-                                  };
-                                });
-                                emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
-                              }}
-                            >
-                              <Text style={[styles.stageParticipantActionText, styles.stageParticipantActionTextDanger]}>
-                                {isRemoved ? "Restore" : "Remove"}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        ) : null}
-                        <View style={styles.stagePresenceTapWrap}>
-                          <Animated.View
+                        return (
+                          <TouchableOpacity
+                            key={`hybrid-presence-${participant.userId}`}
+                            activeOpacity={0.74}
                             style={[
-                              styles.stagePresenceBubble,
-                              styles.stagePresenceBubbleGrid,
-                              isExpanded && styles.stagePresenceBubbleExpandedGrid,
-                              isFeatured && styles.stagePresenceBubbleFeaturedGrid,
+                              styles.stageParticipantTile,
+                              styles.stageParticipantTileGrid,
+                              isExpanded && styles.stageParticipantTileExpandedGrid,
+                              isFeatured && styles.stageParticipantTileFeaturedGrid,
+                              isActiveParticipant && !isFeatured && styles.stageParticipantTileActive,
+                              isRemoved && styles.stageParticipantTileRemoved,
                             ]}
+                            onPress={() => {
+                              if (isHost) {
+                                debugLog("live-stage", "host tap user", { userId: participant.userId });
+                              } else {
+                                debugLog("live-stage", "request mic", { userId: participant.userId });
+                                if (isCurrentUser && canRequestSeat(participantState) && !isRequesting) {
+                                  requestStageSeat(participant.userId).catch(() => {});
+                                }
+                              }
+                              setActiveSpeakerUserId(participant.userId);
+                              setActiveParticipantId(participant.userId);
+                              setParticipantPresentationById((prev) => ({
+                                ...prev,
+                                [participant.userId]: (prev[participant.userId] ?? "compact") === "expanded" ? "compact" : "expanded",
+                              }));
+                              setSelectedParticipantId(participant.userId);
+                            }}
+                            onLongPress={() => {
+                              setFeaturedParticipantById((prev) => ({
+                                ...prev,
+                                [participant.userId]: !prev[participant.userId],
+                              }));
+                            }}
+                            delayLongPress={220}
                           >
-                            {isHostBubble ? <View style={styles.stagePresenceHostDot} /> : null}
-                            {(showLocalRtcPreview || bubbleMediaUri) ? (
-                              <View
-                                style={[
-                                  styles.stagePresenceFaceClip,
-                                  styles.stagePresenceFaceClipGrid,
-                                  isExpanded && styles.stagePresenceFaceClipExpandedGrid,
-                                  isFeatured && styles.stagePresenceFaceClipFeaturedGrid,
-                                ]}
-                              >
-                                {showLocalRtcPreview && RTCView ? (
-                                  <RTCView
-                                    streamURL={localStreamURL as string}
-                                    style={styles.stagePresenceCameraFill}
-                                    objectFit="cover"
-                                    mirror
-                                  />
-                                ) : showRemoteLiveVideo && RTCView ? (
-                                  <RTCView
-                                    streamURL={mediaParticipant.streamURL as string}
-                                    style={styles.stagePresenceCameraFill}
-                                    objectFit="cover"
-                                    mirror={false}
-                                  />
-                                ) : (
-                                  <Image
-                                    source={{ uri: bubbleMediaUri }}
-                                    style={[
-                                      styles.stagePresenceImage,
-                                      styles.stagePresenceImageGrid,
-                                      isExpanded && styles.stagePresenceImageExpandedGrid,
-                                      isFeatured && styles.stagePresenceImageFeaturedGrid,
-                                    ]}
-                                  />
-                                )}
-                                {isCurrentUser && liveFaceFilter !== "none" && (showLocalRtcPreview || !!bubbleMediaUri) ? (
-                                  <View
-                                    pointerEvents="none"
-                                    style={[
-                                      styles.stagePresenceFilterOverlay,
-                                      {
-                                        backgroundColor: activeLiveFaceFilter.overlayColor,
-                                        borderColor: activeLiveFaceFilter.borderColor,
-                                      },
-                                    ]}
-                                  />
+                            {isHost && isActiveParticipant && canModerateParticipant ? (
+                              <View style={[styles.stageParticipantActionMenu, styles.stageParticipantActionMenuGrid]}>
+                                {isRequesting ? (
+                                  <>
+                                    <TouchableOpacity
+                                      style={styles.stageParticipantActionBtn}
+                                      activeOpacity={0.82}
+                                      onPress={() => {
+                                        setParticipantStateById((prev) => ({
+                                          ...prev,
+                                          [participant.userId]: {
+                                            ...(prev[participant.userId] ?? participantState),
+                                            role: "speaker",
+                                          },
+                                        }));
+                                        setSeatRequestsById((prev) => {
+                                          if (!prev[participant.userId]) return prev;
+                                          const next = { ...prev };
+                                          delete next[participant.userId];
+                                          return next;
+                                        });
+                                        emitParticipantUpdate(participant.userId, { role: "speaker" });
+                                        broadcastSeatState(participant.userId, {
+                                          role: "speaker",
+                                          isMuted,
+                                          pending: false,
+                                        });
+                                      }}
+                                    >
+                                      <Text style={styles.stageParticipantActionText}>Approve Seat</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      style={styles.stageParticipantActionBtn}
+                                      activeOpacity={0.82}
+                                      onPress={() => {
+                                        setSeatRequestsById((prev) => {
+                                          if (!prev[participant.userId]) return prev;
+                                          const next = { ...prev };
+                                          delete next[participant.userId];
+                                          return next;
+                                        });
+                                        broadcastSeatRequest(participant.userId, false);
+                                      }}
+                                    >
+                                      <Text style={styles.stageParticipantActionText}>Deny</Text>
+                                    </TouchableOpacity>
+                                  </>
                                 ) : null}
+                                <TouchableOpacity
+                                  style={styles.stageParticipantActionBtn}
+                                  activeOpacity={0.82}
+                                  onPress={() => {
+                                    setParticipantStateById((prev) => {
+                                      const current = prev[participant.userId] ?? {
+                                        isMuted: !!participant.isMuted,
+                                        role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                                        isRemoved: false,
+                                      };
+                                      return {
+                                        ...prev,
+                                        [participant.userId]: {
+                                          ...current,
+                                          isMuted: current.role === "host" ? current.isMuted : !current.isMuted,
+                                        },
+                                      };
+                                    });
+                                    emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
+                                  }}
+                                >
+                                  <Text style={styles.stageParticipantActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={styles.stageParticipantActionBtn}
+                                  activeOpacity={0.82}
+                                  onPress={() => {
+                                    setParticipantStateById((prev) => {
+                                      const current = prev[participant.userId] ?? {
+                                        isMuted: !!participant.isMuted,
+                                        role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                                        isRemoved: false,
+                                      };
+                                      return {
+                                        ...prev,
+                                        [participant.userId]: {
+                                          ...current,
+                                          role: current.role === "host" ? "host" : current.role === "speaker" ? "listener" : "speaker",
+                                        },
+                                      };
+                                    });
+                                    emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
+                                    broadcastSeatState(participant.userId, {
+                                      role: isSpeakerRole ? "listener" : "speaker",
+                                      isMuted,
+                                      pending: false,
+                                    });
+                                    setSeatRequestsById((prev) => {
+                                      if (!prev[participant.userId]) return prev;
+                                      const next = { ...prev };
+                                      delete next[participant.userId];
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  <Text style={styles.stageParticipantActionText}>{isSpeakerRole ? "Move to Audience" : "Seat Participant"}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.stageParticipantActionBtn, styles.stageParticipantActionBtnDanger]}
+                                  activeOpacity={0.82}
+                                  onPress={() => {
+                                    setParticipantStateById((prev) => {
+                                      const current = prev[participant.userId] ?? {
+                                        isMuted: !!participant.isMuted,
+                                        role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                                        isRemoved: false,
+                                      };
+                                      return {
+                                        ...prev,
+                                        [participant.userId]: {
+                                          ...current,
+                                          isRemoved: current.role === "host" ? current.isRemoved : !current.isRemoved,
+                                        },
+                                      };
+                                    });
+                                    emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
+                                    broadcastSeatState(participant.userId, {
+                                      role: participantState.role,
+                                      isMuted,
+                                      isRemoved: !isRemoved,
+                                      pending: false,
+                                    });
+                                    setSeatRequestsById((prev) => {
+                                      if (!prev[participant.userId]) return prev;
+                                      const next = { ...prev };
+                                      delete next[participant.userId];
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  <Text style={[styles.stageParticipantActionText, styles.stageParticipantActionTextDanger]}>
+                                    {isRemoved ? "Restore" : "Remove"}
+                                  </Text>
+                                </TouchableOpacity>
                               </View>
-                            ) : (
-                              <Text
+                            ) : null}
+                            <View style={styles.stagePresenceTapWrap}>
+                              <Animated.View
                                 style={[
-                                  styles.stagePresenceInitial,
-                                  styles.stagePresenceInitialGrid,
-                                  isExpanded && styles.stagePresenceInitialExpandedGrid,
-                                  isFeatured && styles.stagePresenceInitialFeaturedGrid,
+                                  styles.stagePresenceBubble,
+                                  styles.stagePresenceBubbleGrid,
+                                  isExpanded && styles.stagePresenceBubbleExpandedGrid,
+                                  isFeatured && styles.stagePresenceBubbleFeaturedGrid,
                                 ]}
                               >
-                                {participantDisplayName.slice(0, 1).toUpperCase()}
-                              </Text>
-                            )}
-                            <View
+                                {isHostBubble ? <View style={styles.stagePresenceHostDot} /> : null}
+                                {(showLocalRtcPreview || bubbleMediaUri) ? (
+                                  <View
+                                    style={[
+                                      styles.stagePresenceFaceClip,
+                                      styles.stagePresenceFaceClipGrid,
+                                      isExpanded && styles.stagePresenceFaceClipExpandedGrid,
+                                      isFeatured && styles.stagePresenceFaceClipFeaturedGrid,
+                                    ]}
+                                  >
+                                    {showLocalRtcPreview && RTCView ? (
+                                      <RTCView
+                                        streamURL={localStreamURL as string}
+                                        style={styles.stagePresenceCameraFill}
+                                        objectFit="cover"
+                                        mirror
+                                      />
+                                    ) : showRemoteLiveVideo && RTCView ? (
+                                      <RTCView
+                                        streamURL={mediaParticipant.streamURL as string}
+                                        style={styles.stagePresenceCameraFill}
+                                        objectFit="cover"
+                                        mirror={false}
+                                      />
+                                    ) : (
+                                      <Image
+                                        source={{ uri: bubbleMediaUri }}
+                                        style={[
+                                          styles.stagePresenceImage,
+                                          styles.stagePresenceImageGrid,
+                                          isExpanded && styles.stagePresenceImageExpandedGrid,
+                                          isFeatured && styles.stagePresenceImageFeaturedGrid,
+                                        ]}
+                                      />
+                                    )}
+                                    {isCurrentUser && liveFaceFilter !== "none" && (showLocalRtcPreview || !!bubbleMediaUri) ? (
+                                      <View
+                                        pointerEvents="none"
+                                        style={[
+                                          styles.stagePresenceFilterOverlay,
+                                          {
+                                            backgroundColor: activeLiveFaceFilter.overlayColor,
+                                            borderColor: activeLiveFaceFilter.borderColor,
+                                          },
+                                        ]}
+                                      />
+                                    ) : null}
+                                  </View>
+                                ) : (
+                                  <Text
+                                    style={[
+                                      styles.stagePresenceInitial,
+                                      styles.stagePresenceInitialGrid,
+                                      isExpanded && styles.stagePresenceInitialExpandedGrid,
+                                      isFeatured && styles.stagePresenceInitialFeaturedGrid,
+                                    ]}
+                                  >
+                                    {participantDisplayName.slice(0, 1).toUpperCase()}
+                                  </Text>
+                                )}
+                                <View
+                                  style={[
+                                    styles.stagePresenceOnlineDot,
+                                    isLiveParticipant && !isMuted ? styles.stagePresenceOnlineDotLive : styles.stagePresenceOnlineDotIdle,
+                                  ]}
+                                />
+                                {isMuted ? <Text style={styles.stagePresenceMutedIcon}>🔇</Text> : null}
+                              </Animated.View>
+                            </View>
+                            <Text
+                              numberOfLines={1}
                               style={[
-                                styles.stagePresenceOnlineDot,
-                                isLiveParticipant && !isMuted ? styles.stagePresenceOnlineDotLive : styles.stagePresenceOnlineDotIdle,
+                                styles.stageParticipantName,
+                                styles.stageParticipantNameGrid,
+                                isExpanded && styles.stageParticipantNameExpandedGrid,
+                                isFeatured && styles.stageParticipantNameFeaturedGrid,
                               ]}
-                            />
-                            {isMuted ? <Text style={styles.stagePresenceMutedIcon}>🔇</Text> : null}
-                          </Animated.View>
-                        </View>
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.stageParticipantName,
-                            styles.stageParticipantNameGrid,
-                            isExpanded && styles.stageParticipantNameExpandedGrid,
-                            isFeatured && styles.stageParticipantNameFeaturedGrid,
-                          ]}
-                        >
-                          {participantDisplayName}
-                        </Text>
-                        <Text style={[styles.stageParticipantRole, styles.stageParticipantRoleGrid]}>
-                          {isMuted ? `${roleLabel} · Muted` : roleLabel}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                            >
+                              {participantDisplayName}
+                            </Text>
+                            <Text style={[styles.stageParticipantRole, styles.stageParticipantRoleGrid]}>
+                              {isMuted && !isRemoved ? `${roleLabel} · Muted` : roleLabel}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      {participantRow.length === 1 && !featuredParticipantById[participantRow[0]?.userId] ? (
+                        <View style={styles.stageHybridCommunitySpacer} />
+                      ) : null}
+                    </View>
+                  )}
+                />
               ) : (
                 <View style={styles.stageCommunityEmptyState}>
-                  <Text style={styles.stageCommunityEmptyText}>Community syncing</Text>
+                  <Text style={styles.stageCommunityEmptyText}>No party members in view yet.</Text>
                 </View>
               )}
             </View>
@@ -2259,14 +2727,6 @@ export default function WatchPartyLiveStageScreen() {
             </View>
           ) : null}
 
-          {commentsOpen ? (
-            <Animated.View pointerEvents="auto" style={[styles.chatOverlay, { opacity: chatOpacity, transform: [{ translateY: chatFloat }] }]}>
-              <Text style={styles.chatDrawerTitle}>Comments</Text>
-              <ScrollView style={styles.chatDrawerList} contentContainerStyle={styles.chatDrawerListContent}>
-                <Text style={styles.chatOverlayLine}>Comments are not available in this live room yet.</Text>
-              </ScrollView>
-            </Animated.View>
-          ) : null}
         </View>
         </Animated.View>
 
@@ -2281,76 +2741,108 @@ export default function WatchPartyLiveStageScreen() {
           ]}
           pointerEvents={stageOverlayVisible ? "auto" : "none"}
         >
-        <View style={[styles.liveStageLowerDock, isHybridMode && styles.liveStageLowerDockHybrid]}>
-          {isHybridMode ? (
-            <>
-              <View style={[styles.modeRow, styles.modeRowHybrid]}>
-                <TouchableOpacity
-                  style={[styles.modeBtn, !isHybridMode && styles.modeBtnOn]}
-                  activeOpacity={0.82}
-                  onPress={() => updateStageMode("live")}
-                >
-                  <Text style={[styles.modeBtnText, !isHybridMode && styles.modeBtnTextOn]}>Live-First</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
-                  activeOpacity={0.82}
-                  onPress={() => updateStageMode("hybrid")}
-                >
-                  <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
-                </TouchableOpacity>
-              </View>
+        <View style={[styles.liveStageLowerDock, styles.liveStageLowerDockHybrid]}>
+          <View style={[styles.modeRow, styles.modeRowHybrid]}>
+            <TouchableOpacity
+              style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
+              activeOpacity={0.82}
+              onPress={() => updateStageMode("live")}
+            >
+              <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
+              activeOpacity={0.82}
+              onPress={() => updateStageMode("hybrid")}
+            >
+              <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
+            </TouchableOpacity>
+          </View>
 
-              <View style={styles.stageBottomInfoCard}>
-                <View style={styles.stageBottomInfoHeader}>
-                  <Text style={styles.stageBottomInfoKicker}>COMMENTS + REACTIONS</Text>
-                  <Text style={styles.stageBottomInfoCount}>{lowerCommunityCountLabel}</Text>
-                </View>
-                <Text numberOfLines={1} style={styles.stageBottomInfoTitle}>Keep room response below the watch moment.</Text>
-                <Text style={styles.stageBottomInfoBody}>
-                  The hero and community grid stay up top while comments, reactions, and studio controls stay lower and easier to reach.
+          <View style={[styles.stageHybridCommentsCard, commentsOpen && styles.stageHybridCommentsCardActive]}>
+            <View style={styles.stageHybridCommentsHeader}>
+              <Text style={styles.stageHybridCommentsTitle}>Room comments</Text>
+              <Text style={styles.stageHybridCommentsCount}>{hybridCommentCountLabel}</Text>
+            </View>
+
+            <ScrollView
+              ref={hybridCommentsScrollRef}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={styles.stageHybridCommentsList}
+              contentContainerStyle={styles.stageHybridCommentsListContent}
+            >
+              {hybridComments.length > 0 ? (
+                hybridComments.map((comment) => (
+                  <View
+                    key={comment.id}
+                    style={[
+                      styles.stageHybridCommentRow,
+                      comment.isMe && styles.stageHybridCommentRowMe,
+                    ]}
+                  >
+                    <View style={styles.stageHybridCommentMeta}>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.stageHybridCommentAuthor,
+                          comment.isMe && styles.stageHybridCommentAuthorMe,
+                        ]}
+                      >
+                        {comment.authorLabel}
+                      </Text>
+                    </View>
+                    <Text style={styles.stageHybridCommentBody}>{comment.body}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.stageHybridCommentEmpty}>
+                  Comments from the room will land here. Say something to get the live room moving.
                 </Text>
-              </View>
+              )}
+            </ScrollView>
 
-              <View style={styles.stageTailoredActions}>
-                <TouchableOpacity
-                  style={styles.stageTailoredActionButton}
-                  activeOpacity={0.84}
-                  onPress={() => {
-                    revealStageOverlay();
-                    setStageMenuOpen(false);
-                    setStageControlsOpen(false);
-                    setFaceFilterSheetOpen(false);
-                    setReactionPickerOpen(false);
-                    setCommentsOpen((value) => !value);
-                  }}
-                >
-                  <Text style={styles.stageTailoredActionText}>Comments</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.stageTailoredActionButton}
-                  activeOpacity={0.84}
-                  onPress={() => {
-                    revealStageOverlay();
-                    setStageMenuOpen(false);
-                    setStageControlsOpen(false);
-                    setFaceFilterSheetOpen(false);
-                    setCommentsOpen(false);
-                    setReactionPickerOpen((value) => !value);
-                  }}
-                >
-                  <Text style={styles.stageTailoredActionText}>Reactions</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
-                  activeOpacity={0.84}
-                  onPress={onToggleStageControls}
-                >
-                  <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>Studio</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : null}
+            <View style={styles.stageHybridCommentInputRow}>
+              <TextInput
+                ref={hybridCommentInputRef}
+                value={hybridCommentDraft}
+                onChangeText={setHybridCommentDraft}
+                onFocus={() => {
+                  revealStageOverlay();
+                  setStageMenuOpen(false);
+                  setStageControlsOpen(false);
+                  setFaceFilterSheetOpen(false);
+                  setReactionPickerOpen(false);
+                  setCommentsOpen(true);
+                }}
+                placeholder={hybridCommentPlaceholder}
+                placeholderTextColor="rgba(190,206,232,0.72)"
+                returnKeyType="send"
+                blurOnSubmit={false}
+                editable={!hybridCommentSending}
+                onSubmitEditing={() => {
+                  void onSendHybridComment();
+                }}
+                style={styles.stageHybridCommentInput}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.stageHybridCommentSendButton,
+                  (!hybridCommentDraft.trim() || hybridCommentSending) && styles.stageHybridCommentSendButtonDisabled,
+                ]}
+                activeOpacity={0.84}
+                disabled={!hybridCommentDraft.trim() || hybridCommentSending}
+                onPress={() => {
+                  void onSendHybridComment();
+                }}
+              >
+                <Text style={styles.stageHybridCommentSendText}>
+                  {hybridCommentSending ? "Sending" : "Send"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
         <RoomReactionPicker
           visible={reactionPickerOpen}
@@ -2391,6 +2883,8 @@ export default function WatchPartyLiveStageScreen() {
         visible={!!selectedParticipant}
         participant={selectedParticipant}
         participantState={selectedParticipantState}
+        isFeatured={!!(selectedParticipant && featuredParticipantById[selectedParticipant.userId])}
+        isRequesting={!!(selectedParticipant && seatRequestsById[selectedParticipant.userId])}
         canShowProfileAction={canShowProfileAction}
         safeAreaBottom={safeAreaInsets.bottom}
         onClose={closeParticipantModal}
@@ -3033,7 +3527,21 @@ const styles = StyleSheet.create({
   stageTapRevealSurface: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 31,
+    elevation: 31,
+    justifyContent: "flex-end",
+    paddingHorizontal: 8,
+    paddingBottom: 14,
+    backgroundColor: "rgba(4,8,18,0.01)",
+  },
+  stageTapRevealSurfaceHybrid: {
+    left: -10,
+    right: -10,
+    paddingHorizontal: 18,
     backgroundColor: "transparent",
+  },
+  stageTapRevealContent: {
+    alignSelf: "stretch",
+    gap: 10,
   },
   stageHeroFilterOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -3046,6 +3554,7 @@ const styles = StyleSheet.create({
     zIndex: 31,
     flexDirection: "row",
     alignItems: "stretch",
+    justifyContent: "flex-end",
     gap: 12,
   },
   stageHybridHeroCard: {
@@ -3099,29 +3608,34 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   stageHybridCommunityCard: {
-    width: 164,
+    width: 228,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(154,182,246,0.24)",
-    backgroundColor: "rgba(6,10,18,0.76)",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 8,
+    borderColor: "rgba(168,192,245,0.2)",
+    backgroundColor: "rgba(6,10,18,0.54)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
   },
   stageHybridCommunityScroll: {
-    maxHeight: 248,
+    maxHeight: 388,
   },
   stageHybridCommunityGrid: {
+    gap: 9,
+    paddingBottom: 4,
+  },
+  stageHybridCommunityRow: {
     width: "100%",
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 8,
-    paddingBottom: 2,
+    gap: 9,
+  },
+  stageHybridCommunitySpacer: {
+    width: "47.5%",
   },
   stageHeroTagRow: {
     alignSelf: "flex-start",
@@ -3426,10 +3940,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
     marginBottom: 2,
     paddingHorizontal: 4,
   },
   stageCommunityHeaderLeft: {
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -3447,10 +3964,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.35,
     textTransform: "uppercase",
   },
+  stageCommunityLabelHybrid: {
+    color: "#E7EEFF",
+    fontSize: 11,
+    fontWeight: "800",
+    flexShrink: 1,
+  },
   stageCommunityCount: {
-    color: "#AEB9CF",
-    fontSize: 9.5,
+    color: "#C5D1E6",
+    fontSize: 10,
     fontWeight: "700",
+    flexShrink: 0,
+    marginLeft: 12,
+    textAlign: "right",
   },
   stagePresenceScroll: { marginTop: 0, maxHeight: 112 },
   stagePresenceScrollContent: { flexDirection: "row", alignItems: "stretch", gap: 8, paddingRight: 8, paddingVertical: 2 },
@@ -3468,6 +3994,124 @@ const styles = StyleSheet.create({
     color: "#AEB9CF",
     fontSize: 10,
     fontWeight: "700",
+  },
+  stageHybridCommentsCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(168,192,245,0.18)",
+    backgroundColor: "rgba(6,10,18,0.76)",
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 12,
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  stageHybridCommentsCardActive: {
+    borderColor: "rgba(186,208,255,0.28)",
+    backgroundColor: "rgba(7,12,22,0.84)",
+  },
+  stageHybridCommentsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  stageHybridCommentsTitle: {
+    color: "#F4F7FF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  stageHybridCommentsCount: {
+    color: "#AFC0DE",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  stageHybridCommentsList: {
+    maxHeight: 158,
+  },
+  stageHybridCommentsListContent: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  stageHybridCommentRow: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    gap: 4,
+  },
+  stageHybridCommentRowMe: {
+    borderColor: "rgba(186,208,255,0.18)",
+    backgroundColor: "rgba(72,92,132,0.2)",
+  },
+  stageHybridCommentMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  stageHybridCommentAuthor: {
+    color: "#E5EDFC",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  stageHybridCommentAuthorMe: {
+    color: "#FFFFFF",
+  },
+  stageHybridCommentBody: {
+    color: "#C9D4E9",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
+  stageHybridCommentEmpty: {
+    color: "#AEB9CF",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "600",
+    paddingVertical: 8,
+  },
+  stageHybridCommentInputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  stageHybridCommentInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 88,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: "#F3F7FF",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  stageHybridCommentSendButton: {
+    minHeight: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(186,208,255,0.22)",
+    backgroundColor: "rgba(56,80,126,0.78)",
+    paddingHorizontal: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stageHybridCommentSendButtonDisabled: {
+    opacity: 0.48,
+  },
+  stageHybridCommentSendText: {
+    color: "#F7FAFF",
+    fontSize: 12,
+    fontWeight: "800",
   },
   stageParticipantTile: {
     width: 68,

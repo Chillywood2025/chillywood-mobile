@@ -1,13 +1,16 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { VideoView, useVideoPlayer } from "expo-video";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
     Easing,
+    FlatList,
     Image,
     ImageBackground,
     LayoutAnimation,
@@ -22,7 +25,9 @@ import {
     UIManager,
     View,
     type GestureResponderEvent,
-    type ImageSourcePropType
+    type ImageSourcePropType,
+    type StyleProp,
+    type ViewStyle
 } from "react-native";
 
 import { titles } from "../../_data/titles";
@@ -39,6 +44,9 @@ import {
     type ContentAccessDecision,
     type TitleAccessRule,
 } from "../../_lib/monetization";
+import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
+import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
+import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { supabase } from "../../_lib/supabase";
 import {
@@ -52,9 +60,16 @@ import {
     createPartyRoom,
     emitSyncEvent,
     fetchPartyMessages,
+    getActivePartyMemberships,
     getPartyRoom,
+    getPartyRoomSnapshot,
     getSafePartyUserId,
+    joinPartyRoomSession,
+    sendPartyMessage,
+    setPartyParticipantState,
     updateRoomPlayback,
+    type WatchPartyRoomMembership,
+    type WatchPartyRoomSnapshot,
     type WatchPartyState,
 } from "../../_lib/watchParty";
 import { AccessSheet } from "../../components/monetization/access-sheet";
@@ -62,6 +77,7 @@ import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../compo
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
+import { LiveKitStageMediaSurface } from "../../components/watch-party-live/livekit-stage-media-surface";
 import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/_room-shared";
 
 const ACCENT = "#DC143C";
@@ -80,7 +96,7 @@ const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
 const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
 const PARTY_LOCAL_MAX_REACTIONS = 8;
-  const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
+const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
 const LIVE_FACE_FILTER_OPTIONS = [
   { id: "none", label: "Natural", subtitle: "No filter" },
   { id: "studio", label: "Studio Glow", subtitle: "Warm lift" },
@@ -89,8 +105,9 @@ const LIVE_FACE_FILTER_OPTIONS = [
 ] as const;
 const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
-  const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
-  const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
+const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
 type TitleRow = {
   id: string;
   title: string;
@@ -111,6 +128,7 @@ type PartyParticipant = {
   role: "host" | "co-host" | "viewer";
   avatarUrl?: string;
   cameraPreviewUrl?: string;
+  stageRole: "host" | "speaker" | "listener";
   isLive?: boolean;
   muted: boolean;
   canSpeak: boolean;
@@ -118,7 +136,174 @@ type PartyParticipant = {
   isRequestingToSpeak: boolean;
 };
 
+const derivePartyStageRole = (options: {
+  role: "host" | "co-host" | "viewer";
+  canSpeak: boolean;
+  currentStageRole?: string | null;
+}): "host" | "speaker" | "listener" => {
+  const currentStageRole = String(options.currentStageRole ?? "").trim().toLowerCase();
+  if (options.role === "host") return "host" as const;
+  if (currentStageRole === "speaker" || currentStageRole === "listener") {
+    return currentStageRole;
+  }
+  return options.canSpeak ? "speaker" : "listener";
+};
+
 type LiveFaceFilterId = (typeof LIVE_FACE_FILTER_OPTIONS)[number]["id"];
+
+type PlayerController = {
+  setPositionAsync: (positionMillis: number) => Promise<void>;
+  playAsync: () => Promise<void>;
+  pauseAsync: () => Promise<void>;
+  setRateAsync: (rate: number, shouldCorrectPitch: boolean) => Promise<void>;
+};
+
+type SharedAndroidVideoSurfaceProps = {
+  source: any;
+  style: StyleProp<ViewStyle>;
+  contentFit: "contain" | "cover";
+  shouldPlay: boolean;
+  playbackRate: number;
+  onPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
+  onLoad: (status: AVPlaybackStatus) => void;
+};
+
+const buildLoadedPlaybackStatus = ({
+  durationMillis,
+  positionMillis,
+  isPlaying,
+  didJustFinish = false,
+}: {
+  durationMillis: number;
+  positionMillis: number;
+  isPlaying: boolean;
+  didJustFinish?: boolean;
+}) =>
+  ({
+    isLoaded: true,
+    durationMillis,
+    positionMillis,
+    isPlaying,
+    didJustFinish,
+  }) as AVPlaybackStatus;
+
+const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVideoSurfaceProps>(
+  function SharedAndroidVideoSurface(
+    { source, style, contentFit, shouldPlay, playbackRate, onPlaybackStatusUpdate, onLoad },
+    ref,
+  ) {
+    const videoViewKey = useMemo(() => {
+      if (typeof source === "number") return `asset-${source}`;
+      if (typeof source === "string") return `uri-${source}`;
+      if (source && typeof source === "object" && "uri" in source) {
+        return `uri-${String((source as { uri?: unknown }).uri ?? "")}`;
+      }
+      return "shared-android-video";
+    }, [source]);
+    const player = useVideoPlayer(source, (createdPlayer) => {
+      createdPlayer.loop = false;
+      createdPlayer.preservesPitch = true;
+      createdPlayer.playbackRate = playbackRate;
+      createdPlayer.timeUpdateEventInterval = 0.25;
+    });
+    const durationMillisRef = useRef(0);
+    const positionMillisRef = useRef(0);
+    const isPlayingRef = useRef(false);
+
+    const emitStatus = useCallback(
+      (overrides?: Partial<{ durationMillis: number; positionMillis: number; isPlaying: boolean; didJustFinish: boolean }>) => {
+        const status = buildLoadedPlaybackStatus({
+          durationMillis: overrides?.durationMillis ?? durationMillisRef.current,
+          positionMillis: overrides?.positionMillis ?? positionMillisRef.current,
+          isPlaying: overrides?.isPlaying ?? isPlayingRef.current,
+          didJustFinish: overrides?.didJustFinish ?? false,
+        });
+        onPlaybackStatusUpdate(status);
+      },
+      [onPlaybackStatusUpdate],
+    );
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        async setPositionAsync(positionMillis: number) {
+          const safePositionMillis = Math.max(0, positionMillis);
+          positionMillisRef.current = safePositionMillis;
+          player.currentTime = safePositionMillis / 1000;
+          emitStatus({ positionMillis: safePositionMillis });
+        },
+        async playAsync() {
+          player.play();
+        },
+        async pauseAsync() {
+          player.pause();
+        },
+        async setRateAsync(rate: number) {
+          player.playbackRate = rate;
+        },
+      }),
+      [emitStatus, player],
+    );
+
+    useEffect(() => {
+      player.playbackRate = playbackRate;
+      player.preservesPitch = true;
+      player.timeUpdateEventInterval = 0.25;
+    }, [player, playbackRate]);
+
+    useEffect(() => {
+      if (shouldPlay) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }, [player, shouldPlay]);
+
+    useEventListener(player, "sourceLoad", ({ duration }) => {
+      const nextDurationMillis = Math.max(0, Math.round((duration ?? 0) * 1000));
+      durationMillisRef.current = nextDurationMillis;
+      const status = buildLoadedPlaybackStatus({
+        durationMillis: nextDurationMillis,
+        positionMillis: positionMillisRef.current,
+        isPlaying: isPlayingRef.current,
+      });
+      onLoad(status);
+      onPlaybackStatusUpdate(status);
+    });
+
+    useEventListener(player, "timeUpdate", ({ currentTime }) => {
+      positionMillisRef.current = Math.max(0, Math.round((currentTime ?? 0) * 1000));
+      emitStatus();
+    });
+
+    useEventListener(player, "playingChange", ({ isPlaying }) => {
+      isPlayingRef.current = isPlaying;
+      emitStatus({ isPlaying });
+    });
+
+    useEventListener(player, "playToEnd", () => {
+      positionMillisRef.current = durationMillisRef.current;
+      isPlayingRef.current = false;
+      emitStatus({
+        positionMillis: durationMillisRef.current,
+        isPlaying: false,
+        didJustFinish: true,
+      });
+    });
+
+    return (
+      <VideoView
+        key={videoViewKey}
+        player={player}
+        style={style}
+        nativeControls={false}
+        contentFit={contentFit}
+        surfaceType="textureView"
+        useExoShutter={false}
+      />
+    );
+  },
+);
 
 const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
   switch (filterId) {
@@ -208,9 +393,9 @@ export default function PlayerScreen() {
         : "none";
   const fallbackTitle = (titles[0] as any) ?? null;
   const fallbackVideo = getVideoSource(localTitle ?? fallbackTitle ?? {});
-  const showProtectedSessionNote = inWatchParty || isLiveModeFlag;
+  const showProtectedSessionNote = isLiveModeFlag;
 
-  const videoRef = useRef<Video>(null);
+  const videoRef = useRef<PlayerController | null>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
   const [titleLoading, setTitleLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
@@ -238,21 +423,25 @@ export default function PlayerScreen() {
   const [upNextCanceled, setUpNextCanceled] = useState(false);
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
+  const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
   const [partyUserId, setPartyUserId] = useState("");
   const [, setPartyViewerCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(1);
   const [partyParticipantPreview, setPartyParticipantPreview] = useState<string[]>([]);
-  const [partyChatOpen, setPartyChatOpen] = useState(false);
-  const [partyMessages, setPartyMessages] = useState<{ id: string; text: string }[]>([]);
+  const [, setPartyChatOpen] = useState(false);
+  const [, setPartyMessages] = useState<{ id: string; text: string }[]>([]);
   const [partyParticipants, setPartyParticipants] = useState<PartyParticipant[]>([]);
   const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
   const [activeParticipantIds, setActiveParticipantIds] = useState<string[]>([]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
+  const [partyCommentDraft, setPartyCommentDraft] = useState("");
+  const [partyCommentSending, setPartyCommentSending] = useState(false);
+  const [watchPartyMenuOpen, setWatchPartyMenuOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [liveFilterSheetOpen, setLiveFilterSheetOpen] = useState(false);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
-  const [, setPartyOverlayMessages] = useState<{ id: string; author: string; body: string }[]>([]);
+  const [partyOverlayMessages, setPartyOverlayMessages] = useState<{ id: string; author: string; body: string }[]>([]);
   const [partyReactionBursts, setPartyReactionBursts] = useState<{ id: string; emoji: string }[]>([]);
   const [partyLocalReactions, setPartyLocalReactions] = useState<{ id: string; emoji: string; rightOffset: number }[]>([]);
   const [partyParticipantReactions, setPartyParticipantReactions] = useState<
@@ -288,6 +477,9 @@ export default function PlayerScreen() {
   const lastJoinToastAtRef = useRef(0);
   const roomEnergyRef = useRef(0);
   const myCameraPreviewUrlRef = useRef("");
+  const partyDisplayNameRef = useRef("You");
+  const partyAvatarUrlRef = useRef("");
+  const partyMembershipMapRef = useRef<Record<string, WatchPartyRoomMembership>>({});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const zoomScale = useRef(new Animated.Value(1)).current;
@@ -355,6 +547,16 @@ export default function PlayerScreen() {
     if (!nextTitle) return "";
     return String(nextTitle.id ?? "").trim();
   }, [nextTitle]);
+
+  const pushPartyOverlayMessage = useCallback((msg: { id: string; author: string; body: string }) => {
+    const safeBody = String(msg.body ?? "").trim();
+    if (!safeBody) return;
+
+    setPartyOverlayMessages((prev) => {
+      if (prev.some((entry) => entry.id === msg.id)) return prev;
+      return [...prev.slice(-11), { ...msg, body: safeBody }];
+    });
+  }, []);
 
   useEffect(() => {
     const listener = zoomScale.addListener(({ value }) => {
@@ -693,16 +895,99 @@ export default function PlayerScreen() {
     };
   }, [applyPartyRoomStateToGuest, inWatchParty, partyId]);
 
+  const updatePartyMembershipMap = useCallback((memberships: WatchPartyRoomMembership[]) => {
+    partyMembershipMapRef.current = Object.fromEntries(
+      memberships.map((membership) => [membership.userId, membership]),
+    );
+  }, []);
+
+  const refreshPartyMembershipSnapshot = useCallback(async () => {
+    if (!partyId) return null;
+    const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
+    if (!snapshot) return null;
+    updatePartyMembershipMap(snapshot.memberships);
+    return snapshot;
+  }, [partyId, updatePartyMembershipMap]);
+
+  const syncCurrentPartyPresence = useCallback(async (overrides?: Partial<{
+    canSpeak: boolean;
+    stageRole: "host" | "speaker" | "listener";
+    isRequestingToSpeak: boolean;
+  }>) => {
+    const channel = partySocialChannelRef.current;
+    const trackedUserId = String(partySyncUserIdRef.current ?? partyUserId ?? "").trim();
+    if (!channel || !trackedUserId) return;
+
+    const membership = partyMembershipMapRef.current[trackedUserId];
+    const role = membership?.role === "host" ? "host" : "viewer";
+    const currentParticipant = partyParticipants.find((entry) => entry.id === trackedUserId);
+    const canSpeak = overrides?.canSpeak ?? membership?.canSpeak ?? role === "host";
+    const stageRole = overrides?.stageRole ?? derivePartyStageRole({
+      role: role === "host" ? "host" : "viewer",
+      canSpeak,
+      currentStageRole: membership?.stageRole,
+    });
+
+    await channel.track({
+      userId: trackedUserId,
+      username: partyDisplayNameRef.current,
+      avatarUrl: partyAvatarUrlRef.current || undefined,
+      cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
+      role,
+      displayName: partyDisplayNameRef.current,
+      isLive: true,
+      avatarIndex: Number.parseInt(trackedUserId.slice(-3), 16) % 70,
+      canSpeak,
+      stageRole,
+      isRequestingToSpeak: overrides?.isRequestingToSpeak ?? currentParticipant?.isRequestingToSpeak ?? false,
+    }).catch(() => {});
+  }, [partyParticipants, partyUserId]);
+
+  const broadcastPartySeatRequest = useCallback(async (participantId: string, pending: boolean) => {
+    if (!partySocialChannelRef.current) return;
+    await partySocialChannelRef.current.send({
+      type: "broadcast",
+      event: "participant:seat-request",
+      payload: {
+        participantId,
+        pending,
+      },
+    }).catch(() => {});
+  }, []);
+
+  const broadcastPartySeatState = useCallback(async (participantId: string, options: {
+    canSpeak: boolean;
+    stageRole: "host" | "speaker" | "listener";
+    isRequestingToSpeak?: boolean;
+  }) => {
+    if (!partySocialChannelRef.current) return;
+    await partySocialChannelRef.current.send({
+      type: "broadcast",
+      event: "participant:seat-state",
+      payload: {
+        participantId,
+        canSpeak: options.canSpeak,
+        stageRole: options.stageRole,
+        isRequestingToSpeak: !!options.isRequestingToSpeak,
+      },
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!inWatchParty || !partyId) {
+      setWatchPartyLiveKitJoinContract(null);
       setPartyViewerCount(0);
       setViewerCount(1);
       setPartyParticipantPreview([]);
       setPartyParticipants([]);
       setPartyUserId("");
       setPartyChatOpen(false);
+      setPartyCommentDraft("");
+      setPartyCommentSending(false);
       setPartyOverlayMessages([]);
       setPartyReactionBursts([]);
+      partyMembershipMapRef.current = {};
+      partyAvatarUrlRef.current = "";
       Object.values(partyReactionTimersRef.current).forEach((timer) => clearTimeout(timer));
       partyReactionTimersRef.current = {};
       if (partySocialChannelRef.current) {
@@ -713,10 +998,6 @@ export default function PlayerScreen() {
     }
 
     let active = true;
-
-    const pushOverlayMessage = (msg: { id: string; author: string; body: string }) => {
-      setPartyOverlayMessages((prev) => [...prev.slice(-11), msg]);
-    };
 
     const pushReactionBurst = (emojiRaw: unknown) => {
       const emoji = String(emojiRaw ?? "").trim();
@@ -796,6 +1077,8 @@ export default function PlayerScreen() {
       } catch {
         // keep fallback displayName
       }
+      partyDisplayNameRef.current = displayName;
+      partyAvatarUrlRef.current = profileAvatarUrl;
       myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
       const selfIdentityIds = new Set([
         trackedUserId,
@@ -806,6 +1089,101 @@ export default function PlayerScreen() {
         const resolved = String(value ?? "").trim();
         return !!resolved && selfIdentityIds.has(resolved);
       };
+
+      const applyMembershipSnapshotToParticipants = (snapshot: WatchPartyRoomSnapshot | null) => {
+        if (!snapshot) return;
+        const activeMemberships = getActivePartyMemberships(snapshot.memberships);
+        if (activeMemberships.length === 0) return;
+
+        setPartyViewerCount(activeMemberships.length);
+        setViewerCount(activeMemberships.length);
+        setPartyParticipantPreview(
+          activeMemberships.slice(0, 3).map((membership) =>
+            isCurrentIdentity(membership.userId)
+              ? "You"
+              : resolveIdentityName(membership.displayName, membership.displayName, "Guest", "Guest"),
+          ),
+        );
+
+        setPartyParticipants((prev) => {
+          const previousById = new Map(prev.map((entry) => [entry.id, entry]));
+          const next = activeMemberships.map((membership) => {
+            const existing = previousById.get(membership.userId);
+            const role: "host" | "co-host" | "viewer" = membership.role === "host" ? "host" : "viewer";
+            const isCurrentUser = isCurrentIdentity(membership.userId);
+
+            return {
+              id: membership.userId,
+              name: isCurrentUser
+                ? "You"
+                : resolveIdentityName(
+                    membership.displayName,
+                    membership.displayName,
+                    existing?.name,
+                    "Guest",
+                  ),
+              role,
+              avatarUrl:
+                membership.avatarUrl
+                || existing?.avatarUrl
+                || (isCurrentUser ? profileAvatarUrl || undefined : undefined),
+              cameraPreviewUrl:
+                membership.cameraPreviewUrl
+                || existing?.cameraPreviewUrl
+                || (isCurrentUser ? profileCameraPreviewUrl || undefined : undefined),
+              stageRole: derivePartyStageRole({
+                role,
+                canSpeak: membership.canSpeak,
+                currentStageRole: membership.stageRole,
+              }),
+              isLive: true,
+              muted: membership.isMuted,
+              canSpeak: membership.canSpeak,
+              isSpeaking: existing?.isSpeaking ?? false,
+              isRequestingToSpeak: existing?.isRequestingToSpeak ?? false,
+            } satisfies PartyParticipant;
+          });
+
+          next.sort((a, b) => {
+            const aMe = isCurrentIdentity(a.id) ? 1 : 0;
+            const bMe = isCurrentIdentity(b.id) ? 1 : 0;
+            if (aMe !== bMe) return bMe - aMe;
+            const rank = (participant: PartyParticipant) => {
+              if (participant.role === "host") return 0;
+              if (participant.canSpeak) return 1;
+              if (participant.isRequestingToSpeak) return 2;
+              return 3;
+            };
+            const roleDiff = rank(a) - rank(b);
+            if (roleDiff !== 0) return roleDiff;
+            return a.name.localeCompare(b.name);
+          });
+
+          return next;
+        });
+      };
+
+      const initialSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
+      if (!active) return;
+      applyMembershipSnapshotToParticipants(initialSnapshot);
+
+      if (initialSnapshot) {
+        const existingMembership = initialSnapshot.memberships.find((membership) => membership.userId === trackedUserId) ?? null;
+        await joinPartyRoomSession({
+          partyId,
+          userId: trackedUserId,
+          role: trackedUserId === initialSnapshot.room.hostUserId ? "host" : existingMembership?.role ?? "viewer",
+          stageRole: existingMembership?.stageRole,
+          canSpeak: existingMembership?.canSpeak ?? trackedUserId === initialSnapshot.room.hostUserId,
+          cameraEnabled: !!profileCameraPreviewUrl,
+          micEnabled: true,
+          displayName,
+          avatarUrl: profileAvatarUrl,
+          cameraPreviewUrl: profileCameraPreviewUrl,
+        }).catch(() => null);
+        const refreshedSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
+        applyMembershipSnapshotToParticipants(refreshedSnapshot);
+      }
 
       const history = await fetchPartyMessages(partyId, 30).catch(() => []);
       if (!active) return;
@@ -819,20 +1197,31 @@ export default function PlayerScreen() {
         }));
       setPartyOverlayMessages(chatHistory);
 
-      if (partySocialChannelRef.current) {
-        supabase.removeChannel(partySocialChannelRef.current);
-        partySocialChannelRef.current = null;
+      const channelName = `party-chat-${partyId}`;
+      const channelsToRemove = supabase
+        .getChannels()
+        .filter(
+          (existingChannel) =>
+            existingChannel === partySocialChannelRef.current ||
+            existingChannel.topic === channelName ||
+            existingChannel.topic === `realtime:${channelName}`,
+        );
+      partySocialChannelRef.current = null;
+      if (channelsToRemove.length > 0) {
+        await Promise.all(channelsToRemove.map((existingChannel) => supabase.removeChannel(existingChannel).catch(() => null)));
       }
 
-      const channel = supabase.channel(`party-chat-${partyId}`, {
+      const channel = supabase.channel(channelName, {
         config: { presence: { key: trackedUserId } },
       });
+      partySocialChannelRef.current = channel;
 
       channel.on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{
           userId?: string;
           username?: string;
           role?: string;
+          stageRole?: string;
           displayName?: string;
           avatarIndex?: number;
           avatarUrl?: string;
@@ -855,6 +1244,7 @@ export default function PlayerScreen() {
                   userId?: string;
                   username?: string;
                   role?: string;
+                  stageRole?: string;
                   displayName?: string;
                   avatarIndex?: number;
                   avatarUrl?: string;
@@ -884,6 +1274,7 @@ export default function PlayerScreen() {
                   userId?: string;
                   username?: string;
                   role?: string;
+                  stageRole?: string;
                   displayName?: string;
                   avatarIndex?: number;
                   avatarUrl?: string;
@@ -898,25 +1289,46 @@ export default function PlayerScreen() {
               : undefined;
             const resolvedUserId = String(presence?.userId ?? key).trim();
             const existing = previousById.get(resolvedUserId);
-            const rawRole = String(presence?.role ?? existing?.role ?? "").trim().toLowerCase();
+            const membership = partyMembershipMapRef.current[resolvedUserId];
+            const rawRole = String(
+              membership?.role
+              ?? presence?.role
+              ?? existing?.role
+              ?? "",
+            ).trim().toLowerCase();
             const role: "host" | "co-host" | "viewer" =
               rawRole === "host" ? "host" : rawRole === "co-host" || rawRole === "cohost" ? "co-host" : "viewer";
             const canSpeakFromPresence =
-              typeof presence?.canSpeak === "boolean"
-                ? presence.canSpeak
-                : typeof existing?.canSpeak === "boolean"
-                  ? existing.canSpeak
-                  : role === "host" || role === "co-host";
+              typeof membership?.canSpeak === "boolean"
+                ? membership.canSpeak
+                : typeof presence?.canSpeak === "boolean"
+                  ? presence.canSpeak
+                  : typeof existing?.canSpeak === "boolean"
+                    ? existing.canSpeak
+                    : role === "host" || role === "co-host";
+            const stageRole = derivePartyStageRole({
+              role,
+              canSpeak: canSpeakFromPresence,
+              currentStageRole:
+                membership?.stageRole
+                ?? presence?.stageRole
+                ?? existing?.stageRole,
+            });
             const isCurrentUser = isCurrentIdentity(resolvedUserId);
             const resolvedName = resolveIdentityName(
               presence?.username,
               presence?.displayName,
+              membership?.displayName,
               existing?.name,
               isCurrentUser ? displayName : "",
               "Guest",
             );
-            const resolvedAvatarUrl = String(presence?.avatarUrl ?? "").trim() || (isCurrentUser ? profileAvatarUrl : "");
-            const resolvedCameraPreviewUrl = String(presence?.cameraPreviewUrl ?? presence?.camera_preview_url ?? "").trim() || (isCurrentUser ? profileCameraPreviewUrl : "");
+            const resolvedAvatarUrl =
+              String(presence?.avatarUrl ?? membership?.avatarUrl ?? "").trim()
+              || (isCurrentUser ? profileAvatarUrl : "");
+            const resolvedCameraPreviewUrl =
+              String(presence?.cameraPreviewUrl ?? presence?.camera_preview_url ?? membership?.cameraPreviewUrl ?? "").trim()
+              || (isCurrentUser ? profileCameraPreviewUrl : "");
 
             return {
               id: resolvedUserId,
@@ -924,8 +1336,9 @@ export default function PlayerScreen() {
               role,
               avatarUrl: resolvedAvatarUrl || existing?.avatarUrl,
               cameraPreviewUrl: resolvedCameraPreviewUrl || existing?.cameraPreviewUrl,
+              stageRole,
               isLive: typeof presence?.isLive === "boolean" ? presence.isLive : existing?.isLive,
-              muted: typeof presence?.muted === "boolean" ? presence.muted : existing?.muted ?? false,
+              muted: typeof presence?.muted === "boolean" ? presence.muted : membership?.isMuted ?? existing?.muted ?? false,
               canSpeak: canSpeakFromPresence,
               isSpeaking: typeof presence?.isSpeaking === "boolean" ? presence.isSpeaking : existing?.isSpeaking ?? false,
               isRequestingToSpeak:
@@ -937,15 +1350,21 @@ export default function PlayerScreen() {
 
           const hasSelf = next.some((entry) => isCurrentIdentity(entry.id));
           if (!hasSelf) {
+            const selfMembership = partyMembershipMapRef.current[trackedUserId];
             next.unshift({
               id: trackedUserId,
               name: "You",
-              role: partySyncRoleRef.current === "host" ? "host" : "viewer",
-              avatarUrl: previousById.get(trackedUserId)?.avatarUrl,
+              role: selfMembership?.role === "host" ? "host" : "viewer",
+              avatarUrl: previousById.get(trackedUserId)?.avatarUrl || profileAvatarUrl || undefined,
               cameraPreviewUrl: previousById.get(trackedUserId)?.cameraPreviewUrl || profileCameraPreviewUrl || undefined,
+              stageRole: derivePartyStageRole({
+                role: selfMembership?.role === "host" ? "host" : "viewer",
+                canSpeak: selfMembership?.canSpeak ?? partySyncRoleRef.current === "host",
+                currentStageRole: selfMembership?.stageRole,
+              }),
               isLive: true,
-              muted: previousById.get(trackedUserId)?.muted ?? false,
-              canSpeak: previousById.get(trackedUserId)?.canSpeak ?? partySyncRoleRef.current === "host",
+              muted: previousById.get(trackedUserId)?.muted ?? selfMembership?.isMuted ?? false,
+              canSpeak: previousById.get(trackedUserId)?.canSpeak ?? selfMembership?.canSpeak ?? partySyncRoleRef.current === "host",
               isSpeaking: previousById.get(trackedUserId)?.isSpeaking ?? false,
               isRequestingToSpeak: previousById.get(trackedUserId)?.isRequestingToSpeak ?? false,
             });
@@ -955,14 +1374,77 @@ export default function PlayerScreen() {
             const aMe = isCurrentIdentity(a.id) ? 1 : 0;
             const bMe = isCurrentIdentity(b.id) ? 1 : 0;
             if (aMe !== bMe) return bMe - aMe;
-            const rank = (role: "host" | "co-host" | "viewer") => (role === "host" ? 0 : role === "co-host" ? 1 : 2);
-            const roleDiff = rank(a.role) - rank(b.role);
+            const rank = (participant: PartyParticipant) => {
+              if (participant.role === "host") return 0;
+              if (participant.canSpeak) return 1;
+              if (participant.isRequestingToSpeak) return 2;
+              return 3;
+            };
+            const roleDiff = rank(a) - rank(b);
             if (roleDiff !== 0) return roleDiff;
             return a.name.localeCompare(b.name);
           });
 
           return next;
         });
+      });
+
+      channel.on("broadcast", { event: "participant:seat-request" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const pending = !!payload?.pending;
+        setPartyParticipants((prev) =>
+          prev.map((entry) =>
+            entry.id === participantId
+              ? { ...entry, isRequestingToSpeak: pending && !entry.canSpeak }
+              : entry,
+          ),
+        );
+        if (participantId === trackedUserId) {
+          syncCurrentPartyPresence({ isRequestingToSpeak: pending }).catch(() => {});
+        }
+      });
+
+      channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const nextCanSpeak = !!payload?.canSpeak;
+        const nextStageRole = derivePartyStageRole({
+          role: partyMembershipMapRef.current[participantId]?.role === "host" ? "host" : "viewer",
+          canSpeak: nextCanSpeak,
+          currentStageRole: String(payload?.stageRole ?? ""),
+        });
+
+        const currentMembership = partyMembershipMapRef.current[participantId];
+        if (currentMembership) {
+          partyMembershipMapRef.current[participantId] = {
+            ...currentMembership,
+            canSpeak: nextCanSpeak,
+            stageRole: nextStageRole,
+          };
+        }
+
+        setPartyParticipants((prev) =>
+          prev.map((entry) =>
+            entry.id === participantId
+              ? {
+                  ...entry,
+                  canSpeak: nextCanSpeak,
+                  stageRole: nextStageRole,
+                  isRequestingToSpeak: !!payload?.isRequestingToSpeak,
+                  isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
+                }
+              : entry,
+          ),
+        );
+
+        if (participantId === trackedUserId) {
+          syncCurrentPartyPresence({
+            canSpeak: nextCanSpeak,
+            stageRole: nextStageRole,
+            isRequestingToSpeak: !!payload?.isRequestingToSpeak,
+          }).catch(() => {});
+        }
       });
 
       channel.on("broadcast", { event: "reaction" }, ({ payload }: { payload: Record<string, unknown> }) => {
@@ -975,29 +1457,19 @@ export default function PlayerScreen() {
         const body = String(payload?.body ?? "").trim();
         if (!body) return;
         const authorLabel = String(payload?.authorLabel ?? "User");
-        pushOverlayMessage({
+        const incomingUserId = String(payload?.userId ?? "").trim();
+        pushPartyOverlayMessage({
           id: String(payload?.id ?? `party-msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-          author: authorLabel,
+          author: isCurrentIdentity(incomingUserId) ? "You" : authorLabel,
           body,
         });
       });
 
       channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await channel.track({
-            userId: trackedUserId,
-            username: displayName,
-            avatarUrl: profileAvatarUrl || undefined,
-            cameraPreviewUrl: profileCameraPreviewUrl || undefined,
-            role: partySyncRoleRef.current === "host" ? "host" : "viewer",
-            displayName,
-            isLive: true,
-            avatarIndex: Number.parseInt(trackedUserId.slice(-3), 16) % 70,
-          });
+          await syncCurrentPartyPresence();
         }
       });
-
-      partySocialChannelRef.current = channel;
     };
 
     bootstrapPartySocial();
@@ -1011,7 +1483,7 @@ export default function PlayerScreen() {
         partySocialChannelRef.current = null;
       }
     };
-  }, [inWatchParty, partyId]);
+  }, [inWatchParty, partyId, pushPartyOverlayMessage, refreshPartyMembershipSnapshot, syncCurrentPartyPresence]);
 
   useEffect(() => {
     return () => {
@@ -1242,6 +1714,111 @@ export default function PlayerScreen() {
     }
   }, [controlsVisible, isPlaying]);
 
+  const onSendPartyComment = useCallback(async () => {
+    if (!inWatchParty || !partyId || partyCommentSending) return;
+
+    const body = String(partyCommentDraft ?? "").trim();
+    if (!body) return;
+
+    const commentUserId = String(partyUserId || (await getSafePartyUserId().catch(() => "")) || "").trim();
+    const localId = `party-msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const authorLabel = String(partyDisplayNameRef.current ?? "").trim() || "Guest";
+
+    pushPartyOverlayMessage({
+      id: localId,
+      author: "You",
+      body,
+    });
+    setPartyCommentDraft("");
+    setControlsVisible(true);
+    resetAutoHideTimer();
+    setPartyCommentSending(true);
+
+    try {
+      await sendPartyMessage(partyId, commentUserId, "chat", body, { username: authorLabel });
+      await partySocialChannelRef.current?.send({
+        type: "broadcast",
+        event: "message",
+        payload: {
+          id: localId,
+          kind: "chat",
+          body,
+          userId: commentUserId,
+          authorLabel,
+        },
+      }).catch(() => {});
+    } finally {
+      setPartyCommentSending(false);
+    }
+  }, [
+    inWatchParty,
+    partyCommentDraft,
+    partyCommentSending,
+    partyId,
+    partyUserId,
+    pushPartyOverlayMessage,
+    resetAutoHideTimer,
+  ]);
+
+  const requestPartySeat = useCallback(async () => {
+    const trackedUserId = String(partyUserId || partySyncUserIdRef.current || "").trim();
+    if (!inWatchParty || !partyId || !trackedUserId) return;
+    const currentParticipant = partyParticipants.find((entry) => entry.id === trackedUserId);
+    if (!currentParticipant || currentParticipant.role === "host" || currentParticipant.canSpeak || currentParticipant.isRequestingToSpeak) {
+      return;
+    }
+
+    setPartyParticipants((prev) =>
+      prev.map((entry) =>
+        entry.id === trackedUserId ? { ...entry, isRequestingToSpeak: true } : entry,
+      ),
+    );
+    setControlsVisible(true);
+    resetAutoHideTimer();
+    await syncCurrentPartyPresence({ isRequestingToSpeak: true }).catch(() => {});
+    await broadcastPartySeatRequest(trackedUserId, true);
+  }, [broadcastPartySeatRequest, inWatchParty, partyId, partyParticipants, partyUserId, resetAutoHideTimer, syncCurrentPartyPresence]);
+
+  const persistPartySeatState = useCallback(async (participantId: string, options: {
+    canSpeak: boolean;
+    stageRole: "host" | "speaker" | "listener";
+    isRequestingToSpeak?: boolean;
+  }) => {
+    if (!inWatchParty || !partyId || !participantId || partySyncRoleRef.current !== "host") return;
+
+    const existingMembership = partyMembershipMapRef.current[participantId];
+    const nextMembership = await setPartyParticipantState(partyId, participantId, {
+      role: existingMembership?.role ?? "viewer",
+      stageRole: options.stageRole,
+      canSpeak: options.canSpeak,
+      isMuted: options.canSpeak ? existingMembership?.isMuted : false,
+      membershipState: existingMembership?.membershipState ?? "active",
+    }).catch(() => null);
+
+    if (nextMembership) {
+      partyMembershipMapRef.current[participantId] = nextMembership;
+    }
+
+    setPartyParticipants((prev) =>
+      prev.map((entry) =>
+        entry.id === participantId
+          ? {
+              ...entry,
+              canSpeak: options.canSpeak,
+              stageRole: options.stageRole,
+              isRequestingToSpeak: !!options.isRequestingToSpeak,
+              isSpeaking: options.canSpeak ? entry.isSpeaking : false,
+            }
+          : entry,
+      ),
+    );
+
+    await broadcastPartySeatState(participantId, options);
+    if (participantId === String(partyUserId || partySyncUserIdRef.current || "").trim()) {
+      await syncCurrentPartyPresence(options).catch(() => {});
+    }
+  }, [broadcastPartySeatState, inWatchParty, partyId, partyUserId, syncCurrentPartyPresence]);
+
   const handleSingleTap = () => {
     if (isStandalonePlayer && standaloneAccessLoading) return;
     if (standalonePlaybackBlocked) {
@@ -1263,17 +1840,7 @@ export default function PlayerScreen() {
       (durationRef.current > 0 && currentPositionRef.current >= durationRef.current - 1500);
 
     if (reachedEnd) {
-      videoRef.current
-        ?.setPositionAsync(0)
-        .then(() => videoRef.current?.playAsync())
-        .then(() => {
-          didJustFinishRef.current = false;
-          currentPositionRef.current = 0;
-          setPositionMillis(0);
-          setIsPlaying(true);
-          if (titleId) writeProgressForTitle(titleId, 0, durationRef.current || undefined).catch(() => {});
-        })
-        .catch(() => {});
+      void replayFromStart();
       return;
     }
 
@@ -1834,6 +2401,37 @@ export default function PlayerScreen() {
     }
   }, [resetAutoHideTimer]);
 
+  const onToggleWatchPartyComments = useCallback(() => {
+    if (!inWatchParty || isLiveModeFlag) return;
+    resetAutoHideTimer();
+    setWatchPartyMenuOpen(false);
+    setPartyCommentsOpen((value) => !value);
+  }, [inWatchParty, isLiveModeFlag, resetAutoHideTimer]);
+
+  const onToggleWatchPartyMenu = useCallback(() => {
+    if (!inWatchParty || isLiveModeFlag) return;
+    resetAutoHideTimer();
+    setPartyCommentsOpen(false);
+    setWatchPartyMenuOpen((value) => !value);
+  }, [inWatchParty, isLiveModeFlag, resetAutoHideTimer]);
+
+  const onSelectWatchPartyRate = useCallback((rate: number) => {
+    resetAutoHideTimer();
+    setWatchPartyMenuOpen(false);
+    void onSelectRate(rate);
+  }, [onSelectRate, resetAutoHideTimer]);
+
+  const onToggleWatchPartyMyList = useCallback(() => {
+    resetAutoHideTimer();
+    setWatchPartyMenuOpen(false);
+    void onToggleMyList();
+  }, [onToggleMyList, resetAutoHideTimer]);
+
+  const onPressWatchPartyRoom = useCallback(() => {
+    setWatchPartyMenuOpen(false);
+    onReturnToPartyRoom();
+  }, [onReturnToPartyRoom]);
+
   const showLivePresenceEvent = useCallback((message: string) => {
     setLivePresenceEvent(message);
     if (livePresenceEventTimeoutRef.current) {
@@ -2236,11 +2834,49 @@ export default function PlayerScreen() {
     () => liveBubbleParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
     [liveBubbleParticipants],
   );
+  const currentWatchPartyParticipantName = useMemo(
+    () => liveBubbleParticipants.find((participant) => participant.id === trackedUserId)?.name || "You",
+    [liveBubbleParticipants, trackedUserId],
+  );
+  const shouldRenderWatchPartyLiveKit = inWatchParty && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
     if (livePrimarySpeakers.length === 1) return `🎤 ${livePrimarySpeakers[0].name} speaking`;
     return `🎤 ${livePrimarySpeakers[0].name} +1 speaking`;
   }, [livePrimarySpeakers]);
+
+  useEffect(() => {
+    if (!inWatchParty || !partyId || Platform.OS === "web") {
+      setWatchPartyLiveKitJoinContract(null);
+      return;
+    }
+
+    if (watchPartyLiveKitJoinContract?.roomName === partyId) return;
+    if (!trackedUserId || trackedUserId === "anon") return;
+
+    const preparedContract = consumePreparedLiveKitJoinBoundary({
+      surface: "watch-party-live",
+      roomName: partyId,
+      participantIdentity: trackedUserId,
+    });
+    if (!preparedContract) return;
+
+    setWatchPartyLiveKitJoinContract(preparedContract);
+    debugLog("livekit", "consumed watch-party-live join contract", {
+      roomName: preparedContract.roomName,
+      endpoint: preparedContract.endpoint,
+      participantRole: preparedContract.participantRole,
+      requestedGrants: preparedContract.requestedGrants,
+    });
+  }, [inWatchParty, partyId, trackedUserId, watchPartyLiveKitJoinContract?.roomName]);
+
+  const onWatchPartyLiveKitFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
+    debugLog("livekit", "falling back to legacy watch-party-live playback path", {
+      reason,
+      roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
+    });
+    setWatchPartyLiveKitJoinContract(null);
+  }, [partyId, watchPartyLiveKitJoinContract?.roomName]);
 
   useEffect(() => {
     if (!activeParticipantId) return;
@@ -2488,12 +3124,29 @@ export default function PlayerScreen() {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo]);
-  const [playbackSource, setPlaybackSource] = useState<any>(() => (typeof source === "number" ? null : source));
+  const sharedPartyResolvedSource = useMemo(() => {
+    if (!inWatchParty) return source;
+    if (displayItem?.video_url && displayItem.video_url.trim()) {
+      return { uri: displayItem.video_url.trim() };
+    }
+    if (titleLoading) return null;
+    return displayItem?.video || fallbackVideo;
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, source, titleLoading]);
+  const [playbackSource, setPlaybackSource] = useState<any>(() =>
+    typeof sharedPartyResolvedSource === "number" ? null : sharedPartyResolvedSource,
+  );
   useEffect(() => {
     let cancelled = false;
 
-    if (typeof source !== "number") {
-      setPlaybackSource(source);
+    if (!sharedPartyResolvedSource) {
+      setPlaybackSource(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (typeof sharedPartyResolvedSource !== "number") {
+      setPlaybackSource(sharedPartyResolvedSource);
       return () => {
         cancelled = true;
       };
@@ -2502,24 +3155,24 @@ export default function PlayerScreen() {
     setPlaybackSource(null);
 
     // Android preview builds need the bundled asset resolved to a local URI before expo-av can play it.
-    const asset = Asset.fromModule(source);
+    const asset = Asset.fromModule(sharedPartyResolvedSource);
     void asset
       .downloadAsync()
       .then(() => {
         if (cancelled) return;
         const localUri = asset.localUri ?? asset.uri;
-        setPlaybackSource(localUri ? { uri: localUri } : source);
+        setPlaybackSource(localUri ? { uri: localUri } : sharedPartyResolvedSource);
       })
       .catch(() => {
         if (!cancelled) {
-          setPlaybackSource(source);
+          setPlaybackSource(sharedPartyResolvedSource);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [source]);
+  }, [sharedPartyResolvedSource]);
   const frameworkBackgroundSource = useMemo<ImageSourcePropType | null>(() => {
     const poster = String((displayItem as any)?.poster_url ?? "").trim();
     if (poster) return { uri: poster };
@@ -2530,6 +3183,7 @@ export default function PlayerScreen() {
   }, [displayItem, localTitle, fallbackTitle]);
   const isLiveMode = isLiveModeFlag;
   const isSharedPartyPlayback = inWatchParty && !isLiveMode;
+  const shouldUseSharedAndroidVideoSurface = Platform.OS === "android" && isSharedPartyPlayback;
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
@@ -2627,6 +3281,20 @@ export default function PlayerScreen() {
     videoRef.current?.pauseAsync().catch(() => {});
   }, [isStandalonePlayer, standalonePlaybackGateActive]);
 
+  useEffect(() => {
+    if (!isSharedPartyPlayback) {
+      setWatchPartyMenuOpen(false);
+      return;
+    }
+
+    setSpeedMenuOpen(false);
+
+    if (!controlsVisible) {
+      setWatchPartyMenuOpen(false);
+      setPartyCommentsOpen(false);
+    }
+  }, [controlsVisible, isSharedPartyPlayback]);
+
   const hasActiveRailParticipants = useMemo(
     () => liveBubbleParticipants.some((entry) => entry.isSpeaking || primaryActiveParticipantIds.includes(entry.id)),
     [liveBubbleParticipants, primaryActiveParticipantIds],
@@ -2640,6 +3308,11 @@ export default function PlayerScreen() {
     if (partyParticipantPreview.length === 0) return "";
     return partyParticipantPreview.slice(0, 2).join(" · ");
   }, [partyParticipantPreview]);
+  const watchPartySyncLabel = useMemo(() => {
+    if (!isSharedPartyPlayback) return "";
+    const syncLead = partySyncRole === "host" ? "Hosting the room" : "Synced with the host";
+    return partySyncStatus ? `${syncLead} · ${partySyncStatus}` : syncLead;
+  }, [isSharedPartyPlayback, partySyncRole, partySyncStatus]);
   const standaloneContextTitle = useMemo(() => {
     if (standaloneAccessLoading) return "Checking access before playback starts.";
     if (standalonePlaybackUnknown) return "Playback access needs another check.";
@@ -2872,31 +3545,49 @@ export default function PlayerScreen() {
     triggerParticipantReactionBoost,
   ]);
 
-  const renderParticipantPanel = (liveLayout = false, dockLayout = false) => (
-    <View
-      style={[
-        styles.partyFeedCard,
-        liveLayout && styles.partyFeedCardLive,
-        dockLayout && styles.partyFeedCardLiveDock,
-        !liveLayout && styles.partyFeedCardTitleCompact,
-      ]}
-    >
-      <ScrollView
+  const renderParticipantPanel = (liveLayout = false, dockLayout = false) => {
+    return (
+      <View
+        style={[
+          styles.partyFeedCard,
+          liveLayout && styles.partyFeedCardLive,
+          dockLayout && styles.partyFeedCardLiveDock,
+          !liveLayout && styles.partyFeedCardTitleCompact,
+        ]}
+      >
+      <FlatList
         horizontal
+        data={liveBubbleParticipants}
+        keyExtractor={(participant) => participant.id}
         showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={Platform.OS === "android"}
+        initialNumToRender={dockLayout ? 18 : liveLayout ? 12 : 10}
+        maxToRenderPerBatch={dockLayout ? 20 : 16}
+        windowSize={7}
+        extraData={{
+          trackedUserId,
+          partySyncRole,
+          activeParticipantId,
+          primaryActiveParticipantIds,
+          participantReactionBoostIds,
+          partyParticipantReactions,
+          liveFaceFilter,
+          cameraGranted: !!cameraPermission?.granted,
+        }}
         contentContainerStyle={[
           styles.participantBubbleScroll,
           liveLayout && styles.participantBubbleScrollLive,
           dockLayout && styles.participantBubbleScrollLiveDock,
           !liveLayout && styles.participantBubbleScrollTitleCompact,
         ]}
-      >
-        {liveBubbleParticipants.map((participant) => {
+        renderItem={({ item: participant }) => {
           const isCurrentUser = participant.id === trackedUserId;
           const isHost = partySyncRole === "host";
-          const isExpanded = liveLayout && !dockLayout && isHost && activeParticipantId === participant.id;
+          const isExpanded = liveLayout && isHost && activeParticipantId === participant.id;
           const isSpeaking = participant.isSpeaking && participant.canSpeak;
           const isActive = primaryActiveParticipantIds.includes(participant.id);
+          const isFeatured = participant.canSpeak && (isActive || activeParticipantId === participant.id) && participant.role !== "host";
           const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
           const shouldDim = primaryActiveParticipantIds.length > 0 && !isActive;
           const isReactionBoosted = participantReactionBoostIds.includes(participant.id);
@@ -2910,13 +3601,17 @@ export default function PlayerScreen() {
           const pressScale = participantPressScaleMapRef.current[participant.id] ?? 1;
           const joinScale = participantJoinScaleMapRef.current[participant.id] ?? 1;
           const isOnlineActive = isSpeaking || isActive;
-          const showLocalCameraPreview = Platform.OS !== "web" && isCurrentUser && !!cameraPermission?.granted;
+          const showLocalCameraPreview = (
+            Platform.OS !== "web"
+            && isCurrentUser
+            && !!cameraPermission?.granted
+            && !shouldRenderWatchPartyLiveKit
+          );
           const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
           const initials = getInitials(participant.name);
 
           return (
             <Animated.View
-              key={participant.id}
               style={[
                 styles.participantBubbleItem,
                 liveLayout && styles.participantBubbleItemLive,
@@ -2963,11 +3658,7 @@ export default function PlayerScreen() {
                   markParticipantActive(participant.id, 2400);
                   bumpRoomEnergy(0.03);
                   if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
-                    setPartyParticipants((prev) =>
-                      prev.map((entry) =>
-                        entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
-                      ),
-                    );
+                    requestPartySeat().catch(() => {});
                   }
                   if (!isHost) return;
                   setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
@@ -2980,6 +3671,7 @@ export default function PlayerScreen() {
                       styles.participantAvatar,
                       liveLayout && styles.participantAvatarLive,
                       dockLayout && styles.participantAvatarLiveDock,
+                      dockLayout && styles.watchPartyParticipantAvatar,
                       !liveLayout && styles.participantAvatarTitleCompact,
                       participant.muted && styles.participantAvatarMuted,
                     ]}
@@ -3062,68 +3754,55 @@ export default function PlayerScreen() {
                     </Animated.View>
                   ))}
                 </View>
-                {!dockLayout ? (
-                  <Text
-                    style={[
-                      styles.participantName,
-                      liveLayout && styles.participantNameLive,
-                      dockLayout && styles.participantNameLiveDock,
-                      !liveLayout && styles.participantNameTitleCompact,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {participant.id === trackedUserId ? "You" : participant.name}
-                  </Text>
-                ) : null}
-                {liveLayout && !dockLayout ? (
-                  <Text style={styles.partyParticipantStatus}>
+                <Text
+                  style={[
+                    styles.participantName,
+                    liveLayout && styles.participantNameLive,
+                    dockLayout && styles.participantNameLiveDock,
+                    !liveLayout && styles.participantNameTitleCompact,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {participant.id === trackedUserId ? "You" : participant.name}
+                </Text>
+                {liveLayout ? (
+                  <Text style={[styles.partyParticipantStatus, dockLayout && styles.partyParticipantStatusDock]}>
                     {getLiveParticipantStatusText({
                       isSpeaking,
                       isRequesting,
                       isMuted: participant.muted,
                       role: participant.role,
+                      canSpeak: participant.canSpeak,
+                      isFeatured,
                     })}
                   </Text>
                 ) : null}
               </TouchableOpacity>
 
               {isExpanded ? (
-                <View style={styles.participantExpandedControls}>
+                <View style={[styles.participantExpandedControls, dockLayout && styles.participantExpandedControlsDock]}>
                   {isRequesting ? (
                     <>
                       <TouchableOpacity
-                        style={styles.partyParticipantControlBtn}
+                        style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                         onPress={() => {
                           suppressNextSpeakingEventRef.current[participant.id] = "start";
-                          setPartyParticipants((prev) => {
-                            let nextParticipants = prev.map((entry) =>
+                          setPartyParticipants((prev) =>
+                            prev.map((entry) =>
                               entry.id === participant.id
-                                ? { ...entry, canSpeak: true, isSpeaking: true, isRequestingToSpeak: false }
+                                ? { ...entry, canSpeak: true, stageRole: "speaker", isSpeaking: true, isRequestingToSpeak: false }
                                 : entry,
-                            );
-
-                            speakingOrderRef.current = [
-                              ...speakingOrderRef.current.filter((id) => id !== participant.id),
-                              participant.id,
-                            ];
-
-                            const currentlySpeakingIds = nextParticipants
-                              .filter((entry) => entry.canSpeak && entry.isSpeaking)
-                              .map((entry) => entry.id);
-
-                            if (currentlySpeakingIds.length > 2) {
-                              const orderedSpeaking = speakingOrderRef.current.filter((id) => currentlySpeakingIds.includes(id));
-                              const toDropCount = orderedSpeaking.length - 2;
-                              const dropIds = new Set(orderedSpeaking.slice(0, toDropCount));
-
-                              nextParticipants = nextParticipants.map((entry) =>
-                                dropIds.has(entry.id) ? { ...entry, isSpeaking: false } : entry,
-                              );
-                              speakingOrderRef.current = orderedSpeaking.slice(toDropCount);
-                            }
-
-                            return nextParticipants;
-                          });
+                            ),
+                          );
+                          speakingOrderRef.current = [
+                            ...speakingOrderRef.current.filter((id) => id !== participant.id),
+                            participant.id,
+                          ];
+                          persistPartySeatState(participant.id, {
+                            canSpeak: true,
+                            stageRole: "speaker",
+                            isRequestingToSpeak: false,
+                          }).catch(() => {});
                           showLivePresenceEvent(`✅ ${participant.name} is now allowed to speak`);
                           bumpRoomEnergy(0.11);
                           markParticipantActive(participant.id, 2400);
@@ -3134,13 +3813,17 @@ export default function PlayerScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.partyParticipantControlBtn}
+                        style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                         onPress={() => {
                           setPartyParticipants((prev) =>
                             prev.map((entry) =>
                               entry.id === participant.id ? { ...entry, isRequestingToSpeak: false } : entry,
                             ),
                           );
+                          if (participant.id === trackedUserId) {
+                            syncCurrentPartyPresence({ isRequestingToSpeak: false }).catch(() => {});
+                          }
+                          broadcastPartySeatRequest(participant.id, false).catch(() => {});
                           showLivePresenceEvent(`❌ ${participant.name} request denied`);
                           bumpRoomEnergy(0.04);
                         }}
@@ -3152,7 +3835,7 @@ export default function PlayerScreen() {
                   ) : null}
 
                   <TouchableOpacity
-                    style={styles.partyParticipantControlBtn}
+                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                     onPress={() => {
                       setPartyParticipants((prev) => {
                         const target = prev.find((entry) => entry.id === participant.id);
@@ -3205,20 +3888,27 @@ export default function PlayerScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.partyParticipantControlBtn}
+                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                     onPress={() => {
+                      const nextCanSpeak = !participant.canSpeak;
                       setPartyParticipants((prev) =>
                         prev.map((entry) => {
                           if (entry.id !== participant.id) return entry;
-                          const nextCanSpeak = !entry.canSpeak;
                           return {
                             ...entry,
                             canSpeak: nextCanSpeak,
+                            stageRole: nextCanSpeak ? "speaker" : "listener",
                             isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
-                            isRequestingToSpeak: nextCanSpeak ? false : entry.isRequestingToSpeak,
+                            isRequestingToSpeak: false,
                           };
                         }),
                       );
+
+                      persistPartySeatState(participant.id, {
+                        canSpeak: nextCanSpeak,
+                        stageRole: nextCanSpeak ? "speaker" : "listener",
+                        isRequestingToSpeak: false,
+                      }).catch(() => {});
 
                       if (participant.canSpeak) {
                         speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
@@ -3227,11 +3917,11 @@ export default function PlayerScreen() {
                     }}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.partyParticipantControlBtnText}>{participant.canSpeak ? "Revoke Mic" : "Grant Mic"}</Text>
+                    <Text style={styles.partyParticipantControlBtnText}>{participant.canSpeak ? "Move to Audience" : "Seat Participant"}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.partyParticipantControlBtn}
+                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                     onPress={() => {
                       setPartyParticipants((prev) =>
                         prev.map((entry) =>
@@ -3248,10 +3938,11 @@ export default function PlayerScreen() {
               ) : null}
             </Animated.View>
           );
-        })}
-      </ScrollView>
-    </View>
-  );
+        }}
+      />
+      </View>
+    );
+  };
 
   const renderTitleParticipantExpandedPanel = () => (
     <View style={styles.titleParticipantFeedWrap}>
@@ -3262,13 +3953,173 @@ export default function PlayerScreen() {
             {watchPartyAudienceLabel || "Shared playback syncing"}
             {watchPartyPreviewLabel ? ` · ${watchPartyPreviewLabel}` : ""}
           </Text>
+          {watchPartySyncLabel ? (
+            <Text style={styles.watchPartyPlayerBandSubtle}>{watchPartySyncLabel}</Text>
+          ) : null}
         </View>
-        <TouchableOpacity style={styles.watchPartyPlayerBandBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
-          <Text style={styles.watchPartyPlayerBandBtnText}>Party Room</Text>
-        </TouchableOpacity>
       </View>
+      <View style={styles.watchPartySocialShell}>
+        <View style={styles.watchPartySocialMetaRow}>
+          <View style={styles.watchPartySocialMetaPill}>
+            <Text style={styles.watchPartySocialMetaText}>{watchPartyAudienceLabel || "Shared playback syncing"}</Text>
+          </View>
+          {watchPartyPreviewLabel ? (
+            <View style={styles.watchPartySocialMetaPill}>
+              <Text style={styles.watchPartySocialMetaText} numberOfLines={1}>{watchPartyPreviewLabel}</Text>
+            </View>
+          ) : null}
+          {watchPartyLiveKitJoinContract ? (
+            <View style={[styles.watchPartySocialMetaPill, styles.watchPartySocialMetaPillRole]}>
+              <Text style={styles.watchPartySocialRoleText}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
+            </View>
+          ) : null}
+        </View>
+        {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
+          <View style={styles.watchPartySocialMediaFrame}>
+            <LiveKitStageMediaSurface
+              joinContract={watchPartyLiveKitJoinContract}
+              onFallback={onWatchPartyLiveKitFallback}
+              fillParent={false}
+              surfaceLabel="Watch-Party Live"
+              containerStyle={styles.watchPartySocialMediaFrameInner}
+            />
+          </View>
+        ) : (
+          <View style={styles.watchPartySocialPlaceholder}>
+            <Text style={styles.watchPartySocialPlaceholderKicker}>SHARED PLAYER</Text>
+            <Text style={styles.watchPartySocialPlaceholderBody}>
+              Shared party video syncs here after Watch-Party Live reconnects to the room.
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <Animated.View
+        pointerEvents={controlsVisible ? "auto" : "none"}
+        style={[
+          styles.watchPartyDockOverlay,
+          {
+            opacity: partyOverlayControlsOpacity,
+            transform: [{ translateY: partyOverlayControlsTranslateY }],
+          },
+        ]}
+      >
+        <View style={styles.watchPartyDockActionRow}>
+          <TouchableOpacity
+            style={[styles.watchPartyDockActionBtn, partyCommentsOpen && styles.watchPartyDockActionBtnActive]}
+            onPress={onToggleWatchPartyComments}
+            activeOpacity={0.88}
+          >
+            <Text style={[styles.watchPartyDockActionText, partyCommentsOpen && styles.watchPartyDockActionTextActive]}>Comments</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.watchPartyDockActionBtn, watchPartyMenuOpen && styles.watchPartyDockActionBtnActive]}
+            onPress={onToggleWatchPartyMenu}
+            activeOpacity={0.88}
+          >
+            <Text style={[styles.watchPartyDockActionText, watchPartyMenuOpen && styles.watchPartyDockActionTextActive]}>Menu</Text>
+          </TouchableOpacity>
+        </View>
+
+        {partyCommentsOpen ? (
+          <View style={styles.watchPartyDockCard}>{renderPartyCommentsContent()}</View>
+        ) : null}
+
+        {watchPartyMenuOpen ? (
+          <View style={styles.watchPartyDockCard}>
+            <Text style={styles.watchPartyDockCardTitle}>Room Menu</Text>
+            <View style={styles.watchPartyDockMenuRow}>
+              <TouchableOpacity style={styles.watchPartyDockMenuBtn} onPress={onPressWatchPartyRoom} activeOpacity={0.88}>
+                <Text style={styles.watchPartyDockMenuBtnText}>Party Room</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.watchPartyDockMenuBtn, myListBusy && styles.secondaryBtnDisabled]}
+                onPress={onToggleWatchPartyMyList}
+                disabled={myListBusy}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.watchPartyDockMenuBtnText}>
+                  {myListBusy ? "Saving..." : inMyList ? "In My List" : "Add to My List"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.watchPartyDockRateRow}>
+              {SPEED_OPTIONS.map((option) => {
+                const active = playbackRate === option;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.watchPartyDockRateChip, active && styles.watchPartyDockRateChipActive]}
+                    onPress={() => onSelectWatchPartyRate(option)}
+                    activeOpacity={0.88}
+                  >
+                    <Text style={[styles.watchPartyDockRateChipText, active && styles.watchPartyDockRateChipTextActive]}>
+                      {option}x
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+      </Animated.View>
       {renderParticipantPanel(true, true)}
     </View>
+  );
+
+  const renderPartyCommentsContent = () => (
+    <>
+      <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
+      <ScrollView
+        style={styles.partyCommentsList}
+        contentContainerStyle={styles.partyCommentsListContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {partyOverlayMessages.length > 0 ? (
+          partyOverlayMessages.map((msg) => (
+            <Text key={msg.id} style={styles.partyCommentsLine}>
+              <Text style={styles.partyCommentsAuthor}>{msg.author}: </Text>
+              {msg.body}
+            </Text>
+          ))
+        ) : (
+          <Text style={styles.partyCommentsLine}>No comments yet. Start the conversation.</Text>
+        )}
+      </ScrollView>
+      {inWatchParty ? (
+        <View style={styles.partyCommentsInputRow}>
+          <TextInput
+            value={partyCommentDraft}
+            onChangeText={(value) => {
+              setPartyCommentDraft(value);
+              resetAutoHideTimer();
+            }}
+            onFocus={() => {
+              setControlsVisible(true);
+              resetAutoHideTimer();
+            }}
+            onSubmitEditing={() => {
+              void onSendPartyComment();
+            }}
+            style={styles.partyCommentsInput}
+            placeholder="Say something"
+            placeholderTextColor="rgba(212,216,226,0.7)"
+            editable={!partyCommentSending}
+            returnKeyType="send"
+          />
+          <TouchableOpacity
+            style={styles.partyCommentsSendBtn}
+            onPress={() => {
+              void onSendPartyComment();
+            }}
+            disabled={partyCommentSending || !partyCommentDraft.trim()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.partyCommentsSendBtnText}>{partyCommentSending ? "..." : "Send"}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </>
   );
 
   const renderLiveFilterSheet = (sheetStyle?: object) => (
@@ -3334,22 +4185,31 @@ export default function PlayerScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.playerFrameworkRoot}>
-        {frameworkBackgroundSource ? (
+        {isSharedPartyPlayback ? (
+          <>
+            <ImageBackground source={WATCH_PARTY_BRANDED_BACKGROUND} style={styles.playerFrameworkBackground} resizeMode="cover" />
+            {frameworkBackgroundSource ? (
+              <ImageBackground source={frameworkBackgroundSource} style={styles.watchPartyFrameworkPosterWash} resizeMode="cover" />
+            ) : null}
+          </>
+        ) : frameworkBackgroundSource ? (
           <ImageBackground source={frameworkBackgroundSource} style={styles.playerFrameworkBackground} resizeMode="cover" />
         ) : (
           <View style={styles.playerFrameworkBackgroundFallback} />
         )}
-        <View style={styles.playerFrameworkOverlay} pointerEvents="none" />
-        <View style={styles.playerFrameworkDepthTop} pointerEvents="none" />
-        <View style={styles.playerFrameworkDepthBottom} pointerEvents="none" />
+        <View style={[styles.playerFrameworkOverlay, isSharedPartyPlayback && styles.playerFrameworkOverlayWatchParty]} pointerEvents="none" />
+        <View style={[styles.playerFrameworkDepthTop, isSharedPartyPlayback && styles.playerFrameworkDepthTopWatchParty]} pointerEvents="none" />
+        <View style={[styles.playerFrameworkDepthBottom, isSharedPartyPlayback && styles.playerFrameworkDepthBottomWatchParty]} pointerEvents="none" />
 
-        <View style={styles.container}>
+        <View style={[styles.container, isSharedPartyPlayback && styles.containerWatchParty]}>
         {!inWatchParty && !isLiveMode && isStandaloneFullscreen ? null : (
-        <View style={[styles.topSection, styles.topSectionFramework]}>
-          <Text style={styles.kicker}>CHI&apos;LLYWOOD · PLAYER</Text>
-          <Text style={styles.header} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
+        <View style={[styles.topSection, styles.topSectionFramework, isSharedPartyPlayback && styles.topSectionWatchParty]}>
+          <Text style={[styles.kicker, isSharedPartyPlayback && styles.kickerWatchParty]}>
+            {isSharedPartyPlayback ? "CHI&apos;LLYWOOD · WATCH-PARTY LIVE" : "CHI&apos;LLYWOOD · PLAYER"}
+          </Text>
+          <Text style={[styles.header, isSharedPartyPlayback && styles.headerWatchParty]} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
           {inWatchParty && isLiveMode ? <Text style={styles.liveModeTopLabel}>LIVE SESSION</Text> : null}
-          {inWatchParty && partySyncRole ? (
+          {inWatchParty && partySyncRole && !isSharedPartyPlayback ? (
             <View style={[styles.partySyncPill, styles.partySyncPillFramework]}>
               <Text style={styles.partySyncPillText}>
                 {partySyncRole === "host" ? "Host" : "You"}
@@ -3482,11 +4342,7 @@ export default function PlayerScreen() {
                           markParticipantActive(participant.id, 2400);
                           bumpRoomEnergy(0.03);
                           if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
-                            setPartyParticipants((prev) =>
-                              prev.map((entry) =>
-                                entry.id === participant.id ? { ...entry, isRequestingToSpeak: true } : entry,
-                              ),
-                            );
+                            requestPartySeat().catch(() => {});
                           }
                           if (!isHost) return;
                           setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
@@ -3640,10 +4496,7 @@ export default function PlayerScreen() {
 
             {partyCommentsOpen && !inWatchParty ? (
               <View style={styles.partyCommentsDrawer}>
-                <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
-                <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                  <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
-                </ScrollView>
+                {renderPartyCommentsContent()}
               </View>
             ) : null}
 
@@ -3666,19 +4519,34 @@ export default function PlayerScreen() {
             {inWatchParty && entryBoostActive ? (
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
-            <Animated.View style={[styles.videoAnimatedWrap, { transform: [{ scale: zoomScale }] }]}> 
+            <Animated.View style={[styles.videoAnimatedWrap, { transform: [{ scale: zoomScale }] }]}>
               {playbackSource ? (
-                <Video
-                  ref={videoRef}
-                  source={playbackSource}
-                  style={styles.video}
-                  resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
-                  shouldPlay={isLiveMode ? true : isPlaying}
-                  isLooping={false}
-                  useNativeControls={false}
-                  onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-                  onLoad={onVideoLoad}
-                />
+                shouldUseSharedAndroidVideoSurface ? (
+                  <SharedAndroidVideoSurface
+                    ref={videoRef}
+                    source={playbackSource}
+                    style={styles.video}
+                    contentFit={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? "cover" : "contain"}
+                    shouldPlay={isLiveMode ? true : isPlaying}
+                    playbackRate={playbackRate}
+                    onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+                    onLoad={onVideoLoad}
+                  />
+                ) : (
+                  <Video
+                    ref={(node) => {
+                      videoRef.current = node as unknown as PlayerController | null;
+                    }}
+                    source={playbackSource}
+                    style={styles.video}
+                    resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
+                    shouldPlay={isLiveMode ? true : isPlaying}
+                    isLooping={false}
+                    useNativeControls={false}
+                    onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+                    onLoad={onVideoLoad}
+                  />
+                )
               ) : (
                 <View style={styles.videoLoadingFallback}>
                   <ActivityIndicator color={ACCENT} />
@@ -3778,7 +4646,7 @@ export default function PlayerScreen() {
 
               {inWatchParty ? (
                 <>
-                <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
+                <View style={[styles.partyOverlayTopRow, styles.partyOverlayTopRowWatchParty]} pointerEvents="box-none">
                   <Animated.View style={[styles.partyPresencePill, styles.partyPresencePillWatchPartyTitle, { opacity: partyPresenceOpacity }]}> 
                     <View style={styles.partyPresenceRow}>
                       <Text style={styles.partyPresenceIcon}>👥</Text>
@@ -3790,35 +4658,6 @@ export default function PlayerScreen() {
                       </Text>
                     ) : null}
                   </Animated.View>
-
-                  <Animated.View
-                    pointerEvents={controlsVisible ? "auto" : "none"}
-                    style={[
-                      styles.partyOverlayActions,
-                      styles.partyOverlayActionsWatchPartyTitle,
-                      {
-                        opacity: partyOverlayControlsOpacity,
-                        transform: [{ translateY: partyOverlayControlsTranslateY }],
-                      },
-                    ]}
-                  >
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
-                        onPress={onToggleMyList}
-                        disabled={myListBusy}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                        onPress={() => setSpeedMenuOpen((value) => !value)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
-                      </TouchableOpacity>
-                    </Animated.View>
                 </View>
 
                 {partyReactionBursts.length > 0 ? (
@@ -3864,37 +4703,6 @@ export default function PlayerScreen() {
                     <Text style={styles.partyLocalReactionText}>{entry.emoji}</Text>
                   </Animated.View>
                 ))}
-
-                {partyChatOpen && !isLiveMode ? (
-                  <View style={[styles.partyChatDrawer, styles.partyChatDrawerWatchPartyTitle]}>
-                    <Text style={styles.partyChatDrawerTitle}>Live Chat</Text>
-                    <ScrollView
-                      style={{ maxHeight: 140 }}
-                      contentContainerStyle={{ paddingVertical: 8 }}
-                      showsVerticalScrollIndicator={false}
-                    >
-                      {partyMessages.map((msg) => (
-                        <Text key={msg.id} style={styles.partyMessageText}>
-                          {msg.text}
-                        </Text>
-                      ))}
-                    </ScrollView>
-                  </View>
-                ) : null}
-
-                {partyCommentsOpen && !isLiveMode ? (
-                  <View
-                    style={[
-                      styles.partyCommentsDrawer,
-                      styles.partyCommentsDrawerWatchPartyTitle,
-                    ]}
-                  >
-                    <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
-                    <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                      <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
-                    </ScrollView>
-                  </View>
-                ) : null}
               </>
             ) : (
               <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
@@ -3964,7 +4772,7 @@ export default function PlayerScreen() {
               </>
             )}
 
-            {!isLiveMode && controlsVisible && speedMenuOpen ? (
+            {isStandalonePlayer && controlsVisible && speedMenuOpen ? (
               <View style={styles.partySpeedOverlayMenu}>
                 {SPEED_OPTIONS.map((option) => {
                   const active = playbackRate === option;
@@ -4077,10 +4885,7 @@ export default function PlayerScreen() {
                         styles.watchPartyLiveCommentsDrawer,
                       ]}
                     >
-                      <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
-                      <ScrollView style={styles.partyCommentsList} contentContainerStyle={styles.partyCommentsListContent}>
-                        <Text style={styles.partyCommentsLine}>Comments are not available on this player surface yet.</Text>
-                      </ScrollView>
+                      {renderPartyCommentsContent()}
                     </View>
                   ) : null}
 
@@ -4214,8 +5019,13 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   playerFrameworkRoot: { flex: 1 },
   playerFrameworkBackground: { ...StyleSheet.absoluteFillObject },
+  watchPartyFrameworkPosterWash: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.22,
+  },
   playerFrameworkBackgroundFallback: { ...StyleSheet.absoluteFillObject, backgroundColor: "#0B0B10" },
   playerFrameworkOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(8,8,12,0.58)" },
+  playerFrameworkOverlayWatchParty: { backgroundColor: "rgba(7,6,12,0.68)" },
   playerFrameworkDepthTop: {
     position: "absolute",
     top: 0,
@@ -4223,6 +5033,9 @@ const styles = StyleSheet.create({
     right: 0,
     height: 132,
     backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  playerFrameworkDepthTopWatchParty: {
+    backgroundColor: "rgba(34,18,28,0.22)",
   },
   playerFrameworkDepthBottom: {
     position: "absolute",
@@ -4232,7 +5045,11 @@ const styles = StyleSheet.create({
     height: 210,
     backgroundColor: "rgba(0,0,0,0.32)",
   },
+  playerFrameworkDepthBottomWatchParty: {
+    backgroundColor: "rgba(10,10,18,0.54)",
+  },
   container: { flex: 1, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 8 },
+  containerWatchParty: { paddingTop: 2, paddingBottom: 10 },
   topSection: { marginBottom: 2, gap: 2 },
   topSectionFramework: {
     borderRadius: 12,
@@ -4243,8 +5060,18 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginBottom: 4,
   },
+  topSectionWatchParty: {
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+    paddingHorizontal: 2,
+    paddingVertical: 0,
+    marginBottom: 2,
+  },
   kicker: { color: "#5B5B5B", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.1 },
+  kickerWatchParty: { color: "#D2A7B5" },
   header: { color: "white", fontSize: 23, fontWeight: "900", lineHeight: 27 },
+  headerWatchParty: { fontSize: 21, lineHeight: 24 },
   liveModeTopLabel: {
     color: "#FFCCD7",
     fontSize: 11,
@@ -4749,6 +5576,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
   },
+  partyOverlayTopRowWatchParty: {
+    justifyContent: "flex-start",
+  },
   partyOverlaySpacer: { flex: 1 },
   partyPresencePill: {
     borderRadius: 999,
@@ -5194,22 +6024,25 @@ const styles = StyleSheet.create({
     overflow: "visible",
   },
   titleParticipantFeedDock: {
-    marginTop: 6,
-    borderRadius: 10,
+    marginTop: 4,
+    borderRadius: 22,
     borderWidth: 0,
-    backgroundColor: "rgba(7,7,11,0.22)",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    minHeight: 98,
-    maxHeight: 146,
+    backgroundColor: "rgba(8,10,18,0.46)",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    minHeight: 176,
+    maxHeight: 312,
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
   titleWatchPartyRailDockActive: {
-    borderColor: "rgba(220,20,60,0.32)",
-    backgroundColor: "rgba(12,8,12,0.5)",
-    shadowColor: "#DC143C",
+    backgroundColor: "rgba(12,10,20,0.62)",
+    shadowColor: "#130710",
     shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
   titleWatchPartyRailPeekFade: {
     position: "absolute",
@@ -5304,28 +6137,29 @@ const styles = StyleSheet.create({
   },
   titleParticipantFeedWrap: {
     width: "100%",
-    gap: 8,
+    gap: 10,
   },
   watchPartyPlayerBandHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
     paddingHorizontal: 4,
   },
   watchPartyPlayerBandMeta: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   watchPartyPlayerBandKicker: {
-    color: "#F0C8D2",
+    color: "#E7C0CD",
     fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 0.8,
+    letterSpacing: 1,
   },
   watchPartyPlayerBandBody: {
     color: "#E7EBF6",
-    fontSize: 11,
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  watchPartyPlayerBandSubtle: {
+    color: "#AEB4C6",
+    fontSize: 10.5,
     fontWeight: "700",
   },
   watchPartyPlayerBandBtn: {
@@ -5340,6 +6174,125 @@ const styles = StyleSheet.create({
     color: "#FFF5F7",
     fontSize: 11,
     fontWeight: "900",
+  },
+  watchPartyLiveKitCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(132, 205, 255, 0.24)",
+    backgroundColor: "rgba(8, 12, 22, 0.86)",
+    padding: 10,
+    gap: 8,
+  },
+  watchPartyLiveKitCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  watchPartyLiveKitCardCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  watchPartyLiveKitCardKicker: {
+    color: "#8FD7FF",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  watchPartyLiveKitCardTitle: {
+    color: "#F4F7FF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  watchPartyLiveKitCardRole: {
+    color: "#D9EEF9",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  watchPartyLiveKitCardSurface: {
+    height: 132,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#05070E",
+  },
+  watchPartyLiveKitCardSurfaceInner: {
+    flex: 1,
+  },
+  watchPartySocialShell: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(8, 10, 18, 0.88)",
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 8,
+    shadowColor: "#000000",
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  watchPartySocialMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+  },
+  watchPartySocialMetaPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: "100%",
+  },
+  watchPartySocialMetaPillRole: {
+    borderColor: "rgba(220,20,60,0.24)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+  },
+  watchPartySocialMetaText: {
+    color: "#DCE4F6",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  watchPartySocialRoleText: {
+    color: "#FFF5F7",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  watchPartySocialMediaFrame: {
+    height: 152,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#05070E",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  watchPartySocialMediaFrameInner: {
+    flex: 1,
+  },
+  watchPartySocialPlaceholder: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(4, 6, 12, 0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    gap: 6,
+  },
+  watchPartySocialPlaceholderKicker: {
+    color: "#F0C8D2",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  watchPartySocialPlaceholderBody: {
+    color: "#E7EBF6",
+    fontSize: 12,
+    lineHeight: 18,
   },
   titleParticipantFeedScroll: {
     maxHeight: 228,
@@ -5474,12 +6427,106 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   partyFeedCardLiveDock: {
-    minHeight: 88,
-    maxHeight: 88,
+    minHeight: 124,
+    maxHeight: 188,
     backgroundColor: "transparent",
     borderWidth: 0,
     paddingHorizontal: 0,
     paddingVertical: 0,
+  },
+  watchPartyParticipantDockCard: {
+    minHeight: 124,
+    maxHeight: 188,
+  },
+  watchPartyDockOverlay: {
+    gap: 8,
+  },
+  watchPartyDockActionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  watchPartyDockActionBtn: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 0,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  watchPartyDockActionBtnActive: {
+    backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  watchPartyDockActionText: {
+    color: "#EDF1F9",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  watchPartyDockActionTextActive: {
+    color: "#FFFFFF",
+  },
+  watchPartyDockCard: {
+    borderRadius: 18,
+    backgroundColor: "rgba(6,8,16,0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 10,
+  },
+  watchPartyDockCardTitle: {
+    color: "#F5F7FC",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  watchPartyDockCardBody: {
+    color: "#CCD3E4",
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 17,
+  },
+  watchPartyDockMenuRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  watchPartyDockMenuBtn: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 0,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  watchPartyDockMenuBtnText: {
+    color: "#F4F7FE",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  watchPartyDockRateRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  watchPartyDockRateChip: {
+    borderRadius: 999,
+    borderWidth: 0,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  watchPartyDockRateChipActive: {
+    backgroundColor: "rgba(220,20,60,0.26)",
+  },
+  watchPartyDockRateChipText: {
+    color: "#D9E0EF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  watchPartyDockRateChipTextActive: {
+    color: "#FFFFFF",
   },
   participantBubbleScroll: {
     gap: 8,
@@ -5499,10 +6546,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   participantBubbleScrollLiveDock: {
-    gap: 8,
-    alignItems: "center",
-    paddingHorizontal: 12,
-    minHeight: 88,
+    gap: 5,
+    alignItems: "flex-start",
+    paddingHorizontal: 0,
+    paddingVertical: 2,
+    minHeight: 80,
   },
   participantBubbleItem: {
     width: 74,
@@ -5536,8 +6584,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   participantBubbleItemLiveDock: {
-    width: 56,
-    borderRadius: 999,
+    width: 68,
+    borderRadius: 0,
     borderWidth: 0,
     paddingHorizontal: 0,
     paddingVertical: 0,
@@ -5565,7 +6613,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   partyParticipantBubbleTapDock: {
-    gap: 0,
+    gap: 2,
+  },
+  watchPartyParticipantRow: {
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  watchPartyParticipantRowBoosted: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  watchPartyParticipantRowTap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  watchPartyParticipantIdentity: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   partyParticipantAvatarWrap: {
     position: "relative",
@@ -5573,6 +6642,9 @@ const styles = StyleSheet.create({
   },
   partyParticipantAvatarWrapDock: {
     marginBottom: 0,
+  },
+  watchPartyParticipantAvatarWrap: {
+    marginRight: 0,
   },
   participantAvatar: {
     width: 40,
@@ -5634,11 +6706,17 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   participantAvatarLiveDock: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderColor: "rgba(255,255,255,0.24)",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderColor: "transparent",
     backgroundColor: "rgba(0,0,0,0.44)",
+  },
+  watchPartyParticipantAvatar: {
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "rgba(10,12,20,0.64)",
+    overflow: "hidden",
   },
   participantActiveRing: {
     position: "absolute",
@@ -5835,13 +6913,63 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   participantNameLiveDock: {
+    maxWidth: "100%",
     fontSize: 9,
-    color: "#E9EDF8",
+    color: "#F3F6FD",
+    textAlign: "center",
+  },
+  watchPartyParticipantScroll: {
+    maxHeight: 188,
+  },
+  watchPartyParticipantScrollContent: {
+    gap: 8,
+    paddingRight: 2,
+  },
+  watchPartyParticipantTextWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  watchPartyParticipantNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  watchPartyParticipantName: {
+    flex: 1,
+    color: "#F4F7FD",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  watchPartyParticipantStatus: {
+    color: "#AEB4C6",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  watchPartyParticipantLivePill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  watchPartyParticipantLivePillText: {
+    color: "#F5F7FC",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  watchPartyParticipantMeta: {
+    minWidth: 22,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  watchPartyParticipantReaction: {
+    fontSize: 18,
+    fontWeight: "900",
   },
   watchPartyLiveBottomDock: {
     marginTop: 6,
     marginBottom: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingTop: 6,
     paddingBottom: 6,
     borderRadius: 14,
@@ -6094,10 +7222,20 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 1,
   },
+  partyParticipantStatusDock: {
+    maxWidth: "100%",
+    color: "#C0C8D9",
+    fontSize: 8,
+    textAlign: "center",
+  },
   participantExpandedControls: {
     marginTop: 7,
     flexDirection: "row",
     gap: 6,
+  },
+  participantExpandedControlsDock: {
+    width: "100%",
+    flexDirection: "column",
   },
   partyParticipantControlBtn: {
     flex: 1,
@@ -6108,6 +7246,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     alignItems: "center",
+  },
+  partyParticipantControlBtnDock: {
+    width: "100%",
   },
   partyParticipantControlBtnText: {
     color: "#EEF1F8",

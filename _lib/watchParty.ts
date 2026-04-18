@@ -929,7 +929,15 @@ export async function setPartyParticipantState(
     .select(PARTY_ROOM_MEMBERSHIP_SELECT)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    reportRuntimeError("watch-party-set-participant-state", error ?? new Error("Missing membership row"), {
+      partyId: normalizedPartyId,
+      targetUserId: normalizedTargetUserId,
+      writableUserId,
+      updates,
+    });
+    return null;
+  }
   return rowToMembership(data as PartyMembershipRow);
 }
 
