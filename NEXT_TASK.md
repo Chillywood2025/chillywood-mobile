@@ -1,36 +1,44 @@
 # NEXT TASK
 
 ## Exact Next Task
-Carry forward the current room-seat checkpoint exactly as proved: this lane improves roles, seats, and request behavior, not full remote-live-media-for-everyone transport. Preserve as now proved that `Watch-Party Live` on `app/player/[id].tsx` is materially strong on two real phones: both phones show real shared-player video, host and viewer are both visible, the viewer request/promotion path works, the host can seat the viewer, and the viewer updates to `Seated`. Preserve as now proved that `Live Stage` hybrid on `app/watch-party/live-stage/[partyId].tsx` materially improved: both phones reached `/watch-party/live-stage/5RUUH4`, both entered the actual stage surface, `mode=hybrid` honors `Live Watch-Party`, the host hybrid panel shows the viewer as `Audience`, and the viewer hybrid panel now shows both `You · Audience` and `Host` because the hybrid self-visibility bug was fixed. Do not overclaim the remaining blocker as closed: the exact next lane is a narrow on-device proof/fix pass on `app/watch-party/live-stage/[partyId].tsx` for the host moderation action menu in hybrid, so the full Live Stage request/promote path can be honestly closed.
+Carry forward the now-restored player/live-stage baseline exactly as proved: Standalone Player stays solo-first, `Watch-Party Live` stays a bounded shared-player layer inside the player/title lane instead of growing a second shell, and `Live First` keeps the visible lower comments/reactions/studio lane plus the visible mode toggle on the live-stage owner. Keep the newly carried-forward durable LiveKit token auth fix intact as well: `supabase/config.toml` now owns `[functions.livekit-token] verify_jwt = false`, and this branch should not reopen the old ES256 gateway blocker unless fresh proof shows a regression. Also keep the newly integrated Firebase monitoring owners intact: Firebase Analytics and Remote Config remain the analytics/config owners, Crashlytics and Performance Monitoring now have repo-owned owners, and there is still no checked-in Sentry integration to remove on this branch. Do not reopen `app/player/[id].tsx` or `app/watch-party/live-stage/[partyId].tsx` speculatively. Only return if fresh runtime proof shows a new regression in the restored standalone-vs-party split, the restored `Live First` lower lane, or the Party-vs-Live route doctrine. Otherwise continue the remaining runtime-truth integration chain from this recovered foundation, with the next lane now being the LiveKit local-publish commit `cd2cc64` after this Firebase integration lands cleanly.
 
 ## Current Plan
-1. Preserve the newly proved Watch-Party Live seat/request behavior exactly as recorded.
-2. Preserve the Live Stage hybrid self-visibility fix without overstating the unproved moderation step.
-3. Reopen only `app/watch-party/live-stage/[partyId].tsx` for the host hybrid moderation action-menu proof/fix lane.
-4. Keep broader remote-live-media expansion and large-seat media scaling out of scope for this checkpoint.
+1. Preserve the restored standalone-player vs `Watch-Party Live` split exactly as now proved.
+2. Preserve the restored `Live First` lower comments/reactions/studio lane and visible mode toggle.
+3. Preserve the durable `livekit-token` function config in `supabase/config.toml` and do not reopen the old gateway auth blocker without fresh regression proof.
+4. Preserve the Firebase monitoring owners and Firebase-native crash/perf proof hooks exactly as landed.
+5. Reopen the player or live-stage owners only if fresh runtime proof shows a real regression.
+6. Otherwise continue with the next runtime-truth integration lane from this recovered foundation, starting with `cd2cc64`.
 
 ## Exact Next Batch
-- preserve the now-proved Watch-Party Live request/seating checkpoint truth
-- preserve the Live Stage hybrid self-visibility fix on `app/watch-party/live-stage/[partyId].tsx`
-- reopen only the host moderation action-menu path in hybrid Live Stage
-- re-run real-device proof only for that exact remaining blocker before claiming the Live Stage request/promote path is closed
+- preserve the restored `Watch-Party Live` player context above playback and bounded shared-social layer below
+- preserve the restored `Live First` lower comments/reactions/studio lane
+- preserve the durable `livekit-token` function config and auth-fix truth
+- preserve the Firebase monitoring owners and config
+- avoid speculative player or live-stage UI churn
+- keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- preserve the current checkpoint truth without diluting it into vague closure language
-- keep the next lane owner-local to `app/watch-party/live-stage/[partyId].tsx`
-- avoid broad transport/media rewrites and avoid reopening already-proved Watch-Party player seating behavior
-- keep unrelated code and worktree dirt out of any checkpoint
+- preserve the now-restored player/live-stage truth exactly as recorded
+- preserve the carried-forward durable LiveKit token auth fix
+- preserve the carried-forward Firebase monitoring foundation
+- avoid inventing new room shells or duplicating player structure
+- keep route doctrine unchanged
+- keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- overclaim that the full Live Stage request/promote path is already closed
-- broaden into a new RTC/SFU architecture lane or a full remote-live-media-for-everyone build
-- reopen unrelated player, chat, or non-seat room work without fresh proof
-- mix unrelated runtime or local dirt into any future checkpoint
+- reopen token issuance or transport debugging without fresh proof
+- redesign the watch-party structure again
+- broaden into Firebase/profile/admin/chat lanes beyond the already-landed monitoring owner carryforward
+- mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the host hybrid moderation action menu on `app/watch-party/live-stage/[partyId].tsx` is honestly reachable and proved on-device
-- the Live Stage request/promote path can then be called honestly closed at the same narrow runtime level already proved on `Watch-Party Live`
-- the checkpoint remains truthful about current live-seat/request behavior without implying a larger remote-media build
+- the restored standalone-player vs `Watch-Party Live` split stays true
+- the restored `Live First` lower comments lane stays regression-free
+- the durable `livekit-token` auth fix stays carried forward on this recovered base
+- the Firebase monitoring owners remain carried forward on this recovered base
+- the repo can move forward without rediscovering the stale player/live-stage structure, the old token-auth blocker, or the missing Firebase monitoring foundation

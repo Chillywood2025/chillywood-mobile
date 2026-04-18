@@ -325,6 +325,7 @@ export default function AdminStudioScreen() {
   });
   const canAccessAdmin = isSignedIn && isActive && moderationAccess.canAccessAdmin;
   const canReviewSafetyReports = hasPlatformRoleMembership(platformRoles, ["operator", "moderator"]);
+  const canManagePrivilegedAdminWrites = hasPlatformRoleMembership(platformRoles, ["operator"]);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin tools");
 
   useEffect(() => {
@@ -617,6 +618,11 @@ export default function AdminStudioScreen() {
   }, []);
 
   const loadCreatorGrantTarget = useCallback(async () => {
+    if (!canManagePrivilegedAdminWrites) {
+      setNotice({ type: "error", text: "Active operator role required to load creator grants." });
+      return;
+    }
+
     const targetUserId = creatorGrantUserId.trim();
     if (!targetUserId) {
       setCreatorGrantForm(normalizeCreatorPermissionSet(null));
@@ -634,9 +640,14 @@ export default function AdminStudioScreen() {
     } finally {
       setCreatorGrantLoading(false);
     }
-  }, [creatorGrantUserId]);
+  }, [canManagePrivilegedAdminWrites, creatorGrantUserId]);
 
   const saveCreatorGrantTarget = useCallback(async () => {
+    if (!canManagePrivilegedAdminWrites) {
+      setNotice({ type: "error", text: "Active operator role required to save creator grants." });
+      return;
+    }
+
     const targetUserId = creatorGrantUserId.trim();
     if (!targetUserId) {
       setNotice({ type: "error", text: "Enter a creator user id before saving grants." });
@@ -653,7 +664,7 @@ export default function AdminStudioScreen() {
     } finally {
       setCreatorGrantSaving(false);
     }
-  }, [creatorGrantForm, creatorGrantUserId]);
+  }, [canManagePrivilegedAdminWrites, creatorGrantForm, creatorGrantUserId]);
 
   const moveRail = useCallback((railKey: HomeRailKey, direction: -1 | 1) => {
     updateExperienceConfig((prev) => {
@@ -675,6 +686,11 @@ export default function AdminStudioScreen() {
   }, [updateExperienceConfig]);
 
   const saveExperienceConfigChanges = useCallback(async () => {
+    if (!canManagePrivilegedAdminWrites) {
+      setNotice({ type: "error", text: "Active operator role required to save global config." });
+      return;
+    }
+
     try {
       setConfigSaving(true);
 
@@ -703,7 +719,7 @@ export default function AdminStudioScreen() {
     } finally {
       setConfigSaving(false);
     }
-  }, [experienceConfig, titles]);
+  }, [canManagePrivilegedAdminWrites, experienceConfig, titles]);
 
   const openCreate = useCallback(() => {
     const nextSort = titles.reduce((acc, item) => Math.max(acc, item.sort_order ?? 0), 0) + 1;
@@ -1132,13 +1148,17 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>EXPERIENCE CONFIG</Text>
               <Text style={styles.configTitle}>Global presentation and feature controls</Text>
               <Text style={styles.configBody}>
-                Tune homepage, branding, feature visibility, and default room settings without touching code.
+                Tune homepage, feature visibility, and safe presentation defaults here. Locked product naming stays code-owned, and saving requires an active operator role.
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.configSaveBtn, { backgroundColor: themePalette.accent }, configSaving && styles.configSaveBtnDisabled]}
+              style={[
+                styles.configSaveBtn,
+                { backgroundColor: themePalette.accent },
+                (configSaving || configLoading || platformRolesLoading || !canManagePrivilegedAdminWrites) && styles.configSaveBtnDisabled,
+              ]}
               onPress={saveExperienceConfigChanges}
-              disabled={configSaving || configLoading}
+              disabled={configSaving || configLoading || platformRolesLoading || !canManagePrivilegedAdminWrites}
             >
               {configSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Config</Text>}
             </TouchableOpacity>
@@ -1479,20 +1499,16 @@ export default function AdminStudioScreen() {
               />
 
               <Text style={styles.sectionLabel}>Branding</Text>
+              <Text style={styles.configHint}>
+                Core product naming is locked by doctrine. Only safe presentation copy like the hero kicker and admin labels persists here.
+              </Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, styles.inputDisabled]}
                 placeholder="App display name"
                 placeholderTextColor="#8d8d8d"
                 value={experienceConfig.branding.appDisplayName}
-                onChangeText={(text) =>
-                  updateExperienceConfig((prev) => ({
-                    ...prev,
-                    branding: {
-                      ...prev.branding,
-                      appDisplayName: text,
-                    },
-                  }))
-                }
+                editable={false}
+                selectTextOnFocus={false}
               />
               <TextInput
                 style={styles.input}
@@ -1511,19 +1527,12 @@ export default function AdminStudioScreen() {
               />
               <View style={styles.inlineInputs}>
                 <TextInput
-                  style={[styles.input, styles.inputHalf]}
+                  style={[styles.input, styles.inputHalf, styles.inputDisabled]}
                   placeholder="Watch Party label"
                   placeholderTextColor="#8d8d8d"
                   value={experienceConfig.branding.watchPartyLabel}
-                  onChangeText={(text) =>
-                    updateExperienceConfig((prev) => ({
-                      ...prev,
-                      branding: {
-                        ...prev.branding,
-                        watchPartyLabel: text,
-                      },
-                    }))
-                  }
+                  editable={false}
+                  selectTextOnFocus={false}
                 />
                 <TextInput
                   style={[styles.input, styles.inputHalf]}
@@ -1543,66 +1552,38 @@ export default function AdminStudioScreen() {
               </View>
               <View style={styles.inlineInputs}>
                 <TextInput
-                  style={[styles.input, styles.inputHalf]}
+                  style={[styles.input, styles.inputHalf, styles.inputDisabled]}
                   placeholder="Live waiting room title"
                   placeholderTextColor="#8d8d8d"
                   value={experienceConfig.branding.liveWaitingRoomTitle}
-                  onChangeText={(text) =>
-                    updateExperienceConfig((prev) => ({
-                      ...prev,
-                      branding: {
-                        ...prev.branding,
-                        liveWaitingRoomTitle: text,
-                      },
-                    }))
-                  }
+                  editable={false}
+                  selectTextOnFocus={false}
                 />
                 <TextInput
-                  style={[styles.input, styles.inputHalf]}
+                  style={[styles.input, styles.inputHalf, styles.inputDisabled]}
                   placeholder="Party waiting room title"
                   placeholderTextColor="#8d8d8d"
                   value={experienceConfig.branding.partyWaitingRoomTitle}
-                  onChangeText={(text) =>
-                    updateExperienceConfig((prev) => ({
-                      ...prev,
-                      branding: {
-                        ...prev.branding,
-                        partyWaitingRoomTitle: text,
-                      },
-                    }))
-                  }
+                  editable={false}
+                  selectTextOnFocus={false}
                 />
               </View>
               <View style={styles.inlineInputs}>
                 <TextInput
-                  style={[styles.input, styles.inputHalf]}
+                  style={[styles.input, styles.inputHalf, styles.inputDisabled]}
                   placeholder="Live room title"
                   placeholderTextColor="#8d8d8d"
                   value={experienceConfig.branding.liveRoomTitle}
-                  onChangeText={(text) =>
-                    updateExperienceConfig((prev) => ({
-                      ...prev,
-                      branding: {
-                        ...prev.branding,
-                        liveRoomTitle: text,
-                      },
-                    }))
-                  }
+                  editable={false}
+                  selectTextOnFocus={false}
                 />
                 <TextInput
-                  style={[styles.input, styles.inputHalf]}
+                  style={[styles.input, styles.inputHalf, styles.inputDisabled]}
                   placeholder="Party room title"
                   placeholderTextColor="#8d8d8d"
                   value={experienceConfig.branding.partyRoomTitle}
-                  onChangeText={(text) =>
-                    updateExperienceConfig((prev) => ({
-                      ...prev,
-                      branding: {
-                        ...prev.branding,
-                        partyRoomTitle: text,
-                      },
-                    }))
-                  }
+                  editable={false}
+                  selectTextOnFocus={false}
                 />
               </View>
               <TextInput
@@ -1773,13 +1754,17 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>CREATOR GRANTS</Text>
               <Text style={styles.configTitle}>Backend creator monetization permissions</Text>
               <Text style={styles.configBody}>
-                Load a creator user id, then decide whether that creator can use premium rooms, Party Pass rooms, premium titles, and sponsor/ad hooks.
+                Load a creator user id, then decide whether that creator can use premium rooms, Party Pass rooms, premium titles, and sponsor/ad hooks. Active operator role required.
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.configSaveBtn, { backgroundColor: themePalette.accent }, creatorGrantSaving && styles.configSaveBtnDisabled]}
+              style={[
+                styles.configSaveBtn,
+                { backgroundColor: themePalette.accent },
+                (creatorGrantSaving || platformRolesLoading || !canManagePrivilegedAdminWrites) && styles.configSaveBtnDisabled,
+              ]}
               onPress={saveCreatorGrantTarget}
-              disabled={creatorGrantSaving}
+              disabled={creatorGrantSaving || platformRolesLoading || !canManagePrivilegedAdminWrites}
             >
               {creatorGrantSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Grants</Text>}
             </TouchableOpacity>
@@ -1795,9 +1780,12 @@ export default function AdminStudioScreen() {
               autoCapitalize="none"
             />
             <TouchableOpacity
-              style={[styles.orderBtn, creatorGrantLoading && styles.configSaveBtnDisabled]}
+              style={[
+                styles.orderBtn,
+                (creatorGrantLoading || platformRolesLoading || !canManagePrivilegedAdminWrites) && styles.configSaveBtnDisabled,
+              ]}
               onPress={loadCreatorGrantTarget}
-              disabled={creatorGrantLoading}
+              disabled={creatorGrantLoading || platformRolesLoading || !canManagePrivilegedAdminWrites}
             >
               {creatorGrantLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.orderBtnText}>Load</Text>}
             </TouchableOpacity>
@@ -1813,8 +1801,16 @@ export default function AdminStudioScreen() {
             ] as const).map(([key, label]) => (
               <TouchableOpacity
                 key={key}
-                style={[styles.toggleChip, creatorGrantForm[key] && styles.toggleChipActive]}
-                onPress={() => setCreatorGrantForm((prev) => ({ ...prev, [key]: !prev[key] }))}
+                style={[
+                  styles.toggleChip,
+                  creatorGrantForm[key] && styles.toggleChipActive,
+                  !canManagePrivilegedAdminWrites && styles.toggleChipDisabled,
+                ]}
+                onPress={() => {
+                  if (!canManagePrivilegedAdminWrites) return;
+                  setCreatorGrantForm((prev) => ({ ...prev, [key]: !prev[key] }));
+                }}
+                disabled={!canManagePrivilegedAdminWrites}
               >
                 <Text style={[styles.toggleChipText, creatorGrantForm[key] && styles.toggleChipTextActive]}>
                   {label}
@@ -2402,6 +2398,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
     maxWidth: "92%",
   },
+  configHint: {
+    color: "#9AA4B9",
+    fontSize: 11.5,
+    lineHeight: 17,
+    marginBottom: 10,
+    marginTop: -2,
+  },
   configSaveBtn: {
     borderRadius: 999,
     paddingHorizontal: 14,
@@ -2744,6 +2747,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
+  inputDisabled: {
+    opacity: 0.55,
+  },
   inlineInputs: {
     flexDirection: "row",
     gap: 10,
@@ -2789,6 +2795,9 @@ const styles = StyleSheet.create({
   },
   toggleChipTextActive: {
     color: "#fff",
+  },
+  toggleChipDisabled: {
+    opacity: 0.55,
   },
   suggestedCategories: {
     flexDirection: "row",

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "581105227336",
+    "project_id": "chillywood-app",
+    "storage_bucket": "chillywood-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:581105227336:android:5eb30fd6acbd14d6f4aa7d",
+        "android_client_info": {
+          "package_name": "com.chillywood.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBIBEyd-2rQgZ4efz_OuWYq1im3x064WTs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

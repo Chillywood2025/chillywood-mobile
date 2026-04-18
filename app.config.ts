@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import type { ConfigContext, ExpoConfig } from "@expo/config";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
@@ -5,9 +8,52 @@ const normalizeRuntimeEnvironment = (value: unknown) => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
 );
 
+const resolveExistingFile = (...candidates: Array<string | undefined>) => {
+  for (const candidate of candidates) {
+    const normalized = normalizeText(candidate);
+    if (!normalized) continue;
+
+    const absolutePath = path.resolve(__dirname, normalized);
+    if (fs.existsSync(absolutePath)) return normalized;
+  }
+
+  return undefined;
+};
+
+const mergePlugins = (
+  existingPlugins: ExpoConfig["plugins"],
+  nextPlugins: NonNullable<ExpoConfig["plugins"]>,
+): NonNullable<ExpoConfig["plugins"]> => {
+  const merged = Array.isArray(existingPlugins) ? [...existingPlugins] : [];
+
+  nextPlugins.forEach((plugin) => {
+    const pluginName = Array.isArray(plugin) ? plugin[0] : plugin;
+    const currentIndex = merged.findIndex((entry) => (Array.isArray(entry) ? entry[0] : entry) === pluginName);
+
+    if (currentIndex >= 0) {
+      merged[currentIndex] = plugin;
+      return;
+    }
+
+    merged.push(plugin);
+  });
+
+  return merged;
+};
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   const base = config as ExpoConfig;
   const existingExtra = (base.extra ?? {}) as Record<string, unknown>;
+  const existingAndroid = (
+    base.android && typeof base.android === "object" && !Array.isArray(base.android)
+      ? base.android
+      : {}
+  ) as NonNullable<ExpoConfig["android"]>;
+  const existingIos = (
+    base.ios && typeof base.ios === "object" && !Array.isArray(base.ios)
+      ? base.ios
+      : {}
+  ) as NonNullable<ExpoConfig["ios"]>;
   const existingRuntime = (
     existingExtra.runtime && typeof existingExtra.runtime === "object" && !Array.isArray(existingExtra.runtime)
       ? existingExtra.runtime
@@ -28,9 +74,39 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ? existingRuntime.legal
       : {}
   ) as Record<string, unknown>;
+  const androidGoogleServicesFile = resolveExistingFile(
+    typeof existingAndroid.googleServicesFile === "string" ? existingAndroid.googleServicesFile : undefined,
+    "./google-services.json",
+    "./android/app/google-services.json",
+  );
+  const iosGoogleServicesFile = resolveExistingFile(
+    typeof existingIos.googleServicesFile === "string" ? existingIos.googleServicesFile : undefined,
+    "./GoogleService-Info.plist",
+  );
 
   return {
     ...base,
+    android: {
+      ...base.android,
+      ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
+    },
+    ios: {
+      ...base.ios,
+      ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
+    },
+    plugins: mergePlugins(base.plugins, [
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
+      "@react-native-firebase/perf",
+      [
+        "expo-build-properties",
+        {
+          ios: {
+            useFrameworks: "static",
+          },
+        },
+      ],
+    ]),
     extra: {
       ...existingExtra,
       runtime: {
