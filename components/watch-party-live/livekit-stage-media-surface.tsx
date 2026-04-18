@@ -4,7 +4,7 @@ import { Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { reportRuntimeError } from "../../_lib/logger";
+import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 
 const {
@@ -13,6 +13,7 @@ const {
   VideoTrack,
   isTrackReference,
   useConnectionState,
+  useLocalParticipant,
   useTracks,
 } = require("@livekit/react-native") as typeof import("@livekit/react-native");
 
@@ -39,6 +40,13 @@ const toConnectionLabel = (connectionState: unknown) => {
 
 function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMediaContentProps) {
   const connectionState = useConnectionState();
+  const {
+    cameraTrack,
+    isCameraEnabled,
+    lastCameraError,
+    localParticipant,
+  } = useLocalParticipant();
+  const shouldPublishLocalCamera = joinContract.participantRole !== "viewer";
   const tracks = useTracks(
     [
       { source: Track.Source.ScreenShare, withPlaceholder: false },
@@ -46,10 +54,44 @@ function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMe
     ],
     { onlySubscribed: true },
   );
-  const primaryTrack = useMemo(
-    () => tracks.find((trackRef) => isTrackReference(trackRef)) ?? null,
-    [tracks],
+  const primaryRemoteTrack = useMemo(
+    () => tracks.find((trackRef) => (
+      isTrackReference(trackRef) && trackRef.participant.identity !== localParticipant.identity
+    )) ?? null,
+    [localParticipant.identity, tracks],
   );
+  const localCameraTrackRef = useMemo(() => {
+    if (!shouldPublishLocalCamera || !cameraTrack) return null;
+    return {
+      participant: localParticipant,
+      publication: cameraTrack,
+      source: Track.Source.Camera,
+    };
+  }, [cameraTrack, localParticipant, shouldPublishLocalCamera]);
+  const primaryTrack = localCameraTrackRef ?? primaryRemoteTrack;
+  const isShowingLocalPreview = !!localCameraTrackRef && primaryTrack?.participant.identity === localParticipant.identity;
+
+  useEffect(() => {
+    debugLog("livekit", "stage media publish state", {
+      surfaceLabel,
+      roomName: joinContract.roomName,
+      participantRole: joinContract.participantRole,
+      shouldPublishLocalCamera,
+      isCameraEnabled,
+      hasLocalCameraTrack: !!cameraTrack,
+      hasRemoteTrack: !!primaryRemoteTrack,
+      connectionState: String(connectionState ?? ""),
+    });
+  }, [
+    cameraTrack,
+    connectionState,
+    isCameraEnabled,
+    joinContract.participantRole,
+    joinContract.roomName,
+    primaryRemoteTrack,
+    shouldPublishLocalCamera,
+    surfaceLabel,
+  ]);
 
   if (primaryTrack && isTrackReference(primaryTrack)) {
     return (
@@ -57,25 +99,32 @@ function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMe
         trackRef={primaryTrack}
         style={StyleSheet.absoluteFillObject}
         objectFit="cover"
-        mirror={false}
+        mirror={isShowingLocalPreview}
       />
     );
   }
 
   const connectionLabel = toConnectionLabel(connectionState);
   const isConnecting = String(connectionState ?? "").toLowerCase() !== "connected";
+  const showPublishWaitingState = !isConnecting && shouldPublishLocalCamera && !lastCameraError;
+  const placeholderTitle = isConnecting
+    ? `Connecting ${surfaceLabel}…`
+    : showPublishWaitingState
+      ? "Preparing your camera…"
+      : `${surfaceLabel} connected`;
+  const placeholderBody = isConnecting
+    ? `LiveKit is preparing the room connection for ${joinContract.roomName}.`
+    : lastCameraError
+      ? `LiveKit connected, but camera publish failed: ${lastCameraError.message}`
+      : showPublishWaitingState
+        ? "The room is connected and your camera is still preparing for live video."
+        : "The room is connected, but no published stage video is available yet.";
 
   return (
     <View style={styles.placeholderSurface}>
       {isConnecting ? <ActivityIndicator color="#FFFFFF" /> : null}
-      <Text style={styles.placeholderTitle}>
-        {isConnecting ? `Connecting ${surfaceLabel}…` : `${surfaceLabel} connected`}
-      </Text>
-      <Text style={styles.placeholderBody}>
-        {isConnecting
-          ? `LiveKit is preparing the room connection for ${joinContract.roomName}.`
-          : "The room is connected, but no published stage video is available yet."}
-      </Text>
+      <Text style={styles.placeholderTitle}>{placeholderTitle}</Text>
+      <Text style={styles.placeholderBody}>{placeholderBody}</Text>
       <Text style={styles.placeholderStatus}>{connectionLabel}</Text>
     </View>
   );
@@ -90,6 +139,7 @@ export function LiveKitStageMediaSurface({
 }: LiveKitStageMediaSurfaceProps) {
   const fallbackTriggeredRef = useRef(false);
   const [didConnectOnce, setDidConnectOnce] = useState(false);
+  const publishLocalCamera = joinContract.participantRole !== "viewer";
 
   const triggerFallback = useCallback(
     (reason: "connection_timeout" | "disconnected" | "room_error", error?: unknown) => {
@@ -154,11 +204,17 @@ export function LiveKitStageMediaSurface({
         token={joinContract.participantToken}
         connect
         audio={false}
-        video={false}
+        video={publishLocalCamera}
         connectOptions={{ autoSubscribe: true }}
         options={{ adaptiveStream: true, dynacast: false }}
         onConnected={() => {
           setDidConnectOnce(true);
+          debugLog("livekit", "room connected", {
+            surfaceLabel,
+            roomName: joinContract.roomName,
+            participantRole: joinContract.participantRole,
+            publishLocalCamera,
+          });
         }}
         onDisconnected={() => {
           triggerFallback(
@@ -168,6 +224,12 @@ export function LiveKitStageMediaSurface({
         }}
         onError={(error) => {
           triggerFallback("room_error", error);
+        }}
+        onMediaDeviceFailure={(failure) => {
+          triggerFallback(
+            "room_error",
+            new Error(`LiveKit media-device failure: ${String(failure ?? "unknown_failure")}`),
+          );
         }}
       >
         <LiveKitStageMediaContent joinContract={joinContract} surfaceLabel={surfaceLabel} />
