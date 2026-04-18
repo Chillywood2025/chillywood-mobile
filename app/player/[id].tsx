@@ -2242,10 +2242,6 @@ export default function PlayerScreen() {
     () => liveBubbleParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
     [liveBubbleParticipants],
   );
-  const currentWatchPartyParticipantName = useMemo(
-    () => liveBubbleParticipants.find((participant) => participant.id === trackedUserId)?.name || "You",
-    [liveBubbleParticipants, trackedUserId],
-  );
   const shouldRenderWatchPartyLiveKit = inWatchParty && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
@@ -2684,6 +2680,29 @@ export default function PlayerScreen() {
     if (partyParticipantPreview.length === 0) return "";
     return partyParticipantPreview.slice(0, 2).join(" · ");
   }, [partyParticipantPreview]);
+  const watchPartyContextTitle = useMemo(() => {
+    if (partySyncRole === "host") return "You are hosting the shared playback.";
+    if (partySyncRole === "guest") return "You are following the shared room timeline.";
+    return "You are inside shared Watch-Party playback.";
+  }, [partySyncRole]);
+  const watchPartyContextBody = useMemo(() => {
+    if (partySyncRole === "host") {
+      return "Playback authority stays here while Party Room keeps the invites, access defaults, and room setup.";
+    }
+
+    return "Playback stays synced to the room here. Return to Party Room when you need the social shell, invites, or room defaults.";
+  }, [partySyncRole]);
+  const watchPartyContextHelper = useMemo(() => {
+    if (partySyncRole === "host") {
+      return "SYNC HELPER · Stay here for the shared scene. Use Party Room only for invites and room controls.";
+    }
+
+    if (partySyncStatus) {
+      return `SYNC HELPER · ${partySyncStatus}. Return to Party Room when you need setup instead of playback.`;
+    }
+
+    return "SYNC HELPER · Stay here for synced playback. Return to Party Room for invites, access, and room context.";
+  }, [partySyncRole, partySyncStatus]);
   const standaloneContextTitle = useMemo(() => {
     if (standaloneAccessLoading) return "Checking access before playback starts.";
     if (standalonePlaybackUnknown) return "Playback access needs another check.";
@@ -3304,52 +3323,37 @@ export default function PlayerScreen() {
 
   const renderTitleParticipantExpandedPanel = () => (
     <View style={styles.titleParticipantFeedWrap}>
-      <View style={styles.watchPartySessionShell}>
-        <View style={styles.watchPartyPlayerBandHeader}>
-          <View style={styles.watchPartyPlayerBandMeta}>
-            <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
-            <Text style={styles.watchPartyPlayerBandBody}>
-              {watchPartyAudienceLabel || "Shared playback syncing"}
-              {watchPartyPreviewLabel ? ` · ${watchPartyPreviewLabel}` : ""}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.watchPartyPlayerBandBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
-            <Text style={styles.watchPartyPlayerBandBtnText}>Party Room</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.watchPartySessionBody}>
-          Shared playback stays centered here while Party Room keeps the social setup, audience defaults, and room controls.
-        </Text>
-        <View style={styles.watchPartySessionMetaRow}>
-          <View style={styles.watchPartySessionMetaPill}>
-            <Text style={styles.watchPartySessionMetaText}>{watchPartyAudienceLabel || "Shared playback syncing"}</Text>
+      <View style={styles.watchPartySocialShell}>
+        <View style={styles.watchPartySocialMetaRow}>
+          <View style={styles.watchPartySocialMetaPill}>
+            <Text style={styles.watchPartySocialMetaText}>{watchPartyAudienceLabel || "Shared playback syncing"}</Text>
           </View>
           {watchPartyPreviewLabel ? (
-            <View style={styles.watchPartySessionMetaPill}>
-              <Text style={styles.watchPartySessionMetaText} numberOfLines={1}>{watchPartyPreviewLabel}</Text>
+            <View style={styles.watchPartySocialMetaPill}>
+              <Text style={styles.watchPartySocialMetaText} numberOfLines={1}>{watchPartyPreviewLabel}</Text>
             </View>
           ) : null}
           {watchPartyLiveKitJoinContract ? (
-            <View style={[styles.watchPartySessionMetaPill, styles.watchPartySessionMetaPillRole]}>
-              <Text style={styles.watchPartySessionRoleText}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
+            <View style={[styles.watchPartySocialMetaPill, styles.watchPartySocialMetaPillRole]}>
+              <Text style={styles.watchPartySocialRoleText}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
             </View>
           ) : null}
         </View>
         {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
-          <View style={styles.watchPartySessionMediaFrame}>
+          <View style={styles.watchPartySocialMediaFrame}>
             <LiveKitStageMediaSurface
               joinContract={watchPartyLiveKitJoinContract}
               onFallback={onWatchPartyLiveKitFallback}
               fillParent={false}
               surfaceLabel="Watch-Party Live"
-              containerStyle={styles.watchPartySessionMediaFrameInner}
+              containerStyle={styles.watchPartySocialMediaFrameInner}
             />
           </View>
         ) : (
-          <View style={styles.watchPartySessionPlaceholder}>
-            <Text style={styles.watchPartySessionPlaceholderKicker}>SHARED PLAYER</Text>
-            <Text style={styles.watchPartySessionPlaceholderBody}>
-              Watch-Party Live opens the synchronized party surface here after Party Room finishes the room setup.
+          <View style={styles.watchPartySocialPlaceholder}>
+            <Text style={styles.watchPartySocialPlaceholderKicker}>SHARED PLAYER</Text>
+            <Text style={styles.watchPartySocialPlaceholderBody}>
+              Shared party video syncs here after Watch-Party Live reconnects to the room.
             </Text>
           </View>
         )}
@@ -3451,6 +3455,39 @@ export default function PlayerScreen() {
           <ProtectedSessionNote
             {...getProtectedSessionCopy(isLiveModeFlag ? "live-player" : "watch-player")}
           />
+        ) : null}
+
+        {inWatchParty && !isLiveMode ? (
+          <View style={styles.watchPartyContextCard}>
+            <View style={styles.watchPartyContextHeaderRow}>
+              <View style={styles.watchPartyContextCopy}>
+                <Text style={styles.watchPartyContextKicker}>WATCH-PARTY LIVE</Text>
+                <Text style={styles.watchPartyContextTitle}>{watchPartyContextTitle}</Text>
+                <Text style={styles.watchPartyContextBody}>{watchPartyContextBody}</Text>
+              </View>
+              <TouchableOpacity style={styles.watchPartyContextBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
+                <Text style={styles.watchPartyContextBtnText}>Party Room</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.watchPartyContextMetaRow}>
+              {watchPartyAudienceLabel ? (
+                <View style={styles.watchPartyContextMetaPill}>
+                  <Text style={styles.watchPartyContextMetaText}>{watchPartyAudienceLabel}</Text>
+                </View>
+              ) : null}
+              {partySyncStatus ? (
+                <View style={styles.watchPartyContextMetaPill}>
+                  <Text style={styles.watchPartyContextMetaText}>{partySyncStatus}</Text>
+                </View>
+              ) : null}
+              {watchPartyPreviewLabel ? (
+                <View style={styles.watchPartyContextMetaPill}>
+                  <Text style={styles.watchPartyContextMetaText}>{watchPartyPreviewLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.watchPartyContextHelper}>{watchPartyContextHelper}</Text>
+          </View>
         ) : null}
 
         {isStandalonePlayer ? (
@@ -5393,7 +5430,7 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: 8,
   },
-  watchPartySessionShell: {
+  watchPartySocialShell: {
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(220,20,60,0.22)",
@@ -5401,46 +5438,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 10,
-    gap: 10,
+    gap: 8,
     shadowColor: "#000000",
     shadowOpacity: 0.24,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
   },
-  watchPartyPlayerBandHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  watchPartyPlayerBandMeta: {
-    flex: 1,
-    gap: 2,
-  },
-  watchPartyPlayerBandKicker: {
-    color: "#F0C8D2",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-  },
-  watchPartyPlayerBandBody: {
-    color: "#E7EBF6",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  watchPartySessionBody: {
-    color: "rgba(231,235,246,0.78)",
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "600",
-  },
-  watchPartySessionMetaRow: {
+  watchPartySocialMetaRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
   },
-  watchPartySessionMetaPill: {
+  watchPartySocialMetaPill: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
@@ -5449,35 +5459,22 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     maxWidth: "100%",
   },
-  watchPartySessionMetaPillRole: {
+  watchPartySocialMetaPillRole: {
     borderColor: "rgba(220,20,60,0.24)",
     backgroundColor: "rgba(220,20,60,0.14)",
   },
-  watchPartySessionMetaText: {
+  watchPartySocialMetaText: {
     color: "#DCE4F6",
     fontSize: 11,
     fontWeight: "800",
   },
-  watchPartySessionRoleText: {
+  watchPartySocialRoleText: {
     color: "#FFF5F7",
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.5,
   },
-  watchPartyPlayerBandBtn: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.56)",
-    backgroundColor: "rgba(220,20,60,0.18)",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  watchPartyPlayerBandBtnText: {
-    color: "#FFF5F7",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  watchPartySessionMediaFrame: {
+  watchPartySocialMediaFrame: {
     height: 152,
     borderRadius: 16,
     overflow: "hidden",
@@ -5485,10 +5482,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
-  watchPartySessionMediaFrameInner: {
+  watchPartySocialMediaFrameInner: {
     flex: 1,
   },
-  watchPartySessionPlaceholder: {
+  watchPartySocialPlaceholder: {
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
@@ -5497,13 +5494,13 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     gap: 6,
   },
-  watchPartySessionPlaceholderKicker: {
+  watchPartySocialPlaceholderKicker: {
     color: "#F0C8D2",
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.8,
   },
-  watchPartySessionPlaceholderBody: {
+  watchPartySocialPlaceholderBody: {
     color: "#E7EBF6",
     fontSize: 12,
     lineHeight: 18,

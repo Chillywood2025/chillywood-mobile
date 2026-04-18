@@ -1114,6 +1114,13 @@ export default function WatchPartyLiveStageScreen() {
   const isLiveFirstMode = stageMode === "live";
   const isHybridMode = stageMode === "hybrid";
   const commentsLaneBottomOffset = liveDockBottomInset + (isHybridMode ? 214 : 172);
+  const shouldShowLiveFirstTapHint = !isLiveRoomSurface
+    && isLiveFirstMode
+    && !stageOverlayVisible
+    && !commentsOpen
+    && !reactionPickerOpen
+    && !stageControlsOpen
+    && !faceFilterSheetOpen;
   const lowerCommunityParticipants = useMemo(() => {
     if (isLiveFirstMode) {
       return visibleStripParticipants.filter((participant) => participant.role !== "host");
@@ -1819,6 +1826,15 @@ export default function WatchPartyLiveStageScreen() {
           />
         ) : null}
 
+        {shouldShowLiveFirstTapHint ? (
+          <View pointerEvents="none" style={styles.stageTapHintWrap}>
+            <View style={styles.stageTapHintCard}>
+              <Text style={styles.stageTapHintKicker}>LIVE FIRST</Text>
+              <Text style={styles.stageTapHintBody}>Tap the screen for comments, reactions, and stage controls.</Text>
+            </View>
+          </View>
+        ) : null}
+
         <Animated.View
           style={[
             styles.stageOverlayPanelWrap,
@@ -2370,75 +2386,75 @@ export default function WatchPartyLiveStageScreen() {
           pointerEvents={stageOverlayVisible ? "auto" : "none"}
         >
         <View style={[styles.liveStageLowerDock, isHybridMode && styles.liveStageLowerDockHybrid]}>
-          {isHybridMode ? (
-            <>
-              <View style={[styles.modeRow, styles.modeRowHybrid]}>
-                <TouchableOpacity
-                  style={[styles.modeBtn, !isHybridMode && styles.modeBtnOn]}
-                  activeOpacity={0.82}
-                  onPress={() => updateStageMode("live")}
-                >
-                  <Text style={[styles.modeBtnText, !isHybridMode && styles.modeBtnTextOn]}>Live-First</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
-                  activeOpacity={0.82}
-                  onPress={() => updateStageMode("hybrid")}
-                >
-                  <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
-                </TouchableOpacity>
-              </View>
+          <View style={[styles.modeRow, styles.modeRowHybrid]}>
+            <TouchableOpacity
+              style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
+              activeOpacity={0.82}
+              onPress={() => updateStageMode("live")}
+            >
+              <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
+              activeOpacity={0.82}
+              onPress={() => updateStageMode("hybrid")}
+            >
+              <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
+            </TouchableOpacity>
+          </View>
 
-              <View style={styles.stageBottomInfoCard}>
-                <View style={styles.stageBottomInfoHeader}>
-                  <Text style={styles.stageBottomInfoKicker}>COMMENTS + REACTIONS</Text>
-                  <Text style={styles.stageBottomInfoCount}>{lowerCommunityCountLabel}</Text>
-                </View>
-                <Text numberOfLines={1} style={styles.stageBottomInfoTitle}>Keep room response below the watch moment.</Text>
-                <Text style={styles.stageBottomInfoBody}>
-                  The hero and community grid stay up top while comments, reactions, and studio controls stay lower and easier to reach.
-                </Text>
-              </View>
+          <View style={styles.stageBottomInfoCard}>
+            <View style={styles.stageBottomInfoHeader}>
+              <Text style={styles.stageBottomInfoKicker}>COMMENTS + REACTIONS</Text>
+              <Text style={styles.stageBottomInfoCount}>{lowerCommunityCountLabel}</Text>
+            </View>
+            <Text numberOfLines={1} style={styles.stageBottomInfoTitle}>
+              {isLiveFirstMode ? "Keep room response below the host-led live moment." : "Keep room response below the watch moment."}
+            </Text>
+            <Text style={styles.stageBottomInfoBody}>
+              {isLiveFirstMode
+                ? "Tap Comments when you want the audience lane. The host stays up top while reactions and studio controls stay lower and easier to reach."
+                : "The hero and community grid stay up top while comments, reactions, and studio controls stay lower and easier to reach."}
+            </Text>
+          </View>
 
-              <View style={styles.stageTailoredActions}>
-                <TouchableOpacity
-                  style={styles.stageTailoredActionButton}
-                  activeOpacity={0.84}
-                  onPress={() => {
-                    revealStageOverlay();
-                    setStageMenuOpen(false);
-                    setStageControlsOpen(false);
-                    setFaceFilterSheetOpen(false);
-                    setReactionPickerOpen(false);
-                    setCommentsOpen((value) => !value);
-                  }}
-                >
-                  <Text style={styles.stageTailoredActionText}>Comments</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.stageTailoredActionButton}
-                  activeOpacity={0.84}
-                  onPress={() => {
-                    revealStageOverlay();
-                    setStageMenuOpen(false);
-                    setStageControlsOpen(false);
-                    setFaceFilterSheetOpen(false);
-                    setCommentsOpen(false);
-                    setReactionPickerOpen((value) => !value);
-                  }}
-                >
-                  <Text style={styles.stageTailoredActionText}>Reactions</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
-                  activeOpacity={0.84}
-                  onPress={onToggleStageControls}
-                >
-                  <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>Studio</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : null}
+          <View style={styles.stageTailoredActions}>
+            <TouchableOpacity
+              style={styles.stageTailoredActionButton}
+              activeOpacity={0.84}
+              onPress={() => {
+                revealStageOverlay();
+                setStageMenuOpen(false);
+                setStageControlsOpen(false);
+                setFaceFilterSheetOpen(false);
+                setReactionPickerOpen(false);
+                setCommentsOpen((value) => !value);
+              }}
+            >
+              <Text style={styles.stageTailoredActionText}>Comments</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.stageTailoredActionButton}
+              activeOpacity={0.84}
+              onPress={() => {
+                revealStageOverlay();
+                setStageMenuOpen(false);
+                setStageControlsOpen(false);
+                setFaceFilterSheetOpen(false);
+                setCommentsOpen(false);
+                setReactionPickerOpen((value) => !value);
+              }}
+            >
+              <Text style={styles.stageTailoredActionText}>Reactions</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.stageTailoredActionButton, styles.stageTailoredActionButtonGhost]}
+              activeOpacity={0.84}
+              onPress={onToggleStageControls}
+            >
+              <Text style={[styles.stageTailoredActionText, styles.stageTailoredActionTextGhost]}>Studio</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <RoomReactionPicker
           visible={reactionPickerOpen}
@@ -3122,6 +3138,42 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 31,
     backgroundColor: "transparent",
+  },
+  stageTapHintWrap: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 44,
+    zIndex: 32,
+    alignItems: "center",
+  },
+  stageTapHintCard: {
+    maxWidth: 280,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(7,10,16,0.82)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  stageTapHintKicker: {
+    color: "#F0C8D2",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    textAlign: "center",
+  },
+  stageTapHintBody: {
+    color: "#F4F7FF",
+    fontSize: 11.5,
+    fontWeight: "700",
+    lineHeight: 16,
+    textAlign: "center",
   },
   stageHeroFilterOverlay: {
     ...StyleSheet.absoluteFillObject,
