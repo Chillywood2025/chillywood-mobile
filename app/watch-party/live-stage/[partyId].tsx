@@ -1168,10 +1168,12 @@ export default function WatchPartyLiveStageScreen() {
   const liveRoomEntryLabel = isHost ? "Continue to Live Stage" : "Join Live Stage";
   const liveKitParticipantRole = isHost
     ? "host"
-    : participantStateById[trackedUserId]?.role === "speaker"
-      || membershipMapRef.current[trackedUserId]?.canSpeak
+    : !isLiveFirstMode
       ? "speaker"
-      : "viewer";
+      : participantStateById[trackedUserId]?.role === "speaker"
+        || membershipMapRef.current[trackedUserId]?.canSpeak
+        ? "speaker"
+        : "viewer";
   const stageModeTitle = isLiveFirstMode
     ? "Host-led live focus"
     : "Shared watch moment";
