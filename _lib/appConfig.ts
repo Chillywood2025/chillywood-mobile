@@ -17,6 +17,7 @@ import {
   type JoinPolicy,
   type ReactionsPolicy,
 } from "./roomRules";
+import type { Tables, TablesInsert } from "../supabase/database.types";
 import { supabase } from "./supabase";
 
 export const APP_CONFIG_TABLE = "app_configurations";
@@ -82,12 +83,8 @@ export type AppConfig = {
   roomDefaults: RoomDefaultConfig;
 };
 
-type AppConfigRow = {
-  config_key?: string | null;
-  config?: unknown;
-  updated_at?: string | null;
-  updated_by?: string | null;
-};
+type AppConfigRow = Tables<"app_configurations">;
+type AppConfigInsert = TablesInsert<"app_configurations">;
 
 export type ThemePresetPalette = {
   accent: string;
@@ -379,7 +376,7 @@ export async function readAppConfig(): Promise<AppConfig> {
       return cachedAppConfig;
     }
 
-    const normalized = normalizeAppConfig((data as AppConfigRow | null)?.config ?? {});
+    const normalized = normalizeAppConfig(data?.config ?? {});
     cachedAppConfig = normalized;
     setAppMonetizationRuntimeFeatures(normalized.monetization);
     return normalized;
@@ -390,17 +387,15 @@ export async function readAppConfig(): Promise<AppConfig> {
 
 export async function saveAppConfig(config: AppConfig, updatedBy?: string | null): Promise<AppConfig> {
   const normalized = normalizeAppConfig(config);
+  const payload: AppConfigInsert = {
+    config_key: APP_CONFIG_GLOBAL_KEY,
+    config: normalized,
+    updated_at: new Date().toISOString(),
+    updated_by: toNullableText(updatedBy),
+  };
   const { error } = await supabase
     .from(APP_CONFIG_TABLE)
-    .upsert(
-      {
-        config_key: APP_CONFIG_GLOBAL_KEY,
-        config: normalized,
-        updated_at: new Date().toISOString(),
-        updated_by: toNullableText(updatedBy),
-      },
-      { onConflict: "config_key" },
-    );
+    .upsert(payload, { onConflict: "config_key" });
 
   if (error) throw error;
   cachedAppConfig = normalized;

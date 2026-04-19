@@ -15,6 +15,7 @@ import {
   syncRevenueCatCustomerIdentity,
   type RevenueCatConfigurationState,
 } from "./revenuecat";
+import type { Tables, TablesInsert } from "../supabase/database.types";
 import { supabase } from "./supabase";
 
 export type PlanTier = "free" | "premium";
@@ -183,6 +184,11 @@ type GateLike = {
   monetization?: MonetizationGateResolution | null;
 };
 
+type CreatorPermissionRow = Tables<"creator_permissions">;
+type CreatorPermissionInsert = TablesInsert<"creator_permissions">;
+type UserSubscriptionInsert = TablesInsert<"user_subscriptions">;
+type WatchPartyPassUnlockInsert = TablesInsert<"watch_party_pass_unlocks">;
+
 const USER_PLAN_KEY = "@chillywood/user-plan";
 const SUBSCRIPTIONS_TABLE = "user_subscriptions";
 const PARTY_PASS_TABLE = "watch_party_pass_unlocks";
@@ -313,16 +319,6 @@ export const DEFAULT_CREATOR_PERMISSION_SET: CreatorPermissionSet = {
   updatedAt: Date.now(),
 };
 
-type CreatorPermissionRow = {
-  user_id?: string | null;
-  can_use_party_pass_rooms?: boolean | null;
-  can_use_premium_rooms?: boolean | null;
-  can_publish_premium_titles?: boolean | null;
-  can_use_sponsor_placements?: boolean | null;
-  can_use_player_ads?: boolean | null;
-  updated_at?: string | null;
-};
-
 const isMissingTableError = (error: unknown) => {
   const code =
     typeof error === "object" && error && "code" in error
@@ -353,8 +349,9 @@ export const normalizeCreatorPermissionSet = (
   value?: Partial<CreatorPermissionSet> | CreatorPermissionRow | null,
   fallbackUserId = "",
 ): CreatorPermissionSet => {
-  const localValue = value && !("user_id" in value) ? value as Partial<CreatorPermissionSet> : null;
-  const rowValue = value && "user_id" in value ? value as CreatorPermissionRow : null;
+  const isRowValue = !!value && typeof value === "object" && "user_id" in value;
+  const localValue = value && !isRowValue ? value : null;
+  const rowValue = isRowValue ? value : null;
   const updatedAtRaw = typeof localValue?.updatedAt === "number"
     ? localValue.updatedAt
     : new Date(String(rowValue?.updated_at ?? Date.now())).getTime();
@@ -1246,14 +1243,12 @@ export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
   if (!FEATURE_FLAGS.monetization.subscriptions) return next;
 
   try {
-    await supabase.from(SUBSCRIPTIONS_TABLE).upsert(
-      {
-        user_id: userId,
-        tier,
-        updated_at: new Date(next.updatedAt).toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
+    const payload: UserSubscriptionInsert = {
+      user_id: userId,
+      tier,
+      updated_at: new Date(next.updatedAt).toISOString(),
+    };
+    await supabase.from(SUBSCRIPTIONS_TABLE).upsert(payload, { onConflict: "user_id" });
   } catch {
     // table may not exist yet; local fallback still works
   }
@@ -1300,14 +1295,12 @@ export async function unlockPartyPass(partyId: string): Promise<boolean> {
   if (!userId) return false;
 
   try {
-    const { error } = await supabase.from(PARTY_PASS_TABLE).upsert(
-      {
-        room_id: partyId,
-        user_id: userId,
-        unlocked_at: new Date().toISOString(),
-      },
-      { onConflict: "room_id,user_id" },
-    );
+    const payload: WatchPartyPassUnlockInsert = {
+      room_id: partyId,
+      user_id: userId,
+      unlocked_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from(PARTY_PASS_TABLE).upsert(payload, { onConflict: "room_id,user_id" });
 
     return !error;
   } catch {
@@ -1335,7 +1328,7 @@ export async function readCreatorPermissions(userId?: string | null): Promise<Cr
     }
 
     if (!data) return normalizeCreatorPermissionSet(null, safeUserId);
-    return normalizeCreatorPermissionSet(data as CreatorPermissionRow, safeUserId);
+    return normalizeCreatorPermissionSet(data, safeUserId);
   } catch {
     return normalizeCreatorPermissionSet(null, safeUserId);
   }
@@ -1358,7 +1351,7 @@ export async function saveCreatorPermissions(
     safeUserId,
   );
 
-  const payload = {
+  const payload: CreatorPermissionInsert = {
     user_id: safeUserId,
     can_use_party_pass_rooms: next.canUsePartyPassRooms,
     can_use_premium_rooms: next.canUsePremiumRooms,
