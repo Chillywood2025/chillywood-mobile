@@ -35,12 +35,10 @@ import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveBrandingConfig,
-    resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
 import {
     evaluateTitleAccess,
-    getMonetizationAccessSheetPresentation,
     type ContentAccessDecision,
     type TitleAccessRule,
 } from "../../_lib/monetization";
@@ -72,7 +70,6 @@ import {
     type WatchPartyRoomSnapshot,
     type WatchPartyState,
 } from "../../_lib/watchParty";
-import { AccessSheet } from "../../components/monetization/access-sheet";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
@@ -402,7 +399,6 @@ export default function PlayerScreen() {
   const [standaloneAccess, setStandaloneAccess] = useState<ContentAccessDecision | null>(null);
   const [standaloneAccessLoading, setStandaloneAccessLoading] = useState(true);
   const [standaloneAccessRetryToken, setStandaloneAccessRetryToken] = useState(0);
-  const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
 
   const [isVideoReady, setIsVideoReady] = useState(false);
@@ -975,17 +971,17 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!inWatchParty || !partyId) {
-      setWatchPartyLiveKitJoinContract(null);
-      setPartyViewerCount(0);
-      setViewerCount(1);
-      setPartyParticipantPreview([]);
-      setPartyParticipants([]);
-      setPartyUserId("");
-      setPartyChatOpen(false);
-      setPartyCommentDraft("");
-      setPartyCommentSending(false);
-      setPartyOverlayMessages([]);
-      setPartyReactionBursts([]);
+      setWatchPartyLiveKitJoinContract((current) => (current ? null : current));
+      setPartyViewerCount((current) => (current === 0 ? current : 0));
+      setViewerCount((current) => (current === 1 ? current : 1));
+      setPartyParticipantPreview((current) => (current.length === 0 ? current : []));
+      setPartyParticipants((current) => (current.length === 0 ? current : []));
+      setPartyUserId((current) => (current ? "" : current));
+      setPartyChatOpen((current) => (current ? false : current));
+      setPartyCommentDraft((current) => (current ? "" : current));
+      setPartyCommentSending((current) => (current ? false : current));
+      setPartyOverlayMessages((current) => (current.length === 0 ? current : []));
+      setPartyReactionBursts((current) => (current.length === 0 ? current : []));
       partyMembershipMapRef.current = {};
       partyAvatarUrlRef.current = "";
       Object.values(partyReactionTimersRef.current).forEach((timer) => clearTimeout(timer));
@@ -1822,11 +1818,11 @@ export default function PlayerScreen() {
   const handleSingleTap = () => {
     if (isStandalonePlayer && standaloneAccessLoading) return;
     if (standalonePlaybackBlocked) {
-      openStandaloneAccessSheet();
+      retryStandaloneAccessCheck();
       return;
     }
     if (standalonePlaybackUnknown) {
-      setStandaloneAccessRetryToken((current) => current + 1);
+      retryStandaloneAccessCheck();
       return;
     }
 
@@ -2272,11 +2268,11 @@ export default function PlayerScreen() {
 
   const replayFromStart = async () => {
     if (standalonePlaybackBlocked) {
-      openStandaloneAccessSheet();
+      retryStandaloneAccessCheck();
       return;
     }
     if (standalonePlaybackUnknown) {
-      setStandaloneAccessRetryToken((current) => current + 1);
+      retryStandaloneAccessCheck();
       return;
     }
 
@@ -3188,9 +3184,6 @@ export default function PlayerScreen() {
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
-  const monetizationConfig = resolveMonetizationConfig(appConfig);
-  const isPremiumStandaloneTitle = isStandalonePlayer
-    && String(displayItem?.content_access_rule ?? "").trim().toLowerCase() === "premium";
 
   useEffect(() => {
     let active = true;
@@ -3243,24 +3236,9 @@ export default function PlayerScreen() {
   const standalonePlaybackGateActive = isStandalonePlayer && (
     standaloneAccessLoading || standalonePlaybackBlocked || standalonePlaybackUnknown
   );
-  const standaloneAccessPresentation = useMemo(
-    () => (
-      standaloneAccess
-        ? getMonetizationAccessSheetPresentation({
-            gate: standaloneAccess,
-            appDisplayName: branding.appDisplayName,
-            premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
-            premiumUpsellBody: monetizationConfig.premiumUpsellBody,
-          })
-        : null
-    ),
-    [
-      branding.appDisplayName,
-      monetizationConfig.premiumUpsellBody,
-      monetizationConfig.premiumUpsellTitle,
-      standaloneAccess,
-    ],
-  );
+  const retryStandaloneAccessCheck = useCallback(() => {
+    setStandaloneAccessRetryToken((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     if (inWatchParty || isLiveMode) {
@@ -3313,131 +3291,6 @@ export default function PlayerScreen() {
     const syncLead = partySyncRole === "host" ? "Hosting the room" : "Synced with the host";
     return partySyncStatus ? `${syncLead} · ${partySyncStatus}` : syncLead;
   }, [isSharedPartyPlayback, partySyncRole, partySyncStatus]);
-  const standaloneContextTitle = useMemo(() => {
-    if (standaloneAccessLoading) return "Checking access before playback starts.";
-    if (standalonePlaybackUnknown) return "Playback access needs another check.";
-    if (standalonePlaybackBlocked) return "Premium playback is not currently available.";
-    if (resumeCueMillis > 0) return "Resume your own watch session.";
-    return "You are in solo playback.";
-  }, [resumeCueMillis, standaloneAccessLoading, standalonePlaybackBlocked, standalonePlaybackUnknown]);
-  const standaloneContextBody = useMemo(() => {
-    if (standaloneAccessLoading) {
-      return `Chi'llywood is checking whether ${displayItem?.title ?? "this title"} is ready for solo playback on this account.`;
-    }
-
-    if (standalonePlaybackUnknown) {
-      return "Playback stays paused until Chi'llywood can confirm your current access level for this title.";
-    }
-
-    if (standalonePlaybackBlocked) {
-      return "This title stays locked because Premium playback is not currently available for this device or account.";
-    }
-
-    if (resumeCueMillis > 0) {
-      return `Pick up ${displayItem?.title ?? "this title"} from ${formatTime(resumeCueMillis)} or scrub freely without affecting anyone else.`;
-    }
-
-    return "Playback stays private and fully in your control here. Start Watch-Party Live only when you want to bring other people in.";
-  }, [
-    branding.appDisplayName,
-    displayItem?.title,
-    resumeCueMillis,
-    standaloneAccessLoading,
-    standaloneAccessPresentation?.body,
-    standalonePlaybackBlocked,
-    standalonePlaybackUnknown,
-  ]);
-  const standaloneResumeLabel = useMemo(() => {
-    if (resumeCueMillis <= 0) return "";
-    return `Resume ${formatTime(resumeCueMillis)}`;
-  }, [resumeCueMillis]);
-  const standaloneProgressLabel = useMemo(() => {
-    if (durationMillis <= 0 || positionMillis <= 0) return "";
-    const percent = Math.max(1, Math.min(99, Math.round((positionMillis / durationMillis) * 100)));
-    return `${percent}% watched`;
-  }, [durationMillis, positionMillis]);
-  const standaloneAccessStatusLabel = useMemo(() => {
-    if (!isPremiumStandaloneTitle) return "";
-    if (standaloneAccessLoading) return "Checking access";
-    if (standalonePlaybackBlocked) return "Premium access not currently available";
-    if (standalonePlaybackUnknown) return "Access retry needed";
-    return "Premium ready";
-  }, [isPremiumStandaloneTitle, standaloneAccessLoading, standalonePlaybackBlocked, standalonePlaybackUnknown]);
-  const standaloneHelper = useMemo(() => {
-    if (standaloneAccessLoading) {
-      return "PLAYER HELPER · Checking this title against your Chi'llywood access before solo playback starts.";
-    }
-
-    if (standalonePlaybackUnknown) {
-      return "PLAYER HELPER · Playback is paused until Chi'llywood can confirm your access. Retry the access check from this player.";
-    }
-
-    if (standalonePlaybackBlocked) {
-      return "PLAYER HELPER · Premium playback is not currently available for this title on this device or account. Watch-Party Live still routes honestly from this player and will recheck access when premium access becomes available.";
-    }
-
-    if (isPremiumStandaloneTitle) {
-      return "PLAYER HELPER · Premium access is active for this title. Stay here for solo playback, fullscreen, and free scrubbing.";
-    }
-
-    return "PLAYER HELPER · Stay here for solo playback, fullscreen, and free scrubbing. Use Watch-Party Live only when you want to move into the party flow.";
-  }, [isPremiumStandaloneTitle, standaloneAccessLoading, standalonePlaybackBlocked, standalonePlaybackUnknown]);
-
-  const openStandaloneAccessSheet = useCallback(() => {
-    if (!standaloneAccess || standaloneAccess.allowed) return;
-    trackEvent("monetization_gate_shown", {
-      surface: "player",
-      reason: standaloneAccess.reason,
-      titleId,
-    });
-    setAccessSheetVisible(true);
-  }, [standaloneAccess, titleId]);
-
-  const refreshStandaloneAccessAfterSheetAction = useCallback(async (action: "purchase" | "restore") => {
-    const safeTitleId = String(displayItem?.id ?? titleId).trim();
-    if (!safeTitleId) {
-      return {
-        message: "Unable to confirm playback access right now.",
-        tone: "error" as const,
-      };
-    }
-
-    const refreshed = await evaluateTitleAccess({
-      titleId: safeTitleId,
-      accessRule: displayItem?.content_access_rule,
-    }).catch(() => null);
-    setStandaloneAccess(refreshed);
-
-    if (refreshed?.allowed) {
-      trackEvent("monetization_unlock_success", {
-        action,
-        surface: "player",
-        titleId: safeTitleId,
-      });
-      setAccessError(null);
-      setAccessSheetVisible(false);
-      return {
-        message: action === "restore"
-          ? "Purchases restored. Playback access is active."
-          : "Playback access unlocked. You can start the title now.",
-        tone: "success" as const,
-      };
-    }
-
-    const message = refreshed?.monetization.issues[0]
-      ?? "Playback is still locked for this title after the monetization check.";
-    trackEvent("monetization_unlock_failure", {
-      action,
-      surface: "player",
-      titleId: safeTitleId,
-    });
-    setAccessError(message);
-    return {
-      message,
-      tone: "error" as const,
-    };
-  }, [displayItem?.content_access_rule, displayItem?.id, titleId]);
-
   useEffect(() => {
     if (!inWatchParty) return;
 
@@ -4226,35 +4079,6 @@ export default function PlayerScreen() {
           />
         ) : null}
 
-        {isStandalonePlayer ? (
-          <View style={styles.standaloneContextCard}>
-            <Text style={styles.standaloneContextKicker}>SOLO PLAYBACK</Text>
-            <Text style={styles.standaloneContextTitle}>{standaloneContextTitle}</Text>
-            <Text style={styles.standaloneContextBody}>{standaloneContextBody}</Text>
-            <View style={styles.standaloneContextMetaRow}>
-              {standaloneResumeLabel ? (
-                <View style={styles.standaloneContextMetaPill}>
-                  <Text style={styles.standaloneContextMetaText}>{standaloneResumeLabel}</Text>
-                </View>
-              ) : null}
-              {standaloneProgressLabel ? (
-                <View style={styles.standaloneContextMetaPill}>
-                  <Text style={styles.standaloneContextMetaText}>{standaloneProgressLabel}</Text>
-                </View>
-              ) : null}
-              {standaloneAccessStatusLabel ? (
-                <View style={styles.standaloneContextMetaPill}>
-                  <Text style={styles.standaloneContextMetaText}>{standaloneAccessStatusLabel}</Text>
-                </View>
-              ) : null}
-              <View style={styles.standaloneContextMetaPill}>
-                <Text style={styles.standaloneContextMetaText}>Watch-Party Live from here</Text>
-              </View>
-            </View>
-            <Text style={styles.standaloneContextHelper}>{standaloneHelper}</Text>
-          </View>
-        ) : null}
-
         {source || isLiveMode ? (
           <>
           <View
@@ -4555,73 +4379,6 @@ export default function PlayerScreen() {
               )}
             </Animated.View>
 
-            {isStandalonePlayer && standalonePlaybackGateActive ? (
-              <View style={styles.playerAccessOverlay}>
-                <View style={styles.playerAccessCard}>
-                  {standaloneAccessLoading ? (
-                    <>
-                      <ActivityIndicator color="#E5ECF8" />
-                      <Text style={styles.playerAccessKicker}>CHECKING ACCESS</Text>
-                      <Text style={styles.playerAccessTitle}>Confirming playback access</Text>
-                      <Text style={styles.playerAccessBody}>
-                        Chi&apos;llywood is checking whether this account can start solo playback for this title.
-                      </Text>
-                    </>
-                  ) : standalonePlaybackUnknown ? (
-                    <>
-                      <Text style={styles.playerAccessKicker}>ACCESS STATUS</Text>
-                      <Text style={styles.playerAccessTitle}>Playback access needs another check</Text>
-                      <Text style={styles.playerAccessBody}>
-                        {accessError ?? "Playback is paused until Chi'llywood can confirm your current access level."}
-                      </Text>
-                      <View style={styles.playerAccessActions}>
-                        <TouchableOpacity
-                          style={styles.playerAccessSecondaryBtn}
-                          onPress={() => router.back()}
-                          activeOpacity={0.86}
-                        >
-                          <Text style={styles.playerAccessSecondaryText}>Back</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.playerAccessPrimaryBtn}
-                          onPress={() => setStandaloneAccessRetryToken((current) => current + 1)}
-                          activeOpacity={0.9}
-                        >
-                          <Text style={styles.playerAccessPrimaryText}>Retry Access Check</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.playerAccessKicker}>{standaloneAccessPresentation?.kicker ?? "TITLE ACCESS"}</Text>
-                      <Text style={styles.playerAccessTitle}>Premium Access Unavailable</Text>
-                      <Text style={styles.playerAccessBody}>
-                        {accessError ?? "Solo playback stays locked because premium access is not currently available for this device or account."}
-                      </Text>
-                      <View style={styles.playerAccessActions}>
-                        <TouchableOpacity
-                          style={styles.playerAccessSecondaryBtn}
-                          onPress={() => router.back()}
-                          activeOpacity={0.86}
-                        >
-                          <Text style={styles.playerAccessSecondaryText}>Back</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.playerAccessPrimaryBtn}
-                          onPress={openStandaloneAccessSheet}
-                          activeOpacity={0.9}
-                        >
-                          <Text style={styles.playerAccessPrimaryText}>
-                            Retry Access
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  )}
-                </View>
-              </View>
-            ) : null}
-
             {seekFeedback ? (
               <Animated.View style={[styles.seekFeedback, { opacity: seekFeedbackOpacity }]}> 
                 <Text style={styles.seekFeedbackText}>{seekFeedback}</Text>
@@ -4727,23 +4484,7 @@ export default function PlayerScreen() {
                     <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
                   </TouchableOpacity>
 
-                  {standalonePlaybackGateActive ? (
-                    <TouchableOpacity
-                      style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                      onPress={() => {
-                        if (standalonePlaybackBlocked) {
-                          openStandaloneAccessSheet();
-                          return;
-                        }
-                        setStandaloneAccessRetryToken((current) => current + 1);
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.partyOverlayChipText}>
-                        {standalonePlaybackBlocked ? "Retry Access" : standaloneAccessLoading ? "Checking" : "Retry Access"}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
+                  {!standalonePlaybackGateActive ? (
                     <>
                       <TouchableOpacity
                         style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
@@ -4761,7 +4502,7 @@ export default function PlayerScreen() {
                         <Text style={styles.partyOverlayChipText}>{isStandaloneFullscreen ? "Exit Full" : "Full"}</Text>
                       </TouchableOpacity>
                     </>
-                  )}
+                  ) : null}
 
                   <TouchableOpacity style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]} onPress={onWatchParty} activeOpacity={0.85}>
                     <Text style={styles.partyOverlayChipText}>Watch-Party Live</Text>
@@ -4837,26 +4578,9 @@ export default function PlayerScreen() {
                   ]}
                 >
                   <View style={styles.compactActionRow}>
-                    {standalonePlaybackGateActive ? (
-                      <TouchableOpacity
-                        style={styles.compactActionBtn}
-                        onPress={() => {
-                          if (standalonePlaybackBlocked) {
-                            openStandaloneAccessSheet();
-                            return;
-                          }
-                          setStandaloneAccessRetryToken((current) => current + 1);
-                        }}
-                      >
-                        <Text style={styles.compactActionBtnText}>
-                          {standalonePlaybackBlocked ? "Retry Access" : standaloneAccessLoading ? "Checking" : "Retry Access"}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity style={styles.compactActionBtn} onPress={replayFromStart}>
-                        <Text style={styles.compactActionBtnText}>Replay</Text>
-                      </TouchableOpacity>
-                    )}
+                    <TouchableOpacity style={styles.compactActionBtn} onPress={replayFromStart}>
+                      <Text style={styles.compactActionBtnText}>Replay</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.compactActionBtn} onPress={() => router.back()}>
                       <Text style={styles.compactActionBtnText}>Back</Text>
                     </TouchableOpacity>
@@ -4981,36 +4705,6 @@ export default function PlayerScreen() {
         )}
       </View>
       </View>
-      {standaloneAccess?.reason === "premium_required" ? (
-        <AccessSheet
-          visible={accessSheetVisible}
-          reason="premium_required"
-          gate={standaloneAccess}
-          appDisplayName={branding.appDisplayName}
-          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
-          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
-          deferredMonetization
-          kickerOverride={standaloneAccessPresentation?.kicker}
-          titleOverride={standaloneAccessPresentation?.title}
-          bodyOverride={standaloneAccessPresentation?.body}
-          actionLabelOverride={standaloneAccessPresentation?.actionLabel}
-          onPurchaseResult={(result) => {
-            if (!result.ok) {
-              setAccessError(result.message);
-              return;
-            }
-            return refreshStandaloneAccessAfterSheetAction("purchase");
-          }}
-          onRestoreResult={(result) => {
-            if (!result.ok) {
-              setAccessError(result.message);
-              return;
-            }
-            return refreshStandaloneAccessAfterSheetAction("restore");
-          }}
-          onClose={() => setAccessSheetVisible(false)}
-        />
-      ) : null}
     </SafeAreaView>
   );
 }
