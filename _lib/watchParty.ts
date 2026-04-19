@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Database } from "../supabase/database.types";
+import type { Database, Tables } from "../supabase/database.types";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { debugLog, reportRuntimeError } from "./logger";
@@ -183,6 +183,45 @@ export const WATCH_PARTY_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WI
 
 type WatchPartySyncEventInsert = Database["public"]["Tables"]["watch_party_sync_events"]["Insert"];
 
+type PartyRoomBaseRow = Pick<
+  Tables<"watch_party_rooms">,
+  | "party_id"
+  | "room_type"
+  | "host_user_id"
+  | "title_id"
+  | "playback_position_millis"
+  | "playback_state"
+  | "started_at"
+  | "updated_at"
+>;
+
+type PartyRoomFullRow = PartyRoomBaseRow & Pick<
+  Tables<"watch_party_rooms">,
+  "join_policy" | "reactions_policy" | "content_access_rule" | "capture_policy" | "last_activity_at"
+>;
+
+export type PartyRoomRow = PartyRoomBaseRow | PartyRoomFullRow;
+
+type PartyMembershipRow = Pick<
+  Tables<"watch_party_room_memberships">,
+  | "party_id"
+  | "user_id"
+  | "role"
+  | "stage_role"
+  | "can_speak"
+  | "is_muted"
+  | "membership_state"
+  | "camera_enabled"
+  | "mic_enabled"
+  | "display_name"
+  | "avatar_url"
+  | "camera_preview_url"
+  | "joined_at"
+  | "last_seen_at"
+  | "left_at"
+  | "updated_at"
+>;
+
 const PARTY_ROOMS_BASE_SELECT =
   "party_id,room_type,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at";
 const PARTY_ROOMS_POLICY_SELECT =
@@ -196,6 +235,10 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 let cachedGuestUserId: string | null = null;
+
+const isDefined = <T>(value: T | null): value is T => value !== null;
+const isNonEmptyString = (value: string | null | undefined): value is string =>
+  typeof value === "string" && value.length > 0;
 
 export const createPartyId = () => {
   const stamp = Date.now().toString(36);
@@ -356,51 +399,24 @@ export const createWatchPartyDraft = (draft: WatchPartyRoomDraft): WatchPartySta
   };
 };
 
-export type PartyRoomRow = {
-  party_id?: string | null;
-  room_type?: string | null;
-  host_user_id?: string | null;
-  title_id?: string | null;
-  playback_position_millis?: number | null;
-  playback_state?: string | null;
-  join_policy?: string | null;
-  reactions_policy?: string | null;
-  content_access_rule?: string | null;
-  capture_policy?: string | null;
-  started_at?: string | null;
-  updated_at?: string | null;
-  last_activity_at?: string | null;
-};
-
-type PartyMembershipRow = {
-  party_id?: string | null;
-  user_id?: string | null;
-  role?: string | null;
-  stage_role?: string | null;
-  can_speak?: boolean | null;
-  is_muted?: boolean | null;
-  membership_state?: string | null;
-  camera_enabled?: boolean | null;
-  mic_enabled?: boolean | null;
-  display_name?: string | null;
-  avatar_url?: string | null;
-  camera_preview_url?: string | null;
-  joined_at?: string | null;
-  last_seen_at?: string | null;
-  left_at?: string | null;
-  updated_at?: string | null;
-};
-
 function rowToState(row: PartyRoomRow): WatchPartyState | null {
   const primaryId = String(row.party_id ?? "").trim();
   const hostUserId = String(row.host_user_id ?? "").trim();
   const titleIdRaw = String(row.title_id ?? "").trim();
   const roomTypeRaw = String(row.room_type ?? "").trim().toLowerCase();
-  const roomType: WatchPartyRoomType = roomTypeRaw === "live" || roomTypeRaw === "title"
-    ? (roomTypeRaw as WatchPartyRoomType)
-    : titleIdRaw
-      ? "title"
-      : "live";
+  const roomType: WatchPartyRoomType =
+    roomTypeRaw === "live"
+      ? "live"
+      : roomTypeRaw === "title"
+        ? "title"
+        : titleIdRaw
+          ? "title"
+          : "live";
+  const joinPolicy = "join_policy" in row ? row.join_policy : undefined;
+  const reactionsPolicy = "reactions_policy" in row ? row.reactions_policy : undefined;
+  const contentAccessRule = "content_access_rule" in row ? row.content_access_rule : undefined;
+  const capturePolicy = "capture_policy" in row ? row.capture_policy : undefined;
+  const lastActivityAt = "last_activity_at" in row ? row.last_activity_at : undefined;
 
   if (!primaryId || !hostUserId) return null;
   if (roomType === "title" && !titleIdRaw) return null;
@@ -415,13 +431,13 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
     titleId: titleIdRaw || null,
     playbackPositionMillis: Math.max(0, Number(row.playback_position_millis ?? 0)),
     playbackState: row.playback_state === "playing" ? "playing" : "paused",
-    joinPolicy: normalizeJoinPolicy(row.join_policy),
-    reactionsPolicy: normalizeReactionsPolicy(row.reactions_policy),
-    contentAccessRule: normalizeContentAccessRule(row.content_access_rule),
-    capturePolicy: normalizeCapturePolicy(row.capture_policy),
+    joinPolicy: normalizeJoinPolicy(joinPolicy),
+    reactionsPolicy: normalizeReactionsPolicy(reactionsPolicy),
+    contentAccessRule: normalizeContentAccessRule(contentAccessRule),
+    capturePolicy: normalizeCapturePolicy(capturePolicy),
     startedAt: String(row.started_at ?? now),
     updatedAt: String(row.updated_at ?? now),
-    lastActivityAt: String(row.last_activity_at ?? row.updated_at ?? row.started_at ?? now),
+    lastActivityAt: String(lastActivityAt ?? row.updated_at ?? row.started_at ?? now),
   };
 }
 
@@ -495,17 +511,19 @@ async function fetchPartyRoomRow(lookupPartyId: string): Promise<PartyRoomRow | 
     .from(PARTY_ROOMS_TABLE)
     .select(PARTY_ROOMS_POLICY_SELECT)
     .eq("party_id", normalizedPartyId)
+    .returns<PartyRoomFullRow>()
     .maybeSingle();
 
-  if (!query.error && query.data) return query.data as PartyRoomRow;
+  if (!query.error && query.data) return query.data;
 
   if (query.error && isMissingColumnError(query.error, "join_policy")) {
     const fallback = await supabase
       .from(PARTY_ROOMS_TABLE)
       .select(PARTY_ROOMS_BASE_SELECT)
       .eq("party_id", normalizedPartyId)
+      .returns<PartyRoomBaseRow>()
       .maybeSingle();
-    if (!fallback.error && fallback.data) return fallback.data as PartyRoomRow;
+    if (!fallback.error && fallback.data) return fallback.data;
   }
 
   return null;
@@ -560,10 +578,11 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
     .from(WATCH_PARTY_ROOM_MEMBERSHIPS_TABLE)
     .upsert(payload, { onConflict: "party_id,user_id" })
     .select(PARTY_ROOM_MEMBERSHIP_SELECT)
+    .returns<PartyMembershipRow>()
     .single();
 
   if (error || !data) return null;
-  return rowToMembership(data as PartyMembershipRow);
+  return rowToMembership(data);
 }
 
 export async function createPartyRoom(
@@ -610,8 +629,8 @@ export async function createPartyRoom(
   const titleIdCandidates: (string | null)[] =
     requestedRoomType === "live"
       ? [null]
-      : Array.from(new Set([resolvedTitleId, requestedTitleId].filter(Boolean) as string[]));
-  const hostUserIdCandidates = Array.from(new Set([resolvedHostUserId].filter(Boolean) as string[]));
+      : Array.from(new Set([resolvedTitleId, requestedTitleId].filter(isNonEmptyString)));
+  const hostUserIdCandidates = Array.from(new Set([resolvedHostUserId].filter(isNonEmptyString)));
 
   if (!hostUserIdCandidates.length) {
     const explicitError = toCreateError(
@@ -659,10 +678,11 @@ export async function createPartyRoom(
             .from(PARTY_ROOMS_TABLE)
             .insert(payload)
             .select(PARTY_ROOMS_POLICY_SELECT)
+            .returns<PartyRoomFullRow>()
             .single();
 
           if (!error && data) {
-            const createdState = rowToState(data as PartyRoomRow);
+            const createdState = rowToState(data);
             if (createdState) return createdState;
             lastError = toCreateError(
               { message: "Created room payload missing required fields" },
@@ -682,19 +702,20 @@ export async function createPartyRoom(
               updated_at: now,
             };
 
-            const fallbackInsert = await supabase
+            const { data: fallbackData, error: fallbackError } = await supabase
               .from(PARTY_ROOMS_TABLE)
               .insert(fallbackPayload)
               .select(PARTY_ROOMS_BASE_SELECT)
+              .returns<PartyRoomBaseRow>()
               .single();
 
-            if (!fallbackInsert.error && fallbackInsert.data) {
-              const createdState = rowToState(fallbackInsert.data as PartyRoomRow);
+            if (!fallbackError && fallbackData) {
+              const createdState = rowToState(fallbackData);
               if (createdState) return createdState;
             }
 
-            if (fallbackInsert.error) {
-              lastError = toCreateError(fallbackInsert.error, fallbackPayload);
+            if (fallbackError) {
+              lastError = toCreateError(fallbackError, fallbackPayload);
               debugLog("watch-party", "createPartyRoom fallback insert error", lastError);
             }
           } else if (error) {
@@ -770,10 +791,11 @@ export async function listPartyRoomMemberships(partyId: string): Promise<WatchPa
       .from(WATCH_PARTY_ROOM_MEMBERSHIPS_TABLE)
       .select(PARTY_ROOM_MEMBERSHIP_SELECT)
       .eq("party_id", normalizedPartyId)
-      .order("joined_at", { ascending: true });
+      .order("joined_at", { ascending: true })
+      .returns<PartyMembershipRow[]>();
 
     if (error || !data) return [];
-    return (data as PartyMembershipRow[]).map(rowToMembership).filter(Boolean) as WatchPartyRoomMembership[];
+    return data.map(rowToMembership).filter(isDefined);
   } catch {
     return [];
   }
@@ -884,10 +906,11 @@ export async function setPartyRoomPolicies(
     .eq("party_id", normalizedPartyId)
     .eq("host_user_id", writableUserId)
     .select(PARTY_ROOMS_POLICY_SELECT)
+    .returns<PartyRoomFullRow>()
     .single();
 
   if (error || !data) return null;
-  return rowToState(data as PartyRoomRow);
+  return rowToState(data);
 }
 
 export async function setPartyParticipantState(
@@ -930,6 +953,7 @@ export async function setPartyParticipantState(
     .eq("party_id", normalizedPartyId)
     .eq("user_id", normalizedTargetUserId)
     .select(PARTY_ROOM_MEMBERSHIP_SELECT)
+    .returns<PartyMembershipRow>()
     .single();
 
   if (error || !data) {
@@ -941,7 +965,7 @@ export async function setPartyParticipantState(
     });
     return null;
   }
-  return rowToMembership(data as PartyMembershipRow);
+  return rowToMembership(data);
 }
 
 export async function updateRoomPlayback(
