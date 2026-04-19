@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Database, Tables } from "../supabase/database.types";
+import type { Database, Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { debugLog, reportRuntimeError } from "./logger";
@@ -182,6 +182,21 @@ export const WATCH_PARTY_SYNC_TABLE = "watch_party_sync_events";
 export const WATCH_PARTY_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS;
 
 type WatchPartySyncEventInsert = Database["public"]["Tables"]["watch_party_sync_events"]["Insert"];
+type PartyRoomInsert = TablesInsert<"watch_party_rooms">;
+type PartyRoomBaseInsert = Pick<
+  PartyRoomInsert,
+  | "party_id"
+  | "room_type"
+  | "host_user_id"
+  | "title_id"
+  | "playback_position_millis"
+  | "playback_state"
+  | "started_at"
+  | "updated_at"
+>;
+type PartyRoomUpdate = TablesUpdate<"watch_party_rooms">;
+type PartyMembershipInsert = TablesInsert<"watch_party_room_memberships">;
+type PartyMembershipUpdate = TablesUpdate<"watch_party_room_memberships">;
 
 type PartyRoomBaseRow = Pick<
   Tables<"watch_party_rooms">,
@@ -555,7 +570,7 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
   });
   const membershipState = options.membershipState ?? "active";
 
-  const payload = {
+  const payload: PartyMembershipInsert = {
     party_id: partyId,
     user_id: writableUserId,
     role,
@@ -658,7 +673,7 @@ export async function createPartyRoom(
         for (let attempt = 0; attempt < 5; attempt += 1) {
           const generatedPartyId = createPartyIdentifier();
           const now = new Date().toISOString();
-          const payload = {
+          const payload: PartyRoomInsert = {
             party_id: generatedPartyId,
             room_type: requestedRoomType,
             host_user_id: safeHostUserId,
@@ -691,7 +706,7 @@ export async function createPartyRoom(
           }
 
           if (error && isMissingColumnError(error, "join_policy")) {
-            const fallbackPayload = {
+            const fallbackPayload: PartyRoomBaseInsert = {
               party_id: generatedPartyId,
               room_type: requestedRoomType,
               host_user_id: safeHostUserId,
@@ -886,7 +901,7 @@ export async function setPartyRoomPolicies(
   const creatorPermissions = await readCreatorPermissions(writableUserId).catch(() => null);
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {
+  const updates: PartyRoomUpdate = {
     updated_at: now,
     last_activity_at: now,
   };
@@ -924,7 +939,7 @@ export async function setPartyParticipantState(
   if (!normalizedPartyId || !normalizedTargetUserId || !writableUserId) return null;
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {
+  const updates: PartyMembershipUpdate = {
     updated_at: now,
     last_seen_at: now,
   };
@@ -978,14 +993,16 @@ export async function updateRoomPlayback(
   if (!normalizedPartyId || !writableUserId) return;
 
   try {
+    const updates: PartyRoomUpdate = {
+      playback_position_millis: Math.max(0, Math.floor(positionMillis)),
+      playback_state: state,
+      updated_at: new Date().toISOString(),
+      last_activity_at: new Date().toISOString(),
+    };
+
     await supabase
       .from(PARTY_ROOMS_TABLE)
-      .update({
-        playback_position_millis: Math.max(0, Math.floor(positionMillis)),
-        playback_state: state,
-        updated_at: new Date().toISOString(),
-        last_activity_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq("party_id", normalizedPartyId)
       .eq("host_user_id", writableUserId);
   } catch {
