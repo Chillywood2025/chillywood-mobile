@@ -1,35 +1,41 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow creator-analytics blocker-resolution pass on `main`, using `docs/profile-channel-implementation-spec.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not widen into Stage 5 UI, route proliferation, fake analytics, watch-party/live route changes, RBAC expansion, Rachi control-plane work, or unrelated screen/helpers. The audience relationship schema foundation and the owner-safe audience/safety helper summaries are now landed, so the remaining honest blocker before Stage 5 UI is canonical creator-analytics summary truth.
+The next exact task is a narrow `/channel-settings` Stage 5 summary-surface pass on `main`, using `docs/profile-channel-implementation-spec.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not widen into `/profile/[userId]`, route proliferation, fake audience controls, fake analytics, watch-party/live route changes, RBAC expansion, Rachi control-plane work, or unrelated screen/helpers. The audience relationship schema foundation plus the audience/safety/admin/creator-analytics read models are now landed, so the next honest step is to render the owner-safe Stage 5 summary surfaces on `/channel-settings` while keeping unsupported fields explicitly unavailable.
 
 ## Current Plan
 1. Re-read `docs/profile-channel-implementation-spec.md`, `CURRENT_STATE.md`, and `NEXT_TASK.md` first.
-2. Keep the lane focused on creator-analytics truth, not Stage 5 UI.
-3. Prove exactly which creator analytics fields can now be derived honestly from existing room/session truth.
-4. Separate what can be landed as helper-level summary reads now from what still requires backend/schema aggregation work.
-5. Preserve `/profile/[userId]`, `/channel-settings`, `/chat`, `/chat/[threadId]`, and all watch-party/live route truth unchanged.
-6. Keep profile visits/follows/subscriber/content aggregates honest and blocked if no real source-of-truth path exists.
+2. Keep the lane focused on `/channel-settings` only.
+3. Use the landed helper summaries:
+   - `readChannelAudienceSummary(channelUserId)`
+   - `readChannelSafetyAdminSummary(channelUserId)`
+   - `readCreatorAnalyticsSummary(channelUserId)`
+4. Render only the truthful Stage 5 owner-summary layer now.
+5. Keep unsupported audience-visibility fields and unsupported creator-analytics aggregates explicitly unavailable instead of inventing controls or metrics.
+6. Preserve `/profile/[userId]`, `/channel-settings`, `/chat`, `/chat/[threadId]`, and all watch-party/live route truth unchanged.
 
 ## Exact Next Batch
-- audit and, if safe, land the narrow creator-analytics helper summary slice implied by existing room/session truth
-- keep unsupported analytics fields explicitly missing instead of fabricating them
-- keep Stage 5 UI out of scope
+- implement the owner-safe Stage 5 audience, analytics, and safety/admin summary surfaces on `app/channel-settings.tsx`
+- use landed read-model helpers only
+- keep unsupported audience-visibility controls and unsupported creator-analytics fields visibly unavailable instead of fabricating them
 - keep `Chi'lly Chat`, `Watch-Party Live`, and `Live Watch-Party` doctrine unchanged
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- prove the exact minimal `CreatorAnalyticsReadModel` slice that can be supported honestly now
-- optionally land helper-level creator analytics reads only for room/session metrics that already exist in current schema truth
-- leave profile visits, content performance, monetization conversion, and any unsupported creator aggregates blocked until real truth exists
+- land the `/channel-settings` owner summary layer for:
+  - audience summary
+  - analytics summary
+  - safety/admin summary
+- source those summaries from the landed read-model helpers
+- leave audience-visibility controls, profile visits, content performance, monetization conversion, and any unsupported creator aggregates explicitly unavailable until real truth exists
 - preserve all current route truth and all previously landed profile/channel stages
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- implement Stage 5 UI
-- fake audience counts or creator analytics
+- widen beyond `app/channel-settings.tsx` unless a tiny directly-related hook is absolutely required
+- fake audience counts, audience visibility controls, or creator analytics
 - widen or redesign the new audience relationship schema unless a real proof gap is found
 - treat `user_subscriptions` as creator/channel subscriber truth
 - create `/studio*` routes
@@ -41,8 +47,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the repo proves exactly which creator analytics fields are now honest from current truth
-- any helper summary added stays narrow and does not fake unsupported metrics
-- Stage 5 UI remains blocked until unsupported aggregates are resolved
+- `/channel-settings` shows owner-safe audience, analytics, and safety/admin summary surfaces from real helper truth
+- unsupported audience visibility and creator analytics fields stay explicitly unavailable instead of fabricated
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
 - no fake analytics or audience metrics are introduced

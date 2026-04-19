@@ -15,9 +15,12 @@ export const CHANNEL_FOLLOWERS_TABLE = "channel_followers";
 export const CHANNEL_SUBSCRIBERS_TABLE = "channel_subscribers";
 export const CHANNEL_AUDIENCE_REQUESTS_TABLE = "channel_audience_requests";
 export const CHANNEL_AUDIENCE_BLOCKS_TABLE = "channel_audience_blocks";
+export const WATCH_PARTY_ROOMS_TABLE = "watch_party_rooms";
+export const COMMUNICATION_ROOMS_TABLE = "communication_rooms";
 
 export type ChannelAudienceAccessScope = "owner" | "operator" | "unavailable";
 export type ChannelSafetyAdminAccessScope = "owner" | "reviewer" | "unavailable";
+export type ChannelCreatorAnalyticsAccessScope = "owner" | "unavailable";
 export type ChannelReadModelFieldStatus = "available" | "missing";
 
 export type ChannelAudienceReadModel = {
@@ -66,6 +69,38 @@ export type ChannelSafetyAdminReadModel = {
   };
 };
 
+export type CreatorAnalyticsReadModel = {
+  channelUserId: string;
+  generatedAt: string;
+  accessScope: ChannelCreatorAnalyticsAccessScope;
+  watchPartySessionsHosted: number | null;
+  liveSessionsHosted: number | null;
+  communicationRoomsHosted: number | null;
+  activeHostedRooms: number | null;
+  latestHostedActivityAt: string | null;
+  profileVisits: null;
+  followerCount: number | null;
+  subscriberCount: number | null;
+  liveAttendanceTotal: null;
+  contentLaunches: null;
+  continueWatchingReturns: null;
+  gatedSurfaceViews: null;
+  dataStatus: {
+    watchPartySessionsHosted: ChannelReadModelFieldStatus;
+    liveSessionsHosted: ChannelReadModelFieldStatus;
+    communicationRoomsHosted: ChannelReadModelFieldStatus;
+    activeHostedRooms: ChannelReadModelFieldStatus;
+    latestHostedActivityAt: ChannelReadModelFieldStatus;
+    profileVisits: ChannelReadModelFieldStatus;
+    followerCount: ChannelReadModelFieldStatus;
+    subscriberCount: ChannelReadModelFieldStatus;
+    liveAttendanceTotal: ChannelReadModelFieldStatus;
+    contentLaunches: ChannelReadModelFieldStatus;
+    continueWatchingReturns: ChannelReadModelFieldStatus;
+    gatedSurfaceViews: ChannelReadModelFieldStatus;
+  };
+};
+
 const ACTIVE_CHANNEL_SUBSCRIBER_STATUSES = ["active", "grace_period"] as const;
 
 const emptyAudienceStatus: ChannelAudienceReadModel["dataStatus"] = {
@@ -81,7 +116,30 @@ const emptyAudienceStatus: ChannelAudienceReadModel["dataStatus"] = {
   subscriberSurfaceEnabled: "missing",
 };
 
+const creatorAnalyticsStatus: CreatorAnalyticsReadModel["dataStatus"] = {
+  watchPartySessionsHosted: "available",
+  liveSessionsHosted: "available",
+  communicationRoomsHosted: "available",
+  activeHostedRooms: "available",
+  latestHostedActivityAt: "available",
+  profileVisits: "missing",
+  followerCount: "available",
+  subscriberCount: "available",
+  liveAttendanceTotal: "missing",
+  contentLaunches: "missing",
+  continueWatchingReturns: "missing",
+  gatedSurfaceViews: "missing",
+};
+
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const pickLatestIso = (...values: Array<string | null | undefined>) => {
+  const sorted = values
+    .map((value) => normalizeText(value))
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+
+  return sorted.at(-1) ?? null;
+};
 
 async function readChannelHelperContext(channelUserId: string) {
   const normalizedChannelUserId = normalizeText(channelUserId);
@@ -227,5 +285,129 @@ export async function readChannelSafetyAdminSummary(channelUserId: string): Prom
       recentSafetyReports: recentSafetyReports ? "available" : "missing",
       recentSafetyReportCount: recentSafetyReportCount === null ? "missing" : "available",
     },
+  };
+}
+
+export async function readCreatorAnalyticsSummary(channelUserId: string): Promise<CreatorAnalyticsReadModel> {
+  const context = await readChannelHelperContext(channelUserId);
+  const accessScope: ChannelCreatorAnalyticsAccessScope = context.isOwner ? "owner" : "unavailable";
+
+  if (accessScope === "unavailable") {
+    return {
+      channelUserId: context.channelUserId,
+      generatedAt: context.generatedAt,
+      accessScope,
+      watchPartySessionsHosted: null,
+      liveSessionsHosted: null,
+      communicationRoomsHosted: null,
+      activeHostedRooms: null,
+      latestHostedActivityAt: null,
+      profileVisits: null,
+      followerCount: null,
+      subscriberCount: null,
+      liveAttendanceTotal: null,
+      contentLaunches: null,
+      continueWatchingReturns: null,
+      gatedSurfaceViews: null,
+      dataStatus: creatorAnalyticsStatus,
+    };
+  }
+
+  const [
+    { count: titleRoomCountRaw, error: titleRoomCountError },
+    { count: liveRoomCountRaw, error: liveRoomCountError },
+    { count: communicationRoomCountRaw, error: communicationRoomCountError },
+    { count: activeWatchPartyCountRaw, error: activeWatchPartyCountError },
+    { count: activeCommunicationCountRaw, error: activeCommunicationCountError },
+    { data: latestWatchPartyActivityRows, error: latestWatchPartyActivityError },
+    { data: latestCommunicationActivityRows, error: latestCommunicationActivityError },
+    { count: followerCountRaw, error: followerCountError },
+    { count: subscriberCountRaw, error: subscriberCountError },
+  ] = await Promise.all([
+    supabase
+      .from(WATCH_PARTY_ROOMS_TABLE)
+      .select("*", { count: "exact", head: true })
+      .eq("host_user_id", context.channelUserId)
+      .eq("room_type", "title"),
+    supabase
+      .from(WATCH_PARTY_ROOMS_TABLE)
+      .select("*", { count: "exact", head: true })
+      .eq("host_user_id", context.channelUserId)
+      .eq("room_type", "live"),
+    supabase
+      .from(COMMUNICATION_ROOMS_TABLE)
+      .select("*", { count: "exact", head: true })
+      .eq("host_user_id", context.channelUserId),
+    supabase
+      .from(WATCH_PARTY_ROOMS_TABLE)
+      .select("*", { count: "exact", head: true })
+      .eq("host_user_id", context.channelUserId)
+      .eq("is_active", true),
+    supabase
+      .from(COMMUNICATION_ROOMS_TABLE)
+      .select("*", { count: "exact", head: true })
+      .eq("host_user_id", context.channelUserId)
+      .eq("status", "active"),
+    supabase
+      .from(WATCH_PARTY_ROOMS_TABLE)
+      .select("last_activity_at")
+      .eq("host_user_id", context.channelUserId)
+      .order("last_activity_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from(COMMUNICATION_ROOMS_TABLE)
+      .select("last_activity_at")
+      .eq("host_user_id", context.channelUserId)
+      .order("last_activity_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from(CHANNEL_FOLLOWERS_TABLE)
+      .select("*", { count: "exact", head: true })
+      .eq("channel_user_id", context.channelUserId),
+    supabase
+      .from(CHANNEL_SUBSCRIBERS_TABLE)
+      .select("*", { count: "exact", head: true })
+      .eq("channel_user_id", context.channelUserId)
+      .in("status", [...ACTIVE_CHANNEL_SUBSCRIBER_STATUSES]),
+  ]);
+
+  if (titleRoomCountError) throw titleRoomCountError;
+  if (liveRoomCountError) throw liveRoomCountError;
+  if (communicationRoomCountError) throw communicationRoomCountError;
+  if (activeWatchPartyCountError) throw activeWatchPartyCountError;
+  if (activeCommunicationCountError) throw activeCommunicationCountError;
+  if (latestWatchPartyActivityError) throw latestWatchPartyActivityError;
+  if (latestCommunicationActivityError) throw latestCommunicationActivityError;
+  if (followerCountError) throw followerCountError;
+  if (subscriberCountError) throw subscriberCountError;
+
+  const watchPartySessionsHosted = Number(titleRoomCountRaw ?? 0);
+  const liveSessionsHosted = Number(liveRoomCountRaw ?? 0);
+  const communicationRoomsHosted = Number(communicationRoomCountRaw ?? 0);
+  const activeHostedRooms = Number(activeWatchPartyCountRaw ?? 0) + Number(activeCommunicationCountRaw ?? 0);
+  const latestHostedActivityAt = pickLatestIso(
+    latestWatchPartyActivityRows?.[0]?.last_activity_at ?? null,
+    latestCommunicationActivityRows?.[0]?.last_activity_at ?? null,
+  );
+  const followerCount = Number(followerCountRaw ?? 0);
+  const subscriberCount = Number(subscriberCountRaw ?? 0);
+
+  return {
+    channelUserId: context.channelUserId,
+    generatedAt: context.generatedAt,
+    accessScope,
+    watchPartySessionsHosted,
+    liveSessionsHosted,
+    communicationRoomsHosted,
+    activeHostedRooms,
+    latestHostedActivityAt,
+    profileVisits: null,
+    followerCount,
+    subscriberCount,
+    liveAttendanceTotal: null,
+    contentLaunches: null,
+    continueWatchingReturns: null,
+    gatedSurfaceViews: null,
+    dataStatus: creatorAnalyticsStatus,
   };
 }
