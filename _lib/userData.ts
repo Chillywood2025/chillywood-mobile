@@ -352,6 +352,10 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
   }
 }
 
+export async function readUserProfileByUserId(userId: string): Promise<UserProfile | null> {
+  return readRemoteUserProfile(userId);
+}
+
 async function syncUserProfileToRemote(profile: UserProfile): Promise<void> {
   const userId = await getSignedInUserId();
   if (!userId) return;

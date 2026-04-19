@@ -9,6 +9,11 @@ import { trackEvent } from "../../_lib/analytics";
 import { useBetaProgram } from "../../_lib/betaProgram";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import { reportRuntimeError } from "../../_lib/logger";
+import {
+  readCreatorPermissions,
+  sanitizeCreatorRoomAccessRule,
+  type CreatorPermissionSet,
+} from "../../_lib/monetization";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { getSupportRoutePath } from "../../_lib/runtimeConfig";
@@ -23,7 +28,14 @@ import {
     View,
 } from "react-native";
 import { titles as localTitles } from "../../_data/titles";
-import { buildUserChannelProfile, readMergedWatchProgress, readMyListIds } from "../../_lib/userData";
+import {
+  buildUserChannelProfile,
+  readMergedWatchProgress,
+  readMyListIds,
+  readUserProfile,
+  readUserProfileByUserId,
+  type UserProfile,
+} from "../../_lib/userData";
 import { getSafePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 
@@ -57,6 +69,12 @@ type OwnerPromptCard = {
   onPress?: () => void;
 };
 
+type ProfileAccessDetail = {
+  label: string;
+  value: string;
+  body: string;
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { isActive: hasSupportAccess } = useBetaProgram();
@@ -68,6 +86,9 @@ export default function ProfileScreen() {
   const [savedTitleCount, setSavedTitleCount] = useState(0);
   const [continueWatchingCount, setContinueWatchingCount] = useState(0);
   const [channelSignalsReady, setChannelSignalsReady] = useState(false);
+  const [channelAccessProfile, setChannelAccessProfile] = useState<UserProfile | null>(null);
+  const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
+  const [channelAccessReady, setChannelAccessReady] = useState(false);
   const params = useLocalSearchParams<{
     userId?: string;
     displayName?: string;
@@ -168,6 +189,43 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [isSelfProfile]);
+  useEffect(() => {
+    let active = true;
+
+    if (isOfficialProfile || !userId) {
+      setChannelAccessProfile(null);
+      setChannelAccessPermissions(null);
+      setChannelAccessReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setChannelAccessReady(false);
+
+    Promise.all([
+      isSelfProfile
+        ? readUserProfile().catch(() => null)
+        : readUserProfileByUserId(userId).catch(() => null),
+      readCreatorPermissions(userId).catch(() => null),
+    ])
+      .then(([resolvedProfile, resolvedPermissions]) => {
+        if (!active) return;
+        setChannelAccessProfile(resolvedProfile);
+        setChannelAccessPermissions(resolvedPermissions);
+        setChannelAccessReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setChannelAccessProfile(null);
+        setChannelAccessPermissions(null);
+        setChannelAccessReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOfficialProfile, isSelfProfile, userId]);
   const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
   const roleLabel = isOfficialProfile
     ? profile.platformRoleLabel ?? "Official"
@@ -679,6 +737,92 @@ export default function ProfileScreen() {
         : activeTab === "community"
           ? "Community supports public follow-up and Chi'lly Chat continuity without turning profile into the inbox."
           : "About keeps durable identity, trust, and channel framing visible even when content depth is still light.";
+  const watchPartyAccessRule = sanitizeCreatorRoomAccessRule(
+    channelAccessProfile?.defaultWatchPartyContentAccessRule,
+    channelAccessPermissions,
+  );
+  const communicationAccessRule = sanitizeCreatorRoomAccessRule(
+    channelAccessProfile?.defaultCommunicationContentAccessRule,
+    channelAccessPermissions,
+  );
+  const watchPartyJoinPolicy = channelAccessProfile?.defaultWatchPartyJoinPolicy ?? "open";
+  const accessPosture = isOfficialProfile
+    ? {
+        title: "Official Access",
+        body: "Official help stays visible on the canonical profile and Chi'lly Chat routes without pretending this surface is a paywall or creator storefront.",
+      }
+    : !channelAccessReady
+      ? {
+          title: "Loading Access",
+          body: "Checking channel defaults and creator grants so access rules stay visible and honest on this route.",
+        }
+      : watchPartyAccessRule !== "open" && communicationAccessRule !== "open"
+        ? {
+            title: "Subscriber Access",
+            body: "Both channel communication and watch-party defaults are gated, so this profile should signal member-style access before people hit a room or a thread.",
+          }
+        : watchPartyJoinPolicy === "locked"
+          ? {
+              title: "Private",
+              body: "This channel currently defaults to locked watch-party entry, so room access should read as invite/host-controlled instead of purely public.",
+            }
+          : watchPartyAccessRule === "open" && communicationAccessRule === "open"
+            ? {
+                title: "Public",
+                body: "This channel currently defaults to open communication and open watch-party access, so visitors should not be surprised by hidden gating.",
+              }
+            : {
+                title: "Mixed Access",
+                body: "This channel mixes open and gated defaults, so the profile needs to show where access stays public and where member-style rules begin.",
+              };
+  const accessDetails: readonly ProfileAccessDetail[] = isOfficialProfile ? [
+    {
+      label: "Profile",
+      value: "Protected",
+      body: "official platform-owned identity",
+    },
+    {
+      label: "Chat",
+      value: "Canonical",
+      body: "Chi'lly Chat stays the official follow-up path",
+    },
+  ] : [
+    {
+      label: "Watch Party",
+      value: watchPartyAccessRule === "open"
+        ? "Public"
+        : watchPartyAccessRule === "party_pass"
+          ? "Party Pass"
+          : "Premium",
+      body: watchPartyJoinPolicy === "locked" ? "locked room entry by default" : "open room entry by default",
+    },
+    {
+      label: "Communication",
+      value: communicationAccessRule === "open"
+        ? "Public"
+        : communicationAccessRule === "party_pass"
+          ? "Party Pass"
+          : "Premium",
+      body: "Chi'lly Chat stays canonical even when room defaults are gated",
+    },
+    {
+      label: "Creator Grants",
+      value: !channelAccessReady
+        ? "Loading"
+        : channelAccessPermissions?.canUsePartyPassRooms || channelAccessPermissions?.canUsePremiumRooms
+          ? "Enabled"
+          : "Open Only",
+      body: !channelAccessReady
+        ? "checking supported gated room types"
+        : channelAccessPermissions?.canUsePartyPassRooms && channelAccessPermissions?.canUsePremiumRooms
+          ? "party pass and premium room defaults available"
+          : channelAccessPermissions?.canUsePartyPassRooms
+            ? "party pass rooms available, premium hidden"
+            : channelAccessPermissions?.canUsePremiumRooms
+              ? "premium rooms available, party pass hidden"
+              : "gated room defaults fall back to open",
+    },
+  ];
   const ownerStatsRibbon: readonly OwnerStatCard[] = isSelfProfile ? [
     {
       label: "Saved",
@@ -899,6 +1043,20 @@ export default function ProfileScreen() {
                 ))}
               </View>
             ) : null}
+          </View>
+          <View style={styles.accessCard}>
+            <Text style={styles.accessKicker}>ACCESS &amp; MONETIZATION</Text>
+            <Text style={styles.accessTitle}>{accessPosture.title}</Text>
+            <Text style={styles.accessBody}>{accessPosture.body}</Text>
+            <View style={styles.accessDetailRow}>
+              {accessDetails.map((detail) => (
+                <View key={detail.label} style={styles.accessDetailCard}>
+                  <Text style={styles.accessDetailLabel}>{detail.label}</Text>
+                  <Text style={styles.accessDetailValue}>{detail.value}</Text>
+                  <Text style={styles.accessDetailBody}>{detail.body}</Text>
+                </View>
+              ))}
+            </View>
           </View>
           <View style={styles.actionCluster}>
             <View style={styles.primaryActionRow}>
@@ -1296,6 +1454,35 @@ const styles = StyleSheet.create({
   channelGuideKicker: { color: "#7A859A", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   channelGuideTitle: { color: "#F4F7FF", fontSize: 15, fontWeight: "900" },
   channelGuideBody: { color: "#A2ABBD", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  accessCard: {
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.16)",
+    backgroundColor: "rgba(17,24,40,0.84)",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 8,
+  },
+  accessKicker: { color: "#7E8AA0", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  accessTitle: { color: "#F2F5FF", fontSize: 16, fontWeight: "900" },
+  accessBody: { color: "#A9B3C7", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  accessDetailRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  accessDetailCard: {
+    flexBasis: "31%",
+    flexGrow: 1,
+    minWidth: 98,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 4,
+  },
+  accessDetailLabel: { color: "#8590A6", fontSize: 10, fontWeight: "900", letterSpacing: 0.9 },
+  accessDetailValue: { color: "#F4F7FF", fontSize: 15, fontWeight: "900" },
+  accessDetailBody: { color: "#AAB3C7", fontSize: 11.5, lineHeight: 16, fontWeight: "600" },
   quickActionsCard: {
     width: "100%",
     borderRadius: 16,

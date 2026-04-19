@@ -38,6 +38,12 @@ type ChannelSettingsSectionModel = {
   body: string;
 };
 
+type ChannelAccessSummaryDetail = {
+  label: string;
+  value: string;
+  body: string;
+};
+
 export default function ChannelSettingsScreen() {
   const router = useRouter();
   const { isLoading: authLoading, isSignedIn } = useSession();
@@ -174,6 +180,76 @@ export default function ChannelSettingsScreen() {
     "Programming rows",
     "Public activity curation",
   ] as const;
+  const resolvedWatchPartyAccessRule = sanitizeCreatorRoomAccessRule(
+    profile?.defaultWatchPartyContentAccessRule,
+    creatorPermissions,
+  );
+  const resolvedCommunicationAccessRule = sanitizeCreatorRoomAccessRule(
+    profile?.defaultCommunicationContentAccessRule,
+    creatorPermissions,
+  );
+  const resolvedWatchPartyJoinPolicy = profile?.defaultWatchPartyJoinPolicy ?? "open";
+  const accessSummary = !profile
+    ? {
+        title: "Loading Access",
+        body: "Checking saved defaults and creator grants before showing the channel access posture.",
+      }
+    : resolvedWatchPartyAccessRule !== "open" && resolvedCommunicationAccessRule !== "open"
+      ? {
+          title: "Subscriber Access",
+          body: "Both watch-party and communication defaults are gated, so this channel should visibly prepare visitors for member-style access.",
+        }
+      : resolvedWatchPartyJoinPolicy === "locked"
+        ? {
+            title: "Private",
+            body: "Watch-party entry is locked by default, so private/invite-controlled room behavior should stay explicit on public surfaces.",
+          }
+        : resolvedWatchPartyAccessRule === "open" && resolvedCommunicationAccessRule === "open"
+          ? {
+              title: "Public",
+              body: "The channel currently defaults to open communication and open watch-party access, so public surfaces should keep that honest and visible.",
+            }
+          : {
+              title: "Mixed Access",
+              body: "This channel mixes open and gated defaults, so the public route needs to signal where access changes instead of hiding it.",
+            };
+  const accessSummaryDetails: readonly ChannelAccessSummaryDetail[] = [
+    {
+      label: "Watch Party",
+      value: resolvedWatchPartyAccessRule === "open"
+        ? "Public"
+        : resolvedWatchPartyAccessRule === "party_pass"
+          ? "Party Pass"
+          : "Premium",
+      body: resolvedWatchPartyJoinPolicy === "locked" ? "locked join policy" : "open join policy",
+    },
+    {
+      label: "Communication",
+      value: resolvedCommunicationAccessRule === "open"
+        ? "Public"
+        : resolvedCommunicationAccessRule === "party_pass"
+          ? "Party Pass"
+          : "Premium",
+      body: "Chi'lly Chat stays canonical even when default room access is gated",
+    },
+    {
+      label: "Creator Grants",
+      value: !creatorPermissions
+        ? "Loading"
+        : creatorPermissions.canUsePartyPassRooms || creatorPermissions.canUsePremiumRooms
+          ? "Enabled"
+          : "Open Only",
+      body: !creatorPermissions
+        ? "checking supported gated room types"
+        : creatorPermissions.canUsePartyPassRooms && creatorPermissions.canUsePremiumRooms
+          ? "party pass and premium defaults available"
+          : creatorPermissions.canUsePartyPassRooms
+            ? "party pass available, premium hidden"
+            : creatorPermissions.canUsePremiumRooms
+              ? "premium available, party pass hidden"
+              : "unsupported gates fall back to open",
+    },
+  ];
 
   if (authLoading || betaLoading) {
     return (
@@ -368,6 +444,30 @@ export default function ChannelSettingsScreen() {
                     <Text style={styles.previewChipText}>{item}</Text>
                   </View>
                 ))}
+              </View>
+            </View>
+
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Access &amp; Monetization</Text>
+                <Text style={styles.panelStatusMuted}>CURRENT + NEAR TERM</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                This section translates the existing room defaults and creator grants into one honest channel-access posture. It stays on `/channel-settings` and does not create new studio routes.
+              </Text>
+              <View style={styles.accessSummaryCard}>
+                <Text style={styles.accessSummaryKicker}>CHANNEL ACCESS</Text>
+                <Text style={styles.accessSummaryTitle}>{accessSummary.title}</Text>
+                <Text style={styles.accessSummaryBody}>{accessSummary.body}</Text>
+                <View style={styles.accessSummaryRow}>
+                  {accessSummaryDetails.map((detail) => (
+                    <View key={detail.label} style={styles.accessSummaryDetailCard}>
+                      <Text style={styles.accessSummaryDetailLabel}>{detail.label}</Text>
+                      <Text style={styles.accessSummaryDetailValue}>{detail.value}</Text>
+                      <Text style={styles.accessSummaryDetailBody}>{detail.body}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
             </View>
 
@@ -799,6 +899,65 @@ const styles = StyleSheet.create({
     color: "#E1E7FF",
     fontSize: 11,
     fontWeight: "700",
+  },
+  accessSummaryCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.18)",
+    backgroundColor: "rgba(17,24,40,0.82)",
+    padding: 14,
+    gap: 8,
+  },
+  accessSummaryKicker: {
+    color: "#8D97AD",
+    fontSize: 10.5,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  accessSummaryTitle: {
+    color: "#F4F7FF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  accessSummaryBody: {
+    color: "#B8C0D4",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  accessSummaryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  accessSummaryDetailCard: {
+    flexBasis: "31%",
+    flexGrow: 1,
+    minWidth: 96,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 4,
+  },
+  accessSummaryDetailLabel: {
+    color: "#8590A6",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  accessSummaryDetailValue: {
+    color: "#F3F6FF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  accessSummaryDetailBody: {
+    color: "#ACB5C9",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
   },
   saveButton: {
     borderRadius: 14,
