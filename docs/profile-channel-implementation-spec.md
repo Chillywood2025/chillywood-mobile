@@ -456,9 +456,9 @@ Stage 5 UI must not ship until these canonical read models are backed by honest 
 | `vipCount` | channel audience-role relationship table | later-phase only; requires new schema |
 | `moderatorCount` | channel audience-role relationship table | later-phase only; requires new schema |
 | `coHostCount` | channel audience-role relationship table | later-phase only; requires new schema |
-| `publicActivityVisibility` | channel audience visibility field | requires new schema |
-| `followerSurfaceEnabled` | derived from new follower + visibility truth | requires new schema |
-| `subscriberSurfaceEnabled` | derived from new subscriber + visibility truth | requires new schema |
+| `publicActivityVisibility` | `user_profiles.public_activity_visibility` | derivable now with schema + helper work |
+| `followerSurfaceEnabled` | `user_profiles.follower_surface_enabled` | derivable now with schema + helper work |
+| `subscriberSurfaceEnabled` | `user_profiles.subscriber_surface_enabled` | derivable now with schema + helper work |
 
 Canonical rule:
 - `user_subscriptions` is account-tier entitlement truth, not creator/channel subscriber truth
@@ -504,9 +504,13 @@ Canonical rule:
 - safety/admin does not unblock full Stage 5 by itself
 
 #### Stage 5 blocker summary
-Full Stage 5 remains blocked until the repo has canonical backend/schema truth for:
+Current repo truth now supports:
 - audience helper/read-model surfaces built on the landed channel-audience relationship tables
-- creator-facing analytics aggregates beyond room/session counts
+- audience visibility defaults through `user_profiles.public_activity_visibility`, `user_profiles.follower_surface_enabled`, and `user_profiles.subscriber_surface_enabled`
+- the current creator analytics helper slice backed by room/session truth
+
+Remaining later-phase data gaps:
+- creator-facing analytics aggregates beyond the current room/session + audience-linked helper slice
 
 #### Channel audience relationship foundation
 

@@ -17,11 +17,13 @@ export const CHANNEL_AUDIENCE_REQUESTS_TABLE = "channel_audience_requests";
 export const CHANNEL_AUDIENCE_BLOCKS_TABLE = "channel_audience_blocks";
 export const WATCH_PARTY_ROOMS_TABLE = "watch_party_rooms";
 export const COMMUNICATION_ROOMS_TABLE = "communication_rooms";
+export const USER_PROFILES_TABLE = "user_profiles";
 
 export type ChannelAudienceAccessScope = "owner" | "operator" | "unavailable";
 export type ChannelSafetyAdminAccessScope = "owner" | "reviewer" | "unavailable";
 export type ChannelCreatorAnalyticsAccessScope = "owner" | "unavailable";
 export type ChannelReadModelFieldStatus = "available" | "missing";
+export type ChannelPublicActivityVisibility = "public" | "followers_only" | "subscribers_only" | "private";
 
 export type ChannelAudienceReadModel = {
   channelUserId: string;
@@ -34,9 +36,9 @@ export type ChannelAudienceReadModel = {
   vipCount: number | null;
   moderatorCount: number | null;
   coHostCount: number | null;
-  publicActivityVisibility: null;
-  followerSurfaceEnabled: null;
-  subscriberSurfaceEnabled: null;
+  publicActivityVisibility: ChannelPublicActivityVisibility | null;
+  followerSurfaceEnabled: boolean | null;
+  subscriberSurfaceEnabled: boolean | null;
   dataStatus: {
     followerCount: ChannelReadModelFieldStatus;
     subscriberCount: ChannelReadModelFieldStatus;
@@ -111,9 +113,9 @@ const emptyAudienceStatus: ChannelAudienceReadModel["dataStatus"] = {
   vipCount: "missing",
   moderatorCount: "missing",
   coHostCount: "missing",
-  publicActivityVisibility: "missing",
-  followerSurfaceEnabled: "missing",
-  subscriberSurfaceEnabled: "missing",
+  publicActivityVisibility: "available",
+  followerSurfaceEnabled: "available",
+  subscriberSurfaceEnabled: "available",
 };
 
 const creatorAnalyticsStatus: CreatorAnalyticsReadModel["dataStatus"] = {
@@ -132,6 +134,18 @@ const creatorAnalyticsStatus: CreatorAnalyticsReadModel["dataStatus"] = {
 };
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const normalizePublicActivityVisibility = (value: unknown): ChannelPublicActivityVisibility | null => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (
+    normalized === "public"
+    || normalized === "followers_only"
+    || normalized === "subscribers_only"
+    || normalized === "private"
+  ) {
+    return normalized;
+  }
+  return null;
+};
 const pickLatestIso = (...values: Array<string | null | undefined>) => {
   const sorted = values
     .map((value) => normalizeText(value))
@@ -205,6 +219,7 @@ export async function readChannelAudienceSummary(channelUserId: string): Promise
     { count: subscriberCountRaw, error: subscriberCountError },
     { count: pendingRequestCountRaw, error: pendingRequestCountError },
     { count: blockedAudienceCountRaw, error: blockedAudienceCountError },
+    { data: audienceVisibilityData, error: audienceVisibilityError },
   ] = await Promise.all([
     supabase
       .from(CHANNEL_FOLLOWERS_TABLE)
@@ -224,17 +239,30 @@ export async function readChannelAudienceSummary(channelUserId: string): Promise
       .from(CHANNEL_AUDIENCE_BLOCKS_TABLE)
       .select("*", { count: "exact", head: true })
       .eq("channel_user_id", context.channelUserId),
+    supabase
+      .from(USER_PROFILES_TABLE)
+      .select("public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled")
+      .eq("user_id", context.channelUserId)
+      .maybeSingle(),
   ]);
 
   if (followerCountError) throw followerCountError;
   if (subscriberCountError) throw subscriberCountError;
   if (pendingRequestCountError) throw pendingRequestCountError;
   if (blockedAudienceCountError) throw blockedAudienceCountError;
+  if (audienceVisibilityError) throw audienceVisibilityError;
 
   const followerCount = Number(followerCountRaw ?? 0);
   const subscriberCount = Number(subscriberCountRaw ?? 0);
   const pendingRequestCount = Number(pendingRequestCountRaw ?? 0);
   const blockedAudienceCount = Number(blockedAudienceCountRaw ?? 0);
+  const publicActivityVisibility = normalizePublicActivityVisibility(audienceVisibilityData?.public_activity_visibility);
+  const followerSurfaceEnabled = typeof audienceVisibilityData?.follower_surface_enabled === "boolean"
+    ? audienceVisibilityData.follower_surface_enabled
+    : null;
+  const subscriberSurfaceEnabled = typeof audienceVisibilityData?.subscriber_surface_enabled === "boolean"
+    ? audienceVisibilityData.subscriber_surface_enabled
+    : null;
 
   return {
     channelUserId: context.channelUserId,
@@ -247,9 +275,9 @@ export async function readChannelAudienceSummary(channelUserId: string): Promise
     vipCount: null,
     moderatorCount: null,
     coHostCount: null,
-    publicActivityVisibility: null,
-    followerSurfaceEnabled: null,
-    subscriberSurfaceEnabled: null,
+    publicActivityVisibility,
+    followerSurfaceEnabled,
+    subscriberSurfaceEnabled,
     dataStatus: emptyAudienceStatus,
   };
 }

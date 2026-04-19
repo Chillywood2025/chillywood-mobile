@@ -733,8 +733,11 @@ export type Database = {
           default_watch_party_join_policy: string | null
           default_watch_party_reactions_policy: string | null
           display_name: string | null
+          follower_surface_enabled: boolean
           likes_visibility: string
+          public_activity_visibility: string
           shares_visibility: string
+          subscriber_surface_enabled: boolean
           tagline: string | null
           updated_at: string
           user_id: string
@@ -751,8 +754,11 @@ export type Database = {
           default_watch_party_join_policy?: string | null
           default_watch_party_reactions_policy?: string | null
           display_name?: string | null
+          follower_surface_enabled?: boolean
           likes_visibility?: string
+          public_activity_visibility?: string
           shares_visibility?: string
+          subscriber_surface_enabled?: boolean
           tagline?: string | null
           updated_at?: string
           user_id: string
@@ -769,8 +775,11 @@ export type Database = {
           default_watch_party_join_policy?: string | null
           default_watch_party_reactions_policy?: string | null
           display_name?: string | null
+          follower_surface_enabled?: boolean
           likes_visibility?: string
+          public_activity_visibility?: string
           shares_visibility?: string
+          subscriber_surface_enabled?: boolean
           tagline?: string | null
           updated_at?: string
           user_id?: string
