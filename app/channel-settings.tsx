@@ -30,6 +30,14 @@ import { BetaAccessScreen } from "../components/system/beta-access-screen";
 
 const SKYLINE_SOURCE = require("../assets/images/chicago-skyline.jpg");
 
+type ChannelSettingsSectionStatus = "current" | "near_term" | "later_phase";
+
+type ChannelSettingsSectionModel = {
+  title: string;
+  status: ChannelSettingsSectionStatus;
+  body: string;
+};
+
 export default function ChannelSettingsScreen() {
   const router = useRouter();
   const { isLoading: authLoading, isSignedIn } = useSession();
@@ -106,6 +114,67 @@ export default function ChannelSettingsScreen() {
     }
   };
 
+  const sectionMap: readonly ChannelSettingsSectionModel[] = [
+    {
+      title: "Identity",
+      status: "current",
+      body: "Display name, tagline, role framing, and creator-facing identity controls live here now.",
+    },
+    {
+      title: "Design",
+      status: "near_term",
+      body: "Hero treatment, accent direction, and visible branding style belong here on this same route.",
+    },
+    {
+      title: "Layout",
+      status: "near_term",
+      body: "Homepage block order, tab emphasis, and shelf hierarchy will expand here without route drift.",
+    },
+    {
+      title: "Content",
+      status: "near_term",
+      body: "Featured titles, spotlight choices, and curated public shelves belong here as creator controls deepen.",
+    },
+    {
+      title: "Access & Monetization",
+      status: "near_term",
+      body: "Watch-party and communication access defaults anchor the future access and monetization layer here.",
+    },
+    {
+      title: "Audience",
+      status: "later_phase",
+      body: "Public activity visibility and future audience posture controls should land later under this route.",
+    },
+    {
+      title: "Analytics",
+      status: "later_phase",
+      body: "Channel performance, conversion, and engagement insight stay planned here, not in a new studio route.",
+    },
+    {
+      title: "Safety/Admin",
+      status: "later_phase",
+      body: "Creator safety posture, moderation links, and admin-aware helpers stay mapped here for later phases.",
+    },
+  ];
+  const designSectionHighlights = [
+    "Hero treatment",
+    "Avatar framing",
+    "Accent direction",
+    "Brand presence",
+  ] as const;
+  const layoutSectionHighlights = [
+    "Home block order",
+    "Default tab emphasis",
+    "Shelf hierarchy",
+    "Live module priority",
+  ] as const;
+  const contentSectionHighlights = [
+    "Spotlight pick",
+    "Featured shelves",
+    "Programming rows",
+    "Public activity curation",
+  ] as const;
+
   if (authLoading || betaLoading) {
     return (
       <BetaAccessScreen
@@ -151,7 +220,7 @@ export default function ChannelSettingsScreen() {
         <View style={styles.heroCard}>
           <Text style={styles.heroTitle}>Manage Channel</Text>
           <Text style={styles.heroBody}>
-            Update your local channel identity and the default rules new rooms should inherit before live room truth takes over.
+            This route is Chi&apos;llywood&apos;s current studio-equivalent control center. Keep public identity on `/profile/[userId]`, and shape deeper channel controls here without spawning `/studio*` route truth.
           </Text>
         </View>
 
@@ -175,8 +244,52 @@ export default function ChannelSettingsScreen() {
               </View>
             ) : null}
 
+            <View style={styles.sectionMapCard}>
+              <Text style={styles.sectionMapKicker}>SECTION MAP</Text>
+              <Text style={styles.sectionMapTitle}>Current creator control center</Text>
+              <Text style={styles.sectionMapBody}>
+                `/channel-settings` now owns the structured channel-control map. Current, near-term, and later-phase sections stay visible here so the doctrine expands without silent route proliferation.
+              </Text>
+              <View style={styles.sectionMapGrid}>
+                {sectionMap.map((section) => (
+                  <View key={section.title} style={styles.sectionMapItem}>
+                    <View style={styles.sectionMapHeader}>
+                      <Text style={styles.sectionMapItemTitle}>{section.title}</Text>
+                      <View
+                        style={[
+                          styles.sectionStatusChip,
+                          section.status === "current" && styles.sectionStatusChipCurrent,
+                          section.status === "near_term" && styles.sectionStatusChipNearTerm,
+                          section.status === "later_phase" && styles.sectionStatusChipLaterPhase,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sectionStatusChipText,
+                            section.status === "current" && styles.sectionStatusChipTextCurrent,
+                            section.status === "near_term" && styles.sectionStatusChipTextNearTerm,
+                            section.status === "later_phase" && styles.sectionStatusChipTextLaterPhase,
+                          ]}
+                        >
+                          {section.status === "current"
+                            ? "CURRENT"
+                            : section.status === "near_term"
+                              ? "NEAR TERM"
+                              : "LATER"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.sectionMapItemBody}>{section.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>Channel Identity</Text>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Identity</Text>
+                <Text style={styles.panelStatus}>CURRENT SECTION</Text>
+              </View>
               <TextInput
                 style={styles.input}
                 placeholder="Display name"
@@ -208,7 +321,61 @@ export default function ChannelSettingsScreen() {
             </View>
 
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>Watch Party Defaults</Text>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Design</Text>
+                <Text style={styles.panelStatusMuted}>NEAR-TERM SECTION</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                Design stays on this existing route. Hero direction, avatar framing, accent tone, and visible branding treatment should deepen here instead of drifting into separate studio routes.
+              </Text>
+              <View style={styles.previewChipRow}>
+                {designSectionHighlights.map((item) => (
+                  <View key={item} style={styles.previewChip}>
+                    <Text style={styles.previewChipText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Layout</Text>
+                <Text style={styles.panelStatusMuted}>NEAR-TERM SECTION</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                Layout is where channel-home ordering should grow next: featured spotlight priority, default tab emphasis, live module placement, and shelf hierarchy all belong here under the current route.
+              </Text>
+              <View style={styles.previewChipRow}>
+                {layoutSectionHighlights.map((item) => (
+                  <View key={item} style={styles.previewChip}>
+                    <Text style={styles.previewChipText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Content</Text>
+                <Text style={styles.panelStatusMuted}>NEAR-TERM SECTION</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                Content remains truthful here: use this route for spotlight choices, featured rows, and public content curation before inventing bigger creator tooling.
+              </Text>
+              <View style={styles.previewChipRow}>
+                {contentSectionHighlights.map((item) => (
+                  <View key={item} style={styles.previewChip}>
+                    <Text style={styles.previewChipText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Watch Party Defaults</Text>
+                <Text style={styles.panelStatusMuted}>ACCESS PREVIEW</Text>
+              </View>
               <Text style={styles.permissionCopy}>
                 Backend creator grants decide whether Party Pass and Premium room defaults are actually available for this channel.
               </Text>
@@ -288,7 +455,10 @@ export default function ChannelSettingsScreen() {
             </View>
 
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>Communication Defaults</Text>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Communication Defaults</Text>
+                <Text style={styles.panelStatusMuted}>ACCESS PREVIEW</Text>
+              </View>
               <Text style={styles.permissionCopy}>
                 Communication room access follows the same backend grants, even though these defaults stay local to this device for now.
               </Text>
@@ -447,6 +617,92 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
+  sectionMapCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.16)",
+    backgroundColor: "rgba(10,14,24,0.9)",
+    padding: 16,
+    gap: 10,
+  },
+  sectionMapKicker: {
+    color: "#8D98B1",
+    fontSize: 10.5,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  sectionMapTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  sectionMapBody: {
+    color: "#BBC4D8",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
+  sectionMapGrid: {
+    gap: 10,
+  },
+  sectionMapItem: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    gap: 6,
+  },
+  sectionMapHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  sectionMapItemTitle: {
+    color: "#F3F6FF",
+    fontSize: 14,
+    fontWeight: "900",
+    flexShrink: 1,
+  },
+  sectionMapItemBody: {
+    color: "#AFB8CD",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  sectionStatusChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  sectionStatusChipCurrent: {
+    borderColor: "rgba(45,153,92,0.4)",
+    backgroundColor: "rgba(45,153,92,0.16)",
+  },
+  sectionStatusChipNearTerm: {
+    borderColor: "rgba(115,134,255,0.28)",
+    backgroundColor: "rgba(115,134,255,0.14)",
+  },
+  sectionStatusChipLaterPhase: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  sectionStatusChipText: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  sectionStatusChipTextCurrent: {
+    color: "#D9FFE6",
+  },
+  sectionStatusChipTextNearTerm: {
+    color: "#E1E7FF",
+  },
+  sectionStatusChipTextLaterPhase: {
+    color: "#B0BACD",
+  },
   panel: {
     borderRadius: 18,
     borderWidth: 1,
@@ -454,11 +710,29 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(12,16,24,0.9)",
     padding: 16,
   },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
   panelTitle: {
     color: "#fff",
     fontSize: 17,
     fontWeight: "900",
-    marginBottom: 12,
+  },
+  panelStatus: {
+    color: "#D6FFE4",
+    fontSize: 10.5,
+    fontWeight: "900",
+    letterSpacing: 0.9,
+  },
+  panelStatusMuted: {
+    color: "#97A4BE",
+    fontSize: 10.5,
+    fontWeight: "900",
+    letterSpacing: 0.9,
   },
   sectionLabel: {
     color: "#AAB6CD",
@@ -507,6 +781,24 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: "#fff",
+  },
+  previewChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  previewChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.2)",
+    backgroundColor: "rgba(115,134,255,0.1)",
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  previewChipText: {
+    color: "#E1E7FF",
+    fontSize: 11,
+    fontWeight: "700",
   },
   saveButton: {
     borderRadius: 14,
