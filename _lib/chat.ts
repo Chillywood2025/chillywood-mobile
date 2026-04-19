@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { Tables } from "../supabase/database.types";
 
 import {
   createCommunicationRoom,
@@ -62,46 +63,35 @@ export type ChatMessage = {
   createdAt: string;
 };
 
-type ChatThreadRow = {
-  id?: string | null;
-  participant_pair_key?: string | null;
-  created_by?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-  last_message_at?: string | null;
-  last_message_preview?: string | null;
-  active_communication_room_id?: string | null;
-  active_call_type?: string | null;
-  members?: ChatThreadMemberRow[] | null;
+type ChatThreadMemberRow = Pick<
+  Tables<"chat_thread_members">,
+  "thread_id" | "user_id" | "display_name" | "avatar_url" | "tagline" | "joined_at" | "last_read_at" | "unread_count"
+>;
+
+type ChatThreadRow = Pick<
+  Tables<"chat_threads">,
+  | "id"
+  | "participant_pair_key"
+  | "created_by"
+  | "created_at"
+  | "updated_at"
+  | "last_message_at"
+  | "last_message_preview"
+  | "active_communication_room_id"
+  | "active_call_type"
+> & {
+  members: ChatThreadMemberRow[] | null;
 };
 
-type ChatThreadMemberRow = {
-  thread_id?: string | null;
-  user_id?: string | null;
-  display_name?: string | null;
-  avatar_url?: string | null;
-  tagline?: string | null;
-  joined_at?: string | null;
-  last_read_at?: string | null;
-  unread_count?: number | null;
-};
+type ChatMessageRow = Pick<
+  Tables<"chat_messages">,
+  "id" | "thread_id" | "sender_user_id" | "body" | "message_type" | "created_at"
+>;
 
-type ChatMessageRow = {
-  id?: string | null;
-  thread_id?: string | null;
-  sender_user_id?: string | null;
-  body?: string | null;
-  message_type?: string | null;
-  created_at?: string | null;
-};
-
-type ChatUserProfileRow = {
-  user_id?: string | null;
-  username?: string | null;
-  display_name?: string | null;
-  avatar_url?: string | null;
-  tagline?: string | null;
-};
+type ChatUserProfileRow = Pick<
+  Tables<"user_profiles">,
+  "user_id" | "username" | "display_name" | "avatar_url" | "tagline"
+>;
 
 const CHAT_THREAD_MEMBER_SELECT =
   "thread_id,user_id,display_name,avatar_url,tagline,joined_at,last_read_at,unread_count";
@@ -113,6 +103,7 @@ const CHAT_USER_SEARCH_SELECT =
   "user_id,username,display_name,avatar_url,tagline";
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const isDefined = <T>(value: T | null): value is T => value !== null;
 
 const logChatSearch = (event: string, details?: Record<string, unknown>) => {
   void event;
@@ -203,9 +194,9 @@ function parseChatThread(row: ChatThreadRow, currentUserId: string): ChatThreadS
   const createdBy = toText(row.created_by);
   if (!threadId || !participantPairKey || !createdBy) return null;
 
-  const members = ((row.members ?? []) as ChatThreadMemberRow[])
+  const members = (row.members ?? [])
     .map(parseChatThreadMember)
-    .filter(Boolean) as ChatThreadMember[];
+    .filter(isDefined);
   const orderedMembers = [...members].sort((a, b) => {
     const aSelf = a.userId === currentUserId ? 1 : 0;
     const bSelf = b.userId === currentUserId ? 1 : 0;
@@ -271,13 +262,14 @@ export async function listChatThreads(): Promise<ChatThreadSummary[]> {
     .from(CHAT_THREADS_TABLE)
     .select(CHAT_THREAD_SELECT)
     .order("last_message_at", { ascending: false, nullsFirst: false })
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .returns<ChatThreadRow[]>();
 
   if (error || !data) return [];
 
-  return (data as ChatThreadRow[])
+  return data
     .map((row) => parseChatThread(row, currentUserId))
-    .filter(Boolean) as ChatThreadSummary[];
+    .filter(isDefined);
 }
 
 export async function getChatThread(threadId: string): Promise<ChatThreadSummary | null> {
@@ -289,10 +281,11 @@ export async function getChatThread(threadId: string): Promise<ChatThreadSummary
     .from(CHAT_THREADS_TABLE)
     .select(CHAT_THREAD_SELECT)
     .eq("id", normalizedThreadId)
+    .returns<ChatThreadRow>()
     .maybeSingle();
 
   if (error || !data) return null;
-  return parseChatThread(data as ChatThreadRow, currentUserId);
+  return parseChatThread(data, currentUserId);
 }
 
 export async function listChatMessages(threadId: string): Promise<ChatMessage[]> {
@@ -303,12 +296,13 @@ export async function listChatMessages(threadId: string): Promise<ChatMessage[]>
     .from(CHAT_MESSAGES_TABLE)
     .select(CHAT_MESSAGE_SELECT)
     .eq("thread_id", normalizedThreadId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .returns<ChatMessageRow[]>();
 
   if (error || !data) return [];
-  return (data as ChatMessageRow[])
+  return data
     .map(parseChatMessage)
-    .filter(Boolean) as ChatMessage[];
+    .filter(isDefined);
 }
 
 export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promise<ChatThreadSummary> {
@@ -337,6 +331,7 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     .from(CHAT_THREADS_TABLE)
     .select(CHAT_THREAD_SELECT)
     .eq("participant_pair_key", participantPairKey)
+    .returns<ChatThreadRow>()
     .maybeSingle();
 
   const [currentIdentity, currentProfile] = await Promise.all([
@@ -344,8 +339,10 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     readUserProfile().catch(() => null),
   ]);
 
-  if (!existing.error && existing.data) {
-    const thread = parseChatThread(existing.data as ChatThreadRow, currentUserId);
+  const existingRow: ChatThreadRow | null = !existing.error && existing.data ? existing.data : null;
+
+  if (existingRow) {
+    const thread = parseChatThread(existingRow, currentUserId);
     if (thread?.currentMember && thread.otherMember) {
       logChatThread("direct_thread_existing", {
         threadId: thread.threadId,
@@ -355,7 +352,7 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
       return thread;
     }
 
-    const existingThreadId = toText((existing.data as ChatThreadRow).id);
+    const existingThreadId = thread?.threadId ?? "";
     if (existingThreadId) {
       const repairedMembers = buildDirectThreadMemberRows(
         existingThreadId,
@@ -484,7 +481,8 @@ export async function searchChatPeople(rawQuery: string, limit = 12): Promise<Ch
     .select(CHAT_USER_SEARCH_SELECT)
     .or(`display_name.ilike.%${query}%,username.ilike.%${query}%,tagline.ilike.%${query}%`)
     .order("updated_at", { ascending: false })
-    .limit(limit);
+    .limit(limit)
+    .returns<ChatUserProfileRow[]>();
 
   if (error || !data) {
     logChatSearch("search_failed", {
@@ -495,7 +493,7 @@ export async function searchChatPeople(rawQuery: string, limit = 12): Promise<Ch
     return [];
   }
 
-  const results = (data as ChatUserProfileRow[])
+  const results = data
     .map(parseChatUserSearchResult)
     .filter((entry): entry is ChatUserSearchResult => !!entry && entry.userId !== currentUserId);
   logChatSearch("search_success", {
@@ -517,10 +515,11 @@ async function getChatThreadByPairKey(pairKey: string) {
     .from(CHAT_THREADS_TABLE)
     .select(CHAT_THREAD_SELECT)
     .eq("participant_pair_key", pairKey)
+    .returns<ChatThreadRow>()
     .maybeSingle();
 
   if (error || !data) return null;
-  return parseChatThread(data as ChatThreadRow, currentUserId);
+  return parseChatThread(data, currentUserId);
 }
 
 export async function sendChatMessage(threadId: string, body: string): Promise<ChatMessage> {
@@ -546,6 +545,7 @@ export async function sendChatMessage(threadId: string, body: string): Promise<C
       message_type: "text",
     })
     .select(CHAT_MESSAGE_SELECT)
+    .returns<ChatMessageRow>()
     .single();
 
   if (error || !data) {
@@ -557,7 +557,7 @@ export async function sendChatMessage(threadId: string, body: string): Promise<C
     throw error ?? new Error("Failed to send Chi'lly Chat message.");
   }
 
-  const message = parseChatMessage(data as ChatMessageRow);
+  const message = parseChatMessage(data);
   if (!message) {
     logChatInvite("send_message_parse_failed", {
       currentUserId,
