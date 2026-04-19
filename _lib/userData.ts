@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Database } from "../supabase/database.types";
+import type { Tables, TablesInsert } from "../supabase/database.types";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import {
   normalizeCapturePolicy,
@@ -77,33 +77,29 @@ export type UserChannelProfile = {
   auditOwnerKey?: string;
 };
 
-type WatchHistoryRow = {
-  title_id?: string | number | null;
-  last_position_millis?: number | null;
-  duration_millis?: number | null;
-  last_watched_at?: string | null;
-  updated_at?: string | null;
-  completed?: boolean | null;
-  play_count?: number | null;
-};
-
-type WatchHistoryInsert = Database["public"]["Tables"]["watch_history"]["Insert"];
-
-type UserProfileRow = {
-  user_id?: string | null;
-  username?: string | null;
-  avatar_index?: number | null;
-  display_name?: string | null;
-  avatar_url?: string | null;
-  tagline?: string | null;
-  channel_role?: string | null;
-  default_watch_party_join_policy?: string | null;
-  default_watch_party_reactions_policy?: string | null;
-  default_watch_party_content_access_rule?: string | null;
-  default_watch_party_capture_policy?: string | null;
-  default_communication_content_access_rule?: string | null;
-  default_communication_capture_policy?: string | null;
-};
+type UserListInsert = TablesInsert<"user_list">;
+type WatchHistoryRow = Pick<
+  Tables<"watch_history">,
+  "title_id" | "last_position_millis" | "duration_millis" | "last_watched_at" | "updated_at" | "completed" | "play_count"
+>;
+type WatchHistoryInsert = TablesInsert<"watch_history">;
+type UserProfileRow = Pick<
+  Tables<"user_profiles">,
+  | "user_id"
+  | "username"
+  | "avatar_index"
+  | "display_name"
+  | "avatar_url"
+  | "tagline"
+  | "channel_role"
+  | "default_watch_party_join_policy"
+  | "default_watch_party_reactions_policy"
+  | "default_watch_party_content_access_rule"
+  | "default_watch_party_capture_policy"
+  | "default_communication_content_access_rule"
+  | "default_communication_capture_policy"
+>;
+type UserProfileInsert = TablesInsert<"user_profiles">;
 
 const toIdString = (value: string | number | null | undefined) => String(value ?? "").trim();
 
@@ -209,7 +205,7 @@ const toUserProfileUpsertRow = (userId: string, profile: UserProfile) => ({
   default_watch_party_capture_policy: profile.defaultWatchPartyCapturePolicy,
   default_communication_content_access_rule: profile.defaultCommunicationContentAccessRule,
   default_communication_capture_policy: profile.defaultCommunicationCapturePolicy,
-});
+}) satisfies UserProfileInsert;
 
 const parseRemoteUserProfile = (row: UserProfileRow | null | undefined): UserProfile | null => {
   if (!row) return null;
@@ -340,7 +336,7 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
       });
       return null;
     }
-    const parsed = parseRemoteUserProfile(data as UserProfileRow);
+    const parsed = parseRemoteUserProfile(data);
     logChatProfile("remote_read_success", {
       userId: normalizedUserId,
       username: parsed?.username ?? "",
@@ -480,11 +476,11 @@ export async function readMyListIds(): Promise<string[]> {
 
     if (error || !data) return localIds;
 
-    const remoteEntries = (data as Record<string, unknown>[])
+    const remoteEntries = (data ?? [])
       .map((row) => {
-        const id = toIdString(row.title_id as string | number | null | undefined);
+        const id = toIdString(row.title_id);
         if (!id) return null;
-        const updatedAtRaw = typeof row.updated_at === "string" ? Date.parse(row.updated_at) : 0;
+        const updatedAtRaw = Date.parse(row.updated_at);
         return {
           id,
           savedAt: Number.isFinite(updatedAtRaw) ? updatedAtRaw : 0,
@@ -518,7 +514,7 @@ export async function readMyListIds(): Promise<string[]> {
           user_id: userId,
           title_id: titleId,
           updated_at: new Date().toISOString(),
-        })),
+        }) satisfies UserListInsert),
         { onConflict: "user_id,title_id" },
       );
     }
@@ -573,7 +569,7 @@ export async function toggleMyListTitle(
           user_id: userId,
           title_id: id,
           updated_at: new Date().toISOString(),
-        },
+        } satisfies UserListInsert,
         { onConflict: "user_id,title_id" },
       );
     }
@@ -643,7 +639,7 @@ export async function readMergedWatchProgress(): Promise<WatchProgressMap> {
     if (error || !data) return local;
 
     const remoteMap: WatchProgressMap = {};
-    for (const row of data as WatchHistoryRow[]) {
+    for (const row of data ?? []) {
       const id = toIdString(row.title_id);
       const remoteEntry = toProgressEntry(row);
       if (!id || !remoteEntry) continue;
@@ -716,7 +712,7 @@ export async function clearProgressForTitle(titleId: string | number) {
         completed: true,
         last_watched_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      },
+      } satisfies WatchHistoryInsert,
       { onConflict: "user_id,title_id" },
     );
   } catch {
@@ -748,7 +744,7 @@ export async function recordPlaybackStart(titleId: string | number) {
           completed: false,
           last_watched_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        },
+        } satisfies WatchHistoryInsert,
         { onConflict: "user_id,title_id" },
       );
     } catch {
@@ -793,7 +789,7 @@ export async function recordWatchHistoryProgress(
         completed: completed === true,
         last_watched_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      },
+      } satisfies WatchHistoryInsert,
       { onConflict: "user_id,title_id" },
     );
   } catch {
