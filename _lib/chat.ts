@@ -1,5 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import type { Tables } from "../supabase/database.types";
+import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
 import {
   createCommunicationRoom,
@@ -93,6 +93,12 @@ type ChatUserProfileRow = Pick<
   "user_id" | "username" | "display_name" | "avatar_url" | "tagline"
 >;
 
+type ChatThreadInsert = TablesInsert<"chat_threads">;
+type ChatThreadUpdate = TablesUpdate<"chat_threads">;
+type ChatThreadMemberInsert = TablesInsert<"chat_thread_members">;
+type ChatThreadMemberUpdate = TablesUpdate<"chat_thread_members">;
+type ChatMessageInsert = TablesInsert<"chat_messages">;
+
 const CHAT_THREAD_MEMBER_SELECT =
   "thread_id,user_id,display_name,avatar_url,tagline,joined_at,last_read_at,unread_count";
 const CHAT_THREAD_SELECT =
@@ -143,7 +149,7 @@ const buildDirectThreadMemberRows = (
   currentIdentity: Awaited<ReturnType<typeof readCommunicationIdentity>>,
   currentProfile: Awaited<ReturnType<typeof readUserProfile>> | null,
   target: ChatTargetIdentity,
-) => [
+) : ChatThreadMemberInsert[] => [
   {
     thread_id: threadId,
     user_id: currentUserId,
@@ -388,14 +394,15 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
   }
 
   const threadId = createChatThreadId();
+  const threadInsert: ChatThreadInsert = {
+    id: threadId,
+    thread_kind: "direct",
+    participant_pair_key: participantPairKey,
+    created_by: currentUserId,
+  };
   const inserted = await supabase
     .from(CHAT_THREADS_TABLE)
-    .insert({
-      id: threadId,
-      thread_kind: "direct",
-      participant_pair_key: participantPairKey,
-      created_by: currentUserId,
-    });
+    .insert(threadInsert);
 
   if (inserted.error) {
     const errorCode = toText((inserted.error as { code?: unknown })?.code);
@@ -543,7 +550,7 @@ export async function sendChatMessage(threadId: string, body: string): Promise<C
       sender_user_id: currentUserId,
       body: trimmedBody,
       message_type: "text",
-    })
+    } satisfies ChatMessageInsert)
     .select(CHAT_MESSAGE_SELECT)
     .returns<ChatMessageRow>()
     .single();
@@ -597,12 +604,14 @@ export async function markChatThreadRead(threadId: string): Promise<void> {
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return;
 
+  const markReadUpdate: ChatThreadMemberUpdate = {
+    unread_count: 0,
+    last_read_at: new Date().toISOString(),
+  };
+
   await supabase
     .from(CHAT_THREAD_MEMBERS_TABLE)
-    .update({
-      unread_count: 0,
-      last_read_at: new Date().toISOString(),
-    })
+    .update(markReadUpdate)
     .eq("thread_id", normalizedThreadId)
     .eq("user_id", currentUserId);
 }
@@ -611,12 +620,14 @@ export async function clearEndedChatThreadCall(threadId: string): Promise<void> 
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return;
 
+  const clearCallUpdate: ChatThreadUpdate = {
+    active_communication_room_id: null,
+    active_call_type: null,
+  };
+
   await supabase
     .from(CHAT_THREADS_TABLE)
-    .update({
-      active_communication_room_id: null,
-      active_call_type: null,
-    })
+    .update(clearCallUpdate)
     .eq("id", normalizedThreadId);
 }
 
@@ -682,12 +693,14 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   }
 
   const roomId = toText(created.roomId);
+  const startCallUpdate: ChatThreadUpdate = {
+    active_communication_room_id: roomId,
+    active_call_type: mode,
+  };
+
   await supabase
     .from(CHAT_THREADS_TABLE)
-    .update({
-      active_communication_room_id: roomId,
-      active_call_type: mode,
-    })
+    .update(startCallUpdate)
     .eq("id", thread.threadId);
 
   const updated = await getChatThread(thread.threadId);
