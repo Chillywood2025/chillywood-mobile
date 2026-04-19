@@ -181,7 +181,12 @@ export const WATCH_PARTY_MESSAGES_TABLE = "watch_party_room_messages";
 export const WATCH_PARTY_SYNC_TABLE = "watch_party_sync_events";
 export const WATCH_PARTY_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS;
 
-type WatchPartySyncEventInsert = Database["public"]["Tables"]["watch_party_sync_events"]["Insert"];
+type WatchPartySyncEventInsert = TablesInsert<"watch_party_sync_events">;
+type WatchPartyMessageInsert = TablesInsert<"watch_party_room_messages">;
+type WatchPartyMessageRow = Pick<
+  Tables<"watch_party_room_messages">,
+  "id" | "party_id" | "user_id" | "username" | "text" | "created_at"
+>;
 type PartyRoomInsert = TablesInsert<"watch_party_rooms">;
 type PartyRoomBaseInsert = Pick<
   PartyRoomInsert,
@@ -1051,13 +1056,15 @@ export async function sendPartyMessage(
   if (!safeBody) return;
 
   try {
-    await supabase.from(WATCH_PARTY_MESSAGES_TABLE).insert({
+    const payload: WatchPartyMessageInsert = {
       party_id: normalizedPartyId,
       user_id: writableUserId,
       username: String(options?.username ?? "Guest").trim() || "Guest",
       text: kind === "reaction" ? safeBody : safeBody,
       created_at: new Date().toISOString(),
-    });
+    };
+
+    await supabase.from(WATCH_PARTY_MESSAGES_TABLE).insert(payload);
   } catch {
     // noop
   }
@@ -1076,11 +1083,12 @@ export async function fetchPartyMessages(
       .select("id,party_id,user_id,username,text,created_at")
       .eq("party_id", normalizedPartyId)
       .order("created_at", { ascending: true })
-      .limit(limit);
+      .limit(limit)
+      .returns<WatchPartyMessageRow[]>();
 
     if (error || !data) return [];
 
-    return data.map((row: Record<string, unknown>) => ({
+    return data.map((row) => ({
       id: String(row.id ?? ""),
       partyId: String(row.party_id ?? normalizedPartyId),
       userId: String(row.user_id ?? ""),
