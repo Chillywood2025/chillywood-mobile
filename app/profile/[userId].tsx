@@ -36,6 +36,27 @@ type ProfileSurfaceCard = {
   accent?: "default" | "live" | "official";
 };
 
+type OwnerStatCard = {
+  label: string;
+  value: string;
+  body: string;
+  tone?: "default" | "live" | "linked";
+};
+
+type OwnerQuickAction = {
+  label: string;
+  onPress: () => void;
+  emphasis?: "default" | "primary";
+};
+
+type OwnerPromptCard = {
+  kicker: string;
+  title: string;
+  body: string;
+  actionLabel?: string;
+  onPress?: () => void;
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { isActive: hasSupportAccess } = useBetaProgram();
@@ -658,6 +679,88 @@ export default function ProfileScreen() {
         : activeTab === "community"
           ? "Community supports public follow-up and Chi'lly Chat continuity without turning profile into the inbox."
           : "About keeps durable identity, trust, and channel framing visible even when content depth is still light.";
+  const ownerStatsRibbon: readonly OwnerStatCard[] = isSelfProfile ? [
+    {
+      label: "Saved",
+      value: channelSignalsReady ? String(savedTitleCount) : "...",
+      body: "titles ready for public shelves",
+    },
+    {
+      label: "Resume",
+      value: channelSignalsReady ? String(continueWatchingCount) : "...",
+      body: "continue-watching cues still visible to you",
+      tone: "linked",
+    },
+    {
+      label: "Live",
+      value: profile.isLive ? "On" : "Off",
+      body: hasLiveRouteContext ? "room context attached" : "open from a room to test handoff",
+      tone: profile.isLive ? "live" : "default",
+    },
+  ] : [];
+  const ownerQuickActions: readonly OwnerQuickAction[] = isSelfProfile ? [
+    {
+      label: "Manage Channel",
+      onPress: onPressManageChannel,
+      emphasis: "primary",
+    },
+    {
+      label: "Settings",
+      onPress: onPressSettings,
+    },
+    {
+      label: "Chi'lly Chat",
+      onPress: () => {
+        void onPressCommunication("message");
+      },
+    },
+    ...(hasSupportAccess ? [{
+      label: "Support",
+      onPress: onPressBetaSupport,
+    }] : []),
+  ] : [];
+  const ownerPromptCards: readonly OwnerPromptCard[] = isSelfProfile ? [
+    {
+      kicker: "OWNER PROMPT",
+      title: creatorSettingsEnabled ? "Keep deeper editing in Manage Channel" : "Channel editing is currently hidden",
+      body: creatorSettingsEnabled
+        ? "This route stays your shared public-facing profile and channel surface. Use Manage Channel for deeper identity, layout, and content control."
+        : "Creator channel controls are currently hidden by app configuration, so this route should stay focused on the public-facing profile and owner quick actions.",
+      ...(creatorSettingsEnabled
+        ? {
+            actionLabel: "Open Manage Channel",
+            onPress: onPressManageChannel,
+          }
+        : {}),
+    },
+    ...(!profile.tagline ? [{
+      kicker: "SETUP",
+      title: "Add a sharper channel line",
+      body: "Give visitors a clearer first read on your lane by adding a short tagline in Manage Channel.",
+      ...(creatorSettingsEnabled
+        ? {
+            actionLabel: "Write Tagline",
+            onPress: onPressManageChannel,
+          }
+        : {}),
+    }] : []),
+    ...(channelSignalsReady && savedTitleCount === 0 ? [{
+      kicker: "CONTENT",
+      title: "Curate your first visible shelf",
+      body: "Saved titles are the simplest honest seed for your first public content block. Build that shelf before inventing a bigger creator catalog.",
+      ...(creatorSettingsEnabled
+        ? {
+            actionLabel: "Plan Shelves",
+            onPress: onPressManageChannel,
+          }
+        : {}),
+    }] : []),
+    ...(!hasLiveRouteContext ? [{
+      kicker: "LIVE HANDOFF",
+      title: "Test room re-entry from real context",
+      body: "Open your profile from a Live Watch-Party or Watch-Party Live session to verify the route hands back into the correct canonical live and watch-party surfaces.",
+    }] : []),
+  ] : [];
 
   return (
     <View
@@ -882,6 +985,71 @@ export default function ProfileScreen() {
             ) : null}
             <Text style={styles.actionFootnote}>{communicationFootnote ? `${communicationFootnote} ${actionFootnote}` : actionFootnote}</Text>
           </View>
+          {isSelfProfile ? (
+            <View style={styles.ownerModeCard}>
+              <Text style={styles.ownerModeKicker}>OWNER MODE</Text>
+              <Text style={styles.ownerModeTitle}>Stay on this route for self-view. Go deeper in Manage Channel.</Text>
+              <Text style={styles.ownerModeBody}>
+                Your public profile and owner mode now share the same canonical surface. Use the ribbon below for quick control, then hand off to `/channel-settings` for deeper channel editing.
+              </Text>
+              <View style={styles.ownerStatsRow}>
+                {ownerStatsRibbon.map((card) => (
+                  <View
+                    key={card.label}
+                    style={[
+                      styles.ownerStatCard,
+                      card.tone === "linked" && styles.ownerStatCardLinked,
+                      card.tone === "live" && styles.ownerStatCardLive,
+                    ]}
+                  >
+                    <Text style={styles.ownerStatLabel}>{card.label}</Text>
+                    <Text style={styles.ownerStatValue}>{card.value}</Text>
+                    <Text style={styles.ownerStatBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.ownerQuickActionRow}>
+                {ownerQuickActions.map((action) => (
+                  <TouchableOpacity
+                    key={action.label}
+                    style={[
+                      styles.ownerActionChip,
+                      action.emphasis === "primary" && styles.ownerActionChipPrimary,
+                    ]}
+                    activeOpacity={0.84}
+                    onPress={action.onPress}
+                  >
+                    <Text
+                      style={[
+                        styles.ownerActionChipText,
+                        action.emphasis === "primary" && styles.ownerActionChipTextPrimary,
+                      ]}
+                    >
+                      {action.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.ownerPromptStack}>
+                {ownerPromptCards.map((prompt) => (
+                  <View key={prompt.title} style={styles.ownerPromptCard}>
+                    <Text style={styles.ownerPromptKicker}>{prompt.kicker}</Text>
+                    <Text style={styles.ownerPromptTitle}>{prompt.title}</Text>
+                    <Text style={styles.ownerPromptBody}>{prompt.body}</Text>
+                    {prompt.actionLabel && prompt.onPress ? (
+                      <TouchableOpacity
+                        style={styles.ownerPromptAction}
+                        activeOpacity={0.84}
+                        onPress={prompt.onPress}
+                      >
+                        <Text style={styles.ownerPromptActionText}>{prompt.actionLabel}</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.sectionStack}>
@@ -1257,11 +1425,79 @@ const styles = StyleSheet.create({
   actionChipTextPlaceholder: { color: "#97A1B5" },
   actionChipTextMuted: { color: "#9AA3B7" },
   ownerActionChip: {
-    alignSelf: "flex-start",
-    marginTop: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  ownerActionChipText: { color: "#DDE4FF" },
+  ownerActionChipPrimary: {
+    borderColor: "rgba(115,134,255,0.28)",
+    backgroundColor: "rgba(115,134,255,0.16)",
+  },
+  ownerActionChipText: { color: "#DDE4FF", fontSize: 12.5, fontWeight: "800" },
+  ownerActionChipTextPrimary: { color: "#EEF2FF" },
   actionFootnote: { color: "#6D7486", fontSize: 11.5, lineHeight: 16, fontWeight: "600", textAlign: "center" },
+  ownerModeCard: {
+    width: "100%",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.18)",
+    backgroundColor: "rgba(16,21,38,0.92)",
+    padding: 16,
+    gap: 12,
+  },
+  ownerModeKicker: { color: "#8C97B4", fontSize: 10.5, fontWeight: "900", letterSpacing: 1.1 },
+  ownerModeTitle: { color: "#F4F7FF", fontSize: 18, fontWeight: "900" },
+  ownerModeBody: { color: "#B9C2D6", fontSize: 13.5, lineHeight: 20 },
+  ownerStatsRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  ownerStatCard: {
+    flexGrow: 1,
+    flexBasis: 110,
+    minWidth: 110,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    gap: 4,
+  },
+  ownerStatCardLinked: {
+    borderColor: "rgba(115,134,255,0.22)",
+    backgroundColor: "rgba(115,134,255,0.12)",
+  },
+  ownerStatCardLive: {
+    borderColor: "rgba(220,20,60,0.26)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+  },
+  ownerStatLabel: { color: "#8F99AE", fontSize: 10.5, fontWeight: "900", letterSpacing: 0.9 },
+  ownerStatValue: { color: "#F6F8FF", fontSize: 22, fontWeight: "900" },
+  ownerStatBody: { color: "#B1BCD0", fontSize: 12, lineHeight: 17 },
+  ownerQuickActionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  ownerPromptStack: { gap: 10 },
+  ownerPromptCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    padding: 14,
+    gap: 6,
+  },
+  ownerPromptKicker: { color: "#8B95AA", fontSize: 10.5, fontWeight: "900", letterSpacing: 1 },
+  ownerPromptTitle: { color: "#F0F4FF", fontSize: 15.5, fontWeight: "900" },
+  ownerPromptBody: { color: "#B5BED2", fontSize: 13, lineHeight: 19 },
+  ownerPromptAction: {
+    alignSelf: "flex-start",
+    marginTop: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.24)",
+    backgroundColor: "rgba(115,134,255,0.14)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  ownerPromptActionText: { color: "#E4E9FF", fontSize: 12, fontWeight: "800" },
 
   sectionStack: { gap: 12 },
   sectionCard: {
