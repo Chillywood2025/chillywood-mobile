@@ -2,6 +2,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Alert,
@@ -21,6 +22,7 @@ import {
     TextInput,
     TouchableOpacity,
     UIManager,
+    useWindowDimensions,
     View,
     type ImageSourcePropType,
 } from "react-native";
@@ -174,8 +176,271 @@ type CommunicationRTCViewComponent = React.ComponentType<{
   mirror?: boolean;
 }>;
 
+const {
+  AudioSession: HybridLiveKitAudioSession,
+  LiveKitRoom: HybridLiveKitRoom,
+  VideoTrack: HybridLiveKitVideoTrack,
+  isTrackReference: isHybridLiveKitTrackReference,
+  useConnectionState: useHybridLiveKitConnectionState,
+  useLocalParticipant: useHybridLiveKitLocalParticipant,
+  useTracks: useHybridLiveKitTracks,
+} = require("@livekit/react-native") as typeof import("@livekit/react-native");
+
+const HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
+
+type LiveKitStageFallbackReason = "connection_timeout" | "disconnected" | "room_error";
+
+function ConditionalWrap({
+  condition,
+  children,
+  wrap,
+}: {
+  condition: boolean;
+  children: React.ReactNode;
+  wrap: (children: React.ReactNode) => React.ReactElement;
+}) {
+  return condition ? wrap(children) : <>{children}</>;
+}
+
+function LiveKitHybridParticipantVideo({
+  participantId,
+  fallback,
+  remoteTrackIndex = 0,
+}: {
+  participantId: string;
+  fallback: React.ReactNode;
+  remoteTrackIndex?: number;
+}) {
+  const { localParticipant } = useHybridLiveKitLocalParticipant();
+  const tracks = useHybridLiveKitTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: false },
+      { source: Track.Source.ScreenShare, withPlaceholder: false },
+    ],
+    { onlySubscribed: true },
+  );
+  const remoteTracks = useMemo(
+    () => tracks.filter((trackRef) => (
+      isHybridLiveKitTrackReference(trackRef)
+      && trackRef.participant.identity !== localParticipant.identity
+    )),
+    [localParticipant.identity, tracks],
+  );
+
+  const matchingTrack = useMemo(
+    () => tracks.find((trackRef) => (
+      isHybridLiveKitTrackReference(trackRef)
+      && trackRef.participant.identity === participantId
+      && trackRef.participant.identity !== localParticipant.identity
+    )) ?? null,
+    [localParticipant.identity, participantId, tracks],
+  );
+  const fallbackRemoteTrack = useMemo(
+    () => remoteTracks[remoteTrackIndex] ?? remoteTracks[0] ?? null,
+    [remoteTrackIndex, remoteTracks],
+  );
+
+  const resolvedRemoteTrack = matchingTrack ?? fallbackRemoteTrack;
+
+  if (resolvedRemoteTrack && isHybridLiveKitTrackReference(resolvedRemoteTrack)) {
+    return (
+      <HybridLiveKitVideoTrack
+        trackRef={resolvedRemoteTrack}
+        style={styles.stagePresenceCameraFill}
+        objectFit="cover"
+        mirror={false}
+      />
+    );
+  }
+
+  return <>{fallback}</>;
+}
+
+function LiveKitHybridHeroVideo({
+  fallbackInitial,
+  participantRole,
+}: {
+  fallbackInitial: string;
+  participantRole: LiveKitTokenReady["participantRole"];
+}) {
+  const connectionState = useHybridLiveKitConnectionState();
+  const {
+    cameraTrack,
+    lastCameraError,
+    localParticipant,
+  } = useHybridLiveKitLocalParticipant();
+  const shouldPublishLocalCamera = participantRole !== "viewer";
+  const tracks = useHybridLiveKitTracks(
+    [
+      { source: Track.Source.ScreenShare, withPlaceholder: false },
+      { source: Track.Source.Camera, withPlaceholder: false },
+    ],
+    { onlySubscribed: true },
+  );
+  const remoteTracks = useMemo(
+    () => tracks.filter((trackRef) => (
+      isHybridLiveKitTrackReference(trackRef) && trackRef.participant.identity !== localParticipant.identity
+    )),
+    [localParticipant.identity, tracks],
+  );
+  const primaryRemoteTrack = remoteTracks[0] ?? null;
+  const localCameraTrackRef = useMemo(() => {
+    if (!shouldPublishLocalCamera || !cameraTrack) return null;
+    return {
+      participant: localParticipant,
+      publication: cameraTrack,
+      source: Track.Source.Camera,
+    };
+  }, [cameraTrack, localParticipant, shouldPublishLocalCamera]);
+  const primaryTrack = useMemo(
+    () => {
+      if (shouldPublishLocalCamera && localCameraTrackRef) {
+        return localCameraTrackRef;
+      }
+      return primaryRemoteTrack ?? localCameraTrackRef;
+    },
+    [localCameraTrackRef, primaryRemoteTrack, shouldPublishLocalCamera],
+  );
+
+  if (primaryTrack && isHybridLiveKitTrackReference(primaryTrack)) {
+    const showLocalPrimary = primaryTrack.participant.identity === localParticipant.identity;
+
+    return (
+      <View style={styles.stageHeroMediaFill}>
+        <HybridLiveKitVideoTrack
+          trackRef={primaryTrack}
+          style={styles.stageHeroMediaFill}
+          objectFit="cover"
+          mirror={showLocalPrimary}
+        />
+      </View>
+    );
+  }
+
+  const isConnected = String(connectionState ?? "").toLowerCase() === "connected";
+  const shouldShowWaiting = isConnected && shouldPublishLocalCamera && !lastCameraError;
+  const fallbackText = shouldShowWaiting
+    ? "Preparing your live camera…"
+    : "Live feed is syncing.";
+
+  return (
+    <View style={styles.stageHeroFallback}>
+      <Text style={styles.stageHeroFallbackInitial}>{fallbackInitial}</Text>
+      <Text style={styles.stageHeroFallbackBody}>{fallbackText}</Text>
+    </View>
+  );
+}
+
+function LiveKitHybridCommunityRoomHost({
+  joinContract,
+  onFallback,
+  children,
+}: {
+  joinContract: LiveKitTokenReady;
+  onFallback: (reason: LiveKitStageFallbackReason) => void;
+  children: React.ReactNode;
+}) {
+  const fallbackTriggeredRef = useRef(false);
+  const [didConnectOnce, setDidConnectOnce] = useState(false);
+  const publishLocalCamera = joinContract.participantRole !== "viewer";
+
+  const triggerFallback = useCallback(
+    (reason: LiveKitStageFallbackReason, error?: unknown) => {
+      if (fallbackTriggeredRef.current) return;
+      fallbackTriggeredRef.current = true;
+
+      if (error) {
+        reportRuntimeError("livekit-hybrid-community-room", error, {
+          reason,
+          roomName: joinContract.roomName,
+          participantRole: joinContract.participantRole,
+          endpoint: joinContract.endpoint,
+        });
+      }
+
+      onFallback(reason);
+    },
+    [joinContract.endpoint, joinContract.participantRole, joinContract.roomName, onFallback],
+  );
+
+  useEffect(() => {
+    fallbackTriggeredRef.current = false;
+    setDidConnectOnce(false);
+  }, [joinContract.participantToken, joinContract.roomName]);
+
+  useEffect(() => {
+    let active = true;
+
+    HybridLiveKitAudioSession.startAudioSession().catch((error) => {
+      if (!active) return;
+      reportRuntimeError("livekit-hybrid-community-audio-session", error, {
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+      });
+    });
+
+    return () => {
+      active = false;
+      HybridLiveKitAudioSession.stopAudioSession().catch(() => {});
+    };
+  }, [joinContract.participantRole, joinContract.roomName]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!didConnectOnce) {
+        triggerFallback(
+          "connection_timeout",
+          new Error("LiveKit did not finish connecting before the hybrid community feed fallback deadline."),
+        );
+      }
+    }, HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [didConnectOnce, triggerFallback]);
+
+  return (
+    <HybridLiveKitRoom
+      serverUrl={joinContract.serverUrl}
+      token={joinContract.participantToken}
+      connect
+      audio={false}
+      video={publishLocalCamera}
+      connectOptions={{ autoSubscribe: true }}
+      options={{ adaptiveStream: true, dynacast: false }}
+      onConnected={() => {
+        setDidConnectOnce(true);
+        debugLog("livekit", "hybrid community room connected", {
+          roomName: joinContract.roomName,
+          participantRole: joinContract.participantRole,
+          publishLocalCamera,
+        });
+      }}
+      onDisconnected={() => {
+        triggerFallback(
+          "disconnected",
+          new Error("LiveKit disconnected before the hybrid community feed could stay stable."),
+        );
+      }}
+      onError={(error) => {
+        triggerFallback("room_error", error);
+      }}
+      onMediaDeviceFailure={(failure) => {
+        triggerFallback(
+          "room_error",
+          new Error(`LiveKit media-device failure: ${String(failure ?? "unknown_failure")}`),
+        );
+      }}
+    >
+      {children}
+    </HybridLiveKitRoom>
+  );
+}
+
 export default function WatchPartyLiveStageScreen() {
   const safeAreaInsets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const isFocused = useIsFocused();
   const { isLoading: authLoading, isSignedIn } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
@@ -752,7 +1017,12 @@ export default function WatchPartyLiveStageScreen() {
   const liveKitFoundationEnabled = isLiveKitRuntimeConfigured();
   const canOwnActiveStageSurface = isFocused && !isLiveRoomSurface;
   const shouldRenderLiveKitStage = canOwnActiveStageSurface && Platform.OS !== "web" && !!liveKitJoinContract;
-  const shouldRenderLegacyStageRtc = canUseBetaStage && canOwnActiveStageSurface && !!communicationRoomId && !shouldRenderLiveKitStage;
+  const shouldRenderLegacyStageRtc =
+    canUseBetaStage
+    && canOwnActiveStageSurface
+    && !!communicationRoomId
+    && !shouldRenderLiveKitStage
+    && stageMode !== "hybrid";
   const RTCView = useMemo<CommunicationRTCViewComponent | undefined>(() => {
     if (!shouldRenderLegacyStageRtc) return undefined;
     return getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
@@ -1257,19 +1527,24 @@ export default function WatchPartyLiveStageScreen() {
   const stageMenuSheetVisible = stageMenuOpen && !commentsOpen && !reactionPickerOpen && !stageControlsOpen && !faceFilterSheetOpen;
   const liveDockBottomInset = Math.max(28, safeAreaInsets.bottom + 14);
   const liveRoomFooterInset = Math.max(16, safeAreaInsets.bottom + 8);
+  const hybridDeckTop = safeAreaInsets.top + 140;
   const isLiveFirstMode = stageMode === "live";
   const isHybridMode = stageMode === "hybrid";
   const usesSharedStageCommentLane = isLiveFirstMode || isHybridMode;
   const commentsLaneBottomOffset = liveDockBottomInset + (usesSharedStageCommentLane ? 292 : 172);
+  const hybridCommunityMaxHeight = Math.max(
+    170,
+    Math.min(300, windowHeight - hybridDeckTop - (safeAreaInsets.bottom + 360)),
+  );
   const lowerCommunityParticipants = useMemo(() => {
     if (isLiveFirstMode) {
       return visibleStripParticipants.filter((participant) => participant.role !== "host");
     }
-    if (isHost) {
+    if (isHybridMode) {
       return visibleStripParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
     }
     return visibleStripParticipants;
-  }, [currentUserParticipantId, isHost, isLiveFirstMode, visibleStripParticipants]);
+  }, [currentUserParticipantId, isHybridMode, isLiveFirstMode, visibleStripParticipants]);
   const lowerCommunityRows = useMemo(() => {
     const rows: typeof lowerCommunityParticipants[] = [];
     let pendingRow: typeof lowerCommunityParticipants = [];
@@ -1298,6 +1573,10 @@ export default function WatchPartyLiveStageScreen() {
 
     return rows;
   }, [featuredParticipantById, lowerCommunityParticipants]);
+  const lowerCommunityParticipantIndexById = useMemo(
+    () => Object.fromEntries(lowerCommunityParticipants.map((participant, index) => [participant.userId, index])),
+    [lowerCommunityParticipants],
+  );
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
@@ -2068,6 +2347,17 @@ export default function WatchPartyLiveStageScreen() {
         ) : null}
 
         {!isLiveRoomSurface ? (
+        <ConditionalWrap
+          condition={!!(isHybridMode && shouldRenderLiveKitStage && liveKitJoinContract)}
+          wrap={(children) => (
+            <LiveKitHybridCommunityRoomHost
+              joinContract={liveKitJoinContract as LiveKitTokenReady}
+              onFallback={onLiveKitStageFallback}
+            >
+              {children}
+            </LiveKitHybridCommunityRoomHost>
+          )}
+        >
         <>
         <View
           style={[
@@ -2078,10 +2368,23 @@ export default function WatchPartyLiveStageScreen() {
           collapsable={false}
         >
           {shouldRenderLiveKitStage && liveKitJoinContract ? (
-            <LiveKitStageMediaSurface
-              joinContract={liveKitJoinContract}
-              onFallback={onLiveKitStageFallback}
-            />
+            isHybridMode ? (
+              <LiveKitHybridHeroVideo
+                fallbackInitial={heroFallbackInitial}
+                participantRole={liveKitJoinContract.participantRole}
+              />
+            ) : (
+              <View style={styles.stageHeroMediaFill}>
+                <LiveKitStageMediaSurface
+                  joinContract={liveKitJoinContract}
+                  onFallback={onLiveKitStageFallback}
+                />
+              </View>
+            )
+          ) : isHybridMode ? (
+            <View style={styles.stageHeroFallback}>
+              <Text style={styles.stageHeroFallbackInitial}>{heroFallbackInitial}</Text>
+            </View>
           ) : showHeroLocalRtcVideo && RTCView ? (
             <RTCView
               key={`${heroParticipant?.userId ?? "hero"}:${localStreamURL ?? "no-local-stream"}`}
@@ -2108,7 +2411,8 @@ export default function WatchPartyLiveStageScreen() {
               <Text style={styles.stageHeroFallbackInitial}>{heroFallbackInitial}</Text>
             </View>
           )}
-          {(showHeroLocalRtcVideo || showHeroRemoteImage) && liveFaceFilter !== "none" ? (
+          {isHybridMode ? <View pointerEvents="none" style={styles.stageHybridMediaScrim} /> : null}
+          {!isHybridMode && (showHeroLocalRtcVideo || showHeroRemoteImage) && liveFaceFilter !== "none" ? (
             <View
               pointerEvents="none"
               style={[
@@ -2268,8 +2572,8 @@ export default function WatchPartyLiveStageScreen() {
 
         </View>
         {isHybridMode ? (
-          <View style={[styles.stageHybridDeck, { top: safeAreaInsets.top + 140 }]} pointerEvents="box-none">
-            <View pointerEvents="auto" style={styles.stageHybridCommunityCard}>
+          <View style={[styles.stageHybridDeck, { top: hybridDeckTop }]} pointerEvents="box-none">
+            <View pointerEvents="auto" style={[styles.stageHybridCommunityCard, { maxHeight: hybridCommunityMaxHeight + 58 }]}>
               <View style={styles.stageCommunityHeader}>
                 <View style={styles.stageCommunityHeaderLeft}>
                   <View style={styles.stageCommunityDot} />
@@ -2283,8 +2587,9 @@ export default function WatchPartyLiveStageScreen() {
                   data={lowerCommunityRows}
                   keyExtractor={(row, index) => row.map((participant) => participant.userId).join("|") || `community-row-${index}`}
                   nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
-                  style={styles.stageHybridCommunityScroll}
+                  style={[styles.stageHybridCommunityScroll, { maxHeight: hybridCommunityMaxHeight }]}
                   contentContainerStyle={styles.stageHybridCommunityGrid}
                   removeClippedSubviews={Platform.OS === "android"}
                   initialNumToRender={10}
@@ -2332,6 +2637,7 @@ export default function WatchPartyLiveStageScreen() {
                         const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
                         const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
                         const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
+                        const shouldUseHybridLiveKitVideo = isHybridMode && shouldRenderLiveKitStage && !!liveKitJoinContract;
                         const bubbleMediaUri = isCurrentUser
                           ? (heroOwnsLocalFeed ? (participant.avatarUrl || "") : (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || ""))
                           : (participant.cameraPreviewUrl || participant.avatarUrl || "");
@@ -2517,7 +2823,7 @@ export default function WatchPartyLiveStageScreen() {
                                 </TouchableOpacity>
                               </View>
                             ) : null}
-                            <View style={styles.stagePresenceTapWrap}>
+                            <View style={[styles.stagePresenceTapWrap, styles.stagePresenceTapWrapGrid]}>
                               <Animated.View
                                 style={[
                                   styles.stagePresenceBubble,
@@ -2527,7 +2833,7 @@ export default function WatchPartyLiveStageScreen() {
                                 ]}
                               >
                                 {isHostBubble ? <View style={styles.stagePresenceHostDot} /> : null}
-                                {(showLocalRtcPreview || bubbleMediaUri) ? (
+                                {(shouldUseHybridLiveKitVideo || showLocalRtcPreview || bubbleMediaUri) ? (
                                   <View
                                     style={[
                                       styles.stagePresenceFaceClip,
@@ -2536,7 +2842,36 @@ export default function WatchPartyLiveStageScreen() {
                                       isFeatured && styles.stagePresenceFaceClipFeaturedGrid,
                                     ]}
                                   >
-                                    {showLocalRtcPreview && RTCView ? (
+                                    {shouldUseHybridLiveKitVideo ? (
+                                      <LiveKitHybridParticipantVideo
+                                        participantId={participant.userId}
+                                        remoteTrackIndex={lowerCommunityParticipantIndexById[participant.userId] ?? 0}
+                                        fallback={bubbleMediaUri ? (
+                                          <Image
+                                            source={{ uri: bubbleMediaUri }}
+                                            style={[
+                                              styles.stagePresenceImage,
+                                              styles.stagePresenceImageGrid,
+                                              isExpanded && styles.stagePresenceImageExpandedGrid,
+                                              isFeatured && styles.stagePresenceImageFeaturedGrid,
+                                            ]}
+                                          />
+                                        ) : (
+                                          <View style={styles.stagePresenceFallbackFill}>
+                                            <Text
+                                              style={[
+                                                styles.stagePresenceInitial,
+                                                styles.stagePresenceInitialGrid,
+                                                isExpanded && styles.stagePresenceInitialExpandedGrid,
+                                                isFeatured && styles.stagePresenceInitialFeaturedGrid,
+                                              ]}
+                                            >
+                                              {participantDisplayName.slice(0, 1).toUpperCase()}
+                                            </Text>
+                                          </View>
+                                        )}
+                                      />
+                                    ) : showLocalRtcPreview && RTCView ? (
                                       <RTCView
                                         streamURL={localStreamURL as string}
                                         style={styles.stagePresenceCameraFill}
@@ -2561,7 +2896,7 @@ export default function WatchPartyLiveStageScreen() {
                                         ]}
                                       />
                                     )}
-                                    {isCurrentUser && liveFaceFilter !== "none" && (showLocalRtcPreview || !!bubbleMediaUri) ? (
+                                    {isCurrentUser && liveFaceFilter !== "none" && (shouldUseHybridLiveKitVideo || showLocalRtcPreview || !!bubbleMediaUri) ? (
                                       <View
                                         pointerEvents="none"
                                         style={[
@@ -2881,6 +3216,7 @@ export default function WatchPartyLiveStageScreen() {
         />
         </Animated.View>
         </>
+        </ConditionalWrap>
         ) : null}
       </View>
 
@@ -3522,6 +3858,33 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1,
   },
+  stageHeroFallbackBody: {
+    marginTop: 12,
+    color: "#C9D4E9",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  stageHybridHeroSecondaryWrap: {
+    position: "absolute",
+    right: 14,
+    bottom: 18,
+    width: 96,
+    height: 136,
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(5,7,14,0.88)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  stageHybridHeroSecondaryVideo: {
+    width: "100%",
+    height: "100%",
+  },
   stageHeroOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "flex-end",
@@ -3665,6 +4028,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.45,
+  },
+  stageHybridMediaScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(5,9,18,0.76)",
   },
   stageHeroCaption: {
     alignSelf: "flex-start",
@@ -4137,10 +4504,12 @@ const styles = StyleSheet.create({
   },
   stageParticipantTileGrid: {
     width: "47.5%",
-    minHeight: 82,
-    paddingHorizontal: 6,
-    paddingVertical: 7,
+    minHeight: 132,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderRadius: 16,
+    alignItems: "stretch",
+    justifyContent: "flex-start",
   },
   stageParticipantTileExpanded: {
     width: 98,
@@ -4200,9 +4569,9 @@ const styles = StyleSheet.create({
     overflow: "visible",
   },
   stagePresenceBubbleGrid: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: "100%",
+    height: 76,
+    borderRadius: 14,
   },
   stagePresenceBubbleExpanded: {
     width: 52,
@@ -4258,6 +4627,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  stagePresenceTapWrapGrid: {
+    width: "100%",
+  },
   stagePresenceTapWrapPulsed: {
     transform: [{ scale: 1 }],
     opacity: 1,
@@ -4298,7 +4670,7 @@ const styles = StyleSheet.create({
   stagePresenceImage: { width: "100%", height: "100%", borderRadius: 12 },
   stagePresenceImageExpanded: { borderRadius: 18 },
   stagePresenceImageFeatured: { borderRadius: 22 },
-  stagePresenceImageGrid: { borderRadius: 10 },
+  stagePresenceImageGrid: { borderRadius: 14 },
   stagePresenceImageExpandedGrid: { borderRadius: 14 },
   stagePresenceImageFeaturedGrid: { borderRadius: 16 },
   stagePresenceFaceClip: {
@@ -4307,7 +4679,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
   },
-  stagePresenceFaceClipGrid: { borderRadius: 10 },
+  stagePresenceFallbackFill: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stagePresenceFaceClipGrid: { borderRadius: 14 },
   stagePresenceFilterOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
@@ -4357,9 +4734,9 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   stageParticipantNameGrid: {
-    marginTop: 5,
-    fontSize: 9,
-    lineHeight: 11,
+    marginTop: 8,
+    fontSize: 10,
+    lineHeight: 12,
   },
   stageParticipantNameActive: {
     color: "#C6CEDC",
@@ -4400,10 +4777,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   stageParticipantRoleGrid: {
-    marginTop: 2,
-    fontSize: 7.5,
-    paddingHorizontal: 4,
-    paddingVertical: 1.5,
+    marginTop: 4,
+    fontSize: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   stageParticipantRoleSpeaking: {
     color: "#9FA8BA",
