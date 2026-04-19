@@ -40,13 +40,13 @@ import { trackEvent } from "../../_lib/analytics";
 import {
     evaluateTitleAccess,
     type ContentAccessDecision,
-    type TitleAccessRule,
 } from "../../_lib/monetization";
 import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { supabase } from "../../_lib/supabase";
+import type { Tables } from "../../supabase/database.types";
 import {
     clearProgressForTitle,
     readMergedWatchProgress,
@@ -105,19 +105,37 @@ const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
 const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
-type TitleRow = {
-  id: string;
-  title: string;
-  category?: string | null;
-  year?: number | null;
-  runtime?: string | null;
-  synopsis?: string | null;
-  poster_url?: string | null;
+
+type TitleDbBaseRow = Pick<
+  Tables<"titles">,
+  "id" | "title" | "category" | "year" | "runtime" | "synopsis" | "poster_url" | "video_url" | "content_access_rule"
+>;
+
+type TitleDbAdvancedRow = TitleDbBaseRow & Pick<
+  Tables<"titles">,
+  "status" | "is_published" | "release_at" | "release_date"
+>;
+
+type TitleIdLookupRow = Pick<Tables<"titles">, "id">;
+
+type TitleRow = TitleDbBaseRow & {
   thumbnail_url?: string | null;
-  video_url?: string | null;
-  content_access_rule?: TitleAccessRule | null;
-  video?: any;
+  video?: unknown;
 };
+
+const buildLocalPlayerTitle = (chosen: any): TitleRow => ({
+  id: String(chosen?.id ?? ""),
+  title: String(chosen?.title ?? "Now Playing"),
+  category: chosen?.genre ?? null,
+  year: chosen?.year ? Number(chosen.year) : null,
+  runtime: chosen?.runtime ?? null,
+  synopsis: chosen?.description ?? null,
+  poster_url: null,
+  thumbnail_url: null,
+  video_url: null,
+  content_access_rule: "open",
+  video: chosen?.video,
+});
 
 type PartyParticipant = {
   id: string;
@@ -577,14 +595,7 @@ export default function PlayerScreen() {
         if ((localTitle || fallbackTitle) && active) {
           const chosen = (localTitle ?? fallbackTitle) as any;
           console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
-          setItem({
-            id: String(chosen.id),
-            title: String(chosen.title),
-            runtime: chosen.runtime,
-            synopsis: chosen.description,
-            category: chosen.genre,
-            video: chosen.video,
-          });
+          setItem(buildLocalPlayerTitle(chosen));
         }
         setTitleLoading(false);
         return;
@@ -595,12 +606,13 @@ export default function PlayerScreen() {
           .from("titles")
           .select(ADVANCED_SELECT)
           .eq("id", routeId)
+          .returns<TitleDbAdvancedRow>()
           .maybeSingle();
 
         if (primary.data && !primary.error) {
           if (active) {
             console.log("PLAYER MATCH SOURCE: matched from", "db:advanced:id");
-            setItem(primary.data as TitleRow);
+            setItem(primary.data);
             setTitleLoading(false);
           }
           return;
@@ -610,12 +622,13 @@ export default function PlayerScreen() {
           .from("titles")
           .select(BASE_SELECT)
           .eq("id", routeId)
+          .returns<TitleDbBaseRow>()
           .maybeSingle();
 
         if (fallback.data && !fallback.error) {
           if (active) {
             console.log("PLAYER MATCH SOURCE: matched from", "db:base:id");
-            setItem(fallback.data as TitleRow);
+            setItem(fallback.data);
             setTitleLoading(false);
           }
           return;
@@ -624,14 +637,7 @@ export default function PlayerScreen() {
         if ((localTitle || fallbackTitle) && active) {
           const chosen = (localTitle ?? fallbackTitle) as any;
           console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
-          setItem({
-            id: String(chosen.id),
-            title: String(chosen.title),
-            runtime: chosen.runtime,
-            synopsis: chosen.description,
-            category: chosen.genre,
-            video: chosen.video,
-          });
+          setItem(buildLocalPlayerTitle(chosen));
           setTitleLoading(false);
           return;
         }
@@ -647,14 +653,7 @@ export default function PlayerScreen() {
           if (localTitle || fallbackTitle) {
             const chosen = (localTitle ?? fallbackTitle) as any;
             console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
-            setItem({
-              id: String(chosen.id),
-              title: String(chosen.title),
-              runtime: chosen.runtime,
-              synopsis: chosen.description,
-              category: chosen.genre,
-              video: chosen.video,
-            });
+            setItem(buildLocalPlayerTitle(chosen));
           }
           setTitleLoading(false);
         }
@@ -2296,7 +2295,7 @@ export default function PlayerScreen() {
     setMyListBusy(true);
     try {
       const ids = await toggleMyListTitle(titleId, {
-        title: item?.title,
+        title: item?.title ?? undefined,
         posterUrl: item?.poster_url ?? undefined,
         thumbnailUrl: item?.thumbnail_url ?? undefined,
       });
@@ -2324,10 +2323,11 @@ export default function PlayerScreen() {
         const titleNameCandidate = String(item?.title ?? (localTitle as any)?.title ?? (fallbackTitle as any)?.title ?? "").trim();
         if (titleNameCandidate) {
           try {
-            const byName = await supabase
+            const byName: { data: TitleIdLookupRow | null } = await supabase
               .from("titles")
               .select("id")
               .eq("title", titleNameCandidate)
+              .returns<TitleIdLookupRow>()
               .maybeSingle();
 
             const dbTitleId = String(byName.data?.id ?? "").trim();
@@ -3105,15 +3105,7 @@ export default function PlayerScreen() {
     if (!localTitle && !fallbackTitle) return null;
 
     const chosen = (localTitle ?? fallbackTitle) as any;
-
-    return {
-      id: String(chosen.id ?? ""),
-      title: String(chosen.title ?? "Now Playing"),
-      runtime: chosen.runtime,
-      synopsis: chosen.description,
-      category: chosen.genre,
-      video: chosen.video,
-    };
+    return buildLocalPlayerTitle(chosen);
   }, [item, localTitle, fallbackTitle]);
 
   const source = useMemo(() => {
