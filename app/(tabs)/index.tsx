@@ -33,20 +33,16 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
+import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../lib/_supabase";
 
-type TitleRow = {
-  id: string;
+type TitleRow = Omit<
+  Pick<Tables<"titles">, "id" | "created_at" | "title" | "category" | "year" | "runtime" | "synopsis" | "poster_url" | "video_url">,
+  "created_at"
+> & {
+  created_at?: string | null;
   slug?: string | null;
-  created_at?: string;
-  title: string;
-  category?: string | null;
-  year?: number | null;
-  runtime?: string | null;
-  synopsis?: string | null;
-  poster_url?: string | null;
   video_thumbnail?: string | null;
-  video_url?: string | null;
 };
 
 type TitleLiveMetadata = {
@@ -55,17 +51,12 @@ type TitleLiveMetadata = {
   reactionsEnabled: boolean;
 };
 
-type WatchPartyRoomRow = {
-  party_id?: string | null;
-  title_id?: string | null;
-  reactions_policy?: string | null;
-  last_activity_at?: string | null;
-  updated_at?: string | null;
-};
+type WatchPartyRoomRow = Pick<
+  Tables<"watch_party_rooms">,
+  "party_id" | "title_id" | "reactions_policy" | "last_activity_at" | "updated_at"
+>;
 
-type WatchPartyRoomMessageRow = {
-  party_id?: string | null;
-};
+type WatchPartyRoomMessageRow = Pick<Tables<"watch_party_room_messages">, "party_id">;
 
 const LIVE_ACTIVITY_WINDOW_MILLIS = 15 * 60 * 1000;
 
@@ -120,14 +111,15 @@ export default function HomeScreen() {
         .from("watch_party_rooms")
         .select("party_id,title_id,reactions_policy,last_activity_at,updated_at")
         .eq("room_type", "title")
-        .in("title_id", titleIds);
+        .in("title_id", titleIds)
+        .returns<WatchPartyRoomRow[]>();
 
       if (roomError || !roomData) {
         setTitleLiveMetadataById({});
         return;
       }
 
-      const activeRooms = (roomData as WatchPartyRoomRow[]).filter((row) => {
+      const activeRooms = roomData.filter((row) => {
         const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
         if (!activitySource) return false;
         const activityAt = Date.parse(activitySource);
@@ -147,9 +139,10 @@ export default function HomeScreen() {
         const { data: messageData } = await supabase
           .from("watch_party_room_messages")
           .select("party_id")
-          .in("party_id", activePartyIds);
+          .in("party_id", activePartyIds)
+          .returns<WatchPartyRoomMessageRow[]>();
 
-        (messageData as WatchPartyRoomMessageRow[] | null)?.forEach((row) => {
+        messageData?.forEach((row) => {
           const partyId = String(row.party_id ?? "").trim();
           if (!partyId) return;
           messageCountByPartyId[partyId] = (messageCountByPartyId[partyId] ?? 0) + 1;
@@ -187,7 +180,8 @@ export default function HomeScreen() {
     const { data, error } = await supabase
       .from("titles")
       .select("id, title, category, year, runtime, synopsis, poster_url, created_at")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .returns<TitleRow[]>();
 
     if (error) {
       setTitles([]);
@@ -196,7 +190,7 @@ export default function HomeScreen() {
       return;
     }
 
-    const nextTitles = (data as TitleRow[]) ?? [];
+    const nextTitles = data ?? [];
     setTitles(nextTitles);
     await fetchTitleLiveMetadata(nextTitles);
   }
@@ -222,10 +216,11 @@ export default function HomeScreen() {
       const { data, error } = await supabase
         .from("titles")
         .select("id, title, category, year, runtime, synopsis, poster_url, created_at")
-        .in("id", ids);
+        .in("id", ids)
+        .returns<TitleRow[]>();
 
       if (!error && data) {
-        const byId = new Map((data as TitleRow[]).map((item) => [String(item.id), item]));
+        const byId = new Map(data.map((item) => [String(item.id), item]));
         const ordered = ids.map((id) => byId.get(id)).filter((item): item is TitleRow => !!item);
         setMyListTitles(ordered);
         setMyListLoading(false);
@@ -236,7 +231,7 @@ export default function HomeScreen() {
     }
 
     const fallbackLocal = ids
-      .map((id) => {
+      .map((id): TitleRow | null => {
         const localMatch = localTitles.find((item: any) => String(item.id) === id);
         if (!localMatch) return null;
         return {
@@ -247,7 +242,11 @@ export default function HomeScreen() {
           runtime: (localMatch as any).runtime ?? null,
           synopsis: (localMatch as any).description ?? null,
           poster_url: null,
-        } as TitleRow;
+          created_at: null,
+          video_url: null,
+          slug: null,
+          video_thumbnail: null,
+        };
       })
       .filter((item): item is TitleRow => !!item);
 
