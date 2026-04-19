@@ -1,51 +1,57 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow typed player compatibility audit on `main`. Do not touch Home, title detail, profile/channel work, runtime room/live-stage owners, RBAC, Rachi control-plane work, admin expansion, live schema, or remote DB state in this lane. The canonical bootstrap path and remote migration bookkeeping are already normalized, repo-owned database types are checked in, the shared Supabase clients are typed, and the config, monetization, beta, moderation, user-data, chat, communication, watch-party, title-list screen, title-details screen, Home screen, and player title-hydration batches are complete. The next task is to inspect `app/player/[id].tsx` only, inventory the remaining local compatibility casts, local-fallback title/media seams, and non-DB typed drift there, and choose the single smallest safe player-screen follow-up batch without changing runtime behavior.
+The next exact task is Stage 1 implementation of the public unified `/profile/[userId]` profile/channel surface on `main`, using `docs/profile-channel-implementation-spec.md` as the governing implementation reference. Do not widen into `/channel-settings` expansion, profile/channel monetization rollout, `/studio*` route creation, schema work, remote DB state changes, watch-party/live route changes, RBAC, Rachi control-plane expansion, or unrelated screen/helpers in this lane. The typed cleanup family is now sufficiently clear to move on, and the landed spec now makes the next safe implementation step explicit: build the public unified profile/channel surface on the canonical `/profile/[userId]` owner while preserving owner mode on the same route, preserving canonical Chi'lly Chat handoff, and preserving locked `Watch-Party Live` / `Live Watch-Party` semantics.
 
 ## Current Plan
-1. Keep scope to `app/player/[id].tsx` only.
-2. Re-read the normalized schema and typed-screen checkpoint truth first: `CURRENT_STATE.md`, `NEXT_TASK.md`, and `supabase/database.types.ts`.
-3. Audit `app/player/[id].tsx` for the remaining local compatibility casts, local-fallback title/media seams, and non-DB typed drift after the landed DB-facing title-hydration work.
-4. Separate trivial, narrow, and broad/risky follow-up cleanup inside that owner before changing code.
-5. Pick the single smallest safe next player-screen typed implementation batch only if it is obviously safe on `main`; otherwise stop at diagnosis.
-6. Keep live schema unchanged in this lane.
-7. Do not introduce feature migrations, UI changes, or broader runtime behavior changes in this pass.
+1. Re-read `docs/profile-channel-implementation-spec.md`, `CURRENT_STATE.md`, and `NEXT_TASK.md` first.
+2. Keep the canonical route owner on `app/profile/[userId].tsx`.
+3. Land the shared public profile/channel shell only: hero, identity/stats row, primary action row, tab strip, and the first public-tab implementation needed by Stage 1.
+4. Preserve owner mode on the same route without widening into full owner-mode expansion yet.
+5. Preserve `/channel-settings` as the separate studio-equivalent control center and keep `/chat` / `/chat/[threadId]` as the canonical communication owners.
+6. Keep live schema unchanged and do not create `/studio*` routes in this lane.
+7. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- inspect `app/player/[id].tsx`
-- inventory the remaining local compatibility casts and local title/media fallback seams
-- identify the single smallest safe typed player-screen follow-up batch
+- implement Stage 1 public unified profile/channel work from `docs/profile-channel-implementation-spec.md`
+- keep the owner route on `app/profile/[userId].tsx`
+- land the canonical public profile/channel shell and tab structure without widening into full studio/settings expansion
+- preserve `Chi'lly Chat`, `Watch-Party Live`, and `Live Watch-Party` doctrine
 - keep live schema unchanged
 - do not write or apply feature migrations
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- be diagnosis-first typed-screen audit
-- touch only `app/player/[id].tsx`
-- preserve the new single-baseline bootstrap path, the archived legacy chain, the checked-in `supabase/database.types.ts`, and the landed config/monetization typing
-- preserve the now-landed repo truth for `app_configurations`, `creator_permissions`, `user_profiles`, the typed shared clients, and the typed config/monetization/beta/moderation/user-data/chat/full-communication/watch-party helpers plus title-list, title-details, Home, and player title-hydration work
+- implement the Stage 1 public unified profile/channel surface
+- keep the canonical public route on `app/profile/[userId].tsx`
+- preserve owner mode on the same route
+- preserve `/channel-settings` as the current studio-equivalent owner
+- preserve `/chat` and `/chat/[threadId]` as canonical Chi'lly Chat routes
+- preserve the landed typed foundation and helper/screen work
 - avoid live schema changes in this lane
 - avoid new feature migration writes or applies in this lane
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- touch UI
-- touch Home
-- touch title detail
-- touch runtime room/live-stage code outside the audited player owner
+- touch `/channel-settings` expansion yet
+- create `/studio*` routes
+- touch runtime room/live-stage owners unless the profile surface needs an already-canonical handoff preserved
 - touch RBAC or Rachi control-plane work
 - broaden into admin expansion
-- broaden into profile/channel work or other screen owners
+- broaden into other screen owners
 - write or apply new feature migrations
 - change remote DB state
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- `app/player/[id].tsx` has a clear typed-adoption inventory for its remaining local compatibility casts, local-fallback title/media seams, and non-DB typed drift
-- the single smallest safe typed player-screen implementation batch is chosen without widening into other owners
+- `app/profile/[userId].tsx` reads as a unified public profile/channel surface aligned with `docs/profile-channel-implementation-spec.md`
+- public identity, action-row, tab-strip, and public-surface responsibilities are clearer without route proliferation
+- owner mode remains on the same canonical route
+- `/channel-settings` remains the separate studio-equivalent owner
+- `/chat` and `/chat/[threadId]` remain the canonical communication handoff owners
+- locked `Watch-Party Live` and `Live Watch-Party` semantics remain intact
 - live schema remains unchanged
-- no UI changes, feature migrations, or unrelated runtime refactors are introduced in that diagnosis lane
+- no route proliferation, schema work, feature migrations, or unrelated runtime refactors are introduced in that implementation lane
