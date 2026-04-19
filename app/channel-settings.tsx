@@ -61,6 +61,21 @@ type SummaryMetricCard = {
 
 const formatCount = (value: number | null) => value === null ? "Unavailable" : String(value);
 const formatBooleanStatus = (value: boolean) => value ? "Enabled" : "Unavailable";
+const formatVisibilitySurface = (value: boolean | null) => value == null ? "Unavailable" : value ? "Visible" : "Hidden";
+const formatPublicActivityVisibility = (value: ChannelAudienceReadModel["publicActivityVisibility"]) => {
+  switch (value) {
+    case "public":
+      return "Public";
+    case "followers_only":
+      return "Followers Only";
+    case "subscribers_only":
+      return "Subscribers Only";
+    case "private":
+      return "Private";
+    default:
+      return "Unavailable";
+  }
+};
 const formatIsoDate = (value: string | null) => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return "Unavailable";
@@ -192,7 +207,7 @@ export default function ChannelSettingsScreen() {
     {
       title: "Audience",
       status: "current",
-      body: "Audience summary truth is current here now; deeper visibility and audience-role controls still land later on this same route.",
+      body: "Audience summary and audience-visibility truth are current here now; deeper audience-role controls still land later on this same route.",
     },
     {
       title: "Analytics",
@@ -315,17 +330,28 @@ export default function ChannelSettingsScreen() {
       body: "Blocked audience rows already supported by current schema truth.",
     },
   ];
+  const audienceVisibilityCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Public Activity",
+      value: formatPublicActivityVisibility(audienceSummary?.publicActivityVisibility ?? null),
+      body: "Profile-backed audience visibility truth now lives on the channel profile record.",
+    },
+    {
+      label: "Follower Surface",
+      value: formatVisibilitySurface(audienceSummary?.followerSurfaceEnabled ?? null),
+      body: "Shows whether follower visibility can appear on the channel surface from current backed truth.",
+    },
+    {
+      label: "Subscriber Surface",
+      value: formatVisibilitySurface(audienceSummary?.subscriberSurfaceEnabled ?? null),
+      body: "Shows whether subscriber visibility can appear on the channel surface from current backed truth.",
+    },
+  ];
   const audienceUnavailableCards: readonly SummaryMetricCard[] = [
     {
       label: "VIP / Mod / Co-Host",
       value: "Later",
       body: "Audience-role rosters are not backed by schema truth yet.",
-      tone: "unavailable",
-    },
-    {
-      label: "Visibility Controls",
-      value: "Unavailable",
-      body: "Follower and subscriber visibility toggles still need dedicated visibility truth.",
       tone: "unavailable",
     },
   ];
@@ -787,10 +813,19 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                This summary uses the landed channel audience read model only. Unsupported audience-role and visibility controls stay explicitly unavailable until the repo has real backing truth.
+                This summary uses the landed channel audience read model only. Audience counts and visibility values now come from real backing truth, while deeper audience-role controls still stay explicitly later.
               </Text>
               <View style={styles.summaryGrid}>
                 {audienceSummaryCards.map((card) => (
+                  <View key={card.label} style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.summaryGrid}>
+                {audienceVisibilityCards.map((card) => (
                   <View key={card.label} style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>{card.label}</Text>
                     <Text style={styles.summaryValue}>{card.value}</Text>
