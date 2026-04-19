@@ -23,23 +23,31 @@ import { supabase } from "../../_lib/supabase";
 import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
 import { AccessSheet } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import type { Tables } from "../../supabase/database.types";
 
 const ACCENT = "#DC143C";
 const LIVE_ACTIVITY_WINDOW_MILLIS = 15 * 60 * 1000;
 
-type TitleRow = {
-  id: string;
-  title: string;
-  category?: string | null;
-  year?: number | null;
-  runtime?: string | null;
-  synopsis?: string | null;
-  poster_url?: string | null;
+type TitleDbRow = Pick<
+  Tables<"titles">,
+  | "id"
+  | "title"
+  | "category"
+  | "year"
+  | "runtime"
+  | "synopsis"
+  | "poster_url"
+  | "created_at"
+  | "content_access_rule"
+  | "ads_enabled"
+  | "sponsor_placement"
+  | "sponsor_label"
+>;
+
+type TitleRow = Omit<TitleDbRow, "created_at" | "content_access_rule" | "sponsor_placement"> & {
   created_at?: string | null;
-  content_access_rule?: TitleAccessRule | null;
-  ads_enabled?: boolean | null;
-  sponsor_placement?: SponsorPlacement | null;
-  sponsor_label?: string | null;
+  content_access_rule: TitleAccessRule | null;
+  sponsor_placement: SponsorPlacement | null;
 };
 
 type TitleLiveMetadata = {
@@ -48,16 +56,33 @@ type TitleLiveMetadata = {
   reactionsEnabled: boolean;
 };
 
-type WatchPartyRoomRow = {
-  party_id?: string | null;
-  reactions_policy?: string | null;
-  last_activity_at?: string | null;
-  updated_at?: string | null;
-};
+type WatchPartyRoomRow = Pick<
+  Tables<"watch_party_rooms">,
+  "party_id" | "reactions_policy" | "last_activity_at" | "updated_at"
+>;
 
-type WatchPartyRoomMessageRow = {
-  party_id?: string | null;
-};
+type WatchPartyRoomMessageRow = Pick<Tables<"watch_party_room_messages">, "party_id">;
+
+const toTitleRow = (row: TitleDbRow): TitleRow => ({
+  ...row,
+  content_access_rule: (row.content_access_rule as TitleAccessRule | null) ?? null,
+  sponsor_placement: (row.sponsor_placement as SponsorPlacement | null) ?? null,
+});
+
+const buildLocalFallbackTitle = (localMatch: any): TitleRow => ({
+  id: String(localMatch?.id),
+  title: String(localMatch?.title ?? "Untitled"),
+  category: localMatch?.genre ?? null,
+  year: Number(localMatch?.year ?? 0) || null,
+  runtime: localMatch?.runtime ?? null,
+  synopsis: localMatch?.description ?? null,
+  poster_url: null,
+  created_at: null,
+  content_access_rule: "open",
+  ads_enabled: false,
+  sponsor_placement: "none",
+  sponsor_label: null,
+});
 
 const formatAddedDate = (value?: string | null) => {
   if (!value) return "Added recently";
@@ -97,6 +122,7 @@ export default function TitleDetails() {
     () => localTitles.find((t: any) => String(t.id) === cleanId || String(t.title ?? "").toLowerCase() === cleanId.toLowerCase()) ?? null,
     [cleanId],
   );
+  const localFallbackTitle = useMemo(() => (localMatch ? buildLocalFallbackTitle(localMatch) : null), [localMatch]);
 
   const titleId = String(item?.id ?? localMatch?.id ?? cleanId).trim();
   const inMyList = titleId ? myListIds.includes(titleId) : false;
@@ -130,40 +156,29 @@ export default function TitleDetails() {
           .from("titles")
           .select(baseSelect)
           .eq("id", cleanId)
+          .returns<TitleDbRow>()
           .maybeSingle();
 
         if (active && exactIdMatch) {
-          setItem(exactIdMatch as TitleRow);
+          setItem(toTitleRow(exactIdMatch));
         } else if (active && cleanId) {
           const { data: exactTitleMatch } = await supabase
             .from("titles")
             .select(baseSelect)
             .eq("title", cleanId)
+            .returns<TitleDbRow>()
             .maybeSingle();
 
-          if (exactTitleMatch) {
-            setItem(exactTitleMatch as TitleRow);
+          if (active && exactTitleMatch) {
+            setItem(toTitleRow(exactTitleMatch));
           }
         }
       } catch {
         // local fallback below
       }
 
-      if (active && localMatch) {
-        setItem((prev) => prev ?? {
-          id: String((localMatch as any).id),
-          title: String((localMatch as any).title ?? "Untitled"),
-          category: (localMatch as any).genre ?? null,
-          year: Number((localMatch as any).year ?? 0) || null,
-          runtime: (localMatch as any).runtime ?? null,
-          synopsis: (localMatch as any).description ?? null,
-          poster_url: null,
-          created_at: null,
-          content_access_rule: "open" as TitleAccessRule,
-          ads_enabled: false,
-          sponsor_placement: "none" as SponsorPlacement,
-          sponsor_label: null,
-        });
+      if (active && localFallbackTitle) {
+        setItem((prev) => prev ?? localFallbackTitle);
       }
 
       if (active) setLoading(false);
@@ -174,7 +189,7 @@ export default function TitleDetails() {
     return () => {
       active = false;
     };
-  }, [cleanId, localMatch]);
+  }, [cleanId, localFallbackTitle]);
 
   useEffect(() => {
     let active = true;
@@ -190,24 +205,7 @@ export default function TitleDetails() {
     };
   }, []);
 
-  const title = useMemo(() => (
-    item ?? (localMatch
-      ? {
-          id: String((localMatch as any).id),
-          title: String((localMatch as any).title ?? "Untitled"),
-          category: (localMatch as any).genre ?? null,
-          year: Number((localMatch as any).year ?? 0) || null,
-          runtime: (localMatch as any).runtime ?? null,
-          synopsis: (localMatch as any).description ?? null,
-          poster_url: null,
-          created_at: null,
-          content_access_rule: "open" as TitleAccessRule,
-          ads_enabled: false,
-          sponsor_placement: "none" as SponsorPlacement,
-          sponsor_label: null,
-        }
-      : null)
-  ), [item, localMatch]);
+  const title = useMemo(() => item ?? localFallbackTitle, [item, localFallbackTitle]);
 
   useEffect(() => {
     let active = true;
@@ -224,14 +222,15 @@ export default function TitleDetails() {
           .from("watch_party_rooms")
           .select("party_id,reactions_policy,last_activity_at,updated_at")
           .eq("room_type", "title")
-          .eq("title_id", safeTitleId);
+          .eq("title_id", safeTitleId)
+          .returns<WatchPartyRoomRow[]>();
 
         if (roomError || !roomData) {
           if (active) setLiveMetadata(null);
           return;
         }
 
-        const activeRooms = (roomData as WatchPartyRoomRow[]).filter((row) => {
+        const activeRooms = roomData.filter((row) => {
           const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
           if (!activitySource) return false;
           const activityAt = Date.parse(activitySource);
@@ -251,9 +250,10 @@ export default function TitleDetails() {
           const { data: messageData } = await supabase
             .from("watch_party_room_messages")
             .select("party_id")
-            .in("party_id", activePartyIds);
+            .in("party_id", activePartyIds)
+            .returns<WatchPartyRoomMessageRow[]>();
 
-          commentCount = ((messageData as WatchPartyRoomMessageRow[] | null) ?? []).length;
+          commentCount = (messageData ?? []).length;
         }
 
         if (!active) return;
