@@ -27,6 +27,15 @@ import { buildUserChannelProfile, readMergedWatchProgress, readMyListIds } from 
 import { getSafePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 
+type PublicProfileTabKey = "home" | "content" | "live" | "community" | "about";
+
+type ProfileSurfaceCard = {
+  title: string;
+  kicker: string;
+  body: string;
+  accent?: "default" | "live" | "official";
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { isActive: hasSupportAccess } = useBetaProgram();
@@ -138,9 +147,7 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [isSelfProfile]);
-  const [activeProfileView, setActiveProfileView] = useState<"owner" | "profile" | "channel">(
-    requestedSelfProfile && !profile.isProtectedFromClaim ? "owner" : "channel",
-  );
+  const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
   const roleLabel = isOfficialProfile
     ? profile.platformRoleLabel ?? "Official"
     : profile.role === "creator"
@@ -148,14 +155,6 @@ export default function ProfileScreen() {
       : profile.role === "host"
         ? "Host"
         : "Viewer";
-  useEffect(() => {
-    setActiveProfileView((current) => {
-      if (isSelfProfile) {
-        return current === "profile" ? "owner" : current;
-      }
-      return current === "owner" ? "channel" : current;
-    });
-  }, [isSelfProfile]);
   const channelLabel = isOfficialProfile
     ? "Official Concierge"
     : isSelfProfile
@@ -176,7 +175,6 @@ export default function ProfileScreen() {
   }, [isSelfProfile, profile.displayName, profile.handle]);
   const liveActionLabel = profile.isLive ? "Join Live" : "View Live";
   const hasLiveRouteContext = !!partyIdParam;
-  const showManageChannelAction = isSelfProfile && creatorSettingsEnabled;
   const canReportProfile = !isSelfProfile && !!userId;
   const canOpenLinkedRoomActions = hasLiveRouteContext;
   const officialGuidanceTopics = officialAccount?.guidanceTopics ?? [];
@@ -212,91 +210,6 @@ export default function ProfileScreen() {
     : isOfficialProfile
       ? "Chi'lly Chat opens Rachi's official starter thread for welcome help, platform guidance, and future moderation-aware follow-up."
       : "";
-  const profileSections = isOfficialProfile
-    ? [
-        {
-          title: "Official Concierge",
-          kicker: profile.platformOwnershipLabel ?? "PLATFORM OWNED",
-          body: officialAccount?.conciergeHeadline
-            ? `${officialAccount.conciergeHeadline} ${profile.displayName} is not a random user-created profile and not a claimable owner page.`
-            : `${profile.displayName} is Chi'llywood's official seeded platform account, not a random user-created profile and not a claimable owner page.`,
-        },
-        {
-          title: "Starter Path",
-          kicker: "CHI'LLY CHAT",
-          body: "Open the canonical direct thread to ask how to get started, request official help, and follow future platform announcements without leaving the native messenger architecture or pretending this is a separate support app.",
-        },
-      ] as const
-    : [
-        {
-          title: "Profile Snapshot",
-          kicker: "ABOUT",
-          body: `${profile.displayName} keeps live presence, rooms, and direct communication inside one Chi'llywood identity instead of splitting them across disconnected surfaces.`,
-        },
-        {
-          title: "Channel Boundary",
-          kicker: "ROOM RULE",
-          body: "This profile explains the person or network behind the rooms. Messaging still belongs to Chi'lly Chat, and live/watch entry only appears when real room context exists.",
-        },
-      ] as const;
-  const contentSections = isOfficialProfile
-    ? [
-        {
-          title: "Official Network",
-          kicker: profile.officialBadgeLabel ?? "OFFICIAL",
-          body: officialAccount?.trustSummary
-            ?? "This channel surface is reserved for Chi'llywood's official welcome guidance, platform notes, and future announcement drops without inventing a separate network page.",
-          accent: "default",
-        },
-        {
-          title: "Help And Moderation",
-          kicker: roleLabel,
-          body: "Rachi is the moderation-ready official persona that future help, safety, and platform escalation flows can build on through the same protected identity foundation.",
-          accent: "default",
-        },
-        {
-          title: "Trusted Scope",
-          kicker: "CANONICAL ROUTES",
-          body: "Rachi stays on the canonical profile and Chi'lly Chat routes so trusted onboarding, official updates, and moderation-aware follow-up can grow without turning into a generic support center.",
-          accent: "default",
-        },
-      ] as const
-    : [
-        {
-          title: "Channel Signal",
-          kicker: profile.isLive ? "ON AIR" : "OFF AIR",
-          body: profile.isLive
-            ? "This channel is live now, and linked room entry appears here when the profile is opened from an active session."
-            : "No live room is active right now. Live state and linked room entry appear here when a session is running.",
-          accent: profile.isLive ? "live" : "default",
-        },
-        {
-          title: isSelfProfile ? "Programming" : "Channel Home",
-          kicker: isSelfProfile ? "OWNER SIGNAL" : "PUBLIC SIGNAL",
-          body: isSelfProfile
-            ? channelSignalsReady
-              ? `Your channel currently carries ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"} into this owner surface.`
-              : "Loading the saved and in-progress title signals that already belong to your channel home."
-            : "This channel home stays intentionally light until real public drops, featured titles, and creator programming grow on top of the canonical profile route.",
-          accent: "default",
-        },
-        {
-          title: "Room Continuity",
-          kicker: hasLiveRouteContext ? "LINKED ROOM" : "ROOM CONTEXT",
-          body: hasLiveRouteContext
-            ? "Live and Watch Party actions are connected to the active room that opened this profile, so viewers can move back into the right social surface without route drift."
-            : "Open this profile from a real room or live session to unlock direct room re-entry from the channel surface.",
-          accent: "default",
-        },
-        {
-          title: "Chi'lly Chat Link",
-          kicker: "DIRECT CONTACT",
-          body: isSelfProfile
-            ? "Your public channel home keeps messaging separate. Use Chi'lly Chat for inbox and direct-thread continuity instead of turning profile into a message surface."
-            : "Use Chi'lly Chat to follow up from this channel. Direct contact stays on the canonical thread route instead of living inside profile.",
-          accent: "default",
-        },
-      ] as const;
 
   const backgroundSource = (() => {
     const first = localTitles[0] as any;
@@ -524,53 +437,227 @@ export default function ProfileScreen() {
             ? "Use linked room actions only when real room context exists, and use Chi'lly Chat for persistent contact. This page should explain the channel, not replace the room."
             : "Use this page to understand the channel identity first, then move into Chi'lly Chat or a real linked room when that context exists."
         };
-  const ownerSections = [
-    {
-      title: "Channel Scope",
-      kicker: "OWNER CONTROLS",
-      body: "Manage channel defaults, room inheritance, and creator-facing presentation from the owner side of this same canonical profile route.",
-      actionLabel: "Manage Channel",
-      actionKind: "manage-channel" as const,
-    },
-    {
-      title: "Audience Link",
-      kicker: "CHI'LLY CHAT",
-      body: "Open your native Chi'lly Chat inbox from here when you want thread continuity, without letting direct messaging absorb the profile room.",
-      actionLabel: "Open Inbox",
-      actionKind: "message" as const,
-    },
-    {
-      title: "Owner Boundary",
-      kicker: "SETTINGS",
-      body: "Account and session controls stay separate from your public-facing channel home so profile never collapses into a plain settings page.",
-      actionLabel: "Settings",
-      actionKind: "settings" as const,
-    },
-  ] as const;
   const quickActions = isOfficialProfile
     ? [
-        { label: "Official Profile", onPress: () => setActiveProfileView("profile") },
-        { label: "Official Channel", onPress: () => setActiveProfileView("channel") },
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
         ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
       ]
     : isSelfProfile
     ? [
-        { label: "Owner Desk", onPress: () => setActiveProfileView("owner") },
-        { label: "Channel Home", onPress: () => setActiveProfileView("channel") },
         { label: "Manage Channel", onPress: onPressManageChannel },
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
         { label: "Settings", onPress: onPressSettings },
         ...(hasSupportAccess ? [{ label: "Support", onPress: onPressBetaSupport }] : []),
       ]
     : [
-        { label: "Open Profile", onPress: () => setActiveProfileView("profile") },
-        { label: "Open Channel Home", onPress: () => setActiveProfileView("channel") },
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
         { label: "Voice Call", onPress: () => { void onPressCommunication("voice"); } },
         { label: "Video Call", onPress: () => { void onPressCommunication("video"); } },
         ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
       ];
+  const publicProfileTabs = [
+    { key: "home", label: "Home" },
+    { key: "content", label: "Content" },
+    { key: "live", label: "Live" },
+    { key: "community", label: "Community" },
+    { key: "about", label: "About" },
+  ] as const satisfies ReadonlyArray<{ key: PublicProfileTabKey; label: string }>;
+  const featuredSpotlightTitle = isOfficialProfile
+    ? "Official Spotlight"
+    : isSelfProfile
+      ? "Your Channel Spotlight"
+      : `${profile.displayName}'s Spotlight`;
+  const featuredSpotlightBody = isOfficialProfile
+    ? "This protected profile is Chi'llywood's official concierge and announcement surface. Trusted updates stay here and Chi'lly Chat stays the canonical follow-up path."
+    : isSelfProfile
+      ? "This unified profile now acts as your public channel surface. Use it to frame your identity, what people should watch, and where they should go next."
+      : "This unified profile now acts as the public channel surface. It should explain the creator identity first, then guide people into real content, live presence, and Chi'lly Chat.";
+  const homeSections: readonly ProfileSurfaceCard[] = [
+    {
+      title: featuredSpotlightTitle,
+      kicker: "FEATURED SPOTLIGHT",
+      body: featuredSpotlightBody,
+      accent: isOfficialProfile ? "official" : "default",
+    },
+    {
+      title: liveStatusTitle,
+      kicker: "LIVE MODULE",
+      body: liveStatusBody,
+      accent: profile.isLive ? "live" : "default",
+    },
+    {
+      title: isSelfProfile ? "Content Shelves" : "Content Preview",
+      kicker: "CONTENT",
+      body: isSelfProfile
+        ? channelSignalsReady
+          ? `Your current public channel foundation can already point to ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"} without splitting profile and channel into separate surfaces.`
+          : "Loading the current saved and in-progress signals that can anchor your first channel shelves."
+        : "This public channel foundation keeps content honest for now: featured shelves, liked/saved activity, or creator programming should grow here without inventing fake uploads.",
+    },
+    {
+      title: "Community Preview",
+      kicker: "COMMUNITY",
+      body: isOfficialProfile
+        ? "Official presence can route people into trusted Chi'lly Chat follow-up, platform notices, and later moderation-aware contact without becoming an inbox-first surface."
+        : "Community stays visible here through identity, public activity, and follow-up cues, while persistent messaging still belongs to Chi'lly Chat.",
+    },
+    {
+      title: "About Snapshot",
+      kicker: "ABOUT",
+      body: `${profile.displayName} should feel like a coherent social identity and channel surface here, even before deeper creator programming or community systems arrive.`,
+    },
+  ];
+  const contentTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
+    ? [
+        {
+          title: "Official Network",
+          kicker: profile.officialBadgeLabel ?? "OFFICIAL",
+          body: officialAccount?.trustSummary
+            ?? "This channel surface is reserved for Chi'llywood's official welcome guidance, platform notes, and future announcement drops without inventing a separate network page.",
+          accent: "official",
+        },
+        {
+          title: "Content Library Behavior",
+          kicker: "CONTENT",
+          body: "Official content and platform signals can surface here later, but the route stays honest until real drops, featured rows, or official programming are ready.",
+        },
+        {
+          title: "Public Access Boundary",
+          kicker: "CURRENT TRUTH",
+          body: "This tab should show real official programming and content shelves only when those assets exist. It must not fake a library just to make the surface feel full.",
+        },
+      ]
+    : [
+        {
+          title: isSelfProfile ? "Programming Surface" : "Channel Library",
+          kicker: isSelfProfile ? "OWNER SIGNAL" : "PUBLIC SIGNAL",
+          body: isSelfProfile
+            ? channelSignalsReady
+              ? `Your first public content surface can build from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} active resume cue${continueWatchingCount === 1 ? "" : "s"} while deeper creator programming grows later.`
+              : "Loading the saved and in-progress title signals that can anchor your first channel content shelves."
+            : "This tab should grow into featured rows, liked or saved relationships, and creator programming when those signals are real.",
+        },
+        {
+          title: "Library Behavior",
+          kicker: "CONTENT TAB",
+          body: "The content tab is the channel library surface. It should prefer real shelves, curated rows, and honest empty states over fake uploads or placeholder catalogs.",
+        },
+        {
+          title: "Current MVP Boundary",
+          kicker: "MVP ORDER",
+          body: "Public v1 keeps the content surface lightweight and truthful. The route should frame channel content now without pretending the full creator platform already exists.",
+        },
+      ];
+  const liveTabSections: readonly ProfileSurfaceCard[] = [
+    {
+      title: profile.isLive ? "Live Presence" : "Live Status",
+      kicker: "LIVE",
+      body: profile.isLive
+        ? "This channel currently shows live presence. Use the linked live entry only when real room context is attached to this profile route."
+        : "No live room is active right now. This tab should keep Live status clear without pretending the profile is a room.",
+      accent: profile.isLive ? "live" : "default",
+    },
+    {
+      title: "Live Watch-Party",
+      kicker: "LIVE FLOW",
+      body: "Live Watch-Party belongs to Home and Live Room semantics. This tab may point people there, but it must not rename or absorb the live-room flow.",
+    },
+    {
+      title: "Watch-Party Live",
+      kicker: "WATCH TOGETHER",
+      body: "Watch-Party Live remains the title/player-driven watch-together path. This tab can show continuity into party flow without blurring it into the live label.",
+    },
+    {
+      title: hasLiveRouteContext ? "Linked Room Context" : "Room Continuity",
+      kicker: hasLiveRouteContext ? "ACTIVE CONTEXT" : "WHEN AVAILABLE",
+      body: hasLiveRouteContext
+        ? "This profile was opened with real room context, so live and watch-party entry can hand off to the correct canonical route without drift."
+        : "When a profile is opened from a room or live session, this tab should become the clean re-entry point instead of a fake room shell.",
+    },
+  ];
+  const communityTabSections: readonly ProfileSurfaceCard[] = [
+    {
+      title: "Chi'lly Chat Entry",
+      kicker: "COMMUNITY",
+      body: isSelfProfile
+        ? "Your inbox and direct-thread continuity still live on Chi'lly Chat. Community on this route should support identity and follow-up, not replace the messenger."
+        : isOfficialProfile
+          ? "Official community follow-up stays on canonical Chi'lly Chat routes so trusted help never turns into a shadow support app."
+          : "Community follow-up from this profile should hand off to Chi'lly Chat instead of burying messaging inside the profile surface.",
+    },
+    {
+      title: "Public Activity Boundary",
+      kicker: "VISIBILITY",
+      body: "Community should grow here through public-safe activity, room follow-up, and creator identity signals when real data exists. It should not invent fake engagement.",
+    },
+    {
+      title: isOfficialProfile ? "Trust And Safety" : "Safety And Follow-Up",
+      kicker: "SAFETY",
+      body: isOfficialProfile
+        ? "Official accounts need protected trust markers, bounded reporting, and auditable follow-up without leaving the canonical profile and Chi'lly Chat architecture."
+        : canReportProfile
+          ? "This profile already supports reporting when something feels unsafe. Community growth should stay consistent with that safety posture."
+          : "Safety hooks stay available when needed, but this community surface should remain identity-first instead of turning into a moderation console.",
+    },
+  ];
+  const aboutTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
+    ? [
+        {
+          title: "Official Concierge",
+          kicker: profile.platformOwnershipLabel ?? "PLATFORM OWNED",
+          body: officialAccount?.conciergeHeadline
+            ? `${officialAccount.conciergeHeadline} ${profile.displayName} is not a random user-created profile and not a claimable owner page.`
+            : `${profile.displayName} is Chi'llywood's official seeded platform account, not a random user-created profile and not a claimable owner page.`,
+          accent: "official",
+        },
+        {
+          title: "Canonical Official Identity",
+          kicker: "ABOUT",
+          body: "This official profile and channel surface stays on the same canonical route as every other profile. Protected official behavior is additive, not a separate app.",
+        },
+        {
+          title: "Starter Path",
+          kicker: "CHI'LLY CHAT",
+          body: "Open the canonical direct thread to ask how to get started, request official help, and follow future platform announcements without leaving native Chi'lly Chat.",
+        },
+      ]
+    : [
+        {
+          title: "Profile Snapshot",
+          kicker: "ABOUT",
+          body: `${profile.displayName} keeps live presence, rooms, and direct communication inside one Chi'llywood identity instead of splitting them across disconnected surfaces.`,
+        },
+        {
+          title: "Channel Boundary",
+          kicker: "ROOM RULE",
+          body: "This profile explains the person or network behind the rooms. Messaging still belongs to Chi'lly Chat, and live/watch entry only appears when real room context exists.",
+        },
+        {
+          title: isSelfProfile ? "Owner Boundary" : "Identity Boundary",
+          kicker: isSelfProfile ? "OWNER MODE LATER" : "PUBLIC SURFACE",
+          body: isSelfProfile
+            ? "Owner mode stays on this same route, but the shared public profile/channel structure still comes first."
+            : "This route should feel like a public channel surface first, not a settings page or an inbox.",
+        },
+      ];
+  const activeTabSections = activeTab === "home"
+    ? homeSections
+    : activeTab === "content"
+      ? contentTabSections
+      : activeTab === "live"
+        ? liveTabSections
+        : activeTab === "community"
+          ? communityTabSections
+          : aboutTabSections;
+  const tabIntro = activeTab === "home"
+    ? "Home curates the overview: spotlight, live status, content direction, community preview, and about context."
+    : activeTab === "content"
+      ? "Content is the library surface for shelves, programming, and honest empty states."
+      : activeTab === "live"
+        ? "Live keeps live and watch-together paths distinct while preserving the correct room handoffs."
+        : activeTab === "community"
+          ? "Community supports public follow-up and Chi'lly Chat continuity without turning profile into the inbox."
+          : "About keeps durable identity, trust, and channel framing visible even when content depth is still light.";
 
   return (
     <View
@@ -710,51 +797,23 @@ export default function ProfileScreen() {
               </View>
             ) : null}
           </View>
-          <View style={styles.viewSwitchRow}>
-            <TouchableOpacity
-              style={[
-                styles.viewSwitchChip,
-                activeProfileView === (isSelfProfile ? "owner" : "profile") && styles.viewSwitchChipActive,
-              ]}
-              activeOpacity={0.84}
-              onPress={() => setActiveProfileView(isSelfProfile ? "owner" : "profile")}
-            >
-              <Text
-                style={[
-                  styles.viewSwitchChipText,
-                activeProfileView === (isSelfProfile ? "owner" : "profile") && styles.viewSwitchChipTextActive,
-              ]}
-            >
-                {isSelfProfile ? "Owner Desk" : "Profile"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.viewSwitchChip,
-                activeProfileView === "channel" && styles.viewSwitchChipActive,
-              ]}
-              activeOpacity={0.84}
-              onPress={() => setActiveProfileView("channel")}
-            >
-              <Text
-                style={[
-                  styles.viewSwitchChipText,
-                  activeProfileView === "channel" && styles.viewSwitchChipTextActive,
-                ]}
-              >
-                Channel Home
-              </Text>
-            </TouchableOpacity>
-          </View>
           <View style={styles.actionCluster}>
-            {showManageChannelAction || canOpenLinkedRoomActions ? (
-              <View style={styles.primaryActionRow}>
-                {showManageChannelAction ? (
-                  <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} activeOpacity={0.86} onPress={onPressManageChannel}>
-                    <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>Manage Channel</Text>
-                  </TouchableOpacity>
-                ) : null}
-                {canOpenLinkedRoomActions ? (
+            <View style={styles.primaryActionRow}>
+              <TouchableOpacity
+                testID="profile-chilly-chat-button"
+                accessibilityLabel="Open Chi'lly Chat"
+                style={[styles.actionBtn, styles.actionBtnConnected]}
+                activeOpacity={0.86}
+                onPress={() => {
+                  void onPressCommunication("message");
+                }}
+              >
+                <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
+                  Chi&apos;lly Chat
+                </Text>
+              </TouchableOpacity>
+              {canOpenLinkedRoomActions ? (
+                <>
                   <TouchableOpacity
                     style={[
                       styles.actionBtn,
@@ -772,26 +831,20 @@ export default function ProfileScreen() {
                       {liveActionLabel}
                     </Text>
                   </TouchableOpacity>
-                ) : null}
-              </View>
-            ) : null}
-            {isSelfProfile || !!userId || canOpenLinkedRoomActions ? (
-              <View style={styles.secondaryActionRow}>
-                {isSelfProfile || !!userId ? (
                   <TouchableOpacity
-                    testID="profile-chilly-chat-button"
-                    accessibilityLabel="Open Chi'lly Chat"
-                    style={[styles.actionChip, styles.actionChipConnected]}
-                    activeOpacity={0.82}
-                    onPress={() => {
-                      void onPressCommunication("message");
-                    }}
+                    style={[styles.actionBtn, styles.actionBtnConnected]}
+                    activeOpacity={0.86}
+                    onPress={onPressWatchParty}
                   >
-                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
-                      Chi&apos;lly Chat
+                    <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
+                      Watch Party
                     </Text>
                   </TouchableOpacity>
-                ) : null}
+                </>
+              ) : null}
+            </View>
+            {isSelfProfile || !!userId || canOpenLinkedRoomActions ? (
+              <View style={styles.secondaryActionRow}>
                 {isSelfProfile ? (
                   <TouchableOpacity
                     style={[styles.actionChip, styles.actionChipConnected]}
@@ -814,17 +867,6 @@ export default function ProfileScreen() {
                     </Text>
                   </TouchableOpacity>
                 ) : null}
-                {canOpenLinkedRoomActions ? (
-                  <TouchableOpacity
-                    style={[styles.actionChip, styles.actionChipConnected]}
-                    activeOpacity={0.82}
-                    onPress={onPressWatchParty}
-                  >
-                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
-                      Watch Party
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
                 {canReportProfile ? (
                   <TouchableOpacity
                     style={[styles.actionChip, styles.actionChipReport]}
@@ -843,50 +885,46 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.sectionStack}>
-          {activeProfileView === "channel" ? contentSections.map((section) => (
+          <View style={styles.tabStripCard}>
+            <Text style={styles.tabStripKicker}>TAB STRIP</Text>
+            <View style={styles.tabStripRow}>
+              {publicProfileTabs.map((tab) => (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[
+                    styles.tabChip,
+                    activeTab === tab.key && styles.tabChipActive,
+                  ]}
+                  activeOpacity={0.84}
+                  onPress={() => setActiveTab(tab.key)}
+                >
+                  <Text
+                    style={[
+                      styles.tabChipText,
+                      activeTab === tab.key && styles.tabChipTextActive,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.tabIntro}>{tabIntro}</Text>
+          </View>
+          {activeTabSections.map((section) => (
             <View
               key={section.title}
               style={[
                 styles.sectionCard,
                 section.accent === "live" && styles.sectionCardLive,
+                section.accent === "official" && styles.sectionCardOfficial,
               ]}
             >
               <Text style={styles.sectionKicker}>{section.kicker}</Text>
               <Text style={styles.sectionTitle}>{section.title}</Text>
               <Text style={styles.sectionBody}>{section.body}</Text>
             </View>
-          )) : null}
-          {activeProfileView === "owner" ? ownerSections.map((section) => (
-            <View key={section.title} style={styles.sectionCard}>
-              <Text style={styles.sectionKicker}>{section.kicker}</Text>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionBody}>{section.body}</Text>
-              <TouchableOpacity
-                style={[styles.actionChip, styles.ownerActionChip]}
-                activeOpacity={0.84}
-                onPress={() => {
-                  if (section.actionKind === "manage-channel") {
-                    onPressManageChannel();
-                    return;
-                  }
-                  if (section.actionKind === "message") {
-                    void onPressCommunication("message");
-                    return;
-                  }
-                  onPressSettings();
-                }}
-              >
-                <Text style={[styles.actionChipText, styles.ownerActionChipText]}>{section.actionLabel}</Text>
-              </TouchableOpacity>
-            </View>
-          )) : null}
-          {activeProfileView === "profile" ? profileSections.map((section) => (
-            <View key={section.title} style={styles.sectionCard}>
-              <Text style={styles.sectionKicker}>{section.kicker}</Text>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionBody}>{section.body}</Text>
-            </View>
-          )) : null}
+          ))}
         </View>
         <ReportSheet
           visible={reportVisible}
@@ -1111,6 +1149,31 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   quickActionChipText: { color: "#E0E7FF", fontSize: 12, fontWeight: "800" },
+  tabStripCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(18,18,18,0.96)",
+    padding: 16,
+    gap: 12,
+  },
+  tabStripKicker: { color: "#727C91", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  tabStripRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  tabChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  tabChipActive: {
+    borderColor: "rgba(115,134,255,0.28)",
+    backgroundColor: "rgba(115,134,255,0.14)",
+  },
+  tabChipText: { color: "#B5BED1", fontSize: 12.5, fontWeight: "800" },
+  tabChipTextActive: { color: "#E4E9FF" },
+  tabIntro: { color: "#9FA8BA", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
   viewSwitchRow: { flexDirection: "row", gap: 10, width: "100%" },
   viewSwitchChip: {
     flex: 1,
@@ -1212,6 +1275,10 @@ const styles = StyleSheet.create({
   sectionCardLive: {
     borderColor: "rgba(220,20,60,0.18)",
     backgroundColor: "rgba(28,16,20,0.96)",
+  },
+  sectionCardOfficial: {
+    borderColor: "rgba(242,194,91,0.22)",
+    backgroundColor: "rgba(28,23,14,0.96)",
   },
   sectionKicker: { color: "#727C91", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
   sectionTitle: { color: "#ECECEC", fontSize: 16, fontWeight: "900" },
