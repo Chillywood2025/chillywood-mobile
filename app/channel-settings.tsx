@@ -18,6 +18,14 @@ import {
   resolveFeatureConfig,
 } from "../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
+import {
+  readChannelAudienceSummary,
+  readChannelSafetyAdminSummary,
+  readCreatorAnalyticsSummary,
+  type ChannelAudienceReadModel,
+  type ChannelSafetyAdminReadModel,
+  type CreatorAnalyticsReadModel,
+} from "../_lib/channelReadModels";
 import { useSession } from "../_lib/session";
 import {
   readCreatorPermissions,
@@ -44,9 +52,25 @@ type ChannelAccessSummaryDetail = {
   body: string;
 };
 
+type SummaryMetricCard = {
+  label: string;
+  value: string;
+  body: string;
+  tone?: "default" | "unavailable";
+};
+
+const formatCount = (value: number | null) => value === null ? "Unavailable" : String(value);
+const formatBooleanStatus = (value: boolean) => value ? "Enabled" : "Unavailable";
+const formatIsoDate = (value: string | null) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "Unavailable";
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? normalized : parsed.toLocaleString();
+};
+
 export default function ChannelSettingsScreen() {
   const router = useRouter();
-  const { isLoading: authLoading, isSignedIn } = useSession();
+  const { isLoading: authLoading, isSignedIn, user } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +79,10 @@ export default function ChannelSettingsScreen() {
   const [settingsEnabled, setSettingsEnabled] = useState(true);
   const [appDisplayName, setAppDisplayName] = useState(DEFAULT_APP_CONFIG.branding.appDisplayName);
   const [creatorPermissions, setCreatorPermissions] = useState<CreatorPermissionSet | null>(null);
-  const canUseChannelSettings = isSignedIn && isActive;
+  const [audienceSummary, setAudienceSummary] = useState<ChannelAudienceReadModel | null>(null);
+  const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
+  const [creatorAnalyticsSummary, setCreatorAnalyticsSummary] = useState<CreatorAnalyticsReadModel | null>(null);
+  const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel settings");
 
   useEffect(() => {
@@ -69,25 +96,41 @@ export default function ChannelSettingsScreen() {
       readUserProfile(),
       readAppConfig().catch(() => DEFAULT_APP_CONFIG),
       readCreatorPermissions().catch(() => null),
+      readChannelAudienceSummary(String(user?.id ?? "")).catch(() => null),
+      readChannelSafetyAdminSummary(String(user?.id ?? "")).catch(() => null),
+      readCreatorAnalyticsSummary(String(user?.id ?? "")).catch(() => null),
     ])
-      .then(([resolvedProfile, resolvedConfig, resolvedPermissions]) => {
+      .then(([
+        resolvedProfile,
+        resolvedConfig,
+        resolvedPermissions,
+        resolvedAudienceSummary,
+        resolvedSafetyAdminSummary,
+        resolvedCreatorAnalyticsSummary,
+      ]) => {
         if (!active) return;
         setProfile(normalizeUserProfile(resolvedProfile));
         setSettingsEnabled(resolveFeatureConfig(resolvedConfig).creatorSettingsEnabled);
         setAppDisplayName(resolveBrandingConfig(resolvedConfig).appDisplayName);
         setCreatorPermissions(resolvedPermissions);
+        setAudienceSummary(resolvedAudienceSummary);
+        setSafetyAdminSummary(resolvedSafetyAdminSummary);
+        setCreatorAnalyticsSummary(resolvedCreatorAnalyticsSummary);
         setLoading(false);
       })
       .catch(() => {
         if (!active) return;
         setProfile(normalizeUserProfile({ username: "", avatarIndex: 0 }));
+        setAudienceSummary(null);
+        setSafetyAdminSummary(null);
+        setCreatorAnalyticsSummary(null);
         setLoading(false);
       });
 
     return () => {
       active = false;
     };
-  }, [canUseChannelSettings]);
+  }, [canUseChannelSettings, user?.id]);
 
   const updateProfile = (patch: Partial<UserProfile>) => {
     setProfile((prev) => normalizeUserProfile({ ...(prev ?? {}), ...patch }));
@@ -148,18 +191,18 @@ export default function ChannelSettingsScreen() {
     },
     {
       title: "Audience",
-      status: "later_phase",
-      body: "Public activity visibility and future audience posture controls should land later under this route.",
+      status: "current",
+      body: "Audience summary truth is current here now; deeper visibility and audience-role controls still land later on this same route.",
     },
     {
       title: "Analytics",
-      status: "later_phase",
-      body: "Channel performance, conversion, and engagement insight stay planned here, not in a new studio route.",
+      status: "current",
+      body: "Analytics summary truth is current here now; unsupported creator aggregates stay explicitly unavailable instead of being fabricated.",
     },
     {
       title: "Safety/Admin",
-      status: "later_phase",
-      body: "Creator safety posture, moderation links, and admin-aware helpers stay mapped here for later phases.",
+      status: "current",
+      body: "Safety and admin summary truth is current here now; deeper tooling still stays on this route instead of drifting elsewhere.",
     },
   ];
   const designSectionHighlights = [
@@ -248,6 +291,136 @@ export default function ChannelSettingsScreen() {
             : creatorPermissions.canUsePremiumRooms
               ? "premium available, party pass hidden"
               : "unsupported gates fall back to open",
+    },
+  ];
+  const audienceSummaryCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Followers",
+      value: formatCount(audienceSummary?.followerCount ?? null),
+      body: "Real channel follower relationships from the landed audience schema.",
+    },
+    {
+      label: "Subscribers",
+      value: formatCount(audienceSummary?.subscriberCount ?? null),
+      body: "Creator/channel subscriber truth only, not account-tier premium.",
+    },
+    {
+      label: "Requests",
+      value: formatCount(audienceSummary?.pendingRequestCount ?? null),
+      body: "Pending audience requests waiting on channel review.",
+    },
+    {
+      label: "Blocked",
+      value: formatCount(audienceSummary?.blockedAudienceCount ?? null),
+      body: "Blocked audience rows already supported by current schema truth.",
+    },
+  ];
+  const audienceUnavailableCards: readonly SummaryMetricCard[] = [
+    {
+      label: "VIP / Mod / Co-Host",
+      value: "Later",
+      body: "Audience-role rosters are not backed by schema truth yet.",
+      tone: "unavailable",
+    },
+    {
+      label: "Visibility Controls",
+      value: "Unavailable",
+      body: "Follower and subscriber visibility toggles still need dedicated visibility truth.",
+      tone: "unavailable",
+    },
+  ];
+  const analyticsSummaryCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Watch-Party Sessions",
+      value: formatCount(creatorAnalyticsSummary?.watchPartySessionsHosted ?? null),
+      body: "Title-driven hosted watch-party rooms owned by this channel.",
+    },
+    {
+      label: "Live Sessions",
+      value: formatCount(creatorAnalyticsSummary?.liveSessionsHosted ?? null),
+      body: "Live-room sessions hosted by this channel from current room truth.",
+    },
+    {
+      label: "Communication Rooms",
+      value: formatCount(creatorAnalyticsSummary?.communicationRoomsHosted ?? null),
+      body: "Hosted communication-room sessions already present in current schema.",
+    },
+    {
+      label: "Active Hosted Rooms",
+      value: formatCount(creatorAnalyticsSummary?.activeHostedRooms ?? null),
+      body: "Current active room count across watch-party/live and communication hosts.",
+    },
+    {
+      label: "Latest Hosted Activity",
+      value: formatIsoDate(creatorAnalyticsSummary?.latestHostedActivityAt ?? null),
+      body: "Most recent hosted room activity timestamp across landed room tables.",
+    },
+    {
+      label: "Follower Signal",
+      value: formatCount(creatorAnalyticsSummary?.followerCount ?? null),
+      body: "Audience-linked signal mirrored from the landed follower relationship truth.",
+    },
+    {
+      label: "Subscriber Signal",
+      value: formatCount(creatorAnalyticsSummary?.subscriberCount ?? null),
+      body: "Audience-linked subscriber signal mirrored from creator/channel subscriber truth.",
+    },
+  ];
+  const analyticsUnavailableCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Profile Visits",
+      value: "Unavailable",
+      body: "Creator-facing profile-visit aggregates are not backed by current repo truth.",
+      tone: "unavailable",
+    },
+    {
+      label: "Attendance / Content / Conversion",
+      value: "Missing",
+      body: "Live attendance totals, content performance, and gated conversion metrics still need backend aggregation truth.",
+      tone: "unavailable",
+    },
+  ];
+  const safetySummaryCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Actor Role",
+      value: String(safetyAdminSummary?.actorRole ?? "member").replaceAll("_", " ").toUpperCase(),
+      body: "Current moderation role truth from the existing access model.",
+    },
+    {
+      label: "Admin Access",
+      value: formatBooleanStatus(!!safetyAdminSummary?.canAccessAdmin),
+      body: "Current admin reach stays grounded in operator/platform doctrine.",
+    },
+    {
+      label: "Safety Review",
+      value: formatBooleanStatus(!!safetyAdminSummary?.canReviewSafetyReports),
+      body: "Report review access only appears when current moderation truth allows it.",
+    },
+    {
+      label: "Official Protection",
+      value: safetyAdminSummary?.isOfficial ? "Official" : "Member",
+      body: safetyAdminSummary?.auditOwnerKey
+        ? `Audit owner key: ${safetyAdminSummary.auditOwnerKey}`
+        : "No official or operator audit key is attached to this channel context.",
+    },
+  ];
+  const safetySummarySecondaryCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Platform Roles",
+      value: safetyAdminSummary?.platformRoles?.length
+        ? safetyAdminSummary.platformRoles.map((role) => role.toUpperCase()).join(" · ")
+        : "None",
+      body: "Current platform-role memberships for the signed-in identity.",
+    },
+    {
+      label: "Recent Safety Reports",
+      value: safetyAdminSummary?.recentSafetyReportCount == null
+        ? "Unavailable"
+        : String(safetyAdminSummary?.recentSafetyReportCount),
+      body: safetyAdminSummary?.recentSafetyReportCount == null
+        ? "The current account does not have report-queue review access."
+        : "Current review-queue summary from the existing safety-report foundation.",
+      tone: safetyAdminSummary?.recentSafetyReportCount == null ? "unavailable" : "default",
     },
   ];
 
@@ -608,6 +781,96 @@ export default function ChannelSettingsScreen() {
               </View>
             </View>
 
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Audience</Text>
+                <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                This summary uses the landed channel audience read model only. Unsupported audience-role and visibility controls stay explicitly unavailable until the repo has real backing truth.
+              </Text>
+              <View style={styles.summaryGrid}>
+                {audienceSummaryCards.map((card) => (
+                  <View key={card.label} style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.summaryGrid}>
+                {audienceUnavailableCards.map((card) => (
+                  <View key={card.label} style={[styles.summaryCard, styles.summaryCardUnavailable]}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Analytics</Text>
+                <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                This section only renders the supported creator analytics slice backed by current room/session truth. Unsupported creator metrics stay marked missing instead of being zeroed or fabricated.
+              </Text>
+              <View style={styles.summaryGrid}>
+                {analyticsSummaryCards.map((card) => (
+                  <View key={card.label} style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.summaryGrid}>
+                {analyticsUnavailableCards.map((card) => (
+                  <View key={card.label} style={[styles.summaryCard, styles.summaryCardUnavailable]}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Safety/Admin</Text>
+                <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                Safety and admin summary truth stays grounded in the current moderation access model. This route shows only real role, access, and report summary signals already supported by the landed helper.
+              </Text>
+              <View style={styles.summaryGrid}>
+                {safetySummaryCards.map((card) => (
+                  <View key={card.label} style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.summaryGrid}>
+                {safetySummarySecondaryCards.map((card) => (
+                  <View
+                    key={card.label}
+                    style={[
+                      styles.summaryCard,
+                      card.tone === "unavailable" && styles.summaryCardUnavailable,
+                    ]}
+                  >
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
             <TouchableOpacity style={styles.saveButton} onPress={onSave} activeOpacity={0.88} disabled={saving}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Channel Settings</Text>}
             </TouchableOpacity>
@@ -954,6 +1217,44 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   accessSummaryDetailBody: {
+    color: "#ACB5C9",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
+  summaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  summaryCard: {
+    flexBasis: "31%",
+    flexGrow: 1,
+    minWidth: 110,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 4,
+  },
+  summaryCardUnavailable: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  summaryLabel: {
+    color: "#8590A6",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  summaryValue: {
+    color: "#F3F6FF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  summaryBody: {
     color: "#ACB5C9",
     fontSize: 11.5,
     lineHeight: 16,
