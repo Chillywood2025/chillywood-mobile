@@ -1,4 +1,4 @@
-import type { Json } from "../supabase/database.types";
+import type { Json, Tables, TablesInsert } from "../supabase/database.types";
 import { trackEvent } from "./analytics";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import { isBetaOperatorIdentity } from "./runtimeConfig";
@@ -60,6 +60,8 @@ export const SAFETY_REPORT_CATEGORIES: SafetyReportCategory[] = [
   "safety",
   "other",
 ];
+
+type SafetyReportInsert = TablesInsert<"safety_reports">;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -236,7 +238,7 @@ export async function readMyPlatformRoleMemberships() {
 
   if (error) throw error;
 
-  return ((data as Array<Record<string, unknown>> | null) ?? [])
+  return (data ?? [])
     .map((entry) => {
       const role = normalizePlatformRole(entry.role);
       if (!role) return null;
@@ -264,7 +266,7 @@ export async function readSafetyReports(options?: {
 
   if (error) throw error;
 
-  return ((data as Array<Record<string, unknown>> | null) ?? []).map((entry) => ({
+  return (data ?? []).map((entry) => ({
     id: Number(entry.id ?? 0),
     reporterUserId: normalizeText(entry.reporter_user_id),
     targetType: normalizeSafetyReportTargetType(entry.target_type),
@@ -314,7 +316,7 @@ export async function submitSafetyReport(input: SafetyReportInput) {
     title_id: normalizeText(input.titleId) || null,
     context: toJsonValue(payloadContext),
     created_at: new Date().toISOString(),
-  };
+  } satisfies SafetyReportInsert;
 
   const { data, error } = await supabase
     .from(SAFETY_REPORTS_TABLE)

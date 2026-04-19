@@ -1,7 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Json } from "../supabase/database.types";
+import type { Json, Tables, TablesInsert } from "../supabase/database.types";
 import { trackEvent } from "./analytics";
 import { reportRuntimeError } from "./logger";
 import { isClosedBetaEnvironment } from "./runtimeConfig";
@@ -72,19 +72,8 @@ type BetaProgramContextValue = {
   acknowledgeOnboarding: () => Promise<BetaAccessMembership | null>;
 };
 
-type BetaAccessMembershipRow = {
-  id?: string | number | null;
-  email?: string | null;
-  user_id?: string | null;
-  access_status?: string | null;
-  cohort?: string | null;
-  notes?: string | null;
-  invited_by?: string | null;
-  invited_at?: string | null;
-  activated_at?: string | null;
-  last_seen_at?: string | null;
-  onboarding_ack_at?: string | null;
-};
+type BetaAccessMembershipRow = Tables<"beta_access_memberships">;
+type BetaFeedbackInsert = TablesInsert<"beta_feedback_items">;
 
 const BetaProgramContext = createContext<BetaProgramContextValue | null>(null);
 
@@ -120,6 +109,10 @@ const toText = (value: unknown) => {
   const normalized = String(value ?? "").trim();
   return normalized || null;
 };
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => (
+  !!value && typeof value === "object" && !Array.isArray(value)
+);
 
 const toJsonValue = (value: unknown): Json => {
   if (value === undefined || value === null) {
@@ -213,6 +206,14 @@ const normalizeMembership = (row: BetaAccessMembershipRow | null | undefined): B
   };
 };
 
+const isBetaAccessMembershipRow = (value: Json | null): value is BetaAccessMembershipRow => (
+  isPlainObject(value) && "id" in value
+);
+
+const normalizeMembershipResult = (value: Json | null) => (
+  normalizeMembership(isBetaAccessMembershipRow(value) ? value : null)
+);
+
 const deriveReporterDisplayName = (user: User | null) => {
   const metadata = user?.user_metadata as Record<string, unknown> | undefined;
   const directName = toText(metadata?.display_name ?? metadata?.full_name ?? metadata?.name);
@@ -229,13 +230,13 @@ const deriveReporterDisplayName = (user: User | null) => {
 export async function activateBetaMembership(): Promise<BetaAccessMembership | null> {
   const { data, error } = await supabase.rpc("activate_beta_membership");
   if (error) throw error;
-  return normalizeMembership((data ?? null) as BetaAccessMembershipRow | null);
+  return normalizeMembershipResult(data ?? null);
 }
 
 export async function acknowledgeBetaOnboarding(): Promise<BetaAccessMembership | null> {
   const { data, error } = await supabase.rpc("acknowledge_beta_onboarding");
   if (error) throw error;
-  return normalizeMembership((data ?? null) as BetaAccessMembershipRow | null);
+  return normalizeMembershipResult(data ?? null);
 }
 
 export async function submitBetaFeedback(input: BetaFeedbackInput) {
@@ -274,7 +275,7 @@ export async function submitBetaFeedback(input: BetaFeedbackInput) {
     details: String(input.details ?? "").trim() || null,
     context: toJsonValue(input.context ?? {}),
     created_at: new Date().toISOString(),
-  };
+  } satisfies BetaFeedbackInsert;
 
   const { data, error } = await supabase
     .from(BETA_FEEDBACK_TABLE)
