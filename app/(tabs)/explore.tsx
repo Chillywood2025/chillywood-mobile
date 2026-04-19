@@ -15,19 +15,14 @@ import {
   View,
 } from "react-native";
 import { titles as localTitles } from "../../_data/titles";
+import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../lib/_supabase";
 
-type TitleRow = {
-  id: string;
+type TitleRow = Pick<
+  Tables<"titles">,
+  "id" | "created_at" | "title" | "category" | "year" | "runtime" | "synopsis" | "poster_url" | "video_url"
+> & {
   slug?: string | null;
-  created_at?: string;
-  title: string | null;
-  category: string | null;
-  year: number | null;
-  runtime: string | null;
-  synopsis: string | null;
-  poster_url: string | null;
-  video_url: string | null;
 };
 
 export default function ExploreScreen() {
@@ -44,7 +39,8 @@ export default function ExploreScreen() {
     const { data, error } = await supabase
       .from("titles")
       .select("id, created_at, title, category, year, runtime, synopsis, poster_url, video_url")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .returns<TitleRow[]>();
 
     if (error) {
       setErrorMsg(error.message || "Couldn’t load titles.");
@@ -53,7 +49,7 @@ export default function ExploreScreen() {
       return;
     }
 
-    setTitles((data as TitleRow[]) || []);
+    setTitles(data || []);
     setLoading(false);
   }
 

@@ -15,17 +15,13 @@ import {
 
 import { titles as localTitles } from "../../_data/titles";
 import { readMyListIds } from "../../_lib/userData";
+import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../lib/_supabase";
 
-type TitleRow = {
-  id: string;
-  title: string;
-  category?: string | null;
-  year?: number | null;
-  runtime?: string | null;
-  synopsis?: string | null;
-  poster_url?: string | null;
-};
+type TitleRow = Pick<
+  Tables<"titles">,
+  "id" | "title" | "category" | "year" | "runtime" | "synopsis" | "poster_url"
+>;
 
 export default function MyListScreen() {
   const [loading, setLoading] = useState(true);
@@ -57,10 +53,11 @@ export default function MyListScreen() {
       const { data, error } = await supabase
         .from("titles")
         .select("id,title,category,year,runtime,synopsis,poster_url")
-        .in("id", ids);
+        .in("id", ids)
+        .returns<TitleRow[]>();
 
       if (!error && data) {
-        const byId = new Map((data as TitleRow[]).map((item) => [String(item.id), item]));
+        const byId = new Map(data.map((item) => [String(item.id), item]));
         const ordered = ids
           .map((id) => byId.get(id))
           .filter((item): item is TitleRow => !!item);
@@ -75,7 +72,7 @@ export default function MyListScreen() {
     }
 
     const fallbackLocal = ids
-      .map((id) => {
+      .map((id): TitleRow | null => {
         const localMatch = localTitles.find((item: any) => String(item.id) === String(id));
         if (!localMatch) return null;
 
@@ -87,7 +84,7 @@ export default function MyListScreen() {
           runtime: (localMatch as any).runtime ?? null,
           synopsis: (localMatch as any).description ?? null,
           poster_url: null,
-        } as TitleRow;
+        };
       })
       .filter((item): item is TitleRow => !!item);
 
