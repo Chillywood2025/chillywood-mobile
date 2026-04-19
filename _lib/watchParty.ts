@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { Database } from "../supabase/database.types";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { debugLog, reportRuntimeError } from "./logger";
@@ -179,6 +180,8 @@ export const WATCH_PARTY_ROOM_MEMBERSHIPS_TABLE = "watch_party_room_memberships"
 export const WATCH_PARTY_MESSAGES_TABLE = "watch_party_room_messages";
 export const WATCH_PARTY_SYNC_TABLE = "watch_party_sync_events";
 export const WATCH_PARTY_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS;
+
+type WatchPartySyncEventInsert = Database["public"]["Tables"]["watch_party_sync_events"]["Insert"];
 
 const PARTY_ROOMS_BASE_SELECT =
   "party_id,room_type,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at";
@@ -977,13 +980,16 @@ export async function emitSyncEvent(
   if (!normalizedPartyId || !writableUserId) return;
 
   try {
-    await supabase.from(PARTY_SYNC_TABLE).insert({
-      room_id: normalizedPartyId,
+    const payload: WatchPartySyncEventInsert = {
+      id: `sync-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      party_id: normalizedPartyId,
       user_id: writableUserId,
-      event_type: kind,
+      kind,
       playback_position_millis: Math.max(0, Math.floor(positionMillis)),
       created_at: new Date().toISOString(),
-    });
+    };
+
+    await supabase.from(PARTY_SYNC_TABLE).insert(payload);
   } catch {
     // noop
   }

@@ -1,3 +1,4 @@
+import type { Json } from "../supabase/database.types";
 import { trackEvent } from "./analytics";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import { isBetaOperatorIdentity } from "./runtimeConfig";
@@ -65,6 +66,30 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 const isPlainObject = (value: unknown): value is Record<string, unknown> => (
   !!value && typeof value === "object" && !Array.isArray(value)
 );
+
+const toJsonValue = (value: unknown): Json => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => toJsonValue(entry));
+  }
+
+  if (typeof value === "object") {
+    const normalized: { [key: string]: Json | undefined } = {};
+    for (const [key, entry] of Object.entries(value)) {
+      normalized[key] = entry === undefined ? undefined : toJsonValue(entry);
+    }
+    return normalized;
+  }
+
+  return String(value);
+};
 
 const normalizePlatformRole = (value: unknown): PlatformRole | null => {
   const normalized = normalizeText(value).toLowerCase();
@@ -287,7 +312,7 @@ export async function submitSafetyReport(input: SafetyReportInput) {
     note: normalizeText(input.note) || null,
     room_id: normalizeText(input.roomId) || null,
     title_id: normalizeText(input.titleId) || null,
-    context: payloadContext,
+    context: toJsonValue(payloadContext),
     created_at: new Date().toISOString(),
   };
 

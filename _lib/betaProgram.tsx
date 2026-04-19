@@ -1,6 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import type { Json } from "../supabase/database.types";
 import { trackEvent } from "./analytics";
 import { reportRuntimeError } from "./logger";
 import { isClosedBetaEnvironment } from "./runtimeConfig";
@@ -118,6 +119,30 @@ export const BETA_FEEDBACK_SEVERITIES: BetaFeedbackSeverity[] = [
 const toText = (value: unknown) => {
   const normalized = String(value ?? "").trim();
   return normalized || null;
+};
+
+const toJsonValue = (value: unknown): Json => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => toJsonValue(entry));
+  }
+
+  if (typeof value === "object") {
+    const normalized: { [key: string]: Json | undefined } = {};
+    for (const [key, entry] of Object.entries(value)) {
+      normalized[key] = entry === undefined ? undefined : toJsonValue(entry);
+    }
+    return normalized;
+  }
+
+  return String(value);
 };
 
 const normalizeMembershipStatus = (value: unknown): BetaMembershipStatus => {
@@ -247,7 +272,7 @@ export async function submitBetaFeedback(input: BetaFeedbackInput) {
     room_id: String(input.roomId ?? "").trim() || null,
     summary,
     details: String(input.details ?? "").trim() || null,
-    context: input.context ?? {},
+    context: toJsonValue(input.context ?? {}),
     created_at: new Date().toISOString(),
   };
 

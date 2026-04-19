@@ -20,6 +20,7 @@ import {
   type AppConfig,
   type HomeRailKey,
 } from "../_lib/appConfig";
+import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
 import { useSession } from "../_lib/session";
@@ -45,7 +46,7 @@ import {
 import { supabase } from "../_lib/supabase";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 
-type TitleId = string | number;
+type TitleId = Database["public"]["Tables"]["titles"]["Row"]["id"];
 
 type StatusType = "draft" | "published" | "scheduled" | "archived";
 

@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { Database } from "../supabase/database.types";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import {
   normalizeCapturePolicy,
@@ -85,6 +86,8 @@ type WatchHistoryRow = {
   completed?: boolean | null;
   play_count?: number | null;
 };
+
+type WatchHistoryInsert = Database["public"]["Tables"]["watch_history"]["Insert"];
 
 type UserProfileRow = {
   user_id?: string | null;
@@ -609,7 +612,7 @@ async function upsertWatchHistoryProgress(
   entry: WatchProgressEntry,
   options?: { completed?: boolean; playCount?: number },
 ) {
-  const payload: Record<string, unknown> = {
+  const payload: WatchHistoryInsert = {
     user_id: userId,
     title_id: titleId,
     last_position_millis: Math.max(0, Math.floor(entry.positionMillis)),
@@ -721,25 +724,6 @@ export async function clearProgressForTitle(titleId: string | number) {
   }
 }
 
-async function readTitleCounters(titleId: string) {
-  try {
-    const { data, error } = await supabase
-      .from("titles")
-      .select("view_count,watch_count")
-      .eq("id", titleId)
-      .maybeSingle();
-
-    if (error || !data) return null;
-
-    return {
-      viewCount: Number((data as Record<string, unknown>).view_count ?? 0),
-      watchCount: Number((data as Record<string, unknown>).watch_count ?? 0),
-    };
-  } catch {
-    return null;
-  }
-}
-
 export async function recordPlaybackStart(titleId: string | number) {
   const id = toIdString(titleId);
   if (!id) return;
@@ -770,21 +754,6 @@ export async function recordPlaybackStart(titleId: string | number) {
     } catch {
       // watch history is optional foundation data
     }
-  }
-
-  const counters = await readTitleCounters(id);
-  if (!counters) return;
-
-  try {
-    await supabase
-      .from("titles")
-      .update({
-        view_count: Math.max(0, counters.viewCount) + 1,
-        watch_count: Math.max(0, counters.watchCount) + 1,
-      })
-      .eq("id", id);
-  } catch {
-    // optional trending counters
   }
 }
 

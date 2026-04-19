@@ -1,34 +1,34 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow typed-schema foundation lane on `main`. Do not touch UI, runtime room/player/live-stage owners, RBAC, Rachi control-plane work, admin expansion, or new schema features in this lane. The canonical future bootstrap path is now the single baseline file in `supabase/migrations/`, the old chain is archived in `supabase/migrations_legacy/`, and remote migration-history bookkeeping now matches that cutover. The next task is to generate and check in repo-owned database types from the normalized current schema truth, then wire the shared Supabase client owners to those types without changing live schema shape.
+The next exact task is a narrow typed-schema adoption audit on `main`. Do not touch UI, runtime room/player/live-stage owners, RBAC, Rachi control-plane work, admin expansion, live schema, or remote DB state in this lane. The canonical bootstrap path and remote migration bookkeeping are already normalized, repo-owned database types are now checked in, and the shared Supabase clients are now typed. The next task is to inventory the remaining direct Supabase call sites that still rely on loose casts, manual row types, or untyped payload assumptions, then produce the single smallest exact implementation batch for broader typed-schema rollout.
 
 ## Current Plan
-1. Keep scope to typed-schema generation and client typing only.
-2. Re-read the normalized schema checkpoint truth first: `CURRENT_STATE.md`, `NEXT_TASK.md`, and the single active baseline file.
-3. Generate repo-owned database types from the accepted current schema truth.
-4. Update the shared Supabase client owners to use those generated types.
-5. Keep live remote schema unchanged in this lane.
-6. Do not introduce new feature migrations, UI work, or broader runtime refactors in this pass.
-7. Stop after typed schema truth is checked in and verified.
+1. Keep scope to typed-schema adoption audit only.
+2. Re-read the normalized schema and typed-schema checkpoint truth first: `CURRENT_STATE.md`, `NEXT_TASK.md`, and `supabase/database.types.ts`.
+3. Inventory remaining direct Supabase owners on `main` that still use loose casts, manual row shims, or payload shapes that the typed clients do not yet model directly.
+4. Separate current typed-safe owners from remaining compatibility targets.
+5. Produce one exact next implementation batch only after that inventory is proved.
+6. Keep live schema unchanged in this lane.
+7. Do not introduce feature migrations, UI work, or broader runtime behavior changes in this pass.
 
 ## Exact Next Batch
-- inspect the shared Supabase client owners and current untyped schema assumptions
-- generate repo-owned database types from the normalized schema truth
-- wire the shared Supabase clients to those types
-- verify typecheck still passes for the typed schema owners
+- inspect remaining direct Supabase call sites on current `main`
+- identify which owners are already type-safe under the new shared typed clients
+- identify exact loose-cast or payload-shape mismatches that still block broader typed adoption
+- produce the smallest exact next implementation batch from that inventory
 - keep live schema unchanged
 - do not write or apply feature migrations yet
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- be typed-schema foundation only
-- touch only generated database types and the shared Supabase client owners that consume them
-- preserve the new single-baseline bootstrap path and the archived legacy chain
-- preserve the now-landed repo truth for `app_configurations`, `creator_permissions`, and `user_profiles`
+- be typed-schema adoption audit only
+- touch no runtime behavior unless a control-file follow-up explicitly approves a typed compatibility implementation batch
+- preserve the new single-baseline bootstrap path, the archived legacy chain, and the checked-in `supabase/database.types.ts`
+- preserve the now-landed repo truth for `app_configurations`, `creator_permissions`, `user_profiles`, and the typed shared clients
 - avoid live schema changes in this lane
-- avoid new feature migration writes or applies until typed schema truth is landed
+- avoid new feature migration writes or applies until the next typed rollout batch is intentionally chosen
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
@@ -38,11 +38,13 @@ Do not:
 - touch RBAC or Rachi control-plane work
 - broaden into admin expansion
 - write or apply new feature migrations in the planning note
+- change remote DB state
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- repo-owned database types are checked in from the normalized current schema truth
-- shared Supabase client owners use those types
+- the remaining direct Supabase owners are truthfully inventoried against the checked-in `Database` / `Json` types
+- the repo clearly distinguishes already-safe typed owners from remaining compatibility targets
+- the single smallest next implementation batch is named exactly
 - live schema remains unchanged
 - no UI changes, feature migrations, or unrelated runtime refactors are introduced in that lane

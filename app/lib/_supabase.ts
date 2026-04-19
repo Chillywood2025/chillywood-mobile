@@ -7,6 +7,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
 
+import type { Database } from "../../supabase/database.types";
+
 // ✅ YOUR PROJECT VALUES
 const SUPABASE_URL = "https://bmkkhihfbmsnnmcqkoly.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -28,7 +30,7 @@ const webStorage = {
 };
 
 // ✅ Create Supabase Client
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: isWeb ? webStorage : AsyncStorage,
     autoRefreshToken: true,
