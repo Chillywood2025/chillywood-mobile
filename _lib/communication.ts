@@ -1,6 +1,7 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import type { MediaStream } from "react-native-webrtc";
+import type { Tables } from "../supabase/database.types";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { readCreatorPermissions, sanitizeCreatorRoomAccessRule } from "./monetization";
@@ -105,35 +106,41 @@ export type CommunicationParticipantView = CommunicationParticipantPresence & {
   connectionState: "waiting" | "connecting" | "connected" | "disconnected" | "failed";
 };
 
-type CommunicationRoomRow = {
-  room_id?: string | null;
-  room_code?: string | null;
-  host_user_id?: string | null;
-  status?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-  linked_party_id?: string | null;
-  linked_room_code?: string | null;
-  linked_room_mode?: string | null;
-  content_access_rule?: string | null;
-  capture_policy?: string | null;
-  last_activity_at?: string | null;
-};
+type CommunicationRoomBaseRow = Pick<
+  Tables<"communication_rooms">,
+  | "room_id"
+  | "room_code"
+  | "host_user_id"
+  | "status"
+  | "created_at"
+  | "updated_at"
+  | "linked_party_id"
+  | "linked_room_code"
+  | "linked_room_mode"
+>;
 
-type CommunicationMembershipRow = {
-  room_id?: string | null;
-  user_id?: string | null;
-  role?: string | null;
-  membership_state?: string | null;
-  camera_enabled?: boolean | null;
-  mic_enabled?: boolean | null;
-  display_name?: string | null;
-  avatar_url?: string | null;
-  joined_at?: string | null;
-  last_seen_at?: string | null;
-  left_at?: string | null;
-  updated_at?: string | null;
-};
+type CommunicationRoomFullRow = CommunicationRoomBaseRow & Pick<
+  Tables<"communication_rooms">,
+  "content_access_rule" | "capture_policy" | "last_activity_at"
+>;
+
+type CommunicationRoomRow = CommunicationRoomBaseRow | CommunicationRoomFullRow;
+
+type CommunicationMembershipRow = Pick<
+  Tables<"communication_room_memberships">,
+  | "room_id"
+  | "user_id"
+  | "role"
+  | "membership_state"
+  | "camera_enabled"
+  | "mic_enabled"
+  | "display_name"
+  | "avatar_url"
+  | "joined_at"
+  | "last_seen_at"
+  | "left_at"
+  | "updated_at"
+>;
 
 type CommunicationRoomCreateOptions = {
   hostUserId?: string;
@@ -160,6 +167,8 @@ let cachedCommunicationIceServers: CommunicationIceServer[] | null = null;
 const COMMUNICATION_FALLBACK_ICE_SERVERS: CommunicationIceServer[] = [
   { urls: ["stun:stun.l.google.com:19302"] },
 ];
+
+const isDefined = <T>(value: T | null): value is T => value !== null;
 
 const normalizeIceUrlList = (value: unknown): string[] => {
   if (Array.isArray(value)) {
@@ -318,6 +327,9 @@ export const parseCommunicationRoomPayload = (row: CommunicationRoomRow): Commun
   const linkedPartyId = formatCommunicationRoomCode(row.linked_party_id);
   const linkedRoomCode = formatCommunicationRoomCode(row.linked_room_code);
   const linkedRoomMode = normalizeCommunicationLinkedRoomMode(row.linked_room_mode);
+  const contentAccessRule = "content_access_rule" in row ? row.content_access_rule : undefined;
+  const capturePolicy = "capture_policy" in row ? row.capture_policy : undefined;
+  const lastActivityAt = "last_activity_at" in row ? row.last_activity_at : undefined;
 
   if (!roomId || !roomCode || !hostUserId) return null;
 
@@ -333,9 +345,9 @@ export const parseCommunicationRoomPayload = (row: CommunicationRoomRow): Commun
     linkedPartyId: linkedPartyId || undefined,
     linkedRoomCode: linkedRoomCode || undefined,
     linkedRoomMode,
-    contentAccessRule: normalizeContentAccessRule(row.content_access_rule),
-    capturePolicy: normalizeCapturePolicy(row.capture_policy),
-    lastActivityAt: String(row.last_activity_at ?? row.updated_at ?? row.created_at ?? now),
+    contentAccessRule: normalizeContentAccessRule(contentAccessRule),
+    capturePolicy: normalizeCapturePolicy(capturePolicy),
+    lastActivityAt: String(lastActivityAt ?? row.updated_at ?? row.created_at ?? now),
   };
 };
 
@@ -370,17 +382,19 @@ async function fetchCommunicationRoomRow(roomId: string): Promise<CommunicationR
     .from(COMMUNICATION_ROOMS_TABLE)
     .select(COMMUNICATION_ROOM_SELECT)
     .eq("room_id", normalizedRoomId)
+    .returns<CommunicationRoomFullRow>()
     .maybeSingle();
 
-  if (!query.error && query.data) return query.data as CommunicationRoomRow;
+  if (!query.error && query.data) return query.data;
 
   if (query.error && isMissingColumnError(query.error, "content_access_rule")) {
     const fallback = await supabase
       .from(COMMUNICATION_ROOMS_TABLE)
       .select(COMMUNICATION_ROOM_BASE_SELECT)
       .eq("room_id", normalizedRoomId)
+      .returns<CommunicationRoomBaseRow>()
       .maybeSingle();
-    if (!fallback.error && fallback.data) return fallback.data as CommunicationRoomRow;
+    if (!fallback.error && fallback.data) return fallback.data;
   }
 
   return null;
@@ -440,10 +454,11 @@ export async function createCommunicationRoom(hostUserIdOrOptions?: string | Com
       .from(COMMUNICATION_ROOMS_TABLE)
       .insert(payload)
       .select(COMMUNICATION_ROOM_SELECT)
+      .returns<CommunicationRoomFullRow>()
       .single();
 
     if (!error && data) {
-      const room = parseCommunicationRoomPayload(data as CommunicationRoomRow);
+      const room = parseCommunicationRoomPayload(data);
       if (room) return room;
     }
 
@@ -460,14 +475,15 @@ export async function createCommunicationRoom(hostUserIdOrOptions?: string | Com
         linked_room_mode: linkedRoomMode ?? null,
       };
 
-      const fallbackInsert = await supabase
+      const { data: fallbackData, error: fallbackError } = await supabase
         .from(COMMUNICATION_ROOMS_TABLE)
         .insert(fallbackPayload)
         .select(COMMUNICATION_ROOM_BASE_SELECT)
+        .returns<CommunicationRoomBaseRow>()
         .single();
 
-      if (!fallbackInsert.error && fallbackInsert.data) {
-        const room = parseCommunicationRoomPayload(fallbackInsert.data as CommunicationRoomRow);
+      if (!fallbackError && fallbackData) {
+        const room = parseCommunicationRoomPayload(fallbackData);
         if (room) return room;
       }
     }
@@ -507,17 +523,19 @@ export async function getCommunicationRoomByCode(roomCode: string): Promise<Comm
     .from(COMMUNICATION_ROOMS_TABLE)
     .select(COMMUNICATION_ROOM_SELECT)
     .eq("room_code", normalizedRoomCode)
+    .returns<CommunicationRoomFullRow>()
     .maybeSingle();
 
-  if (!query.error && query.data) return parseCommunicationRoomPayload(query.data as CommunicationRoomRow);
+  if (!query.error && query.data) return parseCommunicationRoomPayload(query.data);
 
   if (query.error && isMissingColumnError(query.error, "content_access_rule")) {
     const fallback = await supabase
       .from(COMMUNICATION_ROOMS_TABLE)
       .select(COMMUNICATION_ROOM_BASE_SELECT)
       .eq("room_code", normalizedRoomCode)
+      .returns<CommunicationRoomBaseRow>()
       .maybeSingle();
-    if (!fallback.error && fallback.data) return parseCommunicationRoomPayload(fallback.data as CommunicationRoomRow);
+    if (!fallback.error && fallback.data) return parseCommunicationRoomPayload(fallback.data);
   }
 
   return null;
@@ -532,10 +550,11 @@ export async function listCommunicationRoomMemberships(roomId: string): Promise<
       .from(COMMUNICATION_ROOM_MEMBERSHIPS_TABLE)
       .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
       .eq("room_id", normalizedRoomId)
-      .order("joined_at", { ascending: true });
+      .order("joined_at", { ascending: true })
+      .returns<CommunicationMembershipRow[]>();
 
     if (error || !data) return [];
-    return (data as CommunicationMembershipRow[]).map(parseCommunicationMembershipPayload).filter(Boolean) as CommunicationRoomMembership[];
+    return data.map(parseCommunicationMembershipPayload).filter(isDefined);
   } catch {
     return [];
   }
@@ -625,10 +644,11 @@ export async function joinCommunicationRoomSession(options: {
     .from(COMMUNICATION_ROOM_MEMBERSHIPS_TABLE)
     .upsert(payload, { onConflict: "room_id,user_id" })
     .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
+    .returns<CommunicationMembershipRow>()
     .single();
 
   if (error || !data) return null;
-  return parseCommunicationMembershipPayload(data as CommunicationMembershipRow);
+  return parseCommunicationMembershipPayload(data);
 }
 
 export async function touchCommunicationRoomSession(options: {
@@ -662,10 +682,11 @@ export async function touchCommunicationRoomSession(options: {
     .eq("room_id", roomId)
     .eq("user_id", writableUserId)
     .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
+    .returns<CommunicationMembershipRow>()
     .single();
 
   if (error || !data) return null;
-  return parseCommunicationMembershipPayload(data as CommunicationMembershipRow);
+  return parseCommunicationMembershipPayload(data);
 }
 
 export async function leaveCommunicationRoomSession(options: {
@@ -692,9 +713,10 @@ export async function getLinkedCommunicationRoom(linkedPartyId: string): Promise
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1)
+    .returns<CommunicationRoomFullRow>()
     .maybeSingle();
 
-  if (!query.error && query.data) return parseCommunicationRoomPayload(query.data as CommunicationRoomRow);
+  if (!query.error && query.data) return parseCommunicationRoomPayload(query.data);
 
   if (query.error && isMissingColumnError(query.error, "content_access_rule")) {
     const fallback = await supabase
@@ -704,8 +726,9 @@ export async function getLinkedCommunicationRoom(linkedPartyId: string): Promise
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(1)
+      .returns<CommunicationRoomBaseRow>()
       .maybeSingle();
-    if (!fallback.error && fallback.data) return parseCommunicationRoomPayload(fallback.data as CommunicationRoomRow);
+    if (!fallback.error && fallback.data) return parseCommunicationRoomPayload(fallback.data);
   }
 
   return null;
