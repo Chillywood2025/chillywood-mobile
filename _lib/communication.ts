@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import type { MediaStream } from "react-native-webrtc";
-import type { Tables } from "../supabase/database.types";
+import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { readCreatorPermissions, sanitizeCreatorRoomAccessRule } from "./monetization";
@@ -141,6 +141,23 @@ type CommunicationMembershipRow = Pick<
   | "left_at"
   | "updated_at"
 >;
+
+type CommunicationRoomInsert = TablesInsert<"communication_rooms">;
+type CommunicationRoomBaseInsert = Pick<
+  CommunicationRoomInsert,
+  | "room_id"
+  | "room_code"
+  | "host_user_id"
+  | "status"
+  | "created_at"
+  | "updated_at"
+  | "linked_party_id"
+  | "linked_room_code"
+  | "linked_room_mode"
+>;
+type CommunicationRoomUpdate = TablesUpdate<"communication_rooms">;
+type CommunicationMembershipInsert = TablesInsert<"communication_room_memberships">;
+type CommunicationMembershipUpdate = TablesUpdate<"communication_room_memberships">;
 
 type CommunicationRoomCreateOptions = {
   hostUserId?: string;
@@ -435,7 +452,7 @@ export async function createCommunicationRoom(hostUserIdOrOptions?: string | Com
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const roomId = createPartyIdentifier();
     const now = new Date().toISOString();
-    const payload = {
+    const payload: CommunicationRoomInsert = {
       room_id: roomId,
       room_code: roomId,
       host_user_id: resolvedHostUserId,
@@ -463,7 +480,7 @@ export async function createCommunicationRoom(hostUserIdOrOptions?: string | Com
     }
 
     if (error && isMissingColumnError(error, "content_access_rule")) {
-      const fallbackPayload = {
+      const fallbackPayload: CommunicationRoomBaseInsert = {
         room_id: roomId,
         room_code: roomId,
         host_user_id: resolvedHostUserId,
@@ -625,7 +642,7 @@ export async function joinCommunicationRoomSession(options: {
   if (!hasExistingSeat && activeMemberships.length >= COMMUNICATION_ROOM_MAX_PARTICIPANTS) return null;
 
   const now = new Date().toISOString();
-  const payload = {
+  const payload: CommunicationMembershipInsert = {
     room_id: roomId,
     user_id: writableUserId,
     role: writableUserId === snapshot.room.hostUserId ? "host" : "participant",
@@ -665,7 +682,7 @@ export async function touchCommunicationRoomSession(options: {
   if (!roomId || !writableUserId) return null;
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {
+  const updates: CommunicationMembershipUpdate = {
     membership_state: normalizeRoomMembershipState(options.membershipState),
     last_seen_at: now,
     updated_at: now,
@@ -761,13 +778,15 @@ export async function endCommunicationRoom(roomId: string): Promise<void> {
   const writableUserId = await getWritablePartyUserId();
   if (!normalizedRoomId || !writableUserId) return;
 
+  const updates: CommunicationRoomUpdate = {
+    status: "ended",
+    updated_at: new Date().toISOString(),
+    last_activity_at: new Date().toISOString(),
+  };
+
   await supabase
     .from(COMMUNICATION_ROOMS_TABLE)
-    .update({
-      status: "ended",
-      updated_at: new Date().toISOString(),
-      last_activity_at: new Date().toISOString(),
-    })
+    .update(updates)
     .eq("room_id", normalizedRoomId)
     .eq("host_user_id", writableUserId);
 }
