@@ -260,6 +260,123 @@ export type Database = {
           },
         ]
       }
+      channel_audience_blocks: {
+        Row: {
+          blocked_at: string
+          blocked_by_user_id: string
+          blocked_user_id: string
+          channel_user_id: string
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocked_at?: string
+          blocked_by_user_id: string
+          blocked_user_id: string
+          channel_user_id: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocked_at?: string
+          blocked_by_user_id?: string
+          blocked_user_id?: string
+          channel_user_id?: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_audience_requests: {
+        Row: {
+          channel_user_id: string
+          created_at: string
+          id: number
+          note: string | null
+          request_kind: string
+          requester_user_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel_user_id: string
+          created_at?: string
+          id?: number
+          note?: string | null
+          request_kind?: string
+          requester_user_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel_user_id?: string
+          created_at?: string
+          id?: number
+          note?: string | null
+          request_kind?: string
+          requester_user_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_followers: {
+        Row: {
+          channel_user_id: string
+          followed_at: string
+          follower_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel_user_id: string
+          followed_at?: string
+          follower_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel_user_id?: string
+          followed_at?: string
+          follower_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_subscribers: {
+        Row: {
+          channel_user_id: string
+          expires_at: string | null
+          source: string
+          started_at: string
+          status: string
+          subscriber_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel_user_id: string
+          expires_at?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          subscriber_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel_user_id?: string
+          expires_at?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          subscriber_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       communication_room_memberships: {
         Row: {
           avatar_url: string | null

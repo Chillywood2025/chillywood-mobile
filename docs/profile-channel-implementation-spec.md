@@ -449,10 +449,10 @@ Stage 5 UI must not ship until these canonical read models are backed by honest 
 | --- | --- | --- |
 | `channelUserId` | route/helper input | already supported |
 | `generatedAt` | helper runtime timestamp | derivable now |
-| `followerCount` | channel-follower relationship table | requires new schema |
-| `subscriberCount` | creator/channel subscription relationship table | requires new schema |
-| `pendingRequestCount` | audience-request relationship table | requires new schema |
-| `blockedAudienceCount` | channel-audience block table | requires new schema |
+| `followerCount` | `channel_followers` | derivable now with helper work |
+| `subscriberCount` | `channel_subscribers` filtered to current subscriber statuses | derivable now with helper work |
+| `pendingRequestCount` | `channel_audience_requests` filtered to `status='pending'` | derivable now with helper work |
+| `blockedAudienceCount` | `channel_audience_blocks` | derivable now with helper work |
 | `vipCount` | channel audience-role relationship table | later-phase only; requires new schema |
 | `moderatorCount` | channel audience-role relationship table | later-phase only; requires new schema |
 | `coHostCount` | channel audience-role relationship table | later-phase only; requires new schema |
@@ -475,8 +475,8 @@ Canonical rule:
 | `activeHostedRooms` | `watch_party_rooms.is_active` plus active `communication_rooms.status` | derivable now with helper work |
 | `latestHostedActivityAt` | max `last_activity_at` across owned room tables | derivable now with helper work |
 | `profileVisits` | creator-facing profile-visit aggregate | requires new backend/schema truth |
-| `followerCount` | channel audience follower truth | requires new schema |
-| `subscriberCount` | creator/channel subscriber truth | requires new schema |
+| `followerCount` | `channel_followers` | derivable now with helper work |
+| `subscriberCount` | `channel_subscribers` filtered to current subscriber statuses | derivable now with helper work |
 | `liveAttendanceTotal` | room attendance aggregate by creator | requires new backend/schema truth |
 | `contentLaunches` | creator-owned title launch aggregate | requires new backend/schema truth |
 | `continueWatchingReturns` | creator-owned content return aggregate | requires new backend/schema truth |
@@ -505,11 +505,110 @@ Canonical rule:
 
 #### Stage 5 blocker summary
 Full Stage 5 remains blocked until the repo has canonical backend/schema truth for:
-- channel followers
-- creator/channel subscribers
-- pending audience requests
-- blocked audience
+- audience helper/read-model surfaces built on the landed channel-audience relationship tables
 - creator-facing analytics aggregates beyond room/session counts
+
+#### Channel audience relationship foundation
+
+##### `channel_followers`
+- Purpose: canonical channel follower relationship truth.
+- Primary key / uniqueness: composite primary key on `(channel_user_id, follower_user_id)`.
+- Required columns:
+  - `channel_user_id`
+  - `follower_user_id`
+- Timestamps:
+  - `followed_at`
+  - `updated_at`
+- Indexes:
+  - `(channel_user_id, followed_at desc)`
+  - `(follower_user_id, followed_at desc)`
+- Ownership rules:
+  - follower inserts their own row
+  - follower or channel owner may remove the relationship
+  - raw rows are visible only to the follower, the channel owner, or platform operators
+- Current doctrine support:
+  - supports truthful follower counts now
+  - does not overbuild audience-role systems
+
+##### `channel_subscribers`
+- Purpose: canonical creator/channel subscriber relationship truth, distinct from account-tier `user_subscriptions`.
+- Primary key / uniqueness: composite primary key on `(channel_user_id, subscriber_user_id)`.
+- Required columns:
+  - `channel_user_id`
+  - `subscriber_user_id`
+  - `status`
+  - `source`
+- Timestamps:
+  - `started_at`
+  - `expires_at`
+  - `updated_at`
+- Status fields:
+  - `active`
+  - `grace_period`
+  - `canceled`
+  - `expired`
+  - `revoked`
+- Indexes:
+  - `(channel_user_id, status, updated_at desc)`
+  - `(subscriber_user_id, status, updated_at desc)`
+- Ownership rules:
+  - raw rows are visible only to the subscriber, the channel owner, or platform operators
+  - mutation is operator/service-sync only for now so the app cannot forge paid audience truth
+- Current doctrine support:
+  - supports truthful channel subscriber counts now
+  - keeps creator/channel subscriptions separate from account-tier premium entitlements
+
+##### `channel_audience_requests`
+- Purpose: canonical pending audience request truth for private or approval-based channel relationships.
+- Primary key / uniqueness:
+  - identity primary key `id`
+  - partial unique index on `(channel_user_id, requester_user_id, request_kind)` for `status='pending'`
+- Required columns:
+  - `channel_user_id`
+  - `requester_user_id`
+  - `request_kind`
+  - `status`
+- Timestamps:
+  - `created_at`
+  - `reviewed_at`
+  - `updated_at`
+- Status fields:
+  - `pending`
+  - `approved`
+  - `declined`
+  - `canceled`
+- Indexes:
+  - `(channel_user_id, status, created_at desc)`
+  - `(requester_user_id, status, created_at desc)`
+- Ownership rules:
+  - requester creates their own pending request
+  - channel owner or platform operator reviews it
+  - raw rows are visible only to the requester, the channel owner, or platform operators
+- Current doctrine support:
+  - supports truthful pending-request counts now
+  - keeps richer audience-routing or VIP-style workflows in later phases
+
+##### `channel_audience_blocks`
+- Purpose: canonical blocked-audience truth for channel-owned audience safety boundaries.
+- Primary key / uniqueness: composite primary key on `(channel_user_id, blocked_user_id)`.
+- Required columns:
+  - `channel_user_id`
+  - `blocked_user_id`
+  - `blocked_by_user_id`
+- Timestamps:
+  - `blocked_at`
+  - `updated_at`
+- Optional fields:
+  - `reason`
+- Indexes:
+  - `(channel_user_id, blocked_at desc)`
+  - `(blocked_user_id, blocked_at desc)`
+- Ownership rules:
+  - channel owner or platform operator creates/removes the block
+  - raw rows are visible only to the blocked user, the channel owner, or platform operators
+- Current doctrine support:
+  - supports truthful blocked-audience counts now
+  - does not claim broader audience-role or moderation CRM depth yet
 
 ## 8. Exact Phased Implementation Order
 ### Stage 1 - Public Unified `/profile/[userId]` Profile / Channel Surface
@@ -692,7 +791,7 @@ Goal:
 - grow channel-community depth and owner insight without breaking current product boundaries
 
 Current blocker:
-- do not start Stage 5 UI until the prerequisite audience-relationship backend/schema truth and creator-analytics aggregate truth from section `7.15` are landed
+- do not start Stage 5 UI until the audience helper/read-model layer implied by section `7.15` and the remaining creator-analytics aggregate truth are landed
 
 Exact route/file owner(s):
 - `app/profile/[userId].tsx`
