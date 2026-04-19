@@ -441,6 +441,76 @@ Rule:
 - `ChannelSafetySummaryModel`
 - `OfficialIdentityProtectionModel`
 
+### 7.15 Stage 5 Prerequisite Read Models
+Stage 5 UI must not ship until these canonical read models are backed by honest repo/schema truth.
+
+#### `ChannelAudienceReadModel`
+| Field | Source of truth | Status |
+| --- | --- | --- |
+| `channelUserId` | route/helper input | already supported |
+| `generatedAt` | helper runtime timestamp | derivable now |
+| `followerCount` | channel-follower relationship table | requires new schema |
+| `subscriberCount` | creator/channel subscription relationship table | requires new schema |
+| `pendingRequestCount` | audience-request relationship table | requires new schema |
+| `blockedAudienceCount` | channel-audience block table | requires new schema |
+| `vipCount` | channel audience-role relationship table | later-phase only; requires new schema |
+| `moderatorCount` | channel audience-role relationship table | later-phase only; requires new schema |
+| `coHostCount` | channel audience-role relationship table | later-phase only; requires new schema |
+| `publicActivityVisibility` | channel audience visibility field | requires new schema |
+| `followerSurfaceEnabled` | derived from new follower + visibility truth | requires new schema |
+| `subscriberSurfaceEnabled` | derived from new subscriber + visibility truth | requires new schema |
+
+Canonical rule:
+- `user_subscriptions` is account-tier entitlement truth, not creator/channel subscriber truth
+- room participant state is room-scoped, not channel audience truth
+
+#### `CreatorAnalyticsReadModel`
+| Field | Source of truth | Status |
+| --- | --- | --- |
+| `channelUserId` | route/helper input | already supported |
+| `generatedAt` | helper runtime timestamp | derivable now |
+| `watchPartySessionsHosted` | `watch_party_rooms` filtered by `host_user_id` and `room_type='title'` | derivable now with helper work |
+| `liveSessionsHosted` | `watch_party_rooms` filtered by `host_user_id` and `room_type='live'` | derivable now with helper work |
+| `communicationRoomsHosted` | `communication_rooms` filtered by `host_user_id` | derivable now with helper work |
+| `activeHostedRooms` | `watch_party_rooms.is_active` plus active `communication_rooms.status` | derivable now with helper work |
+| `latestHostedActivityAt` | max `last_activity_at` across owned room tables | derivable now with helper work |
+| `profileVisits` | creator-facing profile-visit aggregate | requires new backend/schema truth |
+| `followerCount` | channel audience follower truth | requires new schema |
+| `subscriberCount` | creator/channel subscriber truth | requires new schema |
+| `liveAttendanceTotal` | room attendance aggregate by creator | requires new backend/schema truth |
+| `contentLaunches` | creator-owned title launch aggregate | requires new backend/schema truth |
+| `continueWatchingReturns` | creator-owned content return aggregate | requires new backend/schema truth |
+| `gatedSurfaceViews` | monetization conversion aggregate | requires new backend/schema truth |
+
+Canonical rule:
+- analytics event emission is not the same thing as creator-facing analytics reads
+- current event sinks may support future aggregation, but they are not current summary truth
+- `titles` has no creator ownership or performance counters that can support creator content analytics today
+
+#### `ChannelSafetyAdminReadModel`
+| Field | Source of truth | Status |
+| --- | --- | --- |
+| `actorRole` | `getModerationAccess(...)` | already supported |
+| `canAccessAdmin` | `getModerationAccess(...)` | already supported |
+| `canReviewSafetyReports` | `getModerationAccess(...)` and `platform_role_memberships` | already supported |
+| `platformRoles` | `readMyPlatformRoleMemberships()` | already supported |
+| `recentSafetyReports` | `readSafetyReports()` | already supported for operator/moderator identities |
+| `recentSafetyReportCount` | derived from `readSafetyReports()` | derivable now with helper work |
+| `isOfficial` | official-account truth | already supported |
+| `auditOwnerKey` | official-account truth / moderation access | already supported |
+
+Canonical rule:
+- safety/admin can proceed later with helper-only work
+- safety/admin does not unblock full Stage 5 by itself
+
+#### Stage 5 blocker summary
+Full Stage 5 remains blocked until the repo has canonical backend/schema truth for:
+- channel followers
+- creator/channel subscribers
+- pending audience requests
+- blocked audience
+- creator-facing analytics aggregates beyond room/session counts
+
 ## 8. Exact Phased Implementation Order
 ### Stage 1 - Public Unified `/profile/[userId]` Profile / Channel Surface
 Goal:
@@ -620,6 +690,9 @@ Likely risk areas / doctrine drift risks:
 ### Stage 5 - Audience / Analytics / Safety
 Goal:
 - grow channel-community depth and owner insight without breaking current product boundaries
+
+Current blocker:
+- do not start Stage 5 UI until the prerequisite audience-relationship backend/schema truth and creator-analytics aggregate truth from section `7.15` are landed
 
 Exact route/file owner(s):
 - `app/profile/[userId].tsx`
