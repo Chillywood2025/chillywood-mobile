@@ -884,6 +884,28 @@ export default function ChannelSettingsScreen() {
     () => creatorReminderSummaries.filter((summary) => summary.activeReminderCount > 0),
     [creatorReminderSummaries],
   );
+  const analyticsEventSignalCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Upcoming Events",
+      value: String(upcomingEvents.length),
+      body: "Scheduled creator events with future start times from the landed creator-event model.",
+    },
+    {
+      label: "Live Now Events",
+      value: String(liveNowEvents.length),
+      body: "Creator events currently marked live now under current event truth.",
+    },
+    {
+      label: "Replay Available",
+      value: String(replayReadyEvents.length),
+      body: "Ended creator events whose replay is open right now.",
+    },
+    {
+      label: "Reminder Enrollments",
+      value: String(activeReminderEnrollments),
+      body: "Active viewer reminder enrollments across reminder-ready creator events.",
+    },
+  ];
   const nextUpcomingEvent = upcomingEvents[0] ?? null;
   const eventSummaryCards: readonly SummaryMetricCard[] = [
     {
@@ -1856,6 +1878,7 @@ export default function ChannelSettingsScreen() {
               <Text style={styles.permissionCopy}>
                 This section only renders the supported creator analytics slice backed by current room/session truth. Creator analytics support status stays explicit: backed metrics are available, and unsupported metrics stay missing or later instead of being zeroed or fabricated.
               </Text>
+              <Text style={styles.sectionLabel}>Room And Audience Signals</Text>
               <View style={styles.summaryGrid}>
                 {analyticsSummaryCards.map((card) => (
                   <View key={card.label} style={styles.summaryCard}>
@@ -1865,6 +1888,17 @@ export default function ChannelSettingsScreen() {
                   </View>
                 ))}
               </View>
+              <Text style={styles.sectionLabel}>Live / Event Signals</Text>
+              <View style={styles.summaryGrid}>
+                {analyticsEventSignalCards.map((card) => (
+                  <View key={card.label} style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.sectionLabel}>Missing / Later</Text>
               <View style={styles.summaryGrid}>
                 {analyticsUnavailableCards.map((card) => (
                   <View key={card.label} style={[styles.summaryCard, styles.summaryCardUnavailable]}>
