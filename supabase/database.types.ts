@@ -505,6 +505,65 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_events: {
+        Row: {
+          created_at: string
+          ends_at: string | null
+          event_title: string
+          event_type: string
+          host_user_id: string
+          id: string
+          linked_title_id: string | null
+          reminder_ready: boolean
+          replay_available_at: string | null
+          replay_expires_at: string | null
+          replay_policy: string
+          starts_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at?: string | null
+          event_title: string
+          event_type: string
+          host_user_id: string
+          id?: string
+          linked_title_id?: string | null
+          reminder_ready?: boolean
+          replay_available_at?: string | null
+          replay_expires_at?: string | null
+          replay_policy?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string | null
+          event_title?: string
+          event_type?: string
+          host_user_id?: string
+          id?: string
+          linked_title_id?: string | null
+          reminder_ready?: boolean
+          replay_available_at?: string | null
+          replay_expires_at?: string | null
+          replay_policy?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_events_linked_title_id_fkey"
+            columns: ["linked_title_id"]
+            isOneToOne: false
+            referencedRelation: "titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_role_memberships: {
         Row: {
           email: string | null
