@@ -1,24 +1,24 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **search / discovery / recommendation doctrine-spec pass** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Start with `docs/search-discovery-implementation-spec.md`.
+The next exact task is a narrow **current search / discovery / recommendation truth audit** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `docs/search-discovery-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the profile/channel, content-management, access, live/event, audience, notifications/reminders, analytics, safety/moderation, and design/layout chapters as closed unless a real regression is found.
-3. Define the current search / discovery / recommendation doctrine from existing public routes and helpers before implementation.
+3. Audit the current discovery truth already exposed in Home, Explore, public profile/channel, title/player, and live/event public surfaces before implementation.
 4. Keep discovery MVP-only and explicitly defer advanced personalization unless current truth supports more.
-5. Keep fake recommendation logic, route drift, and discovery sprawl explicitly out until structure is truly backed.
+5. Keep fake recommendation logic, route drift, discovery sprawl, and fake search sophistication explicitly out until structure is truly backed.
 
 ## Exact Next Batch
-- create `docs/search-discovery-implementation-spec.md`
 - audit the current discovery truth already exposed in Home, public profile/channel, title/player, and live/event public surfaces
+- inspect `app/(tabs)/index.tsx`, `app/(tabs)/explore.tsx`, `app/profile/[userId].tsx`, `app/title/[id].tsx`, `app/player/[id].tsx`, `_lib/appConfig.ts`, and current live/event public read helpers
 - separate current supported discovery truth from missing or later recommendation systems
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- inspect only the current search / discovery / recommendation family and define its doctrine before implementation
+- inspect only the current search / discovery / recommendation family now that the doctrine spec is landed
 - preserve existing public route ownership while clarifying what discovery already exists
 - keep creator/channel audience truth, access truth, live/event truth, notifications truth, analytics truth, safety truth, and design truth separate from unsupported discovery claims
 - avoid reopening already-landed access, audience, channel, content, room, or live/event implementation unless a real regression is found
@@ -44,6 +44,7 @@ Do not:
 ## Success Criteria
 The next lane is successful when:
 - repo truth lands a durable search / discovery / recommendation doctrine spec
+- the current discovery truth audit identifies the smallest honest MVP discovery implementation lane, if one exists
 - current supported discovery truth is separated clearly from missing or later recommendation systems
 - unsupported discovery/recommendation systems remain explicit instead of being implied or fabricated
 - current public route truth remains unchanged
