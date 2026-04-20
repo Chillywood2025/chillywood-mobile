@@ -14,10 +14,15 @@ import { trackEvent } from "../../_lib/analytics";
 import { useBetaProgram } from "../../_lib/betaProgram";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import {
-  readPublicEventSummaries,
   type CreatorEventSummary,
   type CreatorEventType,
 } from "../../_lib/liveEvents";
+import {
+  readPublicEventReminderSummaries,
+  setEventReminderEnrollment,
+  type EventReminderEnrollment,
+  type PublicEventReminderSummary,
+} from "../../_lib/notifications";
 import { reportRuntimeError } from "../../_lib/logger";
 import {
   readCreatorPermissions,
@@ -204,6 +209,36 @@ const formatEventReminderLabel = (event: CreatorEventSummary) => {
   return "Reminder Not Ready";
 };
 
+const formatEventReminderEnrollmentLabel = (enrollment: EventReminderEnrollment) => {
+  switch (enrollment.state) {
+    case "active":
+      return "Reminder Saved";
+    case "canceled":
+      return "Reminder Off";
+    case "signed_out":
+      return "Sign In To Save";
+    case "not_ready":
+      return "Reminder Unavailable";
+    default:
+      return "Reminder Available";
+  }
+};
+
+const getEventReminderEnrollmentBody = (enrollment: EventReminderEnrollment) => {
+  switch (enrollment.state) {
+    case "active":
+      return "You are enrolled for this backed event reminder. Delivery still depends on later notification infrastructure.";
+    case "canceled":
+      return "Your reminder enrollment is currently off. You can turn it back on while this event stays reminder-ready.";
+    case "signed_out":
+      return "Sign in to save a real reminder enrollment for this backed event.";
+    case "not_ready":
+      return "Reminder enrollment stays unavailable until the event is scheduled and marked reminder-ready.";
+    default:
+      return "This event is reminder-ready and can accept a real reminder enrollment.";
+  }
+};
+
 const getProfileAccessBody = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
   if (isOfficialProfile || resolution?.reason === "official_access") {
     return "Official help stays visible on the canonical profile and Chi'lly Chat routes without pretending this surface is a paywall or creator storefront.";
@@ -242,7 +277,10 @@ export default function ProfileScreen() {
   const [channelAccessReady, setChannelAccessReady] = useState(false);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [publicEvents, setPublicEvents] = useState<CreatorEventSummary[]>([]);
+  const [publicReminderSummaries, setPublicReminderSummaries] = useState<PublicEventReminderSummary[]>([]);
   const [publicEventsReady, setPublicEventsReady] = useState(false);
+  const [reminderActionLoading, setReminderActionLoading] = useState<string | null>(null);
+  const [reminderActionNotice, setReminderActionNotice] = useState<string | null>(null);
   const params = useLocalSearchParams<{
     userId?: string;
     displayName?: string;
@@ -296,28 +334,31 @@ export default function ProfileScreen() {
 
     if (!userId) {
       setPublicEvents([]);
+      setPublicReminderSummaries([]);
       setPublicEventsReady(true);
       return () => {
         active = false;
       };
     }
 
-    void readPublicEventSummaries(userId)
-      .then((events) => {
+    void readPublicEventReminderSummaries(userId, currentUserId || undefined)
+      .then((summaries) => {
         if (!active) return;
-        setPublicEvents(events);
+        setPublicReminderSummaries(summaries);
+        setPublicEvents(summaries.map((summary) => summary.event));
         setPublicEventsReady(true);
       })
       .catch(() => {
         if (!active) return;
         setPublicEvents([]);
+        setPublicReminderSummaries([]);
         setPublicEventsReady(true);
       });
 
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [currentUserId, userId]);
 
   useEffect(() => {
     let active = true;
@@ -980,6 +1021,10 @@ export default function ProfileScreen() {
     () => publicEvents.filter((event) => event.reminder.state === "ready"),
     [publicEvents],
   );
+  const publicReminderSummaryByEventId = useMemo(
+    () => new Map(publicReminderSummaries.map((summary) => [summary.event.id, summary])),
+    [publicReminderSummaries],
+  );
   const nextUpcomingEvent = upcomingEvents[0] ?? null;
   const scheduledWatchPartyEvent = upcomingEvents.find((event) => event.eventType === "watch_party_live") ?? null;
   const liveTabSections: readonly ProfileSurfaceCard[] = [
@@ -1173,6 +1218,40 @@ export default function ProfileScreen() {
         : activeTab === "community"
           ? "Community supports public follow-up and Chi'lly Chat continuity without turning profile into the inbox."
           : "About keeps durable identity, trust, and channel framing visible even when content depth is still light.";
+  const loadPublicReminderEvents = async () => {
+    if (!userId) {
+      setPublicEvents([]);
+      setPublicReminderSummaries([]);
+      setPublicEventsReady(true);
+      return;
+    }
+
+    setPublicEventsReady(false);
+    try {
+      const summaries = await readPublicEventReminderSummaries(userId, currentUserId || undefined);
+      setPublicReminderSummaries(summaries);
+      setPublicEvents(summaries.map((summary) => summary.event));
+    } finally {
+      setPublicEventsReady(true);
+    }
+  };
+
+  const onToggleReminderEnrollment = async (eventId: string, enabled: boolean) => {
+    try {
+      setReminderActionLoading(eventId);
+      setReminderActionNotice(null);
+      const result = await setEventReminderEnrollment(eventId, enabled, currentUserId || undefined);
+      setReminderActionNotice(result.message);
+
+      if (result.status === "completed" || result.status === "noop") {
+        await loadPublicReminderEvents();
+      }
+    } catch {
+      setReminderActionNotice("Unable to update event reminder enrollment right now.");
+    } finally {
+      setReminderActionLoading(null);
+    }
+  };
   const accessPosture = {
     title: isOfficialProfile ? "Official Access" : (channelAccessResolution?.label ?? "Loading Access"),
     body: getProfileAccessBody(channelAccessResolution, isOfficialProfile),
@@ -1671,32 +1750,83 @@ export default function ProfileScreen() {
                     Checking the canonical creator event model before showing live, upcoming, replay, or reminder-ready state on this public route.
                   </Text>
                 </View>
-              ) : publicEvents.length ? (
-                publicEvents.map((event) => (
-                  <View
-                    key={event.id}
-                    style={[
-                      styles.sectionCard,
-                      (event.isLiveNow || event.isUpcoming) && styles.sectionCardLive,
-                    ]}
-                  >
-                    <Text style={styles.sectionKicker}>{formatEventTypeLabel(event.eventType).toUpperCase()}</Text>
-                    <Text style={styles.sectionTitle}>{event.eventTitle}</Text>
-                    <Text style={styles.sectionBody}>
-                      {formatEventStatusLabel(event)} · Starts {formatEventDate(event.startsAt)} · Ends {formatEventDate(event.endsAt)}{"\n"}
-                      {event.replay.isReplayAvailableNow
-                        ? "Replay is currently available."
-                        : event.replay.isReplayExpired
-                          ? "Replay window has expired."
-                          : event.replay.policy === "none"
-                            ? "Replay is not enabled for this event."
-                            : "Replay is configured but not available yet."}{"\n"}
-                      {formatEventReminderLabel(event)}
-                      {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
-                    </Text>
-                  </View>
-                ))
-              ) : (
+              ) : null}
+              {publicEventsReady && reminderActionNotice ? (
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionKicker}>REMINDER STATUS</Text>
+                  <Text style={styles.sectionBody}>{reminderActionNotice}</Text>
+                </View>
+              ) : null}
+              {publicEventsReady && publicEvents.length ? (
+                publicEvents.map((event) => {
+                  const reminderSummary = publicReminderSummaryByEventId.get(event.id) ?? null;
+                  const enrollment: EventReminderEnrollment = reminderSummary?.enrollment ?? {
+                    eventId: event.id,
+                    viewerUserId: currentUserId || null,
+                    state: currentUserId ? "not_enrolled" : "signed_out",
+                    reminderReady: event.reminder.reminderReady,
+                    canEnroll: event.reminder.canSetReminder,
+                    reason: currentUserId ? "ready" : "signed_out",
+                    updatedAt: null,
+                  };
+
+                  return (
+                    <View
+                      key={event.id}
+                      style={[
+                        styles.sectionCard,
+                        (event.isLiveNow || event.isUpcoming) && styles.sectionCardLive,
+                      ]}
+                    >
+                      <Text style={styles.sectionKicker}>{formatEventTypeLabel(event.eventType).toUpperCase()}</Text>
+                      <Text style={styles.sectionTitle}>{event.eventTitle}</Text>
+                      <Text style={styles.sectionBody}>
+                        {formatEventStatusLabel(event)} · Starts {formatEventDate(event.startsAt)} · Ends {formatEventDate(event.endsAt)}{"\n"}
+                        {event.replay.isReplayAvailableNow
+                          ? "Replay is currently available."
+                          : event.replay.isReplayExpired
+                            ? "Replay window has expired."
+                            : event.replay.policy === "none"
+                              ? "Replay is not enabled for this event."
+                              : "Replay is configured but not available yet."}{"\n"}
+                        {formatEventReminderLabel(event)} · {formatEventReminderEnrollmentLabel(enrollment)}
+                        {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
+                      </Text>
+                      <Text style={styles.actionFootnote}>{getEventReminderEnrollmentBody(enrollment)}</Text>
+                      {event.reminder.canSetReminder ? (
+                        <View style={styles.secondaryActionRow}>
+                          {currentUserId ? (
+                            <TouchableOpacity
+                              style={[
+                                styles.actionChip,
+                                enrollment.state === "active" && styles.actionChipConnected,
+                                reminderActionLoading === event.id && styles.actionChipPlaceholder,
+                              ]}
+                              onPress={() => onToggleReminderEnrollment(event.id, enrollment.state !== "active")}
+                              activeOpacity={0.86}
+                              disabled={reminderActionLoading === event.id}
+                            >
+                              <Text
+                                style={[
+                                  styles.actionChipText,
+                                  enrollment.state === "active" && styles.actionChipTextConnected,
+                                  reminderActionLoading === event.id && styles.actionChipTextPlaceholder,
+                                ]}
+                              >
+                                {reminderActionLoading === event.id
+                                  ? "Saving…"
+                                  : enrollment.state === "active"
+                                    ? "Cancel Reminder"
+                                    : "Set Reminder"}
+                              </Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })
+              ) : publicEventsReady ? (
                 <View style={styles.sectionCard}>
                   <Text style={styles.sectionKicker}>EVENT STATUS</Text>
                   <Text style={styles.sectionTitle}>No public event schedule yet</Text>
@@ -1704,7 +1834,7 @@ export default function ProfileScreen() {
                     This profile does not currently have any non-draft creator events to show. The route stays honest instead of faking upcoming rooms, replays, or reminder state.
                   </Text>
                 </View>
-              )}
+              ) : null}
             </>
           ) : null}
         </View>

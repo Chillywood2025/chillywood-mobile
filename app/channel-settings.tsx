@@ -49,13 +49,16 @@ import {
 } from "../_lib/monetization";
 import {
   createCreatorEvent,
-  readCreatorEventSummaries,
   updateCreatorEvent,
   type CreatorEventReplayPolicy,
   type CreatorEventStatus,
   type CreatorEventSummary,
   type CreatorEventType,
 } from "../_lib/liveEvents";
+import {
+  readCreatorEventReminderSummaries,
+  type CreatorEventReminderSummary,
+} from "../_lib/notifications";
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
 import { normalizeUserProfile, readUserProfile, saveUserProfile } from "../_lib/userData";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
@@ -268,6 +271,7 @@ export default function ChannelSettingsScreen() {
   const [creatorAnalyticsSummary, setCreatorAnalyticsSummary] = useState<CreatorAnalyticsReadModel | null>(null);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
+  const [creatorReminderSummaries, setCreatorReminderSummaries] = useState<CreatorEventReminderSummary[]>([]);
   const [audienceActionNotice, setAudienceActionNotice] = useState<string | null>(null);
   const [audienceActionResult, setAudienceActionResult] = useState<ChannelAudienceActionResult | null>(null);
   const [audienceActionLoading, setAudienceActionLoading] = useState<ChannelAudienceActionResult["action"] | null>(null);
@@ -361,6 +365,7 @@ export default function ChannelSettingsScreen() {
 
     if (!canUseChannelSettings) {
       setCreatorEvents([]);
+      setCreatorReminderSummaries([]);
       setEventsLoading(false);
       return () => {
         active = false;
@@ -369,15 +374,17 @@ export default function ChannelSettingsScreen() {
 
     setEventsLoading(true);
 
-    void readCreatorEventSummaries(String(user?.id ?? ""))
-      .then((events) => {
+    void readCreatorEventReminderSummaries(String(user?.id ?? ""))
+      .then((summaries) => {
         if (!active) return;
-        setCreatorEvents(events);
+        setCreatorReminderSummaries(summaries);
+        setCreatorEvents(summaries.map((summary) => summary.event));
         setEventsLoading(false);
       })
       .catch(() => {
         if (!active) return;
         setCreatorEvents([]);
+        setCreatorReminderSummaries([]);
         setEventsLoading(false);
       });
 
@@ -452,13 +459,15 @@ export default function ChannelSettingsScreen() {
   const loadCreatorEvents = async () => {
     if (!user?.id) {
       setCreatorEvents([]);
+      setCreatorReminderSummaries([]);
       return;
     }
 
     setEventsLoading(true);
     try {
-      const events = await readCreatorEventSummaries(String(user.id));
-      setCreatorEvents(events);
+      const summaries = await readCreatorEventReminderSummaries(String(user.id));
+      setCreatorReminderSummaries(summaries);
+      setCreatorEvents(summaries.map((summary) => summary.event));
     } finally {
       setEventsLoading(false);
     }
@@ -821,6 +830,18 @@ export default function ChannelSettingsScreen() {
     () => creatorEvents.filter((event) => event.reminder.state === "ready"),
     [creatorEvents],
   );
+  const creatorReminderSummaryByEventId = useMemo(
+    () => new Map(creatorReminderSummaries.map((summary) => [summary.event.id, summary])),
+    [creatorReminderSummaries],
+  );
+  const activeReminderEnrollments = useMemo(
+    () => creatorReminderSummaries.reduce((total, summary) => total + summary.activeReminderCount, 0),
+    [creatorReminderSummaries],
+  );
+  const eventsWithReminderInterest = useMemo(
+    () => creatorReminderSummaries.filter((summary) => summary.activeReminderCount > 0),
+    [creatorReminderSummaries],
+  );
   const nextUpcomingEvent = upcomingEvents[0] ?? null;
   const eventSummaryCards: readonly SummaryMetricCard[] = [
     {
@@ -850,6 +871,23 @@ export default function ChannelSettingsScreen() {
       body: reminderReadyEvents.length
         ? "Scheduled events with start times and reminder-ready truth are ready for later reminder adoption."
         : "No scheduled event is currently reminder-ready.",
+    },
+  ];
+  const reminderEnrollmentCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Reminder Enrollments",
+      value: String(activeReminderEnrollments),
+      body: activeReminderEnrollments
+        ? `${activeReminderEnrollments} active reminder enrollment${activeReminderEnrollments === 1 ? "" : "s"} now back this creator schedule.`
+        : "No viewer has enrolled in a reminder yet.",
+    },
+    {
+      label: "Events With Interest",
+      value: String(eventsWithReminderInterest.length),
+      body: eventsWithReminderInterest.length
+        ? eventsWithReminderInterest.map((summary) => summary.event.eventTitle).slice(0, 2).join(" · ")
+        : "No creator event currently shows reminder interest.",
+      tone: eventsWithReminderInterest.length ? "default" : "unavailable",
     },
   ];
 
@@ -1234,6 +1272,21 @@ export default function ChannelSettingsScreen() {
                   </View>
                 ))}
               </View>
+              <View style={styles.summaryGrid}>
+                {reminderEnrollmentCards.map((card) => (
+                  <View
+                    key={card.label}
+                    style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
+                  >
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.permissionCopy}>
+                Reminder delivery still remains later. This surface now shows only real reminder-ready event truth and real viewer enrollment interest.
+              </Text>
 
               <View style={styles.eventSnapshotCard}>
                 <Text style={styles.accessSummaryKicker}>NEXT REAL EVENT</Text>
@@ -1255,7 +1308,10 @@ export default function ChannelSettingsScreen() {
                 </View>
               ) : creatorEvents.length ? (
                 <View style={styles.eventList}>
-                  {creatorEvents.map((event) => (
+                  {creatorEvents.map((event) => {
+                    const reminderSummary = creatorReminderSummaryByEventId.get(event.id);
+
+                    return (
                     <View key={event.id} style={styles.eventCard}>
                       <View style={styles.eventCardHeader}>
                         <View style={styles.eventCardCopy}>
@@ -1276,11 +1332,15 @@ export default function ChannelSettingsScreen() {
                         Starts: {formatIsoDate(event.startsAt)}{"\n"}
                         Ends: {formatIsoDate(event.endsAt)}{"\n"}
                         Replay: {formatReplayPolicyLabel(event.replayPolicy)} · {formatReplayStateLabel(event)}{"\n"}
-                        Reminder: {formatReminderLabel(event)}
+                        Reminder: {formatReminderLabel(event)} · {reminderSummary?.activeReminderCount ?? 0} active enrollment{(reminderSummary?.activeReminderCount ?? 0) === 1 ? "" : "s"}
+                        {reminderSummary?.canceledReminderCount
+                          ? `\nCanceled reminders: ${reminderSummary.canceledReminderCount}`
+                          : ""}
                         {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
                       </Text>
                     </View>
-                  ))}
+                    );
+                  })}
                 </View>
               ) : (
                 <View style={styles.eventEmptyCard}>
