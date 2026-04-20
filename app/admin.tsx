@@ -133,6 +133,13 @@ type AdminCapabilities = {
   sponsorLabelCol: "sponsor_label" | null;
 };
 
+type AdminDashboardCard = {
+  label: string;
+  value: string;
+  body: string;
+  tone?: "default" | "unavailable";
+};
+
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
 const railLabels: Record<HomeRailKey, string> = {
   top_picks: "Top Picks",
@@ -681,6 +688,124 @@ export default function AdminStudioScreen() {
       visibleItems: queue.slice(0, 4),
     };
   }, [hasReleaseControl, hasStatusControl, titles]);
+
+  const adminDashboardCards = useMemo<readonly AdminDashboardCard[]>(() => {
+    const activeRoleLabels = platformRoles.length
+      ? platformRoles.map((membership) => formatModerationToken(membership.role)).join(" · ")
+      : formatModerationToken(resolvedActorRole);
+    const safetyQueueValue = canReviewSafetyReports
+      ? String(safetyReportQueueSummary?.totalReports ?? safetyReports.length)
+      : "Unavailable";
+    const nextScheduledValue = upcomingScheduledSnapshot.totalUpcoming
+      ? `${upcomingScheduledSnapshot.totalUpcoming} scheduled`
+      : "None";
+    const creatorToolsValue = canManagePrivilegedWrites
+      ? creatorGrantUserId.trim() || "Ready"
+      : "Read only";
+    const auditValue = safetyReportQueueSummary
+      ? `${safetyReportQueueSummary.platformOwnedTargetCount} platform-owned`
+      : canReviewSafetyReports
+        ? "Queue ready"
+        : "Unavailable";
+
+    return [
+      {
+        label: "Users",
+        value: activeRoleLabels,
+        body: "Current admin identity and active platform-role truth only. A broader user directory is not backed yet.",
+      },
+      {
+        label: "Creators",
+        value: creatorToolsValue,
+        body: canManagePrivilegedWrites
+          ? "Creator grant tools are live through the current monetization permission foundation."
+          : "Creator grant tools stay locked until current owner/operator write truth is present.",
+        tone: canManagePrivilegedWrites ? "default" : "unavailable",
+      },
+      {
+        label: "Content",
+        value: `${stats.total} titles`,
+        body: `${stats.published} published · ${stats.scheduled} scheduled · ${stats.draft} draft in the current programming owner.`,
+      },
+      {
+        label: "Live & Rooms",
+        value: nextScheduledValue,
+        body: upcomingScheduledSnapshot.nextItem
+          ? `${upcomingScheduledSnapshot.nextItem.title} is the next scheduled queue item, while room defaults stay in the current config owner.`
+          : "Live/room visibility is currently bounded to scheduled queue and room-default truth already on this route.",
+      },
+      {
+        label: "Reports",
+        value: safetyQueueValue,
+        body: canReviewSafetyReports
+          ? "Recent safety queue visibility is backed by the current moderation foundation."
+          : "Safety review stays unavailable until the signed-in identity has an active review-capable platform role.",
+        tone: canReviewSafetyReports ? "default" : "unavailable",
+      },
+      {
+        label: "Audit Log",
+        value: auditValue,
+        body: canReviewSafetyReports
+          ? "Current audit visibility comes from preserved report route/source/audit-owner context, not a deeper system audit log yet."
+          : "Deeper audit logs remain later; current audit context appears only inside the real report-review slice.",
+        tone: canReviewSafetyReports ? "default" : "unavailable",
+      },
+    ];
+  }, [
+    canManagePrivilegedWrites,
+    canReviewSafetyReports,
+    creatorGrantUserId,
+    platformRoles,
+    resolvedActorRole,
+    safetyReportQueueSummary,
+    safetyReports.length,
+    stats.draft,
+    stats.published,
+    stats.scheduled,
+    stats.total,
+    upcomingScheduledSnapshot.nextItem,
+    upcomingScheduledSnapshot.totalUpcoming,
+  ]);
+
+  const adminSectionRows = useMemo<readonly AdminDashboardCard[]>(() => [
+    {
+      label: "Admin Dashboard",
+      value: "Bounded",
+      body: "This route now groups only real operator/owner-backed signals instead of pretending every future admin section already exists.",
+    },
+    {
+      label: "Users",
+      value: "Access only",
+      body: "Current user/admin truth is role-aware access and identity visibility, not a full platform user-management console.",
+    },
+    {
+      label: "Creators",
+      value: canManagePrivilegedWrites ? "Grant tools live" : "Locked",
+      body: "Creator monetization permission tools are real; broader creator review and staffing workflows remain later.",
+      tone: canManagePrivilegedWrites ? "default" : "unavailable",
+    },
+    {
+      label: "Content",
+      value: "Programming live",
+      body: "Title programming, scheduling, and publish-state controls are already real on this route.",
+    },
+    {
+      label: "Live & Rooms",
+      value: "Config + queue",
+      body: "Current live/room admin truth is bounded to room defaults and scheduled queue visibility already owned here.",
+    },
+    {
+      label: "Reports",
+      value: canReviewSafetyReports ? "Queue live" : "Locked",
+      body: "Safety-report review is real when the signed-in identity has an active review-capable role.",
+      tone: canReviewSafetyReports ? "default" : "unavailable",
+    },
+    {
+      label: "Audit Log",
+      value: "Basic only",
+      body: "Current audit truth is limited to report-context preservation and audit-owner visibility, not a full cross-domain audit trail.",
+    },
+  ], [canManagePrivilegedWrites, canReviewSafetyReports]);
 
   const editorPublicationPreview = useMemo(() => {
     const rawReleaseInput = form.release_at.trim();
@@ -1358,6 +1483,55 @@ export default function AdminStudioScreen() {
             <Text style={styles.noticeText}>{notice.text}</Text>
           </View>
         )}
+
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>ADMIN DASHBOARD</Text>
+              <Text style={styles.configTitle}>Bounded owner/admin surface</Text>
+              <Text style={styles.configBody}>
+                This dashboard uses only the real moderation, programming, config, creator-permission, and queue truth already loaded on `/admin`.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.dashboardGrid}>
+            {adminDashboardCards.map((card) => (
+              <View
+                key={card.label}
+                style={[
+                  styles.dashboardMetricCard,
+                  card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
+                ]}
+              >
+                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.configList}>
+            {adminSectionRows.map((row) => (
+              <View key={row.label} style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>{row.label}</Text>
+                  <Text style={styles.configListBody}>{row.body}</Text>
+                </View>
+                <View style={styles.badgesRow}>
+                  <View
+                    style={[
+                      styles.badge,
+                      row.tone === "unavailable" ? styles.badgeOff : styles.badgeScheduled,
+                    ]}
+                  >
+                    <Text style={styles.badgeText}>{row.value}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
 
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
@@ -3050,6 +3224,42 @@ const styles = StyleSheet.create({
   configList: {
     gap: 8,
     marginBottom: 10,
+  },
+  dashboardGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  dashboardMetricCard: {
+    minWidth: 150,
+    flexGrow: 1,
+    flexBasis: "47%",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    gap: 6,
+  },
+  dashboardMetricCardUnavailable: {
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  dashboardMetricLabel: {
+    color: "#9AA4B9",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  dashboardMetricValue: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  dashboardMetricBody: {
+    color: "#BAC3D5",
+    fontSize: 12,
+    lineHeight: 17,
   },
   configListRow: {
     borderRadius: 14,
