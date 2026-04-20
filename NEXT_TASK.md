@@ -1,30 +1,30 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **Content Studio publication-state consistency batch** on `main`, using `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/profile/[userId]`, `/channel-settings`, `/chat`, watch-party/live route truth, or the landed profile/channel chapter doctrine unless a real regression is proved. The first three creator/content-management batches are now landed: Home and `/profile/[userId]` consume real programming truth, and `app/admin.tsx` now guards hero/top-picks save-time programming validity. The next pass should stay in the source-of-truth content-management owner and tighten the remaining publication-state seam around `status`, `is_published`, and `release_at` so Content Studio publication truth stays internally consistent before any broader studio deepening.
+The next exact task is a narrow **Content Studio source-of-truth closeout audit** on `main`, using `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/profile/[userId]`, `/channel-settings`, `/chat`, watch-party/live route truth, or the landed profile/channel chapter doctrine unless a real regression is proved. The first four creator/content-management batches are now landed: Home and `/profile/[userId]` consume real programming truth, `app/admin.tsx` now guards hero/top-picks save-time programming validity, and Content Studio publication state now normalizes `status`, `is_published`, and `release_at` before persistence. The next pass should stay in the source-of-truth content-management owners and determine whether any remaining admin/app-config seam is still worth a narrow implementation batch before the chapter moves on.
 
 ## Current Plan
 1. Re-read `ROADMAP.md`, `CURRENT_STATE.md`, and this file first.
 2. Treat the current profile/channel chapter as closed unless a real regression is found.
-3. Stay inside the narrow publication-state owner:
+3. Stay inside the source-of-truth content-management owners:
    - `app/admin.tsx`
-4. Tighten the remaining save/editor consistency seam around `status`, `is_published`, and `release_at` without changing schema, route truth, or public surface owners.
-5. Preserve the now-landed hero/top-picks programming guardrails and avoid widening into heavier creator-platform, monetization, analytics, or scheduling systems.
+   - `_lib/appConfig.ts`
+4. Audit whether any meaningful source-of-truth Content Studio seam still remains after the landed public-consumer, programming-guardrail, and publication-consistency batches.
+5. Choose the single smallest honest next batch only if one still clearly exists; otherwise prove the source-of-truth layer is strong enough to move on without reopening public consumers.
 6. Preserve `/profile/[userId]`, `/channel-settings`, `/chat`, `/chat/[threadId]`, and all watch-party/live route truth unchanged.
 
 ## Exact Next Batch
-- tighten the Content Studio publication-state save path so `status`, `is_published`, and `release_at` cannot drift into ambiguous or weak combinations
-- keep create/edit flows honest for draft, published, scheduled, and archived titles without changing public route owners
-- preserve the already-landed hero/top-picks programming guardrails and public consumer truth
+- audit the remaining Content Studio / shared programming source-of-truth layer after the four landed creator/content-management batches
+- inventory whether any admin/app-config seam is still duplicated, shallow, confusing, or not reflected cleanly in current truth
+- choose one more narrow implementation batch only if the remaining leverage is still real
 - keep `Chi'lly Chat`, `Watch-Party Live`, and `Live Watch-Party` doctrine unchanged
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- stay inside `app/admin.tsx` and tiny directly-related publication-state seams only if proved necessary
-- use the landed Home/profile consumer work and the new programming guardrails as proof context, not as the edit target
-- normalize the remaining source-of-truth publication-state drift risks without reopening public consumers
-- avoid reopening landed public consumer work beyond proving a real publication mismatch
+- stay inside `app/admin.tsx`, `_lib/appConfig.ts`, and tiny directly-related source-of-truth seams only if proved necessary
+- use the landed Home/profile consumer work plus the new hero/top-picks and publication-state guardrails as proof context, not as the edit target
+- avoid reopening landed public consumer work beyond proving a real source-of-truth mismatch
 - avoid inventing a full creator mini-platform before Public v1 needs it
 - preserve all current route truth and all previously landed profile/channel stages
 - keep unrelated local dirt out of the checkpoint
@@ -45,7 +45,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- Content Studio create/edit save logic keeps `status`, `is_published`, and `release_at` aligned without ambiguous publication truth
-- the hero/top-picks programming guardrails remain intact
+- the repo proves whether any meaningful source-of-truth Content Studio / app-config seam still needs tightening
+- exactly one next batch is chosen only if it is still justified by current truth
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
 - no fake future scope or schema drift is introduced

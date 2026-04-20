@@ -292,6 +292,57 @@ const applyExperienceConfigGuardrails = (
   return { nextConfig, adjustments };
 };
 
+type PublicationState = {
+  status: StatusType;
+  isPublished: boolean;
+  releaseAt: string | null;
+  adjustments: string[];
+};
+
+const normalizePublicationState = ({
+  status,
+  releaseAt,
+  hasStatusControl,
+  hasReleaseControl,
+}: {
+  status: StatusType;
+  releaseAt: string | null;
+  hasStatusControl: boolean;
+  hasReleaseControl: boolean;
+}): PublicationState => {
+  const adjustments: string[] = [];
+  let nextStatus: StatusType = hasStatusControl ? status : status === "published" ? "published" : "draft";
+  let nextReleaseAt = hasReleaseControl ? releaseAt : null;
+
+  const releaseAtTime = nextReleaseAt ? new Date(nextReleaseAt).getTime() : Number.NaN;
+  const hasUsableReleaseAt = nextReleaseAt !== null && Number.isFinite(releaseAtTime);
+  const releaseInFuture = hasUsableReleaseAt && releaseAtTime > Date.now();
+
+  if (nextStatus === "scheduled") {
+    if (!hasUsableReleaseAt) {
+      nextStatus = "draft";
+      nextReleaseAt = null;
+      adjustments.push("scheduled status had no usable release time, so it was reset to DRAFT");
+    } else if (!releaseInFuture) {
+      nextStatus = "published";
+      nextReleaseAt = null;
+      adjustments.push("scheduled status was already live, so it was normalized to PUBLISHED");
+    }
+  }
+
+  if (nextStatus !== "scheduled" && nextReleaseAt) {
+    nextReleaseAt = null;
+    adjustments.push(`${nextStatus.toUpperCase()} status cleared stale scheduling time`);
+  }
+
+  return {
+    status: nextStatus,
+    isPublished: nextStatus === "published",
+    releaseAt: nextReleaseAt,
+    adjustments,
+  };
+};
+
 const formatModerationToken = (value: unknown) => {
   const text = String(value ?? "").trim();
   if (!text) return "UNKNOWN";
@@ -802,6 +853,13 @@ export default function AdminStudioScreen() {
   }, [titles]);
 
   const openEdit = useCallback((item: TitleRow) => {
+    const publicationState = normalizePublicationState({
+      status: normalizeStatus(item.status, item.is_published),
+      releaseAt: item.release_at ?? null,
+      hasStatusControl,
+      hasReleaseControl,
+    });
+
     setEditorMode("edit");
     setForm({
       id: item.id,
@@ -818,8 +876,8 @@ export default function AdminStudioScreen() {
       is_hero: item.is_hero === true,
       is_trending: item.is_trending === true,
       pin_to_top_row: item.pin_to_top_row === true,
-      status: normalizeStatus(item.status, item.is_published),
-      release_at: toDatetimeLocalValue(item.release_at),
+      status: publicationState.status,
+      release_at: toDatetimeLocalValue(publicationState.releaseAt),
       sort_order: item.sort_order != null ? String(item.sort_order) : "0",
       content_access_rule: normalizeTitleAccessRule(item.content_access_rule),
       ads_enabled: item.ads_enabled === true,
@@ -827,12 +885,36 @@ export default function AdminStudioScreen() {
       sponsor_label: item.sponsor_label ?? "",
     });
     setEditorVisible(true);
-  }, []);
+  }, [hasReleaseControl, hasStatusControl]);
 
   const patchTitle = useCallback(
     async (id: TitleId, patch: Partial<TitleRow>, successText: string) => {
       try {
-        const payload = toDbPatch(patch);
+        const currentItem = titles.find((item) => toIdString(item.id) === toIdString(id)) ?? null;
+        const touchesPublicationState =
+          patch.status !== undefined || patch.is_published !== undefined || patch.release_at !== undefined;
+
+        let nextPatch = patch;
+        let adjustments: string[] = [];
+
+        if (currentItem && touchesPublicationState) {
+          const publicationState = normalizePublicationState({
+            status: normalizeStatus(patch.status ?? currentItem.status, patch.is_published ?? currentItem.is_published),
+            releaseAt: patch.release_at !== undefined ? patch.release_at ?? null : currentItem.release_at ?? null,
+            hasStatusControl,
+            hasReleaseControl,
+          });
+
+          nextPatch = {
+            ...patch,
+            is_published: publicationState.isPublished,
+            ...(hasStatusControl ? { status: publicationState.status } : {}),
+            ...(hasReleaseControl ? { release_at: publicationState.releaseAt } : {}),
+          };
+          adjustments = publicationState.adjustments;
+        }
+
+        const payload = toDbPatch(nextPatch);
 
         const { error } = await supabase.from("titles").update(payload).eq("id", id);
         if (error) throw error;
@@ -843,19 +925,24 @@ export default function AdminStudioScreen() {
               toIdString(item.id) === toIdString(id)
                 ? {
                     ...item,
-                    ...patch,
+                    ...nextPatch,
                   }
                 : item,
             ),
           ),
         );
 
-        setNotice({ type: "success", text: successText });
+        setNotice({
+          type: "success",
+          text: adjustments.length > 0
+            ? `${successText} ${adjustments.join("; ")}.`
+            : successText,
+        });
       } catch (err: any) {
         setNotice({ type: "error", text: err?.message ?? "Update failed." });
       }
     },
-    [toDbPatch],
+    [hasReleaseControl, hasStatusControl, titles, toDbPatch],
   );
 
   const setHeroExclusive = useCallback(
@@ -909,13 +996,12 @@ export default function AdminStudioScreen() {
 
     const yearNum = form.year.trim() ? Number.parseInt(form.year.trim(), 10) : null;
     const sortOrderNum = form.sort_order.trim() ? Number.parseInt(form.sort_order.trim(), 10) : null;
-    const status = hasStatusControl ? normalizeStatus(form.status, form.status === "published") : "draft";
-    const releaseAtIso = hasReleaseControl ? fromDatetimeLocalValue(form.release_at) : null;
-
-    const scheduledInFuture =
-      status === "scheduled" && !!releaseAtIso && new Date(releaseAtIso).getTime() > Date.now();
-
-    const derivedPublished = status === "published" || (status === "scheduled" && !scheduledInFuture);
+    const publicationState = normalizePublicationState({
+      status: hasStatusControl ? normalizeStatus(form.status, form.status === "published") : "draft",
+      releaseAt: hasReleaseControl ? fromDatetimeLocalValue(form.release_at) : null,
+      hasStatusControl,
+      hasReleaseControl,
+    });
 
     const operatorPermissions = await readCreatorPermissions().catch(() => normalizeCreatorPermissionSet(null));
     const sanitizedMonetization = sanitizeCreatorTitleMonetization({
@@ -935,7 +1021,7 @@ export default function AdminStudioScreen() {
       poster_url: form.poster_url.trim() || null,
       video_url: form.video_url.trim() || null,
       featured: !!form.featured,
-      is_published: derivedPublished,
+      is_published: publicationState.isPublished,
       sort_order: Number.isNaN(sortOrderNum as number) ? null : sortOrderNum,
     };
 
@@ -947,8 +1033,8 @@ export default function AdminStudioScreen() {
         is_hero: !!form.is_hero,
         is_trending: !!form.is_trending,
         pin_to_top_row: !!form.pin_to_top_row,
-        status,
-        release_at: releaseAtIso,
+        status: publicationState.status,
+        release_at: publicationState.releaseAt,
         content_access_rule: sanitizedMonetization.contentAccessRule,
         ads_enabled: sanitizedMonetization.adsEnabled,
         sponsor_placement: sanitizedMonetization.sponsorPlacement,
@@ -976,7 +1062,12 @@ export default function AdminStudioScreen() {
           if (setCurrent.error) throw setCurrent.error;
         }
 
-        setNotice({ type: "success", text: "Title created." });
+        setNotice({
+          type: "success",
+          text: publicationState.adjustments.length > 0
+            ? `Title created. ${publicationState.adjustments.join("; ")}.`
+            : "Title created.",
+        });
       } else {
         if (!form.id) throw new Error("Missing title id.");
 
@@ -990,7 +1081,12 @@ export default function AdminStudioScreen() {
 
         const { error } = await supabase.from("titles").update(payload).eq("id", form.id);
         if (error) throw error;
-        setNotice({ type: "success", text: "Title updated." });
+        setNotice({
+          type: "success",
+          text: publicationState.adjustments.length > 0
+            ? `Title updated. ${publicationState.adjustments.join("; ")}.`
+            : "Title updated.",
+        });
       }
 
       setEditorVisible(false);
