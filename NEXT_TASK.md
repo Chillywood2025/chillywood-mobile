@@ -1,29 +1,29 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **current owner admin + Rachi truth audit** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `docs/search-discovery-implementation-spec.md`, `docs/owner-admin-rachi-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
+The next exact task is a narrow **owner / super-admin foundation pass** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `docs/search-discovery-implementation-spec.md`, `docs/owner-admin-rachi-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the profile/channel, access, live/event, audience, notifications, analytics, moderation, design, and discovery chapters as closed unless a real regression is found.
-3. Audit the current admin, moderation, official-account, and control-plane truth before implementing any owner or Rachi foundation.
-4. Keep owner authority explicitly above Rachi and keep creator-facing routes separate from admin-facing routes.
-5. Keep fake admin controls, fake Rachi powers, insecure owner bootstrap handling, and route drift out.
+3. Add only the minimum owner/super-admin role and gate truth the current architecture can honestly support.
+4. Implement only a safe isolated owner bootstrap path that keeps raw credentials out of committed source, docs, and client bundles.
+5. Keep owner authority explicitly above Rachi and keep creator-facing routes separate from admin-facing routes.
+6. Keep fake admin controls, fake Rachi powers, insecure owner bootstrap handling, and route drift out.
 
 ## Exact Next Batch
-- audit the current admin, moderation, official-account, and control-plane truth already present in `/admin`, `_lib/moderation.ts`, current role-aware helpers, and related operator surfaces
-- determine what current owner-only capability exists, what Rachi truth already exists, and what is still missing
-- separate current honest admin/owner truth from later-phase Rachi automation and staff-role expansion
-- keep unrelated local dirt out of the checkpoint
+- land the minimum first-class owner role truth needed for the bounded admin architecture
+- add owner-aware gate truth where the current moderation/admin helpers already support it
+- add a safe isolated bootstrap path for the initial owner account that reads sensitive credentials only from runtime input or environment
+- keep broader staff-role assignment, Rachi control-plane state, emergency controls, and fake admin powers explicitly later
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- inspect only the current owner/admin/Rachi-control family
+- touch only the current owner/admin/Rachi-control foundation family
 - preserve all current route truth and all previously landed chapter ownership
 - keep owner-only truth, admin truth, and Rachi truth clearly separated
 - avoid reopening already-landed access, audience, discovery, analytics, safety, or design implementation unless a real regression is found
-- preserve all current route truth and all previously landed profile/channel, content-management, and access stages
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
@@ -34,6 +34,7 @@ Do not:
 - fake content catalogs, fake programming, or fake analytics
 - create `/studio*` routes
 - touch broader runtime room/live-stage behavior in this doctrine lane
+- hardcode or expose the owner bootstrap password in committed source, docs, or client bundles
 - fake owner bootstrap, fake emergency controls, or fake Rachi automation powers
 - reopen notifications/reminders, push delivery, or generic inbox work unless a real regression is found
 - fake moderation queues, strike systems, dispute workflows, trust scores, or creator safety controls that current truth does not back yet
@@ -44,8 +45,9 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the current owner-admin / Rachi truth audit identifies the smallest honest next foundation slice, if one exists
-- owner authority, admin workflow, and Rachi-control boundaries are separated clearly from later automation or staffing ideas
+- the owner / super-admin foundation lands only the minimum safe role and gate truth the current architecture supports
+- the initial owner bootstrap path exists without raw credentials entering committed source, docs, or client bundles
+- owner authority, admin workflow, and Rachi-control boundaries remain separated clearly from later automation or staffing ideas
 - unsupported or unproven admin/Rachi powers remain explicit instead of being implied or fabricated
 - current public route truth remains unchanged
 - no fake admin control, fake Rachi power, or route drift is introduced
