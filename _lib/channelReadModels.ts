@@ -2,11 +2,11 @@ import {
   getModerationAccess,
   hasPlatformRoleMembership,
   readMyPlatformRoleMemberships,
-  readSafetyReports,
+  readSafetyReportQueue,
   type ModerationActorRole,
   type PlatformRole,
   type PlatformRoleMembership,
-  type SafetyReportRecord,
+  type SafetyReportQueueItem,
 } from "./moderation";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import { supabase } from "./supabase";
@@ -61,13 +61,17 @@ export type ChannelSafetyAdminReadModel = {
   canAccessAdmin: boolean;
   canReviewSafetyReports: boolean;
   platformRoles: PlatformRole[];
-  recentSafetyReports: SafetyReportRecord[] | null;
+  recentSafetyReports: SafetyReportQueueItem[] | null;
   recentSafetyReportCount: number | null;
+  recentPlatformOwnedTargetCount: number | null;
+  recentSourceSurfaces: string[] | null;
   isOfficial: boolean;
   auditOwnerKey: string | null;
   dataStatus: {
     recentSafetyReports: ChannelReadModelFieldStatus;
     recentSafetyReportCount: ChannelReadModelFieldStatus;
+    recentPlatformOwnedTargetCount: ChannelReadModelFieldStatus;
+    recentSourceSurfaces: ChannelReadModelFieldStatus;
   };
 };
 
@@ -294,8 +298,11 @@ export async function readChannelSafetyAdminSummary(channelUserId: string): Prom
   const platformRoles = context.memberships
     .filter((membership): membership is PlatformRoleMembership => membership.status === "active")
     .map((membership) => membership.role);
-  const recentSafetyReports = canReviewSafetyReports ? await readSafetyReports().catch(() => []) : null;
-  const recentSafetyReportCount = recentSafetyReports ? recentSafetyReports.length : null;
+  const recentSafetyQueue = canReviewSafetyReports ? await readSafetyReportQueue({ limit: 8 }).catch(() => null) : null;
+  const recentSafetyReports = recentSafetyQueue?.items ?? null;
+  const recentSafetyReportCount = recentSafetyQueue ? recentSafetyQueue.summary.totalReports : null;
+  const recentPlatformOwnedTargetCount = recentSafetyQueue ? recentSafetyQueue.summary.platformOwnedTargetCount : null;
+  const recentSourceSurfaces = recentSafetyQueue ? recentSafetyQueue.summary.sourceSurfaces : null;
 
   return {
     channelUserId: context.channelUserId,
@@ -307,11 +314,15 @@ export async function readChannelSafetyAdminSummary(channelUserId: string): Prom
     platformRoles,
     recentSafetyReports,
     recentSafetyReportCount,
+    recentPlatformOwnedTargetCount,
+    recentSourceSurfaces,
     isOfficial: !!officialAccount,
     auditOwnerKey: officialAccount?.auditOwnerKey ?? context.moderationAccess.auditOwnerKey,
     dataStatus: {
-      recentSafetyReports: recentSafetyReports ? "available" : "missing",
+      recentSafetyReports: recentSafetyReports === null ? "missing" : "available",
       recentSafetyReportCount: recentSafetyReportCount === null ? "missing" : "available",
+      recentPlatformOwnedTargetCount: recentPlatformOwnedTargetCount === null ? "missing" : "available",
+      recentSourceSurfaces: recentSourceSurfaces === null ? "missing" : "available",
     },
   };
 }

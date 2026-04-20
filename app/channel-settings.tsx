@@ -855,6 +855,28 @@ export default function ChannelSettingsScreen() {
         : "Current review-queue summary from the existing safety-report foundation.",
       tone: safetyAdminSummary?.recentSafetyReportCount == null ? "unavailable" : "default",
     },
+    {
+      label: "Queue Sources",
+      value: safetyAdminSummary?.recentSourceSurfaces == null
+        ? "Unavailable"
+        : safetyAdminSummary.recentSourceSurfaces.length
+          ? safetyAdminSummary.recentSourceSurfaces.map((surface) => surface.replaceAll("-", " ").toUpperCase()).join(" · ")
+          : "None",
+      body: safetyAdminSummary?.recentSourceSurfaces == null
+        ? "Recent review-source mix appears only when the current account can see the queue."
+        : "Current source surfaces represented in the recent review queue slice.",
+      tone: safetyAdminSummary?.recentSourceSurfaces == null ? "unavailable" : "default",
+    },
+    {
+      label: "Platform Targets",
+      value: safetyAdminSummary?.recentPlatformOwnedTargetCount == null
+        ? "Unavailable"
+        : String(safetyAdminSummary.recentPlatformOwnedTargetCount),
+      body: safetyAdminSummary?.recentPlatformOwnedTargetCount == null
+        ? "Platform-owned target count appears only when the current account can see the queue."
+        : "Current number of platform-owned targets in the recent review queue slice.",
+      tone: safetyAdminSummary?.recentPlatformOwnedTargetCount == null ? "unavailable" : "default",
+    },
   ];
   const upcomingEvents = useMemo(
     () => creatorEvents.filter((event) => event.isUpcoming),
