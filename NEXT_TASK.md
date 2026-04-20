@@ -1,25 +1,25 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **safety / moderation chapter closeout and next-chapter handoff** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Re-audit `_lib/moderation.ts`, `_lib/channelReadModels.ts`, `app/admin.tsx`, `app/channel-settings.tsx`, and the report-entry owners, then either choose one real remaining narrow moderation seam or hand off to the channel design / layout chapter.
+The next exact task is a narrow **channel design / layout doctrine-spec pass** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Start with `docs/channel-design-layout-implementation-spec.md`.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the profile/channel, content-management, access, live/event, audience, notifications/reminders, and analytics chapters as closed unless a real regression is found.
-3. Treat `docs/safety-moderation-implementation-spec.md` as the active doctrine for the chapter and keep the next slice strictly inside current helper/schema/admin truth.
-4. Re-audit whether report intake, creator-side summary, and read-only operator review now cover the honest moderation chapter boundary.
-5. Keep fake enforcement workflows, fake report states, fake strike systems, assignment flow, and route drift explicitly out until they are truly backed.
+3. Treat the safety / moderation chapter as closed enough to move on unless a real regression is found.
+4. Define the current channel design / layout doctrine from existing `/channel-settings`, `/profile/[userId]`, and public/channel presentation truth before implementation.
+5. Keep fake freeform layout systems, route drift, and design chaos explicitly out until structure is truly backed.
 
 ## Exact Next Batch
-- audit whether any meaningful narrow moderation seam still remains after helper-backed creator and operator adoption
-- if none remains, close out the moderation chapter and hand off to channel design / layout
-- keep broader enforcement systems explicitly later
+- create `docs/channel-design-layout-implementation-spec.md`
+- audit the current channel design/layout truth already exposed in `/channel-settings`, `/profile/[userId]`, and related presentation/config helpers
+- separate current supported layout truth from missing or later design systems
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- inspect only the current safety / moderation workflow family and decide whether any meaningful narrow seam still remains
-- preserve current route-owner truth and current helper ownership while choosing either a final moderation closeout or a justified last narrow seam
+- inspect only the current channel design / layout family and define its doctrine before implementation
+- preserve `/channel-settings` as the creator-side owner and `/profile/[userId]` as the public presentation owner
 - keep creator/channel audience truth, access truth, live/event truth, notifications truth, and analytics truth separate from unsupported moderation claims
 - avoid reopening already-landed access, audience, channel, content, room, or live/event implementation unless a real regression is found
 - preserve all current route truth and all previously landed profile/channel, content-management, and access stages
@@ -43,9 +43,9 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the remaining moderation seams are explicitly classified as trivial, narrow, medium, or broad/risky
-- the moderation chapter either closes cleanly or identifies one exact final narrow seam
-- current supported moderation/admin/report truth is separated clearly from missing or later workflow systems
-- unsupported moderation systems remain explicit instead of being implied or fabricated
-- `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
+- repo truth lands a durable channel design / layout doctrine spec
+- current supported channel presentation/layout truth is separated clearly from missing or later layout systems
+- unsupported design systems remain explicit instead of being implied or fabricated
+- `/profile/[userId]` and `/channel-settings` route truth remain unchanged
+- no fake freeform layout system or route drift is introduced
 - no fake future scope or route drift is introduced
