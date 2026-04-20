@@ -9,8 +9,8 @@ export const PLATFORM_ROLE_MEMBERSHIPS_TABLE = "platform_role_memberships";
 
 export type SafetyReportTargetType = "participant" | "room" | "title";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
-export type ModerationActorRole = "member" | "official_platform" | "operator";
-export type PlatformRole = "operator" | "moderator";
+export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner";
+export type PlatformRole = "owner" | "operator" | "moderator";
 
 export type ModerationAccess = {
   actorRole: ModerationActorRole;
@@ -132,7 +132,7 @@ const toJsonValue = (value: unknown): Json => {
 
 const normalizePlatformRole = (value: unknown): PlatformRole | null => {
   const normalized = normalizeText(value).toLowerCase();
-  if (normalized === "operator" || normalized === "moderator") {
+  if (normalized === "owner" || normalized === "operator" || normalized === "moderator") {
     return normalized;
   }
   return null;
@@ -164,7 +164,7 @@ const readContextText = (value: unknown) => normalizeText(value) || null;
 
 const normalizeModerationActorRole = (value: unknown): ModerationActorRole => {
   const normalized = normalizeText(value).toLowerCase();
-  if (normalized === "official_platform" || normalized === "operator") {
+  if (normalized === "official_platform" || normalized === "operator" || normalized === "owner") {
     return normalized;
   }
   return "member";
@@ -297,6 +297,43 @@ export function hasPlatformRoleMembership(
 ) {
   if (!memberships.length || !requiredRoles.length) return false;
   return memberships.some((membership) => membership.status === "active" && requiredRoles.includes(membership.role));
+}
+
+export function resolvePlatformActorRole(
+  moderationAccess: ModerationAccess,
+  memberships: PlatformRoleMembership[],
+): ModerationActorRole {
+  if (moderationAccess.actorRole === "official_platform") {
+    return "official_platform";
+  }
+  if (hasPlatformRoleMembership(memberships, ["owner"])) {
+    return "owner";
+  }
+  if (moderationAccess.actorRole === "operator" || hasPlatformRoleMembership(memberships, ["operator"])) {
+    return "operator";
+  }
+  return "member";
+}
+
+export function canAccessAdminConsole(
+  moderationAccess: ModerationAccess,
+  memberships: PlatformRoleMembership[],
+) {
+  return moderationAccess.canAccessAdmin || hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"]);
+}
+
+export function canReviewSafetyQueue(
+  moderationAccess: ModerationAccess,
+  memberships: PlatformRoleMembership[],
+) {
+  return moderationAccess.canReviewSafetyReports || hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"]);
+}
+
+export function canManagePrivilegedAdminWrites(
+  moderationAccess: ModerationAccess,
+  memberships: PlatformRoleMembership[],
+) {
+  return moderationAccess.canAccessAdmin || hasPlatformRoleMembership(memberships, ["owner", "operator"]);
 }
 
 export async function readMyPlatformRoleMemberships() {

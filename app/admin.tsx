@@ -25,10 +25,13 @@ import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
 import { useSession } from "../_lib/session";
 import {
+  canAccessAdminConsole,
+  canManagePrivilegedAdminWrites,
+  canReviewSafetyQueue,
   getModerationAccess,
-  hasPlatformRoleMembership,
   readMyPlatformRoleMemberships,
   readSafetyReportQueue,
+  resolvePlatformActorRole,
   type PlatformRoleMembership,
   type SafetyReportQueueItem,
   type SafetyReportQueueSummary,
@@ -459,13 +462,14 @@ export default function AdminStudioScreen() {
     userId: user?.id ?? null,
     email: user?.email ?? null,
   });
-  const canAccessAdmin = isSignedIn && isActive && moderationAccess.canAccessAdmin;
-  const canReviewSafetyReports = hasPlatformRoleMembership(platformRoles, ["operator", "moderator"]);
-  const canManagePrivilegedAdminWrites = hasPlatformRoleMembership(platformRoles, ["operator"]);
+  const resolvedActorRole = resolvePlatformActorRole(moderationAccess, platformRoles);
+  const canAccessAdmin = isSignedIn && isActive && canAccessAdminConsole(moderationAccess, platformRoles);
+  const canReviewSafetyReports = isSignedIn && isActive && canReviewSafetyQueue(moderationAccess, platformRoles);
+  const canManagePrivilegedWrites = isSignedIn && isActive && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin tools");
 
   useEffect(() => {
-    if (!canAccessAdmin) {
+    if (!isSignedIn || !isActive) {
       setLoading(false);
       setConfigLoading(false);
       setPlatformRoles([]);
@@ -475,9 +479,20 @@ export default function AdminStudioScreen() {
       setModerationNotice(null);
       return;
     }
+    void loadPlatformRoles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn, isActive, user?.id, user?.email]);
+
+  useEffect(() => {
+    if (!canAccessAdmin) {
+      setLoading(false);
+      setConfigLoading(false);
+      setSafetyReports([]);
+      setSafetyReportsLoading(false);
+      return;
+    }
     loadTitles();
     loadExperienceConfig();
-    void loadPlatformRoles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessAdmin]);
 
@@ -896,8 +911,8 @@ export default function AdminStudioScreen() {
   }, []);
 
   const loadCreatorGrantTarget = useCallback(async () => {
-    if (!canManagePrivilegedAdminWrites) {
-      setNotice({ type: "error", text: "Active operator role required to load creator grants." });
+    if (!canManagePrivilegedWrites) {
+      setNotice({ type: "error", text: "Active owner or operator role required to load creator grants." });
       return;
     }
 
@@ -918,11 +933,11 @@ export default function AdminStudioScreen() {
     } finally {
       setCreatorGrantLoading(false);
     }
-  }, [canManagePrivilegedAdminWrites, creatorGrantUserId]);
+  }, [canManagePrivilegedWrites, creatorGrantUserId]);
 
   const saveCreatorGrantTarget = useCallback(async () => {
-    if (!canManagePrivilegedAdminWrites) {
-      setNotice({ type: "error", text: "Active operator role required to save creator grants." });
+    if (!canManagePrivilegedWrites) {
+      setNotice({ type: "error", text: "Active owner or operator role required to save creator grants." });
       return;
     }
 
@@ -942,7 +957,7 @@ export default function AdminStudioScreen() {
     } finally {
       setCreatorGrantSaving(false);
     }
-  }, [canManagePrivilegedAdminWrites, creatorGrantForm, creatorGrantUserId]);
+  }, [canManagePrivilegedWrites, creatorGrantForm, creatorGrantUserId]);
 
   const moveRail = useCallback((railKey: HomeRailKey, direction: -1 | 1) => {
     updateExperienceConfig((prev) => {
@@ -964,8 +979,8 @@ export default function AdminStudioScreen() {
   }, [updateExperienceConfig]);
 
   const saveExperienceConfigChanges = useCallback(async () => {
-    if (!canManagePrivilegedAdminWrites) {
-      setNotice({ type: "error", text: "Active operator role required to save global config." });
+    if (!canManagePrivilegedWrites) {
+      setNotice({ type: "error", text: "Active owner or operator role required to save global config." });
       return;
     }
 
@@ -985,7 +1000,7 @@ export default function AdminStudioScreen() {
     } finally {
       setConfigSaving(false);
     }
-  }, [canManagePrivilegedAdminWrites, experienceConfig, titles]);
+  }, [canManagePrivilegedWrites, experienceConfig, titles]);
 
   const openCreate = useCallback(() => {
     const nextSort = titles.reduce((acc, item) => Math.max(acc, item.sort_order ?? 0), 0) + 1;
@@ -1272,7 +1287,7 @@ export default function AdminStudioScreen() {
   if (authLoading || betaLoading) {
     return (
       <BetaAccessScreen
-        title="Loading operator access"
+        title="Loading admin access"
         body="Checking whether your signed-in account can access studio controls."
         operatorOnly
         loadingOverride
@@ -1284,7 +1299,7 @@ export default function AdminStudioScreen() {
     return (
       <BetaAccessScreen
         title="Sign in to access Chi'llywood studio controls"
-        body="The admin studio is limited to signed-in operator accounts."
+        body="The admin studio is limited to signed-in owner, operator, or moderator accounts."
       />
     );
   }
@@ -1299,11 +1314,19 @@ export default function AdminStudioScreen() {
     );
   }
 
-  if (!moderationAccess.canAccessAdmin) {
+  if (!moderationAccess.canAccessAdmin && platformRolesLoading && !platformRoles.length) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color="#fff" />
+      </View>
+    );
+  }
+
+  if (!canAccessAdmin) {
     return (
       <BetaAccessScreen
-        title="This account is not on the operator allowlist"
-        body="Admin and release controls stay behind a small runtime-config allowlist."
+        title="This account does not have an active admin role"
+        body="Admin access stays behind the bounded allowlist or an active owner, operator, or moderator platform role."
         operatorOnly
       />
     );
@@ -1349,7 +1372,7 @@ export default function AdminStudioScreen() {
 
           <View style={styles.badgesRow}>
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{`Actor ${formatModerationToken(moderationAccess.actorRole)}`}</Text>
+              <Text style={styles.badgeText}>{`Actor ${formatModerationToken(resolvedActorRole)}`}</Text>
             </View>
             <View style={[styles.badge, styles.badgePublished]}>
               <Text style={styles.badgeText}>Admin Access Enabled</Text>
@@ -1382,7 +1405,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>No active review role on this account yet</Text>
                 <Text style={styles.configListBody}>
-                  Content studio access can stay operator-only while safety-report review remains locked until this signed-in identity is granted an active `operator` or `moderator` platform role membership.
+                  Content studio access can stay bounded while safety-report review remains locked until this signed-in identity is granted an active `owner`, `operator`, or `moderator` platform role membership.
                 </Text>
               </View>
             </View>
@@ -1465,17 +1488,17 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>EXPERIENCE CONFIG</Text>
               <Text style={styles.configTitle}>Global presentation and feature controls</Text>
               <Text style={styles.configBody}>
-                Tune homepage, feature visibility, and safe presentation defaults here. Locked product naming stays code-owned, and saving requires an active operator role.
+                Tune homepage, feature visibility, and safe presentation defaults here. Locked product naming stays code-owned, and saving requires an active owner or operator role.
               </Text>
             </View>
             <TouchableOpacity
               style={[
                 styles.configSaveBtn,
                 { backgroundColor: themePalette.accent },
-                (configSaving || configLoading || platformRolesLoading || !canManagePrivilegedAdminWrites) && styles.configSaveBtnDisabled,
+                (configSaving || configLoading || platformRolesLoading || !canManagePrivilegedWrites) && styles.configSaveBtnDisabled,
               ]}
               onPress={saveExperienceConfigChanges}
-              disabled={configSaving || configLoading || platformRolesLoading || !canManagePrivilegedAdminWrites}
+              disabled={configSaving || configLoading || platformRolesLoading || !canManagePrivilegedWrites}
             >
               {configSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Config</Text>}
             </TouchableOpacity>
@@ -2221,17 +2244,17 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>CREATOR GRANTS</Text>
               <Text style={styles.configTitle}>Backend creator monetization permissions</Text>
               <Text style={styles.configBody}>
-                Load a creator user id, then decide whether that creator can use premium rooms, Party Pass rooms, premium titles, and sponsor/ad hooks. Active operator role required.
+                Load a creator user id, then decide whether that creator can use premium rooms, Party Pass rooms, premium titles, and sponsor/ad hooks. Active owner or operator role required.
               </Text>
             </View>
             <TouchableOpacity
               style={[
                 styles.configSaveBtn,
                 { backgroundColor: themePalette.accent },
-                (creatorGrantSaving || platformRolesLoading || !canManagePrivilegedAdminWrites) && styles.configSaveBtnDisabled,
+                (creatorGrantSaving || platformRolesLoading || !canManagePrivilegedWrites) && styles.configSaveBtnDisabled,
               ]}
               onPress={saveCreatorGrantTarget}
-              disabled={creatorGrantSaving || platformRolesLoading || !canManagePrivilegedAdminWrites}
+              disabled={creatorGrantSaving || platformRolesLoading || !canManagePrivilegedWrites}
             >
               {creatorGrantSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Grants</Text>}
             </TouchableOpacity>
@@ -2249,10 +2272,10 @@ export default function AdminStudioScreen() {
             <TouchableOpacity
               style={[
                 styles.orderBtn,
-                (creatorGrantLoading || platformRolesLoading || !canManagePrivilegedAdminWrites) && styles.configSaveBtnDisabled,
+                (creatorGrantLoading || platformRolesLoading || !canManagePrivilegedWrites) && styles.configSaveBtnDisabled,
               ]}
               onPress={loadCreatorGrantTarget}
-              disabled={creatorGrantLoading || platformRolesLoading || !canManagePrivilegedAdminWrites}
+              disabled={creatorGrantLoading || platformRolesLoading || !canManagePrivilegedWrites}
             >
               {creatorGrantLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.orderBtnText}>Load</Text>}
             </TouchableOpacity>
@@ -2271,13 +2294,13 @@ export default function AdminStudioScreen() {
                 style={[
                   styles.toggleChip,
                   creatorGrantForm[key] && styles.toggleChipActive,
-                  !canManagePrivilegedAdminWrites && styles.toggleChipDisabled,
+                  !canManagePrivilegedWrites && styles.toggleChipDisabled,
                 ]}
                 onPress={() => {
-                  if (!canManagePrivilegedAdminWrites) return;
+                  if (!canManagePrivilegedWrites) return;
                   setCreatorGrantForm((prev) => ({ ...prev, [key]: !prev[key] }));
                 }}
-                disabled={!canManagePrivilegedAdminWrites}
+                disabled={!canManagePrivilegedWrites}
               >
                 <Text style={[styles.toggleChipText, creatorGrantForm[key] && styles.toggleChipTextActive]}>
                   {label}
@@ -2891,6 +2914,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingHorizontal: 16,
     gap: 14,
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#06070B",
   },
   headerBlock: {
     gap: 12,

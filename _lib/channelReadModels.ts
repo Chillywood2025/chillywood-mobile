@@ -1,8 +1,11 @@
 import {
+  canAccessAdminConsole,
+  canReviewSafetyQueue,
   getModerationAccess,
   hasPlatformRoleMembership,
   readMyPlatformRoleMemberships,
   readSafetyReportQueue,
+  resolvePlatformActorRole,
   type ModerationActorRole,
   type PlatformRole,
   type PlatformRoleMembership,
@@ -181,12 +184,12 @@ async function readChannelHelperContext(channelUserId: string) {
     moderationAccess,
     memberships,
     canOperateAcrossChannels: (
-      moderationAccess.canAccessAdmin
-      || hasPlatformRoleMembership(memberships, ["operator"])
+      canAccessAdminConsole(moderationAccess, memberships)
+      || hasPlatformRoleMembership(memberships, ["owner", "operator"])
     ),
     canReviewSafetyAcrossChannels: (
-      moderationAccess.canReviewSafetyReports
-      || hasPlatformRoleMembership(memberships, ["operator", "moderator"])
+      canReviewSafetyQueue(moderationAccess, memberships)
+      || hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"])
     ),
   };
 }
@@ -308,8 +311,8 @@ export async function readChannelSafetyAdminSummary(channelUserId: string): Prom
     channelUserId: context.channelUserId,
     generatedAt: context.generatedAt,
     accessScope,
-    actorRole: context.moderationAccess.actorRole,
-    canAccessAdmin: context.moderationAccess.canAccessAdmin,
+    actorRole: resolvePlatformActorRole(context.moderationAccess, context.memberships),
+    canAccessAdmin: canAccessAdminConsole(context.moderationAccess, context.memberships),
     canReviewSafetyReports,
     platformRoles,
     recentSafetyReports,
