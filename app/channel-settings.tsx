@@ -30,6 +30,16 @@ import {
   type ChannelSafetyAdminReadModel,
   type CreatorAnalyticsReadModel,
 } from "../_lib/channelReadModels";
+import {
+  approveChannelAudienceRequest,
+  blockChannelAudienceMember,
+  cancelChannelAudienceRequest,
+  declineChannelAudienceRequest,
+  getChannelSubscriberRelationshipActionSupport,
+  unblockChannelAudienceMember,
+  type ChannelAudienceActionResult,
+  type ChannelAudienceActionStatus,
+} from "../_lib/channelAudience";
 import { useSession } from "../_lib/session";
 import {
   readCreatorPermissions,
@@ -213,6 +223,32 @@ const formatIsoDate = (value: string | null) => {
   return Number.isNaN(parsed.getTime()) ? normalized : parsed.toLocaleString();
 };
 
+const formatAudienceActionLabel = (value: ChannelAudienceActionResult["action"]) => {
+  switch (value) {
+    case "approve_request":
+      return "Approve Request";
+    case "decline_request":
+      return "Decline Request";
+    case "cancel_request":
+      return "Cancel Request";
+    case "block":
+      return "Block Audience Member";
+    case "unblock":
+      return "Unblock Audience Member";
+    case "follow":
+      return "Follow Channel";
+    case "unfollow":
+      return "Unfollow Channel";
+    case "subscriber_relationship_mutation":
+      return "Subscriber Relationship";
+    default:
+      return value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
+  }
+};
+
+const formatAudienceActionStatus = (value: ChannelAudienceActionStatus) =>
+  value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
+
 export default function ChannelSettingsScreen() {
   const router = useRouter();
   const { isLoading: authLoading, isSignedIn, user } = useSession();
@@ -229,12 +265,19 @@ export default function ChannelSettingsScreen() {
   const [creatorAnalyticsSummary, setCreatorAnalyticsSummary] = useState<CreatorAnalyticsReadModel | null>(null);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
+  const [audienceActionNotice, setAudienceActionNotice] = useState<string | null>(null);
+  const [audienceActionResult, setAudienceActionResult] = useState<ChannelAudienceActionResult | null>(null);
+  const [audienceActionLoading, setAudienceActionLoading] = useState<ChannelAudienceActionResult["action"] | null>(null);
+  const [audienceRequestIdInput, setAudienceRequestIdInput] = useState("");
+  const [audienceTargetUserIdInput, setAudienceTargetUserIdInput] = useState("");
+  const [audienceBlockReasonInput, setAudienceBlockReasonInput] = useState("");
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventSaving, setEventSaving] = useState(false);
   const [eventNotice, setEventNotice] = useState<string | null>(null);
   const [eventEditor, setEventEditor] = useState<ChannelEventEditorState>(createEmptyEventEditorState);
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel settings");
+  const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
 
   useEffect(() => {
     if (!canUseChannelSettings) {
@@ -347,6 +390,55 @@ export default function ChannelSettingsScreen() {
   const updateEventEditor = (patch: Partial<ChannelEventEditorState>) => {
     setEventEditor((prev) => ({ ...prev, ...patch }));
     setEventNotice(null);
+  };
+
+  const refreshAudienceSummary = async () => {
+    if (!user?.id) {
+      setAudienceSummary(null);
+      return;
+    }
+
+    const nextSummary = await readChannelAudienceSummary(String(user.id)).catch(() => null);
+    setAudienceSummary(nextSummary);
+  };
+
+  const runAudienceAction = async (
+    action: ChannelAudienceActionResult["action"],
+    execute: () => Promise<ChannelAudienceActionResult>,
+  ) => {
+    try {
+      setAudienceActionLoading(action);
+      setAudienceActionNotice(null);
+      const result = await execute();
+      setAudienceActionResult(result);
+      setAudienceActionNotice(result.message);
+
+      if (result.status === "completed") {
+        await refreshAudienceSummary();
+      }
+
+      return result;
+    } catch {
+      const fallback: ChannelAudienceActionResult = {
+        action,
+        status: "error",
+        reason: "update_failed",
+        message: "Unable to complete this audience action right now.",
+        actorScope: "channel_owner",
+        requiredScope: "owner_or_operator",
+        channelUserId: String(user?.id ?? "") || null,
+        viewerUserId: String(user?.id ?? "") || null,
+        targetUserId: null,
+        requestId: null,
+        requestKind: null,
+        requestStatus: null,
+      };
+      setAudienceActionResult(fallback);
+      setAudienceActionNotice(fallback.message);
+      return fallback;
+    } finally {
+      setAudienceActionLoading(null);
+    }
   };
 
   const resetEventEditor = () => {
@@ -592,6 +684,29 @@ export default function ChannelSettingsScreen() {
       tone: "unavailable",
     },
   ];
+  const audienceActionSummaryCards: readonly SummaryMetricCard[] = audienceActionResult
+    ? [
+      {
+        label: "Last Action",
+        value: formatAudienceActionLabel(audienceActionResult.action),
+        body: audienceActionResult.message,
+      },
+      {
+        label: "Result",
+        value: formatAudienceActionStatus(audienceActionResult.status),
+        body: `Required scope: ${audienceActionResult.requiredScope.replaceAll("_", " ")}`,
+      },
+      {
+        label: "Request State",
+        value: audienceActionResult.requestStatus
+          ? audienceActionResult.requestStatus.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase())
+          : "N/A",
+        body: audienceActionResult.requestId
+          ? `Request #${audienceActionResult.requestId}`
+          : "No request id is attached to the latest action.",
+      },
+    ]
+    : [];
   const analyticsSummaryCards: readonly SummaryMetricCard[] = [
     {
       label: "Watch-Party Sessions",
@@ -1365,6 +1480,220 @@ export default function ChannelSettingsScreen() {
                   </View>
                 ))}
               </View>
+
+              <View style={styles.eventSnapshotCard}>
+                <Text style={styles.accessSummaryKicker}>WORKFLOW FOUNDATION</Text>
+                <Text style={styles.accessSummaryTitle}>Real creator-side audience actions now live here</Text>
+                <Text style={styles.accessSummaryBody}>
+                  This panel now uses `_lib/channelAudience.ts` beneath the summary cards. It stays narrow on purpose: request review and block workflows are real here now, while subscriber mutation, follower removal, and VIP/mod/co-host systems remain explicitly later.
+                </Text>
+              </View>
+
+              {audienceActionNotice ? (
+                <View style={styles.noticeCard}>
+                  <Text style={styles.noticeText}>{audienceActionNotice}</Text>
+                </View>
+              ) : null}
+
+              {audienceActionSummaryCards.length ? (
+                <View style={styles.summaryGrid}>
+                  {audienceActionSummaryCards.map((card) => (
+                    <View key={card.label} style={styles.summaryCard}>
+                      <Text style={styles.summaryLabel}>{card.label}</Text>
+                      <Text style={styles.summaryValue}>{card.value}</Text>
+                      <Text style={styles.summaryBody}>{card.body}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              <Text style={styles.sectionLabel}>Request Review</Text>
+              <Text style={styles.permissionCopy}>
+                Enter a backed request id to approve, decline, or cancel it. Approving `follow` requests now creates the real follower relationship; approving `subscriber_access` requests remains explicitly unsupported until creator/channel subscriber mutation truth exists.
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Audience request id"
+                placeholderTextColor="#8d8d8d"
+                value={audienceRequestIdInput}
+                onChangeText={(text) => {
+                  setAudienceRequestIdInput(text);
+                  setAudienceActionNotice(null);
+                }}
+                keyboardType="number-pad"
+              />
+              <View style={styles.eventActionRow}>
+                <TouchableOpacity
+                  style={styles.eventPrimaryButton}
+                  onPress={() => {
+                    const requestId = Number.parseInt(audienceRequestIdInput, 10);
+                    if (!Number.isFinite(requestId) || requestId <= 0) {
+                      setAudienceActionNotice("Enter a valid audience request id before approving.");
+                      return;
+                    }
+                    void runAudienceAction("approve_request", async () => {
+                      const result = await approveChannelAudienceRequest(requestId);
+                      if (result.status === "completed" || result.status === "unsupported" || result.status === "noop") {
+                        setAudienceRequestIdInput("");
+                      }
+                      return result;
+                    });
+                  }}
+                  activeOpacity={0.88}
+                  disabled={audienceActionLoading !== null}
+                >
+                  {audienceActionLoading === "approve_request" ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.eventPrimaryButtonText}>Approve</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.eventSecondaryButton}
+                  onPress={() => {
+                    const requestId = Number.parseInt(audienceRequestIdInput, 10);
+                    if (!Number.isFinite(requestId) || requestId <= 0) {
+                      setAudienceActionNotice("Enter a valid audience request id before declining.");
+                      return;
+                    }
+                    void runAudienceAction("decline_request", async () => {
+                      const result = await declineChannelAudienceRequest(requestId);
+                      if (result.status === "completed" || result.status === "noop") {
+                        setAudienceRequestIdInput("");
+                      }
+                      return result;
+                    });
+                  }}
+                  activeOpacity={0.86}
+                  disabled={audienceActionLoading !== null}
+                >
+                  {audienceActionLoading === "decline_request" ? (
+                    <ActivityIndicator color="#D9E0EE" />
+                  ) : (
+                    <Text style={styles.eventSecondaryButtonText}>Decline</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.eventSecondaryButton}
+                  onPress={() => {
+                    const requestId = Number.parseInt(audienceRequestIdInput, 10);
+                    if (!Number.isFinite(requestId) || requestId <= 0) {
+                      setAudienceActionNotice("Enter a valid audience request id before canceling.");
+                      return;
+                    }
+                    void runAudienceAction("cancel_request", async () => {
+                      const result = await cancelChannelAudienceRequest(requestId);
+                      if (result.status === "completed" || result.status === "noop") {
+                        setAudienceRequestIdInput("");
+                      }
+                      return result;
+                    });
+                  }}
+                  activeOpacity={0.86}
+                  disabled={audienceActionLoading !== null}
+                >
+                  {audienceActionLoading === "cancel_request" ? (
+                    <ActivityIndicator color="#D9E0EE" />
+                  ) : (
+                    <Text style={styles.eventSecondaryButtonText}>Cancel</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.sectionLabel}>Blocked Audience</Text>
+              <Text style={styles.permissionCopy}>
+                Block and unblock use the real channel-owned audience boundary already backed by schema truth. This stays separate from platform moderation and does not invent VIP, moderator, or co-host roles.
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Audience member user id"
+                placeholderTextColor="#8d8d8d"
+                value={audienceTargetUserIdInput}
+                onChangeText={(text) => {
+                  setAudienceTargetUserIdInput(text);
+                  setAudienceActionNotice(null);
+                }}
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Block reason (optional)"
+                placeholderTextColor="#8d8d8d"
+                value={audienceBlockReasonInput}
+                onChangeText={(text) => {
+                  setAudienceBlockReasonInput(text);
+                  setAudienceActionNotice(null);
+                }}
+              />
+              <View style={styles.eventActionRow}>
+                <TouchableOpacity
+                  style={styles.eventPrimaryButton}
+                  onPress={() => {
+                    const blockedUserId = String(audienceTargetUserIdInput).trim();
+                    if (!blockedUserId) {
+                      setAudienceActionNotice("Enter an audience member user id before blocking.");
+                      return;
+                    }
+                    void runAudienceAction("block", async () => {
+                      const result = await blockChannelAudienceMember({
+                        channelUserId: String(user?.id ?? ""),
+                        blockedUserId,
+                        reason: String(audienceBlockReasonInput).trim() || null,
+                      });
+                      if (result.status === "completed" || result.status === "noop") {
+                        setAudienceTargetUserIdInput("");
+                        setAudienceBlockReasonInput("");
+                      }
+                      return result;
+                    });
+                  }}
+                  activeOpacity={0.88}
+                  disabled={audienceActionLoading !== null}
+                >
+                  {audienceActionLoading === "block" ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.eventPrimaryButtonText}>Block</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.eventSecondaryButton}
+                  onPress={() => {
+                    const blockedUserId = String(audienceTargetUserIdInput).trim();
+                    if (!blockedUserId) {
+                      setAudienceActionNotice("Enter an audience member user id before unblocking.");
+                      return;
+                    }
+                    void runAudienceAction("unblock", async () => {
+                      const result = await unblockChannelAudienceMember({
+                        channelUserId: String(user?.id ?? ""),
+                        blockedUserId,
+                      });
+                      if (result.status === "completed" || result.status === "noop") {
+                        setAudienceTargetUserIdInput("");
+                        setAudienceBlockReasonInput("");
+                      }
+                      return result;
+                    });
+                  }}
+                  activeOpacity={0.86}
+                  disabled={audienceActionLoading !== null}
+                >
+                  {audienceActionLoading === "unblock" ? (
+                    <ActivityIndicator color="#D9E0EE" />
+                  ) : (
+                    <Text style={styles.eventSecondaryButtonText}>Unblock</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.summaryCard, styles.summaryCardUnavailable, styles.audienceWorkflowLimitCard]}>
+                <Text style={styles.summaryLabel}>Explicitly Later</Text>
+                <Text style={styles.summaryValue}>Subscriber / VIP / Removal</Text>
+                <Text style={styles.summaryBody}>
+                  {subscriberMutationSupport.message} Follower removal and VIP/mod/co-host workflows also stay out until the chapter lands real supporting helper truth.
+                </Text>
+              </View>
             </View>
 
             <View style={styles.panel}>
@@ -1817,6 +2146,9 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
     fontWeight: "600",
+  },
+  audienceWorkflowLimitCard: {
+    marginTop: 12,
   },
   eventSnapshotCard: {
     borderRadius: 16,

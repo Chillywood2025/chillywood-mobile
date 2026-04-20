@@ -1,29 +1,29 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **`/channel-settings` audience workflow adoption pass** on `main`, starting with `app/channel-settings.tsx`. Use `docs/audience-management-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `_lib/channelReadModels.ts`, `_lib/channelAudience.ts`, and this file as governing truth. Do not jump to public audience modules yet, do not widen into analytics or deeper moderation workflows, and do not drift current route doctrine.
+The next exact task is a narrow **public audience surface audit** on `main`, scoped to `app/profile/[userId].tsx`. Use `docs/audience-management-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `_lib/channelReadModels.ts`, `_lib/channelAudience.ts`, and this file as governing truth. Do not jump straight into public audience UI implementation until the audit proves which backed visibility belongs on the canonical public profile/channel route.
 
 ## Current Plan
 1. Re-read `docs/audience-management-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `_lib/channelReadModels.ts`, and this file first.
 2. Treat the current profile/channel, content-management, and access-adoption families as closed unless a real regression is found.
-3. Adopt the landed `_lib/channelAudience.ts` helper into the creator-side audience owner on `/channel-settings`.
-4. Deepen the current audience summary area into real workflow sections for current honest buckets only.
+3. Audit the canonical public profile/channel owner on `/profile/[userId]` for what audience visibility is already backed and what should remain private or creator-only.
+4. Determine whether any additional public follower/subscriber visibility should be adopted now or explicitly deferred.
 5. Preserve locked route truth for `/profile/[userId]`, `/channel-settings`, Chi'lly Chat, and all current room/live owners.
 
 ## Exact Next Batch
-- adopt `_lib/channelAudience.ts` inside `app/channel-settings.tsx`
-- expose real creator workflows for current honest buckets such as requests and blocked audience, with follower/subscriber posture only where the helper truth already supports it
+- audit `/profile/[userId]` for backed audience visibility seams only
+- determine whether follower/subscriber/public-activity surfaces have enough truth for a narrow public adoption lane
 - keep creator/channel subscriber truth separate from account-tier premium truth
 - keep VIP/mod/co-host audience roles explicitly later
-- keep public profile audience modules explicitly out of scope in this lane
+- keep creator-only workflow controls out of the public route
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- adopt the landed audience helper/read-model truth into `app/channel-settings.tsx`
-- cover only current honest creator-side audience workflows such as request review and block/unblock, plus any small backed viewer-relationship posture the current helper already supports
-- avoid public profile adoption in the same lane unless a tiny directly-related type import is required
-- keep `_lib/channelReadModels.ts` as the summary/read-model owner and `_lib/channelAudience.ts` as the mutation/workflow owner
+- audit `app/profile/[userId].tsx` against the landed audience-management doctrine and current read-model truth
+- identify what audience visibility is already backed enough for public rendering and what should remain later
+- avoid creator-only workflow controls on the public route
+- keep `_lib/channelReadModels.ts` as the summary/read-model owner and `_lib/channelAudience.ts` as the mutation/workflow owner without widening helper scope
 - keep the lane doctrine-first and avoid reopening already-landed access, channel, content, or room adoption work unless a real regression is found
 - preserve all current route truth and all previously landed profile/channel, content-management, and access stages
 - keep unrelated local dirt out of the checkpoint
@@ -37,15 +37,15 @@ Do not:
 - create `/studio*` routes
 - touch broader runtime room/live-stage behavior in this doctrine lane
 - touch RBAC or Rachi control-plane work
-- jump into broad public audience modules on `/profile/[userId]`
+- jump into broad public audience modules on `/profile/[userId]` before the audit proves them
 - fake VIP/mod/co-host audience logic
-- broaden beyond the canonical creator owner on `/channel-settings`
+- reopen `/channel-settings` workflow work unless the audit proves a regression
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- `/channel-settings` consumes `_lib/channelAudience.ts` for current honest creator-side audience workflows
-- current request/block workflows are no longer summary-only
+- repo truth clearly identifies whether a narrow public audience adoption batch is justified
+- any recommended public audience adoption is grounded in current backed follower/subscriber/visibility truth only
 - creator/channel subscriber truth stays separate from premium entitlement truth
 - unsupported VIP/mod/co-host audience roles remain explicitly later
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
