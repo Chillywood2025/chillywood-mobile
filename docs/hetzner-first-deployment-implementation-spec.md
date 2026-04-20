@@ -8,6 +8,7 @@ It is infrastructure preparation only.
 It exists to:
 - audit the deployment and hosted-service assumptions that already exist in repo truth
 - define the first honest Hetzner machine role without pretending anything is already provisioned
+- record the current known first-host facts that already exist outside repo code
 - separate what stays hosted or local from what may move to Hetzner first
 - define the minimum secrets, cutover order, rollback posture, and monitoring plan for a future first deployment
 - define when OVH should be added later and for what exact job
@@ -70,9 +71,34 @@ Current local/dev truth includes:
 
 These remain local/developer-owned for now.
 
-## 3. Hetzner-First Decision
+## 3. Current Known Hetzner Host Facts
 
-### 3.1 First Machine Role
+The first Hetzner server already exists outside repo code:
+- server name: `chillywood-prod-01`
+- server IP: `87.99.145.160`
+
+This document treats that as current infra truth only.
+
+It does not imply:
+- the server is fully configured
+- LiveKit is installed there
+- reverse proxy/TLS is installed there
+- Chi'llywood production traffic is already using it
+- any provider-side action was performed in this pass
+
+### 3.1 SSH Bootstrap Expectation
+The first connection path should be SSH-based host bootstrap.
+
+Current doctrine for that bootstrap:
+- use SSH for first access and host hardening
+- verify host identity before applying any service config
+- keep SSH keys or passwords outside repo files
+- keep provider API tokens outside repo files
+- do not embed raw provider credentials into client runtime env or committed docs
+
+## 4. Hetzner-First Decision
+
+### 4.1 First Machine Role
 The first Hetzner machine should be a single:
 - `realtime edge + ops ingress` host
 
@@ -82,7 +108,7 @@ That first machine is for:
 - optional static status/legal/support hosting once those destinations are intentionally pointed there
 - basic host-level monitoring and log retention
 
-### 3.2 What This First Machine Is Not
+### 4.2 What This First Machine Is Not
 This first machine is not:
 - the primary database
 - the auth provider
@@ -92,9 +118,9 @@ This first machine is not:
 - the Expo/EAS replacement
 - a general-purpose god-box for every future service
 
-## 4. What Stays Local Or Hosted For Now
+## 5. What Stays Local Or Hosted For Now
 
-### 4.1 Stays Local / Dev-Owned
+### 5.1 Stays Local / Dev-Owned
 - Expo local development
 - Metro / `expo start`
 - local runtime validation
@@ -102,22 +128,22 @@ This first machine is not:
 - Maestro/manual proof
 - local preview verification work
 
-### 4.2 Stays Hosted Outside Hetzner For Now
+### 5.2 Stays Hosted Outside Hetzner For Now
 - Supabase database and auth
 - Supabase Edge Functions
 - Expo/EAS build and update flow
 - Firebase analytics / Crashlytics / performance
 - RevenueCat
 
-### 4.3 Does Not Move In This Pass
+### 5.3 Does Not Move In This Pass
 - billing/payout infrastructure
 - notification providers
 - search/recommendation systems
 - broader admin/support tooling
 
-## 5. What Moves To Hetzner First
+## 6. What Moves To Hetzner First
 
-### 5.1 First-Move Service Boundary
+### 6.1 First-Move Service Boundary
 The first honest Hetzner migration target is:
 - realtime ingress
 
@@ -125,13 +151,13 @@ That means the first future production-like cutover should move:
 - the LiveKit server endpoint
 - the public reverse-proxy / TLS edge in front of that endpoint
 
-### 5.2 Optional Early Add-On
+### 6.2 Optional Early Add-On
 Only if explicitly needed later, the same machine may also host:
 - static legal/status/support pages
 
 But that is secondary to the realtime edge role.
 
-### 5.3 What Does Not Move In The First Cutover
+### 6.3 What Does Not Move In The First Cutover
 The first cutover should not move:
 - Supabase tables or auth
 - the LiveKit token-signing logic out of `supabase/functions/livekit-token`
@@ -139,18 +165,25 @@ The first cutover should not move:
 - creator payouts
 - analytics vendors
 
-## 6. Secrets And Environment Requirements
+## 7. Secrets And Environment Requirements
 
-### 6.1 Host-Side Private Secrets
+### 7.1 Host-Side Private Secrets
 The Hetzner host will need private values such as:
 - ACME / TLS contact email
+- Hetzner API token if later automation is ever used
 - LiveKit API key
 - LiveKit API secret
 - canonical public realtime hostname
 
 These must never be committed to source control.
 
-### 6.2 Supabase Function Cutover Secrets
+Any currently known raw provider token must remain:
+- out of repo docs
+- out of committed env examples
+- out of mobile runtime config
+- out of terminal summaries when avoidable
+
+### 7.2 Supabase Function Cutover Secrets
 The existing `livekit-token` Supabase Edge Function remains part of the architecture for now.
 
 Its server-side env must stay aligned with the Hetzner-hosted LiveKit endpoint:
@@ -160,15 +193,15 @@ Its server-side env must stay aligned with the Hetzner-hosted LiveKit endpoint:
 - `LIVEKIT_API_SECRET`
 - `LIVEKIT_URL`
 
-### 6.3 Mobile Runtime Public Config
+### 7.3 Mobile Runtime Public Config
 The mobile runtime may need public override values after the realtime cutover:
 - `EXPO_PUBLIC_LIVEKIT_URL`
 - `EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT`
 - optional legal/support URLs if those destinations later move to the Hetzner edge
 
-## 7. Reverse Proxy And TLS Plan
+## 8. Reverse Proxy And TLS Plan
 
-### 7.1 Reverse Proxy Ownership
+### 8.1 Reverse Proxy Ownership
 The first Hetzner machine should terminate TLS at a reverse proxy layer.
 
 That proxy should own:
@@ -177,13 +210,13 @@ That proxy should own:
 - host-based routing for the realtime endpoint
 - optional later static status/legal/support hosts
 
-### 7.2 Public Exposure Discipline
+### 8.2 Public Exposure Discipline
 Public exposure should stay narrow:
 - expose `80` and `443` only for web/TLS ingress
 - keep service internals off public random ports where possible
 - do not expose owner/admin dashboards directly from the first machine
 
-### 7.3 TLS Discipline
+### 8.3 TLS Discipline
 TLS should be automatic and renewable.
 
 Approved first-pass posture:
@@ -191,9 +224,9 @@ Approved first-pass posture:
 - one canonical realtime hostname
 - no mixed HTTP/HTTPS production claims
 
-## 8. Monitoring And Logging Plan
+## 9. Monitoring And Logging Plan
 
-### 8.1 Keep Existing Client Observability
+### 9.1 Keep Existing Client Observability
 Current client observability remains valid and should stay in place:
 - Firebase analytics
 - Firebase Crashlytics
@@ -201,7 +234,7 @@ Current client observability remains valid and should stay in place:
 
 Hetzner-first work does not replace those systems.
 
-### 8.2 New Host-Level Monitoring For The First Machine
+### 9.2 New Host-Level Monitoring For The First Machine
 The first Hetzner deployment should add only basic host/service monitoring:
 - host CPU
 - host RAM
@@ -210,14 +243,14 @@ The first Hetzner deployment should add only basic host/service monitoring:
 - reverse proxy health
 - LiveKit process health
 
-### 8.3 Logging Boundaries
+### 9.3 Logging Boundaries
 Logging should remain separated by owner:
 - reverse proxy access/error logs on the Hetzner host
 - LiveKit service logs on the Hetzner host
 - Supabase Edge Function logs remain in Supabase
 - mobile runtime errors remain in the app/mobile observability path
 
-### 8.4 Alerting Posture
+### 9.4 Alerting Posture
 Start narrow:
 - uptime alert for the public realtime hostname
 - disk and memory pressure alerts
@@ -225,42 +258,46 @@ Start narrow:
 
 Do not invent a larger observability program in this pass.
 
-## 9. Deployment Order
+## 10. Deployment Order
 The first production-like Hetzner rollout should happen in this order:
 
-1. lock the public hostname(s) and DNS ownership
-2. harden the Hetzner machine:
-   - SSH access
+1. confirm the existing host facts for `chillywood-prod-01` and `87.99.145.160`
+2. lock the public hostname(s) and DNS ownership
+3. complete first SSH bootstrap and host verification:
+   - verify host identity/fingerprint
+   - confirm SSH access path
+   - confirm non-root operator path for service management
+4. harden the Hetzner machine:
    - firewall
    - OS patching
    - non-root deploy posture
-3. provision host env from the Hetzner env template
-4. stand up reverse proxy and TLS first
-5. bring up LiveKit on the Hetzner host
-6. verify the new realtime endpoint independently before mobile cutover
-7. update Supabase Edge Function env so `livekit-token` signs against the Hetzner endpoint
-8. update public mobile runtime config only after the new endpoint is healthy
-9. verify through preview/internal builds before any broader production-like use
+5. provision host env from the Hetzner env template
+6. stand up reverse proxy and TLS first
+7. bring up LiveKit on the Hetzner host
+8. verify the new realtime endpoint independently before mobile cutover
+9. update Supabase Edge Function env so `livekit-token` signs against the Hetzner endpoint
+10. update public mobile runtime config only after the new endpoint is healthy
+11. verify through preview/internal builds before any broader production-like use
 
-## 10. Rollback And Safety Notes
+## 11. Rollback And Safety Notes
 
-### 10.1 Rollback Rule
+### 11.1 Rollback Rule
 Do not remove or overwrite the current hosted realtime truth until the Hetzner path is verified.
 
-### 10.2 Safe Rollback Path
+### 11.2 Safe Rollback Path
 If the Hetzner realtime cutover fails:
 - restore the prior LiveKit URL in the Supabase function env
 - restore the prior `EXPO_PUBLIC_LIVEKIT_URL` mobile runtime value
 - keep the token endpoint path unchanged if possible
 - do not widen the blast radius by moving unrelated services at the same time
 
-### 10.3 Blast-Radius Discipline
+### 11.3 Blast-Radius Discipline
 The first Hetzner deployment should be:
 - single-purpose
 - reversible
 - independent from auth/database migration
 
-## 11. Why Docker Compose Templates Are Deferred In This Pass
+## 12. Why Docker Compose Templates Are Still Deferred In This Pass
 This repo does not yet prove a broader app-owned server topology.
 
 A concrete Compose stack would currently force guesses about:
@@ -275,7 +312,7 @@ So this pass intentionally stops at:
 
 Compose or provider-run service manifests should be added only when the realtime cutover lane is actually opened.
 
-## 12. OVH Later Add-On Plan
+## 13. OVH Later Add-On Plan
 OVH is intentionally deferred.
 
 It should be added later only as a second-provider layer for:
@@ -288,7 +325,7 @@ OVH should not be introduced later as:
 - a rushed second copy of the whole app stack
 - a justification for broader premature infrastructure sprawl
 
-## 13. First Honest Follow-Up Lane
+## 14. First Honest Follow-Up Lane
 Once this prep is accepted, the first real infrastructure follow-up lane should be:
 - narrow `Hetzner realtime edge cutover prep`
 
