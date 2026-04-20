@@ -229,6 +229,69 @@ const getStatusTone = (status: StatusType) => {
   return styles.badgeDraft;
 };
 
+const hasTitleId = (item: TitleRow, targetId: string) => String(item.id ?? "").trim() === targetId;
+
+const hasHeroFlagCandidate = (titles: TitleRow[]) => titles.some((item) => item.is_hero === true);
+
+const hasTopPicksCandidate = (titles: TitleRow[], source: AppConfig["home"]["topPicksSource"]) => {
+  if (source === "recent") return true;
+  if (source === "featured") return titles.some((item) => item.featured === true);
+  if (source === "trending") return titles.some((item) => item.is_trending === true);
+  return titles.some((item) => item.pin_to_top_row === true);
+};
+
+const applyExperienceConfigGuardrails = (
+  config: AppConfig,
+  titles: TitleRow[],
+): { nextConfig: AppConfig; adjustments: string[] } => {
+  const adjustments: string[] = [];
+  const nextConfig: AppConfig = {
+    ...config,
+    home: {
+      ...config.home,
+      manualHeroTitleId: config.home.heroMode === "manual_title"
+        ? String(config.home.manualHeroTitleId ?? "").trim() || null
+        : null,
+    },
+  };
+
+  if (nextConfig.home.heroMode === "manual_title") {
+    const manualHeroTitleId = String(nextConfig.home.manualHeroTitleId ?? "").trim();
+    const manualHeroExists = manualHeroTitleId.length > 0 && titles.some((item) => hasTitleId(item, manualHeroTitleId));
+    if (!manualHeroExists) {
+      const fallbackHeroMode = hasHeroFlagCandidate(titles) ? "hero_flag" : "latest";
+      nextConfig.home = {
+        ...nextConfig.home,
+        heroMode: fallbackHeroMode,
+        manualHeroTitleId: null,
+      };
+      adjustments.push(
+        fallbackHeroMode === "hero_flag"
+          ? "manual hero target was unavailable, so Hero Strategy was reset to HERO FLAG"
+          : "manual hero target was unavailable, so Hero Strategy was reset to LATEST",
+      );
+    }
+  } else if (nextConfig.home.heroMode === "hero_flag" && !hasHeroFlagCandidate(titles)) {
+    nextConfig.home = {
+      ...nextConfig.home,
+      heroMode: "latest",
+      manualHeroTitleId: null,
+    };
+    adjustments.push("hero flag strategy had no real hero title, so Hero Strategy was reset to LATEST");
+  }
+
+  if (!hasTopPicksCandidate(titles, nextConfig.home.topPicksSource)) {
+    const staleSource = nextConfig.home.topPicksSource;
+    nextConfig.home = {
+      ...nextConfig.home,
+      topPicksSource: "recent",
+    };
+    adjustments.push(`top picks source ${staleSource.replace("_", " ").toUpperCase()} had no real titles, so it was reset to RECENT`);
+  }
+
+  return { nextConfig, adjustments };
+};
+
 const formatModerationToken = (value: unknown) => {
   const text = String(value ?? "").trim();
   if (!text) return "UNKNOWN";
@@ -694,27 +757,15 @@ export default function AdminStudioScreen() {
 
     try {
       setConfigSaving(true);
-
-      let nextConfig = experienceConfig;
-      if (nextConfig.home.heroMode === "manual_title") {
-        const manualTitleId = String(nextConfig.home.manualHeroTitleId ?? "").trim();
-        const manualTitleExists = titles.some((item) => String(item.id) === manualTitleId);
-        if (!manualTitleExists) {
-          const hasHeroFlagTitle = titles.some((item) => item.is_hero === true);
-          nextConfig = {
-            ...nextConfig,
-            home: {
-              ...nextConfig.home,
-              heroMode: hasHeroFlagTitle ? "hero_flag" : "latest",
-              manualHeroTitleId: null,
-            },
-          };
-        }
-      }
-
+      const { nextConfig, adjustments } = applyExperienceConfigGuardrails(experienceConfig, titles);
       const saved = await saveAppConfig(nextConfig, "admin");
       setExperienceConfig(saved);
-      setNotice({ type: "success", text: "Experience config saved." });
+      setNotice({
+        type: "success",
+        text: adjustments.length > 0
+          ? `Experience config saved. ${adjustments.join("; ")}.`
+          : "Experience config saved.",
+      });
     } catch (err: any) {
       setNotice({ type: "error", text: err?.message ?? "Failed to save experience config." });
     } finally {
