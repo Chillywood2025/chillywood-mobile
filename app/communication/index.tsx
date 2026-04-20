@@ -21,12 +21,15 @@ import {
   resolveFeatureConfig,
   resolveMonetizationConfig,
 } from "../../_lib/appConfig";
+import {
+  resolveRoomAccess,
+  type RoomAccessResolution,
+} from "../../_lib/accessEntitlements";
 import { trackEvent } from "../../_lib/analytics";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
   createCommunicationMediaStream,
   createCommunicationRoom,
-  evaluateCommunicationRoomAccess,
   formatCommunicationRoomCode,
   getCommunicationRoomByCode,
   getCommunicationRTCModule,
@@ -40,7 +43,6 @@ import { reportRuntimeError } from "../../_lib/logger";
 import {
   getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
-import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
@@ -50,6 +52,20 @@ type PermissionState = "unknown" | "granted" | "denied" | "blocked";
 const mapMicrophonePermission = (permission: { granted: boolean; canAskAgain: boolean }): PermissionState => {
   if (permission.granted) return "granted";
   return permission.canAskAgain ? "denied" : "blocked";
+};
+
+const isAccessSheetReason = (reason: string | null | undefined): reason is AccessSheetReason => (
+  reason === "premium_required" || reason === "party_pass_required"
+);
+
+const getCommunicationRoomAccessMessage = (access: Pick<RoomAccessResolution, "reason" | "label"> | null | undefined) => {
+  if (access?.reason === "room_locked") return "That communication room is locked right now.";
+  if (access?.reason === "removed") return "You no longer have access to that communication room.";
+  if (access?.reason === "identity_required") return "You need a valid Chi'llywood session before joining this room.";
+  if (access && isAccessSheetReason(access.reason)) {
+    return `${access.label} access is not currently available for that communication room.`;
+  }
+  return "That communication room still isn't available for your current access level.";
 };
 
 export default function CommunicationLobbyScreen() {
@@ -71,7 +87,7 @@ export default function CommunicationLobbyScreen() {
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
   const [pendingJoinRoom, setPendingJoinRoom] = useState<CommunicationRoomState | null>(null);
-  const [pendingJoinAccess, setPendingJoinAccess] = useState<RoomAccessDecision | null>(null);
+  const [pendingJoinAccess, setPendingJoinAccess] = useState<RoomAccessResolution | null>(null);
 
   const previewStreamRef = useRef<MediaStream | null>(null);
   const isRtcAvailable = !!getCommunicationRTCModule();
@@ -214,18 +230,21 @@ export default function CommunicationLobbyScreen() {
   };
 
   const evaluateJoinAccess = async (room: CommunicationRoomState) => {
-    const access = await evaluateCommunicationRoomAccess({ room }).catch(() => null);
+    const access = await resolveRoomAccess({
+      roomSurface: "communication",
+      room,
+    }).catch(() => null);
     if (!access) {
       setError("Unable to confirm access for that communication room right now.");
       return false;
     }
 
-    if (access.canJoin) {
+    if (access.isAllowed) {
       openRoom(room.roomId);
       return true;
     }
 
-    if (access.reason === "premium_required" || access.reason === "party_pass_required") {
+    if (isAccessSheetReason(access.reason)) {
       trackEvent("monetization_gate_shown", {
         surface: "communication-lobby",
         reason: access.reason,
@@ -238,17 +257,7 @@ export default function CommunicationLobbyScreen() {
       return false;
     }
 
-    if (access.reason === "room_locked") {
-      setError("That communication room is locked right now.");
-      return false;
-    }
-
-    if (access.reason === "removed") {
-      setError("You no longer have access to that communication room.");
-      return false;
-    }
-
-    setError("You need a valid Chi'llywood session before joining this room.");
+    setError(getCommunicationRoomAccessMessage(access));
     return false;
   };
 
@@ -336,9 +345,12 @@ export default function CommunicationLobbyScreen() {
 
       const latestRoom = await getCommunicationRoomByCode(pendingJoinRoom.roomCode).catch(() => null);
       const roomToUse = latestRoom ?? pendingJoinRoom;
-      const access = await evaluateCommunicationRoomAccess({ room: roomToUse }).catch(() => null);
+      const access = await resolveRoomAccess({
+        roomSurface: "communication",
+        room: roomToUse,
+      }).catch(() => null);
 
-      if (access?.canJoin) {
+      if (access?.isAllowed) {
         trackEvent("monetization_unlock_success", {
           action,
           surface: "communication-lobby",
@@ -356,10 +368,10 @@ export default function CommunicationLobbyScreen() {
         };
       }
 
-      if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+      if (access && isAccessSheetReason(access.reason)) {
         setPendingJoinAccess(access);
         setAccessSheetReason(access.reason);
-        const message = access.monetization.issues[0] ?? "That communication room still isn't available for your current access level.";
+        const message = access.monetization.issues[0] ?? getCommunicationRoomAccessMessage(access);
         trackEvent("monetization_unlock_failure", {
           action,
           surface: "communication-lobby",
@@ -372,11 +384,7 @@ export default function CommunicationLobbyScreen() {
         };
       }
 
-      const message = access?.reason === "room_locked"
-        ? "That communication room is locked right now."
-        : access?.reason === "removed"
-          ? "You no longer have access to that communication room."
-          : "That communication room still isn't available for your current access level.";
+      const message = getCommunicationRoomAccessMessage(access);
       trackEvent("monetization_unlock_failure", {
         action,
         surface: "communication-lobby",

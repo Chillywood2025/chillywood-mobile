@@ -7,6 +7,10 @@ import {
     resolveFeatureConfig,
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
+import {
+  resolveRoomAccess,
+  type RoomAccessResolution,
+} from "../../_lib/accessEntitlements";
 import { trackEvent } from "../../_lib/analytics";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
@@ -29,10 +33,9 @@ import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
-import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
-import { createPartyRoom, evaluatePartyRoomAccess, getPartyRoom, getSafePartyUserId, type WatchPartyRoomType, type WatchPartyState } from "../../_lib/watchParty";
+import { createPartyRoom, getPartyRoom, getSafePartyUserId, type WatchPartyRoomType, type WatchPartyState } from "../../_lib/watchParty";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
@@ -86,6 +89,20 @@ const getPartyCapturePolicyCopy = (capturePolicy: WatchPartyState["capturePolicy
     ? "Capture expectations become host-managed once shared playback begins."
     : "Capture expectations stay lightweight until shared playback begins.";
 
+const isAccessSheetReason = (reason: string | null | undefined): reason is AccessSheetReason => (
+  reason === "premium_required" || reason === "party_pass_required"
+);
+
+const getWatchPartyRoomAccessMessage = (access: Pick<RoomAccessResolution, "reason" | "label"> | null | undefined) => {
+  if (access?.reason === "room_locked") return "This room is locked right now. Ask the host to reopen it.";
+  if (access?.reason === "removed") return "You no longer have access to this room.";
+  if (access?.reason === "identity_required") return "Sign in to join Chi'llywood rooms.";
+  if (access && isAccessSheetReason(access.reason)) {
+    return `${access.label} access is not currently available for this room.`;
+  }
+  return "This room still isn't available for your current access level.";
+};
+
 export default function WatchPartyIndexScreen() {
   const router = useRouter();
   const { isLoading: authLoading, isSignedIn } = useSession();
@@ -137,7 +154,7 @@ export default function WatchPartyIndexScreen() {
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
   const [pendingAccessPreview, setPendingAccessPreview] = useState<RoomPreview | null>(null);
-  const [pendingAccessDecision, setPendingAccessDecision] = useState<RoomAccessDecision | null>(null);
+  const [pendingAccessDecision, setPendingAccessDecision] = useState<RoomAccessResolution | null>(null);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
@@ -435,7 +452,8 @@ export default function WatchPartyIndexScreen() {
     }
 
     const userId = await getSafePartyUserId().catch(() => "");
-    const access = await evaluatePartyRoomAccess({
+    const access = await resolveRoomAccess({
+      roomSurface: "watch_party",
       partyId: nextPartyId,
       userId,
       room: nextPreview.room,
@@ -451,7 +469,7 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    if (access.canJoin) {
+    if (access.isAllowed) {
       trackEvent("room_join_success", {
         surface: "watch-party-lobby",
         roomId: nextPartyId,
@@ -460,7 +478,7 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    if (access.reason === "premium_required" || access.reason === "party_pass_required") {
+    if (isAccessSheetReason(access.reason)) {
       trackEvent("monetization_gate_shown", {
         surface: "watch-party-lobby",
         reason: access.reason,
@@ -473,17 +491,7 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    if (access.reason === "room_locked") {
-      setJoinError("This room is locked right now. Ask the host to reopen it.");
-      return;
-    }
-
-    if (access.reason === "removed") {
-      setJoinError("You no longer have access to this room.");
-      return;
-    }
-
-      setJoinError("Sign in to join Chi'llywood rooms.");
+    setJoinError(getWatchPartyRoomAccessMessage(access));
   }, [navigateToPreviewRoom]);
 
   const onConfirmJoin = async () => {
@@ -515,13 +523,14 @@ export default function WatchPartyIndexScreen() {
       const latestRoom = await getPartyRoom(accessKey).catch(() => null);
       const userId = await getSafePartyUserId().catch(() => "");
       const refreshedPreview = latestRoom ? { ...pendingAccessPreview, room: latestRoom } : pendingAccessPreview;
-      const access = await evaluatePartyRoomAccess({
+      const access = await resolveRoomAccess({
+        roomSurface: "watch_party",
         partyId: accessKey,
         userId,
         room: latestRoom ?? pendingAccessPreview.room,
       }).catch(() => null);
 
-      if (access?.canJoin) {
+      if (access?.isAllowed) {
         trackEvent("monetization_unlock_success", {
           action,
           surface: "watch-party-lobby",
@@ -540,10 +549,10 @@ export default function WatchPartyIndexScreen() {
         };
       }
 
-      if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+      if (access && isAccessSheetReason(access.reason)) {
         setPendingAccessDecision(access);
         setAccessSheetReason(access.reason);
-        const message = access.monetization.issues[0] ?? "This room still isn't available for your current access level.";
+        const message = access.monetization.issues[0] ?? getWatchPartyRoomAccessMessage(access);
         trackEvent("monetization_unlock_failure", {
           action,
           surface: "watch-party-lobby",
@@ -557,11 +566,7 @@ export default function WatchPartyIndexScreen() {
         };
       }
 
-      const message = access?.reason === "room_locked"
-        ? "This room is locked right now. Ask the host to reopen it."
-        : access?.reason === "removed"
-          ? "You no longer have access to this room."
-          : "This room still isn't available for your current access level.";
+      const message = getWatchPartyRoomAccessMessage(access);
       trackEvent("monetization_unlock_failure", {
         action,
         surface: "watch-party-lobby",
