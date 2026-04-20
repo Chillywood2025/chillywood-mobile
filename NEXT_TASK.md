@@ -1,27 +1,27 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **live/event scheduling doctrine-spec pass** on `main`, starting with `docs/live-event-scheduling-implementation-spec.md` and using `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `docs/access-entitlement-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, and this file as governing truth. Do not reopen the closed-enough access-adoption family, do not implement event access yet, and do not touch schema, routes, or public/live UI in this doctrine pass. The access/entitlement chapter is now complete enough to move on for current truth, and event access remains explicitly later until the live/event chapter creates canonical event truth.
+The next exact task is a narrow **current live/event truth audit** on `main`, using `docs/live-event-scheduling-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `docs/access-entitlement-implementation-spec.md`, and this file as governing truth. Audit only the current live/channel/admin owners and helpers needed to prove what live/session truth, title scheduling truth, replay truth, reminder truth, and missing event truth already exist. Do not implement event access yet, and do not touch schema, routes, or public/live UI in this audit pass unless a real regression is proved.
 
 ## Current Plan
-1. Re-read `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `docs/access-entitlement-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, and this file first.
+1. Re-read `docs/live-event-scheduling-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `docs/access-entitlement-implementation-spec.md`, and this file first.
 2. Treat the current profile/channel, content-management, and access-adoption families as closed unless a real regression is found.
-3. Create the durable live/event chapter doctrine in `docs/live-event-scheduling-implementation-spec.md` only; do not start implementation yet.
-4. Preserve locked semantics and route truth for `Watch-Party Live`, `Live Watch-Party`, `Live First`, `/watch-party/[partyId]`, `/watch-party/live-stage/[partyId]`, `/profile/[userId]`, and `/channel-settings`.
-5. Keep event access implementation out of scope until the live/event chapter defines canonical event truth.
-6. Keep unsupported later-phase purchase, ticketed, and formal invite concepts explicitly unsupported instead of faking them.
+3. Audit the current live/channel/admin owners and helpers to determine exactly what live/session truth already exists now.
+4. Determine whether title-level scheduling truth can be reused or whether canonical event truth must be separate.
+5. Keep event access implementation, schema changes, and UI changes out of scope for this audit lane.
+6. Preserve locked semantics and route truth for `Watch-Party Live`, `Live Watch-Party`, `Live First`, `/watch-party/[partyId]`, `/watch-party/live-stage/[partyId]`, `/profile/[userId]`, and `/channel-settings`.
 
 ## Exact Next Batch
-- create `docs/live-event-scheduling-implementation-spec.md`
-- define canonical live/event doctrine for scheduled live and scheduled watch-party surfaces without changing route truth
-- preserve the locked distinction between `Watch-Party Live`, `Live Watch-Party`, and `Live First`
+- audit current live/session truth
+- audit current scheduling, replay, and reminder truth
+- prove whether a minimal canonical event model can be defined safely
 - confirm event access remains later until canonical event truth exists
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- create the first durable live/event scheduling implementation spec
-- use the access spec handoff, current room doctrine, and current route/control-file truth to define what live/event scheduling means now versus later
+- audit `app/channel-settings.tsx`, `app/profile/[userId].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, `app/watch-party/live-stage/[partyId].tsx`, `_lib/watchParty.ts`, `_lib/communication.ts`, `app/admin.tsx`, and current scheduling truth only as needed
+- use the new live/event spec plus current route/control-file truth to separate current live truth from missing event truth
 - keep the lane doctrine-first and avoid reopening already-landed access, channel, content, or room adoption work unless a real regression is found
 - preserve all current route truth and all previously landed profile/channel, content-management, and access stages
 - keep unrelated local dirt out of the checkpoint
@@ -33,8 +33,8 @@ Do not:
 - invent creator-platform routes or `/studio*` route truth
 - fake content catalogs, fake programming, or fake analytics
 - create `/studio*` routes
-- touch schema or backend ownership in this doctrine lane
-- touch broader runtime room/live-stage behavior in this doctrine lane
+- touch schema or backend ownership in this audit lane
+- touch broader runtime room/live-stage behavior in this audit lane
 - touch RBAC or Rachi control-plane work
 - implement event access before the live/event chapter creates canonical event truth
 - broaden into screen-owner adoption or UI work
@@ -42,8 +42,9 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- `docs/live-event-scheduling-implementation-spec.md` lands as durable doctrine
-- the repo defines exactly what current live/event truth is versus what remains later-phase
+- the repo records exactly what current live/session truth already exists
+- the repo records what scheduling, replay, and reminder truth are still missing
+- the repo ends with one clear next move for canonical event foundation work if it is safe
 - event access remains explicitly later instead of being faked
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
 - no fake future scope or schema drift is introduced
