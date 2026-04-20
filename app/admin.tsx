@@ -28,9 +28,10 @@ import {
   getModerationAccess,
   hasPlatformRoleMembership,
   readMyPlatformRoleMemberships,
-  readSafetyReports,
+  readSafetyReportQueue,
   type PlatformRoleMembership,
-  type SafetyReportRecord,
+  type SafetyReportQueueItem,
+  type SafetyReportQueueSummary,
 } from "../_lib/moderation";
 import {
   normalizeCreatorPermissionSet,
@@ -372,11 +373,6 @@ const formatModerationToken = (value: unknown) => {
   return text.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-const readContextText = (value: unknown, fallback = "") => {
-  const text = String(value ?? "").trim();
-  return text || fallback;
-};
-
 const formatModerationTimestamp = (value: string | null) => {
   if (!value) return "Pending timestamp";
   const date = new Date(value);
@@ -432,7 +428,8 @@ export default function AdminStudioScreen() {
   const [creatorGrantForm, setCreatorGrantForm] = useState<CreatorPermissionSet>(normalizeCreatorPermissionSet(null));
   const [platformRoles, setPlatformRoles] = useState<PlatformRoleMembership[]>([]);
   const [platformRolesLoading, setPlatformRolesLoading] = useState(false);
-  const [safetyReports, setSafetyReports] = useState<SafetyReportRecord[]>([]);
+  const [safetyReports, setSafetyReports] = useState<SafetyReportQueueItem[]>([]);
+  const [safetyReportQueueSummary, setSafetyReportQueueSummary] = useState<SafetyReportQueueSummary | null>(null);
   const [safetyReportsLoading, setSafetyReportsLoading] = useState(false);
   const [moderationNotice, setModerationNotice] = useState<string | null>(null);
   const [form, setForm] = useState<EditorForm>({
@@ -791,10 +788,12 @@ export default function AdminStudioScreen() {
     try {
       setSafetyReportsLoading(true);
       setModerationNotice(null);
-      const reports = await readSafetyReports({ limit: 8 });
-      setSafetyReports(reports);
+      const queue = await readSafetyReportQueue({ limit: 8 });
+      setSafetyReports(queue.items);
+      setSafetyReportQueueSummary(queue.summary);
     } catch (err: any) {
       setSafetyReports([]);
+      setSafetyReportQueueSummary(null);
       setModerationNotice(err?.message ?? "Failed to load the safety review queue.");
     } finally {
       setSafetyReportsLoading(false);
@@ -1396,25 +1395,31 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configLoadingText}>Loading recent safety reports…</Text>
               </View>
             ) : safetyReports.length ? (
-              <View style={styles.configList}>
-                {safetyReports.map((report) => {
-                  const targetLabel = readContextText(report.context.targetLabel, report.targetId);
-                  const sourceSurface = readContextText(report.context.sourceSurface, "unknown");
-                  const reporterRole = readContextText(report.context.reporterRole, "member");
-                  const reviewState = readContextText(report.context.moderationReviewState, "pending_review");
-                  const targetAuditOwnerKey = readContextText(report.context.targetAuditOwnerKey);
-                  const platformOwnedTarget = report.context.platformOwnedTarget === true;
-
-                  return (
+              <>
+                {safetyReportQueueSummary ? (
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Recent queue scope</Text>
+                      <Text style={styles.configListBody}>
+                        {`Sources ${safetyReportQueueSummary.sourceSurfaces.map((surface) => formatModerationToken(surface)).join(" · ") || "Unknown"}`}
+                      </Text>
+                      <Text style={styles.configListBody}>
+                        {`${safetyReportQueueSummary.platformOwnedTargetCount} platform-owned target${safetyReportQueueSummary.platformOwnedTargetCount === 1 ? "" : "s"} in the current recent queue slice.`}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+                <View style={styles.configList}>
+                  {safetyReports.map((report) => (
                     <View key={report.id} style={styles.configListRow}>
                       <View style={styles.configListCopy}>
-                        <Text style={styles.configListTitle}>{targetLabel}</Text>
+                        <Text style={styles.configListTitle}>{report.targetLabel}</Text>
                         <Text style={styles.configListBody}>{formatModerationTimestamp(report.createdAt)}</Text>
                         <Text style={styles.configListBody}>
-                          {`${formatModerationToken(sourceSurface)} · Reporter ${formatModerationToken(reporterRole)}`}
+                          {`${formatModerationToken(report.sourceSurface)} · Reporter ${formatModerationToken(report.reporterRole)}`}
                         </Text>
-                        {targetAuditOwnerKey ? (
-                          <Text style={styles.configListBody}>{`Audit owner ${targetAuditOwnerKey}`}</Text>
+                        {report.targetAuditOwnerKey ? (
+                          <Text style={styles.configListBody}>{`Audit owner ${report.targetAuditOwnerKey}`}</Text>
                         ) : null}
                         {report.note ? (
                           <Text style={styles.configListBody}>{report.note}</Text>
@@ -1428,19 +1433,19 @@ export default function AdminStudioScreen() {
                         <View style={styles.badge}>
                           <Text style={styles.badgeText}>{formatModerationToken(report.targetType)}</Text>
                         </View>
-                        <View style={[styles.badge, reviewState === "operator_visible" ? styles.badgeScheduled : styles.badgeDraft]}>
-                          <Text style={styles.badgeText}>{formatModerationToken(reviewState)}</Text>
+                        <View style={[styles.badge, report.reviewState === "operator_visible" ? styles.badgeScheduled : styles.badgeDraft]}>
+                          <Text style={styles.badgeText}>{formatModerationToken(report.reviewState)}</Text>
                         </View>
-                        {platformOwnedTarget ? (
+                        {report.platformOwnedTarget ? (
                           <View style={[styles.badge, styles.badgeOn]}>
                             <Text style={styles.badgeText}>Platform Target</Text>
                           </View>
                         ) : null}
                       </View>
                     </View>
-                  );
-                })}
-              </View>
+                  ))}
+                </View>
+              </>
             ) : (
               <View style={styles.configListRow}>
                 <View style={styles.configListCopy}>
