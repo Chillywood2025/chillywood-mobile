@@ -632,6 +632,44 @@ export default function AdminStudioScreen() {
     && capabilities.sponsorPlacementCol !== null
     && capabilities.sponsorLabelCol !== null;
 
+  const upcomingScheduledSnapshot = useMemo(() => {
+    const queue = titles
+      .map((item) => {
+        const publicationState = normalizePublicationState({
+          status: normalizeStatus(item.status, item.is_published),
+          releaseAt: item.release_at ?? null,
+          hasStatusControl,
+          hasReleaseControl,
+        });
+
+        if (publicationState.status !== "scheduled" || !publicationState.releaseAt) return null;
+
+        const releaseAtTime = Date.parse(publicationState.releaseAt);
+        if (!Number.isFinite(releaseAtTime) || releaseAtTime <= Date.now()) return null;
+
+        return {
+          item,
+          releaseAt: publicationState.releaseAt,
+          releaseAtTime,
+        };
+      })
+      .filter((entry): entry is { item: TitleRow; releaseAt: string; releaseAtTime: number } => entry !== null)
+      .sort((a, b) => {
+        const releaseDelta = a.releaseAtTime - b.releaseAtTime;
+        if (releaseDelta !== 0) return releaseDelta;
+        const sortDelta = toSortNumber(a.item.sort_order) - toSortNumber(b.item.sort_order);
+        if (sortDelta !== 0) return sortDelta;
+        return (a.item.title ?? "").localeCompare(b.item.title ?? "");
+      });
+
+    return {
+      totalUpcoming: queue.length,
+      nextReleaseAt: queue[0]?.releaseAt ?? null,
+      nextItem: queue[0]?.item ?? null,
+      visibleItems: queue.slice(0, 4),
+    };
+  }, [hasReleaseControl, hasStatusControl, titles]);
+
   const editorPublicationPreview = useMemo(() => {
     const rawReleaseInput = form.release_at.trim();
     const parsedReleaseAt = hasReleaseControl ? fromDatetimeLocalValue(form.release_at) : null;
@@ -2266,6 +2304,74 @@ export default function AdminStudioScreen() {
             <Text style={styles.statLabel}>Hero Picks (target: 1)</Text>
           </View>
         </View>
+
+        {hasReleaseControl ? (
+          <View style={styles.configCard}>
+            <Text style={styles.configKicker}>SCHEDULED SNAPSHOT</Text>
+            <Text style={styles.configTitle}>Upcoming scheduled titles</Text>
+            <Text style={styles.configBody}>
+              See what publishes next without switching filters. Only titles with a real future release time appear here.
+            </Text>
+
+            {loading ? (
+              <View style={styles.configLoadingRow}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.configLoadingText}>Loading scheduled queue…</Text>
+              </View>
+            ) : upcomingScheduledSnapshot.totalUpcoming ? (
+              <View style={styles.configList}>
+                <View style={styles.configListRow}>
+                  <View style={styles.configListCopy}>
+                    <Text style={styles.configListTitle}>Next publish</Text>
+                    <Text style={styles.configListBody}>
+                      {upcomingScheduledSnapshot.nextItem
+                        ? `${upcomingScheduledSnapshot.nextItem.title} is next in the scheduled queue.`
+                        : "A real scheduled title will appear here once a future release is set."}
+                    </Text>
+                    <Text style={styles.configListBody}>
+                      {upcomingScheduledSnapshot.nextReleaseAt
+                        ? `Publishes ${formatRelease(upcomingScheduledSnapshot.nextReleaseAt)}`
+                        : "No upcoming publish time is currently scheduled."}
+                    </Text>
+                  </View>
+
+                  <View style={styles.badgesRow}>
+                    <View style={[styles.badge, styles.badgeScheduled]}>
+                      <Text style={styles.badgeText}>{`Upcoming ${upcomingScheduledSnapshot.totalUpcoming}`}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {upcomingScheduledSnapshot.visibleItems.map(({ item, releaseAt }, index) => (
+                  <View key={toIdString(item.id)} style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>{item.title || "Untitled"}</Text>
+                      <Text style={styles.configListBody}>
+                        {`Queue #${index + 1} · ${(item.category ?? "Uncategorized").toString()} · Sort ${item.sort_order ?? "—"}`}
+                      </Text>
+                      <Text style={styles.configListBody}>{`Publishes ${formatRelease(releaseAt)}`}</Text>
+                    </View>
+
+                    <View style={styles.badgesRow}>
+                      <View style={[styles.badge, styles.badgeScheduled]}>
+                        <Text style={styles.badgeText}>SCHEDULED</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>No real upcoming scheduled titles</Text>
+                  <Text style={styles.configListBody}>
+                    Future scheduled titles will appear here once they have a valid upcoming `release_at`.
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        ) : null}
 
         <View style={styles.searchWrap}>
           <TextInput
