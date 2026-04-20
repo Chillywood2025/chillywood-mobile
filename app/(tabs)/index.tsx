@@ -12,6 +12,7 @@ import {
 import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
+    resolveBrandingConfig,
     resolveFeatureConfig,
     resolveHomeConfig,
 } from "../../_lib/appConfig";
@@ -37,7 +38,23 @@ import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../lib/_supabase";
 
 type TitleRow = Omit<
-  Pick<Tables<"titles">, "id" | "created_at" | "title" | "category" | "year" | "runtime" | "synopsis" | "poster_url" | "video_url">,
+  Pick<
+    Tables<"titles">,
+    | "id"
+    | "created_at"
+    | "title"
+    | "category"
+    | "year"
+    | "runtime"
+    | "synopsis"
+    | "poster_url"
+    | "video_url"
+    | "featured"
+    | "is_hero"
+    | "is_trending"
+    | "pin_to_top_row"
+    | "sort_order"
+  >,
   "created_at"
 > & {
   created_at?: string | null;
@@ -59,12 +76,30 @@ type WatchPartyRoomRow = Pick<
 type WatchPartyRoomMessageRow = Pick<Tables<"watch_party_room_messages">, "party_id">;
 
 const LIVE_ACTIVITY_WINDOW_MILLIS = 15 * 60 * 1000;
+const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
 
 const formatAddedDate = (value?: string | null) => {
   if (!value) return "Added recently";
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "Added recently";
   return `Added ${date.toLocaleDateString([], { month: "short", day: "numeric" })}`;
+};
+
+const toTimestamp = (value?: string | null) => {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toProgramSortOrder = (value?: number | null) => (
+  typeof value === "number" && Number.isFinite(value) ? value : MAX_PROGRAM_SORT_ORDER
+);
+
+const sortTitlesByProgramTruth = (items: TitleRow[]) => {
+  return [...items].sort((a, b) => {
+    const sortDelta = toProgramSortOrder(a.sort_order) - toProgramSortOrder(b.sort_order);
+    if (sortDelta !== 0) return sortDelta;
+    return toTimestamp(b.created_at) - toTimestamp(a.created_at);
+  });
 };
 
 const buildDiscoveryInfoLine = (item: TitleRow) => {
@@ -90,6 +125,7 @@ export default function HomeScreen() {
   const [watchProgress, setWatchProgress] = useState<WatchProgressMap>({});
   const [titleLiveMetadataById, setTitleLiveMetadataById] = useState<Record<string, TitleLiveMetadata>>({});
   const homeConfig = resolveHomeConfig(appConfig);
+  const brandingConfig = resolveBrandingConfig(appConfig);
   const featureConfig = resolveFeatureConfig(appConfig);
   const maxRailItems = Math.max(1, homeConfig.maxItemsPerRail || 8);
   const canShowContinueWatching = featureConfig.continueWatchingEnabled && homeConfig.enabledRails.continue_watching;
@@ -179,7 +215,9 @@ export default function HomeScreen() {
 
     const { data, error } = await supabase
       .from("titles")
-      .select("id, title, category, year, runtime, synopsis, poster_url, created_at")
+      .select(
+        "id, title, category, year, runtime, synopsis, poster_url, created_at, featured, is_hero, is_trending, pin_to_top_row, sort_order",
+      )
       .order("created_at", { ascending: false })
       .returns<TitleRow[]>();
 
@@ -215,7 +253,9 @@ export default function HomeScreen() {
     try {
       const { data, error } = await supabase
         .from("titles")
-        .select("id, title, category, year, runtime, synopsis, poster_url, created_at")
+        .select(
+          "id, title, category, year, runtime, synopsis, poster_url, created_at, featured, is_hero, is_trending, pin_to_top_row, sort_order",
+        )
         .in("id", ids)
         .returns<TitleRow[]>();
 
@@ -244,6 +284,11 @@ export default function HomeScreen() {
           poster_url: null,
           created_at: null,
           video_url: null,
+          featured: null,
+          is_hero: null,
+          is_trending: null,
+          pin_to_top_row: null,
+          sort_order: null,
           slug: null,
           video_thumbnail: null,
         };
@@ -362,14 +407,70 @@ export default function HomeScreen() {
       });
   }, [titles, watchProgress]);
 
-  const spotlightItem = (canShowContinueWatching ? continueCandidates[0] : null) ?? titles[0] ?? null;
+  const latestTitles = useMemo(() => {
+    return [...titles].sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at));
+  }, [titles]);
+
+  const programmedTitles = useMemo(() => sortTitlesByProgramTruth(titles), [titles]);
+
+  const programmedHeroItem = useMemo(() => {
+    const manualHeroTitleId = String(homeConfig.manualHeroTitleId ?? "").trim();
+    const manualHeroItem = manualHeroTitleId
+      ? programmedTitles.find((item) => String(item.id ?? "").trim() === manualHeroTitleId) ?? null
+      : null;
+    const heroFlagItem = programmedTitles.find((item) => item.is_hero === true) ?? null;
+
+    if (homeConfig.heroMode === "manual_title") {
+      return manualHeroItem ?? heroFlagItem ?? latestTitles[0] ?? null;
+    }
+
+    if (homeConfig.heroMode === "hero_flag") {
+      return heroFlagItem ?? latestTitles[0] ?? null;
+    }
+
+    return latestTitles[0] ?? null;
+  }, [homeConfig.heroMode, homeConfig.manualHeroTitleId, latestTitles, programmedTitles]);
+
+  const topPicksRail = useMemo(() => {
+    const sourceTitles = (() => {
+      switch (homeConfig.topPicksSource) {
+        case "top_row":
+          return programmedTitles.filter((item) => item.pin_to_top_row === true);
+        case "featured":
+          return programmedTitles.filter((item) => item.featured === true);
+        case "trending":
+          return programmedTitles.filter((item) => item.is_trending === true);
+        default:
+          return latestTitles;
+      }
+    })();
+
+    const usingConfiguredSource = sourceTitles.length > 0;
+    const data = (usingConfiguredSource ? sourceTitles : latestTitles).slice(0, maxRailItems);
+    const sourceLabel = usingConfiguredSource ? homeConfig.topPicksSource : "recent";
+    const title = sourceLabel === "featured"
+      ? "Featured Picks"
+      : sourceLabel === "trending"
+        ? "Trending Now"
+        : sourceLabel === "top_row"
+          ? "Top Row"
+          : "Top Picks";
+
+    return { data, title };
+  }, [homeConfig.topPicksSource, latestTitles, maxRailItems, programmedTitles]);
+
+  const continueWatchingTitles = useMemo(
+    () => continueCandidates.slice(0, maxRailItems),
+    [continueCandidates, maxRailItems],
+  );
+
+  const spotlightItem = (canShowContinueWatching ? continueCandidates[0] : null) ?? programmedHeroItem ?? null;
   const spotlightIsContinueWatching = canShowContinueWatching && !!continueCandidates.length && !!spotlightItem;
   const spotlightImageSource = getImageUri(spotlightItem);
   const spotlightProgress = spotlightItem ? watchProgress[String(spotlightItem.id)] : undefined;
   const spotlightProgressPercent = spotlightProgress?.durationMillis
     ? Math.max(8, Math.min(100, Math.round((spotlightProgress.positionMillis / spotlightProgress.durationMillis) * 100)))
     : 42;
-  const topRatedTitles = useMemo(() => titles.slice(0, maxRailItems), [titles, maxRailItems]);
   const homeAvatarInitial = String(currentChannel?.displayName ?? "You").slice(0, 1).toUpperCase() || "Y";
 
   const browseTitles = useMemo(() => {
@@ -382,6 +483,25 @@ export default function HomeScreen() {
   }, [homeConfig.browseCategoryQuery, maxRailItems, titles]);
 
   const favoriteTitles = useMemo(() => myListTitles.slice(0, maxRailItems), [maxRailItems, myListTitles]);
+
+  function renderDiscoveryRail(title: string, data: TitleRow[], keyPrefix: string) {
+    if (!data.length) return null;
+
+    return (
+      <View key={keyPrefix} style={styles.section}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+
+        <FlatList
+          horizontal
+          data={data}
+          keyExtractor={(item, idx) => `${keyPrefix}-${item.id}-${idx}`}
+          renderItem={renderDiscoveryCard}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.dramaRow}
+        />
+      </View>
+    );
+  }
 
   const renderDiscoveryCard = ({ item }: { item: TitleRow }) => {
     const cardImageSource = getImageUri(item);
@@ -506,7 +626,7 @@ export default function HomeScreen() {
 
               <View style={styles.heroContent}>
                 <Text style={styles.topBrand}>
-                  {spotlightIsContinueWatching ? "CONTINUE WATCHING" : "STREAM THE CITY"}
+                  {spotlightIsContinueWatching ? "CONTINUE WATCHING" : brandingConfig.homeHeroKicker}
                 </Text>
                 <Text style={styles.heroTitle} numberOfLines={2}>
                   {spotlightItem.title}
@@ -548,91 +668,88 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {homeConfig.enabledRails.top_picks ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Top Rated</Text>
+          {homeConfig.railOrder.map((railKey) => {
+            if (!homeConfig.enabledRails[railKey]) return null;
 
-              <FlatList
-                horizontal
-                data={topRatedTitles}
-                keyExtractor={(item, idx) => `top-rated-${item.id}-${idx}`}
-                renderItem={renderDiscoveryCard}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.dramaRow}
-              />
-            </View>
-          ) : null}
+            if (railKey === "top_picks") {
+              return renderDiscoveryRail(topPicksRail.title, topPicksRail.data, "top-picks");
+            }
 
-          {homeConfig.enabledRails.browse ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{String(homeConfig.browseCategoryLabel ?? "").trim() || "Browse"}</Text>
+            if (railKey === "browse") {
+              return renderDiscoveryRail(
+                String(homeConfig.browseCategoryLabel ?? "").trim() || "Browse",
+                browseTitles,
+                "browse",
+              );
+            }
 
-              <FlatList
-                horizontal
-                data={browseTitles}
-                keyExtractor={(item, idx) => `${item.id}-${idx}`}
-                renderItem={renderDiscoveryCard}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.dramaRow}
-              />
-            </View>
-          ) : null}
+            if (railKey === "continue_watching") {
+              if (!canShowContinueWatching || !continueWatchingTitles.length) return null;
+              return renderDiscoveryRail("Continue Watching", continueWatchingTitles, "continue-watching");
+            }
 
-          {featureConfig.favoritesEnabled && homeConfig.enabledRails.favorites ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Favorites</Text>
+            if (railKey === "favorites") {
+              if (!featureConfig.favoritesEnabled) return null;
 
-              {myListLoading ? (
-                <View style={styles.myListLoadingWrap}>
-                  <ActivityIndicator color="#E50914" />
-                </View>
-              ) : !favoriteTitles.length ? (
-                <Text style={styles.myListEmpty}>No saved titles yet.</Text>
-              ) : (
-                <FlatList
-                  horizontal
-                  data={favoriteTitles}
-                  keyExtractor={(item, idx) => `${item.id}-${idx}`}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.myListRow}
-                  renderItem={({ item }) => {
-                    const cardImage = getImageUri(item);
-                    const infoLine = buildDiscoveryInfoLine(item);
-                    const addedLabel = formatAddedDate(item.created_at);
-                    const liveMetadata = titleLiveMetadataById[String(item.id)];
+              return (
+                <View key="favorites" style={styles.section}>
+                  <Text style={styles.sectionTitle}>Favorites</Text>
 
-                    return (
-                      <View style={styles.myListCard}>
-                        <TouchableOpacity style={styles.myListPosterWrap} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
-                          {cardImage ? (
-                            <Image source={cardImage} style={styles.myListImage} />
-                          ) : (
-                            <View style={styles.myListFallback} />
-                          )}
-                        </TouchableOpacity>
-                        <Text style={styles.myListTitle} numberOfLines={1}>{item.title}</Text>
-                        <Text style={styles.myListMeta} numberOfLines={1}>{infoLine}</Text>
-                        <Text style={styles.myListDate} numberOfLines={1}>{addedLabel}</Text>
-                        {liveMetadata?.liveRoomCount ? (
-                          <View style={styles.myListLiveMetaRow}>
-                            <Text style={styles.myListLiveMetaText}>
-                              {liveMetadata.commentCount} comment{liveMetadata.commentCount === 1 ? "" : "s"}
-                            </Text>
-                            {liveMetadata.reactionsEnabled ? (
-                              <Text style={styles.myListLiveMetaText}>Reactions live</Text>
+                  {myListLoading ? (
+                    <View style={styles.myListLoadingWrap}>
+                      <ActivityIndicator color="#E50914" />
+                    </View>
+                  ) : !favoriteTitles.length ? (
+                    <Text style={styles.myListEmpty}>No saved titles yet.</Text>
+                  ) : (
+                    <FlatList
+                      horizontal
+                      data={favoriteTitles}
+                      keyExtractor={(item, idx) => `${item.id}-${idx}`}
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.myListRow}
+                      renderItem={({ item }) => {
+                        const cardImage = getImageUri(item);
+                        const infoLine = buildDiscoveryInfoLine(item);
+                        const addedLabel = formatAddedDate(item.created_at);
+                        const liveMetadata = titleLiveMetadataById[String(item.id)];
+
+                        return (
+                          <View style={styles.myListCard}>
+                            <TouchableOpacity style={styles.myListPosterWrap} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
+                              {cardImage ? (
+                                <Image source={cardImage} style={styles.myListImage} />
+                              ) : (
+                                <View style={styles.myListFallback} />
+                              )}
+                            </TouchableOpacity>
+                            <Text style={styles.myListTitle} numberOfLines={1}>{item.title}</Text>
+                            <Text style={styles.myListMeta} numberOfLines={1}>{infoLine}</Text>
+                            <Text style={styles.myListDate} numberOfLines={1}>{addedLabel}</Text>
+                            {liveMetadata?.liveRoomCount ? (
+                              <View style={styles.myListLiveMetaRow}>
+                                <Text style={styles.myListLiveMetaText}>
+                                  {liveMetadata.commentCount} comment{liveMetadata.commentCount === 1 ? "" : "s"}
+                                </Text>
+                                {liveMetadata.reactionsEnabled ? (
+                                  <Text style={styles.myListLiveMetaText}>Reactions live</Text>
+                                ) : null}
+                              </View>
                             ) : null}
+                            <TouchableOpacity style={styles.myListRemoveBtn} onPress={() => removeFromMyList(item)} activeOpacity={0.85}>
+                              <Text style={styles.myListRemoveText}>Remove</Text>
+                            </TouchableOpacity>
                           </View>
-                        ) : null}
-                        <TouchableOpacity style={styles.myListRemoveBtn} onPress={() => removeFromMyList(item)} activeOpacity={0.85}>
-                          <Text style={styles.myListRemoveText}>Remove</Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }}
-                />
-              )}
-            </View>
-          ) : null}
+                        );
+                      }}
+                    />
+                  )}
+                </View>
+              );
+            }
+
+            return null;
+          })}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Chi&apos;llywood Originals</Text>
