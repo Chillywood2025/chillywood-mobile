@@ -22,7 +22,7 @@ export const USER_PROFILES_TABLE = "user_profiles";
 export type ChannelAudienceAccessScope = "owner" | "operator" | "unavailable";
 export type ChannelSafetyAdminAccessScope = "owner" | "reviewer" | "unavailable";
 export type ChannelCreatorAnalyticsAccessScope = "owner" | "unavailable";
-export type ChannelReadModelFieldStatus = "available" | "missing";
+export type ChannelReadModelFieldStatus = "available" | "missing" | "later";
 export type ChannelPublicActivityVisibility = "public" | "followers_only" | "subscribers_only" | "private";
 
 export type ChannelAudienceReadModel = {
@@ -124,13 +124,13 @@ const creatorAnalyticsStatus: CreatorAnalyticsReadModel["dataStatus"] = {
   communicationRoomsHosted: "available",
   activeHostedRooms: "available",
   latestHostedActivityAt: "available",
-  profileVisits: "missing",
+  profileVisits: "later",
   followerCount: "available",
   subscriberCount: "available",
   liveAttendanceTotal: "missing",
   contentLaunches: "missing",
-  continueWatchingReturns: "missing",
-  gatedSurfaceViews: "missing",
+  continueWatchingReturns: "later",
+  gatedSurfaceViews: "later",
 };
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();

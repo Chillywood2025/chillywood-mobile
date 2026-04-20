@@ -26,6 +26,7 @@ import {
   readChannelAudienceSummary,
   readChannelSafetyAdminSummary,
   readCreatorAnalyticsSummary,
+  type ChannelReadModelFieldStatus,
   type ChannelAudienceReadModel,
   type ChannelSafetyAdminReadModel,
   type CreatorAnalyticsReadModel,
@@ -85,6 +86,8 @@ type SummaryMetricCard = {
   body: string;
   tone?: "default" | "unavailable";
 };
+
+type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 
 type ChannelEventEditorState = {
   editingEventId: string | null;
@@ -254,6 +257,46 @@ const formatAudienceActionLabel = (value: ChannelAudienceActionResult["action"])
 
 const formatAudienceActionStatus = (value: ChannelAudienceActionStatus) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
+const formatReadModelStatusValue = (value: Exclude<ChannelReadModelFieldStatus, "available">) =>
+  value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
+
+const analyticsUnavailableMetricDefinitions: readonly {
+  key: CreatorAnalyticsMetricKey;
+  label: string;
+  missingBody: string;
+  laterBody: string;
+}[] = [
+  {
+    key: "profileVisits",
+    label: "Profile Visits",
+    missingBody: "Profile analytics are in chapter scope, but the repo still lacks honest aggregate truth for them.",
+    laterBody: "Profile/channel route opens are not treated as creator analytics until a real profile aggregate read path exists.",
+  },
+  {
+    key: "liveAttendanceTotal",
+    label: "Live Attendance",
+    missingBody: "Hosted room and event truth exists, but attendance totals still need real aggregate backing before they can be shown.",
+    laterBody: "This metric stays later until live attendance aggregate truth is actually supported.",
+  },
+  {
+    key: "contentLaunches",
+    label: "Content Launches",
+    missingBody: "Programming and title truth are real, but creator-facing content-performance aggregates are not backed yet.",
+    laterBody: "This metric stays later until creator content-performance aggregates are truly supported.",
+  },
+  {
+    key: "continueWatchingReturns",
+    label: "Continue Watching Returns",
+    missingBody: "Return behavior is conceptually in scope, but the repo does not yet aggregate it honestly.",
+    laterBody: "Continue-watching return analytics belong to a later aggregate layer and should not be implied yet.",
+  },
+  {
+    key: "gatedSurfaceViews",
+    label: "Gated Surface Views",
+    missingBody: "Access events are emitted at runtime, but they are not yet aggregated into creator-facing conversion reporting.",
+    laterBody: "Conversion-style gate views stay later until a real creator conversion read model exists.",
+  },
+];
 
 export default function ChannelSettingsScreen() {
   const router = useRouter();
@@ -757,20 +800,19 @@ export default function ChannelSettingsScreen() {
       body: "Audience-linked subscriber signal mirrored from creator/channel subscriber truth.",
     },
   ];
-  const analyticsUnavailableCards: readonly SummaryMetricCard[] = [
-    {
-      label: "Profile Visits",
-      value: "Unavailable",
-      body: "Creator-facing profile-visit aggregates are not backed by current repo truth.",
-      tone: "unavailable",
-    },
-    {
-      label: "Attendance / Content / Conversion",
-      value: "Missing",
-      body: "Live attendance totals, content performance, and gated conversion metrics still need backend aggregation truth.",
-      tone: "unavailable",
-    },
-  ];
+  const analyticsUnavailableCards: readonly SummaryMetricCard[] = analyticsUnavailableMetricDefinitions.reduce<SummaryMetricCard[]>((cards, definition) => {
+      const status = creatorAnalyticsSummary?.dataStatus?.[definition.key] ?? "missing";
+      if (status === "available") {
+        return cards;
+      }
+      cards.push({
+        label: definition.label,
+        value: formatReadModelStatusValue(status),
+        body: status === "later" ? definition.laterBody : definition.missingBody,
+        tone: "unavailable" as const,
+      });
+      return cards;
+    }, []);
   const safetySummaryCards: readonly SummaryMetricCard[] = [
     {
       label: "Actor Role",
@@ -1812,7 +1854,7 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                This section only renders the supported creator analytics slice backed by current room/session truth. Unsupported creator metrics stay marked missing instead of being zeroed or fabricated.
+                This section only renders the supported creator analytics slice backed by current room/session truth. Creator analytics support status stays explicit: backed metrics are available, and unsupported metrics stay missing or later instead of being zeroed or fabricated.
               </Text>
               <View style={styles.summaryGrid}>
                 {analyticsSummaryCards.map((card) => (
