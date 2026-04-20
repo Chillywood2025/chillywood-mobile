@@ -36,6 +36,7 @@ import {
   cancelChannelAudienceRequest,
   declineChannelAudienceRequest,
   getChannelSubscriberRelationshipActionSupport,
+  removeChannelFollower,
   unblockChannelAudienceMember,
   type ChannelAudienceActionResult,
   type ChannelAudienceActionStatus,
@@ -235,6 +236,8 @@ const formatAudienceActionLabel = (value: ChannelAudienceActionResult["action"])
       return "Block Audience Member";
     case "unblock":
       return "Unblock Audience Member";
+    case "remove_follower":
+      return "Remove Follower";
     case "follow":
       return "Follow Channel";
     case "unfollow":
@@ -269,6 +272,7 @@ export default function ChannelSettingsScreen() {
   const [audienceActionResult, setAudienceActionResult] = useState<ChannelAudienceActionResult | null>(null);
   const [audienceActionLoading, setAudienceActionLoading] = useState<ChannelAudienceActionResult["action"] | null>(null);
   const [audienceRequestIdInput, setAudienceRequestIdInput] = useState("");
+  const [audienceFollowerUserIdInput, setAudienceFollowerUserIdInput] = useState("");
   const [audienceTargetUserIdInput, setAudienceTargetUserIdInput] = useState("");
   const [audienceBlockReasonInput, setAudienceBlockReasonInput] = useState("");
   const [eventsLoading, setEventsLoading] = useState(false);
@@ -1485,7 +1489,7 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.accessSummaryKicker}>WORKFLOW FOUNDATION</Text>
                 <Text style={styles.accessSummaryTitle}>Real creator-side audience actions now live here</Text>
                 <Text style={styles.accessSummaryBody}>
-                  This panel now uses `_lib/channelAudience.ts` beneath the summary cards. It stays narrow on purpose: request review and block workflows are real here now, while subscriber mutation, follower removal, and VIP/mod/co-host systems remain explicitly later.
+                  This panel now uses `_lib/channelAudience.ts` beneath the summary cards. It stays narrow on purpose: follower removal, request review, and block workflows are real here now, while subscriber mutation and VIP/mod/co-host systems remain explicitly later.
                 </Text>
               </View>
 
@@ -1600,6 +1604,52 @@ export default function ChannelSettingsScreen() {
                 </TouchableOpacity>
               </View>
 
+              <Text style={styles.sectionLabel}>Follower Relationship</Text>
+              <Text style={styles.permissionCopy}>
+                Remove a backed follower relationship by follower user id when creator-side cleanup is needed. This stays separate from viewer-side follow or unfollow actions and does not invent subscriber mutation.
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Follower user id"
+                placeholderTextColor="#8d8d8d"
+                value={audienceFollowerUserIdInput}
+                onChangeText={(text) => {
+                  setAudienceFollowerUserIdInput(text);
+                  setAudienceActionNotice(null);
+                }}
+                autoCapitalize="none"
+              />
+              <View style={styles.eventActionRow}>
+                <TouchableOpacity
+                  style={styles.eventPrimaryButton}
+                  onPress={() => {
+                    const followerUserId = String(audienceFollowerUserIdInput).trim();
+                    if (!followerUserId) {
+                      setAudienceActionNotice("Enter a follower user id before removing a follower relationship.");
+                      return;
+                    }
+                    void runAudienceAction("remove_follower", async () => {
+                      const result = await removeChannelFollower({
+                        channelUserId: String(user?.id ?? ""),
+                        followerUserId,
+                      });
+                      if (result.status === "completed" || result.status === "noop") {
+                        setAudienceFollowerUserIdInput("");
+                      }
+                      return result;
+                    });
+                  }}
+                  activeOpacity={0.88}
+                  disabled={audienceActionLoading !== null}
+                >
+                  {audienceActionLoading === "remove_follower" ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.eventPrimaryButtonText}>Remove Follower</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.sectionLabel}>Blocked Audience</Text>
               <Text style={styles.permissionCopy}>
                 Block and unblock use the real channel-owned audience boundary already backed by schema truth. This stays separate from platform moderation and does not invent VIP, moderator, or co-host roles.
@@ -1689,9 +1739,9 @@ export default function ChannelSettingsScreen() {
 
               <View style={[styles.summaryCard, styles.summaryCardUnavailable, styles.audienceWorkflowLimitCard]}>
                 <Text style={styles.summaryLabel}>Explicitly Later</Text>
-                <Text style={styles.summaryValue}>Subscriber / VIP / Removal</Text>
+                <Text style={styles.summaryValue}>Subscriber / VIP / Roles</Text>
                 <Text style={styles.summaryBody}>
-                  {subscriberMutationSupport.message} Follower removal and VIP/mod/co-host workflows also stay out until the chapter lands real supporting helper truth.
+                  {subscriberMutationSupport.message} VIP/mod/co-host workflows also stay out until the chapter lands real supporting helper truth.
                 </Text>
               </View>
             </View>

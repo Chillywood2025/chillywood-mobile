@@ -23,6 +23,7 @@ export type ChannelAudienceRequiredScope =
 export type ChannelAudienceActionName =
   | "follow"
   | "unfollow"
+  | "remove_follower"
   | "create_request"
   | "cancel_request"
   | "approve_request"
@@ -419,6 +420,117 @@ export async function unfollowChannel(channelUserId: string): Promise<ChannelAud
     channelUserId: context.channelUserId,
     viewerUserId: context.viewerUserId,
     targetUserId: context.viewerUserId,
+  });
+}
+
+export async function removeChannelFollower(input: {
+  channelUserId: string;
+  followerUserId: string;
+}): Promise<ChannelAudienceActionResult> {
+  const context = await readAudienceActorContext(input.channelUserId);
+  const targetUserId = normalizeText(input.followerUserId) || null;
+
+  if (!context.channelUserId) {
+    return buildActionResult({
+      action: "remove_follower",
+      status: "blocked",
+      reason: "missing_channel_user_id",
+      message: "Follower removal requires a channel user id.",
+      actorScope: context.actorScope,
+      requiredScope: "owner_or_operator",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId,
+    });
+  }
+
+  if (!context.viewerUserId) {
+    return buildActionResult({
+      action: "remove_follower",
+      status: "blocked",
+      reason: "signed_out",
+      message: "Sign in is required before removing a follower relationship.",
+      actorScope: context.actorScope,
+      requiredScope: "owner_or_operator",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId,
+    });
+  }
+
+  if (!targetUserId) {
+    return buildActionResult({
+      action: "remove_follower",
+      status: "blocked",
+      reason: "missing_target_user_id",
+      message: "Follower removal requires a follower user id.",
+      actorScope: context.actorScope,
+      requiredScope: "owner_or_operator",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId,
+    });
+  }
+
+  if (!context.isOwner && !context.canOperateAcrossChannels) {
+    return buildActionResult({
+      action: "remove_follower",
+      status: "blocked",
+      reason: "not_owner_or_operator",
+      message: "Only the channel owner or an operator can remove follower relationships.",
+      actorScope: context.actorScope,
+      requiredScope: "owner_or_operator",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId,
+    });
+  }
+
+  const existing = await readFollowerRow(context.channelUserId, targetUserId);
+  if (!existing) {
+    return buildActionResult({
+      action: "remove_follower",
+      status: "noop",
+      reason: "not_following",
+      message: "No follower relationship exists for that audience member on this channel.",
+      actorScope: context.actorScope,
+      requiredScope: "owner_or_operator",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId,
+    });
+  }
+
+  const { error } = await supabase
+    .from(CHANNEL_FOLLOWERS_TABLE)
+    .delete()
+    .eq("channel_user_id", context.channelUserId)
+    .eq("follower_user_id", targetUserId);
+
+  if (error) {
+    return buildActionResult({
+      action: "remove_follower",
+      status: "error",
+      reason: "delete_failed",
+      message: String(error.message ?? "Unable to remove this follower relationship right now."),
+      actorScope: context.actorScope,
+      requiredScope: "owner_or_operator",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId,
+    });
+  }
+
+  return buildActionResult({
+    action: "remove_follower",
+    status: "completed",
+    reason: "allowed",
+    message: "Follower relationship removed from this channel.",
+    actorScope: context.actorScope,
+    requiredScope: "owner_or_operator",
+    channelUserId: context.channelUserId,
+    viewerUserId: context.viewerUserId,
+    targetUserId,
   });
 }
 
