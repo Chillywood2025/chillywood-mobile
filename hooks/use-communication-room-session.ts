@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import type { MediaStream } from "react-native-webrtc";
 
+import { resolveRoomAccess } from "../_lib/accessEntitlements";
 import { trackEvent } from "../_lib/analytics";
 import {
   buildCommunicationChannelName,
@@ -14,7 +15,6 @@ import {
   COMMUNICATION_ROOM_MAX_PARTICIPANTS,
   createCommunicationMediaStream,
   endCommunicationRoom,
-  evaluateCommunicationRoomAccess,
   getActiveCommunicationMemberships,
   getCommunicationRoomSnapshot,
   getCommunicationRTCModule,
@@ -1086,13 +1086,14 @@ export function useCommunicationRoomSession({
 
       if (!joinedMembership) {
         const currentMembership = snapshot.memberships.find((membership) => membership.userId === resolvedIdentity.userId) ?? null;
-        const access = await evaluateCommunicationRoomAccess({
+        const access = await resolveRoomAccess({
+          roomSurface: "communication",
           room: snapshot.room,
           membership: currentMembership,
           userId: resolvedIdentity.userId,
         });
         const activeMemberships = getActiveCommunicationMemberships(snapshot.memberships);
-        if (access.canJoin && !currentMembership && activeMemberships.length >= COMMUNICATION_ROOM_MAX_PARTICIPANTS) {
+        if (access.isAllowed && !currentMembership && activeMemberships.length >= COMMUNICATION_ROOM_MAX_PARTICIPANTS) {
           logChatRtc("join_room_blocked_full", {
             roomId,
             activeMembershipCount: activeMemberships.length,

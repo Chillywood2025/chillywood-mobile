@@ -1,29 +1,29 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **communication room/session access cleanup pass** on `main`, using `_lib/accessEntitlements.ts`, `docs/access-entitlement-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/profile/[userId]`, `/channel-settings`, `/chat`, title/player route truth, or schema ownership unless a real regression is proved. The Party Room resolver adoption pass is now landed: `app/watch-party/[partyId].tsx` consumes shared deeper room gating truth from `_lib/accessEntitlements.ts`, and the next pass should clean up the one smaller remaining communication-room/session seam in `hooks/use-communication-room-session.ts`.
+The next exact task is a narrow **deeper room/session access closeout audit** on `main`, using `_lib/accessEntitlements.ts`, `docs/access-entitlement-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/profile/[userId]`, `/channel-settings`, `/chat`, title/player route truth, or schema ownership unless a real regression is proved. The Party Room resolver adoption pass and the communication room/session cleanup pass are now landed, and the next pass should determine whether any meaningful room/session access-adoption seam still remains.
 
 ## Current Plan
 1. Re-read `docs/access-entitlement-implementation-spec.md`, `ROADMAP.md`, `CURRENT_STATE.md`, and this file first.
 2. Treat the current profile/channel and content-management chapters as closed unless a real regression is found.
-3. Stay brutally narrow and clean up only the remaining communication room/session seam next.
-4. Replace the remaining local direct `evaluateCommunicationRoomAccess(...)` use in `hooks/use-communication-room-session.ts` with resolver-backed room truth if it can be done without changing runtime/session behavior.
-5. Keep event access, live-stage adoption, and any broader live/event scheduling work out of scope for this lane.
+3. Stay brutally narrow and audit only the remaining deeper room/session owners next.
+4. Inspect `app/watch-party/[partyId].tsx`, `hooks/use-communication-room-session.ts`, and `app/watch-party/live-stage/[partyId].tsx` only as needed to determine whether one more access-adoption batch is still justified.
+5. Keep event access and any broader live/event scheduling work out of scope for this audit lane.
 6. Preserve `/profile/[userId]`, `/channel-settings`, `/chat`, `/chat/[threadId]`, and all watch-party/live route truth unchanged.
 7. Keep unsupported later-phase purchase, ticketed, and formal invite concepts explicitly unsupported instead of faking them.
 
 ## Exact Next Batch
-- adopt `_lib/accessEntitlements.ts` into `hooks/use-communication-room-session.ts` for the remaining deeper communication-room/session access check
-- preserve current `room_full` vs `room_unavailable` handling
-- keep runtime/session behavior intact
-- leave `app/watch-party/live-stage/[partyId].tsx` untouched
+- audit the remaining deeper room/session family after the Party Room and communication-hook adoption passes
+- determine whether `app/watch-party/live-stage/[partyId].tsx` still has any meaningful access-adoption seam
+- determine whether the room/session adoption family is now complete enough to move on
+- choose one exact next move only if it is clear and honest
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- adopt the landed shared resolver only where the communication room/session hook still bypasses it today
-- use `_lib/accessEntitlements.ts` as the canonical room-access owner in `hooks/use-communication-room-session.ts`
-- keep the lane limited to the communication hook and avoid reopening Party Room or Live Room / Live Stage
+- audit only the remaining deeper room/session owners after the landed Party Room and communication-hook adoption work
+- use `_lib/accessEntitlements.ts` as the canonical reference for what room/session access adoption means now
+- keep the lane limited to `app/watch-party/[partyId].tsx`, `hooks/use-communication-room-session.ts`, and `app/watch-party/live-stage/[partyId].tsx` only as needed for the audit
 - avoid reopening landed public consumer work, source-of-truth hardening, or broader Content Studio redesign
 - preserve all current route truth and all previously landed profile/channel stages
 - keep unrelated local dirt out of the checkpoint
@@ -36,7 +36,7 @@ Do not:
 - fake content catalogs, fake programming, or fake analytics
 - create `/studio*` routes
 - touch schema or backend ownership in this adoption lane
-- touch broader runtime room/live-stage behavior in this cleanup lane
+- touch broader runtime room/live-stage behavior in this audit lane
 - touch RBAC or Rachi control-plane work
 - broaden into event access adoption before the room/session closeout is settled
 - broaden into other screen owners
@@ -44,8 +44,10 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- `hooks/use-communication-room-session.ts` no longer bypasses the shared room resolver where the audit already proved it should not
-- `room_full` vs `room_unavailable` handling stays intact
+- the remaining deeper room/session owners are audited honestly against `_lib/accessEntitlements.ts`
+- the repo ends with exactly one clear next move:
+  - one last narrow room/session access-adoption batch
+  - or room/session access closeout
 - event access remains explicitly later instead of being faked
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
 - no fake future scope or schema drift is introduced
