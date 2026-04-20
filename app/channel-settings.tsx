@@ -12,6 +12,10 @@ import {
 } from "react-native";
 
 import {
+  resolveChannelAccess,
+  type ChannelAccessResolution,
+} from "../_lib/accessEntitlements";
+import {
   DEFAULT_APP_CONFIG,
   readAppConfig,
   resolveBrandingConfig,
@@ -59,6 +63,28 @@ type SummaryMetricCard = {
   tone?: "default" | "unavailable";
 };
 
+const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
+  if (value === "party_pass") return "Party Pass";
+  if (value === "premium") return "Premium";
+  return "Public";
+};
+
+const getChannelAccessSummaryBody = (resolution: ChannelAccessResolution | null) => {
+  if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
+    return "Checking saved defaults and creator grants before showing the channel access posture.";
+  }
+  if (resolution.reason === "channel_defaults_subscriber") {
+    return "Both watch-party and communication defaults are gated, so this channel should visibly prepare visitors for member-style access.";
+  }
+  if (resolution.reason === "channel_defaults_private") {
+    return "Watch-party entry is locked by default, so private/invite-controlled room behavior should stay explicit on public surfaces.";
+  }
+  if (resolution.reason === "channel_defaults_mixed") {
+    return "This channel mixes open and gated defaults, so the public route needs to signal where access changes instead of hiding it.";
+  }
+  return "The channel currently defaults to open communication and open watch-party access, so public surfaces should keep that honest and visible.";
+};
+
 const formatCount = (value: number | null) => value === null ? "Unavailable" : String(value);
 const formatBooleanStatus = (value: boolean) => value ? "Enabled" : "Unavailable";
 const formatVisibilitySurface = (value: boolean | null) => value == null ? "Unavailable" : value ? "Visible" : "Hidden";
@@ -97,6 +123,7 @@ export default function ChannelSettingsScreen() {
   const [audienceSummary, setAudienceSummary] = useState<ChannelAudienceReadModel | null>(null);
   const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
   const [creatorAnalyticsSummary, setCreatorAnalyticsSummary] = useState<CreatorAnalyticsReadModel | null>(null);
+  const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel settings");
 
@@ -146,6 +173,32 @@ export default function ChannelSettingsScreen() {
       active = false;
     };
   }, [canUseChannelSettings, user?.id]);
+  useEffect(() => {
+    let active = true;
+
+    if (!canUseChannelSettings || loading) {
+      setChannelAccessResolution(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    void resolveChannelAccess({
+      channelUserId: String(user?.id ?? ""),
+      profile,
+      creatorPermissions,
+    })
+      .then((resolution) => {
+        if (active) setChannelAccessResolution(resolution);
+      })
+      .catch(() => {
+        if (active) setChannelAccessResolution(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canUseChannelSettings, creatorPermissions, loading, profile, user?.id]);
 
   const updateProfile = (patch: Partial<UserProfile>) => {
     setProfile((prev) => normalizeUserProfile({ ...(prev ?? {}), ...patch }));
@@ -238,72 +291,35 @@ export default function ChannelSettingsScreen() {
     "Programming rows",
     "Public activity curation",
   ] as const;
-  const resolvedWatchPartyAccessRule = sanitizeCreatorRoomAccessRule(
-    profile?.defaultWatchPartyContentAccessRule,
-    creatorPermissions,
-  );
-  const resolvedCommunicationAccessRule = sanitizeCreatorRoomAccessRule(
-    profile?.defaultCommunicationContentAccessRule,
-    creatorPermissions,
-  );
-  const resolvedWatchPartyJoinPolicy = profile?.defaultWatchPartyJoinPolicy ?? "open";
-  const accessSummary = !profile
-    ? {
-        title: "Loading Access",
-        body: "Checking saved defaults and creator grants before showing the channel access posture.",
-      }
-    : resolvedWatchPartyAccessRule !== "open" && resolvedCommunicationAccessRule !== "open"
-      ? {
-          title: "Subscriber Access",
-          body: "Both watch-party and communication defaults are gated, so this channel should visibly prepare visitors for member-style access.",
-        }
-      : resolvedWatchPartyJoinPolicy === "locked"
-        ? {
-            title: "Private",
-            body: "Watch-party entry is locked by default, so private/invite-controlled room behavior should stay explicit on public surfaces.",
-          }
-        : resolvedWatchPartyAccessRule === "open" && resolvedCommunicationAccessRule === "open"
-          ? {
-              title: "Public",
-              body: "The channel currently defaults to open communication and open watch-party access, so public surfaces should keep that honest and visible.",
-            }
-          : {
-              title: "Mixed Access",
-              body: "This channel mixes open and gated defaults, so the public route needs to signal where access changes instead of hiding it.",
-            };
+  const accessSummary = {
+    title: channelAccessResolution?.label ?? "Loading Access",
+    body: getChannelAccessSummaryBody(channelAccessResolution),
+  };
   const accessSummaryDetails: readonly ChannelAccessSummaryDetail[] = [
     {
       label: "Watch Party",
-      value: resolvedWatchPartyAccessRule === "open"
-        ? "Public"
-        : resolvedWatchPartyAccessRule === "party_pass"
-          ? "Party Pass"
-          : "Premium",
-      body: resolvedWatchPartyJoinPolicy === "locked" ? "locked join policy" : "open join policy",
+      value: formatChannelRoomAccessValue(channelAccessResolution?.watchPartyAccessRule),
+      body: channelAccessResolution?.joinPolicy === "locked" ? "locked join policy" : "open join policy",
     },
     {
       label: "Communication",
-      value: resolvedCommunicationAccessRule === "open"
-        ? "Public"
-        : resolvedCommunicationAccessRule === "party_pass"
-          ? "Party Pass"
-          : "Premium",
+      value: formatChannelRoomAccessValue(channelAccessResolution?.communicationAccessRule),
       body: "Chi'lly Chat stays canonical even when default room access is gated",
     },
     {
       label: "Creator Grants",
-      value: !creatorPermissions
+      value: !channelAccessResolution
         ? "Loading"
-        : creatorPermissions.canUsePartyPassRooms || creatorPermissions.canUsePremiumRooms
+        : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms || channelAccessResolution.creatorPermissions?.canUsePremiumRooms
           ? "Enabled"
           : "Open Only",
-      body: !creatorPermissions
+      body: !channelAccessResolution
         ? "checking supported gated room types"
-        : creatorPermissions.canUsePartyPassRooms && creatorPermissions.canUsePremiumRooms
+        : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms && channelAccessResolution.creatorPermissions?.canUsePremiumRooms
           ? "party pass and premium defaults available"
-          : creatorPermissions.canUsePartyPassRooms
+          : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms
             ? "party pass available, premium hidden"
-            : creatorPermissions.canUsePremiumRooms
+            : channelAccessResolution.creatorPermissions?.canUsePremiumRooms
               ? "premium available, party pass hidden"
               : "unsupported gates fall back to open",
     },

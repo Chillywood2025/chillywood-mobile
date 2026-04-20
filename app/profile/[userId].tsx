@@ -1,6 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  resolveChannelAccess,
+  type ChannelAccessResolution,
+} from "../../_lib/accessEntitlements";
+import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveFeatureConfig,
@@ -12,7 +16,6 @@ import { getOrCreateDirectThread } from "../../_lib/chat";
 import { reportRuntimeError } from "../../_lib/logger";
 import {
   readCreatorPermissions,
-  sanitizeCreatorRoomAccessRule,
   type CreatorPermissionSet,
 } from "../../_lib/monetization";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
@@ -119,6 +122,31 @@ const getTitleLabel = (item?: Pick<ContentProgrammingTitle, "title"> | null, fal
   return normalized || fallback;
 };
 
+const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
+  if (value === "party_pass") return "Party Pass";
+  if (value === "premium") return "Premium";
+  return "Public";
+};
+
+const getProfileAccessBody = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
+  if (isOfficialProfile || resolution?.reason === "official_access") {
+    return "Official help stays visible on the canonical profile and Chi'lly Chat routes without pretending this surface is a paywall or creator storefront.";
+  }
+  if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
+    return "Checking channel defaults and creator grants so access rules stay visible and honest on this route.";
+  }
+  if (resolution.reason === "channel_defaults_subscriber") {
+    return "Both channel communication and watch-party defaults are gated, so this profile should signal member-style access before people hit a room or a thread.";
+  }
+  if (resolution.reason === "channel_defaults_private") {
+    return "This channel currently defaults to locked watch-party entry, so room access should read as invite/host-controlled instead of purely public.";
+  }
+  if (resolution.reason === "channel_defaults_mixed") {
+    return "This channel mixes open and gated defaults, so the profile needs to show where access stays public and where member-style rules begin.";
+  }
+  return "This channel currently defaults to open communication and open watch-party access, so visitors should not be surprised by hidden gating.";
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { isActive: hasSupportAccess } = useBetaProgram();
@@ -136,6 +164,7 @@ export default function ProfileScreen() {
   const [channelAccessProfile, setChannelAccessProfile] = useState<UserProfile | null>(null);
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
   const [channelAccessReady, setChannelAccessReady] = useState(false);
+  const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const params = useLocalSearchParams<{
     userId?: string;
     displayName?: string;
@@ -305,6 +334,46 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [isOfficialProfile, isSelfProfile, userId]);
+  useEffect(() => {
+    let active = true;
+
+    if (isOfficialProfile) {
+      void resolveChannelAccess({ channelUserId: userId, isOfficial: true })
+        .then((resolution) => {
+          if (active) setChannelAccessResolution(resolution);
+        })
+        .catch(() => {
+          if (active) setChannelAccessResolution(null);
+        });
+
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!userId || !channelAccessReady) {
+      setChannelAccessResolution(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    void resolveChannelAccess({
+      channelUserId: userId,
+      profile: channelAccessProfile,
+      creatorPermissions: channelAccessPermissions,
+    })
+      .then((resolution) => {
+        if (active) setChannelAccessResolution(resolution);
+      })
+      .catch(() => {
+        if (active) setChannelAccessResolution(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [channelAccessPermissions, channelAccessProfile, channelAccessReady, isOfficialProfile, userId]);
   const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
   const homeConfig = resolveHomeConfig(appConfig);
   const roleLabel = isOfficialProfile
@@ -893,44 +962,10 @@ export default function ProfileScreen() {
         : activeTab === "community"
           ? "Community supports public follow-up and Chi'lly Chat continuity without turning profile into the inbox."
           : "About keeps durable identity, trust, and channel framing visible even when content depth is still light.";
-  const watchPartyAccessRule = sanitizeCreatorRoomAccessRule(
-    channelAccessProfile?.defaultWatchPartyContentAccessRule,
-    channelAccessPermissions,
-  );
-  const communicationAccessRule = sanitizeCreatorRoomAccessRule(
-    channelAccessProfile?.defaultCommunicationContentAccessRule,
-    channelAccessPermissions,
-  );
-  const watchPartyJoinPolicy = channelAccessProfile?.defaultWatchPartyJoinPolicy ?? "open";
-  const accessPosture = isOfficialProfile
-    ? {
-        title: "Official Access",
-        body: "Official help stays visible on the canonical profile and Chi'lly Chat routes without pretending this surface is a paywall or creator storefront.",
-      }
-    : !channelAccessReady
-      ? {
-          title: "Loading Access",
-          body: "Checking channel defaults and creator grants so access rules stay visible and honest on this route.",
-        }
-      : watchPartyAccessRule !== "open" && communicationAccessRule !== "open"
-        ? {
-            title: "Subscriber Access",
-            body: "Both channel communication and watch-party defaults are gated, so this profile should signal member-style access before people hit a room or a thread.",
-          }
-        : watchPartyJoinPolicy === "locked"
-          ? {
-              title: "Private",
-              body: "This channel currently defaults to locked watch-party entry, so room access should read as invite/host-controlled instead of purely public.",
-            }
-          : watchPartyAccessRule === "open" && communicationAccessRule === "open"
-            ? {
-                title: "Public",
-                body: "This channel currently defaults to open communication and open watch-party access, so visitors should not be surprised by hidden gating.",
-              }
-            : {
-                title: "Mixed Access",
-                body: "This channel mixes open and gated defaults, so the profile needs to show where access stays public and where member-style rules begin.",
-              };
+  const accessPosture = {
+    title: isOfficialProfile ? "Official Access" : (channelAccessResolution?.label ?? "Loading Access"),
+    body: getProfileAccessBody(channelAccessResolution, isOfficialProfile),
+  };
   const accessDetails: readonly ProfileAccessDetail[] = isOfficialProfile ? [
     {
       label: "Profile",
@@ -945,36 +980,28 @@ export default function ProfileScreen() {
   ] : [
     {
       label: "Watch Party",
-      value: watchPartyAccessRule === "open"
-        ? "Public"
-        : watchPartyAccessRule === "party_pass"
-          ? "Party Pass"
-          : "Premium",
-      body: watchPartyJoinPolicy === "locked" ? "locked room entry by default" : "open room entry by default",
+      value: formatChannelRoomAccessValue(channelAccessResolution?.watchPartyAccessRule),
+      body: channelAccessResolution?.joinPolicy === "locked" ? "locked room entry by default" : "open room entry by default",
     },
     {
       label: "Communication",
-      value: communicationAccessRule === "open"
-        ? "Public"
-        : communicationAccessRule === "party_pass"
-          ? "Party Pass"
-          : "Premium",
+      value: formatChannelRoomAccessValue(channelAccessResolution?.communicationAccessRule),
       body: "Chi'lly Chat stays canonical even when room defaults are gated",
     },
     {
       label: "Creator Grants",
-      value: !channelAccessReady
+      value: !channelAccessReady || !channelAccessResolution
         ? "Loading"
-        : channelAccessPermissions?.canUsePartyPassRooms || channelAccessPermissions?.canUsePremiumRooms
+        : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms || channelAccessResolution.creatorPermissions?.canUsePremiumRooms
           ? "Enabled"
           : "Open Only",
-      body: !channelAccessReady
+      body: !channelAccessReady || !channelAccessResolution
         ? "checking supported gated room types"
-        : channelAccessPermissions?.canUsePartyPassRooms && channelAccessPermissions?.canUsePremiumRooms
+        : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms && channelAccessResolution.creatorPermissions?.canUsePremiumRooms
           ? "party pass and premium room defaults available"
-          : channelAccessPermissions?.canUsePartyPassRooms
+          : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms
             ? "party pass rooms available, premium hidden"
-            : channelAccessPermissions?.canUsePremiumRooms
+            : channelAccessResolution.creatorPermissions?.canUsePremiumRooms
               ? "premium rooms available, party pass hidden"
               : "gated room defaults fall back to open",
     },
