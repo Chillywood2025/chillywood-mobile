@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
@@ -36,6 +36,15 @@ import {
   sanitizeCreatorRoomAccessRule,
   type CreatorPermissionSet,
 } from "../_lib/monetization";
+import {
+  createCreatorEvent,
+  readCreatorEventSummaries,
+  updateCreatorEvent,
+  type CreatorEventReplayPolicy,
+  type CreatorEventStatus,
+  type CreatorEventSummary,
+  type CreatorEventType,
+} from "../_lib/liveEvents";
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
 import { normalizeUserProfile, readUserProfile, saveUserProfile } from "../_lib/userData";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
@@ -63,10 +72,105 @@ type SummaryMetricCard = {
   tone?: "default" | "unavailable";
 };
 
+type ChannelEventEditorState = {
+  editingEventId: string | null;
+  eventTitle: string;
+  eventType: CreatorEventType;
+  status: CreatorEventStatus;
+  startsAt: string;
+  endsAt: string;
+  linkedTitleId: string;
+  replayPolicy: CreatorEventReplayPolicy;
+  replayAvailableAt: string;
+  replayExpiresAt: string;
+  reminderReady: boolean;
+};
+
+const createEmptyEventEditorState = (): ChannelEventEditorState => ({
+  editingEventId: null,
+  eventTitle: "",
+  eventType: "live_first",
+  status: "draft",
+  startsAt: "",
+  endsAt: "",
+  linkedTitleId: "",
+  replayPolicy: "none",
+  replayAvailableAt: "",
+  replayExpiresAt: "",
+  reminderReady: false,
+});
+
 const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
   if (value === "party_pass") return "Party Pass";
   if (value === "premium") return "Premium";
   return "Public";
+};
+
+const toDatetimeLocalValue = (value: string | null) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return normalized.slice(0, 16);
+  const offset = parsed.getTimezoneOffset();
+  return new Date(parsed.getTime() - offset * 60_000).toISOString().slice(0, 16);
+};
+
+const fromDatetimeLocalValue = (value: string) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return null;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? normalized : parsed.toISOString();
+};
+
+const formatEventTypeLabel = (value: CreatorEventType) => {
+  switch (value) {
+    case "live_watch_party":
+      return "Live Watch-Party";
+    case "watch_party_live":
+      return "Watch-Party Live";
+    default:
+      return "Live First";
+  }
+};
+
+const formatEventStatusLabel = (value: CreatorEventStatus) => {
+  switch (value) {
+    case "live_now":
+      return "Live Now";
+    case "replay_available":
+      return "Replay Available";
+    default:
+      return value.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
+  }
+};
+
+const formatReplayPolicyLabel = (value: CreatorEventReplayPolicy) => {
+  switch (value) {
+    case "indefinite":
+      return "Replay Kept";
+    case "until_expiration":
+      return "Replay Until Expiration";
+    default:
+      return "No Replay";
+  }
+};
+
+const formatReminderLabel = (event: CreatorEventSummary) => {
+  switch (event.reminder.reason) {
+    case "ready":
+      return "Reminder Ready";
+    case "missing_start_time":
+      return "Start Time Needed";
+    default:
+      return event.status === "scheduled" ? "Reminder Off" : "Not Scheduled";
+  }
+};
+
+const formatReplayStateLabel = (event: CreatorEventSummary) => {
+  if (event.replay.policy === "none") return "No Replay";
+  if (event.replay.isReplayExpired) return "Replay Expired";
+  if (event.replay.isReplayAvailableNow) return "Replay Available";
+  return "Replay Pending";
 };
 
 const getChannelAccessSummaryBody = (resolution: ChannelAccessResolution | null) => {
@@ -124,6 +228,11 @@ export default function ChannelSettingsScreen() {
   const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
   const [creatorAnalyticsSummary, setCreatorAnalyticsSummary] = useState<CreatorAnalyticsReadModel | null>(null);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
+  const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventSaving, setEventSaving] = useState(false);
+  const [eventNotice, setEventNotice] = useState<string | null>(null);
+  const [eventEditor, setEventEditor] = useState<ChannelEventEditorState>(createEmptyEventEditorState);
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel settings");
 
@@ -200,9 +309,121 @@ export default function ChannelSettingsScreen() {
     };
   }, [canUseChannelSettings, creatorPermissions, loading, profile, user?.id]);
 
+  useEffect(() => {
+    let active = true;
+
+    if (!canUseChannelSettings) {
+      setCreatorEvents([]);
+      setEventsLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setEventsLoading(true);
+
+    void readCreatorEventSummaries(String(user?.id ?? ""))
+      .then((events) => {
+        if (!active) return;
+        setCreatorEvents(events);
+        setEventsLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCreatorEvents([]);
+        setEventsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canUseChannelSettings, user?.id]);
+
   const updateProfile = (patch: Partial<UserProfile>) => {
     setProfile((prev) => normalizeUserProfile({ ...(prev ?? {}), ...patch }));
     setNotice(null);
+  };
+
+  const updateEventEditor = (patch: Partial<ChannelEventEditorState>) => {
+    setEventEditor((prev) => ({ ...prev, ...patch }));
+    setEventNotice(null);
+  };
+
+  const resetEventEditor = () => {
+    setEventEditor(createEmptyEventEditorState());
+  };
+
+  const loadCreatorEvents = async () => {
+    if (!user?.id) {
+      setCreatorEvents([]);
+      return;
+    }
+
+    setEventsLoading(true);
+    try {
+      const events = await readCreatorEventSummaries(String(user.id));
+      setCreatorEvents(events);
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  const onEditEvent = (event: CreatorEventSummary) => {
+    setEventEditor({
+      editingEventId: event.id,
+      eventTitle: event.eventTitle,
+      eventType: event.eventType,
+      status: event.status,
+      startsAt: toDatetimeLocalValue(event.startsAt),
+      endsAt: toDatetimeLocalValue(event.endsAt),
+      linkedTitleId: event.linkedTitleId ?? "",
+      replayPolicy: event.replayPolicy,
+      replayAvailableAt: toDatetimeLocalValue(event.replayAvailableAt),
+      replayExpiresAt: toDatetimeLocalValue(event.replayExpiresAt),
+      reminderReady: event.reminderReady,
+    });
+    setEventNotice(null);
+  };
+
+  const onSaveEvent = async () => {
+    if (!user?.id) return;
+
+    try {
+      setEventSaving(true);
+      const payload = {
+        hostUserId: String(user.id),
+        eventTitle: eventEditor.eventTitle,
+        eventType: eventEditor.eventType,
+        status: eventEditor.status,
+        startsAt: fromDatetimeLocalValue(eventEditor.startsAt),
+        endsAt: fromDatetimeLocalValue(eventEditor.endsAt),
+        linkedTitleId:
+          eventEditor.eventType === "watch_party_live"
+            ? String(eventEditor.linkedTitleId).trim() || null
+            : null,
+        replayPolicy: eventEditor.replayPolicy,
+        replayAvailableAt: fromDatetimeLocalValue(eventEditor.replayAvailableAt),
+        replayExpiresAt: fromDatetimeLocalValue(eventEditor.replayExpiresAt),
+        reminderReady: eventEditor.reminderReady,
+      };
+
+      const result = eventEditor.editingEventId
+        ? await updateCreatorEvent(eventEditor.editingEventId, payload)
+        : await createCreatorEvent(payload);
+
+      if ("error" in result) {
+        setEventNotice(result.error.message);
+        return;
+      }
+
+      await loadCreatorEvents();
+      resetEventEditor();
+      setEventNotice(eventEditor.editingEventId ? "Creator event updated." : "Creator event created.");
+    } catch {
+      setEventNotice("Unable to save creator event right now.");
+    } finally {
+      setEventSaving(false);
+    }
   };
 
   const onSave = async () => {
@@ -463,6 +684,53 @@ export default function ChannelSettingsScreen() {
         ? "The current account does not have report-queue review access."
         : "Current review-queue summary from the existing safety-report foundation.",
       tone: safetyAdminSummary?.recentSafetyReportCount == null ? "unavailable" : "default",
+    },
+  ];
+  const upcomingEvents = useMemo(
+    () => creatorEvents.filter((event) => event.isUpcoming),
+    [creatorEvents],
+  );
+  const liveNowEvents = useMemo(
+    () => creatorEvents.filter((event) => event.isLiveNow),
+    [creatorEvents],
+  );
+  const replayReadyEvents = useMemo(
+    () => creatorEvents.filter((event) => event.replay.isReplayAvailableNow),
+    [creatorEvents],
+  );
+  const reminderReadyEvents = useMemo(
+    () => creatorEvents.filter((event) => event.reminder.state === "ready"),
+    [creatorEvents],
+  );
+  const nextUpcomingEvent = upcomingEvents[0] ?? null;
+  const eventSummaryCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Upcoming",
+      value: String(upcomingEvents.length),
+      body: nextUpcomingEvent
+        ? `Next up: ${nextUpcomingEvent.eventTitle}`
+        : "No future scheduled event is currently backed by creator event truth.",
+    },
+    {
+      label: "Live Now",
+      value: String(liveNowEvents.length),
+      body: liveNowEvents.length
+        ? liveNowEvents.map((event) => event.eventTitle).slice(0, 2).join(" · ")
+        : "No creator event is currently marked live now.",
+    },
+    {
+      label: "Replay Ready",
+      value: String(replayReadyEvents.length),
+      body: replayReadyEvents.length
+        ? "Replay availability is backed for ended events that are currently open for viewing."
+        : "No creator event replay is currently available.",
+    },
+    {
+      label: "Reminder Ready",
+      value: String(reminderReadyEvents.length),
+      body: reminderReadyEvents.length
+        ? "Scheduled events with start times and reminder-ready truth are ready for later reminder adoption."
+        : "No scheduled event is currently reminder-ready.",
     },
   ];
 
@@ -820,6 +1088,245 @@ export default function ChannelSettingsScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+            </View>
+
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Live Events</Text>
+                <Text style={styles.panelStatus}>CURRENT OWNER</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                `/channel-settings` now owns the first real creator scheduling surface. This panel uses the landed `creator_events` truth, keeps scheduled events separate from title publication scheduling, and keeps event access explicitly later.
+              </Text>
+
+              {eventNotice ? (
+                <View style={styles.noticeCard}>
+                  <Text style={styles.noticeText}>{eventNotice}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.summaryGrid}>
+                {eventSummaryCards.map((card) => (
+                  <View key={card.label} style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.eventSnapshotCard}>
+                <Text style={styles.accessSummaryKicker}>NEXT REAL EVENT</Text>
+                <Text style={styles.accessSummaryTitle}>
+                  {nextUpcomingEvent ? nextUpcomingEvent.eventTitle : "No upcoming event scheduled"}
+                </Text>
+                <Text style={styles.accessSummaryBody}>
+                  {nextUpcomingEvent
+                    ? `${formatEventTypeLabel(nextUpcomingEvent.eventType)} · ${formatIsoDate(nextUpcomingEvent.startsAt)}`
+                    : "Create the first scheduled live/event entry here. This surface does not fake countdowns, reminders, or event access before those systems exist."}
+                </Text>
+              </View>
+
+              <Text style={styles.sectionLabel}>Current Events</Text>
+              {eventsLoading ? (
+                <View style={styles.loadingCard}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.loadingText}>Loading creator events…</Text>
+                </View>
+              ) : creatorEvents.length ? (
+                <View style={styles.eventList}>
+                  {creatorEvents.map((event) => (
+                    <View key={event.id} style={styles.eventCard}>
+                      <View style={styles.eventCardHeader}>
+                        <View style={styles.eventCardCopy}>
+                          <Text style={styles.eventCardTitle}>{event.eventTitle}</Text>
+                          <Text style={styles.eventCardMeta}>
+                            {formatEventTypeLabel(event.eventType)} · {formatEventStatusLabel(event.status)}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.eventActionButton}
+                          onPress={() => onEditEvent(event)}
+                          activeOpacity={0.86}
+                        >
+                          <Text style={styles.eventActionButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.eventCardBody}>
+                        Starts: {formatIsoDate(event.startsAt)}{"\n"}
+                        Ends: {formatIsoDate(event.endsAt)}{"\n"}
+                        Replay: {formatReplayPolicyLabel(event.replayPolicy)} · {formatReplayStateLabel(event)}{"\n"}
+                        Reminder: {formatReminderLabel(event)}
+                        {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>No creator events yet</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Scheduled live/event truth is now backed, but nothing has been created for this channel yet.
+                  </Text>
+                </View>
+              )}
+
+              <Text style={styles.sectionLabel}>
+                {eventEditor.editingEventId ? "Edit Event" : "Create Event"}
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Event title"
+                placeholderTextColor="#8d8d8d"
+                value={eventEditor.eventTitle}
+                onChangeText={(text) => updateEventEditor({ eventTitle: text })}
+              />
+
+              <Text style={styles.sectionLabel}>Event Type</Text>
+              <View style={styles.chipRow}>
+                {(["live_first", "live_watch_party", "watch_party_live"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.chip, eventEditor.eventType === value && styles.chipActive]}
+                    onPress={() => updateEventEditor({ eventType: value })}
+                  >
+                    <Text style={[styles.chipText, eventEditor.eventType === value && styles.chipTextActive]}>
+                      {formatEventTypeLabel(value)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.sectionLabel}>Status</Text>
+              <View style={styles.chipRow}>
+                {(["draft", "scheduled", "live_now", "ended", "replay_available", "expired", "canceled"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.chip, eventEditor.status === value && styles.chipActive]}
+                    onPress={() => updateEventEditor({ status: value, reminderReady: value === "scheduled" ? eventEditor.reminderReady : false })}
+                  >
+                    <Text style={[styles.chipText, eventEditor.status === value && styles.chipTextActive]}>
+                      {formatEventStatusLabel(value)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Starts at (YYYY-MM-DDTHH:mm)"
+                placeholderTextColor="#8d8d8d"
+                value={eventEditor.startsAt}
+                onChangeText={(text) => updateEventEditor({ startsAt: text })}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Ends at (YYYY-MM-DDTHH:mm)"
+                placeholderTextColor="#8d8d8d"
+                value={eventEditor.endsAt}
+                onChangeText={(text) => updateEventEditor({ endsAt: text })}
+              />
+
+              {eventEditor.eventType === "watch_party_live" ? (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Linked title id"
+                  placeholderTextColor="#8d8d8d"
+                  value={eventEditor.linkedTitleId}
+                  onChangeText={(text) => updateEventEditor({ linkedTitleId: text })}
+                />
+              ) : null}
+
+              <Text style={styles.sectionLabel}>Replay Policy</Text>
+              <View style={styles.chipRow}>
+                {(["none", "indefinite", "until_expiration"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.chip, eventEditor.replayPolicy === value && styles.chipActive]}
+                    onPress={() => updateEventEditor({ replayPolicy: value })}
+                  >
+                    <Text style={[styles.chipText, eventEditor.replayPolicy === value && styles.chipTextActive]}>
+                      {formatReplayPolicyLabel(value)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {eventEditor.replayPolicy !== "none" ? (
+                <>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Replay available at (YYYY-MM-DDTHH:mm)"
+                    placeholderTextColor="#8d8d8d"
+                    value={eventEditor.replayAvailableAt}
+                    onChangeText={(text) => updateEventEditor({ replayAvailableAt: text })}
+                  />
+                  {eventEditor.replayPolicy === "until_expiration" ? (
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Replay expires at (YYYY-MM-DDTHH:mm)"
+                      placeholderTextColor="#8d8d8d"
+                      value={eventEditor.replayExpiresAt}
+                      onChangeText={(text) => updateEventEditor({ replayExpiresAt: text })}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
+              <Text style={styles.sectionLabel}>Reminder Readiness</Text>
+              <View style={styles.chipRow}>
+                {(["off", "ready"] as const).map((value) => {
+                  const active = value === "ready" ? eventEditor.reminderReady : !eventEditor.reminderReady;
+                  const disabled = value === "ready" && eventEditor.status !== "scheduled";
+
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.chip, active && styles.chipActive, disabled && styles.chipDisabled]}
+                      onPress={() => {
+                        if (disabled) return;
+                        updateEventEditor({ reminderReady: value === "ready" });
+                      }}
+                      disabled={disabled}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                        {value === "ready" ? "READY" : "OFF"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.permissionCopy}>
+                Reminder readiness is only honest for scheduled events with a real start time. Actual reminder delivery still lands in a later notification/reminder chapter.
+              </Text>
+
+              <View style={styles.eventActionRow}>
+                <TouchableOpacity
+                  style={styles.eventPrimaryButton}
+                  onPress={onSaveEvent}
+                  activeOpacity={0.88}
+                  disabled={eventSaving}
+                >
+                  {eventSaving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.eventPrimaryButtonText}>
+                      {eventEditor.editingEventId ? "Update Event" : "Create Event"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.eventSecondaryButton}
+                  onPress={() => {
+                    resetEventEditor();
+                    setEventNotice(null);
+                  }}
+                  activeOpacity={0.86}
+                  disabled={eventSaving}
+                >
+                  <Text style={styles.eventSecondaryButtonText}>Reset</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -1310,6 +1817,122 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
     fontWeight: "600",
+  },
+  eventSnapshotCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(31,15,22,0.84)",
+    padding: 14,
+    marginTop: 10,
+    marginBottom: 12,
+    gap: 8,
+  },
+  eventList: {
+    gap: 10,
+    marginBottom: 10,
+  },
+  eventCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  eventCardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  eventCardCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  eventCardTitle: {
+    color: "#F3F6FF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  eventCardMeta: {
+    color: "#98A5C0",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  eventCardBody: {
+    color: "#B8C0D4",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  eventActionButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.24)",
+    backgroundColor: "rgba(115,134,255,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  eventActionButtonText: {
+    color: "#E1E7FF",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  eventEmptyCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 10,
+    gap: 4,
+  },
+  eventEmptyTitle: {
+    color: "#F3F6FF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  eventEmptyBody: {
+    color: "#ACB5C9",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  eventActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  eventPrimaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: "#DC143C",
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  eventPrimaryButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  eventSecondaryButton: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  eventSecondaryButtonText: {
+    color: "#D9E0EE",
+    fontSize: 12,
+    fontWeight: "800",
   },
   saveButton: {
     borderRadius: 14,
