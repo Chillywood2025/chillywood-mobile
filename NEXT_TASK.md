@@ -1,25 +1,25 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **current safety / moderation truth audit** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Start by auditing `_lib/moderation.ts`, `app/admin.tsx`, `app/channel-settings.tsx`, `app/profile/[userId].tsx`, and the current report-entry owners before deciding whether a narrow helper or workflow slice is honestly supported.
+The next exact task is a narrow **safety / moderation operator queue-shaping foundation pass** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Start in `_lib/moderation.ts`, then update `_lib/channelReadModels.ts` only as needed, and adopt the normalized queue truth in `app/admin.tsx` without inventing resolution workflow.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the profile/channel, content-management, access, live/event, audience, notifications/reminders, and analytics chapters as closed unless a real regression is found.
-3. Treat `docs/safety-moderation-implementation-spec.md` as the active doctrine for the chapter and audit current helper/schema/admin/report truth against it.
-4. Preserve current admin, report-intake, official-account, and channel safety summary truth while separating current supported workflow from later moderation systems.
-5. Keep fake enforcement workflows, fake report states, fake strike systems, and route drift explicitly out until they are truly backed.
+3. Treat `docs/safety-moderation-implementation-spec.md` as the active doctrine for the chapter and keep the next slice strictly inside current helper/schema/admin truth.
+4. Normalize recent safety-report queue truth inside the current moderation/helper owners before deepening admin or creator surfaces.
+5. Keep fake enforcement workflows, fake report states, fake strike systems, assignment flow, and route drift explicitly out until they are truly backed.
 
 ## Exact Next Batch
-- audit the current safety/moderation truth already exposed in `_lib/moderation.ts`, `app/admin.tsx`, `/channel-settings`, profile/report-entry owners, and existing official-account protections
-- determine whether the current schema/helper foundation is already enough for one narrow creator/operator moderation workflow batch
-- separate current supported workflow truth from missing or later moderation systems
+- normalize recent safety-report queue items into a structured helper/read-model shape
+- adopt that normalized queue truth in `app/admin.tsx`
+- update creator-side safety/admin summary truth only if a minimal related read-model adjustment is required
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- inspect only the current safety / moderation workflow family and determine what is and is not truly backed today
-- preserve current route-owner truth and current helper ownership while choosing the smallest honest next moderation slice
+- inspect only the current safety / moderation workflow family and keep the next moderation slice strictly read-only and helper-backed
+- preserve current route-owner truth and current helper ownership while choosing the smallest honest operator workflow slice
 - keep creator/channel audience truth, access truth, live/event truth, notifications truth, and analytics truth separate from unsupported moderation claims
 - avoid reopening already-landed access, audience, channel, content, room, or live/event implementation unless a real regression is found
 - preserve all current route truth and all previously landed profile/channel, content-management, and access stages
@@ -43,8 +43,8 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the current safety/moderation truth audit is explicit about what is already real and what is still missing
-- the next moderation implementation decision is grounded in current helper/schema/admin truth
+- recent safety-report queue truth is normalized inside the helper/read-model layer
+- `app/admin.tsx` consumes the normalized queue truth instead of locally re-deriving context fields
 - current supported moderation/admin/report truth is separated clearly from missing or later workflow systems
 - unsupported moderation systems remain explicit instead of being implied or fabricated
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
