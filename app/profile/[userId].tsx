@@ -132,6 +132,13 @@ const getTitleLabel = (item?: Pick<ContentProgrammingTitle, "title"> | null, fal
   return normalized || fallback;
 };
 
+const resolveChannelLayoutPreset = (value?: UserProfile["channelLayoutPreset"] | null) => {
+  if (value === "live_first" || value === "library_first") {
+    return value;
+  }
+  return "spotlight";
+};
+
 const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
   if (value === "party_pass") return "Party Pass";
   if (value === "premium") return "Premium";
@@ -934,37 +941,44 @@ export default function ProfileScreen() {
     : isSelfProfile
       ? "This unified profile now acts as your public channel surface. Use it to frame your identity, what people should watch, and where they should go next."
       : "This unified profile now acts as the public channel surface. It should explain the creator identity first, then guide people into real content, live presence, and Chi'lly Chat.";
-  const homeSections: readonly ProfileSurfaceCard[] = [
-    {
+  const channelLayoutPreset = resolveChannelLayoutPreset(channelAccessProfile?.channelLayoutPreset);
+  const homeSectionMap = {
+    featured: {
       title: featuredSpotlightTitle,
       kicker: "FEATURED SPOTLIGHT",
       body: featuredSpotlightBody,
       accent: isOfficialProfile ? "official" : "default",
     },
-    {
+    live: {
       title: liveStatusTitle,
       kicker: "LIVE MODULE",
       body: liveStatusBody,
       accent: profile.isLive ? "live" : "default",
     },
-    {
+    content: {
       title: isSelfProfile ? "Content Shelves" : "Content Preview",
       kicker: "CONTENT",
       body: contentHomeBody,
     },
-    {
+    community: {
       title: "Community Preview",
       kicker: "COMMUNITY",
       body: isOfficialProfile
         ? "Official presence can route people into trusted Chi'lly Chat follow-up, platform notices, and later moderation-aware contact without becoming an inbox-first surface."
         : "Community stays visible here through identity, public activity, and follow-up cues, while persistent messaging still belongs to Chi'lly Chat.",
     },
-    {
+    about: {
       title: "About Snapshot",
       kicker: "ABOUT",
       body: `${profile.displayName} should feel like a coherent social identity and channel surface here, even before deeper creator programming or community systems arrive.`,
     },
-  ];
+  } satisfies Record<"featured" | "live" | "content" | "community" | "about", ProfileSurfaceCard>;
+  const homeSectionOrder = channelLayoutPreset === "live_first"
+    ? (["live", "featured", "content", "community", "about"] as const)
+    : channelLayoutPreset === "library_first"
+      ? (["content", "featured", "live", "community", "about"] as const)
+      : (["featured", "live", "content", "community", "about"] as const);
+  const homeSections: readonly ProfileSurfaceCard[] = homeSectionOrder.map((key) => homeSectionMap[key]);
   const contentTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
     ? [
         {

@@ -223,6 +223,29 @@ const formatPublicActivityVisibility = (value: ChannelAudienceReadModel["publicA
       return "Unavailable";
   }
 };
+
+const formatChannelLayoutPresetLabel = (value?: UserProfile["channelLayoutPreset"] | null) => {
+  switch (value) {
+    case "live_first":
+      return "Live First";
+    case "library_first":
+      return "Library First";
+    default:
+      return "Spotlight";
+  }
+};
+
+const getChannelLayoutPresetBody = (value?: UserProfile["channelLayoutPreset"] | null) => {
+  switch (value) {
+    case "live_first":
+      return "The public channel home should lead with live presence first, then spotlight and library context.";
+    case "library_first":
+      return "The public channel home should lead with content/library context first, then spotlight and live presence.";
+    default:
+      return "The public channel home should keep the featured spotlight first, then live and library context.";
+  }
+};
+
 const formatIsoDate = (value: string | null) => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return "Unavailable";
@@ -1147,6 +1170,21 @@ export default function ChannelSettingsScreen() {
               <Text style={styles.permissionCopy}>
                 Layout is where channel-home ordering should grow next: featured spotlight priority, default tab emphasis, live module placement, and shelf hierarchy all belong here under the current route.
               </Text>
+              <Text style={styles.sectionLabel}>Channel Layout Preset</Text>
+              <View style={styles.chipRow}>
+                {(["spotlight", "live_first", "library_first"] as const).map((preset) => (
+                  <TouchableOpacity
+                    key={preset}
+                    style={[styles.chip, (profile.channelLayoutPreset ?? "spotlight") === preset && styles.chipActive]}
+                    onPress={() => updateProfile({ channelLayoutPreset: preset })}
+                  >
+                    <Text style={[styles.chipText, (profile.channelLayoutPreset ?? "spotlight") === preset && styles.chipTextActive]}>
+                      {formatChannelLayoutPresetLabel(preset).toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.permissionCopy}>{getChannelLayoutPresetBody(profile.channelLayoutPreset)}</Text>
               <View style={styles.previewChipRow}>
                 {layoutSectionHighlights.map((item) => (
                   <View key={item} style={styles.previewChip}>

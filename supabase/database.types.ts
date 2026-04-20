@@ -861,6 +861,7 @@ export type Database = {
         Row: {
           avatar_index: number
           avatar_url: string | null
+          channel_layout_preset: string
           channel_role: string | null
           default_communication_capture_policy: string | null
           default_communication_content_access_rule: string | null
@@ -882,6 +883,7 @@ export type Database = {
         Insert: {
           avatar_index?: number
           avatar_url?: string | null
+          channel_layout_preset?: string
           channel_role?: string | null
           default_communication_capture_policy?: string | null
           default_communication_content_access_rule?: string | null
@@ -903,6 +905,7 @@ export type Database = {
         Update: {
           avatar_index?: number
           avatar_url?: string | null
+          channel_layout_preset?: string
           channel_role?: string | null
           default_communication_capture_policy?: string | null
           default_communication_content_access_rule?: string | null

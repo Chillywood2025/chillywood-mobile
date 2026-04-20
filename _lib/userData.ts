@@ -36,6 +36,7 @@ export type UserProfile = {
   displayName?: string;
   avatarUrl?: string;
   tagline?: string;
+  channelLayoutPreset?: "spotlight" | "live_first" | "library_first";
   channelRole?: "viewer" | "host" | "creator";
   publicActivityVisibility?: "public" | "followers_only" | "subscribers_only" | "private";
   followerSurfaceEnabled?: boolean;
@@ -94,6 +95,7 @@ type UserProfileRow = Pick<
   | "display_name"
   | "avatar_url"
   | "tagline"
+  | "channel_layout_preset"
   | "channel_role"
   | "public_activity_visibility"
   | "follower_surface_enabled"
@@ -132,6 +134,14 @@ const normalizePublicActivityVisibility = (value: unknown): UserProfile["publicA
   return undefined;
 };
 
+const normalizeChannelLayoutPreset = (value: unknown): UserProfile["channelLayoutPreset"] => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "live_first" || normalized === "library_first") {
+    return normalized;
+  }
+  return "spotlight";
+};
+
 const logChatProfile = (event: string, details?: Record<string, unknown>) => {
   void event;
   void details;
@@ -149,6 +159,7 @@ export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): Use
     displayName: normalizeTextValue(profile?.displayName),
     avatarUrl: normalizeTextValue(profile?.avatarUrl),
     tagline: normalizeTextValue(profile?.tagline),
+    channelLayoutPreset: normalizeChannelLayoutPreset(profile?.channelLayoutPreset),
     channelRole: normalizeChannelRole(profile?.channelRole),
     publicActivityVisibility: normalizePublicActivityVisibility(profile?.publicActivityVisibility),
     followerSurfaceEnabled: typeof profile?.followerSurfaceEnabled === "boolean" ? profile.followerSurfaceEnabled : undefined,
@@ -220,6 +231,7 @@ const toUserProfileUpsertRow = (userId: string, profile: UserProfile) => ({
   display_name: profile.displayName ?? null,
   avatar_url: profile.avatarUrl ?? null,
   tagline: profile.tagline ?? null,
+  channel_layout_preset: normalizeChannelLayoutPreset(profile.channelLayoutPreset),
   channel_role: profile.channelRole ?? null,
   default_watch_party_join_policy: profile.defaultWatchPartyJoinPolicy,
   default_watch_party_reactions_policy: profile.defaultWatchPartyReactionsPolicy,
@@ -240,6 +252,7 @@ const parseRemoteUserProfile = (row: UserProfileRow | null | undefined): UserPro
     displayName: normalizeTextValue(row.display_name),
     avatarUrl: normalizeTextValue(row.avatar_url),
     tagline: normalizeTextValue(row.tagline),
+    channelLayoutPreset: normalizeChannelLayoutPreset(row.channel_layout_preset),
     channelRole: normalizeChannelRole(row.channel_role),
     publicActivityVisibility: normalizePublicActivityVisibility(row.public_activity_visibility),
     followerSurfaceEnabled: typeof row.follower_surface_enabled === "boolean" ? row.follower_surface_enabled : undefined,
@@ -349,7 +362,7 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
     const { data, error } = await supabase
       .from(USER_PROFILES_TABLE)
       .select(
-        "user_id,username,avatar_index,display_name,avatar_url,tagline,channel_role,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
+        "user_id,username,avatar_index,display_name,avatar_url,tagline,channel_layout_preset,channel_role,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
       )
       .eq("user_id", normalizedUserId)
       .maybeSingle();
