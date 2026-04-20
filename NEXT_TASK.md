@@ -1,31 +1,31 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **access/entitlement shared resolver foundation pass** on `main`, using `docs/access-entitlement-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/profile/[userId]`, `/channel-settings`, `/chat`, watch-party/live route truth, or the landed profile/channel and content-management chapters unless a real regression is proved. The access/entitlement doctrine-spec pass is now landed: the repo has a durable implementation spec for the shared access rules layer, the canonical access vocabulary is locked, and current-vs-missing truth is now explicit across channel, content, room, and later event access. The next pass should create `_lib/accessEntitlements.ts` as the shared current-truth resolver foundation without adopting it into UI owners yet.
+The next exact task is a narrow **channel access resolver adoption pass** on `main`, using `_lib/accessEntitlements.ts`, `docs/access-entitlement-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/chat`, watch-party/live route truth, schema ownership, or the landed profile/channel and content-management chapters unless a real regression is proved. The shared resolver foundation is now landed: `_lib/accessEntitlements.ts` centralizes current-truth access resolution for channel, content, and room/session access, but no screen owners consume it yet. The next pass should adopt only the channel portion of that resolver into `/profile/[userId]` and `/channel-settings` so those two canonical channel surfaces stop deriving access posture locally.
 
 ## Current Plan
 1. Re-read `docs/access-entitlement-implementation-spec.md`, `ROADMAP.md`, `CURRENT_STATE.md`, and this file first.
 2. Treat the current profile/channel and content-management chapters as closed unless a real regression is found.
-3. Stay in shared-helper territory first; do not jump straight to UI or schema changes.
-4. Create `_lib/accessEntitlements.ts` as the single shared current-truth access resolver owner.
-5. Implement canonical access types plus current-truth `resolveChannelAccess(...)`, `resolveContentAccess(...)`, `resolveRoomAccess(...)`, `getAccessLabel(...)`, and `canPreviewLockedSurface(...)`.
-6. Keep `resolveEventAccess(...)` contract-only or explicitly later until the live/event scheduling chapter creates real event truth.
-7. Preserve `/profile/[userId]`, `/channel-settings`, `/chat`, `/chat/[threadId]`, and all watch-party/live route truth unchanged.
+3. Stay brutally narrow and adopt only the channel-access portion first.
+4. Replace duplicated local access-posture derivation in `/profile/[userId]` and `/channel-settings` with `_lib/accessEntitlements.ts` `resolveChannelAccess(...)` plus `getAccessLabel(...)`.
+5. Keep title/player adoption, room adoption, and event access out of scope for this lane.
+6. Preserve `/profile/[userId]`, `/channel-settings`, `/chat`, `/chat/[threadId]`, and all watch-party/live route truth unchanged.
+7. Keep unsupported later-phase purchase, ticketed, and formal invite concepts explicitly unsupported instead of faking them.
 
 ## Exact Next Batch
-- create `_lib/accessEntitlements.ts`
-- define canonical access types and current-truth resolver outputs for channel, content, and room/session access
-- centralize shared access labels and preview policy helpers without adopting them into screens yet
+- adopt `_lib/accessEntitlements.ts` into `/profile/[userId]` and `/channel-settings` for channel posture/access summary truth only
+- replace scattered local `Public` / `Private` / `Subscriber Access` / `Mixed Access` derivation with shared channel resolver outputs
+- preserve existing screen structure and wording where current doctrine already fits
 - keep `Chi'lly Chat`, `Watch-Party Live`, and `Live Watch-Party` doctrine unchanged
-- keep event access contract-only until the live/event chapter creates canonical event truth
+- keep title/player access, room access, and event access out of scope for this lane
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- create `_lib/accessEntitlements.ts`
-- centralize current access truth from creator permissions, subscriptions, RevenueCat snapshot logic, `content_access_rule`, room access rules, channel defaults, audience visibility, and current access labels
-- stay helper-only and avoid reopening landed public consumer work, source-of-truth hardening, or broader Content Studio redesign
-- leave all UI adoption for later passes once the helper contract is proved
+- adopt the landed shared resolver only where channel posture is already being derived today
+- reuse `_lib/accessEntitlements.ts` for canonical channel-access outputs in `/profile/[userId]` and `/channel-settings`
+- keep the lane limited to channel surfaces and avoid reopening title/player, room/session, or live/event access owners
+- avoid reopening landed public consumer work, source-of-truth hardening, or broader Content Studio redesign
 - preserve all current route truth and all previously landed profile/channel stages
 - keep unrelated local dirt out of the checkpoint
 
@@ -36,18 +36,18 @@ Do not:
 - invent creator-platform routes or `/studio*` route truth
 - fake content catalogs, fake programming, or fake analytics
 - create `/studio*` routes
-- touch schema or backend ownership in this helper-foundation lane
+- touch schema or backend ownership in this adoption lane
 - touch runtime room/live-stage owners in this lane
 - touch RBAC or Rachi control-plane work
-- broaden into UI adoption before the shared access helper is settled
+- broaden into title/player or room access adoption before the channel resolver pass is settled
 - broaden into other screen owners
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- `_lib/accessEntitlements.ts` exists and is decision-complete enough to hand UI adoption to another engineer or agent
-- current-truth access resolution for channel, content, and room/session access is centralized there
-- shared access labels and preview-policy helpers no longer require each surface to invent them locally
-- event access remains explicitly later or contract-only instead of being faked
+- `/profile/[userId]` and `/channel-settings` consume the landed shared channel resolver instead of deriving posture locally
+- shared channel access labels come from `_lib/accessEntitlements.ts`
+- title/player and room/session adoption remain untouched
+- event access remains explicitly later instead of being faked
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
 - no fake future scope or schema drift is introduced
