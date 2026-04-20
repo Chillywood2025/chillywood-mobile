@@ -1,28 +1,28 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **Content Studio manual hero selection workflow batch** on `main`, using `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/profile/[userId]`, `/channel-settings`, `/chat`, watch-party/live route truth, or the landed profile/channel chapter doctrine unless a real regression is proved. The first five creator/content-management batches are now landed: Home and `/profile/[userId]` consume real programming truth, `app/admin.tsx` now guards hero/top-picks save-time programming validity, Content Studio publication state now normalizes `status`, `is_published`, and `release_at` before persistence, and Content Studio now shows the resolved current Home hero/top-picks snapshot directly inside Experience Config. The next pass should stay inside `app/admin.tsx` and remove the current manual-hero picker bottleneck without widening into public surfaces or a broader Content Studio redesign.
+The next exact task is a narrow **Content Studio release scheduling workflow audit** on `main`, using `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/profile/[userId]`, `/channel-settings`, `/chat`, watch-party/live route truth, or the landed profile/channel chapter doctrine unless a real regression is proved. The first six creator/content-management batches are now landed: Home and `/profile/[userId]` consume real programming truth, `app/admin.tsx` now guards hero/top-picks save-time programming validity, Content Studio publication state now normalizes `status`, `is_published`, and `release_at` before persistence, Content Studio now shows the resolved current Home hero/top-picks snapshot directly inside Experience Config, and manual hero targeting no longer depends on the old tiny first-page chooser. The next pass should stay inside `app/admin.tsx` and determine whether release scheduling is now the single smallest remaining high-leverage operator workflow seam.
 
 ## Current Plan
 1. Re-read `ROADMAP.md`, `CURRENT_STATE.md`, and this file first.
 2. Treat the current profile/channel chapter as closed unless a real regression is found.
 3. Stay inside `app/admin.tsx` only unless a tiny directly related local helper extraction inside that file is clearly needed.
-4. Improve the manual hero selection workflow so operators can target a real hero title without being limited to the current tiny first-page title slice.
-5. Preserve the landed programming snapshot, guardrails, and publication-consistency behavior while making the manual hero workflow less clunky.
+4. Audit the current release scheduling workflow around `status`, `release_at`, and operator input friction now that publication truth is already coherent.
+5. Choose the single smallest release-scheduling operator batch only if it is still justified after the landed publication-consistency and manual-hero workflow passes.
 6. Preserve `/profile/[userId]`, `/channel-settings`, `/chat`, `/chat/[threadId]`, and all watch-party/live route truth unchanged.
 
 ## Exact Next Batch
-- improve the `manual_title` hero-selection workflow inside Content Studio
-- remove the current `titles.slice(0, 12)` bottleneck so operators can reach the real intended title more directly
-- keep hero strategy truth, top-picks truth, and publication truth unchanged while making hero targeting faster and less error-prone
+- audit the remaining release scheduling workflow inside Content Studio
+- determine whether the raw `Release At` entry and related publication controls still create the single highest remaining operator-friction seam
+- choose one more narrow workflow batch only if it is still clearly worth doing
 - keep `Chi'lly Chat`, `Watch-Party Live`, and `Live Watch-Party` doctrine unchanged
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - stay inside `app/admin.tsx`
-- improve only the operator workflow for manual hero targeting
-- use the landed Home/profile consumer work plus the new programming snapshot and guardrails as proof context, not as the edit target
+- focus only on release scheduling operator workflow and not reopen the landed manual-hero batch
+- use the landed Home/profile consumer work plus the new programming snapshot, guardrails, and publication-consistency behavior as proof context, not as the edit target
 - avoid reopening landed public consumer work, source-of-truth hardening, or broader Content Studio redesign
 - preserve all current route truth and all previously landed profile/channel stages
 - keep unrelated local dirt out of the checkpoint
@@ -37,13 +37,13 @@ Do not:
 - touch schema or release backend ownership
 - touch runtime room/live-stage owners
 - touch RBAC or Rachi control-plane work
-- broaden into release scheduling redesign or unrelated admin expansion
+- broaden into unrelated admin expansion beyond the exact release-scheduling workflow seam
 - broaden into other screen owners
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- operators can target a real manual hero title without the current tiny chooser bottleneck
-- the existing hero/top-picks snapshot and save-time guardrails remain intact
+- the repo proves whether release scheduling still has one meaningful narrow operator-workflow batch left
+- exactly one next implementation batch is chosen only if the remaining leverage is still real
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
 - no fake future scope or schema drift is introduced

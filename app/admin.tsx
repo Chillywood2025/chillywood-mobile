@@ -416,6 +416,7 @@ export default function AdminStudioScreen() {
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [manualHeroQuery, setManualHeroQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [saving, setSaving] = useState(false);
   const [editorVisible, setEditorVisible] = useState(false);
@@ -589,6 +590,36 @@ export default function AdminStudioScreen() {
       guardrailAdjustments: guardrailedConfig.adjustments,
     };
   }, [experienceConfig, titles]);
+
+  const manualHeroSelection = useMemo(() => {
+    const selectedId = String(experienceConfig.home.manualHeroTitleId ?? "").trim();
+    const needle = manualHeroQuery.trim().toLowerCase();
+    const sortedTitles = sortTitlesByProgrammingTruth(titles);
+    const matchingTitles = sortedTitles.filter((item) => {
+      if (!needle) return true;
+      const status = normalizeStatus(item.status, item.is_published);
+      return (item.title ?? "").toLowerCase().includes(needle)
+        || (item.category ?? "").toLowerCase().includes(needle)
+        || status.toLowerCase().includes(needle);
+    });
+
+    const rankedTitles = matchingTitles.sort((a, b) => {
+      const aSelected = selectedId.length > 0 && hasTitleId(a, selectedId);
+      const bSelected = selectedId.length > 0 && hasTitleId(b, selectedId);
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+      return 0;
+    });
+
+    return {
+      selectedId,
+      selectedTitle: selectedId.length > 0
+        ? sortedTitles.find((item) => hasTitleId(item, selectedId)) ?? null
+        : null,
+      totalMatches: rankedTitles.length,
+      visibleTitles: rankedTitles.slice(0, needle ? 40 : 24),
+    };
+  }, [experienceConfig.home.manualHeroTitleId, manualHeroQuery, titles]);
 
   const hasHeroControl = capabilities.heroCol !== null;
   const hasTrendingControl = capabilities.trendingCol !== null;
@@ -1470,35 +1501,95 @@ export default function AdminStudioScreen() {
               {experienceConfig.home.heroMode === "manual_title" ? (
                 <>
                   <Text style={styles.sectionLabel}>Manual Hero Title</Text>
-                  <View style={styles.toggleRowWrap}>
-                    {titles.slice(0, 12).map((item) => (
-                      <TouchableOpacity
-                        key={toIdString(item.id)}
-                        style={[
-                          styles.toggleChip,
-                          String(experienceConfig.home.manualHeroTitleId ?? "") === String(item.id) && styles.toggleChipActive,
-                        ]}
-                        onPress={() =>
-                          updateExperienceConfig((prev) => ({
-                            ...prev,
-                            home: {
-                              ...prev.home,
-                              manualHeroTitleId: String(item.id),
-                            },
-                          }))
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.toggleChipText,
-                            String(experienceConfig.home.manualHeroTitleId ?? "") === String(item.id) && styles.toggleChipTextActive,
-                          ]}
-                        >
-                          {item.title}
+                  <Text style={styles.configBody}>
+                    Search the real title set here and choose the exact title Home should use as the manual hero target.
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Search titles, category, or status"
+                    placeholderTextColor="#8d8d8d"
+                    value={manualHeroQuery}
+                    onChangeText={setManualHeroQuery}
+                  />
+
+                  {manualHeroSelection.selectedTitle ? (
+                    <View style={styles.configListRow}>
+                      <View style={styles.configListCopy}>
+                        <Text style={styles.configListTitle}>Current manual hero target</Text>
+                        <Text style={styles.configListBody}>{manualHeroSelection.selectedTitle.title}</Text>
+                        <Text style={styles.configListBody}>
+                          {`${manualHeroSelection.selectedTitle.category ?? "Uncategorized"} · ${normalizeStatus(
+                            manualHeroSelection.selectedTitle.status,
+                            manualHeroSelection.selectedTitle.is_published,
+                          ).toUpperCase()} · Sort ${manualHeroSelection.selectedTitle.sort_order ?? "—"}`}
                         </Text>
-                      </TouchableOpacity>
-                    ))}
+                      </View>
+                      <View style={styles.badgesRow}>
+                        <View style={[styles.badge, styles.badgePublished]}>
+                          <Text style={styles.badgeText}>SELECTED</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.configList}>
+                    {manualHeroSelection.visibleTitles.map((item) => {
+                      const isSelected = manualHeroSelection.selectedId.length > 0 && hasTitleId(item, manualHeroSelection.selectedId);
+                      const status = normalizeStatus(item.status, item.is_published);
+
+                      return (
+                        <View key={toIdString(item.id)} style={styles.configListRow}>
+                          <View style={styles.configListCopy}>
+                            <Text style={styles.configListTitle}>{item.title}</Text>
+                            <Text style={styles.configListBody}>
+                              {`${item.category ?? "Uncategorized"} · ${status.toUpperCase()} · Sort ${item.sort_order ?? "—"}`}
+                            </Text>
+                            <Text style={styles.configListBody}>
+                              {item.featured ? "Featured" : "Standard"}
+                              {item.is_hero ? " · Hero Flag" : ""}
+                              {item.is_trending ? " · Trending" : ""}
+                              {item.pin_to_top_row ? " · Top Row" : ""}
+                            </Text>
+                          </View>
+
+                          <View style={styles.configListActions}>
+                            <TouchableOpacity
+                              style={styles.orderBtn}
+                              onPress={() => {
+                                updateExperienceConfig((prev) => ({
+                                  ...prev,
+                                  home: {
+                                    ...prev.home,
+                                    manualHeroTitleId: String(item.id),
+                                  },
+                                }));
+                                setManualHeroQuery("");
+                              }}
+                            >
+                              <Text style={styles.orderBtnText}>{isSelected ? "Selected" : "Choose"}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })}
                   </View>
+
+                  {!manualHeroSelection.visibleTitles.length ? (
+                    <View style={styles.configListRow}>
+                      <View style={styles.configListCopy}>
+                        <Text style={styles.configListTitle}>No titles match this manual hero search</Text>
+                        <Text style={styles.configListBody}>
+                          Refine the search to target the exact title you want Home to resolve as the manual hero.
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {manualHeroSelection.totalMatches > manualHeroSelection.visibleTitles.length ? (
+                    <Text style={styles.configListBody}>
+                      {`Showing ${manualHeroSelection.visibleTitles.length} of ${manualHeroSelection.totalMatches} matching titles. Refine the search to narrow the manual hero target.`}
+                    </Text>
+                  ) : null}
                 </>
               ) : null}
 
