@@ -632,6 +632,23 @@ export default function AdminStudioScreen() {
     && capabilities.sponsorPlacementCol !== null
     && capabilities.sponsorLabelCol !== null;
 
+  const editorPublicationPreview = useMemo(() => {
+    const rawReleaseInput = form.release_at.trim();
+    const parsedReleaseAt = hasReleaseControl ? fromDatetimeLocalValue(form.release_at) : null;
+    const publicationState = normalizePublicationState({
+      status: hasStatusControl ? normalizeStatus(form.status, form.status === "published") : "draft",
+      releaseAt: parsedReleaseAt,
+      hasStatusControl,
+      hasReleaseControl,
+    });
+
+    return {
+      ...publicationState,
+      hasTypedReleaseInput: rawReleaseInput.length > 0,
+      hasUsableReleaseInput: parsedReleaseAt !== null,
+    };
+  }, [form.release_at, form.status, hasReleaseControl, hasStatusControl]);
+
   useEffect(() => {
     if (!canAccessAdmin) return;
     if (loading) {
@@ -2587,6 +2604,57 @@ export default function AdminStudioScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {(hasStatusControl || hasReleaseControl) ? (
+                <>
+                  <Text style={styles.sectionLabel}>Scheduling Preview</Text>
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Effective publication outcome</Text>
+                      <Text style={styles.configListBody}>
+                        {editorPublicationPreview.isPublished
+                          ? `Save will persist ${editorPublicationPreview.status.toUpperCase()} and this title will remain live.`
+                          : `Save will persist ${editorPublicationPreview.status.toUpperCase()} and this title will stay off the live catalog.`}
+                      </Text>
+                      <Text style={styles.configListBody}>
+                        {editorPublicationPreview.releaseAt
+                          ? `Effective scheduled time: ${formatRelease(editorPublicationPreview.releaseAt)}`
+                          : editorPublicationPreview.hasTypedReleaseInput
+                            ? "No scheduled time will persist from the current input."
+                            : "No scheduled time is currently set."}
+                      </Text>
+                      {editorPublicationPreview.hasTypedReleaseInput && !editorPublicationPreview.hasUsableReleaseInput ? (
+                        <Text style={styles.configListBody}>
+                          The typed release time is not usable yet, so save would normalize away the schedule.
+                        </Text>
+                      ) : null}
+                      {editorPublicationPreview.adjustments.map((adjustment) => (
+                        <Text key={adjustment} style={styles.configListBody}>
+                          {adjustment}
+                        </Text>
+                      ))}
+                    </View>
+
+                    <View style={styles.badgesRow}>
+                      <View style={[styles.badge, getStatusTone(editorPublicationPreview.status)]}>
+                        <Text style={styles.badgeText}>{`Will Save ${editorPublicationPreview.status.toUpperCase()}`}</Text>
+                      </View>
+                      {hasReleaseControl ? (
+                        <View
+                          style={[
+                            styles.badge,
+                            editorPublicationPreview.releaseAt ? styles.badgeScheduled : styles.badgeOff,
+                          ]}
+                        >
+                          <Text style={styles.badgeText}>
+                            {editorPublicationPreview.releaseAt ? "Schedule Ready" : "No Schedule"}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                </>
+              ) : null}
 
               {hasTitleMonetizationControls ? (
                 <>
