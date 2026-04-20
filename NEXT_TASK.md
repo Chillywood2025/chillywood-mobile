@@ -1,24 +1,24 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **search / discovery / recommendation chapter closeout audit** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `docs/search-discovery-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
+The next exact task is a narrow **search / discovery / recommendation chapter closeout and next-chapter handoff** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `docs/search-discovery-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
-2. Treat Home, Explore, and public profile/channel discovery truth as already backed unless a real regression is found.
-3. Audit whether any meaningful narrow discovery seam still remains after the Explore adoption slice.
+2. Treat the current discovery chapter as complete enough to move on unless a real regression is found.
+3. Close out the chapter and hand off to the next grounded roadmap chapter.
 4. Keep discovery MVP-only and explicitly defer advanced personalization unless current truth supports more.
-5. Keep fake recommendation logic, route drift, discovery sprawl, and fake search sophistication explicitly out until structure is truly backed.
+5. Keep fake recommendation logic, route drift, discovery sprawl, and fake search sophistication explicitly out until future backing exists.
 
 ## Exact Next Batch
-- audit `app/(tabs)/index.tsx`, `app/(tabs)/explore.tsx`, `app/profile/[userId].tsx`, title/player discovery entry points, and current live/event public discovery helpers
-- decide whether any remaining discovery seam is trivial, narrow, medium, or broad/risky
-- either close out the discovery chapter or name one last narrow discovery batch if a real seam remains
+- update repo truth to record the discovery chapter as complete enough to move on
+- choose the next major chapter grounded in current roadmap truth only
+- keep unrelated local dirt out of the checkpoint
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- inspect only the current discovery family after the Explore adoption slice
+- inspect only the current discovery family long enough to verify clean chapter handoff
 - preserve Home as the primary discovery owner and `/profile/[userId]` as the public creator/channel discovery owner
 - keep current title-programming truth and live cues separate from unsupported recommendation claims
 - avoid reopening already-landed access, audience, channel, content, room, live/event, analytics, safety, or design implementation unless a real regression is found
@@ -43,7 +43,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the discovery chapter closeout audit honestly identifies whether any real narrow seam remains
+- repo truth records the discovery chapter as complete enough to move on
 - current supported discovery truth stays clearly separated from missing or later recommendation systems
 - unsupported discovery/recommendation systems remain explicit instead of being implied or fabricated
 - current public route truth remains unchanged
