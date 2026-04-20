@@ -96,6 +96,58 @@ Current doctrine for that bootstrap:
 - keep provider API tokens outside repo files
 - do not embed raw provider credentials into client runtime env or committed docs
 
+### 3.2 Verified Bootstrap State
+Current host-bootstrap truth now includes:
+- SSH access works
+- the non-root deploy user is `chillywood`
+- `chillywood` has working `sudo`
+- the host has already taken an initial package-update pass
+- the host may already have rebooted once as part of that update/hardening cycle
+
+This still does not imply:
+- reverse proxy/TLS is installed
+- LiveKit is installed
+- app traffic has moved
+- the machine is already serving production Chi'llywood traffic
+
+### 3.3 Base Hardening Closeout Targets
+The remaining first-host bootstrap closeout items should stay manual and host-local:
+- re-check package update status immediately before service bootstrap
+- verify SSH posture:
+  - key-first access
+  - root-login posture only after recovery access is safe
+  - no repo-stored SSH secrets
+- verify firewall posture:
+  - keep SSH narrowly exposed
+  - reserve `80` and `443` for the next reverse-proxy lane
+  - do not publicly expose internal service ports
+- verify fail2ban or equivalent SSH abuse protection
+- verify the service-owned filesystem layout
+
+### 3.4 Expected Filesystem Layout
+The first host should standardize on:
+- `/opt/chillywood` for owned service/runtime/config directories
+- `/var/log/chillywood` for owned service logs
+
+The next lane should create or verify subpaths such as:
+- `/opt/chillywood/env`
+- `/opt/chillywood/runtime`
+- `/opt/chillywood/proxy`
+- `/var/log/chillywood/reverse-proxy`
+- `/var/log/chillywood/livekit`
+
+This pass records the target layout only.
+It does not claim those directories are already populated with live services.
+
+### 3.5 Bootstrap Closeout Decision
+Based on the verified host facts above, the first-host bootstrap state is complete enough to move to:
+- narrow `Hetzner reverse proxy / TLS bootstrap prep`
+
+That means:
+- base host access is no longer the blocker
+- reverse proxy/TLS planning is now the next exact infra lane
+- manual hardening verification still remains part of that next lane
+
 ## 4. Hetzner-First Decision
 
 ### 4.1 First Machine Role
@@ -259,25 +311,23 @@ Start narrow:
 Do not invent a larger observability program in this pass.
 
 ## 10. Deployment Order
-The first production-like Hetzner rollout should happen in this order:
+From the current verified bootstrap state, the next production-like Hetzner rollout should happen in this order:
 
-1. confirm the existing host facts for `chillywood-prod-01` and `87.99.145.160`
-2. lock the public hostname(s) and DNS ownership
-3. complete first SSH bootstrap and host verification:
-   - verify host identity/fingerprint
-   - confirm SSH access path
-   - confirm non-root operator path for service management
-4. harden the Hetzner machine:
-   - firewall
-   - OS patching
-   - non-root deploy posture
-5. provision host env from the Hetzner env template
-6. stand up reverse proxy and TLS first
-7. bring up LiveKit on the Hetzner host
-8. verify the new realtime endpoint independently before mobile cutover
-9. update Supabase Edge Function env so `livekit-token` signs against the Hetzner endpoint
-10. update public mobile runtime config only after the new endpoint is healthy
-11. verify through preview/internal builds before any broader production-like use
+1. re-confirm the known host facts for `chillywood-prod-01`, `87.99.145.160`, and the working `chillywood` deploy user
+2. finish the base-hardening closeout checks:
+   - confirm package update status
+   - confirm SSH posture
+   - confirm firewall posture
+   - confirm fail2ban posture
+   - confirm the `/opt/chillywood` and `/var/log/chillywood` layout
+3. lock the public hostname(s) and DNS ownership
+4. provision host env from the Hetzner env template
+5. stand up reverse proxy and TLS first
+6. bring up LiveKit on the Hetzner host
+7. verify the new realtime endpoint independently before mobile cutover
+8. update Supabase Edge Function env so `livekit-token` signs against the Hetzner endpoint
+9. update public mobile runtime config only after the new endpoint is healthy
+10. verify through preview/internal builds before any broader production-like use
 
 ## 11. Rollback And Safety Notes
 
@@ -327,10 +377,12 @@ OVH should not be introduced later as:
 
 ## 14. First Honest Follow-Up Lane
 Once this prep is accepted, the first real infrastructure follow-up lane should be:
-- narrow `Hetzner realtime edge cutover prep`
+- narrow `Hetzner reverse proxy / TLS bootstrap prep`
 
 That later lane would prove, but not necessarily immediately deploy:
+- the base host-hardening closeout checklist
 - the exact realtime hostname
 - the reverse proxy choice
+- the `/opt/chillywood` and `/var/log/chillywood` service layout
 - the first LiveKit host topology
 - the precise cutover/rollback checklist for the Supabase token endpoint and mobile runtime values
