@@ -52,6 +52,43 @@ export type SafetyReportRecord = {
   createdAt: string | null;
 };
 
+export type SafetyReportQueueSourceSurface =
+  | "profile"
+  | "title-detail"
+  | "chat-thread"
+  | "watch-party-room"
+  | "live-stage"
+  | "communication-room"
+  | "unknown";
+
+export type SafetyReportQueueReviewState = "pending_review" | "operator_visible" | "unknown";
+
+export type SafetyReportQueueItem = SafetyReportRecord & {
+  sourceSurface: SafetyReportQueueSourceSurface;
+  sourceRoute: string | null;
+  targetLabel: string;
+  targetRoleLabel: string | null;
+  reporterRole: ModerationActorRole;
+  reporterAuditOwnerKey: string | null;
+  reporterPlatformOwned: boolean;
+  reporterCanReviewSafetyReports: boolean;
+  reviewState: SafetyReportQueueReviewState;
+  targetAuditOwnerKey: string | null;
+  platformOwnedTarget: boolean;
+};
+
+export type SafetyReportQueueSummary = {
+  totalReports: number;
+  platformOwnedTargetCount: number;
+  sourceSurfaces: SafetyReportQueueSourceSurface[];
+};
+
+export type SafetyReportQueueReadModel = {
+  generatedAt: string;
+  items: SafetyReportQueueItem[];
+  summary: SafetyReportQueueSummary;
+};
+
 export const SAFETY_REPORT_CATEGORIES: SafetyReportCategory[] = [
   "abuse",
   "harassment",
@@ -121,6 +158,39 @@ const normalizeSafetyReportCategory = (value: unknown): SafetyReportCategory => 
     return normalized;
   }
   return "safety";
+};
+
+const readContextText = (value: unknown) => normalizeText(value) || null;
+
+const normalizeModerationActorRole = (value: unknown): ModerationActorRole => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === "official_platform" || normalized === "operator") {
+    return normalized;
+  }
+  return "member";
+};
+
+const normalizeSafetyReportQueueSourceSurface = (value: unknown): SafetyReportQueueSourceSurface => {
+  const normalized = normalizeText(value).toLowerCase();
+  switch (normalized) {
+    case "profile":
+    case "title-detail":
+    case "chat-thread":
+    case "watch-party-room":
+    case "live-stage":
+    case "communication-room":
+      return normalized;
+    default:
+      return "unknown";
+  }
+};
+
+const normalizeSafetyReportQueueReviewState = (value: unknown): SafetyReportQueueReviewState => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === "pending_review" || normalized === "operator_visible") {
+    return normalized;
+  }
+  return "unknown";
 };
 
 export function getModerationAccess(identity?: {
@@ -278,6 +348,42 @@ export async function readSafetyReports(options?: {
     context: isPlainObject(entry.context) ? entry.context : {},
     createdAt: normalizeText(entry.created_at) || null,
   })) satisfies SafetyReportRecord[];
+}
+
+export function toSafetyReportQueueItem(report: SafetyReportRecord): SafetyReportQueueItem {
+  return {
+    ...report,
+    sourceSurface: normalizeSafetyReportQueueSourceSurface(report.context.sourceSurface),
+    sourceRoute: readContextText(report.context.sourceRoute),
+    targetLabel: readContextText(report.context.targetLabel) ?? report.targetId,
+    targetRoleLabel: readContextText(report.context.targetRoleLabel),
+    reporterRole: normalizeModerationActorRole(report.context.reporterRole),
+    reporterAuditOwnerKey: readContextText(report.context.reporterAuditOwnerKey),
+    reporterPlatformOwned: report.context.reporterPlatformOwned === true,
+    reporterCanReviewSafetyReports: report.context.reporterCanReviewSafetyReports === true,
+    reviewState: normalizeSafetyReportQueueReviewState(report.context.moderationReviewState),
+    targetAuditOwnerKey: readContextText(report.context.targetAuditOwnerKey),
+    platformOwnedTarget: report.context.platformOwnedTarget === true,
+  };
+}
+
+export function summarizeSafetyReportQueue(items: SafetyReportQueueItem[]): SafetyReportQueueSummary {
+  return {
+    totalReports: items.length,
+    platformOwnedTargetCount: items.filter((item) => item.platformOwnedTarget).length,
+    sourceSurfaces: Array.from(new Set(items.map((item) => item.sourceSurface))),
+  };
+}
+
+export async function readSafetyReportQueue(options?: {
+  limit?: number;
+}): Promise<SafetyReportQueueReadModel> {
+  const items = (await readSafetyReports(options)).map(toSafetyReportQueueItem);
+  return {
+    generatedAt: new Date().toISOString(),
+    items,
+    summary: summarizeSafetyReportQueue(items),
+  };
 }
 
 export async function submitSafetyReport(input: SafetyReportInput) {
