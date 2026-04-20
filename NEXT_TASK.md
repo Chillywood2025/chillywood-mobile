@@ -1,26 +1,26 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **notification/reminder helper layer pass** on `main`. Use `docs/notification-reminder-implementation-spec.md`, `CURRENT_STATE.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Do not widen into push delivery, fake notification inbox behavior, or reminder UI beyond the first honest helper ownership layer.
+The next exact task is a narrow **creator/public reminder surface adoption pass** on `main`. Use `docs/notification-reminder-implementation-spec.md`, `CURRENT_STATE.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Do not widen into push delivery, fake notification inbox behavior, or a generic notification center.
 
 ## Current Plan
 1. Re-read `docs/notification-reminder-implementation-spec.md`, `CURRENT_STATE.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the current profile/channel, content-management, access, live/event, and audience chapters as closed unless a real regression is found.
-3. Create a dedicated helper owner for the landed notification/reminder data foundation.
+3. Adopt the landed reminder enrollment truth into the current creator/public owners only where the chapter doctrine already supports it.
 4. Keep reminder-ready event truth separate from reminder enrollment truth, and keep chat unread/read truth separate from a global notifications system.
 5. Avoid any push provider, background delivery, fake notification-center behavior, or fake preference rollout.
 
 ## Exact Next Batch
-- add `_lib/notifications.ts` as the canonical notification/reminder helper owner
-- cover notification list/summary reads, read/dismiss mutations, reminder enrollment reads/writes, and target/deep-link normalization
+- adopt `_lib/notifications.ts` into `/channel-settings` for real creator reminder enrollment summaries
+- adopt `_lib/notifications.ts` into `/profile/[userId]` for real public reminder enrollment state where the user is signed in
 - keep reminder-ready event truth and chat unread/read truth as source inputs, not replacement notification tables
-- keep push delivery, advanced preference systems, and discovery/marketing messaging explicitly later unless current truth already supports them
+- keep push delivery, advanced preference systems, chat inbox redesign, and generic notification-center behavior explicitly later
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- add only the smallest honest helper layer needed for the landed notification/reminder truth
-- preserve current route-owner truth and current helper ownership while creating a new canonical notification/reminder helper owner
+- add only the smallest honest creator/public reminder surfaces needed for the landed notification/reminder truth
+- preserve current route-owner truth and current helper ownership while adopting the new canonical notification/reminder helper owner
 - keep notification categories and targets aligned with the landed doctrine
 - keep the lane doctrine-first and avoid reopening already-landed access, audience, channel, content, room, or live/event implementation unless a real regression is found
 - preserve all current route truth and all previously landed profile/channel, content-management, and access stages
@@ -35,14 +35,14 @@ Do not:
 - create `/studio*` routes
 - touch broader runtime room/live-stage behavior in this doctrine lane
 - touch RBAC or Rachi control-plane work
-- jump into notification UI, push delivery, or reminder subscriptions beyond the landed enrollment/data model
+- jump into notification UI, push delivery, or reminder behavior beyond the landed enrollment/data model
 - fake VIP/mod/co-host audience logic
 - reopen `/channel-settings` audience workflow work unless the doctrine pass proves a regression
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- repo truth lands a minimal honest notification/reminder helper layer
+- repo truth lands a minimal honest creator/public reminder surface adoption
 - notification/reminder truth is grounded in current backed event, profile, chat, moderation, access, and route-owner reality
 - creator/channel subscriber truth stays separate from premium entitlement truth where reminders later touch access
 - unsupported push, ticketed, or marketing-heavy notification behavior remains explicitly later unless real truth exists
