@@ -32,15 +32,15 @@ import {
 
 import { titles } from "../../_data/titles";
 import {
+    resolveContentAccess,
+    type ContentAccessResolution,
+} from "../../_lib/accessEntitlements";
+import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveBrandingConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
-import {
-    evaluateTitleAccess,
-    type ContentAccessDecision,
-} from "../../_lib/monetization";
 import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
@@ -414,7 +414,7 @@ export default function PlayerScreen() {
   const [item, setItem] = useState<TitleRow | null>(null);
   const [titleLoading, setTitleLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
-  const [standaloneAccess, setStandaloneAccess] = useState<ContentAccessDecision | null>(null);
+  const [standaloneAccess, setStandaloneAccess] = useState<ContentAccessResolution | null>(null);
   const [standaloneAccessLoading, setStandaloneAccessLoading] = useState(true);
   const [standaloneAccessRetryToken, setStandaloneAccessRetryToken] = useState(0);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -3201,7 +3201,7 @@ export default function PlayerScreen() {
 
     setStandaloneAccessLoading(true);
 
-    evaluateTitleAccess({
+    resolveContentAccess({
       titleId: safeTitleId,
       accessRule: displayItem?.content_access_rule,
     })
@@ -3223,7 +3223,7 @@ export default function PlayerScreen() {
     };
   }, [cleanId, displayItem?.content_access_rule, displayItem?.id, isStandalonePlayer, standaloneAccessRetryToken]);
 
-  const standalonePlaybackBlocked = isStandalonePlayer && !!standaloneAccess && !standaloneAccess.allowed;
+  const standalonePlaybackBlocked = isStandalonePlayer && !!standaloneAccess && !standaloneAccess.isAllowed;
   const standalonePlaybackUnknown = isStandalonePlayer && !standaloneAccessLoading && !standaloneAccess && !!accessError;
   const standalonePlaybackGateActive = isStandalonePlayer && (
     standaloneAccessLoading || standalonePlaybackBlocked || standalonePlaybackUnknown

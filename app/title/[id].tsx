@@ -4,15 +4,17 @@ import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View
 
 import { titles as localTitles } from "../../_data/titles";
 import {
+  resolveContentAccess,
+  type ContentAccessResolution,
+} from "../../_lib/accessEntitlements";
+import {
   DEFAULT_APP_CONFIG,
   readAppConfig,
   resolveBrandingConfig,
   resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import {
-  evaluateTitleAccess,
   getMonetizationAccessSheetPresentation,
-  type ContentAccessDecision,
   type SponsorPlacement,
   type TitleAccessRule,
 } from "../../_lib/monetization";
@@ -110,7 +112,7 @@ export default function TitleDetails() {
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [myListIds, setMyListIds] = useState<string[]>([]);
   const [myListBusy, setMyListBusy] = useState(false);
-  const [titleAccess, setTitleAccess] = useState<ContentAccessDecision | null>(null);
+  const [titleAccess, setTitleAccess] = useState<ContentAccessResolution | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -286,7 +288,7 @@ export default function TitleDetails() {
       }
 
       setAccessLoading(true);
-      const access = await evaluateTitleAccess({
+      const access = await resolveContentAccess({
         titleId: String(title.id ?? "").trim(),
         accessRule: title.content_access_rule,
       }).catch(() => null);
@@ -326,13 +328,13 @@ export default function TitleDetails() {
       };
     }
 
-    const refreshed = await evaluateTitleAccess({
+    const refreshed = await resolveContentAccess({
       titleId: String(title.id ?? "").trim(),
       accessRule: title.content_access_rule,
     }).catch(() => null);
     setTitleAccess(refreshed);
 
-    if (refreshed?.allowed) {
+    if (refreshed?.isAllowed) {
       trackEvent("monetization_unlock_success", {
         action,
         surface: "title-detail",
@@ -388,7 +390,7 @@ export default function TitleDetails() {
 
   const onPlay = () => {
     if (accessLoading) return;
-    if (titleAccess && !titleAccess.allowed) {
+    if (titleAccess && !titleAccess.isAllowed) {
       trackEvent("monetization_gate_shown", {
         surface: "title-detail",
         reason: titleAccess.reason,
@@ -421,7 +423,9 @@ export default function TitleDetails() {
     );
   }
 
-  const isPremiumTitle = title.content_access_rule === "premium";
+  const isPremiumTitle = titleAccess
+    ? titleAccess.classification === "premium_only"
+    : title.content_access_rule === "premium";
   const infoLine = buildTitleInfoLine(title);
   const addedLabel = formatAddedDate(title.created_at);
   const accessSheetPresentation = titleAccess
@@ -453,9 +457,9 @@ export default function TitleDetails() {
             <View style={styles.statusCard}>
               <Text style={styles.statusKicker}>PREMIUM TITLE</Text>
               <Text style={styles.statusBody}>
-                {titleAccess?.allowed
-                  ? `Premium access is active for this title inside ${branding.appDisplayName}.`
-                  : "Premium access is not currently available for this title on this device or account."}
+                {titleAccess?.isAllowed
+                  ? `${titleAccess.label} access is active for this title inside ${branding.appDisplayName}.`
+                  : `${titleAccess?.label ?? "Premium"} access is not currently available for this title on this device or account.`}
               </Text>
             </View>
           ) : null}
@@ -492,7 +496,7 @@ export default function TitleDetails() {
               disabled={accessLoading}
             >
               <Text style={styles.btnPrimaryText}>
-                {accessLoading ? "Checking access..." : titleAccess && !titleAccess.allowed ? "Access Unavailable" : "Play"}
+                {accessLoading ? "Checking access..." : titleAccess && !titleAccess.isAllowed ? "Access Unavailable" : "Play"}
               </Text>
             </Pressable>
 
