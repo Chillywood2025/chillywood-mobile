@@ -8,8 +8,9 @@ The next exact task is a narrow **safety / moderation workflow doctrine-spec pas
 2. Treat the profile/channel, access, live/event, audience, notifications, analytics, moderation, design, and discovery chapters as closed unless a real regression is found.
 3. Treat the Owner Admin + Rachi chapter as closed enough to move on unless a real regression is found.
 4. Defer release hardening / Google Play readiness for now per explicit user priority.
-5. Re-enter safety / moderation workflow deepening by starting from `docs/safety-moderation-implementation-spec.md` and current moderation/admin truth.
-6. Stop immediately if the safety/moderation doctrine refresh would require fake moderation workflow or route drift.
+5. Treat `docs/hetzner-first-deployment-implementation-spec.md` and `infra/hetzner/*.example` as deployment-planning reference only; they do not change the active next product chapter.
+6. Re-enter safety / moderation workflow deepening by starting from `docs/safety-moderation-implementation-spec.md` and current moderation/admin truth.
+7. Stop immediately if the safety/moderation doctrine refresh would require fake moderation workflow or route drift.
 
 ## Exact Next Batch
 - start with `docs/safety-moderation-implementation-spec.md`
