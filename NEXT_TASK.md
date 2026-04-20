@@ -1,25 +1,25 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **safety / moderation chapter closeout audit** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Audit `_lib/moderation.ts`, `_lib/channelReadModels.ts`, `app/admin.tsx`, `app/channel-settings.tsx`, and the report-entry owners to determine whether any meaningful narrow moderation seam still remains or whether the chapter is complete enough to move on.
+The next exact task is a narrow **creator-side safety summary normalization pass** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth. Start in `_lib/channelReadModels.ts`, switch the creator safety/admin summary onto the normalized recent queue truth from `_lib/moderation.ts`, and adopt only the smallest related summary adjustment in `/channel-settings`.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the profile/channel, content-management, access, live/event, audience, notifications/reminders, and analytics chapters as closed unless a real regression is found.
 3. Treat `docs/safety-moderation-implementation-spec.md` as the active doctrine for the chapter and keep the next slice strictly inside current helper/schema/admin truth.
-4. Audit whether report intake, creator-side summary, and read-only operator review now cover the honest moderation chapter boundary.
+4. Normalize creator-side safety/admin summary onto the same helper-owned recent queue truth now used by `/admin`.
 5. Keep fake enforcement workflows, fake report states, fake strike systems, assignment flow, and route drift explicitly out until they are truly backed.
 
 ## Exact Next Batch
-- audit the remaining safety/moderation seams after queue normalization and admin adoption
-- determine whether one final narrow creator/operator moderation batch is truly justified
-- otherwise close out the chapter and hand off to the next major chapter
+- switch creator-side safety/admin summary from raw recent report rows to normalized recent queue truth
+- adopt only the smallest related summary adjustment in `/channel-settings`
+- then close out the moderation chapter if no meaningful seam remains
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- inspect only the current safety / moderation workflow family and determine whether any meaningful narrow seam still remains
-- preserve current route-owner truth and current helper ownership while choosing either one final narrow moderation slice or a chapter handoff
+- inspect only the current safety / moderation workflow family and keep the final moderation slice creator-side, summary-only, and helper-backed
+- preserve current route-owner truth and current helper ownership while choosing the smallest honest creator/operator handoff slice
 - keep creator/channel audience truth, access truth, live/event truth, notifications truth, and analytics truth separate from unsupported moderation claims
 - avoid reopening already-landed access, audience, channel, content, room, or live/event implementation unless a real regression is found
 - preserve all current route truth and all previously landed profile/channel, content-management, and access stages
@@ -43,8 +43,8 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the remaining moderation seams are explicitly classified as trivial, narrow, medium, or broad/risky
-- the next moderation decision is grounded in current helper/schema/admin truth
+- creator-side safety/admin summary uses the normalized recent queue truth
+- `/channel-settings` stays summary-only and does not become a moderation queue
 - current supported moderation/admin/report truth is separated clearly from missing or later workflow systems
 - unsupported moderation systems remain explicit instead of being implied or fabricated
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
