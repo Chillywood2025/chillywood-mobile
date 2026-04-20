@@ -1,52 +1,49 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **access chapter closeout audit / next-chapter selection pass** on `main`, using `_lib/accessEntitlements.ts`, `docs/access-entitlement-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, and this file as governing truth. Do not reopen `/profile/[userId]`, `/channel-settings`, `/chat`, title/player route truth, or schema ownership unless a real regression is proved. The current access-adoption family is now complete enough for current truth: channel, content, room entry, Party Room, and the communication room/session hook all consume the shared resolver where the current doctrine proved they should, and event access remains explicitly later until a live/event model exists.
+The next exact task is a narrow **live/event scheduling doctrine-spec pass** on `main`, starting with `docs/live-event-scheduling-implementation-spec.md` and using `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `docs/access-entitlement-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, and this file as governing truth. Do not reopen the closed-enough access-adoption family, do not implement event access yet, and do not touch schema, routes, or public/live UI in this doctrine pass. The access/entitlement chapter is now complete enough to move on for current truth, and event access remains explicitly later until the live/event chapter creates canonical event truth.
 
 ## Current Plan
-1. Re-read `docs/access-entitlement-implementation-spec.md`, `ROADMAP.md`, `CURRENT_STATE.md`, and this file first.
-2. Treat the current profile/channel and content-management chapters as closed unless a real regression is found.
-3. Stay brutally narrow and treat the current access-adoption family as closed enough unless a real regression is proved.
-4. Audit the chapter state against `docs/access-entitlement-implementation-spec.md`, `CURRENT_STATE.md`, and this file to determine whether the access chapter itself should close for now or hand off to the next major chapter.
-5. Keep event access implementation and any broader live/event scheduling work out of scope for this closeout lane.
-6. Preserve `/profile/[userId]`, `/channel-settings`, `/chat`, `/chat/[threadId]`, and all watch-party/live route truth unchanged.
-7. Keep unsupported later-phase purchase, ticketed, and formal invite concepts explicitly unsupported instead of faking them.
+1. Re-read `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, `CURRENT_STATE.md`, `docs/access-entitlement-implementation-spec.md`, `docs/profile-channel-implementation-spec.md`, and this file first.
+2. Treat the current profile/channel, content-management, and access-adoption families as closed unless a real regression is found.
+3. Create the durable live/event chapter doctrine in `docs/live-event-scheduling-implementation-spec.md` only; do not start implementation yet.
+4. Preserve locked semantics and route truth for `Watch-Party Live`, `Live Watch-Party`, `Live First`, `/watch-party/[partyId]`, `/watch-party/live-stage/[partyId]`, `/profile/[userId]`, and `/channel-settings`.
+5. Keep event access implementation out of scope until the live/event chapter defines canonical event truth.
+6. Keep unsupported later-phase purchase, ticketed, and formal invite concepts explicitly unsupported instead of faking them.
 
 ## Exact Next Batch
-- audit whether the access chapter is now complete enough for current truth
-- confirm that event access remains later until the live/event scheduling model exists
-- choose the single next major lane only if control-file truth supports it clearly
+- create `docs/live-event-scheduling-implementation-spec.md`
+- define canonical live/event doctrine for scheduled live and scheduled watch-party surfaces without changing route truth
+- preserve the locked distinction between `Watch-Party Live`, `Live Watch-Party`, and `Live First`
+- confirm event access remains later until canonical event truth exists
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- audit the current access/entitlement chapter state against the landed resolver foundation plus completed adoptions
-- use `_lib/accessEntitlements.ts` and `docs/access-entitlement-implementation-spec.md` as the canonical references for what is complete now versus later
-- keep the lane doctrine-first and avoid reopening already-landed screen-owner adoptions unless a real regression is found
-- avoid reopening landed public consumer work, source-of-truth hardening, or broader Content Studio redesign
-- preserve all current route truth and all previously landed profile/channel stages
+- create the first durable live/event scheduling implementation spec
+- use the access spec handoff, current room doctrine, and current route/control-file truth to define what live/event scheduling means now versus later
+- keep the lane doctrine-first and avoid reopening already-landed access, channel, content, or room adoption work unless a real regression is found
+- preserve all current route truth and all previously landed profile/channel, content-management, and access stages
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- reopen the broader profile/channel or content-management chapters because of preference churn
+- reopen the broader profile/channel, content-management, or access chapters because of preference churn
 - widen into Home again, profile again, channel-settings again, admin workflow tuning again, live/event scheduling implementation, heavier monetization rollout, audience/analytics expansion, or deeper safety/admin work
 - invent creator-platform routes or `/studio*` route truth
 - fake content catalogs, fake programming, or fake analytics
 - create `/studio*` routes
-- touch schema or backend ownership in this adoption lane
-- touch broader runtime room/live-stage behavior in this closeout lane
+- touch schema or backend ownership in this doctrine lane
+- touch broader runtime room/live-stage behavior in this doctrine lane
 - touch RBAC or Rachi control-plane work
-- broaden into event access adoption before the live/event chapter creates canonical event truth
-- broaden into other screen owners
+- implement event access before the live/event chapter creates canonical event truth
+- broaden into screen-owner adoption or UI work
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the access chapter is audited honestly against current repo truth
-- the repo ends with exactly one clear next move:
-  - access chapter closeout for now
-  - or the next major chapter selection grounded in current doctrine
+- `docs/live-event-scheduling-implementation-spec.md` lands as durable doctrine
+- the repo defines exactly what current live/event truth is versus what remains later-phase
 - event access remains explicitly later instead of being faked
 - `/profile/[userId]`, `/channel-settings`, `/chat`, and live/watch-party route truth remain unchanged
 - no fake future scope or schema drift is introduced
