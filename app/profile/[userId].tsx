@@ -4,6 +4,7 @@ import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveFeatureConfig,
+    resolveHomeConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
 import { useBetaProgram } from "../../_lib/betaProgram";
@@ -36,8 +37,10 @@ import {
   readUserProfileByUserId,
   type UserProfile,
 } from "../../_lib/userData";
+import type { Tables } from "../../supabase/database.types";
 import { getSafePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { supabase } from "../lib/_supabase";
 
 type PublicProfileTabKey = "home" | "content" | "live" | "community" | "about";
 
@@ -75,10 +78,52 @@ type ProfileAccessDetail = {
   body: string;
 };
 
+type ContentProgrammingTitle = Pick<
+  Tables<"titles">,
+  "id" | "title" | "category" | "year" | "created_at" | "featured" | "is_hero" | "is_trending" | "pin_to_top_row" | "sort_order"
+>;
+
+const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
+
+const toTimestamp = (value?: string | null) => {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toProgramSortOrder = (value?: number | null) => (
+  typeof value === "number" && Number.isFinite(value) ? value : MAX_PROGRAM_SORT_ORDER
+);
+
+const sortTitlesByProgramTruth = (items: ContentProgrammingTitle[]) => {
+  return [...items].sort((a, b) => {
+    const sortDelta = toProgramSortOrder(a.sort_order) - toProgramSortOrder(b.sort_order);
+    if (sortDelta !== 0) return sortDelta;
+    return toTimestamp(b.created_at) - toTimestamp(a.created_at);
+  });
+};
+
+const pluralize = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+const formatTitlePreview = (items: ContentProgrammingTitle[], fallback: string) => {
+  const names = items
+    .map((item) => String(item.title ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (!names.length) return fallback;
+  return names.join(", ");
+};
+
+const getTitleLabel = (item?: Pick<ContentProgrammingTitle, "title"> | null, fallback = "Untitled") => {
+  const normalized = String(item?.title ?? "").trim();
+  return normalized || fallback;
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { isActive: hasSupportAccess } = useBetaProgram();
   const [currentUserId, setCurrentUserId] = useState("");
+  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
   const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -86,6 +131,8 @@ export default function ProfileScreen() {
   const [savedTitleCount, setSavedTitleCount] = useState(0);
   const [continueWatchingCount, setContinueWatchingCount] = useState(0);
   const [channelSignalsReady, setChannelSignalsReady] = useState(false);
+  const [contentProgrammingTitles, setContentProgrammingTitles] = useState<ContentProgrammingTitle[]>([]);
+  const [contentProgrammingReady, setContentProgrammingReady] = useState(false);
   const [channelAccessProfile, setChannelAccessProfile] = useState<UserProfile | null>(null);
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
   const [channelAccessReady, setChannelAccessReady] = useState(false);
@@ -140,11 +187,43 @@ export default function ProfileScreen() {
 
     readAppConfig()
       .then((config) => {
-        if (active) setCreatorSettingsEnabled(resolveFeatureConfig(config).creatorSettingsEnabled);
+        if (!active) return;
+        setAppConfig(config);
+        setCreatorSettingsEnabled(resolveFeatureConfig(config).creatorSettingsEnabled);
       })
       .catch(() => {
-        if (active) setCreatorSettingsEnabled(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
+        if (!active) return;
+        setAppConfig(DEFAULT_APP_CONFIG);
+        setCreatorSettingsEnabled(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
       });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    setContentProgrammingReady(false);
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("titles")
+          .select("id, title, category, year, created_at, featured, is_hero, is_trending, pin_to_top_row, sort_order")
+          .order("created_at", { ascending: false })
+          .returns<ContentProgrammingTitle[]>();
+
+        if (!active) return;
+        setContentProgrammingTitles(error ? [] : (data ?? []));
+        setContentProgrammingReady(true);
+      } catch {
+        if (!active) return;
+        setContentProgrammingTitles([]);
+        setContentProgrammingReady(true);
+      }
+    })();
 
     return () => {
       active = false;
@@ -227,6 +306,7 @@ export default function ProfileScreen() {
     };
   }, [isOfficialProfile, isSelfProfile, userId]);
   const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
+  const homeConfig = resolveHomeConfig(appConfig);
   const roleLabel = isOfficialProfile
     ? profile.platformRoleLabel ?? "Official"
     : profile.role === "creator"
@@ -516,6 +596,91 @@ export default function ProfileScreen() {
             ? "Use linked room actions only when real room context exists, and use Chi'lly Chat for persistent contact. This page should explain the channel, not replace the room."
             : "Use this page to understand the channel identity first, then move into Chi'lly Chat or a real linked room when that context exists."
         };
+  const latestProgrammingTitles = useMemo(() => {
+    return [...contentProgrammingTitles].sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at));
+  }, [contentProgrammingTitles]);
+  const orderedProgrammingTitles = useMemo(() => sortTitlesByProgramTruth(contentProgrammingTitles), [contentProgrammingTitles]);
+  const heroProgrammingTitle = useMemo(() => {
+    const manualHeroTitleId = String(homeConfig.manualHeroTitleId ?? "").trim();
+    const manualHeroItem = manualHeroTitleId
+      ? orderedProgrammingTitles.find((item) => String(item.id ?? "").trim() === manualHeroTitleId) ?? null
+      : null;
+    const heroFlagItem = orderedProgrammingTitles.find((item) => item.is_hero === true) ?? null;
+
+    if (homeConfig.heroMode === "manual_title") {
+      return manualHeroItem ?? heroFlagItem ?? latestProgrammingTitles[0] ?? null;
+    }
+
+    if (homeConfig.heroMode === "hero_flag") {
+      return heroFlagItem ?? latestProgrammingTitles[0] ?? null;
+    }
+
+    return latestProgrammingTitles[0] ?? null;
+  }, [homeConfig.heroMode, homeConfig.manualHeroTitleId, latestProgrammingTitles, orderedProgrammingTitles]);
+  const featuredProgrammingTitles = useMemo(
+    () => orderedProgrammingTitles.filter((item) => item.featured === true),
+    [orderedProgrammingTitles],
+  );
+  const trendingProgrammingTitles = useMemo(
+    () => orderedProgrammingTitles.filter((item) => item.is_trending === true),
+    [orderedProgrammingTitles],
+  );
+  const topRowProgrammingTitles = useMemo(
+    () => orderedProgrammingTitles.filter((item) => item.pin_to_top_row === true),
+    [orderedProgrammingTitles],
+  );
+  const hasProgrammingTruth = !!(
+    heroProgrammingTitle
+    || featuredProgrammingTitles.length
+    || trendingProgrammingTitles.length
+    || topRowProgrammingTitles.length
+  );
+  const heroProgrammingLabel = getTitleLabel(heroProgrammingTitle);
+  const programmingSignalsSummary = [
+    heroProgrammingTitle ? `hero lead ${heroProgrammingLabel}` : null,
+    featuredProgrammingTitles.length ? pluralize(featuredProgrammingTitles.length, "featured title") : null,
+    trendingProgrammingTitles.length ? pluralize(trendingProgrammingTitles.length, "trending title") : null,
+    topRowProgrammingTitles.length ? pluralize(topRowProgrammingTitles.length, "top-row title") : null,
+  ].filter(Boolean).join(", ");
+  const programmingGroupsSummary = [
+    heroProgrammingTitle ? `Hero: ${heroProgrammingLabel}` : null,
+    topRowProgrammingTitles.length ? `Top Row: ${formatTitlePreview(topRowProgrammingTitles, "current top-row titles")}` : null,
+    featuredProgrammingTitles.length ? `Featured: ${formatTitlePreview(featuredProgrammingTitles, "current featured titles")}` : null,
+    trendingProgrammingTitles.length ? `Trending: ${formatTitlePreview(trendingProgrammingTitles, "current trending titles")}` : null,
+  ].filter(Boolean).join(" · ");
+  const contentHomeBody = isSelfProfile
+    ? channelSignalsReady
+      ? hasProgrammingTruth
+        ? `Your public channel can already point to ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"}, ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}, and current programming truth like ${programmingSignalsSummary} without splitting profile and channel into separate surfaces.`
+        : `Your current public channel foundation can already point to ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"} without splitting profile and channel into separate surfaces.`
+      : "Loading the current saved and in-progress signals that can anchor your first channel shelves."
+    : contentProgrammingReady
+      ? hasProgrammingTruth
+        ? `Current Chi'llywood programming is already real here: ${programmingSignalsSummary}. This public channel surface can point visitors into real shelves and programming without inventing uploads.`
+        : "This public channel foundation keeps content honest for now: featured shelves, liked/saved activity, or creator programming should grow here without inventing fake uploads."
+      : "Loading the current programmed title signals that can anchor this channel-facing content surface honestly.";
+  const contentProgrammingSurfaceBody = isSelfProfile
+    ? channelSignalsReady
+      ? hasProgrammingTruth
+        ? `Your first public content surface can build from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"}, ${continueWatchingCount} active resume cue${continueWatchingCount === 1 ? "" : "s"}, and current programming truth like ${programmingSignalsSummary}.`
+        : `Your first public content surface can build from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} active resume cue${continueWatchingCount === 1 ? "" : "s"} while deeper creator programming grows later.`
+      : "Loading the saved and in-progress title signals that can anchor your first channel content shelves."
+    : isOfficialProfile
+      ? contentProgrammingReady
+        ? hasProgrammingTruth
+          ? `Official programming truth is already available here: ${programmingSignalsSummary}. This route can point into real platform programming without faking a separate network catalog.`
+          : "This channel surface is reserved for Chi'llywood's official welcome guidance, platform notes, and future announcement drops without inventing a separate network page."
+        : "Loading the current official-safe programming signals for this canonical channel surface."
+      : contentProgrammingReady
+        ? hasProgrammingTruth
+          ? `Current programming truth can already anchor this tab: ${programmingSignalsSummary}. It should stay honest about what is platform programming versus what belongs to this channel.`
+          : "This tab should grow into featured rows, liked or saved relationships, and creator programming when those signals are real."
+        : "Loading the current programmed title signals that can anchor this channel library honestly.";
+  const contentProgrammingGroupsBody = contentProgrammingReady
+    ? hasProgrammingTruth
+      ? `${programmingGroupsSummary}.`
+      : "The content tab should prefer real shelves, curated rows, and honest empty states over fake uploads or placeholder catalogs."
+    : "Loading the real hero, featured, trending, and top-row groupings that can shape this content surface.";
   const quickActions = isOfficialProfile
     ? [
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
@@ -567,11 +732,7 @@ export default function ProfileScreen() {
     {
       title: isSelfProfile ? "Content Shelves" : "Content Preview",
       kicker: "CONTENT",
-      body: isSelfProfile
-        ? channelSignalsReady
-          ? `Your current public channel foundation can already point to ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"} without splitting profile and channel into separate surfaces.`
-          : "Loading the current saved and in-progress signals that can anchor your first channel shelves."
-        : "This public channel foundation keeps content honest for now: featured shelves, liked/saved activity, or creator programming should grow here without inventing fake uploads.",
+      body: contentHomeBody,
     },
     {
       title: "Community Preview",
@@ -589,16 +750,15 @@ export default function ProfileScreen() {
   const contentTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
     ? [
         {
-          title: "Official Network",
+          title: hasProgrammingTruth ? "Official Programming" : "Official Network",
           kicker: profile.officialBadgeLabel ?? "OFFICIAL",
-          body: officialAccount?.trustSummary
-            ?? "This channel surface is reserved for Chi'llywood's official welcome guidance, platform notes, and future announcement drops without inventing a separate network page.",
+          body: contentProgrammingSurfaceBody,
           accent: "official",
         },
         {
-          title: "Content Library Behavior",
+          title: hasProgrammingTruth ? "Programmed Groups" : "Content Library Behavior",
           kicker: "CONTENT",
-          body: "Official content and platform signals can surface here later, but the route stays honest until real drops, featured rows, or official programming are ready.",
+          body: contentProgrammingGroupsBody,
         },
         {
           title: "Public Access Boundary",
@@ -610,16 +770,12 @@ export default function ProfileScreen() {
         {
           title: isSelfProfile ? "Programming Surface" : "Channel Library",
           kicker: isSelfProfile ? "OWNER SIGNAL" : "PUBLIC SIGNAL",
-          body: isSelfProfile
-            ? channelSignalsReady
-              ? `Your first public content surface can build from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} active resume cue${continueWatchingCount === 1 ? "" : "s"} while deeper creator programming grows later.`
-              : "Loading the saved and in-progress title signals that can anchor your first channel content shelves."
-            : "This tab should grow into featured rows, liked or saved relationships, and creator programming when those signals are real.",
+          body: contentProgrammingSurfaceBody,
         },
         {
-          title: "Library Behavior",
+          title: hasProgrammingTruth ? "Programmed Groups" : "Library Behavior",
           kicker: "CONTENT TAB",
-          body: "The content tab is the channel library surface. It should prefer real shelves, curated rows, and honest empty states over fake uploads or placeholder catalogs.",
+          body: contentProgrammingGroupsBody,
         },
         {
           title: "Current MVP Boundary",
