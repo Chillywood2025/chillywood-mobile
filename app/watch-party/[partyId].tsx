@@ -44,6 +44,10 @@ import {
     resolveFeatureConfig,
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
+import {
+    resolveRoomAccess,
+    type RoomAccessResolution,
+} from "../../_lib/accessEntitlements";
 import { trackEvent } from "../../_lib/analytics";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import { prepareLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
@@ -57,13 +61,11 @@ import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed
 import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
-import type { RoomAccessDecision } from "../../_lib/roomRules";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
 import {
     applyHostAction,
-    evaluatePartyRoomAccess,
     getActivePartyMemberships,
     getPartyRoom,
     getPartyRoomSnapshot,
@@ -109,7 +111,7 @@ type ConnState = "loading" | "connecting" | "live" | "reconnecting" | "error";
 
 type MonetizationGate = {
   source: "room";
-  access: RoomAccessDecision;
+  access: RoomAccessResolution;
   accessKey: string;
 };
 
@@ -157,6 +159,31 @@ type FloatingReaction = {
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
 const ROOM_HEARTBEAT_INTERVAL_MILLIS = 10_000;
+
+const isAccessSheetReason = (reason: string | null | undefined): reason is AccessSheetReason => (
+  reason === "premium_required" || reason === "party_pass_required"
+);
+
+const getRoomAccessGateTitle = (access: Pick<RoomAccessResolution, "label"> | null | undefined) => (
+  access?.label === "Party Pass" ? "Party Pass access not currently available" : "Premium room access not currently available"
+);
+
+const getRoomAccessGateBody = (access: Pick<RoomAccessResolution, "label"> | null | undefined) => (
+  access?.label === "Party Pass"
+    ? "This room stays locked because Party Pass access is not currently available for this device or account."
+    : "This room stays locked because premium room access is not currently available for this device or account."
+);
+
+const getRoomAccessMessage = (access: Pick<RoomAccessResolution, "reason" | "label"> | null | undefined) => {
+  if (access?.reason === "room_locked") return "This room is locked right now. Ask the host to reopen it.";
+  if (access?.reason === "removed") return "You no longer have access to this room.";
+  if (access?.reason === "identity_required") return "Sign in to join this watch party.";
+  if (access && isAccessSheetReason(access.reason)) {
+    return `${access.label} access is still locked for this account.`;
+  }
+  return "Unable to confirm your room access right now.";
+};
+
 const getSafeRoomTitleLabel = (titleName: string | null, room: WatchPartyState, fallbackLabel: string) => {
   const resolvedTitle = String(titleName ?? "").trim();
   if (resolvedTitle) return resolvedTitle;
@@ -512,7 +539,8 @@ export default function WatchPartyRoomScreen() {
 
         syncRoomFromSnapshot(snapshot, userId);
         const currentMembership = snapshot.memberships.find((membership) => membership.userId === userId) ?? null;
-        const access = await evaluatePartyRoomAccess({
+        const access = await resolveRoomAccess({
+          roomSurface: "watch_party",
           partyId,
           userId,
           room: snapshot.room,
@@ -521,7 +549,7 @@ export default function WatchPartyRoomScreen() {
 
         if (cancelled) return;
 
-        if (access?.canJoin) {
+        if (access?.isAllowed) {
           await joinPartyRoomSession({
             partyId,
             userId,
@@ -537,7 +565,7 @@ export default function WatchPartyRoomScreen() {
           }
         } else if (access?.reason === "identity_required") {
           setConnState("error");
-        } else if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+        } else if (access && isAccessSheetReason(access.reason)) {
           trackEvent("monetization_gate_shown", {
             surface: "watch-party-room",
             reason: access.reason,
@@ -551,7 +579,7 @@ export default function WatchPartyRoomScreen() {
           setAccessSheetVisible(true);
           setLoading(false);
           return;
-        } else if (access && !access.canJoin) {
+        } else if (access && access.isBlocked) {
           setNotFound(true);
           setLoading(false);
           return;
@@ -599,7 +627,7 @@ export default function WatchPartyRoomScreen() {
           refreshRoomSnapshot(userId).catch(() => {});
         }, 5000);
 
-        if (access?.canJoin) {
+        if (access?.isAllowed) {
           heartbeatRef.current = setInterval(() => {
             void touchPartyRoomSession({
               partyId,
@@ -1204,13 +1232,15 @@ export default function WatchPartyRoomScreen() {
     try {
       const latestRoom = await getPartyRoom(accessGate.accessKey).catch(() => null);
       const userId = await getSafePartyUserId().catch(() => "");
-      const access = await evaluatePartyRoomAccess({
+      const roomToUse = latestRoom ?? room ?? undefined;
+      const access = await resolveRoomAccess({
+        roomSurface: "watch_party",
         partyId: accessGate.accessKey,
         userId,
-        room: latestRoom ?? room ?? undefined,
+        room: roomToUse,
       }).catch(() => null);
 
-      if (access?.canJoin) {
+      if (access?.isAllowed) {
         trackEvent("monetization_unlock_success", {
           action,
           surface: "watch-party-room",
@@ -1227,12 +1257,12 @@ export default function WatchPartyRoomScreen() {
         };
       }
 
-      if (access && (access.reason === "premium_required" || access.reason === "party_pass_required")) {
+      if (access && isAccessSheetReason(access.reason)) {
         setAccessGate({
           ...accessGate,
           access,
         });
-        const message = access.monetization.issues[0] ?? "Room access is still locked for this account.";
+        const message = access.monetization.issues[0] ?? getRoomAccessMessage(access);
         trackEvent("monetization_unlock_failure", {
           action,
           surface: "watch-party-room",
@@ -1245,11 +1275,7 @@ export default function WatchPartyRoomScreen() {
         };
       }
 
-      const message = access?.reason === "room_locked"
-        ? "This room is locked right now. Ask the host to reopen it."
-        : access?.reason === "removed"
-          ? "You no longer have access to this room."
-          : "Unable to confirm your room access right now.";
+      const message = getRoomAccessMessage(access);
       trackEvent("monetization_unlock_failure", {
         action,
         surface: "watch-party-room",
@@ -1642,12 +1668,10 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.center}>
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>
-            {accessGate.access.reason === "premium_required" ? "Premium room access not currently available" : "Party Pass access not currently available"}
+            {getRoomAccessGateTitle(accessGate.access)}
             </Text>
             <Text style={styles.errorBody}>
-            {accessGate.access.reason === "premium_required"
-              ? "This room stays locked because premium room access is not currently available for this device or account."
-              : "This room stays locked because Party Pass access is not currently available for this device or account."}
+            {getRoomAccessGateBody(accessGate.access)}
             </Text>
           <ProtectedSessionNote
             {...getProtectedSessionCopy(sharedRoomMode === "live" ? "live-room" : "party-room", {
