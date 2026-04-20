@@ -53,6 +53,7 @@ type StatusType = "draft" | "published" | "scheduled" | "archived";
 type TitleRow = {
   id: TitleId;
   title: string;
+  created_at?: string | null;
   category?: string | null;
   year?: number | null;
   runtime?: string | null;
@@ -112,7 +113,7 @@ type EditorForm = {
   sponsor_label: string;
 };
 
-const BASE_SELECT = "id,title,category,year,runtime,synopsis,poster_url,video_url,featured,is_published,sort_order";
+const BASE_SELECT = "id,title,created_at,category,year,runtime,synopsis,poster_url,video_url,featured,is_published,sort_order";
 
 type AdminCapabilities = {
   heroCol: "is_hero" | "hero" | null;
@@ -149,6 +150,24 @@ const toIdString = (id: TitleId) => String(id);
 const toSortNumber = (value?: number | null) =>
   typeof value === "number" && Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
 
+const toTimestamp = (value?: string | null) => {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatProgrammingToken = (value: string) =>
+  value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+
+const sortTitlesByProgrammingTruth = (items: TitleRow[]) => {
+  return [...items].sort((a, b) => {
+    const sortDelta = toSortNumber(a.sort_order) - toSortNumber(b.sort_order);
+    if (sortDelta !== 0) return sortDelta;
+    const createdDelta = toTimestamp(b.created_at) - toTimestamp(a.created_at);
+    if (createdDelta !== 0) return createdDelta;
+    return (a.title ?? "").localeCompare(b.title ?? "");
+  });
+};
+
 const defaultCapabilities: AdminCapabilities = {
   heroCol: null,
   trendingCol: null,
@@ -169,6 +188,7 @@ const canonicalizeRow = (row: Record<string, any>): TitleRow => {
   return {
     id: row.id,
     title: row.title,
+    created_at: row.created_at,
     category: row.category,
     year: row.year,
     runtime: row.runtime,
@@ -233,12 +253,15 @@ const hasTitleId = (item: TitleRow, targetId: string) => String(item.id ?? "").t
 
 const hasHeroFlagCandidate = (titles: TitleRow[]) => titles.some((item) => item.is_hero === true);
 
-const hasTopPicksCandidate = (titles: TitleRow[], source: AppConfig["home"]["topPicksSource"]) => {
-  if (source === "recent") return true;
-  if (source === "featured") return titles.some((item) => item.featured === true);
-  if (source === "trending") return titles.some((item) => item.is_trending === true);
-  return titles.some((item) => item.pin_to_top_row === true);
+const getTopPicksCandidates = (titles: TitleRow[], source: AppConfig["home"]["topPicksSource"]) => {
+  if (source === "recent") return [...titles].sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at));
+  if (source === "featured") return titles.filter((item) => item.featured === true);
+  if (source === "trending") return titles.filter((item) => item.is_trending === true);
+  return titles.filter((item) => item.pin_to_top_row === true);
 };
+
+const hasTopPicksCandidate = (titles: TitleRow[], source: AppConfig["home"]["topPicksSource"]) =>
+  getTopPicksCandidates(titles, source).length > 0;
 
 const applyExperienceConfigGuardrails = (
   config: AppConfig,
@@ -511,6 +534,61 @@ export default function AdminStudioScreen() {
       return titleText.includes(q) || categoryText.includes(q) || statusText.includes(q);
     });
   }, [titles, query, filter]);
+
+  const programmingSnapshot = useMemo(() => {
+    const latestTitles = [...titles].sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at));
+    const programmedTitles = sortTitlesByProgrammingTruth(titles);
+    const guardrailedConfig = applyExperienceConfigGuardrails(experienceConfig, titles);
+    const configuredHeroMode = experienceConfig.home.heroMode;
+    const configuredTopPicksSource = experienceConfig.home.topPicksSource;
+    const manualHeroTitleId = String(experienceConfig.home.manualHeroTitleId ?? "").trim();
+    const manualHeroItem = manualHeroTitleId
+      ? programmedTitles.find((item) => hasTitleId(item, manualHeroTitleId)) ?? null
+      : null;
+    const heroFlagItem = programmedTitles.find((item) => item.is_hero === true) ?? null;
+
+    let resolvedHeroSource: AppConfig["home"]["heroMode"] = configuredHeroMode;
+    let resolvedHeroItem: TitleRow | null = null;
+
+    if (configuredHeroMode === "manual_title") {
+      if (manualHeroItem) {
+        resolvedHeroItem = manualHeroItem;
+      } else if (heroFlagItem) {
+        resolvedHeroSource = "hero_flag";
+        resolvedHeroItem = heroFlagItem;
+      } else {
+        resolvedHeroSource = "latest";
+        resolvedHeroItem = latestTitles[0] ?? null;
+      }
+    } else if (configuredHeroMode === "hero_flag") {
+      if (heroFlagItem) {
+        resolvedHeroItem = heroFlagItem;
+      } else {
+        resolvedHeroSource = "latest";
+        resolvedHeroItem = latestTitles[0] ?? null;
+      }
+    } else {
+      resolvedHeroItem = latestTitles[0] ?? null;
+    }
+
+    const configuredTopPicksTitles = getTopPicksCandidates(programmedTitles, configuredTopPicksSource);
+    const effectiveTopPicksSource = configuredTopPicksTitles.length > 0 ? configuredTopPicksSource : "recent";
+    const effectiveTopPicksTitles = effectiveTopPicksSource === configuredTopPicksSource
+      ? configuredTopPicksTitles
+      : latestTitles;
+
+    return {
+      configuredHeroMode,
+      manualHeroItem,
+      resolvedHeroSource,
+      resolvedHeroItem,
+      configuredTopPicksSource,
+      configuredTopPicksCount: configuredTopPicksTitles.length,
+      effectiveTopPicksSource,
+      effectiveTopPicksCount: effectiveTopPicksTitles.length,
+      guardrailAdjustments: guardrailedConfig.adjustments,
+    };
+  }, [experienceConfig, titles]);
 
   const hasHeroControl = capabilities.heroCol !== null;
   const hasTrendingControl = capabilities.trendingCol !== null;
@@ -1446,6 +1524,96 @@ export default function AdminStudioScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <Text style={styles.sectionLabel}>Current Programming Snapshot</Text>
+              {loading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading current title programming state…</Text>
+                </View>
+              ) : (
+                <View style={styles.configList}>
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Resolved Home hero</Text>
+                      <Text style={styles.configListBody}>
+                        {programmingSnapshot.resolvedHeroItem
+                          ? `${programmingSnapshot.resolvedHeroItem.title} is the current hero outcome.`
+                          : "No real title currently resolves as the Home hero."}
+                      </Text>
+                      <Text style={styles.configListBody}>
+                        {`Configured ${formatProgrammingToken(programmingSnapshot.configuredHeroMode)} · Resolved from ${formatProgrammingToken(programmingSnapshot.resolvedHeroSource)}`}
+                      </Text>
+                      {programmingSnapshot.configuredHeroMode === "manual_title" ? (
+                        <Text style={styles.configListBody}>
+                          {programmingSnapshot.manualHeroItem
+                            ? `Manual target: ${programmingSnapshot.manualHeroItem.title}`
+                            : "Manual target is currently unavailable, so Home would fall through to a real backup hero source."}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.badgesRow}>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{`Configured ${formatProgrammingToken(programmingSnapshot.configuredHeroMode)}`}</Text>
+                      </View>
+                      <View style={[styles.badge, styles.badgePublished]}>
+                        <Text style={styles.badgeText}>{`Resolved ${formatProgrammingToken(programmingSnapshot.resolvedHeroSource)}`}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Top Picks backing truth</Text>
+                      <Text style={styles.configListBody}>
+                        {`${formatProgrammingToken(programmingSnapshot.configuredTopPicksSource)} currently has ${programmingSnapshot.configuredTopPicksCount} real backing title${programmingSnapshot.configuredTopPicksCount === 1 ? "" : "s"}.`}
+                      </Text>
+                      <Text style={styles.configListBody}>
+                        {programmingSnapshot.effectiveTopPicksSource === programmingSnapshot.configuredTopPicksSource
+                          ? `${formatProgrammingToken(programmingSnapshot.effectiveTopPicksSource)} is backed and will stay active.`
+                          : `${formatProgrammingToken(programmingSnapshot.configuredTopPicksSource)} is unbacked right now, so Home would fall back to ${formatProgrammingToken(programmingSnapshot.effectiveTopPicksSource)} with ${programmingSnapshot.effectiveTopPicksCount} real title${programmingSnapshot.effectiveTopPicksCount === 1 ? "" : "s"}.`}
+                      </Text>
+                    </View>
+
+                    <View style={styles.badgesRow}>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{`Configured ${formatProgrammingToken(programmingSnapshot.configuredTopPicksSource)}`}</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.badge,
+                          programmingSnapshot.effectiveTopPicksSource === programmingSnapshot.configuredTopPicksSource
+                            ? styles.badgePublished
+                            : styles.badgeScheduled,
+                        ]}
+                      >
+                        <Text style={styles.badgeText}>{`Backing ${programmingSnapshot.configuredTopPicksCount}`}</Text>
+                      </View>
+                      <View style={[styles.badge, styles.badgeOn]}>
+                        <Text style={styles.badgeText}>{`Active ${formatProgrammingToken(programmingSnapshot.effectiveTopPicksSource)}`}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Programming confidence</Text>
+                      {programmingSnapshot.guardrailAdjustments.length ? (
+                        programmingSnapshot.guardrailAdjustments.map((adjustment) => (
+                          <Text key={adjustment} style={styles.configListBody}>
+                            {adjustment}
+                          </Text>
+                        ))
+                      ) : (
+                        <Text style={styles.configListBody}>
+                          Hero strategy and top picks are both backed by current title truth, so saving this config would preserve the current programming state without normalization.
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              )}
 
               <Text style={styles.sectionLabel}>Homepage Rails</Text>
               <View style={styles.configList}>
