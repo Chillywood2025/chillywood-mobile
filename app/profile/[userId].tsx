@@ -13,6 +13,11 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { useBetaProgram } from "../../_lib/betaProgram";
 import { getOrCreateDirectThread } from "../../_lib/chat";
+import {
+  readPublicEventSummaries,
+  type CreatorEventSummary,
+  type CreatorEventType,
+} from "../../_lib/liveEvents";
 import { reportRuntimeError } from "../../_lib/logger";
 import {
   readCreatorPermissions,
@@ -128,6 +133,38 @@ const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPart
   return "Public";
 };
 
+const formatEventDate = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "TBD";
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? normalized : parsed.toLocaleString();
+};
+
+const formatEventTypeLabel = (value: CreatorEventType) => {
+  switch (value) {
+    case "live_watch_party":
+      return "Live Watch-Party";
+    case "watch_party_live":
+      return "Watch-Party Live";
+    default:
+      return "Live First";
+  }
+};
+
+const formatEventStatusLabel = (event: CreatorEventSummary) => {
+  if (event.isLiveNow) return "Live Now";
+  if (event.isUpcoming) return "Upcoming";
+  if (event.replay.isReplayAvailableNow) return "Replay Available";
+  if (event.replay.isReplayExpired) return "Replay Expired";
+  return event.status.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
+};
+
+const formatEventReminderLabel = (event: CreatorEventSummary) => {
+  if (event.reminder.state === "ready") return "Reminder Ready";
+  if (event.reminder.reason === "missing_start_time") return "Start Time Needed";
+  return "Reminder Not Ready";
+};
+
 const getProfileAccessBody = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
   if (isOfficialProfile || resolution?.reason === "official_access") {
     return "Official help stays visible on the canonical profile and Chi'lly Chat routes without pretending this surface is a paywall or creator storefront.";
@@ -165,6 +202,8 @@ export default function ProfileScreen() {
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
   const [channelAccessReady, setChannelAccessReady] = useState(false);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
+  const [publicEvents, setPublicEvents] = useState<CreatorEventSummary[]>([]);
+  const [publicEventsReady, setPublicEventsReady] = useState(false);
   const params = useLocalSearchParams<{
     userId?: string;
     displayName?: string;
@@ -210,6 +249,36 @@ export default function ProfileScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    setPublicEventsReady(false);
+
+    if (!userId) {
+      setPublicEvents([]);
+      setPublicEventsReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    void readPublicEventSummaries(userId)
+      .then((events) => {
+        if (!active) return;
+        setPublicEvents(events);
+        setPublicEventsReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPublicEvents([]);
+        setPublicEventsReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   useEffect(() => {
     let active = true;
@@ -852,24 +921,52 @@ export default function ProfileScreen() {
           body: "Public v1 keeps the content surface lightweight and truthful. The route should frame channel content now without pretending the full creator platform already exists.",
         },
       ];
+  const liveNowEvents = useMemo(
+    () => publicEvents.filter((event) => event.isLiveNow),
+    [publicEvents],
+  );
+  const upcomingEvents = useMemo(
+    () => publicEvents.filter((event) => event.isUpcoming),
+    [publicEvents],
+  );
+  const replayReadyEvents = useMemo(
+    () => publicEvents.filter((event) => event.replay.isReplayAvailableNow),
+    [publicEvents],
+  );
+  const replayExpiredEvents = useMemo(
+    () => publicEvents.filter((event) => event.replay.isReplayExpired),
+    [publicEvents],
+  );
+  const reminderReadyEvents = useMemo(
+    () => publicEvents.filter((event) => event.reminder.state === "ready"),
+    [publicEvents],
+  );
+  const nextUpcomingEvent = upcomingEvents[0] ?? null;
+  const scheduledWatchPartyEvent = upcomingEvents.find((event) => event.eventType === "watch_party_live") ?? null;
   const liveTabSections: readonly ProfileSurfaceCard[] = [
     {
       title: profile.isLive ? "Live Presence" : "Live Status",
       kicker: "LIVE",
-      body: profile.isLive
-        ? "This channel currently shows live presence. Use the linked live entry only when real room context is attached to this profile route."
-        : "No live room is active right now. This tab should keep Live status clear without pretending the profile is a room.",
+      body: liveNowEvents.length
+        ? `${liveNowEvents[0]?.eventTitle ?? "A live event"} is currently backed as ${formatEventTypeLabel(liveNowEvents[0]?.eventType ?? "live_first")} on this channel.`
+        : profile.isLive
+          ? "This channel currently shows live presence. Use the linked live entry only when real room context is attached to this profile route."
+          : "No live room is active right now. This tab should keep Live status clear without pretending the profile is a room.",
       accent: profile.isLive ? "live" : "default",
     },
     {
-      title: "Live Watch-Party",
+      title: nextUpcomingEvent ? formatEventTypeLabel(nextUpcomingEvent.eventType) : "Live Watch-Party",
       kicker: "LIVE FLOW",
-      body: "Live Watch-Party belongs to Home and Live Room semantics. This tab may point people there, but it must not rename or absorb the live-room flow.",
+      body: nextUpcomingEvent
+        ? `${nextUpcomingEvent.eventTitle} is the next backed public event at ${formatEventDate(nextUpcomingEvent.startsAt)}. This tab can show that schedule honestly without absorbing the room route.`
+        : "Live Watch-Party belongs to Home and Live Room semantics. This tab may point people there, but it must not rename or absorb the live-room flow.",
     },
     {
-      title: "Watch-Party Live",
+      title: scheduledWatchPartyEvent ? "Watch-Party Live Scheduled" : "Watch-Party Live",
       kicker: "WATCH TOGETHER",
-      body: "Watch-Party Live remains the title/player-driven watch-together path. This tab can show continuity into party flow without blurring it into the live label.",
+      body: scheduledWatchPartyEvent
+        ? `${scheduledWatchPartyEvent.eventTitle} is scheduled for ${formatEventDate(scheduledWatchPartyEvent.startsAt)} and stays distinct from Live Watch-Party semantics.`
+        : "Watch-Party Live remains the title/player-driven watch-together path. This tab can show continuity into party flow without blurring it into the live label.",
     },
     {
       title: hasLiveRouteContext ? "Linked Room Context" : "Room Continuity",
@@ -953,6 +1050,41 @@ export default function ProfileScreen() {
         : activeTab === "community"
           ? communityTabSections
           : aboutTabSections;
+  const publicEventSummaryCards: readonly OwnerStatCard[] = [
+    {
+      label: "Live Now",
+      value: String(liveNowEvents.length),
+      body: liveNowEvents.length
+        ? liveNowEvents.map((event) => event.eventTitle).slice(0, 2).join(" · ")
+        : "no public creator event is live now",
+      tone: liveNowEvents.length ? "live" : "default",
+    },
+    {
+      label: "Upcoming",
+      value: String(upcomingEvents.length),
+      body: nextUpcomingEvent
+        ? `next: ${nextUpcomingEvent.eventTitle}`
+        : "no upcoming public event yet",
+      tone: upcomingEvents.length ? "linked" : "default",
+    },
+    {
+      label: "Replay",
+      value: String(replayReadyEvents.length),
+      body: replayReadyEvents.length
+        ? replayReadyEvents.map((event) => event.eventTitle).slice(0, 2).join(" · ")
+        : replayExpiredEvents.length
+          ? `${replayExpiredEvents.length} replay window${replayExpiredEvents.length === 1 ? "" : "s"} expired`
+          : "no public replay currently available",
+    },
+    {
+      label: "Reminders",
+      value: String(reminderReadyEvents.length),
+      body: reminderReadyEvents.length
+        ? "reminder-ready public schedule is backed"
+        : "no reminder-ready public event yet",
+      tone: reminderReadyEvents.length ? "linked" : "default",
+    },
+  ];
   const tabIntro = activeTab === "home"
     ? "Home curates the overview: spotlight, live status, content direction, community preview, and about context."
     : activeTab === "content"
@@ -1434,6 +1566,68 @@ export default function ProfileScreen() {
               <Text style={styles.sectionBody}>{section.body}</Text>
             </View>
           ))}
+          {activeTab === "live" ? (
+            <>
+              <View style={styles.ownerStatsRow}>
+                {publicEventSummaryCards.map((card) => (
+                  <View
+                    key={card.label}
+                    style={[
+                      styles.ownerStatCard,
+                      card.tone === "linked" && styles.ownerStatCardLinked,
+                      card.tone === "live" && styles.ownerStatCardLive,
+                    ]}
+                  >
+                    <Text style={styles.ownerStatLabel}>{card.label}</Text>
+                    <Text style={styles.ownerStatValue}>{card.value}</Text>
+                    <Text style={styles.ownerStatBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+              {!publicEventsReady ? (
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionKicker}>EVENT STATUS</Text>
+                  <Text style={styles.sectionTitle}>Loading public event truth</Text>
+                  <Text style={styles.sectionBody}>
+                    Checking the canonical creator event model before showing live, upcoming, replay, or reminder-ready state on this public route.
+                  </Text>
+                </View>
+              ) : publicEvents.length ? (
+                publicEvents.map((event) => (
+                  <View
+                    key={event.id}
+                    style={[
+                      styles.sectionCard,
+                      (event.isLiveNow || event.isUpcoming) && styles.sectionCardLive,
+                    ]}
+                  >
+                    <Text style={styles.sectionKicker}>{formatEventTypeLabel(event.eventType).toUpperCase()}</Text>
+                    <Text style={styles.sectionTitle}>{event.eventTitle}</Text>
+                    <Text style={styles.sectionBody}>
+                      {formatEventStatusLabel(event)} · Starts {formatEventDate(event.startsAt)} · Ends {formatEventDate(event.endsAt)}{"\n"}
+                      {event.replay.isReplayAvailableNow
+                        ? "Replay is currently available."
+                        : event.replay.isReplayExpired
+                          ? "Replay window has expired."
+                          : event.replay.policy === "none"
+                            ? "Replay is not enabled for this event."
+                            : "Replay is configured but not available yet."}{"\n"}
+                      {formatEventReminderLabel(event)}
+                      {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionKicker}>EVENT STATUS</Text>
+                  <Text style={styles.sectionTitle}>No public event schedule yet</Text>
+                  <Text style={styles.sectionBody}>
+                    This profile does not currently have any non-draft creator events to show. The route stays honest instead of faking upcoming rooms, replays, or reminder state.
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : null}
         </View>
         <ReportSheet
           visible={reportVisible}
