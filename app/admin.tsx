@@ -26,14 +26,20 @@ import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
 import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
 import { useSession } from "../_lib/session";
 import {
+  readAdminAuditLog,
   canAccessAdminConsole,
   canManagePrivilegedAdminWrites,
   canReviewSafetyQueue,
   getModerationAccess,
   readMyPlatformRoleMemberships,
+  readPlatformRoleRoster,
   readSafetyReportQueue,
   resolvePlatformActorRole,
+  type AdminAuditLogEntry,
+  type AdminAuditLogReadModel,
   type PlatformRoleMembership,
+  type PlatformRoleRosterEntry,
+  type PlatformRoleRosterReadModel,
   type SafetyReportQueueItem,
   type SafetyReportQueueSummary,
 } from "../_lib/moderation";
@@ -439,10 +445,19 @@ export default function AdminStudioScreen() {
   const [creatorGrantForm, setCreatorGrantForm] = useState<CreatorPermissionSet>(normalizeCreatorPermissionSet(null));
   const [platformRoles, setPlatformRoles] = useState<PlatformRoleMembership[]>([]);
   const [platformRolesLoading, setPlatformRolesLoading] = useState(false);
+  const [platformRoleRoster, setPlatformRoleRoster] = useState<PlatformRoleRosterEntry[]>([]);
+  const [platformRoleRosterSummary, setPlatformRoleRosterSummary] =
+    useState<PlatformRoleRosterReadModel["summary"] | null>(null);
+  const [platformRoleRosterLoading, setPlatformRoleRosterLoading] = useState(false);
+  const [adminAuditLog, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
+  const [adminAuditLogSummary, setAdminAuditLogSummary] =
+    useState<AdminAuditLogReadModel["summary"] | null>(null);
+  const [adminAuditLogLoading, setAdminAuditLogLoading] = useState(false);
   const [safetyReports, setSafetyReports] = useState<SafetyReportQueueItem[]>([]);
   const [safetyReportQueueSummary, setSafetyReportQueueSummary] = useState<SafetyReportQueueSummary | null>(null);
   const [safetyReportsLoading, setSafetyReportsLoading] = useState(false);
   const [moderationNotice, setModerationNotice] = useState<string | null>(null);
+  const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
   const [form, setForm] = useState<EditorForm>({
     title: "",
     category: "",
@@ -482,9 +497,16 @@ export default function AdminStudioScreen() {
       setConfigLoading(false);
       setPlatformRoles([]);
       setPlatformRolesLoading(false);
+      setPlatformRoleRoster([]);
+      setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterLoading(false);
+      setAdminAuditLog([]);
+      setAdminAuditLogSummary(null);
+      setAdminAuditLogLoading(false);
       setSafetyReports([]);
       setSafetyReportsLoading(false);
       setModerationNotice(null);
+      setAdminOpsNotice(null);
       return;
     }
     void loadPlatformRoles();
@@ -495,6 +517,12 @@ export default function AdminStudioScreen() {
     if (!canAccessAdmin) {
       setLoading(false);
       setConfigLoading(false);
+      setPlatformRoleRoster([]);
+      setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterLoading(false);
+      setAdminAuditLog([]);
+      setAdminAuditLogSummary(null);
+      setAdminAuditLogLoading(false);
       setSafetyReports([]);
       setSafetyReportsLoading(false);
       return;
@@ -513,6 +541,21 @@ export default function AdminStudioScreen() {
     void loadSafetyReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessAdmin, canReviewSafetyReports]);
+
+  useEffect(() => {
+    if (!canAccessAdmin) {
+      setPlatformRoleRoster([]);
+      setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterLoading(false);
+      setAdminAuditLog([]);
+      setAdminAuditLogSummary(null);
+      setAdminAuditLogLoading(false);
+      setAdminOpsNotice(null);
+      return;
+    }
+    void loadStaffAndAuditVisibility();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAccessAdmin, canManagePrivilegedWrites, canReviewSafetyReports]);
 
   const stats = useMemo(() => {
     const total = titles.length;
@@ -864,6 +907,55 @@ export default function AdminStudioScreen() {
     },
   ], []);
 
+  const staffAndAuditCards = useMemo<readonly AdminDashboardCard[]>(() => {
+    const canViewStaffRoles = canManagePrivilegedWrites;
+    const canViewAudit = canManagePrivilegedWrites || canReviewSafetyReports;
+    const roleSummary = platformRoleRosterSummary;
+    const auditSummary = adminAuditLogSummary;
+
+    return [
+      {
+        label: "Staff & Roles",
+        value: canViewStaffRoles
+          ? roleSummary
+            ? `${roleSummary.activeCount} active`
+            : platformRoleRosterLoading
+              ? "Loading"
+              : "No records"
+          : "Locked",
+        body: canViewStaffRoles
+          ? roleSummary
+            ? `${roleSummary.ownerCount} owner · ${roleSummary.operatorCount} operator · ${roleSummary.moderatorCount} moderator records are currently visible.`
+            : "Current staff visibility is bounded to role-record truth already stored in platform memberships."
+          : "Staff-role visibility stays behind active owner/operator write-capable admin truth.",
+        tone: canViewStaffRoles ? "default" : "unavailable",
+      },
+      {
+        label: "Audit Visibility",
+        value: canViewAudit
+          ? auditSummary
+            ? `${auditSummary.totalItems} recent`
+            : adminAuditLogLoading
+              ? "Loading"
+              : "No records"
+          : "Locked",
+        body: canViewAudit
+          ? auditSummary
+            ? `${auditSummary.roleRecordCount} role record${auditSummary.roleRecordCount === 1 ? "" : "s"} · ${auditSummary.safetyReportCount} safety item${auditSummary.safetyReportCount === 1 ? "" : "s"} in the current bounded audit slice.`
+            : "Current audit visibility is limited to role records and safety-report context already backed in repo truth."
+          : "Audit visibility stays unavailable until this signed-in identity has active owner/operator or review-capable admin truth.",
+        tone: canViewAudit ? "default" : "unavailable",
+      },
+    ];
+  }, [
+    adminAuditLogLoading,
+    adminAuditLogSummary,
+    canManagePrivilegedWrites,
+    canReviewSafetyReports,
+    platformRoleRosterLoading,
+    platformRoleRosterSummary,
+  ]);
+
   const editorPublicationPreview = useMemo(() => {
     const rawReleaseInput = form.release_at.trim();
     const parsedReleaseAt = hasReleaseControl ? fromDatetimeLocalValue(form.release_at) : null;
@@ -996,6 +1088,58 @@ export default function AdminStudioScreen() {
       setSafetyReportsLoading(false);
     }
   }, []);
+
+  const loadStaffAndAuditVisibility = useCallback(async () => {
+    const canViewStaffRoles = canManagePrivilegedWrites;
+    const canViewAudit = canManagePrivilegedWrites || canReviewSafetyReports;
+
+    if (!canViewStaffRoles) {
+      setPlatformRoleRoster([]);
+      setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterLoading(false);
+    }
+
+    if (!canViewAudit) {
+      setAdminAuditLog([]);
+      setAdminAuditLogSummary(null);
+      setAdminAuditLogLoading(false);
+      if (!canViewStaffRoles) {
+        setAdminOpsNotice(null);
+      }
+      return;
+    }
+
+    try {
+      setAdminOpsNotice(null);
+      setPlatformRoleRosterLoading(canViewStaffRoles);
+      setAdminAuditLogLoading(true);
+
+      const [roleRosterResult, auditLogResult] = await Promise.all([
+        canViewStaffRoles
+          ? readPlatformRoleRoster({ limit: 8, includeRevoked: true })
+          : Promise.resolve(null),
+        readAdminAuditLog({ limit: 8 }),
+      ]);
+
+      setPlatformRoleRoster(roleRosterResult?.items ?? []);
+      setPlatformRoleRosterSummary(roleRosterResult?.summary ?? null);
+      setAdminAuditLog(auditLogResult.items);
+      setAdminAuditLogSummary(auditLogResult.summary);
+    } catch (err: any) {
+      if (canViewStaffRoles) {
+        setPlatformRoleRoster([]);
+        setPlatformRoleRosterSummary(null);
+      }
+      setAdminAuditLog([]);
+      setAdminAuditLogSummary(null);
+      setAdminOpsNotice(err?.message ?? "Failed to load staff-role or audit visibility.");
+    } finally {
+      if (canViewStaffRoles) {
+        setPlatformRoleRosterLoading(false);
+      }
+      setAdminAuditLogLoading(false);
+    }
+  }, [canManagePrivilegedWrites, canReviewSafetyReports]);
 
   const toDbPatch = useCallback(
     (patch: Partial<TitleRow>): Record<string, any> => {
@@ -1711,6 +1855,183 @@ export default function AdminStudioScreen() {
               </View>
             )
           ) : null}
+        </View>
+
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>STAFF & AUDIT VISIBILITY</Text>
+              <Text style={styles.configTitle}>Bounded roster and audit-read truth</Text>
+              <Text style={styles.configBody}>
+                This surface shows only the role-record and audit-context visibility that current owner/operator and review-capable admin truth actually backs.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.dashboardGrid}>
+            {staffAndAuditCards.map((card) => (
+              <View
+                key={card.label}
+                style={[
+                  styles.dashboardMetricCard,
+                  card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
+                ]}
+              >
+                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.badgesRow}>
+            <View style={[styles.badge, canManagePrivilegedWrites ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canManagePrivilegedWrites ? "Staff Visibility Enabled" : "Staff Visibility Locked"}</Text>
+            </View>
+            <View
+              style={[
+                styles.badge,
+                canManagePrivilegedWrites || canReviewSafetyReports ? styles.badgeScheduled : styles.badgeOff,
+              ]}
+            >
+              <Text style={styles.badgeText}>
+                {canManagePrivilegedWrites || canReviewSafetyReports ? "Audit Visibility Enabled" : "Audit Visibility Locked"}
+              </Text>
+            </View>
+          </View>
+
+          {adminOpsNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{adminOpsNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Staff & Roles</Text>
+                <Text style={styles.configListBody}>
+                  Staff-role visibility is limited to current `platform_role_memberships` truth. No role-assignment workflow or fake staff console has been added.
+                </Text>
+              </View>
+            </View>
+
+            {canManagePrivilegedWrites ? (
+              platformRoleRosterLoading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading platform role roster…</Text>
+                </View>
+              ) : platformRoleRoster.length ? (
+                platformRoleRoster.map((entry) => (
+                  <View key={`staff-role-${entry.id}`} style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>{entry.identityLabel}</Text>
+                      <Text style={styles.configListBody}>
+                        {entry.grantedAt ? formatModerationTimestamp(entry.grantedAt) : "Grant timestamp unavailable"}
+                      </Text>
+                      {entry.grantedBy ? (
+                        <Text style={styles.configListBody}>{`Granted by ${entry.grantedBy}`}</Text>
+                      ) : null}
+                      {entry.notes ? (
+                        <Text style={styles.configListBody}>{entry.notes}</Text>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.badgesRow}>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{formatModerationToken(entry.role)}</Text>
+                      </View>
+                      <View style={[styles.badge, entry.status === "active" ? styles.badgeOn : styles.badgeOff]}>
+                        <Text style={styles.badgeText}>{formatModerationToken(entry.status)}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.configListRow}>
+                  <View style={styles.configListCopy}>
+                    <Text style={styles.configListTitle}>No visible staff-role records</Text>
+                    <Text style={styles.configListBody}>
+                      Owner/operator roster visibility is ready, but no current role records are visible in this slice yet.
+                    </Text>
+                  </View>
+                </View>
+              )
+            ) : (
+              <View style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>Staff-role visibility stays owner/operator only</Text>
+                  <Text style={styles.configListBody}>
+                    This signed-in identity can access `/admin`, but full staff-role roster visibility stays locked until active owner/operator truth is present.
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Audit Visibility</Text>
+                <Text style={styles.configListBody}>
+                  Audit visibility is bounded to current role-record metadata and safety-report audit context. There is still no fake cross-domain audit system here.
+                </Text>
+              </View>
+            </View>
+
+            {canManagePrivilegedWrites || canReviewSafetyReports ? (
+              adminAuditLogLoading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading recent admin audit visibility…</Text>
+                </View>
+              ) : adminAuditLog.length ? (
+                adminAuditLog.map((entry) => (
+                  <View key={entry.id} style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>{entry.title}</Text>
+                      <Text style={styles.configListBody}>
+                        {entry.occurredAt ? formatModerationTimestamp(entry.occurredAt) : "Audit timestamp unavailable"}
+                      </Text>
+                      <Text style={styles.configListBody}>{entry.detail}</Text>
+                      {entry.actorLabel ? (
+                        <Text style={styles.configListBody}>{`Actor ${entry.actorLabel}`}</Text>
+                      ) : null}
+                      {entry.auditOwnerKey ? (
+                        <Text style={styles.configListBody}>{`Audit owner ${entry.auditOwnerKey}`}</Text>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.badgesRow}>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{formatModerationToken(entry.kind)}</Text>
+                      </View>
+                      <View style={[styles.badge, entry.tone === "review" ? styles.badgeScheduled : styles.badgeDraft]}>
+                        <Text style={styles.badgeText}>{entry.tone === "review" ? "Review Context" : "Role Record"}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.configListRow}>
+                  <View style={styles.configListCopy}>
+                    <Text style={styles.configListTitle}>No recent audit visibility records</Text>
+                    <Text style={styles.configListBody}>
+                      Current bounded audit visibility is ready, but there are no recent role-record or safety-report audit entries in this slice yet.
+                    </Text>
+                  </View>
+                </View>
+              )
+            ) : (
+              <View style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>Audit visibility stays permission-bound</Text>
+                  <Text style={styles.configListBody}>
+                    Audit visibility requires either active owner/operator truth or a review-capable moderation role. No fake admin audit dashboard is shown otherwise.
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.configCard}>

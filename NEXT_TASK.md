@@ -1,20 +1,20 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **re-check of the blocked Stage 6 business / ops slice** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `docs/search-discovery-implementation-spec.md`, `docs/owner-admin-rachi-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
+The next exact task is a narrow **Owner Admin + Rachi chapter closeout audit** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `docs/search-discovery-implementation-spec.md`, `docs/owner-admin-rachi-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the profile/channel, access, live/event, audience, notifications, analytics, moderation, design, and discovery chapters as closed unless a real regression is found.
-3. Re-check whether the new staff-role roster foundation and the new admin-audit read model unlock one honest bounded `/admin` slice.
+3. Audit whether the landed owner/super-admin foundation, bounded admin dashboard, Rachi Control basics, and new staff/audit visibility slice leave any meaningful narrow owner-admin seam.
 4. Keep actual owner bootstrap execution as a secure local follow-up unless service-role env is intentionally supplied outside repo code.
 5. Keep owner authority above Rachi and keep creator-facing routes separate from admin-facing routes.
-6. Stop immediately if the remaining business/ops surfaces still require fake data or unbacked workflows.
+6. Stop immediately if the remaining owner/admin surfaces still require fake data or unbacked workflows.
 
 ## Exact Next Batch
-- determine whether one narrow staff/role visibility or admin-audit visibility slice is now honestly unlocked by the new foundation
-- implement only that single smallest real slice if it is already backed
-- otherwise stop with the exact blocker instead of pretending the chapter is further along
+- determine whether the chapter is now complete enough to move on or still has one final trivial/narrow owner-admin seam
+- implement only that one final narrow seam if it is already backed and clearly justified
+- otherwise close the chapter honestly and hand off to the next grounded chapter
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
@@ -37,7 +37,7 @@ Do not:
 - fake owner bootstrap, fake emergency controls, or fake Rachi automation powers
 - widen `/admin` into a messy god-panel or leak owner-only controls to general roles
 - pretend that identity-level Rachi truth already means a live automation queue or rule engine
-- fake support queues, fake refunds/disputes, fake staff-role management, or fake admin analytics
+- fake support queues, fake refunds/disputes, fake staff-role management, fake admin analytics, or fake audit systems
 - reopen notifications/reminders, push delivery, or generic inbox work unless a real regression is found
 - fake moderation queues, strike systems, dispute workflows, trust scores, or creator safety controls that current truth does not back yet
 - reopen creator analytics implementation unless the doctrine pass proves a regression
@@ -47,7 +47,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the re-check identifies whether one narrow staff/role or audit-visibility slice is now genuinely unlocked
+- the closeout audit identifies whether any meaningful narrow owner-admin seam still remains
 - owner authority, admin workflow, and Rachi-control boundaries remain separated clearly from later automation or staffing ideas
 - unsupported support, staffing, monetization, and analytics powers remain explicit instead of implied
 - the landed owner bootstrap path remains secret-safe and isolated from committed client code
