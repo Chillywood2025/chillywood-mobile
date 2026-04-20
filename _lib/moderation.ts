@@ -39,6 +39,24 @@ export type PlatformRoleMembership = {
   grantedAt: string | null;
 };
 
+export type PlatformRoleRosterEntry = PlatformRoleMembership & {
+  grantedBy: string | null;
+  notes: string | null;
+  identityLabel: string;
+};
+
+export type PlatformRoleRosterReadModel = {
+  generatedAt: string;
+  items: PlatformRoleRosterEntry[];
+  summary: {
+    totalVisibleRoles: number;
+    activeCount: number;
+    ownerCount: number;
+    operatorCount: number;
+    moderatorCount: number;
+  };
+};
+
 export type SafetyReportRecord = {
   id: number;
   reporterUserId: string;
@@ -89,6 +107,28 @@ export type SafetyReportQueueReadModel = {
   summary: SafetyReportQueueSummary;
 };
 
+export type AdminAuditLogEntry = {
+  id: string;
+  kind: "platform_role_record" | "safety_report";
+  occurredAt: string | null;
+  title: string;
+  detail: string;
+  actorLabel: string | null;
+  auditOwnerKey: string | null;
+  tone: "default" | "review";
+};
+
+export type AdminAuditLogReadModel = {
+  generatedAt: string;
+  items: AdminAuditLogEntry[];
+  summary: {
+    totalItems: number;
+    roleRecordCount: number;
+    safetyReportCount: number;
+    platformOwnedTargetCount: number;
+  };
+};
+
 export const SAFETY_REPORT_CATEGORIES: SafetyReportCategory[] = [
   "abuse",
   "harassment",
@@ -101,6 +141,12 @@ export const SAFETY_REPORT_CATEGORIES: SafetyReportCategory[] = [
 type SafetyReportInsert = TablesInsert<"safety_reports">;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+
+const normalizePositiveLimit = (value: unknown, fallback: number, max: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(max, Math.floor(parsed)));
+};
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => (
   !!value && typeof value === "object" && !Array.isArray(value)
@@ -136,6 +182,24 @@ const normalizePlatformRole = (value: unknown): PlatformRole | null => {
     return normalized;
   }
   return null;
+};
+
+const normalizePlatformRoleStatus = (value: unknown) => {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized === "revoked" ? "revoked" : "active";
+};
+
+const formatPlatformRoleToken = (role: PlatformRole) => role.replaceAll("_", " ").toUpperCase();
+
+const buildRoleIdentityLabel = (entry: {
+  user_id?: unknown;
+  email?: unknown;
+}) => {
+  const userId = normalizeText(entry.user_id);
+  const email = normalizeText(entry.email).toLowerCase();
+  if (email) return email;
+  if (userId) return `USER ${userId}`;
+  return "UNKNOWN IDENTITY";
 };
 
 const normalizeSafetyReportTargetType = (value: unknown): SafetyReportTargetType => {
@@ -361,6 +425,59 @@ export async function readMyPlatformRoleMemberships() {
     .filter((entry): entry is PlatformRoleMembership => !!entry);
 }
 
+export async function readPlatformRoleRoster(options?: {
+  limit?: number;
+  includeRevoked?: boolean;
+}): Promise<PlatformRoleRosterReadModel> {
+  const limit = normalizePositiveLimit(options?.limit, 12, 50);
+  let query = supabase
+    .from(PLATFORM_ROLE_MEMBERSHIPS_TABLE)
+    .select("id,role,user_id,email,status,granted_at,granted_by,notes")
+    .order("granted_at", { ascending: false })
+    .limit(limit);
+
+  if (options?.includeRevoked !== true) {
+    query = query.eq("status", "active");
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+
+  const items = (data ?? [])
+    .map((entry) => {
+      const role = normalizePlatformRole(entry.role);
+      if (!role) return null;
+      const status = normalizePlatformRoleStatus(entry.status);
+      return {
+        id: Number(entry.id ?? 0),
+        role,
+        userId: normalizeText(entry.user_id) || null,
+        email: normalizeText(entry.email).toLowerCase() || null,
+        status,
+        grantedAt: normalizeText(entry.granted_at) || null,
+        grantedBy: normalizeText(entry.granted_by) || null,
+        notes: normalizeText(entry.notes) || null,
+        identityLabel: buildRoleIdentityLabel(entry),
+      } satisfies PlatformRoleRosterEntry;
+    })
+    .filter((entry): entry is PlatformRoleRosterEntry => !!entry);
+
+  const activeItems = items.filter((entry) => entry.status === "active");
+
+  return {
+    generatedAt: new Date().toISOString(),
+    items,
+    summary: {
+      totalVisibleRoles: items.length,
+      activeCount: activeItems.length,
+      ownerCount: activeItems.filter((entry) => entry.role === "owner").length,
+      operatorCount: activeItems.filter((entry) => entry.role === "operator").length,
+      moderatorCount: activeItems.filter((entry) => entry.role === "moderator").length,
+    },
+  };
+}
+
 export async function readSafetyReports(options?: {
   limit?: number;
 }) {
@@ -420,6 +537,67 @@ export async function readSafetyReportQueue(options?: {
     generatedAt: new Date().toISOString(),
     items,
     summary: summarizeSafetyReportQueue(items),
+  };
+}
+
+const toAuditTimestamp = (value: string | null) => {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export async function readAdminAuditLog(options?: {
+  limit?: number;
+}): Promise<AdminAuditLogReadModel> {
+  const limit = normalizePositiveLimit(options?.limit, 12, 50);
+  const [roleRoster, safetyQueue] = await Promise.all([
+    readPlatformRoleRoster({ limit, includeRevoked: true }).catch(() => null),
+    readSafetyReportQueue({ limit }).catch(() => null),
+  ]);
+
+  const roleEntries = (roleRoster?.items ?? []).map((entry) => ({
+    id: `role-${entry.id}`,
+    kind: "platform_role_record" as const,
+    occurredAt: entry.grantedAt,
+    title: `${formatPlatformRoleToken(entry.role)} role record`,
+    detail: [
+      entry.identityLabel,
+      entry.status === "active" ? "ACTIVE" : "REVOKED",
+      entry.grantedBy ? `GRANTED BY ${entry.grantedBy}` : null,
+      entry.notes ? entry.notes : null,
+    ].filter(Boolean).join(" · "),
+    actorLabel: entry.grantedBy,
+    auditOwnerKey: null,
+    tone: "default" as const,
+  }));
+
+  const safetyEntries = (safetyQueue?.items ?? []).map((entry) => ({
+    id: `report-${entry.id}`,
+    kind: "safety_report" as const,
+    occurredAt: entry.createdAt,
+    title: `Safety report · ${entry.targetLabel}`,
+    detail: [
+      entry.sourceSurface.replaceAll("-", " ").toUpperCase(),
+      `REPORTER ${entry.reporterRole.replaceAll("_", " ").toUpperCase()}`,
+      entry.reviewState.replaceAll("_", " ").toUpperCase(),
+    ].join(" · "),
+    actorLabel: entry.reporterAuditOwnerKey,
+    auditOwnerKey: entry.targetAuditOwnerKey,
+    tone: "review" as const,
+  }));
+
+  const items = [...roleEntries, ...safetyEntries]
+    .sort((left, right) => toAuditTimestamp(right.occurredAt) - toAuditTimestamp(left.occurredAt))
+    .slice(0, limit);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    items,
+    summary: {
+      totalItems: items.length,
+      roleRecordCount: roleEntries.length,
+      safetyReportCount: safetyEntries.length,
+      platformOwnedTargetCount: safetyQueue?.summary.platformOwnedTargetCount ?? 0,
+    },
   };
 }
 
