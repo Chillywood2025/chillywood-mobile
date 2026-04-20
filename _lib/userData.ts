@@ -37,6 +37,9 @@ export type UserProfile = {
   avatarUrl?: string;
   tagline?: string;
   channelRole?: "viewer" | "host" | "creator";
+  publicActivityVisibility?: "public" | "followers_only" | "subscribers_only" | "private";
+  followerSurfaceEnabled?: boolean;
+  subscriberSurfaceEnabled?: boolean;
   defaultWatchPartyJoinPolicy?: JoinPolicy;
   defaultWatchPartyReactionsPolicy?: ReactionsPolicy;
   defaultWatchPartyContentAccessRule?: ContentAccessRule;
@@ -92,6 +95,9 @@ type UserProfileRow = Pick<
   | "avatar_url"
   | "tagline"
   | "channel_role"
+  | "public_activity_visibility"
+  | "follower_surface_enabled"
+  | "subscriber_surface_enabled"
   | "default_watch_party_join_policy"
   | "default_watch_party_reactions_policy"
   | "default_watch_party_content_access_rule"
@@ -113,6 +119,19 @@ const normalizeTextValue = (value: unknown) => {
   return normalized || undefined;
 };
 
+const normalizePublicActivityVisibility = (value: unknown): UserProfile["publicActivityVisibility"] => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (
+    normalized === "public"
+    || normalized === "followers_only"
+    || normalized === "subscribers_only"
+    || normalized === "private"
+  ) {
+    return normalized;
+  }
+  return undefined;
+};
+
 const logChatProfile = (event: string, details?: Record<string, unknown>) => {
   void event;
   void details;
@@ -131,6 +150,9 @@ export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): Use
     avatarUrl: normalizeTextValue(profile?.avatarUrl),
     tagline: normalizeTextValue(profile?.tagline),
     channelRole: normalizeChannelRole(profile?.channelRole),
+    publicActivityVisibility: normalizePublicActivityVisibility(profile?.publicActivityVisibility),
+    followerSurfaceEnabled: typeof profile?.followerSurfaceEnabled === "boolean" ? profile.followerSurfaceEnabled : undefined,
+    subscriberSurfaceEnabled: typeof profile?.subscriberSurfaceEnabled === "boolean" ? profile.subscriberSurfaceEnabled : undefined,
     defaultWatchPartyJoinPolicy: normalizeJoinPolicy(profile?.defaultWatchPartyJoinPolicy),
     defaultWatchPartyReactionsPolicy: normalizeReactionsPolicy(profile?.defaultWatchPartyReactionsPolicy),
     defaultWatchPartyContentAccessRule: normalizeContentAccessRule(profile?.defaultWatchPartyContentAccessRule),
@@ -219,6 +241,9 @@ const parseRemoteUserProfile = (row: UserProfileRow | null | undefined): UserPro
     avatarUrl: normalizeTextValue(row.avatar_url),
     tagline: normalizeTextValue(row.tagline),
     channelRole: normalizeChannelRole(row.channel_role),
+    publicActivityVisibility: normalizePublicActivityVisibility(row.public_activity_visibility),
+    followerSurfaceEnabled: typeof row.follower_surface_enabled === "boolean" ? row.follower_surface_enabled : undefined,
+    subscriberSurfaceEnabled: typeof row.subscriber_surface_enabled === "boolean" ? row.subscriber_surface_enabled : undefined,
     defaultWatchPartyJoinPolicy: normalizeJoinPolicy(row.default_watch_party_join_policy),
     defaultWatchPartyReactionsPolicy: normalizeReactionsPolicy(row.default_watch_party_reactions_policy),
     defaultWatchPartyContentAccessRule: normalizeContentAccessRule(row.default_watch_party_content_access_rule),
@@ -324,7 +349,7 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
     const { data, error } = await supabase
       .from(USER_PROFILES_TABLE)
       .select(
-        "user_id,username,avatar_index,display_name,avatar_url,tagline,channel_role,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
+        "user_id,username,avatar_index,display_name,avatar_url,tagline,channel_role,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
       )
       .eq("user_id", normalizedUserId)
       .maybeSingle();

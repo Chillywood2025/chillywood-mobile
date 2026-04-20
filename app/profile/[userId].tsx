@@ -133,6 +133,45 @@ const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPart
   return "Public";
 };
 
+const formatPublicActivityVisibilityValue = (value?: UserProfile["publicActivityVisibility"] | null) => {
+  switch (value) {
+    case "followers_only":
+      return "Followers Only";
+    case "subscribers_only":
+      return "Subscribers Only";
+    case "private":
+      return "Private";
+    default:
+      return "Public";
+  }
+};
+
+const getPublicActivityVisibilityBody = (value?: UserProfile["publicActivityVisibility"] | null) => {
+  switch (value) {
+    case "followers_only":
+      return "Public activity is limited to follower-level visibility on this route and should not be rendered like open community traffic.";
+    case "subscribers_only":
+      return "Public activity is limited to creator/channel subscriber visibility and should stay distinct from account-tier premium access.";
+    case "private":
+      return "Public activity stays hidden on this route, so community framing should not pretend open audience activity is visible.";
+    default:
+      return "Public activity can stay visible here because the creator has backed open audience posture on the canonical public profile route.";
+  }
+};
+
+const formatAudienceSurfaceVisibilityValue = (enabled: boolean) => enabled ? "Visible" : "Hidden";
+
+const getAudienceSurfaceVisibilityBody = (surface: "followers" | "subscribers", enabled: boolean) => {
+  if (surface === "followers") {
+    return enabled
+      ? "Follower-facing public surface cues are enabled on this route when backed follower relationship truth exists."
+      : "Follower-facing public surface cues are currently turned off on this route, so the profile should not invent follower-only community modules.";
+  }
+  return enabled
+    ? "Subscriber-facing public surface cues are enabled on this route when backed creator/channel subscriber truth exists."
+    : "Subscriber-facing public surface cues are currently turned off on this route, so the profile should not imply subscriber-only public modules.";
+};
+
 const formatEventDate = (value?: string | null) => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return "TBD";
@@ -976,6 +1015,45 @@ export default function ProfileScreen() {
         : "When a profile is opened from a room or live session, this tab should become the clean re-entry point instead of a fake room shell.",
     },
   ];
+  const publicAudienceVisibilitySections: readonly ProfileSurfaceCard[] = useMemo(() => {
+    if (isOfficialProfile) return [];
+
+    const sections: ProfileSurfaceCard[] = [];
+    const publicActivityVisibility = channelAccessProfile?.publicActivityVisibility;
+    const followerSurfaceEnabled = channelAccessProfile?.followerSurfaceEnabled;
+    const subscriberSurfaceEnabled = channelAccessProfile?.subscriberSurfaceEnabled;
+
+    if (publicActivityVisibility) {
+      sections.push({
+        title: "Public Activity Visibility",
+        kicker: "PUBLIC ACTIVITY",
+        body: `${formatPublicActivityVisibilityValue(publicActivityVisibility)}. ${getPublicActivityVisibilityBody(publicActivityVisibility)}`,
+      });
+    }
+
+    if (typeof followerSurfaceEnabled === "boolean") {
+      sections.push({
+        title: "Follower Surface",
+        kicker: "FOLLOWERS",
+        body: `${formatAudienceSurfaceVisibilityValue(followerSurfaceEnabled)}. ${getAudienceSurfaceVisibilityBody("followers", followerSurfaceEnabled)}`,
+      });
+    }
+
+    if (typeof subscriberSurfaceEnabled === "boolean") {
+      sections.push({
+        title: "Subscriber Surface",
+        kicker: "SUBSCRIBERS",
+        body: `${formatAudienceSurfaceVisibilityValue(subscriberSurfaceEnabled)}. ${getAudienceSurfaceVisibilityBody("subscribers", subscriberSurfaceEnabled)}`,
+      });
+    }
+
+    return sections;
+  }, [
+    channelAccessProfile?.followerSurfaceEnabled,
+    channelAccessProfile?.publicActivityVisibility,
+    channelAccessProfile?.subscriberSurfaceEnabled,
+    isOfficialProfile,
+  ]);
   const communityTabSections: readonly ProfileSurfaceCard[] = [
     {
       title: "Chi'lly Chat Entry",
@@ -1000,6 +1078,7 @@ export default function ProfileScreen() {
           ? "This profile already supports reporting when something feels unsafe. Community growth should stay consistent with that safety posture."
           : "Safety hooks stay available when needed, but this community surface should remain identity-first instead of turning into a moderation console.",
     },
+    ...publicAudienceVisibilitySections,
   ];
   const aboutTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
     ? [
