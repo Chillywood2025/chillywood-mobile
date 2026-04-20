@@ -564,6 +564,83 @@ export type Database = {
           },
         ]
       }
+      event_reminders: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_reminders_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "creator_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          category: string
+          created_at: string
+          dismissed_at: string | null
+          id: string
+          read_at: string | null
+          target_context: Json
+          target_entity_id: string | null
+          target_route: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          category: string
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          read_at?: string | null
+          target_context?: Json
+          target_entity_id?: string | null
+          target_route: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          category?: string
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          read_at?: string | null
+          target_context?: Json
+          target_entity_id?: string | null
+          target_route?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       platform_role_memberships: {
         Row: {
           email: string | null
