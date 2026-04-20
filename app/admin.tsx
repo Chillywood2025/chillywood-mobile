@@ -23,6 +23,7 @@ import {
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
+import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
 import { useSession } from "../_lib/session";
 import {
   canAccessAdminConsole,
@@ -806,6 +807,62 @@ export default function AdminStudioScreen() {
       body: "Current audit truth is limited to report-context preservation and audit-owner visibility, not a full cross-domain audit trail.",
     },
   ], [canManagePrivilegedWrites, canReviewSafetyReports]);
+
+  const rachiControlCards = useMemo<readonly AdminDashboardCard[]>(() => [
+    {
+      label: "Overview",
+      value: RACHI_OFFICIAL_ACCOUNT.displayName,
+      body: `${RACHI_OFFICIAL_ACCOUNT.handle} stays the canonical official-platform concierge identity across profile and Chi'lly Chat continuity.`,
+    },
+    {
+      label: "Permissions",
+      value: "Observe only",
+      body: "Rachi remains an internal AI operations layer with identity-level trust only. Owner authority stays above Rachi at all times.",
+    },
+    {
+      label: "Queues",
+      value: "Unavailable",
+      body: "There is no real Rachi queue processor, domain state, or automation-control plane backing this build yet.",
+      tone: "unavailable",
+    },
+    {
+      label: "Actions",
+      value: "Assist later",
+      body: "Real action approval, reversal, pause/resume, and automation controls remain later until they are backed by true owner/admin state.",
+      tone: "unavailable",
+    },
+  ], []);
+
+  const rachiDomainRows = useMemo<readonly AdminDashboardCard[]>(() => [
+    {
+      label: "Moderation",
+      value: "Identity-backed",
+      body: "Rachi is already a protected official-platform moderation actor with an audit owner key, but not a live enforcement queue.",
+    },
+    {
+      label: "Support",
+      value: "Profile + chat",
+      body: "Current truth is canonical official presence on profile and Chi'lly Chat, not a support-operations console.",
+    },
+    {
+      label: "Monetization Review",
+      value: "Later",
+      body: "No real Rachi monetization-review automation or approval flow is backed yet.",
+      tone: "unavailable",
+    },
+    {
+      label: "Creator Review",
+      value: "Later",
+      body: "No real creator-review automation queue or owner approval surface is backed yet.",
+      tone: "unavailable",
+    },
+    {
+      label: "Live Room Risk",
+      value: "Later",
+      body: "Live room risk automation, pause, and emergency controls remain unbacked in current repo truth.",
+      tone: "unavailable",
+    },
+  ], []);
 
   const editorPublicationPreview = useMemo(() => {
     const rawReleaseInput = form.release_at.trim();
@@ -1654,6 +1711,72 @@ export default function AdminStudioScreen() {
               </View>
             )
           ) : null}
+        </View>
+
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>RACHI CONTROL</Text>
+              <Text style={styles.configTitle}>Bounded official-platform control truth</Text>
+              <Text style={styles.configBody}>
+                This section shows only current official-account and audit truth. It does not pretend queue processing, automation, or emergency controls already exist.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.dashboardGrid}>
+            {rachiControlCards.map((card) => (
+              <View
+                key={card.label}
+                style={[
+                  styles.dashboardMetricCard,
+                  card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
+                ]}
+              >
+                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Authority boundary</Text>
+                <Text style={styles.configListBody}>
+                  Owner / Super Admin remains above Rachi. Current repo truth does not allow Rachi to self-authorize important actions, pause domains, or overrule owner/admin decisions.
+                </Text>
+              </View>
+              <View style={styles.badgesRow}>
+                <View style={[styles.badge, styles.badgeOn]}>
+                  <Text style={styles.badgeText}>OWNER ABOVE RACHI</Text>
+                </View>
+                <View style={[styles.badge, styles.badgeScheduled]}>
+                  <Text style={styles.badgeText}>{RACHI_OFFICIAL_ACCOUNT.auditOwnerKey}</Text>
+                </View>
+              </View>
+            </View>
+
+            {rachiDomainRows.map((row) => (
+              <View key={row.label} style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>{row.label}</Text>
+                  <Text style={styles.configListBody}>{row.body}</Text>
+                </View>
+                <View style={styles.badgesRow}>
+                  <View
+                    style={[
+                      styles.badge,
+                      row.tone === "unavailable" ? styles.badgeOff : styles.badgeScheduled,
+                    ]}
+                  >
+                    <Text style={styles.badgeText}>{row.value}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={styles.configCard}>
