@@ -839,6 +839,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_friendships: {
+        Row: {
+          actioned_by_user_id: string | null
+          created_at: string
+          requested_by_user_id: string
+          responded_at: string | null
+          status: string
+          updated_at: string
+          user_high_id: string
+          user_low_id: string
+        }
+        Insert: {
+          actioned_by_user_id?: string | null
+          created_at?: string
+          requested_by_user_id: string
+          responded_at?: string | null
+          status?: string
+          updated_at?: string
+          user_high_id: string
+          user_low_id: string
+        }
+        Update: {
+          actioned_by_user_id?: string | null
+          created_at?: string
+          requested_by_user_id?: string
+          responded_at?: string | null
+          status?: string
+          updated_at?: string
+          user_high_id?: string
+          user_low_id?: string
+        }
+        Relationships: []
+      }
       user_list: {
         Row: {
           title_id: string
@@ -1235,6 +1268,32 @@ export type Database = {
       has_platform_role: {
         Args: { required_roles: string[] }
         Returns: boolean
+      }
+      request_friendship: {
+        Args: { target_user_id: string }
+        Returns: {
+          actioned_by_user_id: string | null
+          created_at: string
+          requested_by_user_id: string
+          responded_at: string | null
+          status: string
+          updated_at: string
+          user_high_id: string
+          user_low_id: string
+        }
+      }
+      respond_to_friendship: {
+        Args: { next_action: string; target_user_id: string }
+        Returns: {
+          actioned_by_user_id: string | null
+          created_at: string
+          requested_by_user_id: string
+          responded_at: string | null
+          status: string
+          updated_at: string
+          user_high_id: string
+          user_low_id: string
+        }
       }
       sanitize_app_configuration: {
         Args: { input_config: Json }
