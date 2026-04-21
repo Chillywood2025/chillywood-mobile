@@ -124,20 +124,39 @@ Current host-bootstrap truth now includes:
   - `87.99.145.160`
 - the Cloudflare record remains DNS-only for this pass
 - TLS is now live for `live.chillywoodstream.com`
-- Caddy now serves a placeholder HTTPS surface on `:443`
+- Caddy now reverse-proxies the public hostname to the on-host LiveKit service
 - plain HTTP on `:80` now redirects to HTTPS
+- Docker and Docker Compose are installed and enabled on-host
+- the deploy user is in the `docker` group
+- the LiveKit service layout now exists under:
+  - `/opt/chillywood/livekit`
+  - `/opt/chillywood/livekit/bin`
+  - `/opt/chillywood/livekit/config`
+  - `/opt/chillywood/livekit/data`
+  - `/opt/chillywood/livekit/runtime`
+- a protected host-only LiveKit env/config now exists under:
+  - `/opt/chillywood/livekit/runtime/livekit.env`
+  - `/opt/chillywood/livekit/config/livekit.yaml`
+- the first LiveKit container is now actually running on-host
+- the current public HTTPS response body now comes from the LiveKit upstream (`OK`) rather than the older placeholder edge page
+- the current Supabase project secret state now includes:
+  - `LIVEKIT_API_KEY`
+  - `LIVEKIT_API_SECRET`
+  - `LIVEKIT_URL`
+- the current deployed-default mobile runtime now points to:
+  - `wss://live.chillywoodstream.com`
 
 This still does not imply:
-- LiveKit is installed
-- app traffic has moved
-- the machine is already serving production Chi'llywood traffic
-- a real upstream app service is configured behind Caddy
+- a broader app upstream is deployed on this host
+- the machine serves the full Chi'llywood product
+- databases or auth moved off Supabase
+- app-store or Google Play release readiness is complete
 
 ### 3.3 Remaining Manual Items
 The remaining first-host work is now narrower:
-- keep the HTTPS placeholder honest until a real upstream exists
-- prepare the LiveKit ingress topology behind the existing TLS edge
-- keep LiveKit and any other upstream service unserved until their own cutover lane opens
+- verify real app/client realtime behavior against the new LiveKit ingress
+- prove the current token-issuance path works end-to-end with the new host truth
+- keep broader app hosting and non-realtime upstreams out of scope until their own lanes open
 
 ### 3.4 Expected Filesystem Layout
 The first host should standardize on:
@@ -156,14 +175,14 @@ It does not claim those directories are already populated with live services.
 
 ### 3.5 Bootstrap Closeout Decision
 Based on the verified host facts above, the first-host bootstrap state is complete enough to move to:
-- narrow `LiveKit ingress deployment prep`
+- narrow `realtime cutover verification`
 
 That means:
 - base host access is no longer the blocker
 - base hardening is no longer the blocker
 - reverse proxy baseline is no longer the blocker
 - real domain/DNS truth is no longer the blocker
-- the next blocker is the LiveKit service scaffold itself
+- the next blocker is proving the aligned realtime path through actual client/session behavior
 
 ## 4. Hetzner-First Decision
 
@@ -283,9 +302,10 @@ Current verified proxy baseline:
 - Caddy is the chosen first proxy
 - the active bootstrap config path is `/opt/chillywood/proxy/Caddyfile`
 - `/etc/caddy/Caddyfile` points at that bootstrap config
-- the current served surface is a placeholder HTTPS response on `live.chillywoodstream.com`
+- the current served surface is the real LiveKit upstream response on `live.chillywoodstream.com`
 - the current HTTP behavior is redirect-only
-- no production app upstream or LiveKit upstream is configured yet
+- the public hostname now proxies to the on-host LiveKit service
+- no broader production app upstream is configured yet
 
 ### 8.2 Public Exposure Discipline
 Public exposure should stay narrow:
@@ -336,15 +356,14 @@ Start narrow:
 Do not invent a larger observability program in this pass.
 
 ## 10. Deployment Order
-From the current verified bootstrap, proxy, and TLS state, the next rollout should happen in this order:
+From the current verified bootstrap, proxy, TLS, and LiveKit-ingress state, the next rollout should happen in this order:
 
 1. keep `live.chillywoodstream.com` as the canonical realtime hostname
-2. prepare the LiveKit host/service topology behind the existing TLS edge
-3. wire the reverse-proxy host block to the real LiveKit upstream only after that upstream exists
-4. verify the new realtime endpoint independently before mobile cutover
-5. update Supabase Edge Function env so `livekit-token` signs against the Hetzner endpoint
-6. update public mobile runtime config only after the new endpoint is healthy
-7. verify through preview/internal builds before any broader production-like use
+2. keep the current on-host LiveKit service and Caddy upstream aligned and healthy
+3. keep Supabase Edge Function env aligned so `livekit-token` signs against the Hetzner endpoint
+4. keep public mobile runtime config aligned with the Hetzner endpoint
+5. verify through preview/internal builds or other real client/session proof before any broader production-like use
+6. only after that, open the next lane for broader realtime verification or app-upstream work
 
 ## 11. Rollback And Safety Notes
 
@@ -367,19 +386,24 @@ The first Hetzner deployment should be:
 ## 12. LiveKit-Only Service Scaffolding Boundary
 This repo still does not prove a broader app-owned server topology.
 
-What is now justified is only a bounded LiveKit ingress scaffold:
+What is now justified and already real is only a bounded LiveKit ingress slice:
 - Docker and Docker Compose on the host
 - `/opt/chillywood/livekit` service directories
+- protected host-only LiveKit config and env
 - repo-side `infra/hetzner/livekit.env.example`
 - repo-side `infra/hetzner/docker-compose.livekit.yml`
+- a running on-host LiveKit container
+- Caddy proxying the public realtime hostname to that container
+- Supabase signer env aligned to the Hetzner realtime hostname
+- mobile runtime defaults aligned to the Hetzner realtime hostname
 
 What is still intentionally deferred:
 - a broader app-stack Compose topology
-- any fake app upstream
-- automatic Caddy upstream switch before LiveKit is real
-- any Supabase token-env or mobile runtime cutover
+- any broader app upstream
+- any database or auth migration
+- any release-hardening or Google Play lane
 
-The Compose scaffold now exists only because the realtime cutover lane is open and the host-side prerequisites are real.
+The realtime boundary is now real enough that the next lane is verification, not more scaffolding.
 
 ## 13. OVH Later Add-On Plan
 OVH is intentionally deferred.
@@ -396,26 +420,24 @@ OVH should not be introduced later as:
 
 ## 14. Current LiveKit Ingress Prep Scope
 The current infrastructure follow-up lane is now:
-- narrow `LiveKit ingress deployment prep`
+- narrow `realtime cutover verification`
 
 This lane now includes:
-- verifying current app/runtime/token assumptions
-- installing Docker and Docker Compose on the Hetzner host
-- creating `/opt/chillywood/livekit` service directories
-- adding bounded repo-side LiveKit compose/env scaffolding
+- verifying real client/session behavior against `live.chillywoodstream.com`
+- verifying the current signer/runtime path works end-to-end against the new host truth
+- keeping the current LiveKit host, proxy, signer, and runtime alignment honest
 
 This lane still does not include:
-- launching LiveKit
-- wiring Caddy to a real upstream
-- changing Supabase Edge Function env
-- changing mobile runtime defaults
+- broader app hosting on Hetzner
+- database/auth migration
+- OVH/failover work
+- Google Play release hardening
 
 ## 15. Next Honest Follow-Up Lane
 Once this prep chapter is accepted, the next real infrastructure follow-up lane should be:
-- narrow `LiveKit host config + launch prep`
+- narrow `realtime cutover verification`
 
 That later lane should prove, but not overclaim:
-- the exact LiveKit config file and secret-loading path on this host
-- first real service startup and health verification
-- the reverse-proxy upstream handoff only after the upstream is real
-- the precise later cutover checklist for the Supabase token endpoint and mobile runtime values
+- the current client/runtime path can really use the new LiveKit ingress
+- the current token/signer path works through actual app/realtime usage
+- the remaining post-cutover seam before broader product deployment
