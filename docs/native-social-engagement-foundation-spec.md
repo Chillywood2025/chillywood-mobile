@@ -146,4 +146,4 @@ Not current truth:
 The current foundation chapter should now proceed in this order:
 - Stage 2: native friend graph schema + helper foundation
 - Stage 3: title-content engagement helper foundation for likes and shares only
-- later: narrow adoption audits on existing canonical routes
+- later: narrow native social adoption audit on existing canonical routes, starting with self-only friend read surfaces and title/player like-share read surfaces only where those adoptions stay honest
