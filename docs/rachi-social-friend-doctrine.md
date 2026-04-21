@@ -124,19 +124,15 @@ Internally, current admin truth does not mean:
 - Rachi can self-authorize sensitive actions
 - Rachi is the same thing as a social friend system
 
-## 8. Exact Next Lane Before Broader Polish
-Before any broad whole-app behavior or polish pass continues, the next exact lane should be:
+## 8. Follow-On Lane After This Doctrine Audit
+The required implementation-spec lane is now the durable friend-graph source of truth in:
 
-`native friend graph implementation-spec pass`
+`docs/native-friend-graph-implementation-spec.md`
 
-That next lane should:
-- define the canonical meaning of a Chi'llywood friend relationship
-- define how friend truth differs from followers, subscribers, requests, and blocked audience
-- define private-vs-public friend visibility rules
-- define how Rachi can remain the official first-contact presence without being mistaken for owner authority or a fake already-shipped friend graph
-- map the future friend system onto `/profile/[userId]`, Chi'lly Chat continuity, and any needed helper/read-model owners without changing route truth
+The next exact lane after that spec should be:
+
+`native friend graph schema + helper foundation pass`
 
 Out of scope for that next lane:
 - broad UI implementation
-- schema migration work unless a later spec proves a tiny foundation change is safely required
 - fake friend counts, fake mutuals, or fake social affordances

@@ -1,44 +1,44 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact lane is now a doctrine/spec pass for the native Chi'llywood friend graph before any broad whole-app behavior or polish work continues. The owner/admin/Rachi + social-friend audit is now closed cleanly, and repo truth is explicit: Rachi is already a protected official starter presence on canonical profile/chat surfaces, but native friend-list truth is still missing. Do not start the broad behavior/polish pass yet.
+The next exact lane is now a narrow `native friend graph schema + helper foundation pass` before any broad whole-app behavior or polish work continues. The doctrine/spec lane is now closed cleanly, and repo truth is explicit: friendship is a mutual person-to-person system that does not yet exist in schema/helper truth, while Rachi remains official starter/contact presence outside the default friend graph.
 
 ## Current Plan
-1. Treat the owner/admin/Rachi + social-friend audit as closed.
-2. Keep `RACHI_SOCIAL_TRUTH = PARTIALLY_REAL` and `FRIEND_LIST_TRUTH = MISSING_BUT_NEXT` as the active repo truth.
-3. Run the next lane as a native friend-graph implementation-spec pass, not a broad UI pass.
+1. Treat the native friend-graph implementation-spec pass as closed.
+2. Keep the locked doctrine: friendship is mutual, person-to-person, and private-first.
+3. Run the next lane as the narrow schema + helper foundation pass, not as a broad UI/social rewrite.
 4. Preserve current owner-above-Rachi authority, canonical profile/chat/admin routes, and follower/subscriber distinctions.
 5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- lock the canonical meaning of a Chi'llywood friend relationship
-- define how friend truth differs from followers, creator/channel subscribers, requests, and blocked audience
-- define private-vs-public friend visibility rules for `/profile/[userId]`
-- define how Rachi stays the official first-contact presence without being mistaken for owner authority or a fake already-shipped friend graph
+- add the canonical friend-relationship foundation without public UI adoption yet
+- keep friendship mutual and person-to-person
+- add the helper/action/read-model cutline for pending vs active friendship truth
+- keep Rachi outside default friend-count and auto-friend truth
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve `/profile/[userId]`, `/channel-settings`, `/admin`, `/chat`, and `/chat/[threadId]` as the canonical owners
-- keep the next lane doctrine/spec-first rather than UI-first
-- treat current follower/subscriber/request/blocked truth as the only real native social relationship foundation today
-- use `docs/rachi-social-friend-doctrine.md` as the durable starting point
+- use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
+- establish the native friend graph as a separate foundation from followers, subscribers, requests, and blocked audience
+- stop short of public profile adoption or fake shipped social behavior
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
 - start the broad whole-app behavior/polish pass yet
 - change route truth
-- change schema unless a later spec proves a tiny directly-related foundation correction is safely required
+- invent a broad social rewrite lane
 - rename followers or subscribers into friends
 - invent fake friend counts, fake mutuals, fake Rachi-social behavior, or fake creator/platform powers
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the native friend graph has a locked doctrine/spec definition
-- Rachi's official starter presence is clearly separated from friend-graph truth and owner/admin truth
-- broader behavior/polish work has a clean social truth foundation to build from
-- no route drift, schema drift, or fake social claims are introduced
+- the native friend graph has a real schema/helper foundation
+- Rachi's official starter presence stays clearly separated from friend-graph truth and owner/admin truth
+- public profile/chat/live routes still make no fake friend claims
+- no route drift or fake social claims are introduced
 - the staged set stays task-pure
