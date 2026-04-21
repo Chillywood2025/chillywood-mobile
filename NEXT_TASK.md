@@ -1,40 +1,40 @@
 # NEXT TASK
 
 ## Exact Next Task
-The whole-app premium-finish lane is now closed cleanly on `main`. The next exact broader roadmap lane is a medium `public profile/channel premium hierarchy audit` on `app/profile/[userId].tsx`: audit and rank the remaining creator-identity, hierarchy, trust, and memo-density seams on the canonical public profile/channel route before changing that owner again.
+The public profile/channel premium hierarchy audit is now closed cleanly on `main`. The next exact stage is `premium hierarchy batch 1`: strengthen the top of `app/profile/[userId].tsx` so the route feels more like a premium creator/channel destination and less like a memo wall, while keeping public-owner boundaries, access truth, event truth, and route doctrine intact.
 
 ## Current Plan
-1. Treat the trust/account/support premium-finish batch as closed.
-2. Treat the Chi'lly Chat premium-finish batch as closed.
-3. Treat the Home/title premium-finish batch as closed.
-4. Leave those completed route owners alone unless a new explicit lane reopens them.
-5. Start with `app/profile/[userId].tsx` next because creator identity and hierarchy remain the clearest unresolved premium seam.
-6. Keep unrelated local dirt out of the checkpoint.
+1. Treat the profile/channel premium hierarchy audit as closed.
+2. Tighten the hero stack, action priority, and top-of-route density in `app/profile/[userId].tsx` first.
+3. Keep the route public-facing and creator-led without turning it into a console.
+4. Move to section/tab balance only after the top-of-route hierarchy is verified and pushed.
+5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- audit the remaining creator/profile premium seams
-- classify what is still narrow vs medium vs broad on the canonical public profile/channel route
-- choose the smallest safe next batch from that audit instead of reopening completed routes blindly
+- strengthen hero/public-channel destination feel
+- promote the most important honest public actions higher
+- reduce memo-wall density across the top profile stack
+- keep creator/public and room/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve `/profile/[userId]` as the canonical public profile/channel route
-- focus on creator identity feel, hierarchy, trust/moderation feel, and memo-density on that owner
-- leave completed account/support/chat/home/title route owners alone unless the audit proves they need reopening
+- focus on hero hierarchy, creator identity feel, CTA priority, and public premium confidence on that owner
+- leave completed account/support/chat/home/title route owners alone
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
 - change current public/product route truth
 - change schema or doctrine
-- reopen completed premium-finish route owners without a grounded reason
+- add creator-console behavior to the public route
 - invent route proliferation or fake creator/platform powers
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the remaining profile/channel seams are classified honestly
-- the next profile/channel batch is chosen from real route-owner pressure, not from a vague whole-app polish loop
+- the top of `/profile/[userId]` feels materially more premium and creator-led
+- the route promotes honest public actions without overexplaining itself
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure
