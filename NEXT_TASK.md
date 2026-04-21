@@ -1,23 +1,22 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **Supabase token env cutover** pass on `main`. Use `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
+The next exact task is a narrow **mobile runtime cutover** pass on `main`. Use `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the safety / moderation workflow chapter as closed enough to move on unless a real regression is found.
-3. Treat the Hetzner edge baseline and LiveKit ingress path as already real.
-4. Treat the protected host config, running LiveKit service, and Caddy proxy handoff as already landed truth.
-5. Use the available project-side Supabase secret access to point `supabase/functions/livekit-token` at the new LiveKit host truth.
-6. Verify the required secret names are present for the project after the cutover.
-7. Keep Firebase / RevenueCat / Expo/EAS external for now.
-8. Stop immediately if the provider-side secret update cannot be completed honestly.
+3. Treat the Hetzner edge baseline, running LiveKit service, and Supabase token signer secret state as already real.
+4. Update the mobile runtime defaults to the new LiveKit host truth.
+5. Keep the token endpoint path stable on Supabase while changing only the LiveKit server default.
+6. Keep Firebase / RevenueCat / Expo/EAS external for now.
+7. Stop immediately if the runtime cutover would imply readiness that current ingress proof does not support.
 
 ## Exact Next Batch
 - start with `docs/hetzner-first-deployment-implementation-spec.md`
-- read the protected host-only LiveKit keypair without printing it
-- update the Supabase project secrets for `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `LIVEKIT_URL`
-- verify the secret names are now present for the project
+- update the deployed-default LiveKit runtime URL in `app.config.ts`
+- preserve the current Supabase token endpoint default
+- verify the repo now points at the real LiveKit host truth without inventing broader deployment claims
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
@@ -41,7 +40,8 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- `supabase/functions/livekit-token` now points at the real LiveKit host truth through provider-side env
+- the mobile/runtime default now points at `wss://live.chillywoodstream.com`
+- the Supabase token endpoint remains stable
 - no raw secret is written to repo files or output summaries
 - external service ownership stays unchanged
 - no fake infrastructure claim, raw secret exposure, or route drift is introduced
