@@ -3292,6 +3292,54 @@ export default function PlayerScreen() {
     const syncLead = partySyncRole === "host" ? "Host" : "Synced";
     return compactPartySyncStatus ? `${syncLead} · ${compactPartySyncStatus}` : syncLead;
   }, [compactPartySyncStatus, isSharedPartyPlayback, partySyncRole]);
+  const standaloneAccessPresentation = useMemo(() => {
+    if (!isStandalonePlayer) return null;
+    if (standaloneAccessLoading) {
+      return {
+        title: "Checking playback access",
+        body: "Chi'llywood is confirming whether this title can play on this account right now.",
+        primaryLabel: "Checking...",
+        primaryDisabled: true,
+      };
+    }
+    if (standalonePlaybackBlocked && standaloneAccess) {
+      const title =
+        standaloneAccess.reason === "premium_required"
+          ? "Premium access required"
+          : standaloneAccess.reason === "party_pass_required"
+            ? "Party Pass required"
+            : `${standaloneAccess.label} access required`;
+      const body =
+        standaloneAccess.reason === "premium_required"
+          ? "This title needs an active Premium entitlement before standalone playback can start here."
+          : standaloneAccess.reason === "party_pass_required"
+            ? "This title needs an active Party Pass before standalone playback can start here."
+            : "Standalone playback is not available for this title on this account right now.";
+      return {
+        title,
+        body,
+        primaryLabel: "Refresh access",
+        primaryDisabled: false,
+      };
+    }
+    if (standalonePlaybackUnknown) {
+      return {
+        title: "Playback access unavailable",
+        body: accessError ?? "Chi'llywood could not confirm playback access for this title right now.",
+        primaryLabel: "Retry access",
+        primaryDisabled: false,
+      };
+    }
+    return null;
+  }, [
+    accessError,
+    isStandalonePlayer,
+    standaloneAccess,
+    standaloneAccessLoading,
+    standalonePlaybackBlocked,
+    standalonePlaybackUnknown,
+  ]);
+  const showStandaloneAccessOverlay = isStandalonePlayer && standalonePlaybackGateActive && !!standaloneAccessPresentation;
   useEffect(() => {
     if (!inWatchParty) return;
 
@@ -4379,6 +4427,32 @@ export default function PlayerScreen() {
               )}
             </Animated.View>
 
+            {showStandaloneAccessOverlay && standaloneAccessPresentation ? (
+              <View style={styles.playerAccessOverlay}>
+                <View style={styles.playerAccessCard}>
+                  <Text style={styles.playerAccessKicker}>STANDALONE PLAYER</Text>
+                  <Text style={styles.playerAccessTitle}>{standaloneAccessPresentation.title}</Text>
+                  <Text style={styles.playerAccessBody}>{standaloneAccessPresentation.body}</Text>
+                  <View style={styles.playerAccessActions}>
+                    <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+                      <Text style={styles.playerAccessSecondaryText}>Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.playerAccessPrimaryBtn,
+                        standaloneAccessPresentation.primaryDisabled && styles.secondaryBtnDisabled,
+                      ]}
+                      onPress={retryStandaloneAccessCheck}
+                      disabled={standaloneAccessPresentation.primaryDisabled}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.playerAccessPrimaryText}>{standaloneAccessPresentation.primaryLabel}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
             {seekFeedback ? (
               <Animated.View style={[styles.seekFeedback, { opacity: seekFeedbackOpacity }]}> 
                 <Text style={styles.seekFeedbackText}>{seekFeedback}</Text>
@@ -4464,28 +4538,26 @@ export default function PlayerScreen() {
             ) : (
               <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
                 <View style={styles.partyOverlaySpacer} />
-                <Animated.View
-                  pointerEvents={controlsVisible ? "auto" : "none"}
-                  style={[
-                    styles.partyOverlayActions,
-                    styles.partyOverlayActionsWatchPartyTitle,
-                    {
-                      opacity: compactControlsOpacity,
-                      transform: [{ translateY: compactControlsTranslateY }],
-                    },
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
-                    onPress={onToggleMyList}
-                    disabled={myListBusy}
-                    activeOpacity={0.85}
+                {!standalonePlaybackGateActive ? (
+                  <Animated.View
+                    pointerEvents={controlsVisible ? "auto" : "none"}
+                    style={[
+                      styles.standaloneOverlayActions,
+                      {
+                        opacity: compactControlsOpacity,
+                        transform: [{ translateY: compactControlsTranslateY }],
+                      },
+                    ]}
                   >
-                    <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
-                  </TouchableOpacity>
-
-                  {!standalonePlaybackGateActive ? (
-                    <>
+                    <View style={styles.standaloneUtilityRow}>
+                      <TouchableOpacity
+                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
+                        onPress={onToggleMyList}
+                        disabled={myListBusy}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
                         onPress={() => setSpeedMenuOpen((value) => !value)}
@@ -4501,13 +4573,16 @@ export default function PlayerScreen() {
                       >
                         <Text style={styles.partyOverlayChipText}>{isStandaloneFullscreen ? "Exit Full" : "Full"}</Text>
                       </TouchableOpacity>
-                    </>
-                  ) : null}
-
-                  <TouchableOpacity style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]} onPress={onWatchParty} activeOpacity={0.85}>
-                    <Text style={styles.partyOverlayChipText}>Watch-Party Live</Text>
-                  </TouchableOpacity>
-                </Animated.View>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.compactChip, styles.compactChipAccent, styles.standaloneSocialHandoffBtn]}
+                      onPress={onWatchParty}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.compactChipText, styles.compactChipTextAccent]}>Watch-Party Live</Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ) : null}
               </View>
             )}
               </>
@@ -4532,7 +4607,7 @@ export default function PlayerScreen() {
             ) : null}
 
             <View style={[styles.playerFrameworkBottomStack, inWatchParty && styles.playerFrameworkBottomStackWatchParty]}>
-              {!isLiveMode ? (
+              {!isLiveMode && (!isStandalonePlayer || !standalonePlaybackGateActive) ? (
                 <View style={[styles.progressCard, inWatchParty && styles.progressCardWatchPartyTitle]}>
                   <View style={styles.progressMetaRow}>
                     <Text style={styles.progressTime}>{formatTime(positionMillis)}</Text>
@@ -4558,7 +4633,7 @@ export default function PlayerScreen() {
                 </View>
               ) : null}
 
-              {zoomLevel > 1.01 && !inWatchParty && !isLiveMode ? (
+              {zoomLevel > 1.01 && !inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
                 <View style={styles.controlsRow}>
                   <TouchableOpacity style={styles.controlBtn} onPress={() => animateZoomTo(1)}>
                     <Text style={styles.controlBtnText}>Reset Zoom</Text>
@@ -4566,7 +4641,7 @@ export default function PlayerScreen() {
                 </View>
               ) : null}
 
-              {!inWatchParty && !isLiveMode ? (
+              {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
                 <Animated.View
                   pointerEvents={controlsVisible ? "auto" : "none"}
                   style={[
@@ -4789,57 +4864,6 @@ const styles = StyleSheet.create({
     color: "#F2DEE4",
     fontSize: 10.5,
     fontWeight: "800",
-  },
-  standaloneContextCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(8,8,12,0.4)",
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    marginBottom: 6,
-    gap: 7,
-  },
-  standaloneContextKicker: {
-    color: "#C7E7FF",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-  },
-  standaloneContextTitle: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  standaloneContextBody: {
-    color: "#D3D7E3",
-    fontSize: 11.5,
-    fontWeight: "600",
-    lineHeight: 16,
-  },
-  standaloneContextMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  standaloneContextMetaPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  standaloneContextMetaText: {
-    color: "#EDF0F7",
-    fontSize: 10.5,
-    fontWeight: "800",
-  },
-  standaloneContextHelper: {
-    color: "#BFC4D2",
-    fontSize: 10.5,
-    fontWeight: "700",
-    lineHeight: 15,
   },
   playerAccessOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -5317,6 +5341,14 @@ const styles = StyleSheet.create({
   partyOverlayActionsWatchPartyTitle: {
     gap: 4,
   },
+  standaloneOverlayActions: {
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  standaloneUtilityRow: {
+    flexDirection: "row",
+    gap: 5,
+  },
   partyOverlayChip: {
     borderRadius: 999,
     borderWidth: 1,
@@ -5592,6 +5624,9 @@ const styles = StyleSheet.create({
   },
   compactChipTextAccent: {
     color: "#fff",
+  },
+  standaloneSocialHandoffBtn: {
+    alignSelf: "flex-end",
   },
   compactSpeedMenuRow: {
     flexDirection: "row",

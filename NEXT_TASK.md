@@ -1,27 +1,27 @@
 # NEXT TASK
 
 ## Exact Next Task
-The `/channel-settings` control-center polish lane is now closed on `main`. The next exact product lane is a broad **player mode simplification audit** on `app/player/[id].tsx`. The creator-side control center now reads cleanly enough to move on, so the biggest remaining user-facing seam is the standalone player: it still carries too many mode-specific responsibilities and needs a truth-first audit before any broader simplification work begins.
+The player simplification pass is now underway on `main`, and Stage 1 is closed cleanly. The next exact stage in this chained lane is **shared playback chrome compression** on `app/player/[id].tsx`. The standalone player now surfaces blocked/loading/unknown access honestly and separates utility controls from the real `Watch-Party Live` handoff, so the next grounded seam is the watch-party branch still feeling too much like a second Party Room.
 
 ## Current Plan
-1. Re-read `CURRENT_STATE.md`, `NEXT_TASK.md`, `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `PRODUCT_DOCTRINE.md`, `ROOM_BLUEPRINT.md`, and the active whole-app audit findings first.
-2. Treat the `/channel-settings` control-center polish lane as closed.
-3. Keep the next active owner on `app/player/[id].tsx`.
-4. Audit the player surface honestly before trying to simplify it.
-5. Separate narrow copy/hierarchy cleanup from any broader mode-architecture work before implementing anything.
+1. Keep the active owner on `app/player/[id].tsx`.
+2. Treat Stage 1 standalone access-and-control honesty as closed.
+3. Compress duplicate shared playback audience/sync/status chrome without removing real room truth.
+4. Keep the Party Room handoff, sync truth, and current doctrine labels intact.
+5. Leave unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- audit `app/player/[id].tsx`
-- identify which player modes and overlays are already solid versus overloaded
-- define the smallest safe next simplification slice without collapsing `Watch-Party Live`, `Live Watch-Party`, or `Live First`
+- compress the shared playback branch in `app/player/[id].tsx`
+- reduce duplicate audience / sync / quick-control chrome without removing real behavior
+- keep the canonical Party Room handoff and watch-party/live labels intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve current product route truth and current doctrine
 - focus on the canonical player owner first
-- inspect mode-specific clutter, control hierarchy, and overloaded messaging before implementation
-- leave the completed `/channel-settings` polish work intact
+- reduce duplicate watch-party chrome while preserving real room/social behavior
+- leave the completed standalone Stage 1 player work intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
@@ -30,13 +30,13 @@ Do not:
 - change schema or doctrine
 - widen into profile/channel, admin, infra, or database work
 - change the canonical owner of profile, title, player, watch-party, live-stage, chat, or channel-settings routes
-- turn the audit into a broad player rewrite before the overload seams are classified honestly
+- turn Stage 2 into a broad player rewrite
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the player surface is audited honestly
-- overloaded mode-specific seams are classified clearly as narrow, medium, or broad/risky
-- the next safe player simplification slice is explicit before implementation
+- shared playback feels less crowded
+- duplicate audience/sync/status presentation is reduced safely
+- the Party Room handoff and real room truth stay intact
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure
