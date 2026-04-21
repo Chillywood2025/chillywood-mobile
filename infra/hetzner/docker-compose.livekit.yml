@@ -1,0 +1,17 @@
+services:
+  livekit:
+    image: ${LIVEKIT_IMAGE:?set LIVEKIT_IMAGE}
+    container_name: chillywood-livekit
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - --config
+      - /etc/livekit/livekit.yaml
+    volumes:
+      - ${LIVEKIT_CONFIG_PATH:?set LIVEKIT_CONFIG_PATH}:/etc/livekit/livekit.yaml:ro
+      - ${LIVEKIT_STATE_ROOT:-/opt/chillywood/livekit}/data:/var/lib/livekit
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

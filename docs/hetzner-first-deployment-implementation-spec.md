@@ -133,7 +133,7 @@ This still does not imply:
 - the machine is already serving production Chi'llywood traffic
 - a real upstream app service is configured behind Caddy
 
-### 3.3 Remaining Manual And DNS-Gated Items
+### 3.3 Remaining Manual Items
 The remaining first-host work is now narrower:
 - keep the HTTPS placeholder honest until a real upstream exists
 - prepare the LiveKit ingress topology behind the existing TLS edge
@@ -156,13 +156,14 @@ It does not claim those directories are already populated with live services.
 
 ### 3.5 Bootstrap Closeout Decision
 Based on the verified host facts above, the first-host bootstrap state is complete enough to move to:
-- narrow `Hetzner domain / TLS activation follow-up`
+- narrow `LiveKit ingress deployment prep`
 
 That means:
 - base host access is no longer the blocker
 - base hardening is no longer the blocker
 - reverse proxy baseline is no longer the blocker
-- real domain/DNS truth is now the exact next blocker
+- real domain/DNS truth is no longer the blocker
+- the next blocker is the LiveKit service scaffold itself
 
 ## 4. Hetzner-First Decision
 
@@ -363,20 +364,22 @@ The first Hetzner deployment should be:
 - reversible
 - independent from auth/database migration
 
-## 12. Why Docker Compose Templates Are Still Deferred In This Pass
-This repo does not yet prove a broader app-owned server topology.
+## 12. LiveKit-Only Service Scaffolding Boundary
+This repo still does not prove a broader app-owned server topology.
 
-A concrete Compose stack would currently force guesses about:
-- exact service topology
-- certificate flow
-- domain naming
-- which optional static surfaces are actually being hosted
+What is now justified is only a bounded LiveKit ingress scaffold:
+- Docker and Docker Compose on the host
+- `/opt/chillywood/livekit` service directories
+- repo-side `infra/hetzner/livekit.env.example`
+- repo-side `infra/hetzner/docker-compose.livekit.yml`
 
-So this pass intentionally stops at:
-- the Hetzner-first spec
-- env templates
+What is still intentionally deferred:
+- a broader app-stack Compose topology
+- any fake app upstream
+- automatic Caddy upstream switch before LiveKit is real
+- any Supabase token-env or mobile runtime cutover
 
-Compose or provider-run service manifests should be added only when the realtime cutover lane is actually opened.
+The Compose scaffold now exists only because the realtime cutover lane is open and the host-side prerequisites are real.
 
 ## 13. OVH Later Add-On Plan
 OVH is intentionally deferred.
@@ -391,11 +394,28 @@ OVH should not be introduced later as:
 - a rushed second copy of the whole app stack
 - a justification for broader premature infrastructure sprawl
 
-## 14. First Honest Follow-Up Lane
-Once this prep is accepted, the first real infrastructure follow-up lane should be:
+## 14. Current LiveKit Ingress Prep Scope
+The current infrastructure follow-up lane is now:
 - narrow `LiveKit ingress deployment prep`
 
-That later lane would prove, but not necessarily immediately deploy:
-- the exact LiveKit service topology on this host
-- the reverse-proxy upstream handoff behind the already-live TLS edge
-- the precise cutover/rollback checklist for the Supabase token endpoint and mobile runtime values
+This lane now includes:
+- verifying current app/runtime/token assumptions
+- installing Docker and Docker Compose on the Hetzner host
+- creating `/opt/chillywood/livekit` service directories
+- adding bounded repo-side LiveKit compose/env scaffolding
+
+This lane still does not include:
+- launching LiveKit
+- wiring Caddy to a real upstream
+- changing Supabase Edge Function env
+- changing mobile runtime defaults
+
+## 15. Next Honest Follow-Up Lane
+Once this prep chapter is accepted, the next real infrastructure follow-up lane should be:
+- narrow `LiveKit host config + launch prep`
+
+That later lane should prove, but not overclaim:
+- the exact LiveKit config file and secret-loading path on this host
+- first real service startup and health verification
+- the reverse-proxy upstream handoff only after the upstream is real
+- the precise later cutover checklist for the Supabase token endpoint and mobile runtime values
