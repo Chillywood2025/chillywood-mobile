@@ -1,22 +1,22 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **LiveKit host config + launch prep** pass on `main`. Use `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
+The next exact task is a narrow **first LiveKit service launch** pass on `main`. Use `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
 2. Treat the safety / moderation workflow chapter as closed enough to move on unless a real regression is found.
 3. Treat the Hetzner edge baseline as already real and leave its placeholder honesty intact.
-4. Treat the host-side Docker / Compose install plus `/opt/chillywood/livekit` directory scaffold as already landed prep.
-5. Use real host-side secrets outside git to create the first LiveKit config on-host, sync the scaffold into place, and verify first service startup locally before touching Caddy upstream wiring or mobile runtime values.
-6. Keep Supabase / Firebase / RevenueCat / Expo/EAS external for now.
-7. Stop immediately if the next slice would require fake service health, fake cutover, or broader deployment claims.
+4. Treat the host-side Docker / Compose install, `/opt/chillywood/livekit` directory scaffold, and protected host-only `livekit.env` + `livekit.yaml` as already landed prep.
+5. Sync the compose scaffold onto the host and launch the first real LiveKit service locally.
+6. Verify process state, logs, and local listener truth before touching Caddy upstream wiring or any cutover values.
+7. Keep Supabase / Firebase / RevenueCat / Expo/EAS external for now.
+8. Stop immediately if the next slice would require fake service health, fake cutover, or broader deployment claims.
 
 ## Exact Next Batch
 - start with `docs/hetzner-first-deployment-implementation-spec.md`
-- create the real on-host LiveKit config and env load path outside git
 - sync the bounded compose scaffold onto `/opt/chillywood/livekit`
-- start and verify the LiveKit service locally on the host without claiming public cutover yet
+- launch and verify the LiveKit service locally on the host without claiming public cutover yet
 - only after that, decide whether Caddy upstream wiring is honestly ready
 - keep unrelated local dirt out of the checkpoint
 
@@ -41,7 +41,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the current LiveKit ingress scaffold is turned into a real on-host config + service bootstrap path
+- the protected host-only LiveKit config is reused successfully by the service scaffold
 - first local host-level LiveKit service verification is real before any proxy or mobile cutover claim
 - the current HTTPS placeholder remains honest and no full production deployment is implied
 - external service ownership stays unchanged
