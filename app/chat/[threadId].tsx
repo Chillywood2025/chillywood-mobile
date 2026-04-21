@@ -30,6 +30,15 @@ import {
   type ChatThreadSummary,
 } from "../../_lib/chat";
 import { getCommunicationRoomSnapshot } from "../../_lib/communication";
+import {
+  acceptFriendRequest,
+  cancelFriendRequest,
+  declineFriendRequest,
+  readFriendRelationshipState,
+  removeFriend,
+  sendFriendRequest,
+  type FriendRelationshipState,
+} from "../../_lib/friendGraph";
 import { reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
@@ -170,6 +179,9 @@ export default function ChillyChatThreadScreen() {
   const [reportBusy, setReportBusy] = useState(false);
   const [callPanelOpen, setCallPanelOpen] = useState(false);
   const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
+  const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
+  const [friendLoading, setFriendLoading] = useState(true);
+  const [friendBusy, setFriendBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
   const autoStartCallRef = useRef("");
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
@@ -363,6 +375,65 @@ export default function ChillyChatThreadScreen() {
     platformOwned: !!officialAccount,
     activeCallType: thread?.activeCallType,
   });
+  const friendStatusSummary = useMemo(() => {
+    if (!otherMember?.userId || officialAccount) {
+      return null;
+    }
+
+    if (friendLoading) {
+      return {
+        pill: "Checking friendship",
+        title: "Checking friend state",
+        body: "Chi'llywood is loading the private friend state for this direct thread.",
+      };
+    }
+
+    if (!friendState) {
+      return {
+        pill: "Direct thread only",
+        title: "Direct thread only",
+        body: "Messaging here does not automatically make you friends. Friendship is a separate mutual, private-first relationship.",
+      };
+    }
+
+    if (friendState.isFriend) {
+      return {
+        pill: "Friends",
+        title: "Friends on Chi'llywood",
+        body: "Friendship is active here, but this thread still keeps its own chat and call history.",
+      };
+    }
+
+    if (friendState.pendingDirection === "incoming") {
+      return {
+        pill: "Request waiting",
+        title: "Friend request waiting on you",
+        body: `${otherMemberDisplayName} already has this direct thread. Accept only if you want a separate mutual friend connection too.`,
+      };
+    }
+
+    if (friendState.pendingDirection === "outgoing") {
+      return {
+        pill: "Request sent",
+        title: "Friend request sent",
+        body: "This thread already works on its own. Friendship becomes real only if the request is accepted.",
+      };
+    }
+
+    if (friendState.availability === "signed_out") {
+      return {
+        pill: "Sign in for friends",
+        title: "Sign in for native friendship",
+        body: "Direct threads can exist without friendship. Sign in if you want to send or manage a friend request here.",
+      };
+    }
+
+    return {
+      pill: "Direct thread only",
+      title: "Direct thread only",
+      body: "Messaging here does not automatically make you friends. Add friendship only if you both want a private mutual connection.",
+    };
+  }, [friendLoading, friendState, officialAccount, otherMember?.userId, otherMemberDisplayName]);
 
   const latestThreadHint = useMemo(() => {
     if (renderedMessages.length === 0) {
@@ -390,6 +461,35 @@ export default function ChillyChatThreadScreen() {
       otherMemberName: otherMemberDisplayName,
     });
   }, [officialAccount, otherMemberDisplayName, thread?.activeCallType]);
+
+  useEffect(() => {
+    let active = true;
+    const targetUserId = String(otherMember?.userId ?? "").trim();
+
+    if (!targetUserId || officialAccount) {
+      setFriendState(null);
+      setFriendLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setFriendLoading(true);
+    readFriendRelationshipState(targetUserId)
+      .then((nextState) => {
+        if (active) setFriendState(nextState);
+      })
+      .catch(() => {
+        if (active) setFriendState(null);
+      })
+      .finally(() => {
+        if (active) setFriendLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [officialAccount, otherMember?.userId]);
 
   const handleSend = useCallback(async (bodyOverride?: string) => {
     const trimmedDraft = String(bodyOverride ?? draft).trim();
@@ -668,6 +768,32 @@ export default function ChillyChatThreadScreen() {
     officialAccount,
   ]);
 
+  const handleFriendAction = useCallback(async (action: "request" | "accept" | "decline" | "cancel" | "remove") => {
+    const targetUserId = String(otherMember?.userId ?? "").trim();
+    if (!targetUserId || officialAccount || friendBusy) return;
+
+    setFriendBusy(action);
+    try {
+      const nextState = action === "request"
+        ? await sendFriendRequest(targetUserId)
+        : action === "accept"
+          ? await acceptFriendRequest(targetUserId)
+          : action === "decline"
+            ? await declineFriendRequest(targetUserId)
+            : action === "cancel"
+              ? await cancelFriendRequest(targetUserId)
+              : await removeFriend(targetUserId);
+      setFriendState(nextState);
+    } catch (friendError) {
+      const message = friendError instanceof Error
+        ? friendError.message
+        : "Unable to update friendship right now.";
+      Alert.alert("Friendship unavailable", message);
+    } finally {
+      setFriendBusy(null);
+    }
+  }, [friendBusy, officialAccount, otherMember?.userId]);
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
@@ -738,7 +864,11 @@ export default function ChillyChatThreadScreen() {
               <Text style={styles.headerMetaText}>Voice and video stay in-thread.</Text>
             )}
           </View>
-          <Text style={styles.headerHint}>Tap the avatar for profile, report, and call actions.</Text>
+          <Text style={styles.headerHint}>
+            {officialAccount
+              ? "Tap the avatar for profile, report, and call actions."
+              : "Tap the avatar for profile, friendship, report, and call actions."}
+          </Text>
         </View>
       </View>
 
@@ -749,7 +879,9 @@ export default function ChillyChatThreadScreen() {
             {otherMemberDisplayName}
           </Text>
           <Text style={styles.headerQuickActionBody}>
-            Open the profile or keep voice/video entry in this same thread.
+            {officialAccount
+              ? "Open the profile or keep voice/video entry in this same thread."
+              : "Open the profile, manage friendship, or keep voice/video entry in this same thread."}
           </Text>
           <View style={styles.headerQuickActionRow}>
             <TouchableOpacity
@@ -803,6 +935,90 @@ export default function ChillyChatThreadScreen() {
               </>
             )}
           </View>
+          {!officialAccount && otherMember?.userId && friendStatusSummary ? (
+            <View style={styles.friendshipCard}>
+              <View style={styles.friendshipHeader}>
+                <Text style={styles.friendshipKicker}>FRIENDSHIP</Text>
+                <View style={styles.friendshipPill}>
+                  <Text style={styles.friendshipPillText}>{friendStatusSummary.pill}</Text>
+                </View>
+              </View>
+              <Text style={styles.friendshipTitle}>{friendStatusSummary.title}</Text>
+              <Text style={styles.friendshipBody}>{friendStatusSummary.body}</Text>
+              <View style={styles.friendshipActionRow}>
+                {friendState?.canRequest ? (
+                  <TouchableOpacity
+                    style={[styles.friendshipActionButton, styles.friendshipActionButtonAccent]}
+                    activeOpacity={0.86}
+                    disabled={friendLoading || friendBusy !== null}
+                    onPress={() => {
+                      void handleFriendAction("request");
+                    }}
+                  >
+                    <Text style={styles.friendshipActionButtonAccentText}>
+                      {friendBusy === "request" ? "Sending..." : "Add Friend"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {friendState?.canAccept ? (
+                  <TouchableOpacity
+                    style={[styles.friendshipActionButton, styles.friendshipActionButtonAccent]}
+                    activeOpacity={0.86}
+                    disabled={friendLoading || friendBusy !== null}
+                    onPress={() => {
+                      void handleFriendAction("accept");
+                    }}
+                  >
+                    <Text style={styles.friendshipActionButtonAccentText}>
+                      {friendBusy === "accept" ? "Accepting..." : "Accept"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {friendState?.canDecline ? (
+                  <TouchableOpacity
+                    style={styles.friendshipActionButton}
+                    activeOpacity={0.86}
+                    disabled={friendLoading || friendBusy !== null}
+                    onPress={() => {
+                      void handleFriendAction("decline");
+                    }}
+                  >
+                    <Text style={styles.friendshipActionButtonText}>
+                      {friendBusy === "decline" ? "Declining..." : "Decline"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {friendState?.canCancel ? (
+                  <TouchableOpacity
+                    style={styles.friendshipActionButton}
+                    activeOpacity={0.86}
+                    disabled={friendLoading || friendBusy !== null}
+                    onPress={() => {
+                      void handleFriendAction("cancel");
+                    }}
+                  >
+                    <Text style={styles.friendshipActionButtonText}>
+                      {friendBusy === "cancel" ? "Canceling..." : "Cancel Request"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {friendState?.canRemove ? (
+                  <TouchableOpacity
+                    style={styles.friendshipActionButton}
+                    activeOpacity={0.86}
+                    disabled={friendLoading || friendBusy !== null}
+                    onPress={() => {
+                      void handleFriendAction("remove");
+                    }}
+                  >
+                    <Text style={styles.friendshipActionButtonText}>
+                      {friendBusy === "remove" ? "Removing..." : "Remove Friend"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -861,6 +1077,11 @@ export default function ChillyChatThreadScreen() {
               {thread.currentMember?.lastReadAt ? "Read up to date" : "Read on open"}
             </Text>
           </View>
+          {!officialAccount && friendStatusSummary ? (
+            <View style={styles.threadGuideMetaPill}>
+              <Text style={styles.threadGuideMetaPillText}>{friendStatusSummary.pill}</Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.threadGuideHint}>{latestThreadHint}</Text>
       </View>
@@ -1220,6 +1441,80 @@ const styles = StyleSheet.create({
   },
   headerQuickActionReportButtonText: {
     color: "#FFD5DD",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  friendshipCard: {
+    gap: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(6,10,18,0.28)",
+    padding: 14,
+  },
+  friendshipHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  friendshipKicker: {
+    color: "#9FB3D0",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  friendshipPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  friendshipPillText: {
+    color: "#EFF4FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  friendshipTitle: {
+    color: "#FFF5F8",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  friendshipBody: {
+    color: "#D6DEEC",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  friendshipActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  friendshipActionButton: {
+    minWidth: 118,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  friendshipActionButtonAccent: {
+    borderColor: "rgba(243,75,116,0.7)",
+    backgroundColor: "#F34B74",
+  },
+  friendshipActionButtonText: {
+    color: "#EFF4FF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  friendshipActionButtonAccentText: {
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "900",
   },
