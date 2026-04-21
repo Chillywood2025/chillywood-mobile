@@ -487,8 +487,8 @@ export default function TitleDetails() {
               <Text style={styles.liveActivityKicker}>LIVE WATCH-PARTY</Text>
               <Text style={styles.liveActivityBody}>
                 {liveMetadata.liveRoomCount === 1
-                  ? "One active room is already spinning around this title."
-                  : `${liveMetadata.liveRoomCount} active rooms are already spinning around this title.`}
+                  ? "One live room is already active around this title. Jump in through Watch-Party Live."
+                  : `${liveMetadata.liveRoomCount} live rooms are already active around this title. Jump in through Watch-Party Live.`}
               </Text>
               <View style={styles.liveActivityMetaRow}>
                 <Text style={styles.liveActivityMetaText}>

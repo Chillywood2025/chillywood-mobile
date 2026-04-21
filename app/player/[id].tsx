@@ -3278,11 +3278,20 @@ export default function PlayerScreen() {
     if (partyParticipantPreview.length === 0) return "";
     return partyParticipantPreview.slice(0, 2).join(" · ");
   }, [partyParticipantPreview]);
+  const compactPartySyncStatus = useMemo(() => {
+    if (!partySyncStatus) return "";
+    return partySyncStatus
+      .replace(/^Synced to Host · /, "")
+      .replace(/^Host Controls · /, "")
+      .replace(/^Resyncing to Host…$/, "Resyncing")
+      .replace(/^Resyncing…$/, "Resyncing")
+      .replace(/^Waiting for host…$/, "Waiting for host");
+  }, [partySyncStatus]);
   const watchPartySyncLabel = useMemo(() => {
     if (!isSharedPartyPlayback) return "";
-    const syncLead = partySyncRole === "host" ? "Hosting the room" : "Synced with the host";
-    return partySyncStatus ? `${syncLead} · ${partySyncStatus}` : syncLead;
-  }, [isSharedPartyPlayback, partySyncRole, partySyncStatus]);
+    const syncLead = partySyncRole === "host" ? "Host" : "Synced";
+    return compactPartySyncStatus ? `${syncLead} · ${compactPartySyncStatus}` : syncLead;
+  }, [compactPartySyncStatus, isSharedPartyPlayback, partySyncRole]);
   useEffect(() => {
     if (!inWatchParty) return;
 
@@ -3833,7 +3842,7 @@ export default function PlayerScreen() {
           <View style={styles.watchPartySocialPlaceholder}>
             <Text style={styles.watchPartySocialPlaceholderKicker}>SHARED PLAYER</Text>
             <Text style={styles.watchPartySocialPlaceholderBody}>
-              Shared party video syncs here after Watch-Party Live reconnects to the room.
+              Shared playback returns here if the live room drops back to synced video.
             </Text>
           </View>
         )}
@@ -3872,7 +3881,7 @@ export default function PlayerScreen() {
 
         {watchPartyMenuOpen ? (
           <View style={styles.watchPartyDockCard}>
-            <Text style={styles.watchPartyDockCardTitle}>Room Menu</Text>
+            <Text style={styles.watchPartyDockCardTitle}>Quick Controls</Text>
             <View style={styles.watchPartyDockMenuRow}>
               <TouchableOpacity style={styles.watchPartyDockMenuBtn} onPress={onPressWatchPartyRoom} activeOpacity={0.88}>
                 <Text style={styles.watchPartyDockMenuBtnText}>Party Room</Text>
@@ -3928,7 +3937,7 @@ export default function PlayerScreen() {
             </Text>
           ))
         ) : (
-          <Text style={styles.partyCommentsLine}>No comments yet. Start the conversation.</Text>
+          <Text style={styles.partyCommentsLine}>No comments yet.</Text>
         )}
       </ScrollView>
       {inWatchParty ? (
@@ -3983,7 +3992,7 @@ export default function PlayerScreen() {
         </TouchableOpacity>
       </View>
       <Text style={styles.liveFilterSheetBody}>
-        Live filters stay local to your live camera tiles across the active live-player surfaces.
+        Filters only change your live camera view in this room.
       </Text>
       <Text style={styles.liveFilterSheetHelper}>{activeLiveFaceFilter.subtitle}</Text>
       <View style={styles.liveFilterOptionRow}>
@@ -4053,12 +4062,11 @@ export default function PlayerScreen() {
             {isSharedPartyPlayback ? "CHI'LLYWOOD · WATCH-PARTY LIVE" : "CHI'LLYWOOD · PLAYER"}
           </Text>
           <Text style={[styles.header, isSharedPartyPlayback && styles.headerWatchParty]} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
-          {inWatchParty && isLiveMode ? <Text style={styles.liveModeTopLabel}>LIVE SESSION</Text> : null}
           {inWatchParty && partySyncRole && !isSharedPartyPlayback ? (
             <View style={[styles.partySyncPill, styles.partySyncPillFramework]}>
               <Text style={styles.partySyncPillText}>
                 {partySyncRole === "host" ? "Host" : "You"}
-                {partySyncStatus ? ` · ${partySyncStatus}` : ""}
+                {compactPartySyncStatus ? ` · ${compactPartySyncStatus}` : ""}
               </Text>
             </View>
           ) : null}
