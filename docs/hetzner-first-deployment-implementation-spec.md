@@ -162,10 +162,9 @@ This still does not imply:
 
 ### 3.3 Remaining Manual Items
 The remaining first-host work is now narrower:
-- keep the now-proved token-issuance path connected to the current device-backed join proof
+- keep the now-proved token-issuance path connected to the now-proved two-device authenticated join proof
 - preserve the now-proved canonical Party Room deep-link path into the realtime verification target
-- keep two real Android devices available on ADB for the final proof
-- provide a second distinct authenticated proof identity before rerunning a simultaneous authenticated join proof against the same host
+- preserve the now-proved two-real-device `watch-party-live` handoff for room `XQBBRE`
 - keep broader app hosting and non-realtime upstreams out of scope until their own lanes open
 - treat app-upstream hosting as a separate later doctrine question, not an implied next step from the current LiveKit host state
 
@@ -186,7 +185,7 @@ It does not claim those directories are already populated with live services.
 
 ### 3.5 Bootstrap Closeout Decision
 Based on the verified host facts above, the first-host bootstrap state is complete enough to move to:
-- narrow `simultaneous authenticated realtime join verification with distinct proof identities`
+- narrow `app upstream doctrine / readiness pass`
 
 That means:
 - base host access is no longer the blocker
@@ -194,7 +193,8 @@ That means:
 - reverse proxy baseline is no longer the blocker
 - real domain/DNS truth is no longer the blocker
 - one Android client/session proof is no longer the blocker
-- the next blocker is proving the same aligned realtime path with two distinct authenticated participants instead of the same proof identity on both phones
+- two-real-device authenticated `watch-party-live` proof is no longer the blocker
+- the next unresolved infra question is whether any non-realtime Hetzner app upstream should exist at all, not whether the LiveKit ingress path works
 
 ## 4. Hetzner-First Decision
 
@@ -435,12 +435,12 @@ OVH should not be introduced later as:
 
 ## 14. Current LiveKit Ingress Prep Scope
 The current infrastructure follow-up lane is now:
-- narrow `authenticated realtime session verification`
+- closed enough to move on from realtime verification
 
 This lane now includes:
-- verifying a supported authenticated client/session join against `live.chillywoodstream.com`
 - preserving the already-proved signer/runtime alignment against the new host truth
-- keeping the current LiveKit host, proxy, signer, and runtime alignment honest
+- preserving the already-proved canonical Party Room deep-link path into `watch-party-live`
+- preserving the now-proved two-real-device authenticated join boundary on `live.chillywoodstream.com`
 
 This lane still does not include:
 - broader app hosting on Hetzner
@@ -450,9 +450,9 @@ This lane still does not include:
 
 ## 15. Next Honest Follow-Up Lane
 Once this prep chapter is accepted, the next real infrastructure follow-up lane should be:
-- narrow `device-backed authenticated realtime join verification`
+- narrow `app upstream doctrine / readiness pass`
 
-That later lane should prove, but not overclaim:
-- the current client/runtime path can really use the new LiveKit ingress from a supported client runtime
-- the already-proved token/signer path results in a real authenticated room join
-- the remaining post-cutover seam before broader product deployment
+That later lane should decide, but not overclaim:
+- whether any bounded non-realtime Hetzner app-upstream surface actually exists in current repo truth
+- whether app-upstream hosting should remain deferred as `NO`
+- the remaining post-realtime seam before any broader product deployment discussion opens
