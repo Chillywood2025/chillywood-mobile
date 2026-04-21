@@ -754,9 +754,9 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Chi&apos;llywood Originals</Text>
             <View style={styles.originalsPlaceholder}>
-              <Text style={styles.originalsPlaceholderTitle}>Reserved for Chi&apos;llywood-owned originals</Text>
+              <Text style={styles.originalsPlaceholderTitle}>More Chi&apos;llywood drops will land here</Text>
               <Text style={styles.originalsPlaceholderBody}>
-                This lower Home area is intentionally left open for future original drops, curated rails, and platform-owned premieres.
+                This rail stays open for Chi&apos;llywood-owned originals, curated drops, and platform premieres when they are actually ready.
               </Text>
             </View>
           </View>
