@@ -581,33 +581,33 @@ export default function ProfileScreen() {
   const routeContextLabel = isOfficialProfile ? "PROTECTED" : hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
   const channelHomeBody = isOfficialProfile
     ? officialAccount?.trustSummary
-      ?? "This protected profile doubles as Chi'llywood's official channel surface so trusted help, announcements, and future moderation-aware follow-up stay on the canonical route."
+      ?? "This protected profile is Chi'llywood's official public channel surface for trusted help, updates, and auditable follow-up."
     : isSelfProfile
-      ? "Your profile is also your public-facing channel home. Owner controls stay here, while Settings and Chi'lly Chat stay separate."
-      : "This viewer-facing channel home explains who this person is across live rooms, watch parties, and direct communication without turning into a room or an inbox.";
+      ? "Your profile is your public-facing channel home. Use it to frame what is live, what people should watch, and how they should follow up."
+      : "This channel surface keeps identity, live presence, and follow-up in one public destination without pretending to be a room or an inbox.";
   const liveStatusTitle = isOfficialProfile
     ? "Official concierge is ready"
     : profile.isLive
       ? "Channel is live now"
       : "Channel is off air";
   const liveStatusBody = isOfficialProfile
-    ? "Open Chi'lly Chat for trusted welcome help, account guidance, safety follow-up, and future official updates without leaving the canonical profile and thread routes."
+    ? "Open Chi'lly Chat for trusted help, then return here for official updates and channel context."
     : hasLiveRouteContext
       ? profile.isLive
-        ? "Join Live and Watch Party open from the current room on this profile."
-        : "View Live and Watch Party open from the current room on this profile."
+        ? "Join Live and Watch Party both hand back into the linked room from here."
+        : "View Live and Watch Party both hand back into the linked room from here."
       : hasLiveTabEntry
-        ? "This profile can open the Live tab honestly, but direct room re-entry only appears when this route carries real room context."
-        : "No linked room entry is attached to this profile yet.";
+        ? "Use the Live tab for current status and schedule. Direct room re-entry only appears when real room context is attached."
+        : "No linked room is attached right now, but the channel's live context stays visible here.";
   const actionFootnote = isOfficialProfile
-    ? "Rachi stays on the canonical profile and Chi'lly Chat paths so future help, moderation, and official announcements remain platform-owned and auditable."
+    ? "Rachi stays on the canonical profile and Chi'lly Chat paths so trusted help stays platform-owned and auditable."
     : hasLiveRouteContext
-      ? `${liveActionLabel} and Watch Party are connected to this room.`
+      ? `${liveActionLabel} and Watch Party stay connected to this room.`
       : canOpenWatchPartyEntry
-        ? "This profile can point into a backed Watch-Party Live title, but direct room re-entry still requires linked room context."
+        ? "This profile can hand off into a backed Watch-Party Live title."
         : hasLiveTabEntry
-          ? "This profile can open the Live tab honestly, but linked room entry still depends on real room context."
-          : "This profile does not currently carry linked room continuity.";
+          ? "Live status is available here even when room re-entry is not."
+          : "Direct room continuity is not attached to this profile right now.";
   const communicationFootnote = isSelfProfile
     ? "Chi'lly Chat opens your native Chi'llywood inbox and direct threads."
     : isOfficialProfile
@@ -827,23 +827,23 @@ export default function ProfileScreen() {
   const channelHelper = isOfficialProfile
     ? {
         kicker: "CHANNEL HELPER",
-        title: "Keep official help on the canonical route",
-        body: `${officialAccount?.trustSummary ?? "Open Chi'lly Chat for trusted help, then return here for the protected official profile and channel identity."} This surface stays official, not social-roleplay and not a separate support app.`,
+        title: "Official presence stays clear here",
+        body: `${officialAccount?.trustSummary ?? "Open Chi'lly Chat for trusted help, then return here for the protected official profile and channel identity."} This route stays official and public-facing.`,
       }
     : isSelfProfile
       ? {
           kicker: "CHANNEL HELPER",
-          title: "Owner controls live here. Messaging does not.",
+          title: "Shape the public channel here",
           body: channelSignalsReady
-            ? `Use Owner for channel control, Channel Home for public identity, and Chi'lly Chat for direct conversation. Right now your channel home is anchored by ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
-            : "Use Owner for channel control, Channel Home for public identity, and Chi'lly Chat for direct conversation. Loading the current saved and resume signals now."
+            ? `Your channel home already has ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"} to build from. Keep direct conversation in Chi'lly Chat.`
+            : "Loading the saved and resume signals that can anchor your public channel home."
         }
       : {
           kicker: "CHANNEL HELPER",
-          title: "This profile is a channel home, not a settings page",
+          title: "Start with the channel, then go deeper",
           body: hasLiveRouteContext
-            ? "Use linked room actions only when real room context exists, and use Chi'lly Chat for persistent contact. This page should explain the channel, not replace the room."
-            : "Use this page to understand the channel identity first, then move into Chi'lly Chat or a real linked room when that context exists."
+            ? "Use the linked room actions when they are present, and use Chi'lly Chat for direct follow-up."
+            : "Use this page to understand the channel first, then move into Chi'lly Chat or a real linked room when that context exists."
         };
   const latestProgrammingTitles = useMemo(() => {
     return [...contentProgrammingTitles].sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at));
@@ -900,36 +900,36 @@ export default function ProfileScreen() {
   const contentHomeBody = isSelfProfile
     ? channelSignalsReady
       ? hasProgrammingTruth
-        ? `Your public channel can already point to ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"}, ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}, and current programming truth like ${programmingSignalsSummary} without splitting profile and channel into separate surfaces.`
-        : `Your current public channel foundation can already point to ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"} without splitting profile and channel into separate surfaces.`
-      : "Loading the current saved and in-progress signals that can anchor your first channel shelves."
+        ? `Your channel can already point people into ${programmingSignalsSummary}, plus ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
+        : `Your channel can already build from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
+      : "Loading the titles that can anchor your first channel shelves."
     : contentProgrammingReady
       ? hasProgrammingTruth
-        ? `Current Chi'llywood programming is already real here: ${programmingSignalsSummary}. This public channel surface can point visitors into real shelves and programming without inventing uploads.`
-        : "This public channel foundation keeps content honest for now: featured shelves, liked/saved activity, or creator programming should grow here without inventing fake uploads."
-      : "Loading the current programmed title signals that can anchor this channel-facing content surface honestly.";
+        ? `${programmingSignalsSummary} already gives this channel a real lineup to point visitors into.`
+        : "This channel can stay lean until real shelves or creator programming are ready."
+      : "Loading the lineup this channel can point people into.";
   const contentProgrammingSurfaceBody = isSelfProfile
     ? channelSignalsReady
       ? hasProgrammingTruth
-        ? `Your first public content surface can build from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"}, ${continueWatchingCount} active resume cue${continueWatchingCount === 1 ? "" : "s"}, and current programming truth like ${programmingSignalsSummary}.`
-        : `Your first public content surface can build from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} active resume cue${continueWatchingCount === 1 ? "" : "s"} while deeper creator programming grows later.`
-      : "Loading the saved and in-progress title signals that can anchor your first channel content shelves."
+        ? `Build the public lineup from ${programmingSignalsSummary}, then layer saved titles and resume cues behind it.`
+        : `Build the first public lineup from saved titles and resume cues while deeper programming grows later.`
+      : "Loading the signals that can anchor your first content shelves."
     : isOfficialProfile
       ? contentProgrammingReady
         ? hasProgrammingTruth
-          ? `Official programming truth is already available here: ${programmingSignalsSummary}. This route can point into real platform programming without faking a separate network catalog.`
-          : "This channel surface is reserved for Chi'llywood's official welcome guidance, platform notes, and future announcement drops without inventing a separate network page."
-        : "Loading the current official-safe programming signals for this canonical channel surface."
+          ? `Official programming is already live here: ${programmingSignalsSummary}.`
+          : "This official channel stays lean until real platform programming is ready."
+        : "Loading the official programming signals for this channel surface."
       : contentProgrammingReady
         ? hasProgrammingTruth
-          ? `Current programming truth can already anchor this tab: ${programmingSignalsSummary}. It should stay honest about what is platform programming versus what belongs to this channel.`
-          : "This tab should grow into featured rows, liked or saved relationships, and creator programming when those signals are real."
-        : "Loading the current programmed title signals that can anchor this channel library honestly.";
+          ? `${programmingSignalsSummary} can already anchor this tab.`
+          : "This tab should stay lean until real shelves or creator programming are ready."
+        : "Loading the programming signals that can anchor this channel library.";
   const contentProgrammingGroupsBody = contentProgrammingReady
     ? hasProgrammingTruth
-      ? `${programmingGroupsSummary}.`
-      : "The content tab should prefer real shelves, curated rows, and honest empty states over fake uploads or placeholder catalogs."
-    : "Loading the real hero, featured, trending, and top-row groupings that can shape this content surface.";
+      ? programmingGroupsSummary
+      : "Keep this tab focused on real shelves and real titles instead of placeholder catalogs."
+    : "Loading the hero, featured, trending, and top-row groupings for this surface.";
   const quickActions = isOfficialProfile
     ? [
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
@@ -948,6 +948,42 @@ export default function ProfileScreen() {
         { label: "Video Call", onPress: () => { void onPressCommunication("video"); } },
         ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
       ];
+  const contentActionTitles = useMemo(() => {
+    const orderedItems = [
+      heroProgrammingTitle,
+      ...topRowProgrammingTitles,
+      ...featuredProgrammingTitles,
+      ...trendingProgrammingTitles,
+    ].filter((item): item is ContentProgrammingTitle => !!item);
+
+    const seen = new Set<string>();
+    return orderedItems.filter((item) => {
+      const key = String(item.id ?? "").trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 4);
+  }, [
+    featuredProgrammingTitles,
+    heroProgrammingTitle,
+    topRowProgrammingTitles,
+    trendingProgrammingTitles,
+  ]);
+  const communityActions = isSelfProfile
+    ? [
+        { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+      ]
+    : isOfficialProfile
+      ? [
+          { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+          ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
+        ]
+      : [
+          { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+          { label: "Voice Call", onPress: () => { void onPressCommunication("voice"); } },
+          { label: "Video Call", onPress: () => { void onPressCommunication("video"); } },
+          ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
+        ];
   const publicProfileTabs = [
     { key: "home", label: "Home" },
     { key: "content", label: "Content" },
@@ -961,10 +997,10 @@ export default function ProfileScreen() {
       ? "Your Channel Spotlight"
       : `${profile.displayName}'s Spotlight`;
   const featuredSpotlightBody = isOfficialProfile
-    ? "This protected profile is Chi'llywood's official concierge and announcement surface. Trusted updates stay here and Chi'lly Chat stays the canonical follow-up path."
+    ? "This protected profile is Chi'llywood's official public channel surface for trusted updates, programming, and follow-up."
     : isSelfProfile
-      ? "This unified profile now acts as your public channel surface. Use it to frame your identity, what people should watch, and where they should go next."
-      : "This unified profile now acts as the public channel surface. It should explain the creator identity first, then guide people into real content, live presence, and Chi'lly Chat.";
+      ? "Use this route to spotlight what people should watch, what is live, and where they should go next."
+      : "Start here for the creator's spotlight, live presence, and the next real watch or chat step.";
   const channelLayoutPreset = resolveChannelLayoutPreset(channelAccessProfile?.channelLayoutPreset);
   const homeSectionMap = {
     featured: {
@@ -988,13 +1024,13 @@ export default function ProfileScreen() {
       title: "Community Preview",
       kicker: "COMMUNITY",
       body: isOfficialProfile
-        ? "Official presence can route people into trusted Chi'lly Chat follow-up, platform notices, and later moderation-aware contact without becoming an inbox-first surface."
-        : "Community stays visible here through identity, public activity, and follow-up cues, while persistent messaging still belongs to Chi'lly Chat.",
+        ? "Trusted follow-up stays visible here, while direct conversation still lives in Chi'lly Chat."
+        : "Community stays visible here through public signals and follow-up cues, while direct conversation still lives in Chi'lly Chat.",
     },
     about: {
       title: "About Snapshot",
       kicker: "ABOUT",
-      body: `${profile.displayName} should feel like a coherent social identity and channel surface here, even before deeper creator programming or community systems arrive.`,
+      body: `${profile.displayName} should read like a coherent public channel here, even before deeper creator programming arrives.`,
     },
   } satisfies Record<"featured" | "live" | "content" | "community" | "about", ProfileSurfaceCard>;
   const homeSectionOrder = channelLayoutPreset === "live_first"
@@ -1006,20 +1042,15 @@ export default function ProfileScreen() {
   const contentTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
     ? [
         {
-          title: hasProgrammingTruth ? "Official Programming" : "Official Network",
+          title: hasProgrammingTruth ? "Official Lineup" : "Official Channel",
           kicker: profile.officialBadgeLabel ?? "OFFICIAL",
           body: contentProgrammingSurfaceBody,
           accent: "official",
         },
         {
-          title: hasProgrammingTruth ? "Programmed Groups" : "Content Library Behavior",
+          title: hasProgrammingTruth ? "Current Lineup" : "Content Boundary",
           kicker: "CONTENT",
           body: contentProgrammingGroupsBody,
-        },
-        {
-          title: "Public Access Boundary",
-          kicker: "CURRENT TRUTH",
-          body: "This tab should show real official programming and content shelves only when those assets exist. It must not fake a library just to make the surface feel full.",
         },
       ]
     : [
@@ -1029,14 +1060,9 @@ export default function ProfileScreen() {
           body: contentProgrammingSurfaceBody,
         },
         {
-          title: hasProgrammingTruth ? "Programmed Groups" : "Library Behavior",
+          title: hasProgrammingTruth ? "Current Lineup" : "Library Boundary",
           kicker: "CONTENT TAB",
           body: contentProgrammingGroupsBody,
-        },
-        {
-          title: "Current MVP Boundary",
-          kicker: "MVP ORDER",
-          body: "Public v1 keeps the content surface lightweight and truthful. The route should frame channel content now without pretending the full creator platform already exists.",
         },
       ];
   const liveNowEvents = useMemo(
@@ -1137,27 +1163,22 @@ export default function ProfileScreen() {
   ]);
   const communityTabSections: readonly ProfileSurfaceCard[] = [
     {
-      title: "Chi'lly Chat Entry",
-      kicker: "COMMUNITY",
+      title: "Chi'lly Chat",
+      kicker: "FOLLOW-UP",
       body: isSelfProfile
-        ? "Your inbox and direct-thread continuity still live on Chi'lly Chat. Community on this route should support identity and follow-up, not replace the messenger."
+        ? "Your inbox and direct-thread continuity still live on Chi'lly Chat. Keep the public route social and let messaging stay thread-first."
         : isOfficialProfile
-          ? "Official community follow-up stays on canonical Chi'lly Chat routes so trusted help never turns into a shadow support app."
+          ? "Official follow-up stays on canonical Chi'lly Chat routes so trusted help never turns into a shadow support app."
           : "Community follow-up from this profile should hand off to Chi'lly Chat instead of burying messaging inside the profile surface.",
     },
     {
-      title: "Public Activity Boundary",
-      kicker: "VISIBILITY",
-      body: "Community should grow here through public-safe activity, room follow-up, and creator identity signals when real data exists. It should not invent fake engagement.",
-    },
-    {
-      title: isOfficialProfile ? "Trust And Safety" : "Safety And Follow-Up",
-      kicker: "SAFETY",
+      title: isOfficialProfile ? "Trust And Safety" : "Public Signals",
+      kicker: isOfficialProfile ? "SAFETY" : "COMMUNITY",
       body: isOfficialProfile
         ? "Official accounts need protected trust markers, bounded reporting, and auditable follow-up without leaving the canonical profile and Chi'lly Chat architecture."
         : canReportProfile
-          ? "This profile already supports reporting when something feels unsafe. Community growth should stay consistent with that safety posture."
-          : "Safety hooks stay available when needed, but this community surface should remain identity-first instead of turning into a moderation console.",
+          ? "This profile already supports reporting when something feels unsafe. Public activity and follow-up should grow from that same honest footing."
+          : "Keep this surface identity-first, public-facing, and ready for real activity signals when they exist.",
     },
     ...publicAudienceVisibilitySections,
   ];
@@ -1186,18 +1207,13 @@ export default function ProfileScreen() {
         {
           title: "Profile Snapshot",
           kicker: "ABOUT",
-          body: `${profile.displayName} keeps live presence, rooms, and direct communication inside one Chi'llywood identity instead of splitting them across disconnected surfaces.`,
+          body: `${profile.displayName} keeps live presence, rooms, and direct communication inside one Chi'llywood identity.`,
         },
         {
           title: "Channel Boundary",
           kicker: "ROOM RULE",
-          body: "This profile explains the person or network behind the rooms. Messaging still belongs to Chi'lly Chat, and live/watch entry only appears when real room context exists.",
-        },
-        {
-          title: isSelfProfile ? "Owner Boundary" : "Identity Boundary",
-          kicker: isSelfProfile ? "OWNER MODE LATER" : "PUBLIC SURFACE",
           body: isSelfProfile
-            ? "Owner mode stays on this same route, but the shared public profile/channel structure still comes first."
+            ? "Keep this route public-facing first. Owner tools stay on the same surface, but deeper editing still lives in Manage Channel."
             : "This route should feel like a public channel surface first, not a settings page or an inbox.",
         },
       ];
@@ -1246,14 +1262,14 @@ export default function ProfileScreen() {
     },
   ];
   const tabIntro = activeTab === "home"
-    ? "Home curates the overview: spotlight, live status, content direction, community preview, and about context."
+    ? "Home keeps the spotlight, live status, lineup, and community cues in one place."
     : activeTab === "content"
-      ? "Content is the library surface for shelves, programming, and honest empty states."
+      ? "Content is the lineup and library surface for real titles and real shelves."
       : activeTab === "live"
-        ? "Live keeps live and watch-together paths distinct while preserving the correct room handoffs."
+        ? "Live keeps schedule, current status, and watch-together continuity distinct."
         : activeTab === "community"
-          ? "Community supports public follow-up and Chi'lly Chat continuity without turning profile into the inbox."
-          : "About keeps durable identity, trust, and channel framing visible even when content depth is still light.";
+          ? "Community keeps public follow-up visible without turning this route into the inbox."
+          : "About keeps identity, trust, and channel framing clear.";
   const loadPublicReminderEvents = async () => {
     if (!userId) {
       setPublicEvents([]);
@@ -1407,11 +1423,6 @@ export default function ProfileScreen() {
             onPress: onPressManageChannel,
           }
         : {}),
-    }] : []),
-    ...(!hasLiveRouteContext ? [{
-      kicker: "LIVE HANDOFF",
-      title: "Test room re-entry from real context",
-      body: "Open your profile from a Live Watch-Party or Watch-Party Live session to verify the route hands back into the correct canonical live and watch-party surfaces.",
     }] : []),
   ] : [];
 
@@ -1650,14 +1661,14 @@ export default function ProfileScreen() {
                 ) : null}
               </View>
             ) : null}
-            <Text style={styles.actionFootnote}>{communicationFootnote ? `${communicationFootnote} ${actionFootnote}` : actionFootnote}</Text>
+              <Text style={styles.actionFootnote}>{communicationFootnote ? `${communicationFootnote} ${actionFootnote}` : actionFootnote}</Text>
           </View>
           {isSelfProfile ? (
             <View style={styles.ownerModeCard}>
               <Text style={styles.ownerModeKicker}>OWNER MODE</Text>
-              <Text style={styles.ownerModeTitle}>Stay on this route for self-view. Go deeper in Manage Channel.</Text>
+              <Text style={styles.ownerModeTitle}>Keep this route public-facing. Go deeper in Manage Channel.</Text>
               <Text style={styles.ownerModeBody}>
-                Your public profile and owner mode now share the same canonical surface. Use the ribbon below for quick control, then hand off to `/channel-settings` for deeper channel editing.
+                Your public profile and owner mode share the same canonical surface. Use the ribbon below for quick control, then hand off to Manage Channel for deeper editing.
               </Text>
               <View style={styles.ownerStatsRow}>
                 {ownerStatsRibbon.map((card) => (
@@ -1760,6 +1771,47 @@ export default function ProfileScreen() {
               <Text style={styles.sectionBody}>{section.body}</Text>
             </View>
           ))}
+          {activeTab === "content" && contentActionTitles.length ? (
+            <View style={styles.quickActionsCard}>
+              <Text style={styles.quickActionsTitle}>Open The Current Lineup</Text>
+              <View style={styles.quickActionsRow}>
+                {contentActionTitles.map((item) => (
+                  <TouchableOpacity
+                    key={String(item.id)}
+                    style={styles.quickActionChip}
+                    activeOpacity={0.84}
+                    onPress={() => {
+                      router.push({
+                        pathname: "/title/[id]",
+                        params: {
+                          id: String(item.id),
+                        },
+                      });
+                    }}
+                  >
+                    <Text style={styles.quickActionChipText}>{getTitleLabel(item)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {activeTab === "community" && communityActions.length ? (
+            <View style={styles.quickActionsCard}>
+              <Text style={styles.quickActionsTitle}>Community Actions</Text>
+              <View style={styles.quickActionsRow}>
+                {communityActions.map((action) => (
+                  <TouchableOpacity
+                    key={action.label}
+                    style={styles.quickActionChip}
+                    activeOpacity={0.84}
+                    onPress={action.onPress}
+                  >
+                    <Text style={styles.quickActionChipText}>{action.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : null}
           {activeTab === "live" ? (
             <>
               <View style={styles.ownerStatsRow}>

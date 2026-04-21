@@ -1,42 +1,41 @@
 # NEXT TASK
 
 ## Exact Next Task
-The narrow v1 polish/workflow lane is now closed on `main`. It fixed the highest-value low-risk trust gaps from the whole-app audit without widening into doctrine or route changes: public social-entry honesty is fixed, the watch-party lobby is materially lighter, the canonical thread composer only promises what is actually live, and the lower Home reserved rail feels intentional instead of visibly unfinished. The next grounded product lane is now a **medium public profile/channel compression pass** on `app/profile/[userId].tsx`. That route remains the canonical public profile/channel owner, but it still reads too much like a living doctrine sheet instead of a polished public-facing surface.
+The larger v1-facing social/live/profile/chat polish pass is now one stage in on `main`. Stage 1 is closed: `app/profile/[userId].tsx` now feels more like a real public creator/channel destination, its public-facing copy is materially less doctrine-heavy, the Content tab has real title-entry chips, the Community tab has real follow-up actions, and the route keeps honest live/watch-party/channel entry without dead-end primary CTAs. The next exact stage in this pass is now **title + player social honesty** on `app/title/[id].tsx` and `app/player/[id].tsx`.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `NEXT_TASK.md`, `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `PRODUCT_DOCTRINE.md`, `ROOM_BLUEPRINT.md`, and the active whole-app audit findings first.
-2. Treat the narrow v1 polish/workflow lane as closed.
-3. Keep the next active owner primarily on `app/profile/[userId].tsx`.
-4. Reduce doctrine-heavy explanation and visual overload on the canonical public profile/channel route without breaking the now-honest live/watch-party entry wiring.
-5. Preserve current route ownership, current public creator/channel truth, and the existing visual direction while improving hierarchy and public-surface clarity.
+2. Treat Stage 1 as closed: the canonical public profile/channel surface is now materially tighter and more actionable.
+3. Keep the next active owners on `app/title/[id].tsx` and `app/player/[id].tsx`.
+4. Tighten the title/player funnel so visible social/live/watch-party truth has matching honest actions and the player feels less mode-cluttered.
+5. Preserve standalone player truth, preserve watch-party/live distinctions, and avoid route or doctrine drift.
 
 ## Exact Next Batch
-- tighten `app/profile/[userId].tsx` as the canonical public profile/channel surface
-- compress doctrine-heavy public-facing cards and guidance blocks
-- preserve the now-real live/watch-party entry paths and current creator/channel doctrine
+- tighten `app/title/[id].tsx` and `app/player/[id].tsx`
+- make any shown live/watch-party/social activity match a real user path or a clean honest explanation
+- reduce visibly partial or overloaded mode messaging in the player without rewriting it
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve current product route truth and current doctrine
-- focus on the public profile/channel owner first
-- improve hierarchy, scanability, and public-surface confidence
-- avoid reopening broader redesign work across the app
-- leave the completed narrow polish fixes intact
+- focus on the canonical title detail and standalone player owners only
+- improve social-entry clarity and player coherence without widening into a broad player rewrite
+- leave the completed profile improvements intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
 - change current public/product route truth
 - change schema or doctrine
-- widen into player, admin, infra, or database work
-- change the canonical owner of profile/channel, title, player, watch-party, or chat routes
-- turn the pass into a broad profile redesign
+- widen into profile follow-up, admin, infra, or database work
+- change the canonical owner of title, player, watch-party, live-stage, or chat routes
+- turn the pass into a broad player rewrite
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- `/profile/[userId]` feels materially less like a doctrine memo and more like a polished public route
-- live/watch-party/public event entry remains honest and real
+- title no longer shows social/live/watch-party activity without a matching honest action or explanation
+- player feels cleaner and more coherent while preserving current route and mode truth
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure
