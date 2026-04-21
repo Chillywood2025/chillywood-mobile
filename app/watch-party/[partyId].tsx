@@ -1814,6 +1814,248 @@ export default function WatchPartyRoomScreen() {
         fallbackDisplayName: "Participant",
       })
     : null;
+  const renderPartyRoomParticipantSummary = () => {
+    if (waitingRoomParticipantSummary.totalCount <= 0) return null;
+
+    return (
+      <View style={styles.participantsWrap}>
+        <Text style={styles.sectionKicker}>IN THE ROOM</Text>
+        <View style={styles.participantsCard}>
+          <Text style={styles.participantsLabel}>
+            <Text style={styles.viewerCount}>👥 {waitingRoomParticipantSummary.totalCount}</Text>
+            {waitingRoomParticipantSummary.totalCount === 1 ? " person" : " people"} in room
+            {waitingRoomParticipantSummary.totalCount >= 3 ? <Text style={styles.trendingBadge}>  🔥 Trending</Text> : null}
+          </Text>
+          <View style={styles.chips}>
+            {waitingRoomParticipantSummary.visible.map((participant) => (
+              <RoomParticipantTile
+                key={participant.id}
+                participant={participant}
+                myCameraPreviewUrl={myCameraPreviewUrlRef.current}
+                showHostBadge={false}
+                styles={{
+                  container: styles.chip,
+                  containerHost: styles.chipHost,
+                  containerSelf: styles.chipMe,
+                  avatarWrap: styles.avatarCircle,
+                  avatarImage: styles.chipAvatarImage,
+                  avatarLabel: styles.chipAvatar,
+                  nameText: styles.chipText,
+                  nameTextHost: styles.chipTextHost,
+                  statusText: [styles.participantStatus, styles.participantStatusLive],
+                  reactionBadge: styles.participantReactionBadge,
+                  reactionText: styles.participantReactionText,
+                }}
+              />
+            ))}
+            {waitingRoomParticipantSummary.overflowCount > 0 ? (
+              <View style={styles.chip}>
+                <Text style={styles.chipText}>+{waitingRoomParticipantSummary.overflowCount}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderPartyRoomHostControls = () => {
+    if (!shouldShowHostControls(isHost, isLiveRoom)) return null;
+
+    return (
+      <View style={styles.hostWrap}>
+        <Text style={styles.sectionKicker}>CONTROLS</Text>
+        <View style={styles.hostSection}>
+          <Text style={styles.hostSectionLabel}>ROOM DEFAULTS</Text>
+          <View style={styles.tailoredRoomMetaRow}>
+            <View style={styles.tailoredRoomMetaPill}>
+              <Text style={styles.tailoredRoomMetaText}>Access: {partyRoomJoinLabel}</Text>
+            </View>
+            <View style={styles.tailoredRoomMetaPill}>
+              <Text style={styles.tailoredRoomMetaText}>Reactions: {partyRoomReactionLabel}</Text>
+            </View>
+            <View style={styles.tailoredRoomMetaPill}>
+              <Text style={styles.tailoredRoomMetaText}>Capture: {partyRoomCaptureLabel}</Text>
+            </View>
+          </View>
+          <View style={styles.hostBtnRow}>
+            <TouchableOpacity
+              style={[styles.hostBtn, reactionsGloballyMuted && styles.hostBtnOn]}
+              onPress={onToggleMuteReactions}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.hostBtnText}>
+                {reactionsGloballyMuted ? "🔇  Unmute reactions" : "🔇  Mute reactions"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.hostBtn, roomLocked && styles.hostBtnOn]}
+              onPress={onToggleLockRoom}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.hostBtnText}>
+                {roomLocked ? "🔓  Unlock room" : "🔒  Lock room"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.hostBtn, room.capturePolicy === "host_managed" && styles.hostBtnOn]}
+              onPress={onToggleCaptureRoom}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.hostBtnText}>
+                {room.capturePolicy === "host_managed" ? "📷  Best-effort capture" : "📷  Host-managed capture"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderPartyRoomSetupShell = () => (
+    <View style={styles.partyRoomSetupShell}>
+      <View style={styles.tailoredRoomCard}>
+        <Text style={styles.sectionKicker}>PARTY ROOM</Text>
+        <Text style={styles.tailoredRoomTitle}>Set the room before playback</Text>
+        <Text style={styles.tailoredRoomBody}>
+          {hostParticipant
+            ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Decide who appears first and what the room allows before Watch-Party Live starts.`
+            : "Decide who appears first and what the room allows before Watch-Party Live starts."}
+        </Text>
+        <View style={styles.tailoredRoomMetaRow}>
+          <View style={styles.tailoredRoomMetaPill}>
+            <Text style={styles.tailoredRoomMetaText}>
+              Host: {hostParticipant ? (hostParticipant.userId === currentUserBubbleId ? "You" : hostParticipant.displayName) : "Syncing..."}
+            </Text>
+          </View>
+          <View style={styles.tailoredRoomMetaPill}>
+            <Text style={styles.tailoredRoomMetaText}>
+              Focus: {partyRoomFocusLabel}
+            </Text>
+          </View>
+          <View style={styles.tailoredRoomMetaPill}>
+            <Text style={styles.tailoredRoomMetaText}>Visibility: {partyRoomVisibilityLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.tailoredRoomActions}>
+          {!tailoredRoomIsDefault ? (
+            <TouchableOpacity
+              style={styles.tailoredRoomActionButton}
+              activeOpacity={0.86}
+              onPress={() => {
+                if (!hostParticipant?.userId) return;
+                featureParticipantFirst(hostParticipant.userId);
+              }}
+              disabled={!hostParticipant?.userId}
+            >
+              <Text style={styles.tailoredRoomActionText}>See host first</Text>
+            </TouchableOpacity>
+          ) : null}
+          {tailoredFocusParticipant && tailoredFocusParticipant.userId !== hostParticipant?.userId ? (
+            <TouchableOpacity
+              style={styles.tailoredRoomActionButton}
+              activeOpacity={0.86}
+              onPress={() => {
+                featureParticipantFirst(tailoredFocusParticipant.userId);
+              }}
+            >
+              <Text style={styles.tailoredRoomActionText}>
+                See {tailoredFocusParticipant.userId === currentUserBubbleId ? "yourself" : tailoredFocusParticipant.displayName} first
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {tailoredFocusParticipant
+            && tailoredFocusParticipant.userId !== currentUserBubbleId
+            && tailoredFocusParticipant.role !== "host" ? (
+            <TouchableOpacity
+              style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
+              activeOpacity={0.86}
+              onPress={() => {
+                hideParticipantLocally(tailoredFocusParticipant.userId);
+              }}
+            >
+              <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>
+                Hide {tailoredFocusParticipant.displayName}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {hiddenParticipantCount > 0 ? (
+            <TouchableOpacity
+              style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
+              activeOpacity={0.86}
+              onPress={showEveryoneLocally}
+            >
+              <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Show everyone</Text>
+            </TouchableOpacity>
+          ) : null}
+          {!tailoredRoomIsDefault || hiddenParticipantCount > 0 ? (
+            <TouchableOpacity
+              style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
+              activeOpacity={0.86}
+              onPress={resetTailoredRoomView}
+            >
+              <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Reset layout</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+
+      <RoomCodeInviteCard
+        roomCode={roomCodeCardValue}
+        actionLabel="Invite in app"
+        onActionPress={onShareCode}
+        codeSelectable
+        styles={{
+          card: styles.inviteCard,
+          left: styles.inviteLeft,
+          label: styles.inviteLabel,
+          code: styles.inviteCode,
+          actionBtn: styles.shareBtn,
+          actionText: styles.shareBtnText,
+        }}
+      />
+
+      <TouchableOpacity
+        style={styles.reportRoomButton}
+        activeOpacity={0.84}
+        onPress={() => {
+          if (!room) return;
+          trackModerationActionUsed({
+            surface: "watch-party-room",
+            action: "open_safety_report",
+            targetType: "room",
+            targetId: room.partyId,
+            roomId: room.partyId,
+            titleId: room.titleId ?? null,
+            sourceRoute: `/watch-party/${partyId}`,
+          });
+          setReportTarget({
+            type: "room",
+            targetId: room.partyId,
+            label: roomCodeCardValue || room.partyId,
+          });
+          setReportVisible(true);
+        }}
+      >
+        <Text style={styles.reportRoomButtonText}>Report Room</Text>
+      </TouchableOpacity>
+
+      <ProtectedSessionNote
+        {...getProtectedSessionCopy("party-room", {
+          contentAccessRule: room.contentAccessRule,
+          capturePolicy: room.capturePolicy,
+        })}
+      />
+
+      {renderPartyRoomParticipantSummary()}
+
+      <TouchableOpacity style={styles.watchCTA} onPress={onWatchTogether} activeOpacity={0.88}>
+        <Text style={styles.watchCTAText}>Watch-Party Live</Text>
+      </TouchableOpacity>
+
+      {renderPartyRoomHostControls()}
+    </View>
+  );
 
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
@@ -2118,183 +2360,47 @@ export default function WatchPartyRoomScreen() {
           </ScrollView>
         </View>
 
-        {!isLiveRoom ? (
-          <View style={styles.tailoredRoomCard}>
-            <Text style={styles.sectionKicker}>PARTY ROOM</Text>
-            <Text style={styles.tailoredRoomTitle}>Set the room before playback</Text>
-            <Text style={styles.tailoredRoomBody}>
-              {hostParticipant
-                ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Decide who appears first and what the room allows before Watch-Party Live starts.`
-                : "Decide who appears first and what the room allows before Watch-Party Live starts."}
-            </Text>
-            <View style={styles.tailoredRoomMetaRow}>
-              <View style={styles.tailoredRoomMetaPill}>
-                <Text style={styles.tailoredRoomMetaText}>
-                  Host: {hostParticipant ? (hostParticipant.userId === currentUserBubbleId ? "You" : hostParticipant.displayName) : "Syncing..."}
-                </Text>
+        {!isLiveRoom ? renderPartyRoomSetupShell() : null}
+
+        {/* ── Participant list ────────────────────────────────────────── */}
+        {isLiveRoom && waitingRoomParticipantSummary.totalCount > 0 ? (
+          <View style={styles.participantsWrap}>
+            <View style={[styles.participantsCard, styles.participantsCardLive]}>
+              <Text style={styles.participantsLabel}>
+                <Text style={styles.viewerCount}>👥 {waitingRoomParticipantSummary.totalCount}</Text>
+                {waitingRoomParticipantSummary.totalCount === 1 ? " person" : " people"} in room
+              </Text>
+              <View style={[styles.chips, styles.chipsLive]}>
+                {waitingRoomParticipantSummary.visible.map((participant) => (
+                  <RoomParticipantTile
+                    key={participant.id}
+                    participant={participant}
+                    myCameraPreviewUrl={myCameraPreviewUrlRef.current}
+                    showHostBadge={false}
+                    styles={{
+                      container: [styles.chip, styles.chipLive],
+                      containerHost: styles.chipHost,
+                      containerSelf: styles.chipMe,
+                      avatarWrap: styles.avatarCircle,
+                      avatarImage: styles.chipAvatarImage,
+                      avatarLabel: styles.chipAvatar,
+                      nameText: styles.chipText,
+                      nameTextHost: styles.chipTextHost,
+                      statusText: [styles.participantStatus, styles.participantStatusLive],
+                      reactionBadge: styles.participantReactionBadge,
+                      reactionText: styles.participantReactionText,
+                    }}
+                  />
+                ))}
+                {waitingRoomParticipantSummary.overflowCount > 0 ? (
+                  <View style={styles.chip}>
+                    <Text style={styles.chipText}>+{waitingRoomParticipantSummary.overflowCount}</Text>
+                  </View>
+                ) : null}
               </View>
-              <View style={styles.tailoredRoomMetaPill}>
-                <Text style={styles.tailoredRoomMetaText}>
-                  Focus: {partyRoomFocusLabel}
-                </Text>
-              </View>
-              <View style={styles.tailoredRoomMetaPill}>
-                <Text style={styles.tailoredRoomMetaText}>Visibility: {partyRoomVisibilityLabel}</Text>
-              </View>
-            </View>
-            <View style={styles.tailoredRoomActions}>
-              {!tailoredRoomIsDefault ? (
-                <TouchableOpacity
-                  style={styles.tailoredRoomActionButton}
-                  activeOpacity={0.86}
-                  onPress={() => {
-                    if (!hostParticipant?.userId) return;
-                    featureParticipantFirst(hostParticipant.userId);
-                  }}
-                  disabled={!hostParticipant?.userId}
-                >
-                  <Text style={styles.tailoredRoomActionText}>See host first</Text>
-                </TouchableOpacity>
-              ) : null}
-              {tailoredFocusParticipant && tailoredFocusParticipant.userId !== hostParticipant?.userId ? (
-                <TouchableOpacity
-                  style={styles.tailoredRoomActionButton}
-                  activeOpacity={0.86}
-                  onPress={() => {
-                    featureParticipantFirst(tailoredFocusParticipant.userId);
-                  }}
-                >
-                  <Text style={styles.tailoredRoomActionText}>
-                    See {tailoredFocusParticipant.userId === currentUserBubbleId ? "yourself" : tailoredFocusParticipant.displayName} first
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {tailoredFocusParticipant
-                && tailoredFocusParticipant.userId !== currentUserBubbleId
-                && tailoredFocusParticipant.role !== "host" ? (
-                <TouchableOpacity
-                  style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
-                  activeOpacity={0.86}
-                  onPress={() => {
-                    hideParticipantLocally(tailoredFocusParticipant.userId);
-                  }}
-                >
-                  <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>
-                    Hide {tailoredFocusParticipant.displayName}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {hiddenParticipantCount > 0 ? (
-                <TouchableOpacity
-                  style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
-                  activeOpacity={0.86}
-                  onPress={showEveryoneLocally}
-                >
-                  <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Show everyone</Text>
-                </TouchableOpacity>
-              ) : null}
-              {!tailoredRoomIsDefault || hiddenParticipantCount > 0 ? (
-                <TouchableOpacity
-                  style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
-                  activeOpacity={0.86}
-                  onPress={resetTailoredRoomView}
-                >
-                  <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Reset layout</Text>
-                </TouchableOpacity>
-              ) : null}
             </View>
           </View>
         ) : null}
-
-        {/* ── Invite card ────────────────────────────────────────────── */}
-        <RoomCodeInviteCard
-          roomCode={roomCodeCardValue}
-          actionLabel="Invite in app"
-          onActionPress={onShareCode}
-          codeSelectable
-          styles={{
-            card: styles.inviteCard,
-            left: styles.inviteLeft,
-            label: styles.inviteLabel,
-            code: styles.inviteCode,
-            actionBtn: styles.shareBtn,
-            actionText: styles.shareBtnText,
-          }}
-        />
-
-        <TouchableOpacity
-          style={styles.reportRoomButton}
-          activeOpacity={0.84}
-          onPress={() => {
-            if (!room) return;
-            trackModerationActionUsed({
-              surface: "watch-party-room",
-              action: "open_safety_report",
-              targetType: "room",
-              targetId: room.partyId,
-              roomId: room.partyId,
-              titleId: room.titleId ?? null,
-              sourceRoute: `/watch-party/${partyId}`,
-            });
-            setReportTarget({
-              type: "room",
-              targetId: room.partyId,
-              label: roomCodeCardValue || room.partyId,
-            });
-            setReportVisible(true);
-          }}
-        >
-          <Text style={styles.reportRoomButtonText}>Report Room</Text>
-        </TouchableOpacity>
-
-        <ProtectedSessionNote
-          {...getProtectedSessionCopy(isLiveRoom ? "live-room" : "party-room", {
-            contentAccessRule: room.contentAccessRule,
-            capturePolicy: room.capturePolicy,
-          })}
-        />
-
-        {/* ── Participant list ────────────────────────────────────────── */}
-        {waitingRoomParticipantSummary.totalCount > 0 && (
-          <View style={styles.participantsWrap}>
-            {!isLiveRoom ? <Text style={styles.sectionKicker}>IN THE ROOM</Text> : null}
-            <View style={[styles.participantsCard, isLiveRoom && styles.participantsCardLive]}>
-            <Text style={styles.participantsLabel}>
-              <Text style={styles.viewerCount}>👥 {waitingRoomParticipantSummary.totalCount}</Text>
-              {waitingRoomParticipantSummary.totalCount === 1 ? " person" : " people"} in room
-              {!isLiveRoom && waitingRoomParticipantSummary.totalCount >= 3 && <Text style={styles.trendingBadge}>  🔥 Trending</Text>}
-            </Text>
-            <View style={[styles.chips, isLiveRoom && styles.chipsLive]}>
-              {waitingRoomParticipantSummary.visible.map((participant) => (
-                <RoomParticipantTile
-                  key={participant.id}
-                  participant={participant}
-                  myCameraPreviewUrl={myCameraPreviewUrlRef.current}
-                  showHostBadge={false}
-                  styles={{
-                    container: [styles.chip, isLiveRoom && styles.chipLive],
-                    containerHost: styles.chipHost,
-                    containerSelf: styles.chipMe,
-                    avatarWrap: styles.avatarCircle,
-                    avatarImage: styles.chipAvatarImage,
-                    avatarLabel: styles.chipAvatar,
-                    nameText: styles.chipText,
-                    nameTextHost: styles.chipTextHost,
-                    statusText: [styles.participantStatus, styles.participantStatusLive],
-                    reactionBadge: styles.participantReactionBadge,
-                    reactionText: styles.participantReactionText,
-                  }}
-                />
-              ))}
-              {waitingRoomParticipantSummary.overflowCount > 0 && (
-                <View style={styles.chip}>
-                  <Text style={styles.chipText}>+{waitingRoomParticipantSummary.overflowCount}</Text>
-                </View>
-              )}
-            </View>
-            </View>
-          </View>
-        )}
 
         {/* ── Primary CTA ─────────────────────────────────────────────── */}
         {isLiveRoom ? (
@@ -2315,61 +2421,7 @@ export default function WatchPartyRoomScreen() {
           >
             <Text style={styles.watchCTAText}>🔴  Go Live</Text>
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.watchCTA} onPress={onWatchTogether} activeOpacity={0.88}>
-            <Text style={styles.watchCTAText}>Watch-Party Live</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* ── Host controls ──────────────────────────────────────────── */}
-        {shouldShowHostControls(isHost, isLiveRoom) && (
-          <View style={styles.hostWrap}>
-            <Text style={styles.sectionKicker}>CONTROLS</Text>
-            <View style={styles.hostSection}>
-            <Text style={styles.hostSectionLabel}>ROOM DEFAULTS</Text>
-            <View style={styles.tailoredRoomMetaRow}>
-              <View style={styles.tailoredRoomMetaPill}>
-                <Text style={styles.tailoredRoomMetaText}>Access: {partyRoomJoinLabel}</Text>
-              </View>
-              <View style={styles.tailoredRoomMetaPill}>
-                <Text style={styles.tailoredRoomMetaText}>Reactions: {partyRoomReactionLabel}</Text>
-              </View>
-              <View style={styles.tailoredRoomMetaPill}>
-                <Text style={styles.tailoredRoomMetaText}>Capture: {partyRoomCaptureLabel}</Text>
-              </View>
-            </View>
-            <View style={styles.hostBtnRow}>
-              <TouchableOpacity
-                style={[styles.hostBtn, reactionsGloballyMuted && styles.hostBtnOn]}
-                onPress={onToggleMuteReactions}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.hostBtnText}>
-                  {reactionsGloballyMuted ? "🔇  Unmute reactions" : "🔇  Mute reactions"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.hostBtn, roomLocked && styles.hostBtnOn]}
-                onPress={onToggleLockRoom}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.hostBtnText}>
-                  {roomLocked ? "🔓  Unlock room" : "🔒  Lock room"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.hostBtn, room.capturePolicy === "host_managed" && styles.hostBtnOn]}
-                onPress={onToggleCaptureRoom}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.hostBtnText}>
-                  {room.capturePolicy === "host_managed" ? "📷  Best-effort capture" : "📷  Host-managed capture"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            </View>
-          </View>
-        )}
+        ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -3318,6 +3370,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#B80F31",
   },
   watchCTAText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
+  partyRoomSetupShell: { gap: 14 },
   tailoredRoomCard: {
     borderRadius: 18,
     borderWidth: 1,
