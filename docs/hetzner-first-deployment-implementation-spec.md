@@ -30,6 +30,14 @@ Current app delivery truth is still Expo-first:
 
 This repo does not currently contain an app-owned production web backend or app-owned deployment stack.
 
+Current app-upstream readiness decision:
+- `APP_UPSTREAM_READY = NO`
+
+That means:
+- there is no current deployable app-owned HTTP upstream for Caddy to front on Hetzner
+- Expo/EAS mobile delivery remains the app-distribution owner
+- any future Hetzner app upstream needs a separate doctrine/spec pass before deployment prep begins
+
 ### 2.2 Backend And Data Truth
 Current backend truth is hosted Supabase:
 - auth and data truth are in Supabase
@@ -154,9 +162,10 @@ This still does not imply:
 
 ### 3.3 Remaining Manual Items
 The remaining first-host work is now narrower:
-- verify real app/client realtime behavior against the new LiveKit ingress
+- verify authenticated app/client realtime behavior against the new LiveKit ingress
 - prove the current token-issuance path works end-to-end with the new host truth
 - keep broader app hosting and non-realtime upstreams out of scope until their own lanes open
+- treat app-upstream hosting as a separate later doctrine question, not an implied next step from the current LiveKit host state
 
 ### 3.4 Expected Filesystem Layout
 The first host should standardize on:
@@ -403,6 +412,9 @@ What is still intentionally deferred:
 - any database or auth migration
 - any release-hardening or Google Play lane
 
+Current app-upstream decision remains:
+- `APP_UPSTREAM_READY = NO`
+
 The realtime boundary is now real enough that the next lane is verification, not more scaffolding.
 
 ## 13. OVH Later Add-On Plan
@@ -420,10 +432,10 @@ OVH should not be introduced later as:
 
 ## 14. Current LiveKit Ingress Prep Scope
 The current infrastructure follow-up lane is now:
-- narrow `realtime cutover verification`
+- narrow `authenticated realtime session verification`
 
 This lane now includes:
-- verifying real client/session behavior against `live.chillywoodstream.com`
+- verifying authenticated client/session behavior against `live.chillywoodstream.com`
 - verifying the current signer/runtime path works end-to-end against the new host truth
 - keeping the current LiveKit host, proxy, signer, and runtime alignment honest
 
@@ -435,9 +447,9 @@ This lane still does not include:
 
 ## 15. Next Honest Follow-Up Lane
 Once this prep chapter is accepted, the next real infrastructure follow-up lane should be:
-- narrow `realtime cutover verification`
+- narrow `authenticated realtime session verification`
 
 That later lane should prove, but not overclaim:
 - the current client/runtime path can really use the new LiveKit ingress
-- the current token/signer path works through actual app/realtime usage
+- the current token/signer path works through authenticated app/realtime usage
 - the remaining post-cutover seam before broader product deployment
