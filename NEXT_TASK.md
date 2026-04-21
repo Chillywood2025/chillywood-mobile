@@ -1,26 +1,26 @@
 # NEXT TASK
 
 ## Exact Next Task
-The third public profile/channel owner-overlay batch is now closed cleanly on `main`. The next exact stage is the `lane closeout audit`: decide whether the public profile/channel owner-overlay lane is complete enough to close cleanly, or whether one final trivial/narrow pass is still honestly justified inside `app/profile/[userId].tsx`.
+The public profile/channel owner-overlay lane is now closed cleanly on `main`. There is no immediate narrow follow-up on `/profile/[userId]`. Leave this route alone until a future broader public profile/channel structure chapter is intentionally opened, because any further owner/public split on this surface is now structural rather than polish-sized.
 
 ## Current Plan
-1. Treat owner overlay batch 3 as closed.
-2. Audit what this lane fully improved on `/profile/[userId]`.
-3. Separate any remaining trivial/narrow seam from medium or broader work honestly.
-4. Only do one more pass if it is clearly justified and still fully route-owned.
+1. Treat the owner-overlay lane as closed.
+2. Do not reopen `/profile/[userId]` for more narrow polish right now.
+3. Only return to this route when a broader structural owner/public chapter is intentionally approved.
+4. Preserve the current public-first route balance and deeper `/channel-settings` handoff.
 5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- audit whether any final trivial/narrow owner-overlay cleanup remains
-- close the lane if the remaining seams are already medium or broader
-- preserve useful self-view convenience without reopening broader owner/public structure
+- no immediate narrow batch is recommended on `/profile/[userId]`
+- treat any further owner/public split as a future broader structure chapter
+- preserve the current public-first / owner-handoff balance until that broader work is intentionally opened
 - keep creator/public and room/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve `/profile/[userId]` as the canonical public profile/channel route
-- focus on honest lane closeout and next-step grounding only on that owner
+- avoid reopening this route for more narrow edits right now
 - leave completed account/support/chat/home/title route owners alone
 - keep unrelated local dirt out of the checkpoint
 
@@ -34,7 +34,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the route's landed owner-overlay improvements are clearly recorded
-- any remaining seam is classified honestly as trivial, narrow, medium, or broad/risky
+- the route's landed owner-overlay improvements stay recorded
+- broader future work is clearly separated from closed narrow polish work
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure
