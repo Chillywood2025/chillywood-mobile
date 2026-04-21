@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Implement the first safe watch-party / live-room broader structure batch on the current truthful baseline. The broader chapter audit is now underway, and the best first route-owned batch is a narrow Live Room pre-stage shell isolation pass on `app/watch-party/live-stage/[partyId].tsx`.
+Run the watch-party / live-room broader structure closeout audit on the current truthful baseline. The first safe route-owned batch on `app/watch-party/live-stage/[partyId].tsx` is now landed, and the next step is to decide whether this chapter stops cleanly here or hands off the Party Room setup shell as the exact next batch.
 
 ## Current Plan
 1. Treat the broader monetization / ads doctrine-controlled chapter and the whole-app proof / QA chapter as closed cleanly enough to move on.
@@ -12,7 +12,7 @@ Implement the first safe watch-party / live-room broader structure batch on the 
 6. Preserve `/settings` now that Premium account status reads like a trustworthy account surface instead of an internal rollout snapshot.
 7. Preserve the landed `/profile/[userId]` room-signal wording so it stays grounded in current linked-room truth instead of speculation.
 8. Keep ads doctrine explicit: no current public route is honestly ads-ready yet, and immersive player/watch-party/live/chat surfaces remain no-ads-here.
-9. Use the broader watch-party / live-room chapter first, starting with the Live Room pre-stage shell on `app/watch-party/live-stage/[partyId].tsx`.
+9. Preserve the landed Live Room pre-stage shell isolation on `app/watch-party/live-stage/[partyId].tsx`.
 10. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
@@ -23,9 +23,9 @@ Implement the first safe watch-party / live-room broader structure batch on the 
 - preserve `/profile/[userId]` now that current Premium / Party Pass posture reads as current default-entry truth rather than speculative later wording
 - preserve the landed `/settings` Premium/account status cleanup without widening it into monetization purchase flow changes
 - preserve the landed `/profile/[userId]` room-signal wording cleanup without reopening the broader public-profile chapter
-- begin the broader watch-party / live-room structure chapter instead of another cross-app sweep
-- isolate the dense Live Room pre-stage shell from the mixed `app/watch-party/live-stage/[partyId].tsx` render path without changing room sync or Live Stage semantics
-- keep the Party Room setup shell ranked second and the waiting-room owner later unless the first batch lands cleanly
+- preserve the landed Live Room pre-stage shell isolation without widening it into room-sync or stage-semantics changes
+- use the next stage for watch-party / live-room closeout instead of forcing a second batch prematurely
+- keep the Party Room setup shell ranked next and the waiting-room owner later unless the closeout audit proves another narrow step is clearly safe
 - do not invent fake ads, fake monetization powers, Google Play readiness work, OVH work, or database-move work
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
@@ -37,7 +37,7 @@ This next pass should:
 - treat the monetization/ad chapter and whole-app proof / QA chapter as closed unless a future broader audit proves a real regression
 - preserve `app/settings.tsx` now that the Premium card reads like account-trust copy rather than rollout-preview copy
 - preserve `/profile/[userId]` now that the `Room` signal stays grounded in current linked-room truth instead of speculative later backing
-- use `app/watch-party/live-stage/[partyId].tsx` as the first broader route-owned owner in this pass
+- preserve `app/watch-party/live-stage/[partyId].tsx` now that the Live Room pre-stage shell is structurally isolated from the mixed stage render
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
 - keep the current social baseline settled while monetization/access/ad-readiness truth stays grounded
@@ -64,7 +64,8 @@ The next lane is successful when:
 - `/settings` presents Premium account status as a trustworthy account surface instead of a rollout-preview memo wall
 - `/profile/[userId]` removes the remaining speculative room-handoff wording if the second batch lands safely
 - the whole-app proof / QA chapter stays closed cleanly after those two route-owned fixes instead of reopening into leftover patchwork
-- `app/watch-party/live-stage/[partyId].tsx` becomes materially cleaner by isolating the pre-stage Live Room shell without flattening Live Room and Live Stage truth
+- `app/watch-party/live-stage/[partyId].tsx` stays materially cleaner by isolating the pre-stage Live Room shell without flattening Live Room and Live Stage truth
+- the watch-party / live-room chapter can stop cleanly if the remaining Party Room seam is judged broader than another safe narrow batch
 - `/profile/[userId]` access wording stays route-owned and honest rather than speculative, while Chi'lly Chat itself stays distinct from monetized direct-message claims
 - whole-app proof / QA starts from the current truthful baseline instead of reopening closed monetization cleanup
 - public/profile/chat/title/player routes still make no fake social or ad claims
