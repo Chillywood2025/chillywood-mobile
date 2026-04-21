@@ -1,22 +1,22 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact stage is now the `social adoption closeout audit` before any broader native social rollout continues. Repo truth is now explicit: `/title/[id]` owns the first product-facing backed `like` / `share` adoption, and `/chat/[threadId]` now owns the first private-context friendship adoption without implying that direct messaging automatically equals friendship.
+The next exact lane is now a broad whole-app behavior/polish re-entry audit on the current truthful social baseline. Repo truth is now explicit: the first native social adoption lane is closed, `/title/[id]` owns the first backed `like` / `share` adoption, `/chat/[threadId]` owns the first private-context friendship adoption, and broader polish no longer needs to stay blocked on missing native social truth.
 
 ## Current Plan
-1. Treat the native social adoption audit plus the title and chat-thread adoption batches as closed.
-2. Keep the locked doctrine: friendship is mutual, person-to-person, and private-first.
-3. Run the lane closeout audit before any additional route adoption.
-4. Keep profile, inbox, and player adoption later unless a final narrow pass is clearly justified by the closeout audit.
+1. Treat the first native social adoption lane as closed.
+2. Carry forward the locked doctrine: friendship is mutual, person-to-person, and private-first.
+3. Resume broader whole-app behavior/polish work on top of the landed truthful social baseline.
+4. Keep profile, inbox, and player social adoption later unless a future route-owned pass opens them intentionally.
 5. Keep comments limited to current room/live truth unless a later chapter adds a real content-comment owner.
-6. Preserve current owner-above-Rachi authority, canonical profile/chat/admin routes, and follower/subscriber distinctions.
+6. Preserve current owner-above-Rachi authority, canonical profile/chat/admin/title/player routes, and follower/subscriber distinctions.
 7. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- audit the now-landed title and chat-thread native social adoptions
-- decide whether any final third adoption slice is honestly safe or whether the lane should close
-- keep profile, inbox, and player later unless the audit proves one final narrow pass is clearly justified
-- avoid public friend chrome, fake friend counts, fake inbox clutter, and fake engagement metrics
+- reopen the broader whole-app behavior/polish lane using the landed social truth as current baseline
+- preserve the truthful title and chat-thread adoptions without widening them into fake broad social rollout
+- keep profile, inbox, and player social adoption later unless a dedicated future route-owned pass proves otherwise
+- avoid public friend chrome, fake friend counts, fake inbox clutter, fake engagement metrics, and universal comments
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
@@ -26,12 +26,11 @@ This next pass should:
 - preserve `/title/[id]` and `/player/[id]` as the canonical title/player owners
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
-- stop short of broad UI rollout or fake shipped social behavior
+- allow broader behavior/polish work to resume, but keep social truth honest and route-owned
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- start the broad whole-app behavior/polish pass yet
 - change route truth
 - invent a broad social rewrite lane
 - invent fake friend counts, fake mutuals, fake Rachi-social behavior, fake comment systems, or fake creator/platform powers
@@ -39,8 +38,9 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the closeout audit can honestly say what landed on `/title/[id]` and `/chat/[threadId]`
-- any final adoption decision is strict about keeping profile, inbox, and player later unless clearly justified
+- broader behavior/polish work resumes without erasing or faking the landed native social truth
+- `/title/[id]` and `/chat/[threadId]` remain the only adopted native social surfaces unless a later dedicated pass proves a new owner
+- profile, inbox, and player remain later for native social adoption unless a future lane opens them intentionally
 - comments remain explicitly limited to current room/live truth unless separately backed later
 - public/profile/chat/title/player routes still make no fake social claims
 - no route drift or fake social claims are introduced
