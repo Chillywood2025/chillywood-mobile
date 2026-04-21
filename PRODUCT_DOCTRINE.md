@@ -65,6 +65,16 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - users should be able to start with the base profile experience and expand later without losing that base experience
 - profiles remain social identity hubs even when creator-platform mode grows deeper
 
+## Official Presence And Social Graph Truth
+- Rachi remains Chi'llywood's protected official platform concierge presence on the canonical `/profile/[userId]` and Chi'lly Chat routes.
+- owner authority remains above Rachi; Rachi is not owner authority, not a hidden admin override, and not the final decision-maker for platform actions.
+- current creator/channel relationship truth is `followers`, creator/channel `subscribers`, audience `requests`, and `blocked` audience boundaries.
+- creator/channel subscriber truth remains distinct from account-tier Premium entitlement truth.
+- a native Chi'llywood friend list is distinct from followers and creator/channel subscribers.
+- current repo truth does not yet include a native friend relationship, friend-list read model, or public friend-list surface.
+- if product language uses `Rachi as your first friend`, that currently means official starter presence on the canonical profile/chat system, not a backed friend-graph relationship.
+- when a native friend system lands, it should be a mutual person-to-person social relationship with privacy-aware visibility rules instead of a rename of follower, subscriber, or admin truth.
+
 ## Public Product Phasing
 - Public v1 should focus on the core social streaming experience, not the full long-term platform vision
 - Public v1 includes login/settings/logout, home/discovery, customizable basic profiles, standalone player, Watch-Party Live core flow, Live Watch-Party / Live Stage core flow, comments/reactions/basic social interaction, basic Chi'lly Chat or simple direct messaging, Premium subscription gating, moderation basics, and analytics/error monitoring/admin visibility

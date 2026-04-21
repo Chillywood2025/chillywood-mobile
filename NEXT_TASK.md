@@ -1,40 +1,44 @@
 # NEXT TASK
 
 ## Exact Next Task
-The public profile/channel owner-overlay lane is now closed cleanly on `main`. There is no immediate narrow follow-up on `/profile/[userId]`. Leave this route alone until a future broader public profile/channel structure chapter is intentionally opened, because any further owner/public split on this surface is now structural rather than polish-sized.
+The next exact lane is now a doctrine/spec pass for the native Chi'llywood friend graph before any broad whole-app behavior or polish work continues. The owner/admin/Rachi + social-friend audit is now closed cleanly, and repo truth is explicit: Rachi is already a protected official starter presence on canonical profile/chat surfaces, but native friend-list truth is still missing. Do not start the broad behavior/polish pass yet.
 
 ## Current Plan
-1. Treat the owner-overlay lane as closed.
-2. Do not reopen `/profile/[userId]` for more narrow polish right now.
-3. Only return to this route when a broader structural owner/public chapter is intentionally approved.
-4. Preserve the current public-first route balance and deeper `/channel-settings` handoff.
+1. Treat the owner/admin/Rachi + social-friend audit as closed.
+2. Keep `RACHI_SOCIAL_TRUTH = PARTIALLY_REAL` and `FRIEND_LIST_TRUTH = MISSING_BUT_NEXT` as the active repo truth.
+3. Run the next lane as a native friend-graph implementation-spec pass, not a broad UI pass.
+4. Preserve current owner-above-Rachi authority, canonical profile/chat/admin routes, and follower/subscriber distinctions.
 5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- no immediate narrow batch is recommended on `/profile/[userId]`
-- treat any further owner/public split as a future broader structure chapter
-- preserve the current public-first / owner-handoff balance until that broader work is intentionally opened
-- keep creator/public and room/doctrine boundaries intact
+- lock the canonical meaning of a Chi'llywood friend relationship
+- define how friend truth differs from followers, creator/channel subscribers, requests, and blocked audience
+- define private-vs-public friend visibility rules for `/profile/[userId]`
+- define how Rachi stays the official first-contact presence without being mistaken for owner authority or a fake already-shipped friend graph
+- keep creator/public, admin/owner, and route/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- preserve `/profile/[userId]` as the canonical public profile/channel route
-- avoid reopening this route for more narrow edits right now
-- leave completed account/support/chat/home/title route owners alone
+- preserve `/profile/[userId]`, `/channel-settings`, `/admin`, `/chat`, and `/chat/[threadId]` as the canonical owners
+- keep the next lane doctrine/spec-first rather than UI-first
+- treat current follower/subscriber/request/blocked truth as the only real native social relationship foundation today
+- use `docs/rachi-social-friend-doctrine.md` as the durable starting point
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- change current public/product route truth
-- change schema or doctrine
-- add creator-console behavior to the public route
-- invent route proliferation or fake creator/platform powers
+- start the broad whole-app behavior/polish pass yet
+- change route truth
+- change schema unless a later spec proves a tiny directly-related foundation correction is safely required
+- rename followers or subscribers into friends
+- invent fake friend counts, fake mutuals, fake Rachi-social behavior, or fake creator/platform powers
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the route's landed owner-overlay improvements stay recorded
-- broader future work is clearly separated from closed narrow polish work
-- no route drift, schema drift, or doctrine drift is introduced
+- the native friend graph has a locked doctrine/spec definition
+- Rachi's official starter presence is clearly separated from friend-graph truth and owner/admin truth
+- broader behavior/polish work has a clean social truth foundation to build from
+- no route drift, schema drift, or fake social claims are introduced
 - the staged set stays task-pure
