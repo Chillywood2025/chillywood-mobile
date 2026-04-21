@@ -1,25 +1,26 @@
 # NEXT TASK
 
 ## Exact Next Task
-The third public profile/channel premium hierarchy batch is now closed cleanly on `main`. The next exact stage is the `lane closeout audit`: decide whether the public profile/channel premium hierarchy lane is complete enough to close cleanly, or whether one final trivial/narrow pass is still honestly justified inside `app/profile/[userId].tsx`.
+The public profile/channel premium hierarchy lane is now closed cleanly on `main`. The next exact broader roadmap lane is a medium `public profile/channel access + audience surface audit` on `app/profile/[userId].tsx`: determine what public access, audience-visibility, and owner-overlay truth still belongs on the canonical public route, and what should stay de-emphasized or move later, without changing route truth, schema, or doctrine.
 
 ## Current Plan
-1. Treat premium hierarchy batch 3 as closed.
-2. Audit what this lane fully improved on `/profile/[userId]`.
-3. Separate any remaining trivial/narrow seam from medium or broader work honestly.
-4. Only do one more pass if it is clearly justified and still fully route-owned.
+1. Treat the public profile/channel premium hierarchy lane as closed.
+2. Audit the remaining access, audience, and owner-overlay presentation seams on `/profile/[userId]`.
+3. Keep the canonical route public-facing and creator-led without drifting into fake metrics or creator-console behavior.
+4. Only promote public truths that are already backed and actually belong on the public route.
 5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- audit whether any final trivial/narrow profile cleanup remains
-- close the lane if the remaining seams are already medium or broader
+- inspect the current `Access & Monetization` and audience-visibility surfaces on the public profile route
+- decide what public-facing access/audience truth should stay visible, soften, or move later
+- audit any remaining owner-overlay energy that still competes with the public route
 - keep creator/public and room/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve `/profile/[userId]` as the canonical public profile/channel route
-- focus on honest lane closeout and next-step grounding
+- focus on access/audience presentation truth and remaining owner-overlay boundaries on that owner
 - leave completed account/support/chat/home/title route owners alone
 - keep unrelated local dirt out of the checkpoint
 
@@ -33,7 +34,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the route's landed improvements are clearly recorded
-- any remaining seam is classified honestly as trivial, narrow, medium, or broad/risky
+- the route's backed access and audience truths are classified more clearly for the public surface
+- any remaining owner-overlay seam is separated honestly from broader structural work
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure
