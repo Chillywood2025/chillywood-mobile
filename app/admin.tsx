@@ -813,65 +813,48 @@ export default function AdminStudioScreen() {
 
   const adminSectionRows = useMemo<readonly AdminDashboardCard[]>(() => [
     {
-      label: "Admin Dashboard",
-      value: "Bounded",
-      body: "This route now groups only real operator/owner-backed signals instead of pretending every future admin section already exists.",
+      label: "Current coverage",
+      value: canManagePrivilegedWrites ? "Programming · Grants" : "Programming live",
+      body: canManagePrivilegedWrites
+        ? "Programming, creator grants, room defaults, and bounded admin visibility are the real current operating slice on this route."
+        : "Programming and room-default visibility are live here, while creator grant writes stay locked until active owner/operator write truth is present.",
     },
     {
-      label: "Users",
-      value: "Access only",
-      body: "Current user/admin truth is role-aware access and identity visibility, not a full platform user-management console.",
-    },
-    {
-      label: "Creators",
-      value: canManagePrivilegedWrites ? "Grant tools live" : "Locked",
-      body: "Creator monetization permission tools are real; broader creator review and staffing workflows remain later.",
-      tone: canManagePrivilegedWrites ? "default" : "unavailable",
-    },
-    {
-      label: "Content",
-      value: "Programming live",
-      body: "Title programming, scheduling, and publish-state controls are already real on this route.",
-    },
-    {
-      label: "Live & Rooms",
-      value: "Config + queue",
-      body: "Current live/room admin truth is bounded to room defaults and scheduled queue visibility already owned here.",
-    },
-    {
-      label: "Reports",
+      label: "Review posture",
       value: canReviewSafetyReports ? "Queue live" : "Locked",
-      body: "Safety-report review is real when the signed-in identity has an active review-capable role.",
+      body: canReviewSafetyReports
+        ? "Recent safety reports and audit-read context are visible through the current moderation foundation."
+        : "The review queue stays hidden until this identity has an active owner, operator, or moderator role.",
       tone: canReviewSafetyReports ? "default" : "unavailable",
     },
     {
-      label: "Audit Log",
-      value: "Basic only",
-      body: "Current audit truth is limited to report-context preservation and audit-owner visibility, not a full cross-domain audit trail.",
+      label: "Authority boundary",
+      value: "Owner above Rachi",
+      body: "This route stays bounded: no full user-management suite, no emergency panel, and no live Rachi automation plane are implied here.",
     },
   ], [canManagePrivilegedWrites, canReviewSafetyReports]);
 
   const rachiControlCards = useMemo<readonly AdminDashboardCard[]>(() => [
     {
-      label: "Overview",
+      label: "Official account",
       value: RACHI_OFFICIAL_ACCOUNT.displayName,
-      body: `${RACHI_OFFICIAL_ACCOUNT.handle} stays the canonical official-platform concierge identity across profile and Chi'lly Chat continuity.`,
+      body: `${RACHI_OFFICIAL_ACCOUNT.handle} stays the canonical official-platform identity across profile and Chi'lly Chat continuity.`,
     },
     {
-      label: "Permissions",
-      value: "Observe only",
-      body: "Rachi remains an internal AI operations layer with identity-level trust only. Owner authority stays above Rachi at all times.",
+      label: "Authority",
+      value: "Owner gated",
+      body: "Rachi can assist as an official-platform layer, but it cannot outrank owner/admin decisions or self-authorize important actions.",
     },
     {
-      label: "Queues",
-      value: "Unavailable",
-      body: "There is no real Rachi queue processor, domain state, or automation-control plane backing this build yet.",
+      label: "Automation",
+      value: "Not live",
+      body: "No Rachi queue processor, domain state, or automation control plane is backed in this build yet.",
       tone: "unavailable",
     },
     {
-      label: "Actions",
-      value: "Assist later",
-      body: "Real action approval, reversal, pause/resume, and automation controls remain later until they are backed by true owner/admin state.",
+      label: "Escalation",
+      value: "Later",
+      body: "Pause/resume, reversal, and emergency controls remain later until they are backed by true owner-only state.",
       tone: "unavailable",
     },
   ], []);
@@ -1689,9 +1672,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>ADMIN DASHBOARD</Text>
-              <Text style={styles.configTitle}>Bounded owner/admin surface</Text>
+              <Text style={styles.configTitle}>Current platform operations</Text>
               <Text style={styles.configBody}>
-                This dashboard uses only the real moderation, programming, config, creator-permission, and queue truth already loaded on `/admin`.
+                This route stays limited to the admin truth that already exists: programming, creator grants, moderation review, room defaults, and bounded audit visibility.
               </Text>
             </View>
           </View>
@@ -1861,9 +1844,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>STAFF & AUDIT VISIBILITY</Text>
-              <Text style={styles.configTitle}>Bounded roster and audit-read truth</Text>
+              <Text style={styles.configTitle}>Current roster and audit read</Text>
               <Text style={styles.configBody}>
-                This surface shows only the role-record and audit-context visibility that current owner/operator and review-capable admin truth actually backs.
+                This surface shows only current role records and recent report-context audit visibility. It does not imply a broader staffing workflow or cross-domain audit suite.
               </Text>
             </View>
           </View>
@@ -2038,9 +2021,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>RACHI CONTROL</Text>
-              <Text style={styles.configTitle}>Bounded official-platform control truth</Text>
+              <Text style={styles.configTitle}>Official-platform authority boundary</Text>
               <Text style={styles.configBody}>
-                This section shows only current official-account and audit truth. It does not pretend queue processing, automation, or emergency controls already exist.
+                This section shows only current official-account and authority-boundary truth. It does not pretend queue processing, automation, or emergency controls already exist.
               </Text>
             </View>
           </View>
