@@ -1,56 +1,47 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **safety / moderation workflow doctrine-spec pass** on `main`. Use `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `docs/safety-moderation-implementation-spec.md`, `docs/channel-design-layout-implementation-spec.md`, `docs/search-discovery-implementation-spec.md`, `docs/owner-admin-rachi-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
+The next exact task is a narrow **LiveKit ingress deployment prep** pass on `main`. Use `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
 
 ## Current Plan
-1. Re-read `CURRENT_STATE.md`, `docs/profile-channel-implementation-spec.md`, `docs/access-entitlement-implementation-spec.md`, `docs/live-event-scheduling-implementation-spec.md`, `docs/audience-management-implementation-spec.md`, `docs/notification-reminder-implementation-spec.md`, `docs/creator-analytics-implementation-spec.md`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
-2. Treat the profile/channel, access, live/event, audience, notifications, analytics, moderation, design, and discovery chapters as closed unless a real regression is found.
-3. Treat the Owner Admin + Rachi chapter as closed enough to move on unless a real regression is found.
-4. Defer release hardening / Google Play readiness for now per explicit user priority.
-5. Treat `docs/hetzner-first-deployment-implementation-spec.md` and `infra/hetzner/*.example` as deployment-planning reference only; the Hetzner side-lane now has a real hostname (`live.chillywoodstream.com`), live TLS, and an honest HTTPS placeholder edge, and the exact next infra blocker is a narrow `LiveKit ingress deployment prep`, without changing the active next product chapter.
-6. Re-enter safety / moderation workflow deepening by starting from `docs/safety-moderation-implementation-spec.md` and current moderation/admin truth.
-7. Stop immediately if the safety/moderation doctrine refresh would require fake moderation workflow or route drift.
+1. Re-read `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
+2. Treat the safety / moderation workflow chapter as closed enough to move on unless a real regression is found.
+3. Keep the active product-side chapter truth intact while advancing the current infra side-lane only.
+4. Preserve the current Hetzner edge baseline as already real: host exists, deploy user works, firewall/fail2ban baseline exists, Caddy is installed, `live.chillywoodstream.com` resolves, HTTPS is live, and the current served surface is still an honest placeholder.
+5. Treat Supabase / Firebase / RevenueCat / Expo/EAS as external owners that remain in place for now.
+6. Prepare the host and repo for LiveKit ingress only as far as honest deployment prep supports; do not fake a LiveKit deployment or mobile cutover.
+7. Stop immediately if the next slice would require fake infrastructure, fake service health, or route/product drift.
 
 ## Exact Next Batch
-- start with `docs/safety-moderation-implementation-spec.md`
-- refresh or reaffirm the next safety / moderation workflow-deepening lane against current repo truth
-- update repo-truth docs to point to the first honest safety/moderation implementation lane after that doctrine-spec pass
+- start with `docs/hetzner-first-deployment-implementation-spec.md`
+- audit the current LiveKit runtime/token assumptions plus current Hetzner host baseline
+- land only the smallest honest LiveKit ingress deployment-prep scaffold that current repo and host truth support
+- update repo-truth docs to point to the next infra lane after that prep slice
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- touch only the safety/moderation doctrine/spec surface family
-- preserve all current route truth and all previously landed chapter ownership
-- keep current product, creator, admin, and owner truths separate from unsupported moderation claims
-- avoid reopening already-landed access, audience, discovery, analytics, safety, or design implementation unless a real regression is found
+- touch only the Hetzner / LiveKit ingress deployment-prep surface family
+- preserve all current product route truth and all previously landed chapter ownership
+- keep the current HTTPS placeholder honest until a real LiveKit or app upstream exists
+- avoid reopening already-landed safety, design, discovery, analytics, or owner/admin implementation unless a real regression is found
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
-- reopen the broader profile/channel, content-management, access, live/event, audience, notifications, analytics, safety, design, or discovery chapters because of preference churn
-- widen into new product systems outside the owner/admin/Rachi-control chapter
-- invent creator-platform routes or `/studio*` route truth
-- fake content catalogs, fake programming, or fake analytics
-- create `/studio*` routes
-- touch broader runtime room/live-stage behavior in this doctrine lane
-- hardcode or expose the owner bootstrap password in committed source, docs, or client bundles
-- fake owner bootstrap, fake emergency controls, or fake Rachi automation powers
-- widen `/admin` into a messy god-panel or leak owner-only controls to general roles
-- pretend that identity-level Rachi truth already means a live automation queue or rule engine
+- buy providers or add OVH work
 - start release hardening / Google Play readiness work in this lane
-- reopen notifications/reminders, push delivery, or generic inbox work unless a real regression is found
-- fake moderation queues, strike systems, dispute workflows, trust scores, or creator safety controls that current truth does not back yet
-- reopen creator analytics implementation unless the doctrine pass proves a regression
-- fake VIP/mod/co-host audience logic
-- reopen `/channel-settings` audience workflow work unless the doctrine pass proves a regression
+- move databases or Supabase auth off their current hosted owner
+- fake a LiveKit deployment, fake service health, fake mobile cutover, or fake app upstream
+- change current public/product route truth
+- write provider tokens, private keys, or raw secrets into repo files
+- widen into full app deployment or unrelated infra systems
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the next safety / moderation doctrine lane is re-established cleanly from current repo truth
-- current product/admin/owner truths remain separated cleanly from unsupported moderation claims
-- the landed owner bootstrap path remains secret-safe and isolated from committed client code
-- unsupported or unproven moderation powers remain explicit instead of being implied or fabricated
-- current public route truth remains unchanged
-- no fake moderation workflow, fake safety-control claim, or route drift is introduced
+- the LiveKit ingress prep doctrine is grounded in the current Hetzner edge and current app/runtime truth
+- the host and repo have only the minimal honest LiveKit deployment-prep scaffold needed for the next slice
+- the current HTTPS placeholder remains honest and no full production deployment is implied
+- external service ownership stays unchanged
+- no fake infrastructure claim, raw secret exposure, or route drift is introduced
