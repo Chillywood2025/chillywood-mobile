@@ -79,14 +79,11 @@ const getThreadGuideTitle = ({
   platformOwned: boolean;
   activeCallType?: ChatCallType;
 }) => {
-  if (platformOwned && activeCallType) {
-    return "Official thread with live call entry";
-  }
   if (platformOwned) {
     return "Official thread";
   }
   if (activeCallType) {
-    return "Direct thread with live call access";
+    return "Call ready here";
   }
   return "Direct thread";
 };
@@ -100,13 +97,13 @@ const getThreadGuideBody = ({
 }) => {
   if (platformOwned) {
     return activeCallType
-      ? "Platform-owned updates, concierge follow-up, and call join stay in this thread."
-      : "Platform-owned updates and concierge follow-up stay in this thread.";
+      ? "Official follow-up and call rejoin stay in this thread."
+      : "Official follow-up stays in this thread.";
   }
 
   return activeCallType
-    ? "Voice and video stay in this thread so both people can rejoin from the same place."
-    : "Use this thread for direct messages and optional voice/video entry.";
+    ? "Both people can rejoin the active call from this thread."
+    : "Message here first, then start voice or video from the same thread.";
 };
 
 const buildSmartReplySuggestions = ({
@@ -343,7 +340,7 @@ export default function ChillyChatThreadScreen() {
     : !activeCallRoomId
       ? "No Active Call"
       : callPanelOpen
-        ? "Close Chi'lly Chat"
+        ? "Close Call Surface"
         : thread?.activeCallType === "video"
           ? "Join Video Call"
           : "Join Voice Call";
@@ -370,8 +367,8 @@ export default function ChillyChatThreadScreen() {
   const latestThreadHint = useMemo(() => {
     if (renderedMessages.length === 0) {
       return officialAccount
-        ? `${otherMemberDisplayName} can reply here with official prompts and thread-based calling.`
-        : "This thread is ready for the first message. Voice and video also start here.";
+        ? `${otherMemberDisplayName} is ready for official follow-up here.`
+        : "Start with a message or a call.";
     }
 
     const latestMessage = renderedMessages[renderedMessages.length - 1];
@@ -380,8 +377,19 @@ export default function ChillyChatThreadScreen() {
       ? `${latestMessage.body.slice(0, 85)}...`
       : latestMessage.body;
 
-    return `Latest in thread: ${author} · ${preview}`;
+    return `Latest: ${author} · ${preview}`;
   }, [officialAccount, otherMemberDisplayName, renderedMessages]);
+
+  const emptyThreadPrompts = useMemo(() => {
+    if (officialAccount) {
+      return officialAccount.starterPrompts;
+    }
+
+    return buildSmartReplySuggestions({
+      activeCallType: thread?.activeCallType,
+      otherMemberName: otherMemberDisplayName,
+    });
+  }, [officialAccount, otherMemberDisplayName, thread?.activeCallType]);
 
   const handleSend = useCallback(async (bodyOverride?: string) => {
     const trimmedDraft = String(bodyOverride ?? draft).trim();
@@ -725,18 +733,18 @@ export default function ChillyChatThreadScreen() {
               <Text style={styles.headerPillText}>{getThreadStatusLabel(thread, !!officialAccount)}</Text>
             </View>
             {thread?.currentMember?.lastReadAt ? (
-              <Text style={styles.headerMetaText}>Read updates sync when this thread opens.</Text>
+              <Text style={styles.headerMetaText}>Read up to date.</Text>
             ) : (
-              <Text style={styles.headerMetaText}>Direct messages with thread-based calling.</Text>
+              <Text style={styles.headerMetaText}>Voice and video stay in-thread.</Text>
             )}
           </View>
-          <Text style={styles.headerHint}>Tap the avatar for profile and call actions.</Text>
+          <Text style={styles.headerHint}>Tap the avatar for profile, report, and call actions.</Text>
         </View>
       </View>
 
       {headerQuickActionsOpen ? (
         <View style={styles.headerQuickActionCard}>
-          <Text style={styles.headerQuickActionKicker}>THREAD QUICK ACTIONS</Text>
+          <Text style={styles.headerQuickActionKicker}>THREAD ACTIONS</Text>
           <Text style={styles.headerQuickActionTitle}>
             {otherMemberDisplayName}
           </Text>
@@ -833,7 +841,7 @@ export default function ChillyChatThreadScreen() {
 
       <View style={[styles.threadGuideCard, officialAccount && styles.threadGuideCardOfficial]}>
         <View style={styles.threadGuideHeader}>
-          <Text style={styles.threadGuideKicker}>THREAD GUIDE</Text>
+          <Text style={styles.threadGuideKicker}>THREAD STATUS</Text>
           <View style={[styles.threadGuideKindPill, officialAccount && styles.threadGuideKindPillOfficial]}>
             <Text style={[styles.threadGuideKindPillText, officialAccount && styles.threadGuideKindPillTextOfficial]}>
               {threadKindLabel}
@@ -850,7 +858,7 @@ export default function ChillyChatThreadScreen() {
           </View>
           <View style={styles.threadGuideMetaPill}>
             <Text style={styles.threadGuideMetaPillText}>
-              {thread.currentMember?.lastReadAt ? "Read sync active" : "Read sync on open"}
+              {thread.currentMember?.lastReadAt ? "Read up to date" : "Read on open"}
             </Text>
           </View>
         </View>
@@ -914,25 +922,23 @@ export default function ChillyChatThreadScreen() {
             <Text style={styles.emptyBody}>
               {officialAccount
                 ? officialAccount.starterWelcomeBody
-                : "Send the first message here. Voice and video stay thread-based when you start a Chi&apos;lly Chat call."}
+                : "Send the first message here, or start a voice or video handoff from the same thread."}
             </Text>
-            {officialAccount ? (
-              <View style={styles.starterPromptRow}>
-                {officialAccount.starterPrompts.map((prompt) => (
-                  <TouchableOpacity
-                    key={prompt}
-                    style={styles.starterPromptChip}
-                    activeOpacity={0.86}
-                    disabled={sending}
-                    onPress={() => {
-                      void handleSend(prompt);
-                    }}
-                  >
-                    <Text style={styles.starterPromptChipText}>{prompt}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null}
+            <View style={styles.starterPromptRow}>
+              {emptyThreadPrompts.map((prompt) => (
+                <TouchableOpacity
+                  key={prompt}
+                  style={styles.starterPromptChip}
+                  activeOpacity={0.86}
+                  disabled={sending}
+                  onPress={() => {
+                    void handleSend(prompt);
+                  }}
+                >
+                  <Text style={styles.starterPromptChipText}>{prompt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         ) : null}
       </ScrollView>
@@ -948,7 +954,7 @@ export default function ChillyChatThreadScreen() {
           <View style={styles.composerAffordanceChip}>
             <Text style={styles.composerAffordanceText}>Text only</Text>
           </View>
-          <Text style={styles.composerAssistText}>Voice and video still start here. Media and reactions are not live yet.</Text>
+          <Text style={styles.composerAssistText}>Calls stay in-thread. Media and reactions are not live yet.</Text>
         </View>
         <GatedSmartReplySuggestions
           activeCallType={thread?.activeCallType}

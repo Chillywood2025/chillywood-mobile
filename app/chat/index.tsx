@@ -21,7 +21,7 @@ function buildPreview(thread: ChatThreadSummary) {
   if (thread.activeCommunicationRoomId && thread.activeCallType) {
     return `${thread.activeCallType === "video" ? "Video" : "Voice"} call active`;
   }
-  return thread.lastMessagePreview ?? "No messages yet.";
+  return thread.lastMessagePreview ?? "Start the thread";
 }
 
 function formatThreadTime(value?: string) {
@@ -40,16 +40,6 @@ function getIdentityLabel(thread: ChatThreadSummary) {
 
 function getThreadKindLabel(thread: ChatThreadSummary) {
   return getOfficialPlatformAccount(thread.otherMember?.userId) ? "Official thread" : "Direct thread";
-}
-
-function getThreadRouteHint(thread: ChatThreadSummary) {
-  if (getOfficialPlatformAccount(thread.otherMember?.userId)) {
-    return "Platform-owned updates and concierge follow-up stay here. Profiles stay separate.";
-  }
-  if (thread.activeCommunicationRoomId && thread.activeCallType) {
-    return "Voice and video stay attached to this thread so both people can rejoin from the same place.";
-  }
-  return "Use this thread for direct messaging and thread-based calls without replacing profile or room chat.";
 }
 
 function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
@@ -125,13 +115,6 @@ export default function ChillyChatInboxScreen() {
     () => threads.filter((thread) => !!thread.activeCommunicationRoomId && !!thread.activeCallType).length,
     [threads],
   );
-
-  const officialThreadCount = useMemo(
-    () => threads.filter((thread) => !!getOfficialPlatformAccount(thread.otherMember?.userId)).length,
-    [threads],
-  );
-
-  const directThreadCount = Math.max(threads.length - officialThreadCount, 0);
 
   const quickActionThread = useMemo(
     () => threads.find((thread) => thread.threadId === quickActionThreadId) ?? null,
@@ -224,7 +207,7 @@ export default function ChillyChatInboxScreen() {
       <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
       <Text style={styles.title}>Inbox</Text>
       <Text style={styles.body}>
-        Direct threads, voice calls, and video calls live here as Chi&apos;llywood&apos;s native communication layer.
+        Direct threads, voice, and video live here.
       </Text>
       <View style={styles.headerMetaRow}>
         <View style={styles.headerPill}>
@@ -235,24 +218,6 @@ export default function ChillyChatInboxScreen() {
         </View>
         <View style={styles.headerPill}>
           <Text style={styles.headerPillText}>{liveCallCount} live call{liveCallCount === 1 ? "" : "s"}</Text>
-        </View>
-      </View>
-      <View style={styles.inboxGuideCard}>
-        <Text style={styles.inboxGuideKicker}>INBOX HELPER</Text>
-        <Text style={styles.inboxGuideTitle}>Chi&apos;lly Chat owns direct threads and thread-based calls.</Text>
-        <Text style={styles.inboxGuideBody}>
-          Open profiles for identity, keep voice/video entry inside threads, and treat official conversations like platform-owned communication instead of a generic support center.
-        </Text>
-        <View style={styles.inboxGuideMetaRow}>
-          <View style={styles.inboxGuidePill}>
-            <Text style={styles.inboxGuidePillText}>{directThreadCount} direct</Text>
-          </View>
-          <View style={[styles.inboxGuidePill, styles.inboxGuidePillOfficial]}>
-            <Text style={[styles.inboxGuidePillText, styles.inboxGuidePillTextOfficial]}>{officialThreadCount} official</Text>
-          </View>
-          <View style={styles.inboxGuidePill}>
-            <Text style={styles.inboxGuidePillText}>{liveCallCount} call-ready</Text>
-          </View>
         </View>
       </View>
       <View style={styles.officialStarterCard}>
@@ -294,15 +259,15 @@ export default function ChillyChatInboxScreen() {
           </TouchableOpacity>
         </View>
       </View>
-      <Text style={styles.headerHint}>Long-press a thread or avatar for profile and call quick actions.</Text>
+      <Text style={styles.headerHint}>Tap an avatar for profile. Long-press a thread for quick call actions.</Text>
       {quickActionThread ? (
         <View style={styles.quickActionCard}>
-          <Text style={styles.quickActionKicker}>QUICK ACTIONS</Text>
+          <Text style={styles.quickActionKicker}>THREAD SHORTCUTS</Text>
           <Text style={styles.quickActionTitle}>
             {quickActionThread.otherMember?.displayName ?? "Chi'lly Chat Thread"}
           </Text>
           <Text style={styles.quickActionBody}>
-            Jump into the thread, open the profile, or launch a thread-based voice/video call without leaving Chi&apos;lly Chat.
+            Open the thread, jump to the profile, or start voice/video from the same inbox surface.
           </Text>
           <View style={styles.quickActionRow}>
             <TouchableOpacity
@@ -368,9 +333,7 @@ export default function ChillyChatInboxScreen() {
       </View>
     </View>
   ), [
-    directThreadCount,
     liveCallCount,
-    officialThreadCount,
     openOfficialProfile,
     openOfficialThread,
     openProfile,
@@ -408,8 +371,8 @@ export default function ChillyChatInboxScreen() {
             <Text style={styles.emptyTitle}>{searchQuery.trim() ? "No matching threads" : "No Chi&apos;lly Chat threads yet"}</Text>
             <Text style={styles.emptyBody}>
               {searchQuery.trim()
-                ? "Try another name or clear your search to see every direct conversation."
-                : "Open Chi&apos;lly Chat from another channel profile to start a direct conversation."}
+                ? "Try another name or clear your search."
+                : "Open Chi&apos;lly Chat from a profile to start your first direct thread."}
             </Text>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>
@@ -424,7 +387,6 @@ export default function ChillyChatInboxScreen() {
             : buildPreview(item);
           const identityLabel = getIdentityLabel(item);
           const threadKindLabel = getThreadKindLabel(item);
-          const threadRouteHint = getThreadRouteHint(item);
           const displayName = officialAccount?.displayName ?? other?.displayName ?? "Chi'lly Chat Thread";
           const tagline = officialAccount?.tagline ?? other?.tagline;
 
@@ -444,7 +406,7 @@ export default function ChillyChatInboxScreen() {
               <TouchableOpacity
                 style={styles.avatarButton}
                 activeOpacity={0.86}
-                onPress={() => openThread(item)}
+                onPress={() => openProfile(item)}
                 onLongPress={() => setQuickActionThreadId(item.threadId)}
               >
                 {avatarUrl ? (
@@ -486,7 +448,6 @@ export default function ChillyChatInboxScreen() {
                   </Text>
                 )}
                 <Text style={styles.threadPreview} numberOfLines={2}>{preview}</Text>
-                <Text style={styles.threadRouteHint} numberOfLines={2}>{threadRouteHint}</Text>
                 {item.activeCommunicationRoomId && item.activeCallType ? (
                   <View style={styles.callPill}>
                     <Text style={styles.callPillText}>
