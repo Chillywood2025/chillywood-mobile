@@ -3,6 +3,11 @@
 ## 1. Purpose And Scope
 This document defines Chi'llywood's native friend-graph doctrine before any friend implementation work begins.
 
+April 21, 2026 update:
+- this file still governs the friend graph doctrine and hard boundaries
+- the narrow schema + helper foundation is now real in repo truth through `user_friendships`, `request_friendship(...)`, `respond_to_friendship(...)`, and `_lib/friendGraph.ts`
+- public adoption, mutual-friend context, and public-safe visibility options are still not yet real
+
 It exists to:
 - lock the exact meaning of a Chi'llywood friend relationship
 - separate friend truth from current creator/channel audience truth
@@ -80,8 +85,6 @@ Rachi is not yet:
 
 ### 2.5 What Does Not Exist Yet
 The current repo does not have:
-- a native friend relationship table
-- a friend-request helper or read model
 - a friend-list module on `/profile/[userId]`
 - private mutual-friend context
 - public friend visibility controls
@@ -245,9 +248,9 @@ Not current truth:
 
 ## 12. Phased Implementation Order
 1. Doctrine/spec pass.
-   This file.
+   Closed.
 2. Schema + helper foundation pass.
-   Add the canonical person-to-person friend relationship foundation, request lifecycle, and helper layer without public UI adoption yet.
+   Landed April 21, 2026 through `user_friendships`, `request_friendship(...)`, `respond_to_friendship(...)`, and `_lib/friendGraph.ts`.
 3. Private read-model pass.
    Add self-only friend summary truth, pending request truth, and mutual-friend derivation where actually backed.
 4. Narrow profile/chat adoption pass.
@@ -258,11 +261,10 @@ Not current truth:
 ## 13. Exact Next Lane
 The next exact lane after this spec pass should be:
 
-`native friend graph schema + helper foundation pass`
+`native friend graph private/adoption audit on existing canonical routes`
 
 That next lane should:
-- establish the canonical friend relationship foundation
-- keep friendship person-to-person and mutual
-- keep Rachi outside default friend-count and auto-friend truth
+- keep the landed friend foundation distinct from followers, subscribers, direct threads, and Rachi's official presence
+- determine the smallest honest self-only or route-owned adoption surface next
 - avoid public profile adoption until private/read-model truth exists
 - avoid fake UI or fake social counts

@@ -17,7 +17,7 @@ This spec does not:
 
 ## 2. Current Truth Already In Repo
 
-### 2.1 Native Friend Doctrine Exists, But Native Friend Schema Does Not
+### 2.1 Native Friend Doctrine Exists, And Native Friend Foundation Is Now Real
 Current friend doctrine is already locked in `docs/native-friend-graph-implementation-spec.md`.
 
 That doctrine already defines:
@@ -26,40 +26,46 @@ That doctrine already defines:
 - friendship is private-first
 - friendship is separate from followers, subscribers, requests, blocked audience, direct threads, and Rachi's official presence
 
+Current repo truth now also includes:
+- `user_friendships`
+- `request_friendship(...)`
+- `respond_to_friendship(...)`
+- `_lib/friendGraph.ts`
+
 What does not exist yet:
-- a native friend relationship table
-- friend mutation helpers
-- friend read models
-- friend list summary truth
+- self-only friend UI adoption
+- public friend visibility controls
+- mutual-friend context
 
 ### 2.2 Native Likes Already Have Real Schema Truth For Titles
 Current repo schema already supports title-level native like truth through:
 - `public.user_content_relationships`
 - `relationship_type = 'like'`
 - `user_profiles.likes_visibility`
+- `_lib/contentEngagement.ts`
 
 That means:
 - likes are already a real stored content relationship for titles
 - like visibility doctrine already exists at the profile level
 
 What is still missing:
-- helper reads/writes for title likes
-- clear viewer-state helpers on top of the stored relationship
 - any route adoption that consumes the stored relationship honestly
+- any later public metric policy beyond the current stored relationship truth
 
 ### 2.3 Native Shares Already Have Real Schema Truth For Titles
 Current repo schema already supports title-level native share truth through:
 - `public.user_content_relationships`
 - `relationship_type = 'share'`
 - `user_profiles.shares_visibility`
+- `_lib/contentEngagement.ts`
 
 That means:
 - shares are already a real stored content relationship for titles
 - share visibility doctrine already exists at the profile level
 
 What is still missing:
-- helper reads/writes for title shares
 - route adoption that treats share truth as a stored relationship instead of only a system share-sheet affordance
+- any broader repost/feed behavior
 
 ### 2.4 Comments Are Real Only In Room / Live Contexts Today
 Current repo already supports bounded comments through:
@@ -97,14 +103,14 @@ That system-share behavior is real, but it is not the same thing as:
 ## 4. Readiness Decisions For The Current Lane
 
 ### 4.1 Friend Graph
-- current truth: doctrine locked, schema/helper missing
+- current truth: doctrine locked, schema/helper foundation now real
 - readiness decision: `FRIEND_GRAPH_FOUNDATION_READY = YES`
-- why: the repo already has a precise friend doctrine and the next exact lane is explicitly the narrow schema + helper foundation pass
+- why: the repo already has the narrow pair-based friend foundation and can now move into later private/adoption audits without faking public friendship
 
 ### 4.2 Likes
-- current truth: title-level like schema exists, helper layer missing
+- current truth: title-level like schema and helper foundation exist
 - readiness decision: `CONTENT_LIKES_FOUNDATION_READY = YES`
-- why: the underlying table and visibility truth already exist, so a narrow helper foundation is safe without inventing new UI
+- why: the underlying table, visibility truth, and viewer-state helper are now real without inventing broad UI
 
 ### 4.3 Comments
 - current truth: room/live comments already exist, but no universal title/profile comment system exists
@@ -112,13 +118,15 @@ That system-share behavior is real, but it is not the same thing as:
 - why: creating a new content-comment system in this lane would invent broader product truth instead of finishing the current narrow foundation
 
 ### 4.4 Shares
-- current truth: title-level share schema exists, helper layer missing
+- current truth: title-level share schema and helper foundation exist
 - readiness decision: `CONTENT_SHARES_FOUNDATION_READY = YES`
-- why: the stored relationship already exists for titles, and a narrow helper foundation can land without claiming a full public repost graph
+- why: the stored relationship and helper foundation are now real for titles without claiming a full public repost graph
 
 ## 5. Exact Current-Lane Implementation Order
 1. Land the native friend graph schema + helper foundation.
+   Landed April 21, 2026.
 2. Land the title-content engagement helper foundation for likes and shares only.
+   Landed April 21, 2026.
 3. Keep comments limited to existing room/live truth in this lane.
 4. Stop short of broad route adoption unless one tiny proof surface is clearly justified and honest.
 
