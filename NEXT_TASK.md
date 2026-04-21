@@ -1,21 +1,21 @@
 # NEXT TASK
 
 ## Exact Next Task
-Implement the second safe creator monetization / ad-readiness control-center batch on `app/channel-settings.tsx`. Do not auto-open Google Play readiness, OVH, database-move, or fake public ad-rollout work.
+Run the creator monetization / ad-readiness closeout audit on `app/channel-settings.tsx`. Do not auto-open Google Play readiness, OVH, database-move, or fake public ad-rollout work.
 
 ## Current Plan
 1. Treat the behavior/social consistency lane and the broader player architecture chapter as closed enough to move on.
 2. Preserve the landed deferred-access trust fix on `components/monetization/access-sheet.tsx`.
 3. Carry forward the current truthful social baseline on profile, chat, title, player, and watch-party owners unchanged.
 4. Keep ads doctrine explicit: no current public route is honestly ads-ready yet.
-5. Use the next pass to tighten the raw default-control wording and labels so creator monetization controls read more premium and less internal.
+5. Use the next pass to close the lane honestly now that the current-grants summary and default-control wording are both tighter.
 6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
 - keep the monetization audit result explicit: Premium and Party Pass truth are real, while ads remain foundation-only and not honestly route-ready
 - preserve the landed deferred-access sheet trust fix without widening it into a broader monetization or ad rollout
 - preserve the clearer current-grants / ad-readiness summary in `Access & Monetization`
-- tighten the watch-party and communication default controls so labels and helper copy read more creator-facing and less internal
+- preserve the creator-facing watch-party and communication default labels without widening into a broader monetization rewrite
 - do not invent fake ads, fake monetization powers, Google Play readiness work, OVH work, or database-move work
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
@@ -49,6 +49,7 @@ The next lane is successful when:
 - the shared deferred-access sheet no longer reads like an internal testing/store-readiness surface
 - `/channel-settings` makes current creator monetization grants clearer without promising live ads or broader monetization rollout
 - watch-party and communication default controls stop reading like raw internal enum values
+- the next step cleanly decides whether any remaining monetization/ad-readiness seam is still safe or should stay later
 - public/profile/chat/title/player routes still make no fake social claims
 - no route drift or fake social claims are introduced
 - the staged set stays task-pure

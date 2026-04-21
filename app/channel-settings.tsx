@@ -124,6 +124,18 @@ const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPart
   return "Public";
 };
 
+const formatRoomDefaultAccessLabel = (value: "open" | "party_pass" | "premium") => {
+  if (value === "party_pass") return "Party Pass";
+  if (value === "premium") return "Premium";
+  return "Open";
+};
+
+const formatJoinPolicyLabel = (value: "open" | "locked") => (value === "locked" ? "Locked" : "Open");
+const formatReactionsPolicyLabel = (value: "enabled" | "muted") => (value === "muted" ? "Muted" : "Enabled");
+const formatCapturePolicyLabel = (value: "best_effort" | "host_managed") => (
+  value === "host_managed" ? "Host Managed" : "Best Effort"
+);
+
 const toDatetimeLocalValue = (value: string | null) => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return "";
@@ -1304,7 +1316,7 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.panelStatus}>ACTIVE DEFAULTS</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Party Pass and Premium options only appear when creator grants support them.
+                Set the shared-room posture creators can actually use now. Party Pass and Premium only stay selectable when the matching creator grant is active.
               </Text>
               <Text style={styles.sectionLabel}>Join Policy</Text>
               <View style={styles.chipRow}>
@@ -1315,7 +1327,7 @@ export default function ChannelSettingsScreen() {
                     onPress={() => updateProfile({ defaultWatchPartyJoinPolicy: value })}
                   >
                     <Text style={[styles.chipText, profile.defaultWatchPartyJoinPolicy === value && styles.chipTextActive]}>
-                      {value.toUpperCase()}
+                      {formatJoinPolicyLabel(value)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1330,7 +1342,7 @@ export default function ChannelSettingsScreen() {
                     onPress={() => updateProfile({ defaultWatchPartyReactionsPolicy: value })}
                   >
                     <Text style={[styles.chipText, profile.defaultWatchPartyReactionsPolicy === value && styles.chipTextActive]}>
-                      {value.toUpperCase()}
+                      {formatReactionsPolicyLabel(value)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1358,7 +1370,7 @@ export default function ChannelSettingsScreen() {
                       disabled={blocked}
                     >
                       <Text style={[styles.chipText, profile.defaultWatchPartyContentAccessRule === value && styles.chipTextActive]}>
-                        {value.toUpperCase()}
+                        {formatRoomDefaultAccessLabel(value)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1374,7 +1386,7 @@ export default function ChannelSettingsScreen() {
                     onPress={() => updateProfile({ defaultWatchPartyCapturePolicy: value })}
                   >
                     <Text style={[styles.chipText, profile.defaultWatchPartyCapturePolicy === value && styles.chipTextActive]}>
-                      {value.replace("_", " ").toUpperCase()}
+                      {formatCapturePolicyLabel(value)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1387,7 +1399,7 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.panelStatus}>ACTIVE DEFAULTS</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Communication defaults follow the same creator grants and stay local to this device for now.
+                Use the same grant-backed access posture for Chi&apos;lly Chat-linked entry without promising broader monetization or live ads yet.
               </Text>
 
               <Text style={styles.sectionLabel}>Content Access</Text>
@@ -1412,7 +1424,7 @@ export default function ChannelSettingsScreen() {
                       disabled={blocked}
                     >
                       <Text style={[styles.chipText, profile.defaultCommunicationContentAccessRule === value && styles.chipTextActive]}>
-                        {value.toUpperCase()}
+                        {formatRoomDefaultAccessLabel(value)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1428,7 +1440,7 @@ export default function ChannelSettingsScreen() {
                     onPress={() => updateProfile({ defaultCommunicationCapturePolicy: value })}
                   >
                     <Text style={[styles.chipText, profile.defaultCommunicationCapturePolicy === value && styles.chipTextActive]}>
-                      {value.replace("_", " ").toUpperCase()}
+                      {formatCapturePolicyLabel(value)}
                     </Text>
                   </TouchableOpacity>
                 ))}
