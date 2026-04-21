@@ -1685,7 +1685,7 @@ export default function WatchPartyRoomScreen() {
             activeOpacity={0.85}
           >
             <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-              Coming Soon
+              Review Access
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
