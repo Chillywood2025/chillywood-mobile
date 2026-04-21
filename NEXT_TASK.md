@@ -1,40 +1,40 @@
 # NEXT TASK
 
 ## Exact Next Task
-The whole-app premium-finish pass is now underway on `main`, and Stage 3 is closed cleanly. The next exact stage is `premium finish batch 3`: tighten Home and Title so discovery feels more intentional, more alive, and more premium without changing route truth, doctrine, schema, or the canonical `Live Watch-Party` / `Watch-Party Live` handoff.
+The whole-app premium-finish pass is now underway on `main`, and Stage 4 is closed cleanly. The next exact stage is the `premium finish closeout audit`: decide whether one final trivial or narrow micro-polish slice is still justified, or whether this lane is now complete enough to hand back to the broader roadmap cleanly.
 
 ## Current Plan
 1. Treat the trust/account/support batch as closed.
 2. Treat the Chi'lly Chat inbox/thread batch as closed.
-3. Tighten `app/(tabs)/index.tsx` and `app/title/[id].tsx` next.
-4. Improve discovery hierarchy, live activity feel, and state confidence without changing Home/title route truth.
-5. Keep the real player/title/watch-party handoff intact.
+3. Treat the Home/title discovery batch as closed.
+4. Audit the lane for any final trivial or narrow micro-polish that is still safe and justified.
+5. If no such slice remains, close the lane and hand back to the broader roadmap.
 6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- tighten Home/title discovery confidence
-- improve live-signal feel, loading/error polish, and premium scanability
-- keep real title/player/watch-party entry points honest
+- decide whether one final micro-polish slice is still justified
+- only proceed if the remaining seam is trivial or narrow
+- otherwise close the lane cleanly and keep the completed premium-finish work intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- preserve current Home/title route truth and current doctrine
-- improve hierarchy, discovery confidence, and loading/error/live-state feel on Home and Title
-- keep the canonical title route, player handoff, and Watch-Party entry intact
+- preserve current route truth and current doctrine
+- review the landed premium-finish work against the remaining seams
+- only allow one final trivial or narrow polish slice if it is clearly safe
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
 Do not:
 - change current public/product route truth
 - change schema or doctrine
-- widen into profile, player, chat, watch-party room, or admin work in this batch
-- invent fake notifications, fake catalog rows, or fake live availability
+- widen back into a new medium/broad pass
+- invent a fake final batch just to keep the lane open
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- Home and Title feel more premium and more intentional
-- discovery and live/activity cues stay honest to current route/function truth
+- the remaining seam is classified honestly as trivial, narrow, medium, or broad/risky
+- the lane either lands one final safe micro-polish slice or closes cleanly
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure

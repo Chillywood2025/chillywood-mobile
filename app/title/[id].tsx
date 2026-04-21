@@ -419,7 +419,7 @@ export default function TitleDetails() {
     return (
       <View style={styles.screenCenter}>
         <ActivityIndicator color={ACCENT} />
-        <Text style={styles.loadingText}>Loading title…</Text>
+        <Text style={styles.loadingText}>Loading Chi&apos;llywood title…</Text>
       </View>
     );
   }
@@ -427,7 +427,8 @@ export default function TitleDetails() {
   if (!title) {
     return (
       <View style={styles.screenCenter}>
-        <Text style={styles.h1}>Not found</Text>
+        <Text style={styles.h1}>Title unavailable</Text>
+        <Text style={styles.stateText}>This title isn&apos;t available right now.</Text>
         <Pressable onPress={() => router.back()} style={styles.btnGhost}>
           <Text style={styles.btnText}>Go back</Text>
         </Pressable>
@@ -440,6 +441,20 @@ export default function TitleDetails() {
     : title.content_access_rule === "premium";
   const infoLine = buildTitleInfoLine(title);
   const addedLabel = formatAddedDate(title.created_at);
+  const titleSignals = [
+    {
+      label: isPremiumTitle ? "Premium title" : "Open title",
+      tone: isPremiumTitle ? "premium" as const : "default" as const,
+    },
+    ...(inMyList ? [{
+      label: "In Favorites",
+      tone: "default" as const,
+    }] : []),
+    ...(liveMetadata?.liveRoomCount ? [{
+      label: `${liveMetadata.liveRoomCount} live room${liveMetadata.liveRoomCount === 1 ? "" : "s"}`,
+      tone: "live" as const,
+    }] : []),
+  ];
   const accessSheetPresentation = titleAccess
     ? getMonetizationAccessSheetPresentation({
         gate: titleAccess,
@@ -465,6 +480,30 @@ export default function TitleDetails() {
             <Text style={styles.metaDot}>•</Text>
             <Text style={styles.metaText}>{addedLabel}</Text>
           </View>
+          {titleSignals.length ? (
+            <View style={styles.signalRow}>
+              {titleSignals.map((signal) => (
+                <View
+                  key={signal.label}
+                  style={[
+                    styles.signalPill,
+                    signal.tone === "premium" && styles.signalPillPremium,
+                    signal.tone === "live" && styles.signalPillLive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.signalPillText,
+                      signal.tone === "premium" && styles.signalPillTextPremium,
+                      signal.tone === "live" && styles.signalPillTextLive,
+                    ]}
+                  >
+                    {signal.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
           {isPremiumTitle ? (
             <View style={styles.statusCard}>
               <Text style={styles.statusKicker}>PREMIUM TITLE</Text>
@@ -487,8 +526,8 @@ export default function TitleDetails() {
               <Text style={styles.liveActivityKicker}>LIVE WATCH-PARTY</Text>
               <Text style={styles.liveActivityBody}>
                 {liveMetadata.liveRoomCount === 1
-                  ? "One live room is already active around this title. Jump in through Watch-Party Live."
-                  : `${liveMetadata.liveRoomCount} live rooms are already active around this title. Jump in through Watch-Party Live.`}
+                  ? "One live room is already moving around this title. Jump in through Watch-Party Live."
+                  : `${liveMetadata.liveRoomCount} live rooms are already moving around this title. Jump in through Watch-Party Live.`}
               </Text>
               <View style={styles.liveActivityMetaRow}>
                 <Text style={styles.liveActivityMetaText}>
@@ -499,7 +538,7 @@ export default function TitleDetails() {
                 ) : null}
               </View>
               <Pressable style={[styles.btnGhost, styles.liveActivityActionButton]} onPress={onOpenWatchPartyLive}>
-                <Text style={styles.btnText}>Watch-Party Live</Text>
+                <Text style={styles.btnText}>Open Watch-Party Live</Text>
               </Pressable>
             </View>
           ) : null}
@@ -602,6 +641,15 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "black" },
   screenCenter: { flex: 1, backgroundColor: "black", alignItems: "center", justifyContent: "center", padding: 20 },
   loadingText: { color: "#9a9a9a", marginTop: 10 },
+  stateText: {
+    color: "#AAB6CC",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+    marginTop: 10,
+    marginBottom: 14,
+    textAlign: "center",
+  },
   hero: { width: "100%", height: 420, resizeMode: "cover" },
   heroFallback: { width: "100%", height: 420, backgroundColor: "#111" },
   content: { paddingHorizontal: 16, paddingTop: 14 },
@@ -612,6 +660,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginTop: 8,
+  },
+  signalRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  signalPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  signalPillPremium: {
+    borderColor: "rgba(242,194,91,0.3)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+  },
+  signalPillLive: {
+    borderColor: "rgba(220,20,60,0.32)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+  },
+  signalPillText: {
+    color: "#F3F7FF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  signalPillTextPremium: {
+    color: "#FFE4A1",
+  },
+  signalPillTextLive: {
+    color: "#FFD6DE",
   },
   metaText: {
     color: "#C5CEDF",

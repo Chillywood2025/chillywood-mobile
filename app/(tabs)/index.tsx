@@ -483,6 +483,40 @@ export default function HomeScreen() {
   }, [homeConfig.browseCategoryQuery, maxRailItems, titles]);
 
   const favoriteTitles = useMemo(() => myListTitles.slice(0, maxRailItems), [maxRailItems, myListTitles]);
+  const livePulse = useMemo(() => {
+    const liveEntries = Object.values(titleLiveMetadataById);
+    const liveRoomCount = liveEntries.reduce((total, entry) => total + entry.liveRoomCount, 0);
+    const liveCommentCount = liveEntries.reduce((total, entry) => total + entry.commentCount, 0);
+
+    return {
+      liveTitleCount: liveEntries.length,
+      liveRoomCount,
+      liveCommentCount,
+      reactionsLive: liveEntries.some((entry) => entry.reactionsEnabled),
+    };
+  }, [titleLiveMetadataById]);
+  const homePulseTitle = livePulse.liveRoomCount
+    ? `${livePulse.liveRoomCount} live room${livePulse.liveRoomCount === 1 ? "" : "s"} moving now`
+    : continueWatchingTitles.length
+      ? `${continueWatchingTitles.length} title${continueWatchingTitles.length === 1 ? "" : "s"} ready to resume`
+      : `${titles.length} title${titles.length === 1 ? "" : "s"} ready on Home`;
+  const homePulseBody = livePulse.liveRoomCount
+    ? `${livePulse.liveTitleCount} title${livePulse.liveTitleCount === 1 ? "" : "s"} already have watch-party activity${livePulse.liveCommentCount ? ` and ${livePulse.liveCommentCount} live comment${livePulse.liveCommentCount === 1 ? "" : "s"}` : ""}.`
+    : favoriteTitles.length
+      ? `${favoriteTitles.length} saved title${favoriteTitles.length === 1 ? "" : "s"} stay close, and fresh picks are ready below.`
+      : "Fresh picks, featured drops, and live watch-party entry stay ready from Home.";
+  const homePulsePills = [
+    livePulse.liveRoomCount
+      ? `${livePulse.liveRoomCount} live room${livePulse.liveRoomCount === 1 ? "" : "s"}`
+      : "No live rooms",
+    favoriteTitles.length
+      ? `${favoriteTitles.length} saved`
+      : "Build your list",
+    canShowContinueWatching && continueWatchingTitles.length
+      ? `${continueWatchingTitles.length} resume`
+      : "Fresh picks ready",
+    ...(livePulse.reactionsLive ? ["Reactions live"] : []),
+  ];
 
   function renderDiscoveryRail(title: string, data: TitleRow[], keyPrefix: string) {
     if (!data.length) return null;
@@ -559,11 +593,11 @@ export default function HomeScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color="#E50914" />
-          <Text style={styles.muted}>Loading titles…</Text>
+          <Text style={styles.muted}>Loading tonight&apos;s picks…</Text>
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.errorTitle}>Couldn’t load titles</Text>
+          <Text style={styles.errorTitle}>Home couldn&apos;t refresh</Text>
           <Text style={styles.errorMsg}>{error}</Text>
 
           <Pressable style={styles.retryBtn} onPress={onRefresh}>
@@ -572,8 +606,8 @@ export default function HomeScreen() {
         </View>
       ) : !titles.length ? (
         <View style={styles.center}>
-          <Text style={styles.muted}>No titles yet.</Text>
-          <Text style={styles.mutedSmall}>When you add titles later, they’ll show up here automatically.</Text>
+          <Text style={styles.muted}>Home is waiting on titles.</Text>
+          <Text style={styles.mutedSmall}>Program the first lineup and it will light up here automatically.</Text>
         </View>
       ) : (
         <ScrollView
@@ -611,6 +645,19 @@ export default function HomeScreen() {
                   </View>
                 )}
               </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.homePulseCard}>
+            <Text style={styles.homePulseKicker}>DISCOVERY PULSE</Text>
+            <Text style={styles.homePulseTitle}>{homePulseTitle}</Text>
+            <Text style={styles.homePulseBody}>{homePulseBody}</Text>
+            <View style={styles.homePulseMetaRow}>
+              {homePulsePills.map((pill) => (
+                <View key={pill} style={styles.homePulsePill}>
+                  <Text style={styles.homePulsePillText}>{pill}</Text>
+                </View>
+              ))}
             </View>
           </View>
 
@@ -700,7 +747,7 @@ export default function HomeScreen() {
                       <ActivityIndicator color="#E50914" />
                     </View>
                   ) : !favoriteTitles.length ? (
-                    <Text style={styles.myListEmpty}>No saved titles yet.</Text>
+                    <Text style={styles.myListEmpty}>Saved titles land here.</Text>
                   ) : (
                     <FlatList
                       horizontal
@@ -754,9 +801,9 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Chi&apos;llywood Originals</Text>
             <View style={styles.originalsPlaceholder}>
-              <Text style={styles.originalsPlaceholderTitle}>More Chi&apos;llywood drops will land here</Text>
+              <Text style={styles.originalsPlaceholderTitle}>More Chi&apos;llywood drops land here next</Text>
               <Text style={styles.originalsPlaceholderBody}>
-                This rail stays open for Chi&apos;llywood-owned originals, curated drops, and platform premieres when they are actually ready.
+                This rail stays reserved for Chi&apos;llywood-owned originals, curated drops, and platform premieres when they are actually ready.
               </Text>
             </View>
           </View>
@@ -799,6 +846,53 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  homePulseCard: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(9,12,20,0.76)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  homePulseKicker: {
+    color: "#9AA8C4",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  homePulseTitle: {
+    color: "#F5F8FF",
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  homePulseBody: {
+    color: "#C4CFE2",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  homePulseMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  homePulsePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  homePulsePillText: {
+    color: "#E2E9F7",
+    fontSize: 11,
+    fontWeight: "800",
   },
   utilitySettingsButton: {
     minHeight: 36,
