@@ -911,35 +911,35 @@ export default function ProfileScreen() {
   const contentHomeBody = isSelfProfile
     ? channelSignalsReady
       ? hasProgrammingTruth
-        ? `Your channel can already point people into ${programmingSignalsSummary}, plus ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
-        : `Your channel can already build from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
+        ? `Your channel already points into ${programmingSignalsSummary}, plus ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
+        : `Your channel can grow from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
       : "Loading the titles that can anchor your first channel shelves."
     : contentProgrammingReady
       ? hasProgrammingTruth
-        ? `${programmingSignalsSummary} already gives this channel a real lineup to point visitors into.`
+        ? `${programmingSignalsSummary} already gives this channel a real lineup.`
         : "This channel can stay lean until real shelves or creator programming are ready."
       : "Loading the lineup this channel can point people into.";
   const contentProgrammingSurfaceBody = isSelfProfile
     ? channelSignalsReady
       ? hasProgrammingTruth
-        ? `Build the public lineup from ${programmingSignalsSummary}, then layer saved titles and resume cues behind it.`
-        : `Build the first public lineup from saved titles and resume cues while deeper programming grows later.`
+        ? `Build the public lineup from ${programmingSignalsSummary}, then let saved titles and resume cues support it.`
+        : "Build the first public lineup from saved titles and resume cues."
       : "Loading the signals that can anchor your first content shelves."
     : isOfficialProfile
       ? contentProgrammingReady
         ? hasProgrammingTruth
-          ? `Official programming is already live here: ${programmingSignalsSummary}.`
+          ? `Official programming already lives here: ${programmingSignalsSummary}.`
           : "This official channel stays lean until real platform programming is ready."
         : "Loading the official programming signals for this channel surface."
       : contentProgrammingReady
         ? hasProgrammingTruth
-          ? `${programmingSignalsSummary} can already anchor this tab.`
+          ? `${programmingSignalsSummary} already anchors this channel lineup.`
           : "This tab should stay lean until real shelves or creator programming are ready."
         : "Loading the programming signals that can anchor this channel library.";
   const contentProgrammingGroupsBody = contentProgrammingReady
     ? hasProgrammingTruth
       ? programmingGroupsSummary
-      : "Keep this tab focused on real shelves and real titles instead of placeholder catalogs."
+      : "Keep this tab focused on real shelves and real titles."
     : "Loading the hero, featured, trending, and top-row groupings for this surface.";
   const quickActions = isOfficialProfile
     ? [
@@ -1005,40 +1005,40 @@ export default function ProfileScreen() {
       ? "Your Channel Spotlight"
       : `${profile.displayName}'s Spotlight`;
   const featuredSpotlightBody = isOfficialProfile
-    ? "This protected profile is Chi'llywood's official public channel surface for trusted updates, programming, and follow-up."
+    ? "Verified updates, programming, and trusted follow-up start here."
     : isSelfProfile
-      ? "Use this route to spotlight what people should watch, what is live, and where they should go next."
-      : "Start here for the creator's spotlight, live presence, and the next real watch or chat step.";
+      ? "Lead with the title, live moment, or cue that best defines your channel right now."
+      : "Start here for the creator spotlight, live pulse, and next real watch or chat move.";
   const channelLayoutPreset = resolveChannelLayoutPreset(channelAccessProfile?.channelLayoutPreset);
   const homeSectionMap = {
     featured: {
       title: featuredSpotlightTitle,
-      kicker: "FEATURED SPOTLIGHT",
+      kicker: "SPOTLIGHT",
       body: featuredSpotlightBody,
       accent: isOfficialProfile ? "official" : "default",
     },
     live: {
       title: liveStatusTitle,
-      kicker: "LIVE MODULE",
+      kicker: "LIVE",
       body: liveStatusBody,
       accent: profile.isLive ? "live" : "default",
     },
     content: {
-      title: isSelfProfile ? "Content Shelves" : "Content Preview",
-      kicker: "CONTENT",
+      title: isSelfProfile ? "Your Lineup" : "Channel Lineup",
+      kicker: "LINEUP",
       body: contentHomeBody,
     },
     community: {
-      title: "Community Preview",
+      title: "Community Pulse",
       kicker: "COMMUNITY",
       body: isOfficialProfile
-        ? "Trusted follow-up stays visible here, while direct conversation still lives in Chi'lly Chat."
-        : "Community stays visible here through public signals and follow-up cues, while direct conversation still lives in Chi'lly Chat.",
+        ? "Trusted follow-up stays visible here while direct conversation stays in Chi'lly Chat."
+        : "Public follow-up stays visible here while direct conversation stays in Chi'lly Chat.",
     },
     about: {
-      title: "About Snapshot",
+      title: "Channel Identity",
       kicker: "ABOUT",
-      body: `${profile.displayName} should read like a coherent public channel here, even before deeper creator programming arrives.`,
+      body: `${profile.displayName} should feel like a coherent public channel even before deeper programming arrives.`,
     },
   } satisfies Record<"featured" | "live" | "content" | "community" | "about", ProfileSurfaceCard>;
   const homeSectionOrder = channelLayoutPreset === "live_first"
@@ -1056,20 +1056,20 @@ export default function ProfileScreen() {
           accent: "official",
         },
         {
-          title: hasProgrammingTruth ? "Current Lineup" : "Content Boundary",
-          kicker: "CONTENT",
+          title: hasProgrammingTruth ? "Current Shelves" : "Channel Shelves",
+          kicker: "PROGRAMMING",
           body: contentProgrammingGroupsBody,
         },
       ]
     : [
         {
-          title: isSelfProfile ? "Programming Surface" : "Channel Library",
-          kicker: isSelfProfile ? "OWNER SIGNAL" : "PUBLIC SIGNAL",
+          title: isSelfProfile ? "Your Lineup" : "Channel Lineup",
+          kicker: isSelfProfile ? "YOUR CHANNEL" : "PUBLIC CHANNEL",
           body: contentProgrammingSurfaceBody,
         },
         {
-          title: hasProgrammingTruth ? "Current Lineup" : "Library Boundary",
-          kicker: "CONTENT TAB",
+          title: hasProgrammingTruth ? "Current Shelves" : "Channel Shelves",
+          kicker: "PROGRAMMING",
           body: contentProgrammingGroupsBody,
         },
       ];
@@ -1140,7 +1140,7 @@ export default function ProfileScreen() {
 
     if (publicActivityVisibility) {
       sections.push({
-        title: "Public Activity Visibility",
+        title: "Activity Visibility",
         kicker: "PUBLIC ACTIVITY",
         body: `${formatPublicActivityVisibilityValue(publicActivityVisibility)}. ${getPublicActivityVisibilityBody(publicActivityVisibility)}`,
       });
@@ -1148,7 +1148,7 @@ export default function ProfileScreen() {
 
     if (typeof followerSurfaceEnabled === "boolean") {
       sections.push({
-        title: "Follower Surface",
+        title: "Followers",
         kicker: "FOLLOWERS",
         body: `${formatAudienceSurfaceVisibilityValue(followerSurfaceEnabled)}. ${getAudienceSurfaceVisibilityBody("followers", followerSurfaceEnabled)}`,
       });
@@ -1156,7 +1156,7 @@ export default function ProfileScreen() {
 
     if (typeof subscriberSurfaceEnabled === "boolean") {
       sections.push({
-        title: "Subscriber Surface",
+        title: "Subscribers",
         kicker: "SUBSCRIBERS",
         body: `${formatAudienceSurfaceVisibilityValue(subscriberSurfaceEnabled)}. ${getAudienceSurfaceVisibilityBody("subscribers", subscriberSurfaceEnabled)}`,
       });
@@ -1171,58 +1171,58 @@ export default function ProfileScreen() {
   ]);
   const communityTabSections: readonly ProfileSurfaceCard[] = [
     {
-      title: "Chi'lly Chat",
-      kicker: "FOLLOW-UP",
+      title: "Conversation",
+      kicker: "CHI'LLY CHAT",
       body: isSelfProfile
-        ? "Your inbox and direct-thread continuity still live on Chi'lly Chat. Keep the public route social and let messaging stay thread-first."
+        ? "Keep direct follow-up in Chi'lly Chat so this route can stay public-facing."
         : isOfficialProfile
-          ? "Official follow-up stays on canonical Chi'lly Chat routes so trusted help never turns into a shadow support app."
-          : "Community follow-up from this profile should hand off to Chi'lly Chat instead of burying messaging inside the profile surface.",
+          ? "Official follow-up stays in canonical Chi'lly Chat so trusted help never turns into a shadow support app."
+          : "Direct follow-up from this channel should move into Chi'lly Chat, not hide inside the profile.",
     },
     {
-      title: isOfficialProfile ? "Trust And Safety" : "Public Signals",
+      title: isOfficialProfile ? "Trust And Safety" : "Public Trust",
       kicker: isOfficialProfile ? "SAFETY" : "COMMUNITY",
       body: isOfficialProfile
-        ? "Official accounts need protected trust markers, bounded reporting, and auditable follow-up without leaving the canonical profile and Chi'lly Chat architecture."
+        ? "Official accounts need protected trust markers, bounded reporting, and auditable follow-up."
         : canReportProfile
-          ? "This profile already supports reporting when something feels unsafe. Public activity and follow-up should grow from that same honest footing."
-          : "Keep this surface identity-first, public-facing, and ready for real activity signals when they exist.",
+          ? "Reporting is already available here, so community trust can grow from a real safety floor."
+          : "Keep this channel identity-first and ready for real public activity when it exists.",
     },
     ...publicAudienceVisibilitySections,
   ];
   const aboutTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
     ? [
         {
-          title: "Official Concierge",
+          title: "Official Identity",
           kicker: profile.platformOwnershipLabel ?? "PLATFORM OWNED",
           body: officialAccount?.conciergeHeadline
-            ? `${officialAccount.conciergeHeadline} ${profile.displayName} is not a random user-created profile and not a claimable owner page.`
-            : `${profile.displayName} is Chi'llywood's official seeded platform account, not a random user-created profile and not a claimable owner page.`,
+            ? `${officialAccount.conciergeHeadline} ${profile.displayName} is Chi'llywood's verified public account.`
+            : `${profile.displayName} is Chi'llywood's verified public account, not a claimable owner page.`,
           accent: "official",
         },
         {
-          title: "Canonical Official Identity",
+          title: "Public Route",
           kicker: "ABOUT",
-          body: "This official profile and channel surface stays on the same canonical route as every other profile. Protected official behavior is additive, not a separate app.",
+          body: "This official profile stays on the same canonical route as every other channel. Protected behavior is additive, not a separate app.",
         },
         {
-          title: "Starter Path",
+          title: "Starter Thread",
           kicker: "CHI'LLY CHAT",
-          body: "Open the canonical direct thread to ask how to get started, request official help, and follow future platform announcements without leaving native Chi'lly Chat.",
+          body: "Open the canonical direct thread for official help, onboarding questions, and future platform follow-up.",
         },
       ]
     : [
         {
-          title: "Profile Snapshot",
+          title: "Channel Identity",
           kicker: "ABOUT",
-          body: `${profile.displayName} keeps live presence, rooms, and direct communication inside one Chi'llywood identity.`,
+          body: `${profile.displayName} keeps live presence, rooms, and direct follow-up inside one Chi'llywood identity.`,
         },
         {
-          title: "Channel Boundary",
-          kicker: "ROOM RULE",
+          title: "Public Route",
+          kicker: "CHANNEL",
           body: isSelfProfile
-            ? "Keep this route public-facing first. Owner tools stay on the same surface, but deeper editing still lives in Manage Channel."
-            : "This route should feel like a public channel surface first, not a settings page or an inbox.",
+            ? "Keep this surface public-facing first. Manage Channel stays the deeper editing handoff."
+            : "This route stays a public channel destination, not a settings page or inbox.",
         },
       ];
   const activeTabSections = activeTab === "home"
@@ -1270,14 +1270,14 @@ export default function ProfileScreen() {
     },
   ];
   const tabIntro = activeTab === "home"
-    ? "Home keeps the spotlight, live status, lineup, and community cues in one place."
+    ? "Spotlight, live pulse, lineup, and community cues in one channel home."
     : activeTab === "content"
-      ? "Content is the lineup and library surface for real titles and real shelves."
+      ? "Real titles and shelves that define this channel."
       : activeTab === "live"
         ? "Live keeps schedule, current status, and watch-together continuity distinct."
         : activeTab === "community"
-          ? "Community keeps public follow-up visible without turning this route into the inbox."
-          : "About keeps identity, trust, and channel framing clear.";
+          ? "Public follow-up and trust signals without turning this route into the inbox."
+          : "Identity, trust, and channel context at a glance.";
   const loadPublicReminderEvents = async () => {
     if (!userId) {
       setPublicEvents([]);
@@ -1714,7 +1714,7 @@ export default function ProfileScreen() {
 
         <View style={styles.sectionStack}>
           <View style={styles.tabStripCard}>
-            <Text style={styles.tabStripKicker}>TAB STRIP</Text>
+            <Text style={styles.tabStripKicker}>CHANNEL NAVIGATION</Text>
             <View style={styles.tabStripRow}>
               {publicProfileTabs.map((tab) => (
                 <TouchableOpacity
@@ -1755,7 +1755,7 @@ export default function ProfileScreen() {
           ))}
           {activeTab === "content" && contentActionTitles.length ? (
             <View style={styles.quickActionsCard}>
-              <Text style={styles.quickActionsTitle}>Open The Current Lineup</Text>
+              <Text style={styles.quickActionsTitle}>Jump Into The Lineup</Text>
               <View style={styles.quickActionsRow}>
                 {contentActionTitles.map((item) => (
                   <TouchableOpacity
@@ -1779,7 +1779,7 @@ export default function ProfileScreen() {
           ) : null}
           {activeTab === "community" && communityActions.length ? (
             <View style={styles.quickActionsCard}>
-              <Text style={styles.quickActionsTitle}>Community Actions</Text>
+              <Text style={styles.quickActionsTitle}>Community Follow-Up</Text>
               <View style={styles.quickActionsRow}>
                 {communityActions.map((action) => (
                   <TouchableOpacity
