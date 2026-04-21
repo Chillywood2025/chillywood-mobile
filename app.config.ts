@@ -8,7 +8,7 @@ const normalizeRuntimeEnvironment = (value: unknown) => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
 );
 const CONFIG_DIR = process.cwd();
-const DEPLOYED_LIVEKIT_SERVER_URL = "wss://chillywood-realtime-eu251vsu.livekit.cloud";
+const DEPLOYED_LIVEKIT_SERVER_URL = "wss://live.chillywoodstream.com";
 const DEPLOYED_LIVEKIT_TOKEN_ENDPOINT = "https://bmkkhihfbmsnnmcqkoly.supabase.co/functions/v1/livekit-token";
 
 const resolveExistingFile = (...candidates: Array<string | undefined>) => {
