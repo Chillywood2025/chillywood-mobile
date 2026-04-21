@@ -41,7 +41,7 @@ This does not mean:
 
 It means only this:
 - there is no honest app-owned backend/web upstream to deploy now
-- the only grounded later non-realtime candidate is a bounded public-static legal slice
+- the only grounded bounded non-realtime candidate is the now-live public-static legal slice
 
 ## 4. What "App Upstream" Can Honestly Mean Now
 
@@ -62,7 +62,10 @@ Current grounded owner files:
 
 Grounding already present in repo truth:
 - runtime config already supports external public legal URLs
-- Hetzner planning templates already mention optional later public legal hosts
+- the bounded legal slice is now live at:
+  - `https://live.chillywoodstream.com/privacy`
+  - `https://live.chillywoodstream.com/terms`
+  - `https://live.chillywoodstream.com/account-deletion`
 
 ### 4.2 Not Grounded Enough Yet
 These are not currently honest app-upstream targets:
@@ -111,14 +114,12 @@ Before any later deployment-prep pass begins, Chi'llywood needs all of the follo
 5. Keep support/status deferred unless their owners become real and host-safe.
 
 ## 7. Recommended Next Lane
-The next exact infra lane after this doctrine pass should be:
-- narrow `public legal-surface export prep`
+The bounded legal slice is now closed enough to move on.
 
-That later lane should decide only:
-- how `privacy`, `terms`, and `account-deletion` become hostable static assets
-- what public URLs and Caddy/static-file ownership they would use
+If infra work resumes later, the next exact lane should be:
+- `release hardening later`
 
-That later lane should not:
+That later lane should still not:
 - deploy a broader app upstream
 - move database/auth
 - replace Expo/EAS delivery

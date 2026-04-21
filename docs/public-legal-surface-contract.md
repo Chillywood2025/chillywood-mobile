@@ -6,7 +6,6 @@ This document defines what a host-served public legal surface would mean for Chi
 It is a bounded contract only.
 
 It does not:
-- deploy the legal surfaces
 - create a broader app or backend upstream
 - move auth, data, or functions off Supabase
 - change current app routes
@@ -50,17 +49,37 @@ It would not mean:
 - auth cutover
 - data deletion automation moving to Hetzner
 
+### 2.4 Current Live Host Truth
+The bounded public legal slice is now actually live on the existing Hetzner edge at:
+- `https://live.chillywoodstream.com/privacy`
+- `https://live.chillywoodstream.com/terms`
+- `https://live.chillywoodstream.com/account-deletion`
+
+Current serving strategy is:
+- same host as the LiveKit ingress
+- path-scoped static serving only for the exact legal paths
+- shared `/_expo` assets and `/favicon.ico` served from the legal artifact
+- all other traffic on `live.chillywoodstream.com` still reverse-proxied to LiveKit
+
+This still does not create:
+- a broader app/backend upstream
+- support hosting
+- status hosting
+
 ## 3. Readiness Decision
 
 Current decision:
 - `LEGAL_SURFACE_READY = YES_BOUNDED_STATIC_SLICE`
 
 This means:
-- the legal-page content owners are bounded and self-contained enough that a later static host/export slice is honest
-- that later slice can stay fully separate from a broader app/backend upstream
+- the legal-page content owners were bounded and self-contained enough that a later static host/export slice was honest
+- that slice stays fully separate from a broader app/backend upstream
+
+Current deployment truth:
+- `LEGAL_SURFACE_DEPLOYED = YES`
+- the bounded static slice is now proved live on the current host/path strategy
 
 This does not mean:
-- deployment should happen immediately
 - a broader app upstream is now justified
 - support/status hosting are ready
 
@@ -75,10 +94,10 @@ Canonical in-app routes remain:
 - `/terms`
 - `/account-deletion`
 
-Possible later public-hosted destinations may mirror those paths on a bounded legal host, such as:
-- `https://legal.example.com/privacy`
-- `https://legal.example.com/terms`
-- `https://legal.example.com/account-deletion`
+Current public-hosted destinations are:
+- `https://live.chillywoodstream.com/privacy`
+- `https://live.chillywoodstream.com/terms`
+- `https://live.chillywoodstream.com/account-deletion`
 
 ## 5. Explicit Out Of Scope
 Even if public legal hosting is adopted later, it must not imply:
@@ -103,46 +122,50 @@ What would still be fabricated if we tried to host more right now:
 - status, because there is no canonical public status-page owner in repo truth
 - a broader app/backend host, because no deployable server topology exists
 
-## 7. What Must Happen Before Any Later Deployment Prep
-Before a real deployment pass begins, Chi'llywood still needs:
+## 7. Deployment Contract That Is Now Proved
+The bounded legal deployment contract is now:
 
-1. A static output contract.
-   Define exactly how these legal owners become hostable static assets.
+1. Static output contract.
+   Use `expo export --platform web` as the renderer, then prune the artifact down to:
+   - `/privacy`
+   - `/terms`
+   - `/account-deletion`
+   - shared `/_expo` assets
+   - `/favicon.ico`
 
-2. A host-path contract.
-   Define exact target hostnames/paths and whether one legal host or path-based routing is used.
+2. Host/path contract.
+   Serve the legal slice on the existing LiveKit host as:
+   - `/privacy`
+   - `/terms`
+   - `/account-deletion`
 
-3. A Caddy ownership contract.
-   Define whether Caddy should serve the legal host directly from files, and keep that isolated from LiveKit ingress.
+3. Caddy ownership contract.
+   Caddy serves only the exact legal/static paths from disk, and falls back to the existing LiveKit reverse proxy for everything else.
 
-4. A rollback contract.
-   Keep in-app legal routes and existing runtime defaults intact until hosted legal URLs are proved.
+4. Runtime URL contract.
+   Runtime legal defaults now point at the live HTTPS paths above.
 
-5. A publication-worthiness check.
-   Confirm the public-hosted legal pages solve a real need, such as app-store/compliance/browser reachability, instead of becoming speculative infrastructure drift.
+5. Rollback contract.
+   If the bounded legal slice regresses later, legal URL overrides can still be controlled through the existing runtime env contract without opening a broader app-upstream lane.
 
-## 8. Is This Worth Doing Now
-Maybe, but only as a narrow convenience/compliance slice.
+## 8. Was This Worth Doing
+Yes, as a narrow convenience/compliance slice.
 
-It is not a blocker for:
-- the current mobile product
-- the current LiveKit ingress path
-- the current Supabase architecture
-
-It is only worth doing if Chi'llywood now benefits from:
+The live result now provides:
 - browser-reachable legal URLs outside the app
-- cleaner store-review / compliance references
-- a bounded non-realtime use for the Hetzner edge that does not invent a broader app host
+- cleaner compliance/store-review references
+- a bounded non-realtime use for the Hetzner edge without inventing a broader app host
 
 ## 9. Exact Next Lane
-The next exact infra lane after this contract pass should be:
-- narrow `public legal-surface deployment`
+This bounded legal slice is now complete enough to close out.
 
-That later lane should:
-- use a bounded static export artifact only for `privacy`, `terms`, and `account-deletion`
-- define target public URLs
-- define Caddy/static-file ownership
-- stop before claiming deployment unless the artifact and host wiring are actually proved
+If infra work resumes later, the next exact lane should be:
+- `release hardening later`
+
+It should not reopen:
+- broader app hosting
+- database migration
+- support/status hosting
 
 ## 10. Current Export Strategy
 The current bounded export strategy is:

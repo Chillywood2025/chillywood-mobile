@@ -29,6 +29,10 @@ import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
 
+const PUBLIC_LEGAL_PATHS = new Set(["/privacy", "/terms", "/account-deletion"]);
+
+const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
+
 function RouteAnalyticsBridge() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
@@ -261,14 +265,29 @@ function BetaWelcomeController() {
   );
 }
 
+function PublicLegalNavigator() {
+  return (
+    <RootErrorBoundary>
+      <Stack screenOptions={{ headerShown: false }} />
+    </RootErrorBoundary>
+  );
+}
+
 export default function RootLayout() {
-  if (!isRuntimeConfigValid()) {
+  const pathname = usePathname();
+  const publicLegalPath = isPublicLegalPath(pathname);
+
+  if (!isRuntimeConfigValid() && !publicLegalPath) {
     const message = getRuntimeConfigIssueSummary();
     if (__DEV__) {
       throw new Error(message);
     }
 
     return <RuntimeUnavailableScreen message={message} />;
+  }
+
+  if (publicLegalPath) {
+    return <PublicLegalNavigator />;
   }
 
   return (

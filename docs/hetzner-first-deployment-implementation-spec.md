@@ -36,7 +36,7 @@ Current app-upstream readiness decision:
 That means:
 - there is still no current deployable app-owned HTTP upstream for Caddy to front on Hetzner
 - Expo/EAS mobile delivery remains the app-distribution owner
-- the only later bounded non-realtime candidate currently grounded in repo truth is public legal-page hosting
+- the only bounded non-realtime candidate currently grounded in repo truth is the now-live public legal-page slice
 - any future Hetzner app upstream still needs a separate export/deployment contract pass before deployment prep begins
 
 ### 2.2 Backend And Data Truth
@@ -148,6 +148,13 @@ Current host-bootstrap truth now includes:
   - `/opt/chillywood/livekit/config/livekit.yaml`
 - the first LiveKit container is now actually running on-host
 - the current public HTTPS response body now comes from the LiveKit upstream (`OK`) rather than the older placeholder edge page
+- the bounded static legal slice is now live on the current host at:
+  - `https://live.chillywoodstream.com/privacy`
+  - `https://live.chillywoodstream.com/terms`
+  - `https://live.chillywoodstream.com/account-deletion`
+- the legal artifact is now served from:
+  - `/opt/chillywood/legal/current`
+- Caddy now serves only the exact legal/static paths from disk and falls back to LiveKit for everything else on `live.chillywoodstream.com`
 - the current Supabase project secret state now includes:
   - `LIVEKIT_API_KEY`
   - `LIVEKIT_API_SECRET`
@@ -168,6 +175,7 @@ The remaining first-host work is now narrower:
 - preserve the now-proved two-real-device `watch-party-live` handoff for room `XQBBRE`
 - keep broader app hosting and non-realtime upstreams out of scope until their own lanes open
 - treat app-upstream hosting as a separate later doctrine question, not an implied next step from the current LiveKit host state
+- treat the bounded legal slice as closed unless the live legal paths regress
 
 ### 3.4 Expected Filesystem Layout
 The first host should standardize on:
@@ -184,18 +192,18 @@ The next lane should create or verify subpaths such as:
 This pass records the target layout only.
 It does not claim those directories are already populated with live services.
 
-### 3.5 Bootstrap Closeout Decision
-Based on the verified host facts above, the first-host bootstrap state is complete enough to move to:
-- narrow `app upstream doctrine / readiness pass`
+### 3.5 Current Hetzner Closeout Decision
+Based on the verified host facts above, the first-host bootstrap, LiveKit ingress, and bounded legal-surface slice are now complete enough to close out.
 
 That means:
 - base host access is no longer the blocker
 - base hardening is no longer the blocker
 - reverse proxy baseline is no longer the blocker
 - real domain/DNS truth is no longer the blocker
-- one Android client/session proof is no longer the blocker
 - two-real-device authenticated `watch-party-live` proof is no longer the blocker
-- the next unresolved infra question is whether any non-realtime Hetzner app upstream should exist at all, not whether the LiveKit ingress path works
+- bounded public legal hosting is no longer the blocker
+- broader app hosting is still not ready
+- if infra work resumes later, the next exact lane should be `release hardening later`, not broader app deployment or database migration
 
 ## 4. Hetzner-First Decision
 
@@ -252,9 +260,9 @@ That means the first future production-like cutover should move:
 - the LiveKit server endpoint
 - the public reverse-proxy / TLS edge in front of that endpoint
 
-### 6.2 Optional Early Add-On
-Only if explicitly needed later, the same machine may also host:
-- static legal pages
+### 6.2 Early Add-On Now Proved
+The same machine now also hosts:
+- bounded static legal pages
 
 Still not justified yet in current repo truth:
 - broader support hosting
