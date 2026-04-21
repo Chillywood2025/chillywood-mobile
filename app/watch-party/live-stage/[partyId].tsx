@@ -38,6 +38,15 @@ import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgra
 import {
   type LiveKitTokenReady,
 } from "../../../_lib/livekit/token-contract";
+import {
+  LiveKitAudioSession as HybridLiveKitAudioSession,
+  LiveKitRoom as HybridLiveKitRoom,
+  LiveKitVideoTrack as HybridLiveKitVideoTrack,
+  isLiveKitTrackReference as isHybridLiveKitTrackReference,
+  useLiveKitConnectionState as useHybridLiveKitConnectionState,
+  useLiveKitLocalParticipant as useHybridLiveKitLocalParticipant,
+  useLiveKitTracks as useHybridLiveKitTracks,
+} from "../../../_lib/livekit/react-native-module";
 import { prepareLiveKitJoinBoundary } from "../../../_lib/livekit/join-boundary";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
@@ -175,16 +184,6 @@ type CommunicationRTCViewComponent = React.ComponentType<{
   objectFit?: "cover" | "contain";
   mirror?: boolean;
 }>;
-
-const {
-  AudioSession: HybridLiveKitAudioSession,
-  LiveKitRoom: HybridLiveKitRoom,
-  VideoTrack: HybridLiveKitVideoTrack,
-  isTrackReference: isHybridLiveKitTrackReference,
-  useConnectionState: useHybridLiveKitConnectionState,
-  useLocalParticipant: useHybridLiveKitLocalParticipant,
-  useTracks: useHybridLiveKitTracks,
-} = require("@livekit/react-native") as typeof import("@livekit/react-native");
 
 const HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
 

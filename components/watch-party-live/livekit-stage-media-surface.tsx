@@ -5,17 +5,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
-import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
-
-const {
-  AudioSession,
+import {
+  LiveKitAudioSession as AudioSession,
   LiveKitRoom,
-  VideoTrack,
-  isTrackReference,
-  useConnectionState,
-  useLocalParticipant,
-  useTracks,
-} = require("@livekit/react-native") as typeof import("@livekit/react-native");
+  LiveKitVideoTrack as VideoTrack,
+  isLiveKitTrackReference as isTrackReference,
+  useLiveKitConnectionState as useConnectionState,
+  useLiveKitLocalParticipant as useLocalParticipant,
+  useLiveKitTracks as useTracks,
+} from "../../_lib/livekit/react-native-module";
+import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 
 type LiveKitStageMediaSurfaceProps = {
   joinContract: LiveKitTokenReady;

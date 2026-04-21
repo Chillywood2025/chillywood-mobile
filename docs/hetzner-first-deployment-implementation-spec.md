@@ -263,6 +263,11 @@ Still not justified yet in current repo truth:
 Current legal-surface readiness decision:
 - `LEGAL_SURFACE_READY = YES_BOUNDED_STATIC_SLICE`
 
+Current legal export strategy:
+- use Expo static web export only as a bounded content renderer
+- prune the artifact to `privacy`, `terms`, `account-deletion`, and shared `/_expo` assets only
+- keep the later host exposure path-scoped and legal-only
+
 But that is secondary to the realtime edge role.
 
 ### 6.3 What Does Not Move In The First Cutover
@@ -458,9 +463,9 @@ This lane still does not include:
 
 ## 15. Next Honest Follow-Up Lane
 Once this prep chapter is accepted, the next real infrastructure follow-up lane should be:
-- narrow `public legal-surface export prep`
+- narrow `public legal-surface deployment`
 
 That later lane should decide, but not overclaim:
-- how the existing public legal owners become hostable static assets
-- what public legal URLs and Caddy/static-file ownership they would use
-- whether deployment is actually worth doing once the export artifact is defined
+- how the bounded legal export artifact is synced to the Hetzner host
+- what exact public legal URLs and Caddy/static-file ownership it uses
+- whether the deployed pages are actually verified over HTTPS without widening beyond that slice

@@ -104,7 +104,7 @@ What would still be fabricated if we tried to host more right now:
 - a broader app/backend host, because no deployable server topology exists
 
 ## 7. What Must Happen Before Any Later Deployment Prep
-Before a real deployment-prep pass begins, Chi'llywood still needs:
+Before a real deployment pass begins, Chi'llywood still needs:
 
 1. A static output contract.
    Define exactly how these legal owners become hostable static assets.
@@ -136,10 +136,25 @@ It is only worth doing if Chi'llywood now benefits from:
 
 ## 9. Exact Next Lane
 The next exact infra lane after this contract pass should be:
-- narrow `public legal-surface export prep`
+- narrow `public legal-surface deployment`
 
 That later lane should:
-- choose the export/build artifact
+- use a bounded static export artifact only for `privacy`, `terms`, and `account-deletion`
 - define target public URLs
 - define Caddy/static-file ownership
 - stop before claiming deployment unless the artifact and host wiring are actually proved
+
+## 10. Current Export Strategy
+The current bounded export strategy is:
+- use `expo export --platform web` as the content renderer
+- prune the output down to:
+  - `/privacy`
+  - `/terms`
+  - `/account-deletion`
+  - shared `/_expo` web assets
+- keep any later host exposure path-scoped and legal-only
+
+This is still not a broader app-upstream deployment because:
+- no broader HTML/app route set is deployed
+- no app/backend server is introduced
+- Caddy would continue to front LiveKit for everything outside the exact legal paths
