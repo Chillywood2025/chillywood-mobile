@@ -162,8 +162,8 @@ This still does not imply:
 
 ### 3.3 Remaining Manual Items
 The remaining first-host work is now narrower:
-- verify authenticated app/client realtime behavior against the new LiveKit ingress
-- prove the current token-issuance path works end-to-end with the new host truth
+- verify a supported authenticated app/client realtime join against the new LiveKit ingress
+- keep the now-proved token-issuance path connected to that later device/client join proof
 - keep broader app hosting and non-realtime upstreams out of scope until their own lanes open
 - treat app-upstream hosting as a separate later doctrine question, not an implied next step from the current LiveKit host state
 
@@ -435,8 +435,8 @@ The current infrastructure follow-up lane is now:
 - narrow `authenticated realtime session verification`
 
 This lane now includes:
-- verifying authenticated client/session behavior against `live.chillywoodstream.com`
-- verifying the current signer/runtime path works end-to-end against the new host truth
+- verifying a supported authenticated client/session join against `live.chillywoodstream.com`
+- preserving the already-proved signer/runtime alignment against the new host truth
 - keeping the current LiveKit host, proxy, signer, and runtime alignment honest
 
 This lane still does not include:
@@ -447,9 +447,9 @@ This lane still does not include:
 
 ## 15. Next Honest Follow-Up Lane
 Once this prep chapter is accepted, the next real infrastructure follow-up lane should be:
-- narrow `authenticated realtime session verification`
+- narrow `device-backed authenticated realtime join verification`
 
 That later lane should prove, but not overclaim:
-- the current client/runtime path can really use the new LiveKit ingress
-- the current token/signer path works through authenticated app/realtime usage
+- the current client/runtime path can really use the new LiveKit ingress from a supported client runtime
+- the already-proved token/signer path results in a real authenticated room join
 - the remaining post-cutover seam before broader product deployment
