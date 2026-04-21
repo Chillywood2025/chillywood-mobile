@@ -903,7 +903,7 @@ export default function ProfileScreen() {
           ? "linked room handoff ready"
           : profile.isLive
             ? "live presence is visible"
-            : "room handoff appears when backed",
+            : "no linked room is active yet",
       tone: isOfficialProfile ? "official" : hasLiveRouteContext ? "linked" : (profile.isLive ? "live" : "default"),
     },
   ] as const;
