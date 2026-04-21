@@ -77,6 +77,19 @@ export function SupportScreen() {
     return "Open the current Privacy Policy, review the Terms of Use, or request account deletion from the same support surface that already owns signed-in feedback and launch help.";
   }, [legalConfig.accountDeletionUrl, legalConfig.privacyPolicyUrl, legalConfig.termsOfServiceUrl, topic]);
 
+  const legalCardTitle = useMemo(() => {
+    if (topic === "account-deletion") return "Account deletion help";
+    if (topic === "privacy") return "Privacy help";
+    if (topic === "terms") return "Terms help";
+    return "Privacy, terms, and account help";
+  }, [topic]);
+
+  const primaryLegalAction = topic === "account-deletion"
+    ? "account-deletion"
+    : topic === "terms"
+      ? "terms"
+      : "privacy";
+
   const openExternalDestination = async (
     url: string,
     label: string,
@@ -215,13 +228,13 @@ export function SupportScreen() {
           <Text style={styles.heroKicker}>{closedBeta ? "BETA SUPPORT" : "SUPPORT & FEEDBACK"}</Text>
           <Text style={styles.heroTitle}>
             {closedBeta
-              ? "Keep the beta tight, learn fast, and log the right issues."
-              : "Send the right issue with the right context."}
+              ? "Keep the beta sharp and send the issue that matters."
+              : "Report the issue without losing your place."}
           </Text>
           <Text style={styles.heroBody}>
             {closedBeta
-              ? "This closed beta is intentionally small. Use it to verify the most-used flows, capture real friction, and separate must-fix issues from later ideas."
-              : "Use this space to report bugs, confusing flows, playback issues, or room problems without losing the screen context you are already in."}
+              ? "This beta stays intentionally small. Focus on the real flows, capture the friction, and separate must-fix problems from later ideas."
+              : "Use this space for bugs, confusing copy, playback issues, room problems, and launch friction without dropping the screen context you are already in."}
           </Text>
         </View>
 
@@ -231,7 +244,7 @@ export function SupportScreen() {
             <Text style={styles.cardBody}>
               {closedBeta
                 ? "Support, room access, and structured feedback all depend on a real signed-in tester identity."
-                : "Support feedback, room access, and safety reports all depend on a real signed-in Chi'llywood account."}
+                : "Support feedback, room access, and safety reports all depend on a real signed-in Chi&apos;llywood account."}
             </Text>
             <TouchableOpacity
               style={styles.primaryButton}
@@ -256,7 +269,7 @@ export function SupportScreen() {
               <Text style={styles.cardTitle}>{closedBeta ? "Current tester status" : "Send support feedback"}</Text>
               <Text style={styles.cardBody}>
                 {closedBeta
-                  ? `You are active in the closed beta${accessState.membership?.cohort ? ` for cohort ${accessState.membership.cohort}` : ""}. Send structured bugs and product feedback from here so issues land in the queue with your tester context.`
+                  ? `You are active in the closed beta${accessState.membership?.cohort ? ` for cohort ${accessState.membership.cohort}` : ""}. Send structured bugs and product feedback from here so they land with your tester context.`
                   : "Report broken flows, confusing copy, playback issues, room reliability problems, or launch friction from here so the team can triage them with screen context attached."}
               </Text>
               <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={() => setFeedbackVisible(true)}>
@@ -265,7 +278,7 @@ export function SupportScreen() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>{closedBeta ? "What to test first" : "Most-used flows to watch"}</Text>
+              <Text style={styles.cardTitle}>{closedBeta ? "What to test first" : "Priority flows to watch"}</Text>
               <View style={styles.list}>
                 {focusFlows.map((item) => (
                   <Text key={item} style={styles.listItem}>• {item}</Text>
@@ -278,22 +291,36 @@ export function SupportScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>How issues are triaged</Text>
           <Text style={styles.cardBody}>
-            Use `blocking` for broken room entry, dead-end playback, sign-in failures, or crashes. Use `major` when a critical flow works badly but still recovers. Use `polish` for non-blocking roughness. Use `insight` for product learning or unclear copy.
+            Use `blocking` for broken entry, dead-end playback, sign-in failures, or crashes. Use `major` when a key flow still recovers but feels bad. Use `polish` for non-blocking roughness. Use `insight` for product learning or unclear copy.
           </Text>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Privacy, terms, and account help</Text>
+          <Text style={styles.cardTitle}>{legalCardTitle}</Text>
           <Text style={styles.cardBody}>{legalBody}</Text>
           <View style={styles.list}>
-            <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={() => { void onPressPrivacyPolicy(); }}>
-              <Text style={styles.primaryButtonText}>Privacy Policy</Text>
+            <TouchableOpacity
+              style={primaryLegalAction === "privacy" ? styles.primaryButton : styles.secondaryButton}
+              activeOpacity={0.86}
+              onPress={() => { void onPressPrivacyPolicy(); }}
+            >
+              <Text style={primaryLegalAction === "privacy" ? styles.primaryButtonText : styles.secondaryButtonText}>Privacy Policy</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={() => { void onPressTerms(); }}>
-              <Text style={styles.secondaryButtonText}>Terms of Use</Text>
+            <TouchableOpacity
+              style={primaryLegalAction === "terms" ? styles.primaryButton : styles.secondaryButton}
+              activeOpacity={0.86}
+              onPress={() => { void onPressTerms(); }}
+            >
+              <Text style={primaryLegalAction === "terms" ? styles.primaryButtonText : styles.secondaryButtonText}>Terms of Use</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={onPressAccountDeletion}>
-              <Text style={styles.secondaryButtonText}>Request Account Deletion</Text>
+            <TouchableOpacity
+              style={primaryLegalAction === "account-deletion" ? styles.primaryButton : styles.secondaryButton}
+              activeOpacity={0.86}
+              onPress={onPressAccountDeletion}
+            >
+              <Text style={primaryLegalAction === "account-deletion" ? styles.primaryButtonText : styles.secondaryButtonText}>
+                Request Account Deletion
+              </Text>
             </TouchableOpacity>
           </View>
           {legalConfig.supportEmail ? (
@@ -304,9 +331,9 @@ export function SupportScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Privacy and capture reminder</Text>
+          <Text style={styles.cardTitle}>Capture reminder</Text>
           <Text style={styles.cardBody}>
-            Capture protection remains best-effort on supported devices. Do not assume DRM-grade guarantees, and report any misleading copy or unsafe capture behavior through the support flow.
+            Capture protection stays best-effort on supported devices. Do not assume DRM-grade guarantees, and report any misleading copy or unsafe capture behavior through support.
           </Text>
         </View>
       </ScrollView>

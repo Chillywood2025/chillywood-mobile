@@ -215,9 +215,9 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardKicker}>ACCOUNT</Text>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>Account</Text>
         <Text style={styles.body}>
-          Keep sign-out and account-level access here without changing the role of your owner profile/control hub.
+          Keep sign-out and account-level access here. Public channel presentation still stays on your profile surface.
         </Text>
         <View style={styles.identityBlock}>
           <Text style={styles.identityLabel}>Signed in as</Text>
@@ -238,9 +238,9 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardKicker}>LEGAL & SUPPORT</Text>
-        <Text style={styles.secondaryTitle}>Privacy, Terms, and Account Help</Text>
+        <Text style={styles.secondaryTitle}>Privacy, terms, and account help</Text>
         <Text style={styles.body}>
-          Open the current Privacy Policy, review the Terms of Use, or request account deletion from the canonical account path.
+          Open the current policy pages or start an account-deletion request from the canonical account-help path.
         </Text>
         <View style={styles.utilityRow}>
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressPrivacyPolicy}>
@@ -254,15 +254,15 @@ export default function SettingsScreen() {
           <Text style={styles.secondaryActionButtonText}>Request Account Deletion</Text>
         </TouchableOpacity>
         <Text style={styles.metaText}>
-          If a public legal or deletion URL is not configured for this build yet, Settings routes you into Chi&apos;llywood Support so the request still lands on the official account/help path.
+          If a public legal link is not configured on this build yet, Settings hands off to Chi&apos;llywood Support so the request still lands on the official help path.
         </Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardKicker}>PREMIUM PREVIEW</Text>
-        <Text style={styles.secondaryTitle}>Premium Access</Text>
+        <Text style={styles.secondaryTitle}>Premium access snapshot</Text>
         <Text style={styles.body}>
-          This screen shows the current premium access state for your account. If premium access is not currently available, this screen stays informational until access options are available here.
+          This screen shows the current account snapshot. Premium purchases do not open from Settings yet, so this stays read-only until rollout is ready here.
         </Text>
 
         <View style={styles.identityBlock}>
@@ -282,7 +282,7 @@ export default function SettingsScreen() {
           <Text style={styles.identityValue}>{offeringsLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Build note</Text>
+          <Text style={styles.identityLabel}>Why this is read-only</Text>
           <Text style={styles.statusNote}>{issueLabel}</Text>
         </View>
 
