@@ -1,26 +1,26 @@
 # NEXT TASK
 
 ## Exact Next Task
-The first public profile/channel owner-overlay batch is now closed cleanly on `main`. The next exact stage is `owner overlay batch 2` on `app/profile/[userId].tsx`: tighten the remaining owner ribbon, quick actions, and prompt stack so self-view feels useful but more secondary, with clearer handoff energy and less setup/console weight.
+The second public profile/channel owner-overlay batch is now closed cleanly on `main`. The next exact stage is `owner overlay batch 3` on `app/profile/[userId].tsx`: apply one final narrow self-view hierarchy cleanup only if it still helps, most likely by making the lower owner layer visually quieter now that the content and handoff structure are cleaner.
 
 ## Current Plan
-1. Treat owner overlay batch 1 as closed.
-2. Tighten the remaining owner ribbon / prompt stack hierarchy next.
-3. Keep self-view useful without letting the lower owner layer feel like a second console.
-4. Make creator-management actions read even more clearly as handoffs to `/channel-settings`.
+1. Treat owner overlay batch 2 as closed.
+2. Check whether the remaining owner layer still carries too much visual weight.
+3. Only do one more pass if it stays narrow and route-owned.
+4. Skip the batch if the remaining work is already medium or broader.
 5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- reduce duplication between the lower owner layer and `/channel-settings`
-- tighten owner ribbon, quick actions, and setup prompts so they feel quieter and more decisive
-- keep useful self-view convenience without removing honest owner handoffs
+- make the lower owner layer visually quieter if it still competes with the public route
+- keep the cleaned handoff structure intact while reducing any remaining console-like weight
+- preserve useful self-view convenience without reopening broader owner/public structure
 - keep creator/public and room/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve `/profile/[userId]` as the canonical public profile/channel route
-- focus on the remaining owner-overlay hierarchy seam only on that owner
+- focus on final owner-overlay hierarchy consistency only on that owner
 - leave completed account/support/chat/home/title route owners alone
 - keep unrelated local dirt out of the checkpoint
 
@@ -34,7 +34,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the lower owner layer feels quieter and less duplicative
-- the public route still offers useful owner convenience without reading like a creator console
+- the lower owner layer no longer visually competes with the public route
+- the route closes this lane feeling balanced without route or doctrine drift
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure

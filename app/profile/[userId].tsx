@@ -1422,71 +1422,60 @@ export default function ProfileScreen() {
   ];
   const ownerStatsRibbon: readonly OwnerStatCard[] = isSelfProfile ? [
     {
-      label: "Saved",
+      label: "Shelves",
       value: channelSignalsReady ? String(savedTitleCount) : "...",
-      body: "titles ready for public shelves",
+      body: "saved titles ready for public shelves",
     },
     {
       label: "Resume",
       value: channelSignalsReady ? String(continueWatchingCount) : "...",
-      body: "private resume cues still visible to you",
+      body: "private resume cues only you can see",
       tone: "linked",
     },
     {
-      label: "Live",
+      label: "Live Link",
       value: profile.isLive ? "On" : "Off",
-      body: hasLiveRouteContext ? "room context attached" : "linked visits bring room context here",
+      body: hasLiveRouteContext ? "room context attached" : "linked visits bring room context here later",
       tone: profile.isLive ? "live" : "default",
     },
   ] : [];
   const ownerQuickActions: readonly OwnerQuickAction[] = isSelfProfile ? [
     {
-      label: "Manage Channel",
+      label: "Open Manage Channel",
       onPress: onPressManageChannel,
       emphasis: "primary",
     },
     {
-      label: "Chi'lly Chat",
+      label: "Open Chi'lly Chat",
       onPress: () => {
         void onPressCommunication("message");
       },
     },
   ] : [];
+  const ownerNextSteps = [
+    !profile.tagline ? "add a sharper channel line" : null,
+    channelSignalsReady && savedTitleCount === 0 ? "build the first visible shelf" : null,
+  ].filter(Boolean);
   const ownerPromptCards: readonly OwnerPromptCard[] = isSelfProfile ? [
-    {
+    ...(!creatorSettingsEnabled ? [{
       kicker: "OWNER VIEW",
-      title: creatorSettingsEnabled ? "Keep deeper editing in Manage Channel" : "Channel editing is currently hidden",
-      body: creatorSettingsEnabled
-        ? "This route stays public-facing. Use Manage Channel only for deeper identity, layout, and content edits."
-        : "Creator channel controls are currently hidden by app configuration, so this route stays focused on the public-facing channel view.",
-      ...(creatorSettingsEnabled
-        ? {
-            actionLabel: "Open Manage Channel",
-            onPress: onPressManageChannel,
-          }
-        : {}),
-    },
-    ...(!profile.tagline ? [{
-      kicker: "SETUP",
-      title: "Add a sharper channel line",
-      body: "Give visitors a clearer first read on your lane with a short tagline in Manage Channel.",
-      ...(creatorSettingsEnabled
-        ? {
-            actionLabel: "Write Tagline",
-            onPress: onPressManageChannel,
-          }
-        : {}),
+      title: "Channel editing is currently hidden",
+      body: "This route stays focused on the public-facing channel view until deeper creator controls return.",
     }] : []),
-    ...(channelSignalsReady && savedTitleCount === 0 ? [{
-      kicker: "CONTENT",
-      title: "Curate your first visible shelf",
-      body: "Saved titles are the simplest honest seed for your first public shelf. Build that before inventing a bigger creator catalog.",
-      ...(creatorSettingsEnabled
-        ? {
-            actionLabel: "Plan Shelves",
-            onPress: onPressManageChannel,
-          }
-        : {}),
+    ...(creatorSettingsEnabled && ownerNextSteps.length ? [{
+      kicker: "NEXT IN MANAGE CHANNEL",
+      title: ownerNextSteps.length > 1 ? "Shape the next public read" : (
+        ownerNextSteps[0] === "add a sharper channel line"
+          ? "Add a sharper channel line"
+          : "Build the first visible shelf"
+      ),
+      body: ownerNextSteps.length > 1
+        ? "Start by adding a sharper channel line and building the first visible shelf."
+        : ownerNextSteps[0] === "add a sharper channel line"
+          ? "Give visitors a clearer first read on your lane with a short tagline."
+          : "Saved titles are the simplest honest seed for your first public shelf.",
+      actionLabel: "Open Manage Channel",
+      onPress: onPressManageChannel,
     }] : []),
   ] : [];
 
