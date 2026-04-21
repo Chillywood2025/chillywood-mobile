@@ -1592,14 +1592,14 @@ export default function WatchPartyLiveStageScreen() {
     : "Best-effort capture";
   const liveRoomShareCode = String(room?.roomCode ?? partyId ?? "").trim().toUpperCase();
   const liveRoomShellTitle = isHost
-    ? "Shape the live room before the stage opens."
-    : "This is the live room before stage entry.";
+    ? "Set the live room before the stage opens."
+    : "This live room stays pre-stage.";
   const liveRoomShellBody = isHost
-    ? "Invite people, set room defaults, and decide how the audience meets the presentation before you continue into Live Stage."
-    : "Use the live room to understand the host's defaults, decide who you want to see first, and then enter Live Stage when the presentation begins."
+    ? "Invite people, set the defaults, and then continue into Live Stage."
+    : "Check the host's defaults here, choose who you want to follow first, and then enter Live Stage."
   const liveRoomPermissionCopy = isHost
-    ? "Host authority stays in Live Room for access, comments or reactions, capture expectations, and pre-stage audience focus."
-    : "The host controls access, reactions, capture expectations, and the stage handoff here. Live Stage only carries the actual live presentation."
+    ? "Access, reactions, capture, and pre-stage focus all stay here."
+    : "The host controls access, reactions, capture, and the handoff here. Live Stage carries the actual presentation."
   const liveRoomFocusTarget = isHost
     ? (lowerCommunityParticipants[0] ?? hostParticipant)
     : hostParticipant;
@@ -1611,15 +1611,15 @@ export default function WatchPartyLiveStageScreen() {
     : "Audience syncing";
   const liveRoomControlTitle = isHost
     ? "Set who the room sees first."
-    : "Set the live view you want before stage entry.";
+    : "Choose who you want to follow first.";
   const liveRoomControlBody = isHost
-    ? "Keep room entry purposeful here: invite the audience, set visual priority, and keep presentation controls out of Live Stage until you are ready."
-    : "Choose the host or audience focus you want to follow here. Deeper presentation controls only begin after you enter Live Stage.";
+    ? "Set the opening focus here and leave presentation controls for Live Stage."
+    : "Choose the host or audience view here before you join the presentation.";
   const liveRoomPolicyTitle = isHost
-    ? "Room defaults stay in Live Room."
-    : "Live Room shows the current room defaults.";
+    ? "Room defaults stay here."
+    : "Current room defaults";
   const liveRoomPolicyBody = isHost
-    ? "Access, reactions, and capture expectations belong here before you continue into the actual live presentation."
+    ? "Set access, reactions, and capture here before you continue."
     : `Current room defaults are ${liveRoomJoinLabel.toLowerCase()}, ${liveRoomReactionsLabel.toLowerCase()}, and ${liveRoomCaptureLabel.toLowerCase()}.`;
   const liveRoomEntryLabel = isHost ? "Continue to Live Stage" : "Join Live Stage";
   const liveKitParticipantRole = isHost
@@ -1634,8 +1634,8 @@ export default function WatchPartyLiveStageScreen() {
     ? "Host-led live focus"
     : "Shared watch moment";
   const stageModeBody = isLiveFirstMode
-    ? "Live-First keeps the host and crowd energy at the front."
-    : `${branding.watchPartyLabel} keeps the shared watch moment centered inside the live route.`;
+    ? "Live-First keeps the host at the center."
+    : `${branding.watchPartyLabel} keeps the shared watch moment centered in the live route.`;
   const hybridStageFocusTarget = tailoredFocusParticipant && tailoredFocusParticipant.userId !== currentUserParticipantId
     ? tailoredFocusParticipant
     : (lowerCommunityParticipants[0] ?? hostParticipant ?? tailoredFocusParticipant);
@@ -1649,8 +1649,8 @@ export default function WatchPartyLiveStageScreen() {
     ? (isLiveFirstMode ? "Spotlight host" : "Spotlight community")
     : "Follow stage focus";
   const stageHelperCopy = isLiveFirstMode
-    ? `${lowerCommunityCountLabel}. ${hostParticipant ? `${hostParticipant.userId === currentUserParticipantId ? "You are" : `${hostParticipant.displayName} is`} leading the stage.` : "Host focus is syncing."} Keep comments and reactions additive so the host stays visually clear.`
-    : `${lowerCommunityCountLabel}. Shared viewing is active here, so keep the host and community readable while the watch moment leads the stage.`;
+    ? `${lowerCommunityCountLabel}. ${hostParticipant ? `${hostParticipant.userId === currentUserParticipantId ? "You lead the stage." : `${hostParticipant.displayName} leads the stage.`}` : "Host focus is syncing."}`
+    : `${lowerCommunityCountLabel}. Keep the host and community readable while the shared watch moment leads.`;
   const stageModeMeaning = isLiveFirstMode
     ? "Host-led live presentation mode with audience energy at the front."
     : `${branding.watchPartyLabel} keeps shared content inside the live presentation while comments, reactions, and audience presence stay active.`;
@@ -1664,6 +1664,7 @@ export default function WatchPartyLiveStageScreen() {
   const liveStageProtectionHint = room?.capturePolicy === "host_managed"
     ? "Host capture rules are active, while device blocking still stays best-effort."
     : "Capture protection stays best-effort on supported devices.";
+  const liveRoomLayoutIsDefault = !tailoredFocusParticipant || tailoredFocusParticipant.userId === hostParticipant?.userId;
   const heroParticipant = stageFocusTarget ?? hostParticipant ?? selfFallbackParticipant;
   const stageMediaParticipantsByUserId = useMemo(
     () => Object.fromEntries(stageMediaParticipants.map((participant) => [participant.userId, participant])),
@@ -2200,9 +2201,9 @@ export default function WatchPartyLiveStageScreen() {
 
             <View style={styles.liveRoomControlCard}>
               <Text style={styles.liveRoomControlKicker}>INVITE + SHARE</Text>
-              <Text style={styles.liveRoomControlTitle}>Keep the room ready before the stage starts.</Text>
+              <Text style={styles.liveRoomControlTitle}>Share the room code before stage entry.</Text>
               <Text style={styles.liveRoomControlBody}>
-                Invite people inside Chi&apos;llywood from Live Room first, then fall back to system share only if needed so Live Stage stays presentation-first.
+                Invite people from Live Room first, then fall back to system share only if needed.
               </Text>
               <Pressable
                 style={styles.liveRoomShareRow}
@@ -2237,25 +2238,24 @@ export default function WatchPartyLiveStageScreen() {
                 </View>
               </View>
               <View style={styles.liveRoomActionRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.liveRoomActionBtn,
-                    !liveRoomFocusTarget?.userId && styles.liveRoomActionBtnDisabled,
-                  ]}
-                  activeOpacity={0.84}
-                  disabled={!liveRoomFocusTarget?.userId}
-                  onPress={() => {
-                    if (!liveRoomFocusTarget?.userId) return;
-                    featureParticipantFirst(liveRoomFocusTarget.userId);
-                    setActiveParticipantId(liveRoomFocusTarget.userId);
-                    setActiveSpeakerUserId(liveRoomFocusTarget.userId);
-                  }}
-                >
-                  <Text style={styles.liveRoomActionText}>
-                    {isHost ? "See audience first" : "See host first"}
-                  </Text>
-                </TouchableOpacity>
-                {hostParticipant ? (
+                {liveRoomFocusTarget?.userId
+                  && (isHost ? liveRoomFocusTarget.userId !== hostParticipant?.userId : !liveRoomLayoutIsDefault) ? (
+                  <TouchableOpacity
+                    style={styles.liveRoomActionBtn}
+                    activeOpacity={0.84}
+                    onPress={() => {
+                      if (!liveRoomFocusTarget?.userId) return;
+                      featureParticipantFirst(liveRoomFocusTarget.userId);
+                      setActiveParticipantId(liveRoomFocusTarget.userId);
+                      setActiveSpeakerUserId(liveRoomFocusTarget.userId);
+                    }}
+                  >
+                    <Text style={styles.liveRoomActionText}>
+                      {isHost ? "See audience first" : "See host first"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {hostParticipant && !liveRoomLayoutIsDefault ? (
                   <TouchableOpacity
                     style={styles.liveRoomActionBtn}
                     activeOpacity={0.84}
@@ -2290,13 +2290,15 @@ export default function WatchPartyLiveStageScreen() {
                     <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Show everyone</Text>
                   </TouchableOpacity>
                 ) : null}
-                <TouchableOpacity
-                  style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
-                  activeOpacity={0.84}
-                  onPress={resetTailoredStageView}
-                >
-                  <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Reset layout</Text>
-                </TouchableOpacity>
+                {!liveRoomLayoutIsDefault || hiddenParticipantCount > 0 ? (
+                  <TouchableOpacity
+                    style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
+                    activeOpacity={0.84}
+                    onPress={resetTailoredStageView}
+                  >
+                    <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>Reset layout</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
 
@@ -2510,7 +2512,7 @@ export default function WatchPartyLiveStageScreen() {
                 <View style={styles.stageTopMenuItemCopy}>
                   <Text style={styles.stageTopMenuItemTitle}>Comments</Text>
                   <Text style={styles.stageTopMenuItemBody}>
-                    {usesSharedStageCommentLane ? "Jump to the bottom comment lane." : "Read the live room response lane."}
+                    {usesSharedStageCommentLane ? "Open the bottom comment lane." : "Open the room response lane."}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -2563,7 +2565,7 @@ export default function WatchPartyLiveStageScreen() {
                 <Text style={styles.stageTopMenuItemIcon}>✨</Text>
                 <View style={styles.stageTopMenuItemCopy}>
                   <Text style={styles.stageTopMenuItemTitle}>React</Text>
-                  <Text style={styles.stageTopMenuItemBody}>Send a live reaction burst.</Text>
+                  <Text style={styles.stageTopMenuItemBody}>Send a live reaction.</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -3043,7 +3045,7 @@ export default function WatchPartyLiveStageScreen() {
                 </TouchableOpacity>
               </View>
               <Text style={styles.stageUtilityBody}>
-                Live filters stay local to your camera across the stage hero and lower live tiles.
+                Filters only change your camera view on this stage.
               </Text>
               <Text style={styles.stageUtilityHelper}>{activeLiveFaceFilter.subtitle}</Text>
               <View style={styles.stageFilterRow}>
@@ -3137,7 +3139,7 @@ export default function WatchPartyLiveStageScreen() {
                 ))
               ) : (
                 <Text style={styles.stageHybridCommentEmpty}>
-                  Comments from the room will land here. Say something to get the live room moving.
+                  Room comments will land here. Say something to get it moving.
                 </Text>
               )}
             </ScrollView>
