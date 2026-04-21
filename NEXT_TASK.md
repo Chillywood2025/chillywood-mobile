@@ -1,21 +1,21 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact stage is now `behavior / polish batch 3` on `app/chat/index.tsx`. Repo truth is explicit: the waiting-room preview-state error fix landed cleanly, and the next highest-leverage remaining seam in this lane is inbox error visibility.
+The next exact stage is now the `whole-app behavior closeout audit`. Repo truth is explicit: the three ranked fix batches landed cleanly, and the next decision is whether any truly narrow final polish remains or whether this lane should close.
 
 ## Current Plan
-1. Treat the public profile private friendship boundary lane, the first title/player behavior batch, and the waiting-room error-visibility batch as closed.
+1. Treat the public profile private friendship boundary lane plus the three ranked behavior batches as closed.
 2. Carry forward the locked doctrine: friendship is mutual, person-to-person, private-first, and still distinct from followers/subscribers.
 3. Preserve the new rights-aware title/player share behavior without widening it into broader content-action changes.
 4. Preserve the waiting-room preview flow while keeping real join/access failures visible.
 5. Keep comments limited to current room/live truth and keep Rachi distinct from normal friendship hints.
 6. Preserve current owner-above-Rachi authority, canonical profile/chat/admin/title/player routes, and follower/subscriber distinctions.
-7. Fix the next real behavior mismatch now: inbox load or official-thread failures must stay visible even when the inbox is not empty.
+7. Preserve the new inbox error visibility without turning `/chat/index.tsx` into a warning-heavy dashboard.
 8. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- keep the current truthful title/player and waiting-room behavior fixes as landed in batches 1 and 2
-- make `app/chat/index.tsx` show real inbox load or official-thread failures even when the list already has threads
+- run the whole-app behavior closeout audit and decide whether one final trivial or narrow polish slice is honestly justified
+- keep the current truthful title/player, waiting-room, and inbox behavior fixes as landed
 - preserve the shipped title, player, watch-party, chat-thread, inbox, and profile social adoptions without widening them into fake broad social rollout
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
@@ -28,9 +28,9 @@ This next pass should:
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
 - keep the current social baseline settled while verifying real behavior across the existing canonical routes
-- preserve inbox scan clarity while improving error visibility on `/chat/index`
+- preserve inbox scan clarity while keeping the new error visibility on `/chat/index`
 - treat the profile friendship treatment as already landed and closed for now
-- keep the third fix batch inside the inbox owner only
+- keep any remaining work narrower than a new route chapter
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope

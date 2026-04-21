@@ -274,6 +274,23 @@ export default function ChillyChatInboxScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      {error ? (
+        <View style={styles.headerErrorCard}>
+          <View style={styles.headerErrorCopy}>
+            <Text style={styles.headerErrorTitle}>Inbox needs another try</Text>
+            <Text style={styles.headerErrorBody}>{error}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.headerErrorAction}
+            activeOpacity={0.86}
+            onPress={() => {
+              void loadThreads(true);
+            }}
+          >
+            <Text style={styles.headerErrorActionText}>Refresh Inbox</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <Text style={styles.headerHint}>Tap an avatar for profile. Long-press a thread for quick call actions.</Text>
       {quickActionThread ? (
         <View style={styles.quickActionCard}>
@@ -348,7 +365,9 @@ export default function ChillyChatInboxScreen() {
       </View>
     </View>
   ), [
+    error,
     liveCallCount,
+    loadThreads,
     openOfficialProfile,
     openOfficialThread,
     openProfile,
@@ -532,6 +551,42 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 17,
     fontWeight: "700",
+  },
+  headerErrorCard: {
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(243,75,116,0.28)",
+    backgroundColor: "rgba(243,75,116,0.1)",
+    padding: 14,
+  },
+  headerErrorCopy: {
+    gap: 4,
+  },
+  headerErrorTitle: {
+    color: "#FFF4F8",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  headerErrorBody: {
+    color: "#FFD8E2",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  headerErrorAction: {
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(243,75,116,0.42)",
+    backgroundColor: "rgba(6,10,18,0.3)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  headerErrorActionText: {
+    color: "#FFF4F8",
+    fontSize: 12,
+    fontWeight: "900",
   },
   inboxGuideCard: {
     gap: 8,
