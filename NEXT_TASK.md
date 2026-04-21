@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact task is a narrow **device-backed authenticated realtime join verification** pass on `main`. Use `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
+The next exact task is a narrow **device-backed authenticated realtime join verification** pass on `main`. The new [docs/database-move-doctrine-audit.md](/Users/loverslane/chillywood-mobile/docs/database-move-doctrine-audit.md) is now governing truth that any database/auth move remains deferred and out of scope for this lane. Use `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `docs/database-move-doctrine-audit.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file as governing truth.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `docs/hetzner-first-deployment-implementation-spec.md`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/livekit.env.example`, `infra/hetzner/docker-compose.livekit.yml`, `app.config.ts`, `_lib/runtimeConfig.ts`, `supabase/functions/livekit-token/index.ts`, `PRODUCT_DOCTRINE.md`, `ROADMAP.md`, and this file first.
@@ -11,6 +11,7 @@ The next exact task is a narrow **device-backed authenticated realtime join veri
 5. If that proof fails, isolate whether the blocker is device availability, client runtime support, room access, token usage, or connection behavior.
 6. Keep Firebase / RevenueCat / Expo/EAS external for now.
 7. Stop immediately if supported device/runtime proof is still unavailable.
+8. Keep any database-move or auth-cutover work deferred unless a separate later chapter explicitly reopens it.
 
 ## Exact Next Batch
 - start from the aligned LiveKit host, signer, and runtime truth already recorded in `CURRENT_STATE.md`
