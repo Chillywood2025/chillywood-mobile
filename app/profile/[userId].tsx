@@ -992,6 +992,7 @@ export default function ProfileScreen() {
       ]
     : isSelfProfile
     ? [
+        { label: "Manage Channel", onPress: onPressManageChannel },
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
       ]
     : [
@@ -1700,71 +1701,6 @@ export default function ProfileScreen() {
               ))}
             </View>
           </View>
-          {isSelfProfile ? (
-            <View style={styles.ownerModeCard}>
-              <Text style={styles.ownerModeKicker}>OWNER VIEW</Text>
-              <Text style={styles.ownerModeTitle}>Keep this route public-facing. Go deeper in Manage Channel.</Text>
-              <Text style={styles.ownerModeBody}>
-                Your public profile and owner mode share the same canonical surface. Use the ribbon below for quick control, then hand off to Manage Channel for deeper editing.
-              </Text>
-              <View style={styles.ownerStatsRow}>
-                {ownerStatsRibbon.map((card) => (
-                  <View
-                    key={card.label}
-                    style={[
-                      styles.ownerStatCard,
-                      card.tone === "linked" && styles.ownerStatCardLinked,
-                      card.tone === "live" && styles.ownerStatCardLive,
-                    ]}
-                  >
-                    <Text style={styles.ownerStatLabel}>{card.label}</Text>
-                    <Text style={styles.ownerStatValue}>{card.value}</Text>
-                    <Text style={styles.ownerStatBody}>{card.body}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.ownerQuickActionRow}>
-                {ownerQuickActions.map((action) => (
-                  <TouchableOpacity
-                    key={action.label}
-                    style={[
-                      styles.ownerActionChip,
-                      action.emphasis === "primary" && styles.ownerActionChipPrimary,
-                    ]}
-                    activeOpacity={0.84}
-                    onPress={action.onPress}
-                  >
-                    <Text
-                      style={[
-                        styles.ownerActionChipText,
-                        action.emphasis === "primary" && styles.ownerActionChipTextPrimary,
-                      ]}
-                    >
-                      {action.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.ownerPromptStack}>
-                {ownerPromptCards.map((prompt) => (
-                  <View key={prompt.title} style={styles.ownerPromptCard}>
-                    <Text style={styles.ownerPromptKicker}>{prompt.kicker}</Text>
-                    <Text style={styles.ownerPromptTitle}>{prompt.title}</Text>
-                    <Text style={styles.ownerPromptBody}>{prompt.body}</Text>
-                    {prompt.actionLabel && prompt.onPress ? (
-                      <TouchableOpacity
-                        style={styles.ownerPromptAction}
-                        activeOpacity={0.84}
-                        onPress={prompt.onPress}
-                      >
-                        <Text style={styles.ownerPromptActionText}>{prompt.actionLabel}</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
         </View>
 
         <View style={styles.sectionStack}>
@@ -1963,6 +1899,71 @@ export default function ProfileScreen() {
             </>
           ) : null}
         </View>
+        {isSelfProfile ? (
+          <View style={styles.ownerModeCard}>
+            <Text style={styles.ownerModeKicker}>YOUR VIEW</Text>
+            <Text style={styles.ownerModeTitle}>The public channel still leads here.</Text>
+            <Text style={styles.ownerModeBody}>
+              Use Manage Channel for deeper edits, and keep this route focused on the public read first.
+            </Text>
+            <View style={styles.ownerQuickActionRow}>
+              {ownerQuickActions.map((action) => (
+                <TouchableOpacity
+                  key={action.label}
+                  style={[
+                    styles.ownerActionChip,
+                    action.emphasis === "primary" && styles.ownerActionChipPrimary,
+                  ]}
+                  activeOpacity={0.84}
+                  onPress={action.onPress}
+                >
+                  <Text
+                    style={[
+                      styles.ownerActionChipText,
+                      action.emphasis === "primary" && styles.ownerActionChipTextPrimary,
+                    ]}
+                  >
+                    {action.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.ownerStatsRow}>
+              {ownerStatsRibbon.map((card) => (
+                <View
+                  key={card.label}
+                  style={[
+                    styles.ownerStatCard,
+                    card.tone === "linked" && styles.ownerStatCardLinked,
+                    card.tone === "live" && styles.ownerStatCardLive,
+                  ]}
+                >
+                  <Text style={styles.ownerStatLabel}>{card.label}</Text>
+                  <Text style={styles.ownerStatValue}>{card.value}</Text>
+                  <Text style={styles.ownerStatBody}>{card.body}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.ownerPromptStack}>
+              {ownerPromptCards.map((prompt) => (
+                <View key={prompt.title} style={styles.ownerPromptCard}>
+                  <Text style={styles.ownerPromptKicker}>{prompt.kicker}</Text>
+                  <Text style={styles.ownerPromptTitle}>{prompt.title}</Text>
+                  <Text style={styles.ownerPromptBody}>{prompt.body}</Text>
+                  {prompt.actionLabel && prompt.onPress ? (
+                    <TouchableOpacity
+                      style={styles.ownerPromptAction}
+                      activeOpacity={0.84}
+                      onPress={prompt.onPress}
+                    >
+                      <Text style={styles.ownerPromptActionText}>{prompt.actionLabel}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
         <ReportSheet
           visible={reportVisible}
           title={isOfficialProfile ? "Report official account concern" : "Report profile or participant"}
