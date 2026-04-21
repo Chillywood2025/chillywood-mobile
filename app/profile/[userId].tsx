@@ -1891,7 +1891,7 @@ export default function ProfileScreen() {
         {isSelfProfile ? (
           <View style={styles.ownerModeCard}>
             <Text style={styles.ownerModeKicker}>YOUR VIEW</Text>
-            <Text style={styles.ownerModeTitle}>The public channel still leads here.</Text>
+            <Text style={styles.ownerModeTitle}>Your public channel still leads here.</Text>
             <Text style={styles.ownerModeBody}>
               Use Manage Channel for deeper edits, and keep this route focused on the public read first.
             </Text>
@@ -2315,14 +2315,14 @@ const styles = StyleSheet.create({
   ownerActionChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 13,
+    paddingVertical: 9,
   },
   ownerActionChipPrimary: {
-    borderColor: "rgba(115,134,255,0.28)",
-    backgroundColor: "rgba(115,134,255,0.16)",
+    borderColor: "rgba(115,134,255,0.22)",
+    backgroundColor: "rgba(115,134,255,0.12)",
   },
   ownerActionChipText: { color: "#DDE4FF", fontSize: 12.5, fontWeight: "800" },
   ownerActionChipTextPrimary: { color: "#EEF2FF" },
@@ -2331,14 +2331,14 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(115,134,255,0.18)",
-    backgroundColor: "rgba(16,21,38,0.92)",
-    padding: 16,
-    gap: 12,
+    borderColor: "rgba(115,134,255,0.12)",
+    backgroundColor: "rgba(13,18,32,0.8)",
+    padding: 15,
+    gap: 10,
   },
-  ownerModeKicker: { color: "#8C97B4", fontSize: 10.5, fontWeight: "900", letterSpacing: 1.1 },
-  ownerModeTitle: { color: "#F4F7FF", fontSize: 18, fontWeight: "900" },
-  ownerModeBody: { color: "#B9C2D6", fontSize: 13.5, lineHeight: 20 },
+  ownerModeKicker: { color: "#8390AB", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  ownerModeTitle: { color: "#F4F7FF", fontSize: 16.5, fontWeight: "900" },
+  ownerModeBody: { color: "#B4BDD1", fontSize: 13, lineHeight: 19 },
   ownerStatsRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   ownerStatCard: {
     flexGrow: 1,
@@ -2367,21 +2367,21 @@ const styles = StyleSheet.create({
   ownerPromptCard: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.03)",
-    padding: 14,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.02)",
+    padding: 12,
     gap: 6,
   },
   ownerPromptKicker: { color: "#8B95AA", fontSize: 10.5, fontWeight: "900", letterSpacing: 1 },
-  ownerPromptTitle: { color: "#F0F4FF", fontSize: 15.5, fontWeight: "900" },
-  ownerPromptBody: { color: "#B5BED2", fontSize: 13, lineHeight: 19 },
+  ownerPromptTitle: { color: "#F0F4FF", fontSize: 15, fontWeight: "900" },
+  ownerPromptBody: { color: "#B5BED2", fontSize: 12.5, lineHeight: 18 },
   ownerPromptAction: {
     alignSelf: "flex-start",
     marginTop: 2,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(115,134,255,0.24)",
-    backgroundColor: "rgba(115,134,255,0.14)",
+    borderColor: "rgba(115,134,255,0.18)",
+    backgroundColor: "rgba(115,134,255,0.1)",
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
