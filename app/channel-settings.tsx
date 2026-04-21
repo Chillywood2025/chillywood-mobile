@@ -20,6 +20,7 @@ import {
   readAppConfig,
   resolveBrandingConfig,
   resolveFeatureConfig,
+  resolveMonetizationConfig,
 } from "../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import {
@@ -331,6 +332,7 @@ export default function ChannelSettingsScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsEnabled, setSettingsEnabled] = useState(true);
   const [appDisplayName, setAppDisplayName] = useState(DEFAULT_APP_CONFIG.branding.appDisplayName);
+  const [monetizationConfig, setMonetizationConfig] = useState(DEFAULT_APP_CONFIG.monetization);
   const [creatorPermissions, setCreatorPermissions] = useState<CreatorPermissionSet | null>(null);
   const [audienceSummary, setAudienceSummary] = useState<ChannelAudienceReadModel | null>(null);
   const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
@@ -380,6 +382,7 @@ export default function ChannelSettingsScreen() {
         setProfile(normalizeUserProfile(resolvedProfile));
         setSettingsEnabled(resolveFeatureConfig(resolvedConfig).creatorSettingsEnabled);
         setAppDisplayName(resolveBrandingConfig(resolvedConfig).appDisplayName);
+        setMonetizationConfig(resolveMonetizationConfig(resolvedConfig));
         setCreatorPermissions(resolvedPermissions);
         setAudienceSummary(resolvedAudienceSummary);
         setSafetyAdminSummary(resolvedSafetyAdminSummary);
@@ -389,6 +392,7 @@ export default function ChannelSettingsScreen() {
       .catch(() => {
         if (!active) return;
         setProfile(normalizeUserProfile({ username: "", avatarIndex: 0 }));
+        setMonetizationConfig(DEFAULT_APP_CONFIG.monetization);
         setAudienceSummary(null);
         setSafetyAdminSummary(null);
         setCreatorAnalyticsSummary(null);
@@ -694,6 +698,14 @@ export default function ChannelSettingsScreen() {
     title: channelAccessResolution?.label ?? "Loading Access",
     body: getChannelAccessSummaryBody(channelAccessResolution),
   };
+  const resolvedCreatorPermissions = channelAccessResolution?.creatorPermissions ?? creatorPermissions;
+  const adRuntimeEnabled =
+    monetizationConfig.sponsorPlacementsEnabled
+    || monetizationConfig.playerBannerEnabled
+    || monetizationConfig.playerMidRollEnabled;
+  const adGrantEnabled =
+    !!resolvedCreatorPermissions?.canUseSponsorPlacements
+    || !!resolvedCreatorPermissions?.canUsePlayerAds;
   const accessSummaryDetails: readonly ChannelAccessSummaryDetail[] = [
     {
       label: "Watch Party",
@@ -705,22 +717,55 @@ export default function ChannelSettingsScreen() {
       value: formatChannelRoomAccessValue(channelAccessResolution?.communicationAccessRule),
       body: "Chi'lly Chat stays canonical even when default room access is gated",
     },
+  ];
+  const creatorGrantDetails: readonly ChannelAccessSummaryDetail[] = [
     {
-      label: "Creator Grants",
-      value: !channelAccessResolution
+      label: "Party Pass Rooms",
+      value: !resolvedCreatorPermissions
         ? "Loading"
-        : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms || channelAccessResolution.creatorPermissions?.canUsePremiumRooms
-          ? "Enabled"
+        : resolvedCreatorPermissions.canUsePartyPassRooms
+          ? "Ready"
           : "Open Only",
-      body: !channelAccessResolution
-        ? "checking supported gated room types"
-        : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms && channelAccessResolution.creatorPermissions?.canUsePremiumRooms
-          ? "party pass and premium defaults available"
-          : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms
-            ? "party pass available, premium hidden"
-            : channelAccessResolution.creatorPermissions?.canUsePremiumRooms
-              ? "premium available, party pass hidden"
-              : "unsupported gates fall back to open",
+      body: !resolvedCreatorPermissions
+        ? "checking whether Party Pass room defaults are available"
+        : resolvedCreatorPermissions.canUsePartyPassRooms
+          ? "Party Pass room defaults can stay active on this route"
+          : "Party Pass defaults fall back to open until the creator grant is enabled",
+    },
+    {
+      label: "Premium Rooms",
+      value: !resolvedCreatorPermissions
+        ? "Loading"
+        : resolvedCreatorPermissions.canUsePremiumRooms
+          ? "Ready"
+          : "Open Only",
+      body: !resolvedCreatorPermissions
+        ? "checking whether Premium room defaults are available"
+        : resolvedCreatorPermissions.canUsePremiumRooms
+          ? "Premium room defaults can stay active on this route"
+          : "Premium room defaults stay hidden until the creator grant is enabled",
+    },
+    {
+      label: "Ad Readiness",
+      value: !resolvedCreatorPermissions
+        ? "Loading"
+        : adGrantEnabled
+          ? (adRuntimeEnabled ? "Prepared" : "Foundation Only")
+          : "Later",
+      body: !resolvedCreatorPermissions
+        ? "checking sponsor and player-ad groundwork"
+        : adGrantEnabled
+          ? (
+              adRuntimeEnabled
+                ? "Sponsor groundwork is granted here, but public rollout still needs a later route-owned chapter"
+                : "Sponsor or player-ad groundwork can be granted here, but public placements still stay off in this build"
+            )
+          : "Sponsor placements and player ads are still later for this creator and are not live on public routes",
+    },
+    {
+      label: "Premium Playback",
+      value: "Ad-Free",
+      body: `${appDisplayName} Premium stays ad-free even when creator-side sponsorship deepens later`,
     },
   ];
   const audienceSummaryCards: readonly SummaryMetricCard[] = [
@@ -1225,14 +1270,24 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Use current room defaults and creator grants to see the real channel access posture.
+                Lead with what is live now: room defaults are active here today, creator grants decide which paid defaults can stay on, and ad readiness still stays preparation-only.
               </Text>
               <View style={styles.accessSummaryCard}>
-                <Text style={styles.accessSummaryKicker}>CHANNEL ACCESS</Text>
+                <Text style={styles.accessSummaryKicker}>CURRENT ACCESS POSTURE</Text>
                 <Text style={styles.accessSummaryTitle}>{accessSummary.title}</Text>
                 <Text style={styles.accessSummaryBody}>{accessSummary.body}</Text>
                 <View style={styles.accessSummaryRow}>
                   {accessSummaryDetails.map((detail) => (
+                    <View key={detail.label} style={styles.accessSummaryDetailCard}>
+                      <Text style={styles.accessSummaryDetailLabel}>{detail.label}</Text>
+                      <Text style={styles.accessSummaryDetailValue}>{detail.value}</Text>
+                      <Text style={styles.accessSummaryDetailBody}>{detail.body}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.accessSummaryKicker}>CURRENT CREATOR GRANTS</Text>
+                <View style={styles.accessSummaryRow}>
+                  {creatorGrantDetails.map((detail) => (
                     <View key={detail.label} style={styles.accessSummaryDetailCard}>
                       <Text style={styles.accessSummaryDetailLabel}>{detail.label}</Text>
                       <Text style={styles.accessSummaryDetailValue}>{detail.value}</Text>
