@@ -617,7 +617,7 @@ export default function TitleDetails() {
               </Text>
               <View style={styles.liveActivityMetaRow}>
                 <Text style={styles.liveActivityMetaText}>
-                  {liveMetadata.commentCount} comment{liveMetadata.commentCount === 1 ? "" : "s"}
+                  {liveMetadata.commentCount} room comment{liveMetadata.commentCount === 1 ? "" : "s"}
                 </Text>
                 {liveMetadata.reactionsEnabled ? (
                   <Text style={styles.liveActivityMetaText}>Reactions live</Text>

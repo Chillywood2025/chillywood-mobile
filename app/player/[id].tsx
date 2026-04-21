@@ -3405,6 +3405,8 @@ export default function PlayerScreen() {
     !!livePresenceEvent && !partyCommentsOpen && !liveFilterSheetOpen && !shouldUseLiveModeLowerDock;
   const shouldRenderWatchPartyLivePresenceToast =
     !!livePresenceEvent && !partyCommentsOpen && !liveFilterSheetOpen && shouldUseLiveModeLowerDock;
+  const roomCommentsTitle = isLiveMode ? "Live Room Comments" : "Room Comments";
+  const roomCommentsEmptyText = isLiveMode ? "No live room comments yet." : "No room comments yet.";
   const standaloneAccessPresentation = useMemo(() => {
     if (!isStandalonePlayer) return null;
     if (standaloneAccessLoading) {
@@ -4075,7 +4077,7 @@ export default function PlayerScreen() {
             onPress={onToggleWatchPartyComments}
             activeOpacity={0.88}
           >
-            <Text style={[styles.watchPartyDockActionText, partyCommentsOpen && styles.watchPartyDockActionTextActive]}>Comments</Text>
+            <Text style={[styles.watchPartyDockActionText, partyCommentsOpen && styles.watchPartyDockActionTextActive]}>Room Comments</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.watchPartyDockActionBtn, watchPartyPeopleOpen && styles.watchPartyDockActionBtnActive]}
@@ -4147,7 +4149,7 @@ export default function PlayerScreen() {
 
   const renderPartyCommentsContent = () => (
     <>
-      <Text style={styles.partyCommentsDrawerTitle}>Comments</Text>
+      <Text style={styles.partyCommentsDrawerTitle}>{roomCommentsTitle}</Text>
       <ScrollView
         style={styles.partyCommentsList}
         contentContainerStyle={styles.partyCommentsListContent}
@@ -4161,7 +4163,7 @@ export default function PlayerScreen() {
             </Text>
           ))
         ) : (
-          <Text style={styles.partyCommentsLine}>No comments yet.</Text>
+          <Text style={styles.partyCommentsLine}>{roomCommentsEmptyText}</Text>
         )}
       </ScrollView>
       {inWatchParty ? (
@@ -4480,7 +4482,7 @@ export default function PlayerScreen() {
                   }}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.partyOverlayChipText}>🗨️ Comments</Text>
+                  <Text style={styles.partyOverlayChipText}>🗨️ Room Comments</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -4900,7 +4902,7 @@ export default function PlayerScreen() {
               leftAction={{
                 id: "comments",
                 icon: "🗨️",
-                label: "Comments",
+                label: "Room Comments",
                 activeOpacity: 0.85,
                 onPress: () => {
                   setLiveFilterSheetOpen(false);

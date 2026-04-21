@@ -1,20 +1,19 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run `behavior/social consistency batch 2` on `app/title/[id].tsx` plus `app/player/[id].tsx` so room/live-only comments stay explicit instead of reading like a broader title/player comment rollout.
+Run the `behavior/social consistency closeout audit` and only continue if one final trivial or narrow pass is still honestly justified after the inbox retry fix and the explicit room-comment wording pass.
 
 ## Current Plan
 1. Preserve the already-landed truthful social baseline on profile, chat thread, title, player, and watch-party owners.
 2. Keep the newly aligned inbox retry card on `/chat/index.tsx` scan-first and action-correct.
-3. Tighten title/player comment wording so those routes stay explicit about current room/live-only comment truth.
-4. Keep comments limited to current room/live truth, keep Rachi distinct from ordinary friendship, and keep public friendship boundaries closed.
-5. Re-audit after the title/player wording pass and only continue if another narrow batch is still honestly justified.
+3. Keep the new title/player `Room Comments` wording tied to current room/live truth without widening it into a broader comment rollout.
+4. Re-audit the touched routes and only continue if one final trivial or narrow consistency pass is still honestly justified.
 6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- update `app/title/[id].tsx` so live activity copy stays explicit that the current comment signal is room/live-only
-- update `app/player/[id].tsx` so room/live comment buttons and drawers do not read like a broader standalone comment system
-- preserve the existing rights-aware `Mark Shared` gating and current watch-party/live ownership
+- verify the inbox retry alignment still stays scan-first on `/chat/index.tsx`
+- verify `app/title/[id].tsx` and `app/player/[id].tsx` now keep comment truth explicitly room/live-only
+- decide whether any final narrow pass is still warranted or whether the lane should close cleanly
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
