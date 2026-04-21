@@ -379,11 +379,11 @@ export function AccessSheet({
           {sheetState || deferredMonetization ? (
             <View style={[styles.helperCard, helperToneStyle]}>
               <Text style={styles.helperKicker}>
-                {deferredMonetization ? "TESTING BUILD" : sheetState?.helperKicker}
+                {deferredMonetization ? "ACCESS STATUS" : sheetState?.helperKicker}
               </Text>
               <Text style={[styles.helperText, helperTextStyle]}>
                 {deferredMonetization
-                  ? "Purchases, restore flows, and subscription management are deferred while Public v1 store-readiness testing is in progress."
+                  ? "This surface can explain the current gate, but unlock, restore, and subscription actions are not active in this build yet."
                   : sheetState?.helperBody}
               </Text>
             </View>
