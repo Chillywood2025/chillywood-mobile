@@ -31,12 +31,13 @@ Current app delivery truth is still Expo-first:
 This repo does not currently contain an app-owned production web backend or app-owned deployment stack.
 
 Current app-upstream readiness decision:
-- `APP_UPSTREAM_READY = NO`
+- `APP_UPSTREAM_READY = LATER_BOUNDED_SLICE`
 
 That means:
-- there is no current deployable app-owned HTTP upstream for Caddy to front on Hetzner
+- there is still no current deployable app-owned HTTP upstream for Caddy to front on Hetzner
 - Expo/EAS mobile delivery remains the app-distribution owner
-- any future Hetzner app upstream needs a separate doctrine/spec pass before deployment prep begins
+- the only later bounded non-realtime candidate currently grounded in repo truth is public legal-page hosting
+- any future Hetzner app upstream still needs a separate export/deployment contract pass before deployment prep begins
 
 ### 2.2 Backend And Data Truth
 Current backend truth is hosted Supabase:
@@ -253,7 +254,11 @@ That means the first future production-like cutover should move:
 
 ### 6.2 Optional Early Add-On
 Only if explicitly needed later, the same machine may also host:
-- static legal/status/support pages
+- static legal pages
+
+Still not justified yet in current repo truth:
+- broader support hosting
+- a public status host
 
 But that is secondary to the realtime edge role.
 
@@ -416,9 +421,9 @@ What is still intentionally deferred:
 - any release-hardening or Google Play lane
 
 Current app-upstream decision remains:
-- `APP_UPSTREAM_READY = NO`
+- `APP_UPSTREAM_READY = LATER_BOUNDED_SLICE`
 
-The realtime boundary is now real enough that the next lane is verification, not more scaffolding.
+The realtime boundary is now real enough that the next lane is doctrine for a bounded non-realtime slice, not more LiveKit scaffolding.
 
 ## 13. OVH Later Add-On Plan
 OVH is intentionally deferred.
@@ -450,9 +455,9 @@ This lane still does not include:
 
 ## 15. Next Honest Follow-Up Lane
 Once this prep chapter is accepted, the next real infrastructure follow-up lane should be:
-- narrow `app upstream doctrine / readiness pass`
+- narrow `public legal-surface export contract pass`
 
 That later lane should decide, but not overclaim:
-- whether any bounded non-realtime Hetzner app-upstream surface actually exists in current repo truth
-- whether app-upstream hosting should remain deferred as `NO`
-- the remaining post-realtime seam before any broader product deployment discussion opens
+- how the existing public legal owners would become hostable static assets, if at all
+- whether those legal pages should stay in-app only or gain a bounded Hetzner-hosted static destination
+- whether broader app-upstream hosting should remain deferred beyond that later slice
