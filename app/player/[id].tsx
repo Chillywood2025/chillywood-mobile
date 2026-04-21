@@ -3292,6 +3292,12 @@ export default function PlayerScreen() {
     const syncLead = partySyncRole === "host" ? "Host" : "Synced";
     return compactPartySyncStatus ? `${syncLead} · ${compactPartySyncStatus}` : syncLead;
   }, [compactPartySyncStatus, isSharedPartyPlayback, partySyncRole]);
+  const shouldUseLiveModeLowerDock = inWatchParty && isLiveMode && !!source;
+  const shouldRenderInlineLiveParticipantPanel = isLiveMode && !shouldUseLiveModeLowerDock;
+  const shouldRenderInlineLivePresenceToast =
+    !!livePresenceEvent && !partyCommentsOpen && !liveFilterSheetOpen && !shouldUseLiveModeLowerDock;
+  const shouldRenderWatchPartyLivePresenceToast =
+    !!livePresenceEvent && !partyCommentsOpen && !liveFilterSheetOpen && shouldUseLiveModeLowerDock;
   const standaloneAccessPresentation = useMemo(() => {
     if (!isStandalonePlayer) return null;
     if (standaloneAccessLoading) {
@@ -4284,7 +4290,7 @@ export default function PlayerScreen() {
               </View>
             ) : null}
 
-            {livePresenceEvent ? (
+            {shouldRenderInlineLivePresenceToast ? (
               <View style={styles.livePresenceEventToast}>
                 <Text style={styles.livePresenceEventText} numberOfLines={1}>
                   {livePresenceEvent}
@@ -4292,7 +4298,9 @@ export default function PlayerScreen() {
               </View>
             ) : null}
 
-            <View style={styles.liveModeParticipantsWrap}>{renderParticipantPanel(true)}</View>
+            {shouldRenderInlineLiveParticipantPanel ? (
+              <View style={styles.liveModeParticipantsWrap}>{renderParticipantPanel(true)}</View>
+            ) : null}
 
             {!inWatchParty ? (
               <View style={styles.liveModeActionRow}>
@@ -4304,7 +4312,7 @@ export default function PlayerScreen() {
                   }}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.partyOverlayChipText}>🗨️</Text>
+                  <Text style={styles.partyOverlayChipText}>🗨️ Comments</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -4321,7 +4329,7 @@ export default function PlayerScreen() {
                       (liveFilterSheetOpen || liveFaceFilter !== "none") && styles.watchPartyLiveFooterActiveLabel,
                     ]}
                   >
-                    🎭
+                    🎭 Filters
                   </Text>
                 </TouchableOpacity>
 
@@ -4335,7 +4343,7 @@ export default function PlayerScreen() {
                   }}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.partyOverlayChipText}>🔥</Text>
+                  <Text style={styles.partyOverlayChipText}>🔥 React</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -4665,10 +4673,10 @@ export default function PlayerScreen() {
               {renderTitleParticipantExpandedPanel()}
             </View>
           ) : null}
-          {inWatchParty && isLiveMode && source ? (
+          {shouldUseLiveModeLowerDock ? (
             <LiveLowerDock
               rootStyle={[styles.watchPartyLiveBottomDock, hasActiveRailParticipants && styles.watchPartyLiveBottomDockActive]}
-              presenceToast={partyCommentsOpen || livePresenceEvent || liveFilterSheetOpen ? (
+              presenceToast={partyCommentsOpen || liveFilterSheetOpen || shouldRenderWatchPartyLivePresenceToast ? (
                 <View style={styles.watchPartyLivePresenceStack}>
                   {liveFilterSheetOpen ? renderLiveFilterSheet(styles.liveFilterSheetWatchParty) : null}
                   {partyCommentsOpen ? (
@@ -4683,7 +4691,7 @@ export default function PlayerScreen() {
                     </View>
                   ) : null}
 
-                  {livePresenceEvent ? (
+                  {shouldRenderWatchPartyLivePresenceToast ? (
                     <View style={[styles.livePresenceEventToast, styles.watchPartyLivePresenceToast]}>
                       <Text style={styles.livePresenceEventText} numberOfLines={1}>
                         {livePresenceEvent}
