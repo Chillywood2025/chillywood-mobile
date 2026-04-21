@@ -548,6 +548,7 @@ export default function TitleDetails() {
         premiumUpsellBody: monetizationConfig.premiumUpsellBody,
       })
     : null;
+  const canMarkTitleShared = !accessLoading && !!titleAccess?.isAllowed;
 
   return (
     <>
@@ -653,15 +654,17 @@ export default function TitleDetails() {
               </Text>
             </Pressable>
 
-            <Pressable
-              style={[styles.btnGhost, engagementState?.shared && styles.btnGhostActive]}
-              onPress={onToggleShare}
-              disabled={engagementLoading || engagementBusy !== null}
-            >
-              <Text style={[styles.btnText, engagementState?.shared && styles.btnTextActive]}>
-                {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
-              </Text>
-            </Pressable>
+            {canMarkTitleShared ? (
+              <Pressable
+                style={[styles.btnGhost, engagementState?.shared && styles.btnGhostActive]}
+                onPress={onToggleShare}
+                disabled={engagementLoading || engagementBusy !== null}
+              >
+                <Text style={[styles.btnText, engagementState?.shared && styles.btnTextActive]}>
+                  {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
+                </Text>
+              </Pressable>
+            ) : null}
 
             <Pressable
               style={styles.btnGhost}

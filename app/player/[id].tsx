@@ -3453,6 +3453,7 @@ export default function PlayerScreen() {
     standalonePlaybackUnknown,
   ]);
   const showStandaloneAccessOverlay = isStandalonePlayer && standalonePlaybackGateActive && !!standaloneAccessPresentation;
+  const canMarkStandaloneShared = isStandalonePlayer && !standaloneAccessLoading && !!standaloneAccess?.isAllowed;
   useEffect(() => {
     if (!inWatchParty) return;
 
@@ -4755,16 +4756,18 @@ export default function PlayerScreen() {
                           {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
                         </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.compactChip, engagementState?.shared && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
-                        onPress={onToggleStandaloneShare}
-                        disabled={engagementLoading || engagementBusy !== null}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
-                          {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
-                        </Text>
-                      </TouchableOpacity>
+                      {canMarkStandaloneShared ? (
+                        <TouchableOpacity
+                          style={[styles.compactChip, engagementState?.shared && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
+                          onPress={onToggleStandaloneShare}
+                          disabled={engagementLoading || engagementBusy !== null}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
+                            {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                     <TouchableOpacity
                       style={[styles.compactChip, styles.compactChipAccent, styles.standaloneSocialHandoffBtn]}
