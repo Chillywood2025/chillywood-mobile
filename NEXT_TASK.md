@@ -1,14 +1,14 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the second safe batch inside the broader monetization / ads doctrine-controlled chapter only if it stays route-owned and honest. The ranked next step is a narrow public access wording pass on `/profile/[userId]` so current Premium / Party Pass posture stops sounding speculative, while whole-app proof / QA stays gated closed until this chapter is ready to hand off.
+Run the monetization / ads closeout audit and gating decision. The shared monetization helper cleanup and the route-owned `/profile/[userId]` access wording pass are both landed, so the next step is to decide whether this chapter is honestly complete enough to hand off to whole-app proof / QA.
 
 ## Current Plan
 1. Treat the creator monetization / ad-readiness control lane on `/channel-settings` as closed cleanly.
 2. Preserve the landed deferred-access trust fix on `components/monetization/access-sheet.tsx`.
 3. Preserve the clearer creator-grants / ad-readiness summary and creator-facing default labels on `/channel-settings`.
 4. Preserve the shared monetization helper cleanup so Premium / Party Pass stay current truth while later title/live direct unlock framing and store/dev-build wording stay demoted.
-5. Tighten any remaining public route wording only if it removes speculation without widening monetization rollout.
+5. Preserve the route-owned `/profile/[userId]` access wording cleanup so current Premium / Party Pass posture reads as current default-entry truth rather than speculation.
 6. Keep ads doctrine explicit: no current public route is honestly ads-ready yet, and immersive player/watch-party/live/chat surfaces remain no-ads-here.
 7. Keep whole-app proof / QA gated closed until this monetization/ad chapter is honestly ready to hand off.
 8. Keep unrelated local dirt out of the checkpoint.
@@ -18,7 +18,8 @@ Run the second safe batch inside the broader monetization / ads doctrine-control
 - preserve the landed deferred-access sheet trust fix without widening it into a broader monetization or ad rollout
 - keep `/channel-settings` closed unless the broader chapter proves a real new control-center issue
 - preserve `_lib/monetization.ts` and `components/monetization/access-sheet.tsx` now that shared language reflects current truth rather than store/dev-build or later-phase direct-unlock optimism
-- run the ranked second batch only if it stays narrow: `/profile/[userId]` access wording cleanup for current Premium / Party Pass posture
+- preserve `/profile/[userId]` now that current Premium / Party Pass posture reads as current default-entry truth rather than speculative later wording
+- run the monetization / ads closeout audit before opening whole-app proof / QA
 - do not invent fake ads, fake monetization powers, Google Play readiness work, OVH work, or database-move work
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
@@ -52,7 +53,7 @@ The next lane is successful when:
 - Premium and Party Pass stay the current backed monetization/access truth while ads remain foundation-only and not honestly route-ready
 - rights-aware share gating, room/live comment truth, and current social boundaries remain intact while monetization/ad doctrine is clarified
 - `/channel-settings` keeps its clearer creator grants without being reopened casually
-- any follow-up route wording stays route-owned and honest rather than speculative
+- `/profile/[userId]` access wording stays route-owned and honest rather than speculative, while Chi'lly Chat itself stays distinct from monetized direct-message claims
 - whole-app proof / QA does not start until the monetization/ad gate is honestly ready
 - public/profile/chat/title/player routes still make no fake social or ad claims
 - no route drift, schema drift, or fake monetization claims are introduced

@@ -281,16 +281,16 @@ const getProfileAccessBody = (resolution: ChannelAccessResolution | null, isOffi
 const getWatchPartyAccessBody = (resolution: ChannelAccessResolution | null, ready: boolean) => {
   if (!ready || !resolution) return "checking watch-party entry";
   if (resolution.joinPolicy === "locked") return "invite-led room entry by default";
-  if (resolution.watchPartyAccessRule === "party_pass") return "party-pass room entry when backed";
-  if (resolution.watchPartyAccessRule === "premium") return "premium room entry when backed";
+  if (resolution.watchPartyAccessRule === "party_pass") return "Party Pass room entry by default";
+  if (resolution.watchPartyAccessRule === "premium") return "Premium room entry by default";
   return "open room entry by default";
 };
 
 const getCommunicationAccessBody = (resolution: ChannelAccessResolution | null, ready: boolean) => {
-  if (!ready || !resolution) return "checking direct follow-up posture";
-  if (resolution.communicationAccessRule === "party_pass") return "Chi'lly Chat can turn party-pass led when backed";
-  if (resolution.communicationAccessRule === "premium") return "Chi'lly Chat can turn premium-led when backed";
-  return "Chi'lly Chat stays open by default";
+  if (!ready || !resolution) return "checking communication-room posture";
+  if (resolution.communicationAccessRule === "party_pass") return "linked communication rooms can stay Party Pass-led by default";
+  if (resolution.communicationAccessRule === "premium") return "linked communication rooms can stay Premium-led by default";
+  return "linked communication rooms stay open by default";
 };
 
 const getBrowseAccessValue = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
