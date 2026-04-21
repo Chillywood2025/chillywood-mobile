@@ -532,6 +532,18 @@ export default function ProfileScreen() {
   }, [channelAccessPermissions, channelAccessProfile, channelAccessReady, isOfficialProfile, userId]);
   const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
   const homeConfig = resolveHomeConfig(appConfig);
+  const liveNowEvent = useMemo(
+    () => publicEvents.find((event) => event.isLiveNow) ?? null,
+    [publicEvents],
+  );
+  const nextUpcomingEvent = useMemo(
+    () => publicEvents.find((event) => event.isUpcoming) ?? null,
+    [publicEvents],
+  );
+  const scheduledWatchPartyEvent = useMemo(
+    () => publicEvents.find((event) => event.eventType === "watch_party_live" && !!event.linkedTitleId) ?? null,
+    [publicEvents],
+  );
   const roleLabel = isOfficialProfile
     ? profile.platformRoleLabel ?? "Official"
     : profile.role === "creator"
@@ -560,7 +572,10 @@ export default function ProfileScreen() {
   const liveActionLabel = profile.isLive ? "Join Live" : "View Live";
   const hasLiveRouteContext = !!partyIdParam;
   const canReportProfile = !isSelfProfile && !!userId;
-  const canOpenLinkedRoomActions = hasLiveRouteContext;
+  const hasLiveTabEntry = !hasLiveRouteContext && (!!liveNowEvent || !!nextUpcomingEvent || profile.isLive);
+  const scheduledWatchPartyTitleId = String(scheduledWatchPartyEvent?.linkedTitleId ?? "").trim();
+  const canOpenWatchPartyEntry = hasLiveRouteContext || !!scheduledWatchPartyTitleId;
+  const liveActionTitle = hasLiveRouteContext ? liveActionLabel : "Live Events";
   const officialGuidanceTopics = officialAccount?.guidanceTopics ?? [];
   const liveStateLabel = isOfficialProfile ? "CONCIERGE READY" : profile.isLive ? "LIVE NOW" : "OFF AIR";
   const routeContextLabel = isOfficialProfile ? "PROTECTED" : hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
@@ -581,14 +596,18 @@ export default function ProfileScreen() {
       ? profile.isLive
         ? "Join Live and Watch Party open from the current room on this profile."
         : "View Live and Watch Party open from the current room on this profile."
-      : profile.isLive
-        ? "This channel looks live. Open this profile from a room or live session to join from here."
-        : "Open this profile from a room or live session to jump into Live or Watch Party from here.";
+      : hasLiveTabEntry
+        ? "This profile can open the Live tab honestly, but direct room re-entry only appears when this route carries real room context."
+        : "No linked room entry is attached to this profile yet.";
   const actionFootnote = isOfficialProfile
     ? "Rachi stays on the canonical profile and Chi'lly Chat paths so future help, moderation, and official announcements remain platform-owned and auditable."
     : hasLiveRouteContext
       ? `${liveActionLabel} and Watch Party are connected to this room.`
-      : "Open this profile from a room or live session to jump back into linked live and watch-party surfaces from here.";
+      : canOpenWatchPartyEntry
+        ? "This profile can point into a backed Watch-Party Live title, but direct room re-entry still requires linked room context."
+        : hasLiveTabEntry
+          ? "This profile can open the Live tab honestly, but linked room entry still depends on real room context."
+          : "This profile does not currently carry linked room continuity.";
   const communicationFootnote = isSelfProfile
     ? "Chi'lly Chat opens your native Chi'llywood inbox and direct threads."
     : isOfficialProfile
@@ -630,9 +649,7 @@ export default function ProfileScreen() {
       return;
     }
 
-    Alert.alert(liveActionLabel, profile.isLive
-      ? "This channel is live. Open this profile from a room or live session to join from here."
-      : "Open this profile from a room or live session to jump into the linked live surface from here.");
+    setActiveTab("live");
   };
   const onPressWatchParty = () => {
     if (hasLiveRouteContext) {
@@ -647,7 +664,14 @@ export default function ProfileScreen() {
       return;
     }
 
-    Alert.alert("Watch Party", "Open this profile from a room or live session to jump into the linked watch party from here.");
+    if (!scheduledWatchPartyTitleId) return;
+
+    router.push({
+      pathname: "/watch-party",
+      params: {
+        titleId: scheduledWatchPartyTitleId,
+      },
+    });
   };
   const onPressCommunication = async (entryMode: "message" | "voice" | "video" = "message") => {
     if (isSelfProfile) {
@@ -1039,16 +1063,14 @@ export default function ProfileScreen() {
     () => new Map(publicReminderSummaries.map((summary) => [summary.event.id, summary])),
     [publicReminderSummaries],
   );
-  const nextUpcomingEvent = upcomingEvents[0] ?? null;
-  const scheduledWatchPartyEvent = upcomingEvents.find((event) => event.eventType === "watch_party_live") ?? null;
   const liveTabSections: readonly ProfileSurfaceCard[] = [
     {
       title: profile.isLive ? "Live Presence" : "Live Status",
       kicker: "LIVE",
-      body: liveNowEvents.length
-        ? `${liveNowEvents[0]?.eventTitle ?? "A live event"} is currently backed as ${formatEventTypeLabel(liveNowEvents[0]?.eventType ?? "live_first")} on this channel.`
+      body: liveNowEvent
+        ? `${liveNowEvent.eventTitle} is currently backed as ${formatEventTypeLabel(liveNowEvent.eventType)} on this channel.`
         : profile.isLive
-          ? "This channel currently shows live presence. Use the linked live entry only when real room context is attached to this profile route."
+          ? "This channel currently shows live presence. Use the Live tab here for honest status, and use linked room entry only when real room context is attached to this profile route."
           : "No live room is active right now. This tab should keep Live status clear without pretending the profile is a room.",
       accent: profile.isLive ? "live" : "default",
     },
@@ -1063,7 +1085,7 @@ export default function ProfileScreen() {
       title: scheduledWatchPartyEvent ? "Watch-Party Live Scheduled" : "Watch-Party Live",
       kicker: "WATCH TOGETHER",
       body: scheduledWatchPartyEvent
-        ? `${scheduledWatchPartyEvent.eventTitle} is scheduled for ${formatEventDate(scheduledWatchPartyEvent.startsAt)} and stays distinct from Live Watch-Party semantics.`
+        ? `${scheduledWatchPartyEvent.eventTitle} is scheduled for ${formatEventDate(scheduledWatchPartyEvent.startsAt)} and can link out to the canonical Watch-Party Live entry without absorbing the room route.`
         : "Watch-Party Live remains the title/player-driven watch-together path. This tab can show continuity into party flow without blurring it into the live label.",
     },
     {
@@ -1545,9 +1567,9 @@ export default function ProfileScreen() {
               ))}
             </View>
           </View>
-          <View style={styles.actionCluster}>
-            <View style={styles.primaryActionRow}>
-              <TouchableOpacity
+            <View style={styles.actionCluster}>
+              <View style={styles.primaryActionRow}>
+                <TouchableOpacity
                 testID="profile-chilly-chat-button"
                 accessibilityLabel="Open Chi'lly Chat"
                 style={[styles.actionBtn, styles.actionBtnConnected]}
@@ -1555,17 +1577,16 @@ export default function ProfileScreen() {
                 onPress={() => {
                   void onPressCommunication("message");
                 }}
-              >
-                <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
-                  Chi&apos;lly Chat
-                </Text>
-              </TouchableOpacity>
-              {canOpenLinkedRoomActions ? (
-                <>
+                >
+                  <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
+                    Chi&apos;lly Chat
+                  </Text>
+                </TouchableOpacity>
+                {hasLiveRouteContext || hasLiveTabEntry ? (
                   <TouchableOpacity
                     style={[
                       styles.actionBtn,
-                      profile.isLive ? styles.actionBtnLive : styles.actionBtnConnected,
+                      hasLiveRouteContext && profile.isLive ? styles.actionBtnLive : styles.actionBtnConnected,
                     ]}
                     activeOpacity={0.86}
                     onPress={onPressLive}
@@ -1573,25 +1594,26 @@ export default function ProfileScreen() {
                     <Text
                       style={[
                         styles.actionBtnText,
-                        profile.isLive ? styles.actionBtnTextLive : styles.actionBtnTextConnected,
+                        hasLiveRouteContext && profile.isLive ? styles.actionBtnTextLive : styles.actionBtnTextConnected,
                       ]}
                     >
-                      {liveActionLabel}
+                      {liveActionTitle}
                     </Text>
                   </TouchableOpacity>
+                ) : null}
+                {canOpenWatchPartyEntry ? (
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.actionBtnConnected]}
                     activeOpacity={0.86}
                     onPress={onPressWatchParty}
                   >
                     <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
-                      Watch Party
+                      {hasLiveRouteContext ? "Watch Party" : "Watch-Party Live"}
                     </Text>
                   </TouchableOpacity>
-                </>
-              ) : null}
-            </View>
-            {isSelfProfile || !!userId || canOpenLinkedRoomActions ? (
+                ) : null}
+              </View>
+            {isSelfProfile || !!userId || canOpenWatchPartyEntry || hasLiveTabEntry ? (
               <View style={styles.secondaryActionRow}>
                 {isSelfProfile ? (
                   <TouchableOpacity

@@ -403,6 +403,18 @@ export default function TitleDetails() {
     router.push({ pathname: "/player/[id]", params: { id: String(title?.id ?? titleId) } });
   };
 
+  const onOpenWatchPartyLive = () => {
+    const nextTitleId = String(title?.id ?? titleId).trim();
+    if (!nextTitleId) return;
+
+    router.push({
+      pathname: "/watch-party",
+      params: {
+        titleId: nextTitleId,
+      },
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.screenCenter}>
@@ -486,6 +498,9 @@ export default function TitleDetails() {
                   <Text style={styles.liveActivityMetaText}>Reactions live</Text>
                 ) : null}
               </View>
+              <Pressable style={[styles.btnGhost, styles.liveActivityActionButton]} onPress={onOpenWatchPartyLive}>
+                <Text style={styles.btnText}>Watch-Party Live</Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -673,6 +688,10 @@ const styles = StyleSheet.create({
     color: "#F4C8D3",
     fontSize: 11.5,
     fontWeight: "800",
+  },
+  liveActivityActionButton: {
+    alignSelf: "flex-start",
+    marginTop: 4,
   },
   actions: { flexDirection: "row", gap: 12, marginTop: 14, marginBottom: 12 },
   btnPrimary: {
