@@ -80,15 +80,15 @@ const getThreadGuideTitle = ({
   activeCallType?: ChatCallType;
 }) => {
   if (platformOwned && activeCallType) {
-    return "Official conversation with live call entry";
+    return "Official thread with live call entry";
   }
   if (platformOwned) {
-    return "Official platform conversation";
+    return "Official thread";
   }
   if (activeCallType) {
-    return "Direct conversation with live call access";
+    return "Direct thread with live call access";
   }
-  return "Direct conversation, thread first";
+  return "Direct thread";
 };
 
 const getThreadGuideBody = ({
@@ -100,13 +100,13 @@ const getThreadGuideBody = ({
 }) => {
   if (platformOwned) {
     return activeCallType
-      ? "Platform-owned updates, concierge follow-up, and call join stay inside this thread. Profile identity stays separate."
-      : "Platform-owned updates and concierge follow-up stay inside this thread. Profile identity stays separate and room-native chat stays in the rooms.";
+      ? "Platform-owned updates, concierge follow-up, and call join stay in this thread."
+      : "Platform-owned updates and concierge follow-up stay in this thread.";
   }
 
   return activeCallType
-    ? "Voice and video stay inside this thread so both people can rejoin from the same place. Profiles stay separate and room-native chat stays in the rooms."
-    : "Use this thread for direct messages and optional voice/video entry. Profiles stay separate and room-native chat stays where it started.";
+    ? "Voice and video stay in this thread so both people can rejoin from the same place."
+    : "Use this thread for direct messages and optional voice/video entry.";
 };
 
 const buildSmartReplySuggestions = ({
@@ -370,8 +370,8 @@ export default function ChillyChatThreadScreen() {
   const latestThreadHint = useMemo(() => {
     if (renderedMessages.length === 0) {
       return officialAccount
-        ? `${otherMemberDisplayName} can start here with official prompts while keeping help on the canonical profile and thread routes.`
-        : "This thread is ready for the first message. Voice and video attach here if you choose to start a call.";
+        ? `${otherMemberDisplayName} can reply here with official prompts and thread-based calling.`
+        : "This thread is ready for the first message. Voice and video also start here.";
     }
 
     const latestMessage = renderedMessages[renderedMessages.length - 1];
@@ -700,7 +700,7 @@ export default function ChillyChatThreadScreen() {
           style={styles.headerAvatarButton}
           activeOpacity={0.86}
           onLongPress={() => setHeaderQuickActionsOpen((current) => !current)}
-          onPress={() => setHeaderQuickActionsOpen(false)}
+          onPress={() => setHeaderQuickActionsOpen((current) => !current)}
         >
           {otherMemberAvatarUrl ? (
             <Image source={{ uri: otherMemberAvatarUrl }} style={styles.headerAvatarImage} />
@@ -727,10 +727,10 @@ export default function ChillyChatThreadScreen() {
             {thread?.currentMember?.lastReadAt ? (
               <Text style={styles.headerMetaText}>Read updates sync when this thread opens.</Text>
             ) : (
-              <Text style={styles.headerMetaText}>Messenger-first thread with room-linked calling.</Text>
+              <Text style={styles.headerMetaText}>Direct messages with thread-based calling.</Text>
             )}
           </View>
-          <Text style={styles.headerHint}>Long-press the avatar for profile and call actions.</Text>
+          <Text style={styles.headerHint}>Tap the avatar for profile and call actions.</Text>
         </View>
       </View>
 
@@ -741,7 +741,7 @@ export default function ChillyChatThreadScreen() {
             {otherMemberDisplayName}
           </Text>
           <Text style={styles.headerQuickActionBody}>
-            Open the profile or keep voice/video entry inside this thread so the conversation and call state stay together.
+            Open the profile or keep voice/video entry in this same thread.
           </Text>
           <View style={styles.headerQuickActionRow}>
             <TouchableOpacity
@@ -948,7 +948,7 @@ export default function ChillyChatThreadScreen() {
           <View style={styles.composerAffordanceChip}>
             <Text style={styles.composerAffordanceText}>Text only</Text>
           </View>
-          <Text style={styles.composerAssistText}>Text send is live now. Voice and video still start from this thread. Media and reactions are not live yet.</Text>
+          <Text style={styles.composerAssistText}>Voice and video still start here. Media and reactions are not live yet.</Text>
         </View>
         <GatedSmartReplySuggestions
           activeCallType={thread?.activeCallType}
