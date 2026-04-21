@@ -18,6 +18,11 @@ import { getOrCreateDirectThread, listChatThreads, subscribeToInbox, type ChatTh
 import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { getOfficialPlatformAccount, RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 
+type InboxErrorState = {
+  message: string;
+  source: "load" | "official-thread";
+};
+
 function buildPreview(thread: ChatThreadSummary) {
   if (thread.activeCommunicationRoomId && thread.activeCallType) {
     return `${thread.activeCallType === "video" ? "Video" : "Voice"} call active`;
@@ -63,7 +68,7 @@ export default function ChillyChatInboxScreen() {
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InboxErrorState | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [quickActionThreadId, setQuickActionThreadId] = useState("");
   const [starterBusy, setStarterBusy] = useState(false);
@@ -88,7 +93,10 @@ export default function ChillyChatInboxScreen() {
           setActiveFriendUserIds([]);
         });
     } catch (loadError: any) {
-      setError(loadError?.message ?? "Unable to load Chi'lly Chat right now.");
+      setError({
+        message: loadError?.message ?? "Unable to load Chi'lly Chat right now.",
+        source: "load",
+      });
       setActiveFriendUserIds([]);
     } finally {
       setLoading(false);
@@ -211,7 +219,10 @@ export default function ChillyChatInboxScreen() {
         },
       });
     } catch (threadError: any) {
-      setError(threadError?.message ?? "Unable to open the official Chi'lly Chat thread right now.");
+      setError({
+        message: threadError?.message ?? "Unable to open the official Chi'lly Chat thread right now.",
+        source: "official-thread",
+      });
     } finally {
       setStarterBusy(false);
     }
@@ -277,17 +288,25 @@ export default function ChillyChatInboxScreen() {
       {error ? (
         <View style={styles.headerErrorCard}>
           <View style={styles.headerErrorCopy}>
-            <Text style={styles.headerErrorTitle}>Inbox needs another try</Text>
-            <Text style={styles.headerErrorBody}>{error}</Text>
+            <Text style={styles.headerErrorTitle}>
+              {error.source === "official-thread" ? "Official thread needs another try" : "Inbox needs another try"}
+            </Text>
+            <Text style={styles.headerErrorBody}>{error.message}</Text>
           </View>
           <TouchableOpacity
             style={styles.headerErrorAction}
             activeOpacity={0.86}
             onPress={() => {
+              if (error.source === "official-thread") {
+                void openOfficialThread();
+                return;
+              }
               void loadThreads(true);
             }}
           >
-            <Text style={styles.headerErrorActionText}>Refresh Inbox</Text>
+            <Text style={styles.headerErrorActionText}>
+              {error.source === "official-thread" ? "Open Thread" : "Refresh Inbox"}
+            </Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -408,7 +427,7 @@ export default function ChillyChatInboxScreen() {
                 ? "Try another name or clear your search."
                 : "Open Chi&apos;lly Chat from a profile to start your first direct thread."}
             </Text>
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? <Text style={styles.errorText}>{error.message}</Text> : null}
           </View>
         )}
         renderItem={({ item }) => {
