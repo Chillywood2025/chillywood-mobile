@@ -342,7 +342,7 @@ export function AccessSheet({
       });
       if (opened) {
         setStatusTone("neutral");
-        setStatusMessage("Subscription management opened in Google Play.");
+        setStatusMessage("Subscription management opened.");
       } else {
         setStatusTone("error");
         setStatusMessage("Unable to open subscription management right now.");

@@ -1,23 +1,24 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the first safe batch inside the broader monetization / ads doctrine-controlled chapter. Keep `/channel-settings` closed unless the broader audit proves otherwise, keep ads foundation-only, and start with the shared monetization helper/access-sheet truth cleanup before any whole-app proof / QA chapter opens.
+Run the second safe batch inside the broader monetization / ads doctrine-controlled chapter only if it stays route-owned and honest. The ranked next step is a narrow public access wording pass on `/profile/[userId]` so current Premium / Party Pass posture stops sounding speculative, while whole-app proof / QA stays gated closed until this chapter is ready to hand off.
 
 ## Current Plan
 1. Treat the creator monetization / ad-readiness control lane on `/channel-settings` as closed cleanly.
 2. Preserve the landed deferred-access trust fix on `components/monetization/access-sheet.tsx`.
 3. Preserve the clearer creator-grants / ad-readiness summary and creator-facing default labels on `/channel-settings`.
-4. Clarify shared monetization helper truth so Premium / Party Pass stay current truth while later title/live direct unlock framing and store/dev-build wording stop overreaching.
-5. Keep ads doctrine explicit: no current public route is honestly ads-ready yet, and immersive player/watch-party/live/chat surfaces remain no-ads-here.
-6. Keep whole-app proof / QA gated closed until this monetization/ad chapter is honestly ready to hand off.
-7. Keep unrelated local dirt out of the checkpoint.
+4. Preserve the shared monetization helper cleanup so Premium / Party Pass stay current truth while later title/live direct unlock framing and store/dev-build wording stay demoted.
+5. Tighten any remaining public route wording only if it removes speculation without widening monetization rollout.
+6. Keep ads doctrine explicit: no current public route is honestly ads-ready yet, and immersive player/watch-party/live/chat surfaces remain no-ads-here.
+7. Keep whole-app proof / QA gated closed until this monetization/ad chapter is honestly ready to hand off.
+8. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
 - keep the monetization audit result explicit: Premium and Party Pass truth are real, while ads remain foundation-only and not honestly route-ready
 - preserve the landed deferred-access sheet trust fix without widening it into a broader monetization or ad rollout
 - keep `/channel-settings` closed unless the broader chapter proves a real new control-center issue
-- tighten `_lib/monetization.ts` and `components/monetization/access-sheet.tsx` so shared language reflects current truth rather than store/dev-build or later-phase direct-unlock optimism
-- rank `/profile/[userId]` access wording cleanup second if it still reads too speculative after the helper batch
+- preserve `_lib/monetization.ts` and `components/monetization/access-sheet.tsx` now that shared language reflects current truth rather than store/dev-build or later-phase direct-unlock optimism
+- run the ranked second batch only if it stays narrow: `/profile/[userId]` access wording cleanup for current Premium / Party Pass posture
 - do not invent fake ads, fake monetization powers, Google Play readiness work, OVH work, or database-move work
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
@@ -26,7 +27,7 @@ Run the first safe batch inside the broader monetization / ads doctrine-controll
 ## Scope
 This next pass should:
  - preserve `/player/[id].tsx`, `/title/[id]`, `/profile/[userId].tsx`, `/watch-party/index.tsx`, `/watch-party/[partyId].tsx`, `/channel-settings`, and the canonical chat owners while monetization/ad-readiness truth stays grounded
- - start with the shared monetization helper and access-sheet owners before widening into another route-owned batch
+ - start from the landed shared monetization helper and access-sheet cleanup before widening into another route-owned batch
  - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
  - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
  - keep the current social baseline settled while monetization/access/ad-readiness truth stays grounded

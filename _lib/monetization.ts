@@ -214,7 +214,7 @@ const MONETIZATION_TARGETS: Record<MonetizationTargetId, MonetizationTargetDefin
   paid_title_access: {
     id: "paid_title_access",
     label: "Title Unlock",
-    summary: "One-time paid-content access for titles when creator-paid unlocks go live.",
+    summary: "Reserved for later direct title unlocks. Current premium titles still resolve through Chi'llywood Premium on current public routes.",
     kind: "one_time_unlock",
     offeringId: "paid-content",
     entitlementIds: ["paid_content"],
@@ -223,7 +223,7 @@ const MONETIZATION_TARGETS: Record<MonetizationTargetId, MonetizationTargetDefin
   premium_live_access: {
     id: "premium_live_access",
     label: "Premium Live Access",
-    summary: "Premium entry for live-first sessions that should stay outside the free baseline.",
+    summary: "Reserved for later live-entry monetization. Current premium live entry still resolves through Chi'llywood Premium on current public routes.",
     kind: "one_time_unlock",
     offeringId: "premium-live",
     entitlementIds: ["premium_live", "premium"],
@@ -231,8 +231,8 @@ const MONETIZATION_TARGETS: Record<MonetizationTargetId, MonetizationTargetDefin
   },
   premium_watch_party_access: {
     id: "premium_watch_party_access",
-    label: "Watch-Party Access",
-    summary: "Premium shared-room access for Watch-Party Live and paid room entry.",
+    label: "Party Pass Access",
+    summary: "Party Pass room access for watch-party entry, while active Premium can still satisfy the same gate where that entitlement already applies.",
     kind: "one_time_unlock",
     offeringId: "premium-watch-party",
     entitlementIds: ["premium_watch_party", "premium"],
@@ -465,14 +465,14 @@ const formatPackageDetail = (pkg: PurchasesPackage | null, target: MonetizationT
   if (!product) return target.summary;
 
   const subscriptionPeriod = String(product.subscriptionPeriod ?? "").trim().toUpperCase();
-  if (subscriptionPeriod === "P1W") return "Billed weekly through Google Play.";
-  if (subscriptionPeriod === "P1M") return "Billed monthly through Google Play.";
-  if (subscriptionPeriod === "P3M") return "Billed every 3 months through Google Play.";
-  if (subscriptionPeriod === "P6M") return "Billed every 6 months through Google Play.";
-  if (subscriptionPeriod === "P1Y") return "Billed yearly through Google Play.";
+  if (subscriptionPeriod === "P1W") return "Billed weekly through the active store configuration.";
+  if (subscriptionPeriod === "P1M") return "Billed monthly through the active store configuration.";
+  if (subscriptionPeriod === "P3M") return "Billed every 3 months through the active store configuration.";
+  if (subscriptionPeriod === "P6M") return "Billed every 6 months through the active store configuration.";
+  if (subscriptionPeriod === "P1Y") return "Billed yearly through the active store configuration.";
 
   const packageType = String(pkg.packageType ?? "").trim().toUpperCase();
-  if (packageType === "LIFETIME") return "One-time unlock through Google Play.";
+  if (packageType === "LIFETIME") return "One-time unlock through the active store configuration.";
 
   return String(product.description ?? "").trim() || target.summary;
 };
@@ -499,7 +499,7 @@ const buildMonetizationAccessSheetOffer = (options: {
     detail: formatPackageDetail(selectedPackage, target),
     caption: availableCount > 1
       ? `${availableCount} live packages are configured for this offer.`
-      : "Pricing is coming from the current RevenueCat offering.",
+      : "Pricing is coming from the current configured offer.",
     badge: formatPackageBadge(selectedPackage),
     packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
   };
@@ -726,13 +726,13 @@ export async function readMonetizationSnapshot(options?: {
 
     const issues = [...baseSnapshot.issues];
     if (!canMakePayments) {
-      issues.push("Google Play billing is not currently available on this device/account.");
+      issues.push("Billing is not currently available on this device/account.");
     }
     if (!customerInfo) {
-      issues.push("Customer info is unavailable from RevenueCat.");
+      issues.push("Account entitlement status is unavailable right now.");
     }
     if (!offerings) {
-      issues.push("Offerings are unavailable from RevenueCat.");
+      issues.push("Offer configuration is unavailable right now.");
     }
 
     const snapshot: MonetizationSnapshot = {
@@ -809,7 +809,7 @@ export async function purchaseMonetizationTarget(
       target: targetId,
       snapshot,
       customerInfo: null,
-      message: snapshot.configuration.reason ?? "RevenueCat is not configured for this build.",
+      message: snapshot.configuration.reason ?? "Monetization is not configured for this build.",
     };
   }
 
@@ -819,7 +819,7 @@ export async function purchaseMonetizationTarget(
       target: targetId,
       snapshot,
       customerInfo: null,
-      message: "Google Play billing is not currently available on this device/account.",
+      message: "Billing is not currently available on this device/account.",
     };
   }
 
@@ -846,7 +846,7 @@ export async function purchaseMonetizationTarget(
       target: targetId,
       snapshot,
       customerInfo: null,
-      message: `${target.label} is not available in the current RevenueCat offerings yet.`,
+      message: `${target.label} is not available in the current offer configuration yet.`,
     };
   }
 
@@ -894,7 +894,7 @@ export async function restoreMonetizationAccess(options?: { userId?: string | nu
       ok: false,
       snapshot,
       customerInfo: null,
-      message: snapshot.configuration.reason ?? "RevenueCat is not configured for this build.",
+      message: snapshot.configuration.reason ?? "Monetization is not configured for this build.",
     };
   }
 
@@ -942,27 +942,27 @@ export function getMonetizationAccessSheetPresentation(options: {
   if (primaryTargetId === "paid_title_access") {
     return {
       kicker: "TITLE ACCESS",
-      title: "Unlock This Title",
-      body: `This title is gated. Unlock it directly when title access is available, or use an active ${appDisplayName} Premium subscription.`,
-      actionLabel: "Unlock Title",
+      title: "Premium Access Required",
+      body: `This title currently resolves through ${appDisplayName} Premium on this route. Direct title unlocks are later and are not active here yet.`,
+      actionLabel: "Unlock Premium",
     };
   }
 
   if (primaryTargetId === "premium_live_access") {
     return {
       kicker: "LIVE ACCESS",
-      title: "Unlock Live Access",
-      body: `This live entry point requires premium live access or an active ${appDisplayName} Premium subscription before you can continue.`,
-      actionLabel: "Unlock Live Access",
+      title: "Premium Access Required",
+      body: `This live entry point currently resolves through ${appDisplayName} Premium on this route. Separate live unlocks are later and are not active here yet.`,
+      actionLabel: "Unlock Premium",
     };
   }
 
   if (gateReason === "party_pass_required") {
     return {
-      kicker: "WATCH-PARTY ACCESS",
+      kicker: "PARTY PASS ACCESS",
       title: "Unlock This Room",
-      body: `This room uses Watch-Party access. Unlock it for shared entry, or use an active ${appDisplayName} Premium subscription when that offer is available.`,
-      actionLabel: "Unlock Access",
+      body: `This room uses Party Pass access. Review the current room gate here, or use an active ${appDisplayName} Premium subscription when that entitlement already clears the room.`,
+      actionLabel: "Get Party Pass",
     };
   }
 
@@ -1014,7 +1014,7 @@ export async function readMonetizationAccessSheetState(options: {
       primaryLabel: "Monetization Disabled",
       primaryDisabled: true,
       helperKicker: "MONETIZATION STATUS",
-      helperBody: snapshot.configuration.reason ?? "RevenueCat is not configured for this build yet.",
+      helperBody: snapshot.configuration.reason ?? "Monetization is not configured for this build yet.",
       helperTone: "warning",
       offer,
       canRestore: false,
@@ -1031,7 +1031,7 @@ export async function readMonetizationAccessSheetState(options: {
       primaryDisabled: false,
       helperKicker: "BILLING STATUS",
       helperBody: snapshot.issues[0]
-        ?? "Google Play billing is not currently available on this device/account.",
+        ?? "Billing is not currently available on this device/account.",
       helperTone: "warning",
       offer,
       canRestore: true,
@@ -1048,7 +1048,7 @@ export async function readMonetizationAccessSheetState(options: {
       primaryDisabled: false,
       helperKicker: "OFFER STATUS",
       helperBody: snapshot.issues[0]
-        ?? "This purchase path is not available in the current RevenueCat offering configuration yet.",
+        ?? "This purchase path is not available in the current offer configuration yet.",
       helperTone: "warning",
       offer,
       canRestore: true,
@@ -1079,7 +1079,7 @@ export async function readMonetizationAccessSheetState(options: {
     primaryLabel: presentation.actionLabel,
     primaryDisabled: false,
     helperKicker: "LIVE OFFER",
-    helperBody: "This pricing is coming from the current RevenueCat offering on this Android dev build.",
+    helperBody: "This pricing is coming from the current configured offer for this build.",
     helperTone: "neutral",
     offer,
     canRestore: true,
