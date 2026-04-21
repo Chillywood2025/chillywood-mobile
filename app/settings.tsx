@@ -51,35 +51,33 @@ export default function SettingsScreen() {
   }, [isLoading, isSignedIn, refreshMonetizationStatus]);
 
   const monetizationStatusLabel = useMemo(() => {
-    if (!monetizationSnapshot.configuration.shouldConfigure) return "Not currently available";
-    if (monetizationSnapshot.status === "ready") return "Configured for later rollout";
-    if (monetizationSnapshot.status === "store_unavailable") return "Not currently available on this device";
-    if (monetizationSnapshot.status === "partial") return "Availability still being finalized";
-    return "Not currently available";
+    if (!monetizationSnapshot.configuration.shouldConfigure) return "Premium is not enabled on this build";
+    if (monetizationSnapshot.status === "ready") return "Premium can resolve on supported locked routes";
+    if (monetizationSnapshot.status === "store_unavailable") return "Premium billing is unavailable on this device";
+    if (monetizationSnapshot.status === "partial") return "Premium configuration is still being finalized";
+    return "Premium is not currently available";
   }, [monetizationSnapshot.configuration.shouldConfigure, monetizationSnapshot.status]);
 
   const planLabel = useMemo(() => (
-    monetizationSnapshot.targets.premium_subscription?.hasEntitlement ? "Premium active on this account" : "Not currently available on this account"
+    monetizationSnapshot.targets.premium_subscription?.hasEntitlement ? "Premium is active on this account" : "No active Premium access on this account"
   ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
 
   const entitlementsLabel = useMemo(() => (
-    monetizationSnapshot.activeEntitlementIds.length
-      ? monetizationSnapshot.activeEntitlementIds.join(", ")
-      : "None active on this account"
-  ), [monetizationSnapshot.activeEntitlementIds]);
+    monetizationSnapshot.targets.premium_subscription?.hasEntitlement
+      ? "This account already clears Premium-gated routes."
+      : "Premium-gated routes still need an active Premium entitlement."
+  ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
 
   const offeringsLabel = useMemo(() => {
-    if (monetizationSnapshot.currentOfferingId) return monetizationSnapshot.currentOfferingId;
-    if (monetizationSnapshot.availableOfferingIds.length) {
-      return `${monetizationSnapshot.availableOfferingIds.length} offer configuration item${monetizationSnapshot.availableOfferingIds.length === 1 ? "" : "s"} found`;
-    }
+    if (monetizationSnapshot.currentOfferingId) return "A Premium offer is configured for supported unlock surfaces";
+    if (monetizationSnapshot.availableOfferingIds.length) return "Premium offer configuration is present for supported unlock surfaces";
     return "No premium offer is currently available";
   }, [monetizationSnapshot.availableOfferingIds, monetizationSnapshot.currentOfferingId]);
 
   const issueLabel = useMemo(() => (
     monetizationSnapshot.targets.premium_subscription?.hasEntitlement
-      ? "This account already has Premium access, but new premium purchases are not currently available from this surface."
-      : "Premium access is not currently available from this surface. Access options will appear here when they are available for this device and account."
+      ? "Settings stays read-only here. New Premium purchases still begin from supported locked routes, not from this screen."
+      : "Settings can confirm current Premium posture on this account, but purchase entry still begins from supported locked routes instead of this screen."
   ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
 
   const onPressSignOut = async () => {
@@ -259,30 +257,30 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardKicker}>PREMIUM PREVIEW</Text>
-        <Text style={styles.secondaryTitle}>Premium access snapshot</Text>
+        <Text style={styles.cardKicker}>PREMIUM ACCOUNT</Text>
+        <Text style={styles.secondaryTitle}>Premium access on this account</Text>
         <Text style={styles.body}>
-          This screen shows the current account snapshot. Premium purchases do not open from Settings yet, so this stays read-only until rollout is ready here.
+          Settings shows the current Premium posture for this signed-in account. Purchase entry still begins from supported locked routes, so this surface stays read-only and status-first.
         </Text>
 
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Build access</Text>
+          <Text style={styles.identityLabel}>Account status</Text>
           <Text style={styles.identityValue}>{planLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Snapshot</Text>
+          <Text style={styles.identityLabel}>Current purchase posture</Text>
           <Text style={styles.identityValue}>{monetizationStatusLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Active premium access</Text>
+          <Text style={styles.identityLabel}>Premium route access</Text>
           <Text style={styles.identityValue}>{entitlementsLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Rollout state</Text>
+          <Text style={styles.identityLabel}>Offer readiness</Text>
           <Text style={styles.identityValue}>{offeringsLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Why this is read-only</Text>
+          <Text style={styles.identityLabel}>Purchase entry</Text>
           <Text style={styles.statusNote}>{issueLabel}</Text>
         </View>
 
@@ -297,7 +295,7 @@ export default function SettingsScreen() {
           >
             {monetizationLoading
               ? <ActivityIndicator color="#E5ECF8" size="small" />
-              : <Text style={styles.utilityButtonText}>Refresh snapshot</Text>}
+              : <Text style={styles.utilityButtonText}>Refresh status</Text>}
           </TouchableOpacity>
         </View>
       </View>

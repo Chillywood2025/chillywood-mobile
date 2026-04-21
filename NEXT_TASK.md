@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Implement the first safe whole-app proof / QA / behavior verification batch on the current truthful product baseline. The audit is now underway and the best first route-owned fix is a narrow Premium/account-trust cleanup on `app/settings.tsx`, with a smaller `/profile/[userId]` room-signal wording pass ranked second only if the first batch lands safely.
+Implement the second safe whole-app proof / QA / behavior verification batch on the current truthful product baseline. The first route-owned fix on `app/settings.tsx` is now landed, and the next narrow seam is the smaller `/profile/[userId]` room-signal wording cleanup if it still lands cleanly.
 
 ## Current Plan
 1. Treat the broader monetization / ads doctrine-controlled chapter as closed cleanly enough to move on.
@@ -10,9 +10,9 @@ Implement the first safe whole-app proof / QA / behavior verification batch on t
 4. Preserve the shared monetization helper cleanup so Premium / Party Pass stay current truth while later title/live direct unlock framing and store/dev-build wording stay demoted.
 5. Preserve the route-owned `/profile/[userId]` access wording cleanup so current Premium / Party Pass posture reads as current default-entry truth rather than speculation.
 6. Keep ads doctrine explicit: no current public route is honestly ads-ready yet, and immersive player/watch-party/live/chat surfaces remain no-ads-here.
-7. Reframe `/settings` so Premium account status reads like a trustworthy account surface instead of an internal rollout snapshot.
-8. Clean up the smaller `/profile/[userId]` room-signal wording seam only if the settings batch lands safely.
-8. Keep unrelated local dirt out of the checkpoint.
+7. Preserve `/settings` now that Premium account status reads like a trustworthy account surface instead of an internal rollout snapshot.
+8. Clean up the smaller `/profile/[userId]` room-signal wording seam only if it stays safely route-owned and copy-only.
+9. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
 - keep the monetization audit result explicit: Premium and Party Pass truth are real, while ads remain foundation-only and not honestly route-ready
@@ -20,8 +20,8 @@ Implement the first safe whole-app proof / QA / behavior verification batch on t
 - keep `/channel-settings` closed unless a future broader chapter proves a real new control-center issue
 - preserve `_lib/monetization.ts` and `components/monetization/access-sheet.tsx` now that shared language reflects current truth rather than store/dev-build or later-phase direct-unlock optimism
 - preserve `/profile/[userId]` now that current Premium / Party Pass posture reads as current default-entry truth rather than speculative later wording
-- land the first whole-app proof / QA fix on `app/settings.tsx` so Premium/account status reads as current-account truth instead of rollout-preview copy
-- keep the smaller `/profile/[userId]` room-signal wording seam ranked second and only take it if the settings batch lands safely
+- preserve the landed `/settings` Premium/account status cleanup without widening it into monetization purchase flow changes
+- keep the smaller `/profile/[userId]` room-signal wording seam ranked next and only take it if it stays safely route-owned and copy-only
 - do not invent fake ads, fake monetization powers, Google Play readiness work, OVH work, or database-move work
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
@@ -31,7 +31,7 @@ Implement the first safe whole-app proof / QA / behavior verification batch on t
 This next pass should:
  - preserve `/player/[id].tsx`, `/title/[id]`, `/profile/[userId].tsx`, `/watch-party/index.tsx`, `/watch-party/[partyId].tsx`, `/channel-settings`, and the canonical chat owners while monetization/ad-readiness truth stays grounded
  - treat the monetization/ad chapter as closed unless the proof/QA pass proves a real regression
- - use `app/settings.tsx` as the first route-owned proof/QA owner for Premium/account-trust cleanup
+ - preserve `app/settings.tsx` now that the Premium card reads like account-trust copy rather than rollout-preview copy
  - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
  - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
  - keep the current social baseline settled while monetization/access/ad-readiness truth stays grounded
@@ -56,6 +56,7 @@ The next lane is successful when:
 - Premium and Party Pass stay the current backed monetization/access truth while ads remain foundation-only and not honestly route-ready
 - `/channel-settings` keeps its clearer creator grants without being reopened casually
 - `/settings` presents Premium account status as a trustworthy account surface instead of a rollout-preview memo wall
+- `/profile/[userId]` removes the remaining speculative room-handoff wording if the second batch lands safely
 - `/profile/[userId]` access wording stays route-owned and honest rather than speculative, while Chi'lly Chat itself stays distinct from monetized direct-message claims
 - whole-app proof / QA starts from the current truthful baseline instead of reopening closed monetization cleanup
 - public/profile/chat/title/player routes still make no fake social or ad claims
