@@ -1,12 +1,12 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact stage is now `inbox friendship hint adoption` on `app/chat/index.tsx`. Repo truth is now explicit: the inbox audit is complete, and the only safe adoption shape is a tiny active-friend hint for already-accepted private friendships only.
+The next exact stage is now the `chat inbox private friendship hint closeout audit`. Repo truth is now explicit: the tiny inbox adoption is landed, and there is no second obvious inbox batch unless the closeout audit finds one final truly narrow refinement.
 
 ## Current Plan
-1. Treat the whole-app re-entry lane and inbox audit as closed.
+1. Treat the whole-app re-entry lane, inbox audit, and inbox hint adoption as closed.
 2. Carry forward the locked doctrine: friendship is mutual, person-to-person, private-first, and still distinct from followers/subscribers.
-3. Add only a tiny accepted-friend hint to `/chat/index.tsx` if it can stay scan-first and private.
+3. Run the closeout audit before inventing any second inbox batch.
 4. Keep pending/request states in `/chat/[threadId]` rather than pushing them into the inbox.
 5. Keep profile friend adoption later than inbox adoption unless a future dedicated pass proves the public route is ready.
 6. Keep comments limited to current room/live truth and keep Rachi distinct from normal friendship hints.
@@ -14,8 +14,8 @@ The next exact stage is now `inbox friendship hint adoption` on `app/chat/index.
 8. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- add one quiet accepted-friend hint to direct-thread inbox rows only if it stays private, truthful, and scan-first
-- preserve the truthful title, player, watch-party, and chat-thread adoptions without widening them into fake broad social rollout
+- audit whether one final trivial inbox refinement is honestly cleaner than closing the lane now
+- preserve the truthful title, player, watch-party, chat-thread, and inbox adoptions without widening them into fake broad social rollout
 - keep pending/request states, `/profile/[userId]`, and universal comments later
 - avoid public friend chrome, fake friend counts, fake inbox clutter, fake engagement metrics, and universal comments
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
@@ -28,7 +28,7 @@ This next pass should:
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
 - keep the next pass route-owned and smaller than a public-profile friendship rollout
-- preserve inbox scan clarity while adopting only the smallest honest accepted-friend signal
+- preserve inbox scan clarity while deciding whether the lane should close
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope

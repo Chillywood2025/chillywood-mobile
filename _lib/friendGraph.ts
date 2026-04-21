@@ -378,3 +378,45 @@ export async function readFriendListSummary(options?: {
     items,
   };
 }
+
+export async function readActiveFriendUserIds(): Promise<string[]> {
+  const viewerUserId = await getSignedInFriendUserId();
+  if (!viewerUserId) {
+    return [];
+  }
+
+  const [
+    { data: lowRows, error: lowError },
+    { data: highRows, error: highError },
+  ] = await Promise.all([
+    supabase
+      .from(USER_FRIENDSHIPS_TABLE)
+      .select(FRIEND_RELATIONSHIP_SELECT)
+      .eq("user_low_id", viewerUserId)
+      .eq("status", "active")
+      .returns<FriendRelationshipRow[]>(),
+    supabase
+      .from(USER_FRIENDSHIPS_TABLE)
+      .select(FRIEND_RELATIONSHIP_SELECT)
+      .eq("user_high_id", viewerUserId)
+      .eq("status", "active")
+      .returns<FriendRelationshipRow[]>(),
+  ]);
+
+  if (lowError) throw lowError;
+  if (highError) throw highError;
+
+  const friendUserIds = new Set<string>();
+  for (const row of [...(lowRows ?? []), ...(highRows ?? [])]) {
+    const relationship = parseFriendRelationshipRow(row);
+    if (!relationship || relationship.status !== "active") continue;
+    const otherUserId = relationship.userLowId === viewerUserId
+      ? relationship.userHighId
+      : relationship.userLowId;
+    if (otherUserId) {
+      friendUserIds.add(otherUserId);
+    }
+  }
+
+  return [...friendUserIds];
+}

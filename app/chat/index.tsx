@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
 import { getOrCreateDirectThread, listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../../_lib/chat";
+import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { getOfficialPlatformAccount, RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 
 function buildPreview(thread: ChatThreadSummary) {
@@ -66,6 +67,7 @@ export default function ChillyChatInboxScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [quickActionThreadId, setQuickActionThreadId] = useState("");
   const [starterBusy, setStarterBusy] = useState(false);
+  const [activeFriendUserIds, setActiveFriendUserIds] = useState<string[]>([]);
 
   const loadThreads = useCallback(async (refresh = false) => {
     if (refresh) {
@@ -78,8 +80,16 @@ export default function ChillyChatInboxScreen() {
       const nextThreads = await listChatThreads();
       setThreads(nextThreads);
       setError(null);
+      void readActiveFriendUserIds()
+        .then((nextUserIds) => {
+          setActiveFriendUserIds(nextUserIds);
+        })
+        .catch(() => {
+          setActiveFriendUserIds([]);
+        });
     } catch (loadError: any) {
       setError(loadError?.message ?? "Unable to load Chi'lly Chat right now.");
+      setActiveFriendUserIds([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -119,6 +129,11 @@ export default function ChillyChatInboxScreen() {
   const quickActionThread = useMemo(
     () => threads.find((thread) => thread.threadId === quickActionThreadId) ?? null,
     [quickActionThreadId, threads],
+  );
+
+  const activeFriendUserIdSet = useMemo(
+    () => new Set(activeFriendUserIds.map((userId) => String(userId).trim()).filter(Boolean)),
+    [activeFriendUserIds],
   );
 
   const openThread = useCallback((thread: ChatThreadSummary, startCall?: "voice" | "video") => {
@@ -389,6 +404,7 @@ export default function ChillyChatInboxScreen() {
           const threadKindLabel = getThreadKindLabel(item);
           const displayName = officialAccount?.displayName ?? other?.displayName ?? "Chi'lly Chat Thread";
           const tagline = officialAccount?.tagline ?? other?.tagline;
+          const isActiveFriend = !officialAccount && !!other?.userId && activeFriendUserIdSet.has(String(other.userId).trim());
 
           return (
             <TouchableOpacity
@@ -439,6 +455,11 @@ export default function ChillyChatInboxScreen() {
                     <View style={[styles.identityDot, unreadCount > 0 && styles.identityDotUnread]} />
                     <Text style={[styles.identityPillText, unreadCount > 0 && styles.identityPillTextUnread]}>{identityLabel}</Text>
                   </View>
+                  {isActiveFriend ? (
+                    <View style={styles.friendHintPill}>
+                      <Text style={styles.friendHintPillText}>Friends</Text>
+                    </View>
+                  ) : null}
                 </View>
                 {tagline ? (
                   <Text style={styles.threadTagline} numberOfLines={1}>{tagline}</Text>
@@ -826,6 +847,19 @@ const styles = StyleSheet.create({
   },
   identityPillTextUnread: {
     color: "#FFD6E1",
+  },
+  friendHintPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(182, 202, 255, 0.18)",
+    backgroundColor: "rgba(182, 202, 255, 0.08)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  friendHintPillText: {
+    color: "#DCE6FF",
+    fontSize: 10,
+    fontWeight: "900",
   },
   threadTagline: {
     flex: 1,
