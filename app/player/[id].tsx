@@ -4381,6 +4381,206 @@ export default function PlayerScreen() {
     </View>
   );
 
+  const renderStandaloneLiveModeOverlayCluster = () => {
+    if (shouldUseLiveModeLowerDock) return null;
+
+    return (
+      <>
+        {shouldRenderInlineLivePresenceToast ? (
+          <View style={styles.livePresenceEventToast}>
+            <Text style={styles.livePresenceEventText} numberOfLines={1}>
+              {livePresenceEvent}
+            </Text>
+          </View>
+        ) : null}
+
+        {!inWatchParty ? (
+          <View style={styles.liveModeActionRow}>
+            <TouchableOpacity
+              style={styles.partyOverlayChip}
+              onPress={() => {
+                setLiveFilterSheetOpen(false);
+                setPartyCommentsOpen((value) => !value);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.partyOverlayChipText}>🗨️ Room Comments</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.partyOverlayChip,
+                (liveFilterSheetOpen || liveFaceFilter !== "none") && styles.watchPartyLiveFooterActiveBtn,
+              ]}
+              onPress={onToggleLiveFilters}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.partyOverlayChipText,
+                  (liveFilterSheetOpen || liveFaceFilter !== "none") && styles.watchPartyLiveFooterActiveLabel,
+                ]}
+              >
+                🎭 Filters
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.partyOverlayChip}
+              onPress={() => {
+                setLiveFilterSheetOpen(false);
+                setPartyCommentsOpen(false);
+                const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
+                triggerLocalPartyReaction(emoji);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.partyOverlayChipText}>🔥 React</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {partyLocalReactions.map((entry) => (
+          <Animated.View
+            key={entry.id}
+            pointerEvents="none"
+            style={[
+              styles.partyLocalReactionBubble,
+              {
+                right: entry.rightOffset,
+                opacity: partyLocalReactionOpacityMapRef.current[entry.id] ?? 1,
+                transform: [
+                  { translateY: partyLocalReactionTranslateMapRef.current[entry.id] ?? 0 },
+                  { translateX: partyLocalReactionTranslateXMapRef.current[entry.id] ?? 0 },
+                  { scale: partyLocalReactionScaleMapRef.current[entry.id] ?? 1 },
+                ],
+              },
+            ]}
+          >
+            <Text style={styles.partyLocalReactionText}>{entry.emoji}</Text>
+          </Animated.View>
+        ))}
+
+        {partyCommentsOpen && !inWatchParty ? (
+          <View style={styles.partyCommentsDrawer}>
+            {renderPartyCommentsContent()}
+          </View>
+        ) : null}
+
+        {liveFilterSheetOpen && !inWatchParty ? renderLiveFilterSheet(styles.liveFilterSheetStandalone) : null}
+      </>
+    );
+  };
+
+  const renderWatchPartyLiveModeOverlayCluster = () => {
+    if (!shouldUseLiveModeLowerDock) return null;
+
+    return (
+      <LiveLowerDock
+        rootStyle={[styles.watchPartyLiveBottomDock, hasActiveRailParticipants && styles.watchPartyLiveBottomDockActive]}
+        presenceToast={partyCommentsOpen || liveFilterSheetOpen || shouldRenderWatchPartyLivePresenceToast ? (
+          <View style={styles.watchPartyLivePresenceStack}>
+            {liveFilterSheetOpen ? renderLiveFilterSheet(styles.liveFilterSheetWatchParty) : null}
+            {partyCommentsOpen ? (
+              <View
+                style={[
+                  styles.partyCommentsDrawer,
+                  styles.partyCommentsDrawerWatchPartyTitle,
+                  styles.watchPartyLiveCommentsDrawer,
+                ]}
+              >
+                {renderPartyCommentsContent()}
+              </View>
+            ) : null}
+
+            {shouldRenderWatchPartyLivePresenceToast ? (
+              <View style={[styles.livePresenceEventToast, styles.watchPartyLivePresenceToast]}>
+                <Text style={styles.livePresenceEventText} numberOfLines={1}>
+                  {livePresenceEvent}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : undefined}
+        participantStrip={(
+          <View style={styles.watchPartyLiveStripWrap}>
+            {renderParticipantPanel(true)}
+          </View>
+        )}
+        leftAction={{
+          id: "comments",
+          icon: "🗨️",
+          label: "Room Comments",
+          activeOpacity: 0.85,
+          onPress: () => {
+            setLiveFilterSheetOpen(false);
+            setReactionPickerOpen(false);
+            setPartyCommentsOpen((value) => !value);
+          },
+          buttonStyle: partyCommentsOpen ? styles.watchPartyLiveFooterActiveBtn : undefined,
+          labelStyle: partyCommentsOpen ? styles.watchPartyLiveFooterActiveLabel : undefined,
+        }}
+        trailingActions={[
+          {
+            id: "filters",
+            icon: "🎭",
+            label: "Filters",
+            activeOpacity: 0.85,
+            onPress: onToggleLiveFilters,
+            buttonStyle: (liveFilterSheetOpen || liveFaceFilter !== "none") ? styles.watchPartyLiveFooterActiveBtn : undefined,
+            labelStyle: (liveFilterSheetOpen || liveFaceFilter !== "none") ? styles.watchPartyLiveFooterActiveLabel : undefined,
+          },
+          {
+            id: "react",
+            icon: "✨",
+            label: "React",
+            activeOpacity: 0.85,
+            onPress: () => {
+              setLiveFilterSheetOpen(false);
+              setPartyCommentsOpen(false);
+              setReactionPickerOpen((value) => !value);
+            },
+            buttonStyle: reactionPickerOpen ? styles.watchPartyLiveFooterActiveBtn : undefined,
+            labelStyle: reactionPickerOpen ? styles.watchPartyLiveFooterActiveLabel : undefined,
+          },
+        ]}
+        footerStyles={mapFooterControlRowStyles({
+          row: styles.footerControls,
+          actionButton: styles.footerIconBtn,
+          actionIconText: styles.footerIconBtnText,
+          actionLabelText: styles.footerIconBtnLabel,
+          quickRow: styles.footerReactionQuickRow,
+          quickChip: styles.footerReactionQuickBtn,
+          quickChipText: styles.footerReactionQuickText,
+        }, buildFooterControlTokens({ size: "compact", surface: "glass" }))}
+        reactionPicker={{
+          visible: reactionPickerOpen,
+          onClose: () => setReactionPickerOpen(false),
+          onSelectEmoji: onSelectReactionFromPicker,
+          recentEmojis: recentReactionEmojis,
+          title: "React",
+          subtitle: "Browse and tap to send",
+          styles: {
+            root: styles.reactionPickerRoot,
+            backdrop: styles.reactionPickerBackdrop,
+            sheet: styles.reactionPickerSheet,
+            header: styles.reactionPickerHeader,
+            title: styles.reactionPickerTitle,
+            subtitle: styles.reactionPickerSubtitle,
+            closeBtn: styles.reactionPickerCloseBtn,
+            closeText: styles.reactionPickerCloseText,
+            body: styles.reactionPickerBody,
+            section: styles.reactionPickerSection,
+            sectionTitle: styles.reactionPickerSectionTitle,
+            grid: styles.reactionPickerGrid,
+            emojiBtn: styles.reactionPickerEmojiBtn,
+            emojiText: styles.reactionPickerEmojiText,
+          },
+        }}
+      />
+    );
+  };
+
   useEffect(() => {
     const sourceLabel = source
       ? typeof source === "number"
@@ -4600,92 +4800,11 @@ export default function PlayerScreen() {
               </View>
             ) : null}
 
-            {shouldRenderInlineLivePresenceToast ? (
-              <View style={styles.livePresenceEventToast}>
-                <Text style={styles.livePresenceEventText} numberOfLines={1}>
-                  {livePresenceEvent}
-                </Text>
-              </View>
-            ) : null}
-
             {shouldRenderInlineLiveParticipantPanel ? (
               <View style={styles.liveModeParticipantsWrap}>{renderParticipantPanel(true)}</View>
             ) : null}
 
-            {!inWatchParty ? (
-              <View style={styles.liveModeActionRow}>
-                <TouchableOpacity
-                  style={styles.partyOverlayChip}
-                  onPress={() => {
-                    setLiveFilterSheetOpen(false);
-                    setPartyCommentsOpen((value) => !value);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.partyOverlayChipText}>🗨️ Room Comments</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.partyOverlayChip,
-                    (liveFilterSheetOpen || liveFaceFilter !== "none") && styles.watchPartyLiveFooterActiveBtn,
-                  ]}
-                  onPress={onToggleLiveFilters}
-                  activeOpacity={0.85}
-                >
-                  <Text
-                    style={[
-                      styles.partyOverlayChipText,
-                      (liveFilterSheetOpen || liveFaceFilter !== "none") && styles.watchPartyLiveFooterActiveLabel,
-                    ]}
-                  >
-                    🎭 Filters
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.partyOverlayChip}
-                  onPress={() => {
-                    setLiveFilterSheetOpen(false);
-                    setPartyCommentsOpen(false);
-                    const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)];
-                    triggerLocalPartyReaction(emoji);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.partyOverlayChipText}>🔥 React</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
-
-            {partyLocalReactions.map((entry) => (
-              <Animated.View
-                key={entry.id}
-                pointerEvents="none"
-                style={[
-                  styles.partyLocalReactionBubble,
-                  {
-                    right: entry.rightOffset,
-                    opacity: partyLocalReactionOpacityMapRef.current[entry.id] ?? 1,
-                    transform: [
-                      { translateY: partyLocalReactionTranslateMapRef.current[entry.id] ?? 0 },
-                      { translateX: partyLocalReactionTranslateXMapRef.current[entry.id] ?? 0 },
-                      { scale: partyLocalReactionScaleMapRef.current[entry.id] ?? 1 },
-                    ],
-                  },
-                ]}
-              >
-                <Text style={styles.partyLocalReactionText}>{entry.emoji}</Text>
-              </Animated.View>
-            ))}
-
-            {partyCommentsOpen && !inWatchParty ? (
-              <View style={styles.partyCommentsDrawer}>
-                {renderPartyCommentsContent()}
-              </View>
-            ) : null}
-
-            {liveFilterSheetOpen && !inWatchParty ? renderLiveFilterSheet(styles.liveFilterSheetStandalone) : null}
+            {renderStandaloneLiveModeOverlayCluster()}
               </>
             ) : (
               <>
@@ -4939,110 +5058,7 @@ export default function PlayerScreen() {
               {renderTitleParticipantExpandedPanel()}
             </View>
           ) : null}
-          {shouldUseLiveModeLowerDock ? (
-            <LiveLowerDock
-              rootStyle={[styles.watchPartyLiveBottomDock, hasActiveRailParticipants && styles.watchPartyLiveBottomDockActive]}
-              presenceToast={partyCommentsOpen || liveFilterSheetOpen || shouldRenderWatchPartyLivePresenceToast ? (
-                <View style={styles.watchPartyLivePresenceStack}>
-                  {liveFilterSheetOpen ? renderLiveFilterSheet(styles.liveFilterSheetWatchParty) : null}
-                  {partyCommentsOpen ? (
-                    <View
-                      style={[
-                        styles.partyCommentsDrawer,
-                        styles.partyCommentsDrawerWatchPartyTitle,
-                        styles.watchPartyLiveCommentsDrawer,
-                      ]}
-                    >
-                      {renderPartyCommentsContent()}
-                    </View>
-                  ) : null}
-
-                  {shouldRenderWatchPartyLivePresenceToast ? (
-                    <View style={[styles.livePresenceEventToast, styles.watchPartyLivePresenceToast]}>
-                      <Text style={styles.livePresenceEventText} numberOfLines={1}>
-                        {livePresenceEvent}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : undefined}
-              participantStrip={(
-                <View style={styles.watchPartyLiveStripWrap}>
-                  {renderParticipantPanel(true)}
-                </View>
-              )}
-              leftAction={{
-                id: "comments",
-                icon: "🗨️",
-                label: "Room Comments",
-                activeOpacity: 0.85,
-                onPress: () => {
-                  setLiveFilterSheetOpen(false);
-                  setReactionPickerOpen(false);
-                  setPartyCommentsOpen((value) => !value);
-                },
-                buttonStyle: partyCommentsOpen ? styles.watchPartyLiveFooterActiveBtn : undefined,
-                labelStyle: partyCommentsOpen ? styles.watchPartyLiveFooterActiveLabel : undefined,
-              }}
-              trailingActions={[
-                {
-                  id: "filters",
-                  icon: "🎭",
-                  label: "Filters",
-                  activeOpacity: 0.85,
-                  onPress: onToggleLiveFilters,
-                  buttonStyle: (liveFilterSheetOpen || liveFaceFilter !== "none") ? styles.watchPartyLiveFooterActiveBtn : undefined,
-                  labelStyle: (liveFilterSheetOpen || liveFaceFilter !== "none") ? styles.watchPartyLiveFooterActiveLabel : undefined,
-                },
-                {
-                  id: "react",
-                  icon: "✨",
-                  label: "React",
-                  activeOpacity: 0.85,
-                  onPress: () => {
-                    setLiveFilterSheetOpen(false);
-                    setPartyCommentsOpen(false);
-                    setReactionPickerOpen((value) => !value);
-                  },
-                  buttonStyle: reactionPickerOpen ? styles.watchPartyLiveFooterActiveBtn : undefined,
-                  labelStyle: reactionPickerOpen ? styles.watchPartyLiveFooterActiveLabel : undefined,
-                },
-              ]}
-              footerStyles={mapFooterControlRowStyles({
-                row: styles.footerControls,
-                actionButton: styles.footerIconBtn,
-                actionIconText: styles.footerIconBtnText,
-                actionLabelText: styles.footerIconBtnLabel,
-                quickRow: styles.footerReactionQuickRow,
-                quickChip: styles.footerReactionQuickBtn,
-                quickChipText: styles.footerReactionQuickText,
-              }, buildFooterControlTokens({ size: "compact", surface: "glass" }))}
-              reactionPicker={{
-                visible: reactionPickerOpen,
-                onClose: () => setReactionPickerOpen(false),
-                onSelectEmoji: onSelectReactionFromPicker,
-                recentEmojis: recentReactionEmojis,
-                title: "React",
-                subtitle: "Browse and tap to send",
-                styles: {
-                  root: styles.reactionPickerRoot,
-                  backdrop: styles.reactionPickerBackdrop,
-                  sheet: styles.reactionPickerSheet,
-                  header: styles.reactionPickerHeader,
-                  title: styles.reactionPickerTitle,
-                  subtitle: styles.reactionPickerSubtitle,
-                  closeBtn: styles.reactionPickerCloseBtn,
-                  closeText: styles.reactionPickerCloseText,
-                  body: styles.reactionPickerBody,
-                  section: styles.reactionPickerSection,
-                  sectionTitle: styles.reactionPickerSectionTitle,
-                  grid: styles.reactionPickerGrid,
-                  emojiBtn: styles.reactionPickerEmojiBtn,
-                  emojiText: styles.reactionPickerEmojiText,
-                },
-              }}
-            />
-          ) : null}
+          {renderWatchPartyLiveModeOverlayCluster()}
           </>
         ) : (
           <Text style={styles.text}>No video attached</Text>
