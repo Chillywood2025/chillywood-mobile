@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the Party Room chapter closeout audit on the current truthful baseline. The first safe route-owned batch is now landed: `app/watch-party/[partyId].tsx` keeps the pre-playback setup shell behind local render boundaries instead of one long inline block, while room sync, access, moderation, and Live Stage separation stay unchanged.
+There is no immediate narrow follow-up on the Party Room setup-shell chapter now. Repo truth is explicit: the first safe broader batch is landed cleanly, and any next watch-party/live work should be an intentionally reopened broader participant/live ownership regrouping audit on `app/watch-party/[partyId].tsx` instead of another leftover shell cleanup pass.
 
 ## Current Plan
 1. Treat the broader monetization / ads doctrine-controlled chapter, the whole-app proof / QA chapter, and the current watch-party / live-room pass stop-point as closed cleanly enough to move on.
@@ -26,10 +26,10 @@ Run the Party Room chapter closeout audit on the current truthful baseline. The 
 - preserve the landed `/profile/[userId]` room-signal wording cleanup without reopening the broader public-profile chapter
 - preserve the landed Live Room pre-stage shell isolation without widening it into room-sync or stage-semantics changes
 - preserve the landed Party Room setup-shell isolation so the actual room surface reads first
-- decide in closeout whether any second Party Room batch is honestly justified or whether the chapter should stop cleanly here
+- treat deeper Party Room participant/live ownership regrouping as later unless a future broader audit intentionally reopens it
 - preserve `/admin` now that the top dashboard, staff/audit surface, and Rachi boundary read more operationally and less like duplicated roadmap framing
 - treat deeper admin regrouping, role expansion, and real Rachi automation as later unless a future broader audit intentionally reopens them
-- keep `app/watch-party/[partyId].tsx` as the only active owner for this pass
+- keep `app/watch-party/[partyId].tsx` as the grounded later watch-party/live seam instead of auto-opening another cleanup loop
 - do not invent fake ads, fake monetization powers, Google Play readiness work, OVH work, or database-move work
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
@@ -42,8 +42,8 @@ This next pass should:
 - preserve `app/settings.tsx` now that the Premium card reads like account-trust copy rather than rollout-preview copy
 - preserve `/profile/[userId]` now that the `Room` signal stays grounded in current linked-room truth instead of speculative later backing
 - preserve `app/watch-party/live-stage/[partyId].tsx` now that the Live Room pre-stage shell is structurally isolated from the mixed stage render
-- use `app/watch-party/[partyId].tsx` as the active route-owned chapter owner for this pass
-- treat any deeper Party Room participant/live regrouping as later unless the closeout audit proves another narrow pass is clearly safe
+- treat the Party Room shell lane as closed cleanly for now
+- treat any deeper Party Room participant/live regrouping as later unless a future broader audit proves another safe route-owned batch
 - use `app/admin.tsx` as the current route-owned chapter owner while `_lib/moderation.ts` remains the backing truth rather than the first place to force logic changes
 - treat deeper admin regrouping, role expansion, and real Rachi automation as later unless the closeout audit proves another narrow pass is clearly safe
 - keep the current Party Room pass structural and route-local instead of widening into another cross-route cleanup loop
@@ -77,6 +77,7 @@ The next lane is successful when:
 - the watch-party / live-room chapter can stop cleanly for this pass if the remaining Party Room seam is broader than another safe narrow batch
 - `app/watch-party/[partyId].tsx` becomes the active route-owned chapter and the Party Room setup shell is isolated without changing room truth
 - the Party Room chapter can stop cleanly if the remaining seam is deeper participant/live ownership rather than another safe narrow pass
+- there is no immediate narrow follow-up on the Party Room shell chapter after this batch
 - the admin / owner / Rachi chapter stays closed unless a future broader audit intentionally reopens it
 - `/profile/[userId]` access wording stays route-owned and honest rather than speculative, while Chi'lly Chat itself stays distinct from monetized direct-message claims
 - whole-app proof / QA starts from the current truthful baseline instead of reopening closed monetization cleanup
