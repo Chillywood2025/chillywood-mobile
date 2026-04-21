@@ -1,22 +1,23 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact lane is now a narrow `native social adoption audit` on existing canonical routes before any broad whole-app behavior or polish work continues. Repo truth is now explicit: native friend graph schema/helper truth is real, title like/share helper truth is real, comments still remain room/live-only, and no route has adopted the new social foundations yet.
+The next exact stage is now `first narrow adoption batch` on `/title/[id]` before any broader native social rollout continues. Repo truth is now explicit: title detail is the safest first product-facing adoption surface for backed `like` / `share` state, chat thread is the safest second friendship surface, profile remains later because it is still public-first, inbox remains later because scan speed matters, and player remains later because playback should stay primary.
 
 ## Current Plan
-1. Treat the social graph + engagement truth audit, native friend graph foundation, content engagement foundation, and lane closeout as closed.
+1. Treat the native social adoption audit as closed.
 2. Keep the locked doctrine: friendship is mutual, person-to-person, and private-first.
-3. Keep likes/share truth distinct from fake public metrics or route-wide rollout.
-4. Keep comments limited to current room/live truth unless a later chapter adds a real content-comment owner.
-5. Run the next lane as a narrow adoption audit on existing canonical routes, not as a broad social rewrite.
-6. Preserve current owner-above-Rachi authority, canonical profile/chat/admin routes, and follower/subscriber distinctions.
-7. Keep unrelated local dirt out of the checkpoint.
+3. Adopt backed title `like` / `share` truth first.
+4. Adopt private-context friendship second on `/chat/[threadId]` only if the first batch stays clean.
+5. Keep profile, inbox, and player adoption later unless a final narrow pass is clearly justified.
+6. Keep comments limited to current room/live truth unless a later chapter adds a real content-comment owner.
+7. Preserve current owner-above-Rachi authority, canonical profile/chat/admin routes, and follower/subscriber distinctions.
+8. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- audit the smallest honest read/adoption surfaces for the landed friend and title-engagement foundations
-- determine whether self-only friend truth belongs first on `/profile/[userId]`, `/chat`, or another existing canonical owner
-- determine whether title/player like-share truth belongs first on `/title/[id]`, `/player/[id]`, or both
-- keep route ownership, privacy boundaries, and no-fake-metrics doctrine intact
+- adopt title-level `like` / `share` state on `/title/[id]`
+- keep title engagement distinct from fake public metrics and distinct from watch-party/live comments
+- keep share truth distinct from room invite share-sheet behavior
+- hold friendship adoption for the next stage unless this batch clears cleanly
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
@@ -39,7 +40,8 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the next route-owned social adoption lane is clearly scoped without blurring friends, followers, subscribers, comments, likes, shares, or Rachi truth
+- `/title/[id]` shows real backed `like` / `share` truth without fake counts or fake comment claims
+- the next friendship adoption stage remains clearly scoped without blurring friends, followers, subscribers, comments, likes, shares, or Rachi truth
 - comments remain explicitly limited to current room/live truth unless separately backed later
 - public/profile/chat/title/player routes still make no fake social claims
 - no route drift or fake social claims are introduced
