@@ -3848,34 +3848,25 @@ export default function PlayerScreen() {
 
   const renderTitleParticipantExpandedPanel = () => (
     <View style={styles.titleParticipantFeedWrap}>
-      <View style={styles.watchPartyPlayerBandHeader}>
-        <View style={styles.watchPartyPlayerBandMeta}>
-          <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
-          <Text style={styles.watchPartyPlayerBandBody}>
-            {watchPartyAudienceLabel || "Shared playback syncing"}
-            {watchPartyPreviewLabel ? ` · ${watchPartyPreviewLabel}` : ""}
-          </Text>
-          {watchPartySyncLabel ? (
-            <Text style={styles.watchPartyPlayerBandSubtle}>{watchPartySyncLabel}</Text>
-          ) : null}
-        </View>
-      </View>
       <View style={styles.watchPartySocialShell}>
-        <View style={styles.watchPartySocialMetaRow}>
-          <View style={styles.watchPartySocialMetaPill}>
-            <Text style={styles.watchPartySocialMetaText}>{watchPartyAudienceLabel || "Shared playback syncing"}</Text>
+        <View style={styles.watchPartySocialHeaderRow}>
+          <View style={styles.watchPartyPlayerBandMeta}>
+            <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
+            <Text style={styles.watchPartyPlayerBandSubtle}>
+              {watchPartySyncLabel || watchPartyAudienceLabel || "Shared playback syncing"}
+            </Text>
           </View>
-          {watchPartyPreviewLabel ? (
-            <View style={styles.watchPartySocialMetaPill}>
-              <Text style={styles.watchPartySocialMetaText} numberOfLines={1}>{watchPartyPreviewLabel}</Text>
-            </View>
-          ) : null}
           {watchPartyLiveKitJoinContract ? (
             <View style={[styles.watchPartySocialMetaPill, styles.watchPartySocialMetaPillRole]}>
               <Text style={styles.watchPartySocialRoleText}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
             </View>
           ) : null}
         </View>
+        {watchPartyPreviewLabel ? (
+          <Text style={styles.watchPartySocialHelperText} numberOfLines={1}>
+            {watchPartyPreviewLabel}
+          </Text>
+        ) : null}
         {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
           <View style={styles.watchPartySocialMediaFrame}>
             <LiveKitStageMediaSurface
@@ -3890,7 +3881,7 @@ export default function PlayerScreen() {
           <View style={styles.watchPartySocialPlaceholder}>
             <Text style={styles.watchPartySocialPlaceholderKicker}>SHARED PLAYER</Text>
             <Text style={styles.watchPartySocialPlaceholderBody}>
-              Shared playback returns here if the live room drops back to synced video.
+              Shared playback stays here if the room drops back from live camera.
             </Text>
           </View>
         )}
@@ -3908,6 +3899,13 @@ export default function PlayerScreen() {
       >
         <View style={styles.watchPartyDockActionRow}>
           <TouchableOpacity
+            style={styles.watchPartyDockActionBtn}
+            onPress={onPressWatchPartyRoom}
+            activeOpacity={0.88}
+          >
+            <Text style={styles.watchPartyDockActionText}>Party Room</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.watchPartyDockActionBtn, partyCommentsOpen && styles.watchPartyDockActionBtnActive]}
             onPress={onToggleWatchPartyComments}
             activeOpacity={0.88}
@@ -3919,7 +3917,7 @@ export default function PlayerScreen() {
             onPress={onToggleWatchPartyMenu}
             activeOpacity={0.88}
           >
-            <Text style={[styles.watchPartyDockActionText, watchPartyMenuOpen && styles.watchPartyDockActionTextActive]}>Menu</Text>
+            <Text style={[styles.watchPartyDockActionText, watchPartyMenuOpen && styles.watchPartyDockActionTextActive]}>Controls</Text>
           </TouchableOpacity>
         </View>
 
@@ -3929,11 +3927,8 @@ export default function PlayerScreen() {
 
         {watchPartyMenuOpen ? (
           <View style={styles.watchPartyDockCard}>
-            <Text style={styles.watchPartyDockCardTitle}>Quick Controls</Text>
+            <Text style={styles.watchPartyDockCardTitle}>Player Controls</Text>
             <View style={styles.watchPartyDockMenuRow}>
-              <TouchableOpacity style={styles.watchPartyDockMenuBtn} onPress={onPressWatchPartyRoom} activeOpacity={0.88}>
-                <Text style={styles.watchPartyDockMenuBtnText}>Party Room</Text>
-              </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.watchPartyDockMenuBtn, myListBusy && styles.secondaryBtnDisabled]}
                 onPress={onToggleWatchPartyMyList}
@@ -5962,6 +5957,12 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
   },
+  watchPartySocialHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
   watchPartySocialMetaRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -5991,6 +5992,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.5,
+  },
+  watchPartySocialHelperText: {
+    color: "#AEB4C6",
+    fontSize: 10.5,
+    fontWeight: "700",
+    lineHeight: 14,
   },
   watchPartySocialMediaFrame: {
     height: 152,
