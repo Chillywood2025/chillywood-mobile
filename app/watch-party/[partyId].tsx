@@ -1760,12 +1760,12 @@ export default function WatchPartyRoomScreen() {
   const isWaitingForHost = !isHost && !participants.some((p) => p.role === "host");
   const roleStatusTitle = isHost ? "Host Room Controls" : "Viewer Room Entry";
   const roleStatusBody = isHost
-    ? "Shape the room here before the shared player opens. Invite people, set access, and decide how the audience enters the watch moment."
+    ? "Set access, invite people, and shape the room before playback starts."
     : isWaitingForHost
       ? "Waiting for host…"
       : isSyncUnstable
-        ? "Resyncing room setup with the host…"
-        : "You are inside the host's room setup. Shared playback starts only after the room is ready.";
+        ? "Resyncing room setup…"
+        : "You are inside the host's room setup. Playback starts when the room is ready.";
   const accessGatePresentation = accessGate
     ? getMonetizationAccessSheetPresentation({
         gate: accessGate.access,
@@ -1789,8 +1789,8 @@ export default function WatchPartyRoomScreen() {
   const roomCardLabel = roomLabels.roomCardLabel;
   const roomCardTitle = roomLabels.roomCardTitle;
   const roomCardSubtext = isLiveRoom
-    ? "Host and viewer control room for the live session."
-    : `Pre-entry control room for ${partyRoomTitleContext}.`;
+    ? "Control room for the live session."
+    : `Control room for ${partyRoomTitleContext} before playback.`;
   const partyRoomFocusLabel = tailoredFocusParticipant
     ? (tailoredFocusParticipant.userId === currentUserBubbleId ? "You" : tailoredFocusParticipant.displayName)
     : "Host";
@@ -1798,6 +1798,7 @@ export default function WatchPartyRoomScreen() {
   const partyRoomJoinLabel = roomLocked ? "Locked" : "Open";
   const partyRoomReactionLabel = reactionsGloballyMuted ? "Muted" : "Enabled";
   const partyRoomCaptureLabel = room.capturePolicy === "host_managed" ? "Host-managed" : "Best-effort";
+  const tailoredRoomIsDefault = !tailoredFocusParticipant || tailoredFocusParticipant.userId === hostParticipant?.userId;
   const { selectedParticipantUserId, selectedParticipantState, canShowProfileAction } = resolveSelectedParticipantContext({
     selectedParticipant,
     participantStateById,
@@ -2120,11 +2121,11 @@ export default function WatchPartyRoomScreen() {
         {!isLiveRoom ? (
           <View style={styles.tailoredRoomCard}>
             <Text style={styles.sectionKicker}>PARTY ROOM</Text>
-            <Text style={styles.tailoredRoomTitle}>Shape the room before shared playback starts</Text>
+            <Text style={styles.tailoredRoomTitle}>Set the room before playback</Text>
             <Text style={styles.tailoredRoomBody}>
               {hostParticipant
-                ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Use Party Room to decide who appears first, what the room allows, and how the watch-together moment opens before you enter shared Watch-Party Live.`
-                : "Use Party Room to decide who appears first, what the room allows, and how the shared watch moment opens before playback starts."}
+                ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Decide who appears first and what the room allows before Watch-Party Live starts.`
+                : "Decide who appears first and what the room allows before Watch-Party Live starts."}
             </Text>
             <View style={styles.tailoredRoomMetaRow}>
               <View style={styles.tailoredRoomMetaPill}>
@@ -2142,17 +2143,19 @@ export default function WatchPartyRoomScreen() {
               </View>
             </View>
             <View style={styles.tailoredRoomActions}>
-              <TouchableOpacity
-                style={styles.tailoredRoomActionButton}
-                activeOpacity={0.86}
-                onPress={() => {
-                  if (!hostParticipant?.userId) return;
-                  featureParticipantFirst(hostParticipant.userId);
-                }}
-                disabled={!hostParticipant?.userId}
-              >
-                <Text style={styles.tailoredRoomActionText}>See host first</Text>
-              </TouchableOpacity>
+              {!tailoredRoomIsDefault ? (
+                <TouchableOpacity
+                  style={styles.tailoredRoomActionButton}
+                  activeOpacity={0.86}
+                  onPress={() => {
+                    if (!hostParticipant?.userId) return;
+                    featureParticipantFirst(hostParticipant.userId);
+                  }}
+                  disabled={!hostParticipant?.userId}
+                >
+                  <Text style={styles.tailoredRoomActionText}>See host first</Text>
+                </TouchableOpacity>
+              ) : null}
               {tailoredFocusParticipant && tailoredFocusParticipant.userId !== hostParticipant?.userId ? (
                 <TouchableOpacity
                   style={styles.tailoredRoomActionButton}
@@ -2190,13 +2193,15 @@ export default function WatchPartyRoomScreen() {
                   <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Show everyone</Text>
                 </TouchableOpacity>
               ) : null}
-              <TouchableOpacity
-                style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
-                activeOpacity={0.86}
-                onPress={resetTailoredRoomView}
-              >
-                <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Reset layout</Text>
-              </TouchableOpacity>
+              {!tailoredRoomIsDefault || hiddenParticipantCount > 0 ? (
+                <TouchableOpacity
+                  style={[styles.tailoredRoomActionButton, styles.tailoredRoomActionButtonGhost]}
+                  activeOpacity={0.86}
+                  onPress={resetTailoredRoomView}
+                >
+                  <Text style={[styles.tailoredRoomActionText, styles.tailoredRoomActionTextGhost]}>Reset layout</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         ) : null}

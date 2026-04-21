@@ -59,35 +59,35 @@ const getWaitingRoomPreviewTitle = (preview: RoomPreview) => {
 
 const getJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null | undefined) =>
   joinPolicy === "locked"
-    ? "Entry is locked until the host reopens it or invites returning members back in."
-    : "Signed-in Chi'llywood members can join with the room code while the host keeps the room open.";
+    ? "Entry stays locked until the host reopens it."
+    : "Signed-in members can join with the room code while the host keeps it open.";
 
 const getContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
-  if (contentAccessRule === "premium") return "Premium live-room access is not currently available for this device or account, so this room stays locked right now.";
-  if (contentAccessRule === "party_pass") return "Party Pass access is not currently available for this device or account, so this room stays locked right now.";
-  return "No extra entitlement is needed beyond normal signed-in live access.";
+  if (contentAccessRule === "premium") return "Premium access is locked for this device or account.";
+  if (contentAccessRule === "party_pass") return "Party Pass access is locked for this device or account.";
+  return "No extra entitlement is required.";
 };
 
 const getCapturePolicyCopy = (capturePolicy: WatchPartyState["capturePolicy"] | null | undefined) =>
   capturePolicy === "host_managed"
-    ? "Capture expectations are host-managed after you enter the live room."
-    : "Capture expectations are lightweight until the live room opens.";
+    ? "Capture shifts to host-managed after you enter the room."
+    : "Capture stays lightweight until the room opens.";
 
 const getPartyJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null | undefined) =>
   joinPolicy === "locked"
-    ? "Party entry is locked until the host reopens it or invites returning members back in."
-    : "Signed-in Chi'llywood members can join with the room code while the host keeps the party open.";
+    ? "Party entry stays locked until the host reopens it."
+    : "Signed-in members can join with the room code while the host keeps it open.";
 
 const getPartyContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
-  if (contentAccessRule === "premium") return "Premium title access is not currently available for this device or account, so this party room stays locked right now.";
-  if (contentAccessRule === "party_pass") return "Party Pass access is not currently available for this device or account, so this party room stays locked right now.";
-  return "No extra entitlement is needed beyond normal signed-in title access.";
+  if (contentAccessRule === "premium") return "Premium title access is locked for this device or account.";
+  if (contentAccessRule === "party_pass") return "Party Pass access is locked for this device or account.";
+  return "No extra entitlement is required.";
 };
 
 const getPartyCapturePolicyCopy = (capturePolicy: WatchPartyState["capturePolicy"] | null | undefined) =>
   capturePolicy === "host_managed"
-    ? "Capture expectations become host-managed once shared playback begins."
-    : "Capture expectations stay lightweight until shared playback begins.";
+    ? "Capture shifts to host-managed once shared playback begins."
+    : "Capture stays lightweight until shared playback begins.";
 
 const isAccessSheetReason = (reason: string | null | undefined): reason is AccessSheetReason => (
   reason === "premium_required" || reason === "party_pass_required"
@@ -807,18 +807,6 @@ export default function WatchPartyIndexScreen() {
       tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
     },
     {
-      label: "Audience focus",
-      status: "Ready",
-      detail: "Live Room decides who the host sees first, who viewers see first, and how the room opens before stage entry.",
-      tone: "ready" as const,
-    },
-    {
-      label: "Comments / reactions",
-      status: "Set in Live Room",
-      detail: "Comment and reaction expectations stay pre-stage. Live Stage only carries the actual presentation experience.",
-      tone: "pending" as const,
-    },
-    {
       label: "Next room",
       status: "Live Room",
       detail: "Continue into Live Room first. Enter Live Stage from there when the room setup is ready.",
@@ -844,12 +832,6 @@ export default function WatchPartyIndexScreen() {
           ? "The room is preparing a party code before entry opens."
           : "Generate or enter a party code before you bring people into Party Room.",
       tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
-    },
-    {
-      label: "Room defaults",
-      status: "Party Room",
-      detail: "Who you see first, room privacy, and comments or reactions all stay in Party Room before the shared player opens.",
-      tone: "pending" as const,
     },
     {
       label: "Next room",
@@ -929,11 +911,11 @@ export default function WatchPartyIndexScreen() {
             <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "HOST THIS LIVE SESSION" : "HOST THIS WATCH-PARTY"}</Text>
             {isLiveWaitingRoom ? (
               <Text style={styles.joinSupportText}>
-                Create the live room here, keep the code handy, and continue into Live Room as host.
+                Create the room here, keep the code handy, and continue into Live Room.
               </Text>
             ) : partyTitleLocked ? (
               <Text style={styles.joinSupportText}>
-                {partyTitleName} is locked for this entry. Create the room here, share the code, and finish setup inside Party Room.
+                {partyTitleName} is set for this entry. Create the room, share the code, and finish setup in Party Room.
               </Text>
             ) : (
               <TextInput
@@ -976,11 +958,11 @@ export default function WatchPartyIndexScreen() {
             <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "JOIN A LIVE ROOM" : "JOIN WATCH-PARTY LIVE"}</Text>
             {isLiveWaitingRoom ? (
               <Text style={styles.joinSupportText}>
-                Enter a live room code to preview the live lane and join Live Room before stage mode takes over.
+                Enter a live room code, preview the lane, and continue into Live Room.
               </Text>
             ) : (
               <Text style={styles.joinSupportText}>
-                Enter a watch-party room code to preview the title and join Party Room before shared playback starts.
+                Enter a room code, preview the title, and continue into Party Room.
               </Text>
             )}
 
@@ -1047,20 +1029,8 @@ export default function WatchPartyIndexScreen() {
 
         {isLiveWaitingRoom ? (
           <>
-            <View style={styles.liveContextCard}>
-              <Text style={styles.liveContextLabel}>LIVE ENTRY</Text>
-              <Text style={styles.liveContextTitle}>
-                {topRoomCode ? "Your live entry stays pre-stage here." : "Set the live lane here, then continue."}
-              </Text>
-              <Text style={styles.liveContextBody}>
-                {topRoomCode
-                  ? "Use the controls above to host or join. Live Room owns the actual room once you continue."
-                  : "This screen handles the entry lane and room code. Live Room and Live Stage stay separate after that."}
-              </Text>
-            </View>
-
             <View style={styles.readinessCard}>
-              <Text style={styles.readinessLabel}>PRE-ENTRY DEFAULTS</Text>
+              <Text style={styles.readinessLabel}>READY CHECK</Text>
               {liveReadinessRows.map((entry) => (
                 <View key={entry.label} style={styles.readinessRow}>
                   <View style={[styles.readinessDot, entry.tone === "ready"
@@ -1088,20 +1058,8 @@ export default function WatchPartyIndexScreen() {
           </>
         ) : (
           <>
-            <View style={styles.partyContextCard}>
-              <Text style={styles.partyContextLabel}>PARTY ENTRY</Text>
-              <Text style={styles.partyContextTitle}>{partyTitleName}</Text>
-              <Text style={styles.partyContextBody}>
-                {topRoomCode
-                  ? "Use the controls above to host or join. Party Room handles the actual room once you continue."
-                  : partyTitleId
-                    ? "Confirm the title here, then move into Party Room when you are ready."
-                    : "Pick the title first, then host or join by code."}
-              </Text>
-            </View>
-
             <View style={styles.readinessCard}>
-              <Text style={styles.readinessLabel}>PRE-ENTRY DEFAULTS</Text>
+              <Text style={styles.readinessLabel}>READY CHECK</Text>
               {partyReadinessRows.map((entry) => (
                 <View key={entry.label} style={styles.readinessRow}>
                   <View style={[styles.readinessDot, entry.tone === "ready"
@@ -1137,8 +1095,8 @@ export default function WatchPartyIndexScreen() {
               ? "Preparing a shareable code for this live waiting room."
               : "Preparing a shareable room code for this waiting room.")
             : (isLiveWaitingRoom
-              ? "Invite people inside Chi'llywood before the live room opens so guests enter through the correct live path."
-              : "Invite people inside Chi'llywood before the party opens, then fall back to system share only if needed.")}
+              ? "Invite people in Chi'lly Chat before the room opens, or fall back to system share."
+              : "Invite people in Chi'lly Chat before the party opens, or fall back to system share.")}
           actionLabel="Invite in app"
           onActionPress={() => {
             if (!topRoomCode || roomCodeActionBusy) return;
@@ -1241,8 +1199,8 @@ export default function WatchPartyIndexScreen() {
         sourceSurface={isLiveWaitingRoom ? "live-waiting-room" : "party-waiting-room"}
         title={isLiveWaitingRoom ? "Invite people to this live room" : "Invite people to this watch-party"}
         body={isLiveWaitingRoom
-          ? "Find a Chi'llywood member, send the live-room code in Chi'lly Chat, or fall back to system share if you need to leave the app."
-          : "Find a Chi'llywood member, send the party-room code in Chi'lly Chat, or fall back to system share if you need to leave the app."}
+          ? "Send the live-room code in Chi'lly Chat, or fall back to system share."
+          : "Send the party-room code in Chi'lly Chat, or fall back to system share."}
         inviteMessage={waitingRoomInviteMessage}
         onClose={() => setInviteSheetVisible(false)}
         onInviteSent={(thread) => {
