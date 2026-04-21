@@ -118,21 +118,25 @@ Current host-bootstrap truth now includes:
   - `/var/log/chillywood/reverse-proxy`
   - `/var/log/chillywood/livekit`
 - Caddy is installed as the first reverse-proxy baseline
-- a placeholder HTTP surface is active on `:80`
+- the real public hostname is now:
+  - `live.chillywoodstream.com`
+- DNS for `live.chillywoodstream.com` resolves to:
+  - `87.99.145.160`
+- the Cloudflare record remains DNS-only for this pass
+- TLS is now live for `live.chillywoodstream.com`
+- Caddy now serves a placeholder HTTPS surface on `:443`
+- plain HTTP on `:80` now redirects to HTTPS
 
 This still does not imply:
 - LiveKit is installed
 - app traffic has moved
 - the machine is already serving production Chi'llywood traffic
-- real TLS is active
-- a real FQDN already points to this host
+- a real upstream app service is configured behind Caddy
 
 ### 3.3 Remaining Manual And DNS-Gated Items
 The remaining first-host work is now narrower:
-- confirm the final public FQDN to use for realtime ingress
-- prove that FQDN points to `87.99.145.160`
-- replace the placeholder HTTP site with the real domain host block
-- issue real TLS only after DNS truth is proved
+- keep the HTTPS placeholder honest until a real upstream exists
+- prepare the LiveKit ingress topology behind the existing TLS edge
 - keep LiveKit and any other upstream service unserved until their own cutover lane opens
 
 ### 3.4 Expected Filesystem Layout
@@ -278,7 +282,8 @@ Current verified proxy baseline:
 - Caddy is the chosen first proxy
 - the active bootstrap config path is `/opt/chillywood/proxy/Caddyfile`
 - `/etc/caddy/Caddyfile` points at that bootstrap config
-- the current served surface is a placeholder HTTP response only
+- the current served surface is a placeholder HTTPS response on `live.chillywoodstream.com`
+- the current HTTP behavior is redirect-only
 - no production app upstream or LiveKit upstream is configured yet
 
 ### 8.2 Public Exposure Discipline
@@ -330,18 +335,15 @@ Start narrow:
 Do not invent a larger observability program in this pass.
 
 ## 10. Deployment Order
-From the current verified bootstrap and proxy-baseline state, the next rollout should happen in this order:
+From the current verified bootstrap, proxy, and TLS state, the next rollout should happen in this order:
 
-1. lock the real public hostname(s) and DNS ownership
-2. prove the chosen realtime FQDN resolves to `87.99.145.160`
-3. replace the placeholder Caddy site with the real domain host block
-4. issue real TLS only after the FQDN is proved
-5. verify `443` and HTTPS for that real domain
-6. bring up LiveKit on the Hetzner host later in its own cutover lane
-7. verify the new realtime endpoint independently before mobile cutover
-8. update Supabase Edge Function env so `livekit-token` signs against the Hetzner endpoint
-9. update public mobile runtime config only after the new endpoint is healthy
-10. verify through preview/internal builds before any broader production-like use
+1. keep `live.chillywoodstream.com` as the canonical realtime hostname
+2. prepare the LiveKit host/service topology behind the existing TLS edge
+3. wire the reverse-proxy host block to the real LiveKit upstream only after that upstream exists
+4. verify the new realtime endpoint independently before mobile cutover
+5. update Supabase Edge Function env so `livekit-token` signs against the Hetzner endpoint
+6. update public mobile runtime config only after the new endpoint is healthy
+7. verify through preview/internal builds before any broader production-like use
 
 ## 11. Rollback And Safety Notes
 
@@ -391,11 +393,9 @@ OVH should not be introduced later as:
 
 ## 14. First Honest Follow-Up Lane
 Once this prep is accepted, the first real infrastructure follow-up lane should be:
-- narrow `Hetzner domain / TLS activation follow-up`
+- narrow `LiveKit ingress deployment prep`
 
 That later lane would prove, but not necessarily immediately deploy:
-- the exact realtime hostname
-- the DNS-to-host mapping
-- the real HTTPS certificate path
-- the replacement of the placeholder HTTP surface with the real domain host block
+- the exact LiveKit service topology on this host
+- the reverse-proxy upstream handoff behind the already-live TLS edge
 - the precise cutover/rollback checklist for the Supabase token endpoint and mobile runtime values
