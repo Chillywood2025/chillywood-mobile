@@ -162,8 +162,9 @@ This still does not imply:
 
 ### 3.3 Remaining Manual Items
 The remaining first-host work is now narrower:
-- verify a supported authenticated app/client realtime join against the new LiveKit ingress
-- keep the now-proved token-issuance path connected to that later device/client join proof
+- keep the now-proved token-issuance path connected to the current device-backed join proof
+- preserve the now-proved canonical Party Room deep-link path into the realtime verification target
+- restore a second real Android device on ADB and rerun a simultaneous authenticated join proof against the same host
 - keep broader app hosting and non-realtime upstreams out of scope until their own lanes open
 - treat app-upstream hosting as a separate later doctrine question, not an implied next step from the current LiveKit host state
 
@@ -184,14 +185,15 @@ It does not claim those directories are already populated with live services.
 
 ### 3.5 Bootstrap Closeout Decision
 Based on the verified host facts above, the first-host bootstrap state is complete enough to move to:
-- narrow `realtime cutover verification`
+- narrow `simultaneous authenticated realtime join verification`
 
 That means:
 - base host access is no longer the blocker
 - base hardening is no longer the blocker
 - reverse proxy baseline is no longer the blocker
 - real domain/DNS truth is no longer the blocker
-- the next blocker is proving the aligned realtime path through actual client/session behavior
+- one Android client/session proof is no longer the blocker
+- the next blocker is restoring stable two-device proof for the same aligned realtime path
 
 ## 4. Hetzner-First Decision
 
