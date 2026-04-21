@@ -192,18 +192,18 @@ const formatReplayStateLabel = (event: CreatorEventSummary) => {
 
 const getChannelAccessSummaryBody = (resolution: ChannelAccessResolution | null) => {
   if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
-    return "Checking saved defaults and creator grants before showing the channel access posture.";
+    return "Checking saved defaults and creator grants.";
   }
   if (resolution.reason === "channel_defaults_subscriber") {
-    return "Both watch-party and communication defaults are gated, so this channel should visibly prepare visitors for member-style access.";
+    return "Both defaults are gated, so public channel copy should prepare visitors for member-style access.";
   }
   if (resolution.reason === "channel_defaults_private") {
-    return "Watch-party entry is locked by default, so private/invite-controlled room behavior should stay explicit on public surfaces.";
+    return "Watch-party entry is locked by default, so private room behavior should stay explicit on public surfaces.";
   }
   if (resolution.reason === "channel_defaults_mixed") {
-    return "This channel mixes open and gated defaults, so the public route needs to signal where access changes instead of hiding it.";
+    return "This channel mixes open and gated defaults, so access changes need to stay visible on public surfaces.";
   }
-  return "The channel currently defaults to open communication and open watch-party access, so public surfaces should keep that honest and visible.";
+  return "This channel currently defaults to open communication and open watch-party access.";
 };
 
 const formatCount = (value: number | null) => value === null ? "Unavailable" : String(value);
@@ -238,11 +238,11 @@ const formatChannelLayoutPresetLabel = (value?: UserProfile["channelLayoutPreset
 const getChannelLayoutPresetBody = (value?: UserProfile["channelLayoutPreset"] | null) => {
   switch (value) {
     case "live_first":
-      return "The public channel home should lead with live presence first, then spotlight and library context.";
+      return "The public channel home leads with live presence first.";
     case "library_first":
-      return "The public channel home should lead with content/library context first, then spotlight and live presence.";
+      return "The public channel home leads with content/library context first.";
     default:
-      return "The public channel home should keep the featured spotlight first, then live and library context.";
+      return "The public channel home keeps the featured spotlight first.";
   }
 };
 
@@ -292,31 +292,31 @@ const analyticsUnavailableMetricDefinitions: readonly {
   {
     key: "profileVisits",
     label: "Profile Visits",
-    missingBody: "Profile analytics are in chapter scope, but the repo still lacks honest aggregate truth for them.",
-    laterBody: "Profile/channel route opens are not treated as creator analytics until a real profile aggregate read path exists.",
+    missingBody: "Profile analytics are in scope, but no honest aggregate read path exists yet.",
+    laterBody: "Profile/channel opens are not treated as creator analytics yet.",
   },
   {
     key: "liveAttendanceTotal",
     label: "Live Attendance",
-    missingBody: "Hosted room and event truth exists, but attendance totals still need real aggregate backing before they can be shown.",
-    laterBody: "This metric stays later until live attendance aggregate truth is actually supported.",
+    missingBody: "Attendance totals still need real aggregate backing before they can be shown.",
+    laterBody: "This stays later until live attendance aggregates are supported.",
   },
   {
     key: "contentLaunches",
     label: "Content Launches",
-    missingBody: "Programming and title truth are real, but creator-facing content-performance aggregates are not backed yet.",
-    laterBody: "This metric stays later until creator content-performance aggregates are truly supported.",
+    missingBody: "Creator-facing content-performance aggregates are not backed yet.",
+    laterBody: "This stays later until creator content-performance aggregates are supported.",
   },
   {
     key: "continueWatchingReturns",
     label: "Continue Watching Returns",
-    missingBody: "Return behavior is conceptually in scope, but the repo does not yet aggregate it honestly.",
-    laterBody: "Continue-watching return analytics belong to a later aggregate layer and should not be implied yet.",
+    missingBody: "The repo does not aggregate return behavior honestly yet.",
+    laterBody: "Continue-watching return analytics belong to a later aggregate layer.",
   },
   {
     key: "gatedSurfaceViews",
     label: "Gated Surface Views",
-    missingBody: "Access events are emitted at runtime, but they are not yet aggregated into creator-facing conversion reporting.",
+    missingBody: "Access events are emitted, but not yet aggregated into creator-facing conversion reporting.",
     laterBody: "Conversion-style gate views stay later until a real creator conversion read model exists.",
   },
 ];
@@ -627,44 +627,51 @@ export default function ChannelSettingsScreen() {
     {
       title: "Identity",
       status: "current",
-      body: "Display name, tagline, role framing, and creator-facing identity controls live here now.",
-    },
-    {
-      title: "Design",
-      status: "near_term",
-      body: "Hero treatment, accent direction, and visible branding style belong here on this same route.",
+      body: "Name, tagline, and role.",
     },
     {
       title: "Layout",
-      status: "near_term",
-      body: "Homepage block order, tab emphasis, and shelf hierarchy will expand here without route drift.",
-    },
-    {
-      title: "Content",
-      status: "near_term",
-      body: "Featured titles, spotlight choices, and curated public shelves belong here as creator controls deepen.",
+      status: "current",
+      body: "Home emphasis and layout preset.",
     },
     {
       title: "Access & Monetization",
-      status: "near_term",
-      body: "Watch-party and communication access defaults anchor the future access and monetization layer here.",
+      status: "current",
+      body: "Room defaults and creator grants.",
+    },
+    {
+      title: "Live Events",
+      status: "current",
+      body: "Schedule live sessions and replays.",
     },
     {
       title: "Audience",
       status: "current",
-      body: "Audience summary and audience-visibility truth are current here now; deeper audience-role controls still land later on this same route.",
+      body: "Followers, requests, blocks, and visibility.",
     },
     {
       title: "Analytics",
       status: "current",
-      body: "Analytics summary truth is current here now; unsupported creator aggregates stay explicitly unavailable instead of being fabricated.",
+      body: "Backed room, event, and audience signals.",
     },
     {
       title: "Safety/Admin",
       status: "current",
-      body: "Safety and admin summary truth is current here now; deeper tooling still stays on this route instead of drifting elsewhere.",
+      body: "Role, report, and admin reach.",
+    },
+    {
+      title: "Design",
+      status: "near_term",
+      body: "Hero, avatar, and brand treatment.",
+    },
+    {
+      title: "Content",
+      status: "near_term",
+      body: "Spotlight rows and public shelves.",
     },
   ];
+  const currentSectionMap = sectionMap.filter((section) => section.status === "current");
+  const buildNextSectionMap = sectionMap.filter((section) => section.status !== "current");
   const designSectionHighlights = [
     "Hero treatment",
     "Avatar framing",
@@ -759,7 +766,7 @@ export default function ChannelSettingsScreen() {
     {
       label: "VIP / Mod / Co-Host",
       value: "Later",
-      body: "Audience-role rosters are not backed by schema truth yet.",
+      body: "Audience-role rosters are not backed yet.",
       tone: "unavailable",
     },
   ];
@@ -790,22 +797,22 @@ export default function ChannelSettingsScreen() {
     {
       label: "Watch-Party Sessions",
       value: formatCount(creatorAnalyticsSummary?.watchPartySessionsHosted ?? null),
-      body: "Title-driven hosted watch-party rooms owned by this channel.",
+      body: "Hosted title-driven watch-party rooms.",
     },
     {
       label: "Live Sessions",
       value: formatCount(creatorAnalyticsSummary?.liveSessionsHosted ?? null),
-      body: "Live-room sessions hosted by this channel from current room truth.",
+      body: "Hosted live-room sessions.",
     },
     {
       label: "Communication Rooms",
       value: formatCount(creatorAnalyticsSummary?.communicationRoomsHosted ?? null),
-      body: "Hosted communication-room sessions already present in current schema.",
+      body: "Hosted communication-room sessions.",
     },
     {
       label: "Active Hosted Rooms",
       value: formatCount(creatorAnalyticsSummary?.activeHostedRooms ?? null),
-      body: "Current active room count across watch-party/live and communication hosts.",
+      body: "Current active rooms across watch-party/live and communication.",
     },
     {
       label: "Latest Hosted Activity",
@@ -815,12 +822,12 @@ export default function ChannelSettingsScreen() {
     {
       label: "Follower Signal",
       value: formatCount(creatorAnalyticsSummary?.followerCount ?? null),
-      body: "Audience-linked signal mirrored from the landed follower relationship truth.",
+      body: "Follower signal from the landed audience model.",
     },
     {
       label: "Subscriber Signal",
       value: formatCount(creatorAnalyticsSummary?.subscriberCount ?? null),
-      body: "Audience-linked subscriber signal mirrored from creator/channel subscriber truth.",
+      body: "Subscriber signal from creator/channel subscriber truth.",
     },
   ];
   const analyticsUnavailableCards: readonly SummaryMetricCard[] = analyticsUnavailableMetricDefinitions.reduce<SummaryMetricCard[]>((cards, definition) => {
@@ -933,22 +940,22 @@ export default function ChannelSettingsScreen() {
     {
       label: "Upcoming Events",
       value: String(upcomingEvents.length),
-      body: "Scheduled creator events with future start times from the landed creator-event model.",
+      body: "Scheduled creator events with future start times.",
     },
     {
       label: "Live Now Events",
       value: String(liveNowEvents.length),
-      body: "Creator events currently marked live now under current event truth.",
+      body: "Creator events currently marked live now.",
     },
     {
       label: "Replay Available",
       value: String(replayReadyEvents.length),
-      body: "Ended creator events whose replay is open right now.",
+      body: "Ended creator events with replay open now.",
     },
     {
       label: "Reminder Enrollments",
       value: String(activeReminderEnrollments),
-      body: "Active viewer reminder enrollments across reminder-ready creator events.",
+      body: "Active reminder enrollments across reminder-ready events.",
     },
   ];
   const nextUpcomingEvent = upcomingEvents[0] ?? null;
@@ -971,14 +978,14 @@ export default function ChannelSettingsScreen() {
       label: "Replay Ready",
       value: String(replayReadyEvents.length),
       body: replayReadyEvents.length
-        ? "Replay availability is backed for ended events that are currently open for viewing."
+        ? "Replay is backed for ended events currently open for viewing."
         : "No creator event replay is currently available.",
     },
     {
       label: "Reminder Ready",
       value: String(reminderReadyEvents.length),
       body: reminderReadyEvents.length
-        ? "Scheduled events with start times and reminder-ready truth are ready for later reminder adoption."
+        ? "Scheduled events with start times are reminder-ready."
         : "No scheduled event is currently reminder-ready.",
     },
   ];
@@ -1045,7 +1052,7 @@ export default function ChannelSettingsScreen() {
         <View style={styles.heroCard}>
           <Text style={styles.heroTitle}>Manage Channel</Text>
           <Text style={styles.heroBody}>
-            This route is Chi&apos;llywood&apos;s current studio-equivalent control center. Keep public identity on `/profile/[userId]`, and shape deeper channel controls here without spawning `/studio*` route truth.
+            Run public identity, room defaults, scheduling, audience workflows, and creator summaries from this route. Public channel presentation stays on `/profile/[userId]`.
           </Text>
         </View>
 
@@ -1070,13 +1077,14 @@ export default function ChannelSettingsScreen() {
             ) : null}
 
             <View style={styles.sectionMapCard}>
-              <Text style={styles.sectionMapKicker}>SECTION MAP</Text>
-              <Text style={styles.sectionMapTitle}>Current creator control center</Text>
+              <Text style={styles.sectionMapKicker}>CONTROL LANES</Text>
+              <Text style={styles.sectionMapTitle}>Current controls first</Text>
               <Text style={styles.sectionMapBody}>
-                `/channel-settings` now owns the structured channel-control map. Current, near-term, and later-phase sections stay visible here so the doctrine expands without silent route proliferation.
+                Run what is already live here first. Build-next lanes stay visible without crowding the creator tools that already work.
               </Text>
+              <Text style={styles.sectionMapSubheading}>Ready Now</Text>
               <View style={styles.sectionMapGrid}>
-                {sectionMap.map((section) => (
+                {currentSectionMap.map((section) => (
                   <View key={section.title} style={styles.sectionMapItem}>
                     <View style={styles.sectionMapHeader}>
                       <Text style={styles.sectionMapItemTitle}>{section.title}</Text>
@@ -1099,7 +1107,41 @@ export default function ChannelSettingsScreen() {
                           {section.status === "current"
                             ? "CURRENT"
                             : section.status === "near_term"
-                              ? "NEAR TERM"
+                              ? "BUILD NEXT"
+                              : "LATER"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.sectionMapItemBody}>{section.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.sectionMapSubheading}>Build Next</Text>
+              <View style={styles.sectionMapGrid}>
+                {buildNextSectionMap.map((section) => (
+                  <View key={section.title} style={styles.sectionMapItem}>
+                    <View style={styles.sectionMapHeader}>
+                      <Text style={styles.sectionMapItemTitle}>{section.title}</Text>
+                      <View
+                        style={[
+                          styles.sectionStatusChip,
+                          section.status === "current" && styles.sectionStatusChipCurrent,
+                          section.status === "near_term" && styles.sectionStatusChipNearTerm,
+                          section.status === "later_phase" && styles.sectionStatusChipLaterPhase,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sectionStatusChipText,
+                            section.status === "current" && styles.sectionStatusChipTextCurrent,
+                            section.status === "near_term" && styles.sectionStatusChipTextNearTerm,
+                            section.status === "later_phase" && styles.sectionStatusChipTextLaterPhase,
+                          ]}
+                        >
+                          {section.status === "current"
+                            ? "CURRENT"
+                            : section.status === "near_term"
+                              ? "BUILD NEXT"
                               : "LATER"}
                         </Text>
                       </View>
@@ -1113,7 +1155,7 @@ export default function ChannelSettingsScreen() {
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Identity</Text>
-                <Text style={styles.panelStatus}>CURRENT SECTION</Text>
+                <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <TextInput
                 style={styles.input}
@@ -1147,28 +1189,11 @@ export default function ChannelSettingsScreen() {
 
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Design</Text>
-                <Text style={styles.panelStatusMuted}>NEAR-TERM SECTION</Text>
-              </View>
-              <Text style={styles.permissionCopy}>
-                Design stays on this existing route. Hero direction, avatar framing, accent tone, and visible branding treatment should deepen here instead of drifting into separate studio routes.
-              </Text>
-              <View style={styles.previewChipRow}>
-                {designSectionHighlights.map((item) => (
-                  <View key={item} style={styles.previewChip}>
-                    <Text style={styles.previewChipText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.panel}>
-              <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Layout</Text>
-                <Text style={styles.panelStatusMuted}>NEAR-TERM SECTION</Text>
+                <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Layout is where channel-home ordering should grow next: featured spotlight priority, default tab emphasis, live module placement, and shelf hierarchy all belong here under the current route.
+                Layout preset is already live here. Bigger shelf and tab controls can deepen later on this same route.
               </Text>
               <Text style={styles.sectionLabel}>Channel Layout Preset</Text>
               <View style={styles.chipRow}>
@@ -1196,28 +1221,11 @@ export default function ChannelSettingsScreen() {
 
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Content</Text>
-                <Text style={styles.panelStatusMuted}>NEAR-TERM SECTION</Text>
-              </View>
-              <Text style={styles.permissionCopy}>
-                Content remains truthful here: use this route for spotlight choices, featured rows, and public content curation before inventing bigger creator tooling.
-              </Text>
-              <View style={styles.previewChipRow}>
-                {contentSectionHighlights.map((item) => (
-                  <View key={item} style={styles.previewChip}>
-                    <Text style={styles.previewChipText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.panel}>
-              <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Access &amp; Monetization</Text>
-                <Text style={styles.panelStatusMuted}>CURRENT + NEAR TERM</Text>
+                <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                This section translates the existing room defaults and creator grants into one honest channel-access posture. It stays on `/channel-settings` and does not create new studio routes.
+                Use current room defaults and creator grants to see the real channel access posture.
               </Text>
               <View style={styles.accessSummaryCard}>
                 <Text style={styles.accessSummaryKicker}>CHANNEL ACCESS</Text>
@@ -1238,10 +1246,10 @@ export default function ChannelSettingsScreen() {
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Watch Party Defaults</Text>
-                <Text style={styles.panelStatusMuted}>ACCESS PREVIEW</Text>
+                <Text style={styles.panelStatus}>ACTIVE DEFAULTS</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Backend creator grants decide whether Party Pass and Premium room defaults are actually available for this channel.
+                Party Pass and Premium options only appear when creator grants support them.
               </Text>
               <Text style={styles.sectionLabel}>Join Policy</Text>
               <View style={styles.chipRow}>
@@ -1321,10 +1329,10 @@ export default function ChannelSettingsScreen() {
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Communication Defaults</Text>
-                <Text style={styles.panelStatusMuted}>ACCESS PREVIEW</Text>
+                <Text style={styles.panelStatus}>ACTIVE DEFAULTS</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Communication room access follows the same backend grants, even though these defaults stay local to this device for now.
+                Communication defaults follow the same creator grants and stay local to this device for now.
               </Text>
 
               <Text style={styles.sectionLabel}>Content Access</Text>
@@ -1375,10 +1383,10 @@ export default function ChannelSettingsScreen() {
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Live Events</Text>
-                <Text style={styles.panelStatus}>CURRENT OWNER</Text>
+                <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                `/channel-settings` now owns the first real creator scheduling surface. This panel uses the landed `creator_events` truth, keeps scheduled events separate from title publication scheduling, and keeps event access explicitly later.
+                Schedule live sessions here now. Event access and reminder delivery still stay later.
               </Text>
 
               {eventNotice ? (
@@ -1409,7 +1417,7 @@ export default function ChannelSettingsScreen() {
                 ))}
               </View>
               <Text style={styles.permissionCopy}>
-                Reminder delivery still remains later. This surface now shows only real reminder-ready event truth and real viewer enrollment interest.
+                Reminder delivery still stays later. This surface shows only real reminder-ready event truth and viewer enrollment interest.
               </Text>
 
               <View style={styles.eventSnapshotCard}>
@@ -1420,7 +1428,7 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.accessSummaryBody}>
                   {nextUpcomingEvent
                     ? `${formatEventTypeLabel(nextUpcomingEvent.eventType)} · ${formatIsoDate(nextUpcomingEvent.startsAt)}`
-                    : "Create the first scheduled live/event entry here. This surface does not fake countdowns, reminders, or event access before those systems exist."}
+                    : "Create the first scheduled event here. Countdown, reminder delivery, and event access still stay later."}
                 </Text>
               </View>
 
@@ -1470,7 +1478,7 @@ export default function ChannelSettingsScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>No creator events yet</Text>
                   <Text style={styles.eventEmptyBody}>
-                    Scheduled live/event truth is now backed, but nothing has been created for this channel yet.
+                    Scheduled event truth is backed, but nothing has been created for this channel yet.
                   </Text>
                 </View>
               )}
@@ -1601,7 +1609,7 @@ export default function ChannelSettingsScreen() {
                 })}
               </View>
               <Text style={styles.permissionCopy}>
-                Reminder readiness is only honest for scheduled events with a real start time. Actual reminder delivery still lands in a later notification/reminder chapter.
+                Reminder readiness is only honest for scheduled events with a real start time. Delivery still lands later.
               </Text>
 
               <View style={styles.eventActionRow}>
@@ -1636,10 +1644,10 @@ export default function ChannelSettingsScreen() {
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Audience</Text>
-                <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
+                <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                This summary uses the landed channel audience read model only. Audience counts and visibility values now come from real backing truth, while deeper audience-role controls still stay explicitly later.
+                Counts and visibility values come from the landed audience read model. Deeper audience-role systems still stay later.
               </Text>
               <View style={styles.summaryGrid}>
                 {audienceSummaryCards.map((card) => (
@@ -1670,10 +1678,10 @@ export default function ChannelSettingsScreen() {
               </View>
 
               <View style={styles.eventSnapshotCard}>
-                <Text style={styles.accessSummaryKicker}>WORKFLOW FOUNDATION</Text>
-                <Text style={styles.accessSummaryTitle}>Real creator-side audience actions now live here</Text>
+                <Text style={styles.accessSummaryKicker}>LIVE WORKFLOWS</Text>
+                <Text style={styles.accessSummaryTitle}>Real audience actions live here now</Text>
                 <Text style={styles.accessSummaryBody}>
-                  This panel now uses `_lib/channelAudience.ts` beneath the summary cards. It stays narrow on purpose: follower removal, request review, and block workflows are real here now, while subscriber mutation and VIP/mod/co-host systems remain explicitly later.
+                  Follower removal, request review, and block workflows are real here now. Subscriber mutation and VIP/mod/co-host systems still stay later.
                 </Text>
               </View>
 
@@ -1697,7 +1705,7 @@ export default function ChannelSettingsScreen() {
 
               <Text style={styles.sectionLabel}>Request Review</Text>
               <Text style={styles.permissionCopy}>
-                Enter a backed request id to approve, decline, or cancel it. Approving `follow` requests now creates the real follower relationship; approving `subscriber_access` requests remains explicitly unsupported until creator/channel subscriber mutation truth exists.
+                Enter a backed request id to approve, decline, or cancel it. `follow` requests are real now; `subscriber_access` stays unsupported until subscriber mutation truth exists.
               </Text>
               <TextInput
                 style={styles.input}
@@ -1836,7 +1844,7 @@ export default function ChannelSettingsScreen() {
 
               <Text style={styles.sectionLabel}>Blocked Audience</Text>
               <Text style={styles.permissionCopy}>
-                Block and unblock use the real channel-owned audience boundary already backed by schema truth. This stays separate from platform moderation and does not invent VIP, moderator, or co-host roles.
+                Block and unblock use the real channel-owned audience boundary already backed by schema truth. VIP, moderator, and co-host roles still stay out.
               </Text>
               <TextInput
                 style={styles.input}
@@ -1922,7 +1930,7 @@ export default function ChannelSettingsScreen() {
               </View>
 
               <View style={[styles.summaryCard, styles.summaryCardUnavailable, styles.audienceWorkflowLimitCard]}>
-                <Text style={styles.summaryLabel}>Explicitly Later</Text>
+                <Text style={styles.summaryLabel}>Later</Text>
                 <Text style={styles.summaryValue}>Subscriber / VIP / Roles</Text>
                 <Text style={styles.summaryBody}>
                   {subscriberMutationSupport.message} VIP/mod/co-host workflows also stay out until the chapter lands real supporting helper truth.
@@ -1936,7 +1944,7 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                This section only renders the supported creator analytics slice backed by current room/session truth. Creator analytics support status stays explicit: backed metrics are available, and unsupported metrics stay missing or later instead of being zeroed or fabricated.
+                Only backed creator analytics render here. Unsupported metrics stay unavailable instead of being zeroed or fabricated.
               </Text>
               <Text style={styles.sectionLabel}>Room And Audience Signals</Text>
               <View style={styles.summaryGrid}>
@@ -1958,7 +1966,7 @@ export default function ChannelSettingsScreen() {
                   </View>
                 ))}
               </View>
-              <Text style={styles.sectionLabel}>Missing / Later</Text>
+              <Text style={styles.sectionLabel}>Unavailable / Later</Text>
               <View style={styles.summaryGrid}>
                 {analyticsUnavailableCards.map((card) => (
                   <View key={card.label} style={[styles.summaryCard, styles.summaryCardUnavailable]}>
@@ -1976,7 +1984,7 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Safety and admin summary truth stays grounded in the current moderation access model. This route shows only real role, access, and report summary signals already supported by the landed helper.
+                This section shows only the role, access, and report signals the current moderation model already supports.
               </Text>
               <View style={styles.summaryGrid}>
                 {safetySummaryCards.map((card) => (
@@ -1999,6 +2007,40 @@ export default function ChannelSettingsScreen() {
                     <Text style={styles.summaryLabel}>{card.label}</Text>
                     <Text style={styles.summaryValue}>{card.value}</Text>
                     <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={[styles.panel, styles.panelSubtle]}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Design</Text>
+                <Text style={styles.panelStatusMuted}>BUILD NEXT</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                Hero, avatar framing, accent tone, and visible brand treatment can deepen here later without leaving this route.
+              </Text>
+              <View style={styles.previewChipRow}>
+                {designSectionHighlights.map((item) => (
+                  <View key={item} style={styles.previewChip}>
+                    <Text style={styles.previewChipText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={[styles.panel, styles.panelSubtle]}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Content</Text>
+                <Text style={styles.panelStatusMuted}>BUILD NEXT</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                Spotlight rows, featured shelves, and public content curation stay on this route when creator programming deepens.
+              </Text>
+              <View style={styles.previewChipRow}>
+                {contentSectionHighlights.map((item) => (
+                  <View key={item} style={styles.previewChip}>
+                    <Text style={styles.previewChipText}>{item}</Text>
                   </View>
                 ))}
               </View>
@@ -2138,6 +2180,13 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: "600",
   },
+  sectionMapSubheading: {
+    color: "#AAB6CD",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    marginTop: 2,
+  },
   sectionMapGrid: {
     gap: 10,
   },
@@ -2205,6 +2254,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(12,16,24,0.9)",
     padding: 16,
+  },
+  panelSubtle: {
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(10,14,22,0.74)",
   },
   panelHeader: {
     flexDirection: "row",
