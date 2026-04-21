@@ -1,20 +1,20 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the `broader player chapter closeout audit` and decide whether this pass should stop here with a clean next-step handoff. Do not force the riskier live/comment/participant extractions unless new proof says they are equally safe right now.
+Run the next planned broader player batch on `app/player/[id].tsx`: separate the live-mode comment/filter/react overlay cluster from the mixed route render body without changing room sync, route truth, or live-stage semantics.
 
 ## Current Plan
 1. Treat the behavior/social consistency lane as closed and carry its truthful social baseline forward unchanged.
 2. Keep the broader player chapter active on `app/player/[id].tsx`.
 3. Preserve the new standalone-only top-chrome extraction in `app/player/[id].tsx`.
-4. Re-audit whether the next player seam is still safe enough for this pass or whether it should stop here.
-5. Preserve current room/live semantics, rights-aware share gating, friendship boundaries, and comment truth while restructuring the player.
+4. Use the next pass to isolate the live-mode comment/filter/react overlay cluster without touching room sync or participant-host logic yet.
+5. Preserve current room/live semantics, rights-aware share gating, friendship boundaries, and comment truth while continuing the player chapter.
 6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- verify the new standalone-only top-chrome grouping still keeps route truth and behavior intact
-- decide whether the next seam is now `live-mode comment/filter/react cluster` or `participant/host tool shell`, and whether either is still safe in this pass
-- stop cleanly if those remaining seams are still too entangled with room sync or live-stage behavior
+- extract the live-mode comment/filter/react overlay cluster from `app/player/[id].tsx` into a local player-owned substructure
+- keep room comments, live filters, and live reaction entry grouped together without moving room sync or live-seat logic
+- leave the participant rail and host-tool shell for a later pass unless a narrower proof emerges
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
@@ -26,9 +26,9 @@ This next pass should:
 - preserve `/title/[id]`, `/watch-party/index.tsx`, and `/watch-party/[partyId].tsx` as linked owners whose truth must not drift while player work is underway
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
-- keep the current social baseline settled while the broader player chapter is audited
+- keep the current social baseline settled while the broader player chapter continues
 - preserve inbox scan clarity, profile friendship boundaries, room/live comment truth, and rights-aware share gating during player work
-- keep any further work inside clearly safe player-owned substructures only
+- keep the next batch inside the live-mode overlay shell rather than room sync or participant-host control logic
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
@@ -45,7 +45,7 @@ The next lane is successful when:
 - `app/player/[id].tsx` is chosen only if its structural seam is clearly more urgent than `app/profile/[userId].tsx`
 - the first player architecture batch is narrow enough to land safely without route drift or schema drift
 - standalone-only player chrome is grouped more cleanly without changing room/live behavior
-- the pass stops cleanly if the next remaining player seams are still more risky than this checkpoint
+- the next player batch stays clearly inside the live-mode overlay shell and does not drift into room sync or participant-host logic
 - rights-aware share gating, room/live comment truth, and current social boundaries remain intact during player work
 - the public profile chapter stays closed unless the player audit fails to justify safe progress
 - public/profile/chat/title/player routes still make no fake social claims
