@@ -329,6 +329,146 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
   },
 );
 
+type StandalonePlayerTopChromeProps = {
+  controlsVisible: boolean;
+  playbackGateActive: boolean;
+  overlayOpacity: Animated.Value;
+  overlayTranslateY: Animated.Value;
+  myListBusy: boolean;
+  inMyList: boolean;
+  onToggleMyList: () => void;
+  playbackRate: number;
+  onToggleSpeedMenu: () => void;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  engagementState: TitleEngagementState | null;
+  engagementLoading: boolean;
+  engagementBusy: "like" | "share" | null;
+  onToggleLike: () => void;
+  canMarkShared: boolean;
+  onToggleShare: () => void;
+  onWatchParty: () => void;
+  speedMenuOpen: boolean;
+  onSelectRate: (rate: number) => void;
+};
+
+function StandalonePlayerTopChrome({
+  controlsVisible,
+  playbackGateActive,
+  overlayOpacity,
+  overlayTranslateY,
+  myListBusy,
+  inMyList,
+  onToggleMyList,
+  playbackRate,
+  onToggleSpeedMenu,
+  isFullscreen,
+  onToggleFullscreen,
+  engagementState,
+  engagementLoading,
+  engagementBusy,
+  onToggleLike,
+  canMarkShared,
+  onToggleShare,
+  onWatchParty,
+  speedMenuOpen,
+  onSelectRate,
+}: StandalonePlayerTopChromeProps) {
+  return (
+    <>
+      <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
+        <View style={styles.partyOverlaySpacer} />
+        {!playbackGateActive ? (
+          <Animated.View
+            pointerEvents={controlsVisible ? "auto" : "none"}
+            style={[
+              styles.standaloneOverlayActions,
+              {
+                opacity: overlayOpacity,
+                transform: [{ translateY: overlayTranslateY }],
+              },
+            ]}
+          >
+            <View style={styles.standaloneUtilityRow}>
+              <TouchableOpacity
+                style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
+                onPress={onToggleMyList}
+                disabled={myListBusy}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
+                onPress={onToggleSpeedMenu}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
+                onPress={onToggleFullscreen}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.partyOverlayChipText}>{isFullscreen ? "Exit Full" : "Full"}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.standaloneEngagementRow}>
+              <TouchableOpacity
+                style={[styles.compactChip, engagementState?.liked && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
+                onPress={onToggleLike}
+                disabled={engagementLoading || engagementBusy !== null}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.compactChipText, engagementState?.liked && styles.compactChipTextAccent]}>
+                  {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
+                </Text>
+              </TouchableOpacity>
+              {canMarkShared ? (
+                <TouchableOpacity
+                  style={[styles.compactChip, engagementState?.shared && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
+                  onPress={onToggleShare}
+                  disabled={engagementLoading || engagementBusy !== null}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
+                    {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              style={[styles.compactChip, styles.compactChipAccent, styles.standaloneSocialHandoffBtn]}
+              onPress={onWatchParty}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.compactChipText, styles.compactChipTextAccent]}>Watch-Party Live</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        ) : null}
+      </View>
+
+      {controlsVisible && speedMenuOpen ? (
+        <View style={styles.partySpeedOverlayMenu}>
+          {SPEED_OPTIONS.map((option) => {
+            const active = playbackRate === option;
+            return (
+              <TouchableOpacity
+                key={option}
+                style={[styles.partySpeedOverlayChip, active && styles.partySpeedOverlayChipActive]}
+                onPress={() => onSelectRate(option)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.partySpeedOverlayChipText, active && styles.partySpeedOverlayChipTextActive]}>{option}x</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : null}
+    </>
+  );
+}
+
 const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
   switch (filterId) {
     case "studio":
@@ -4709,99 +4849,31 @@ export default function PlayerScreen() {
                 ))}
               </>
             ) : (
-              <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
-                <View style={styles.partyOverlaySpacer} />
-                {!standalonePlaybackGateActive ? (
-                  <Animated.View
-                    pointerEvents={controlsVisible ? "auto" : "none"}
-                    style={[
-                      styles.standaloneOverlayActions,
-                      {
-                        opacity: compactControlsOpacity,
-                        transform: [{ translateY: compactControlsTranslateY }],
-                      },
-                    ]}
-                  >
-                    <View style={styles.standaloneUtilityRow}>
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
-                        onPress={onToggleMyList}
-                        disabled={myListBusy}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                        onPress={() => setSpeedMenuOpen((value) => !value)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                        onPress={() => setIsStandaloneFullscreen((value) => !value)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyOverlayChipText}>{isStandaloneFullscreen ? "Exit Full" : "Full"}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.standaloneEngagementRow}>
-                      <TouchableOpacity
-                        style={[styles.compactChip, engagementState?.liked && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
-                        onPress={onToggleStandaloneLike}
-                        disabled={engagementLoading || engagementBusy !== null}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={[styles.compactChipText, engagementState?.liked && styles.compactChipTextAccent]}>
-                          {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
-                        </Text>
-                      </TouchableOpacity>
-                      {canMarkStandaloneShared ? (
-                        <TouchableOpacity
-                          style={[styles.compactChip, engagementState?.shared && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
-                          onPress={onToggleStandaloneShare}
-                          disabled={engagementLoading || engagementBusy !== null}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
-                            {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.compactChip, styles.compactChipAccent, styles.standaloneSocialHandoffBtn]}
-                      onPress={onWatchParty}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[styles.compactChipText, styles.compactChipTextAccent]}>Watch-Party Live</Text>
-                    </TouchableOpacity>
-                  </Animated.View>
-                ) : null}
-              </View>
+              <StandalonePlayerTopChrome
+                controlsVisible={controlsVisible}
+                playbackGateActive={standalonePlaybackGateActive}
+                overlayOpacity={compactControlsOpacity}
+                overlayTranslateY={compactControlsTranslateY}
+                myListBusy={myListBusy}
+                inMyList={inMyList}
+                onToggleMyList={onToggleMyList}
+                playbackRate={playbackRate}
+                onToggleSpeedMenu={() => setSpeedMenuOpen((value) => !value)}
+                isFullscreen={isStandaloneFullscreen}
+                onToggleFullscreen={() => setIsStandaloneFullscreen((value) => !value)}
+                engagementState={engagementState}
+                engagementLoading={engagementLoading}
+                engagementBusy={engagementBusy}
+                onToggleLike={onToggleStandaloneLike}
+                canMarkShared={canMarkStandaloneShared}
+                onToggleShare={onToggleStandaloneShare}
+                onWatchParty={onWatchParty}
+                speedMenuOpen={speedMenuOpen}
+                onSelectRate={onSelectRate}
+              />
             )}
               </>
             )}
-
-            {isStandalonePlayer && controlsVisible && speedMenuOpen ? (
-              <View style={styles.partySpeedOverlayMenu}>
-                {SPEED_OPTIONS.map((option) => {
-                  const active = playbackRate === option;
-                  return (
-                    <TouchableOpacity
-                      key={option}
-                      style={[styles.partySpeedOverlayChip, active && styles.partySpeedOverlayChipActive]}
-                      onPress={() => onSelectRate(option)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[styles.partySpeedOverlayChipText, active && styles.partySpeedOverlayChipTextActive]}>{option}x</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : null}
 
             <View style={[styles.playerFrameworkBottomStack, inWatchParty && styles.playerFrameworkBottomStackWatchParty]}>
               {!isLiveMode && (!isStandalonePlayer || !standalonePlaybackGateActive) ? (
