@@ -11,7 +11,6 @@ import {
     resolveHomeConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
-import { useBetaProgram } from "../../_lib/betaProgram";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import {
   type CreatorEventSummary,
@@ -30,7 +29,6 @@ import {
 } from "../../_lib/monetization";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
-import { getSupportRoutePath } from "../../_lib/runtimeConfig";
 import {
     Alert,
     Image,
@@ -267,7 +265,6 @@ const getProfileAccessBody = (resolution: ChannelAccessResolution | null, isOffi
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { isActive: hasSupportAccess } = useBetaProgram();
   const [currentUserId, setCurrentUserId] = useState("");
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
@@ -745,12 +742,6 @@ export default function ProfileScreen() {
       );
     }
   };
-  const onPressBetaSupport = () => {
-    router.push(getSupportRoutePath());
-  };
-  const onPressSettings = () => {
-    router.push("/settings");
-  };
   const onPressReportProfile = () => {
     if (!canReportProfile) return;
     trackModerationActionUsed({
@@ -1102,31 +1093,31 @@ export default function ProfileScreen() {
       title: profile.isLive ? "Live Presence" : "Live Status",
       kicker: "LIVE",
       body: liveNowEvent
-        ? `${liveNowEvent.eventTitle} is currently backed as ${formatEventTypeLabel(liveNowEvent.eventType)} on this channel.`
+        ? `${liveNowEvent.eventTitle} is live here now as ${formatEventTypeLabel(liveNowEvent.eventType)}.`
         : profile.isLive
-          ? "This channel currently shows live presence. Use the Live tab here for honest status, and use linked room entry only when real room context is attached to this profile route."
-          : "No live room is active right now. This tab should keep Live status clear without pretending the profile is a room.",
+          ? "This channel is showing live presence. Room re-entry appears only when real room context is attached."
+          : "No live room is active right now. This tab keeps live status clear without pretending the profile is the room.",
       accent: profile.isLive ? "live" : "default",
     },
     {
       title: nextUpcomingEvent ? formatEventTypeLabel(nextUpcomingEvent.eventType) : "Live Watch-Party",
       kicker: "LIVE FLOW",
       body: nextUpcomingEvent
-        ? `${nextUpcomingEvent.eventTitle} is the next backed public event at ${formatEventDate(nextUpcomingEvent.startsAt)}. This tab can show that schedule honestly without absorbing the room route.`
-        : "Live Watch-Party belongs to Home and Live Room semantics. This tab may point people there, but it must not rename or absorb the live-room flow.",
+        ? `${nextUpcomingEvent.eventTitle} is the next backed public event at ${formatEventDate(nextUpcomingEvent.startsAt)}.`
+        : "This tab can point people toward Live Watch-Party without absorbing the live-room flow.",
     },
     {
       title: scheduledWatchPartyEvent ? "Watch-Party Live Scheduled" : "Watch-Party Live",
       kicker: "WATCH TOGETHER",
       body: scheduledWatchPartyEvent
-        ? `${scheduledWatchPartyEvent.eventTitle} is scheduled for ${formatEventDate(scheduledWatchPartyEvent.startsAt)} and can link out to the canonical Watch-Party Live entry without absorbing the room route.`
-        : "Watch-Party Live remains the title/player-driven watch-together path. This tab can show continuity into party flow without blurring it into the live label.",
+        ? `${scheduledWatchPartyEvent.eventTitle} is scheduled for ${formatEventDate(scheduledWatchPartyEvent.startsAt)} and links out to the canonical Watch-Party Live entry.`
+        : "Watch-Party Live stays the title/player-driven watch-together path.",
     },
     {
       title: hasLiveRouteContext ? "Linked Room Context" : "Room Continuity",
       kicker: hasLiveRouteContext ? "ACTIVE CONTEXT" : "WHEN AVAILABLE",
       body: hasLiveRouteContext
-        ? "This profile was opened with real room context, so live and watch-party entry can hand off to the correct canonical route without drift."
+        ? "Real room context is attached, so live and watch-party entry can hand off to the correct canonical route."
         : "When a profile is opened from a room or live session, this tab should become the clean re-entry point instead of a fake room shell.",
     },
   ];
@@ -1365,13 +1356,13 @@ export default function ProfileScreen() {
     {
       label: "Resume",
       value: channelSignalsReady ? String(continueWatchingCount) : "...",
-      body: "continue-watching cues still visible to you",
+      body: "private resume cues still visible to you",
       tone: "linked",
     },
     {
       label: "Live",
       value: profile.isLive ? "On" : "Off",
-      body: hasLiveRouteContext ? "room context attached" : "open from a room to test handoff",
+      body: hasLiveRouteContext ? "room context attached" : "linked visits bring room context here",
       tone: profile.isLive ? "live" : "default",
     },
   ] : [];
@@ -1382,27 +1373,19 @@ export default function ProfileScreen() {
       emphasis: "primary",
     },
     {
-      label: "Settings",
-      onPress: onPressSettings,
-    },
-    {
       label: "Chi'lly Chat",
       onPress: () => {
         void onPressCommunication("message");
       },
     },
-    ...(hasSupportAccess ? [{
-      label: "Support",
-      onPress: onPressBetaSupport,
-    }] : []),
   ] : [];
   const ownerPromptCards: readonly OwnerPromptCard[] = isSelfProfile ? [
     {
-      kicker: "OWNER PROMPT",
+      kicker: "OWNER VIEW",
       title: creatorSettingsEnabled ? "Keep deeper editing in Manage Channel" : "Channel editing is currently hidden",
       body: creatorSettingsEnabled
-        ? "This route stays your shared public-facing profile and channel surface. Use Manage Channel for deeper identity, layout, and content control."
-        : "Creator channel controls are currently hidden by app configuration, so this route should stay focused on the public-facing profile and owner quick actions.",
+        ? "This route stays public-facing. Use Manage Channel only for deeper identity, layout, and content edits."
+        : "Creator channel controls are currently hidden by app configuration, so this route stays focused on the public-facing channel view.",
       ...(creatorSettingsEnabled
         ? {
             actionLabel: "Open Manage Channel",
@@ -1413,7 +1396,7 @@ export default function ProfileScreen() {
     ...(!profile.tagline ? [{
       kicker: "SETUP",
       title: "Add a sharper channel line",
-      body: "Give visitors a clearer first read on your lane by adding a short tagline in Manage Channel.",
+      body: "Give visitors a clearer first read on your lane with a short tagline in Manage Channel.",
       ...(creatorSettingsEnabled
         ? {
             actionLabel: "Write Tagline",
@@ -1424,7 +1407,7 @@ export default function ProfileScreen() {
     ...(channelSignalsReady && savedTitleCount === 0 ? [{
       kicker: "CONTENT",
       title: "Curate your first visible shelf",
-      body: "Saved titles are the simplest honest seed for your first public content block. Build that shelf before inventing a bigger creator catalog.",
+      body: "Saved titles are the simplest honest seed for your first public shelf. Build that before inventing a bigger creator catalog.",
       ...(creatorSettingsEnabled
         ? {
             actionLabel: "Plan Shelves",
@@ -1647,7 +1630,7 @@ export default function ProfileScreen() {
           </View>
           {isSelfProfile ? (
             <View style={styles.ownerModeCard}>
-              <Text style={styles.ownerModeKicker}>OWNER MODE</Text>
+              <Text style={styles.ownerModeKicker}>OWNER VIEW</Text>
               <Text style={styles.ownerModeTitle}>Keep this route public-facing. Go deeper in Manage Channel.</Text>
               <Text style={styles.ownerModeBody}>
                 Your public profile and owner mode share the same canonical surface. Use the ribbon below for quick control, then hand off to Manage Channel for deeper editing.
@@ -1817,7 +1800,7 @@ export default function ProfileScreen() {
                   <Text style={styles.sectionKicker}>EVENT STATUS</Text>
                   <Text style={styles.sectionTitle}>Loading public event truth</Text>
                   <Text style={styles.sectionBody}>
-                    Checking the canonical creator event model before showing live, upcoming, replay, or reminder-ready state on this public route.
+                    Checking backed creator events before showing live, replay, and reminder state.
                   </Text>
                 </View>
               ) : null}
@@ -1860,7 +1843,7 @@ export default function ProfileScreen() {
                               ? "Replay is not enabled for this event."
                               : "Replay is configured but not available yet."}{"\n"}
                         {formatEventReminderLabel(event)} · {formatEventReminderEnrollmentLabel(enrollment)}
-                        {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
+                        {event.linkedTitleId ? `\nWatch title: ${event.linkedTitleId}` : ""}
                       </Text>
                       <Text style={styles.actionFootnote}>{getEventReminderEnrollmentBody(enrollment)}</Text>
                       {event.reminder.canSetReminder ? (
@@ -1901,7 +1884,7 @@ export default function ProfileScreen() {
                   <Text style={styles.sectionKicker}>EVENT STATUS</Text>
                   <Text style={styles.sectionTitle}>No public event schedule yet</Text>
                   <Text style={styles.sectionBody}>
-                    This profile does not currently have any non-draft creator events to show. The route stays honest instead of faking upcoming rooms, replays, or reminder state.
+                    This profile does not currently have any non-draft creator events to show. The route stays honest instead of faking upcoming rooms or reminder state.
                   </Text>
                 </View>
               ) : null}
