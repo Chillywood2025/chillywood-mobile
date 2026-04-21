@@ -1,26 +1,26 @@
 # NEXT TASK
 
 ## Exact Next Task
-The public profile/channel access + audience surface audit is now closed cleanly on `main`. The next exact stage is `access surface polish` on `app/profile/[userId].tsx`: make the public access posture feel concise, premium, and public-safe by tightening the access summary, removing creator-side capability framing from the public card, and keeping current access truth honest without route or schema drift.
+The first public profile/channel access + audience batch is now closed cleanly on `main`. The next exact stage is `audience surface polish` on `app/profile/[userId].tsx`: make public activity, follower visibility, and subscriber visibility feel clearer and more premium without leaking private workflow truth or inventing fake social proof.
 
 ## Current Plan
-1. Treat the access + audience audit as closed.
-2. Tighten the public access card and access detail language first.
-3. Remove creator-side capability bookkeeping from the public route while preserving backed access truth.
-4. Move to audience posture polish only after the access batch is verified and pushed.
+1. Treat access surface polish as closed.
+2. Tighten the audience posture and community-facing visibility cards next.
+3. Keep follower/subscriber/public-activity truth public-safe and socially legible without inventing counts.
+4. Move to the final cohesion pass only after the audience batch is verified and pushed.
 5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- make public access posture visible, concise, and premium
-- reduce memo-like access explanation and creator-side terminology
-- keep backed watch-party, communication, and official access truth honest
+- make public activity, follower, and subscriber posture clearer and more social
+- reduce system-language and visibility-policy memo wording
+- keep private workflow, blocked audience truth, and fake social proof off the public route
 - keep creator/public and room/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve `/profile/[userId]` as the canonical public profile/channel route
-- focus on access presentation truth only on that owner
+- focus on audience/community presentation truth only on that owner
 - leave completed account/support/chat/home/title route owners alone
 - keep unrelated local dirt out of the checkpoint
 
@@ -34,7 +34,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- the public route's access posture reads clearly and confidently
-- creator-side capability details no longer leak into public presentation
+- the public route's audience posture reads clearly and confidently
+- public-safe community visibility is clearer without leaking private audience workflow truth
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure

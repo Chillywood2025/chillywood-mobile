@@ -140,7 +140,18 @@ const resolveChannelLayoutPreset = (value?: UserProfile["channelLayoutPreset"] |
 const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
   if (value === "party_pass") return "Party Pass";
   if (value === "premium") return "Premium";
-  return "Public";
+  return "Open";
+};
+
+const getAccessPostureTitle = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
+  if (isOfficialProfile || resolution?.reason === "official_access") return "Official Access";
+  if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
+    return "Checking Access";
+  }
+  if (resolution.classification === "subscriber_access") return "Subscriber Access";
+  if (resolution.classification === "private") return "Private Entry";
+  if (resolution.classification === "mixed_access") return "Mixed Entry";
+  return "Open Channel";
 };
 
 const formatPublicActivityVisibilityValue = (value?: UserProfile["publicActivityVisibility"] | null) => {
@@ -246,21 +257,63 @@ const getEventReminderEnrollmentBody = (enrollment: EventReminderEnrollment) => 
 
 const getProfileAccessBody = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
   if (isOfficialProfile || resolution?.reason === "official_access") {
-    return "Official help stays visible on the canonical profile and Chi'lly Chat routes without pretending this surface is a paywall or creator storefront.";
+    return "Verified help and official follow-up stay public here.";
   }
   if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
-    return "Checking channel defaults and creator grants so access rules stay visible and honest on this route.";
+    return "Checking the channel's current entry posture.";
   }
   if (resolution.reason === "channel_defaults_subscriber") {
-    return "Both channel communication and watch-party defaults are gated, so this profile should signal member-style access before people hit a room or a thread.";
+    return "This channel stays public to browse while deeper conversation and watch-party entry can be subscriber-led.";
   }
   if (resolution.reason === "channel_defaults_private") {
-    return "This channel currently defaults to locked watch-party entry, so room access should read as invite/host-controlled instead of purely public.";
+    return "This channel stays public to browse while deeper room entry stays invite-led.";
   }
   if (resolution.reason === "channel_defaults_mixed") {
-    return "This channel mixes open and gated defaults, so the profile needs to show where access stays public and where member-style rules begin.";
+    return "Some entry stays open while member-only moments stay protected.";
   }
-  return "This channel currently defaults to open communication and open watch-party access, so visitors should not be surprised by hidden gating.";
+  return "Conversation and watch-party entry stay open by default on this channel.";
+};
+
+const getWatchPartyAccessBody = (resolution: ChannelAccessResolution | null, ready: boolean) => {
+  if (!ready || !resolution) return "checking watch-party entry";
+  if (resolution.joinPolicy === "locked") return "invite-led room entry by default";
+  if (resolution.watchPartyAccessRule === "party_pass") return "party-pass room entry when backed";
+  if (resolution.watchPartyAccessRule === "premium") return "premium room entry when backed";
+  return "open room entry by default";
+};
+
+const getCommunicationAccessBody = (resolution: ChannelAccessResolution | null, ready: boolean) => {
+  if (!ready || !resolution) return "checking direct follow-up posture";
+  if (resolution.communicationAccessRule === "party_pass") return "Chi'lly Chat can turn party-pass led when backed";
+  if (resolution.communicationAccessRule === "premium") return "Chi'lly Chat can turn premium-led when backed";
+  return "Chi'lly Chat stays open by default";
+};
+
+const getBrowseAccessValue = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
+  if (isOfficialProfile || resolution?.reason === "official_access") return "Verified";
+  if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
+    return "Loading";
+  }
+  return resolution.previewMode === "teaser" ? "Preview" : "Open";
+};
+
+const getBrowseAccessBody = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
+  if (isOfficialProfile || resolution?.reason === "official_access") {
+    return "verified platform-owned public identity";
+  }
+  if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
+    return "checking public channel posture";
+  }
+  if (resolution.reason === "channel_defaults_subscriber") {
+    return "the channel stays visible while member access protects deeper entry";
+  }
+  if (resolution.reason === "channel_defaults_private") {
+    return "the channel stays visible even when room entry is invite-led";
+  }
+  if (resolution.reason === "channel_defaults_mixed") {
+    return "the channel stays visible while access changes by surface";
+  }
+  return "the full channel story stays open to browse";
 };
 
 export default function ProfileScreen() {
@@ -1304,47 +1357,35 @@ export default function ProfileScreen() {
     }
   };
   const accessPosture = {
-    title: isOfficialProfile ? "Official Access" : (channelAccessResolution?.label ?? "Loading Access"),
+    title: getAccessPostureTitle(channelAccessResolution, isOfficialProfile),
     body: getProfileAccessBody(channelAccessResolution, isOfficialProfile),
   };
   const accessDetails: readonly ProfileAccessDetail[] = isOfficialProfile ? [
     {
-      label: "Profile",
-      value: "Protected",
+      label: "Browse",
+      value: "Verified",
       body: "official platform-owned identity",
     },
     {
-      label: "Chat",
-      value: "Canonical",
-      body: "Chi'lly Chat stays the official follow-up path",
+      label: "Chi'lly Chat",
+      value: "Official",
+      body: "trusted help starts in the official thread",
     },
   ] : [
     {
+      label: "Browse",
+      value: getBrowseAccessValue(channelAccessResolution, isOfficialProfile),
+      body: getBrowseAccessBody(channelAccessResolution, isOfficialProfile),
+    },
+    {
       label: "Watch Party",
       value: formatChannelRoomAccessValue(channelAccessResolution?.watchPartyAccessRule),
-      body: channelAccessResolution?.joinPolicy === "locked" ? "locked room entry by default" : "open room entry by default",
+      body: getWatchPartyAccessBody(channelAccessResolution, channelAccessReady),
     },
     {
-      label: "Communication",
+      label: "Chi'lly Chat",
       value: formatChannelRoomAccessValue(channelAccessResolution?.communicationAccessRule),
-      body: "Chi'lly Chat stays canonical even when room defaults are gated",
-    },
-    {
-      label: "Creator Grants",
-      value: !channelAccessReady || !channelAccessResolution
-        ? "Loading"
-        : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms || channelAccessResolution.creatorPermissions?.canUsePremiumRooms
-          ? "Enabled"
-          : "Open Only",
-      body: !channelAccessReady || !channelAccessResolution
-        ? "checking supported gated room types"
-        : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms && channelAccessResolution.creatorPermissions?.canUsePremiumRooms
-          ? "party pass and premium room defaults available"
-          : channelAccessResolution.creatorPermissions?.canUsePartyPassRooms
-            ? "party pass rooms available, premium hidden"
-            : channelAccessResolution.creatorPermissions?.canUsePremiumRooms
-              ? "premium rooms available, party pass hidden"
-              : "gated room defaults fall back to open",
+      body: getCommunicationAccessBody(channelAccessResolution, channelAccessReady),
     },
   ];
   const ownerStatsRibbon: readonly OwnerStatCard[] = isSelfProfile ? [
@@ -1615,7 +1656,7 @@ export default function ProfileScreen() {
             ) : null}
           </View>
           <View style={styles.accessCard}>
-            <Text style={styles.accessKicker}>ACCESS &amp; MONETIZATION</Text>
+            <Text style={styles.accessKicker}>CHANNEL ACCESS</Text>
             <Text style={styles.accessTitle}>{accessPosture.title}</Text>
             <Text style={styles.accessBody}>{accessPosture.body}</Text>
             <View style={styles.accessDetailRow}>
