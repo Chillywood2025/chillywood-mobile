@@ -157,40 +157,40 @@ const getAccessPostureTitle = (resolution: ChannelAccessResolution | null, isOff
 const formatPublicActivityVisibilityValue = (value?: UserProfile["publicActivityVisibility"] | null) => {
   switch (value) {
     case "followers_only":
-      return "Followers Only";
+      return "Follower-Led";
     case "subscribers_only":
-      return "Subscribers Only";
+      return "Subscriber-Led";
     case "private":
-      return "Private";
+      return "Quiet";
     default:
-      return "Public";
+      return "Open";
   }
 };
 
 const getPublicActivityVisibilityBody = (value?: UserProfile["publicActivityVisibility"] | null) => {
   switch (value) {
     case "followers_only":
-      return "Public activity is limited to follower-level visibility on this route and should not be rendered like open community traffic.";
+      return "Public activity stays follower-led here, so the channel can feel social without pretending the whole audience sees every signal.";
     case "subscribers_only":
-      return "Public activity is limited to creator/channel subscriber visibility and should stay distinct from account-tier premium access.";
+      return "Public activity stays channel-subscriber-led here and remains distinct from account-tier premium access.";
     case "private":
-      return "Public activity stays hidden on this route, so community framing should not pretend open audience activity is visible.";
+      return "Public activity stays quiet here until the creator opens it up.";
     default:
-      return "Public activity can stay visible here because the creator has backed open audience posture on the canonical public profile route.";
+      return "Public activity can show up openly on this channel.";
   }
 };
 
-const formatAudienceSurfaceVisibilityValue = (enabled: boolean) => enabled ? "Visible" : "Hidden";
+const formatAudienceSurfaceVisibilityValue = (enabled: boolean) => enabled ? "Active" : "Quiet";
 
 const getAudienceSurfaceVisibilityBody = (surface: "followers" | "subscribers", enabled: boolean) => {
   if (surface === "followers") {
     return enabled
-      ? "Follower-facing public surface cues are enabled on this route when backed follower relationship truth exists."
-      : "Follower-facing public surface cues are currently turned off on this route, so the profile should not invent follower-only community modules.";
+      ? "Follower cues can show up here when that relationship is real."
+      : "This channel keeps follower-only cues out of public view right now.";
   }
   return enabled
-    ? "Subscriber-facing public surface cues are enabled on this route when backed creator/channel subscriber truth exists."
-    : "Subscriber-facing public surface cues are currently turned off on this route, so the profile should not imply subscriber-only public modules.";
+    ? "Subscriber cues can show up here when the channel relationship is real."
+    : "This channel keeps subscriber-only cues out of public view right now.";
 };
 
 const formatEventDate = (value?: string | null) => {
@@ -1184,7 +1184,7 @@ export default function ProfileScreen() {
 
     if (publicActivityVisibility) {
       sections.push({
-        title: "Activity Visibility",
+        title: "Audience Activity",
         kicker: "PUBLIC ACTIVITY",
         body: `${formatPublicActivityVisibilityValue(publicActivityVisibility)}. ${getPublicActivityVisibilityBody(publicActivityVisibility)}`,
       });
@@ -1192,7 +1192,7 @@ export default function ProfileScreen() {
 
     if (typeof followerSurfaceEnabled === "boolean") {
       sections.push({
-        title: "Followers",
+        title: "Follower Circle",
         kicker: "FOLLOWERS",
         body: `${formatAudienceSurfaceVisibilityValue(followerSurfaceEnabled)}. ${getAudienceSurfaceVisibilityBody("followers", followerSurfaceEnabled)}`,
       });
@@ -1200,7 +1200,7 @@ export default function ProfileScreen() {
 
     if (typeof subscriberSurfaceEnabled === "boolean") {
       sections.push({
-        title: "Subscribers",
+        title: "Subscriber Circle",
         kicker: "SUBSCRIBERS",
         body: `${formatAudienceSurfaceVisibilityValue(subscriberSurfaceEnabled)}. ${getAudienceSurfaceVisibilityBody("subscribers", subscriberSurfaceEnabled)}`,
       });
@@ -1213,7 +1213,38 @@ export default function ProfileScreen() {
     channelAccessProfile?.subscriberSurfaceEnabled,
     isOfficialProfile,
   ]);
+  const audiencePostureBody = useMemo(() => {
+    if (isOfficialProfile) return "";
+
+    const publicActivityVisibility = channelAccessProfile?.publicActivityVisibility;
+    const followerSurfaceEnabled = channelAccessProfile?.followerSurfaceEnabled;
+    const subscriberSurfaceEnabled = channelAccessProfile?.subscriberSurfaceEnabled;
+    const postureLead = publicActivityVisibility === "followers_only"
+      ? "Community activity stays follower-led on this channel."
+      : publicActivityVisibility === "subscribers_only"
+        ? "Community activity stays subscriber-led on this channel."
+        : publicActivityVisibility === "private"
+          ? "Community activity stays quiet on the public route for now."
+          : "Community activity can stay open on this channel.";
+    const followerCue = followerSurfaceEnabled
+      ? "Follower cues can appear when that relationship is real."
+      : "Follower cues stay quiet on the public route.";
+    const subscriberCue = subscriberSurfaceEnabled
+      ? "Subscriber cues can appear when that relationship is real."
+      : "Subscriber cues stay quiet on the public route.";
+    return `${postureLead} ${followerCue} ${subscriberCue}`;
+  }, [
+    channelAccessProfile?.followerSurfaceEnabled,
+    channelAccessProfile?.publicActivityVisibility,
+    channelAccessProfile?.subscriberSurfaceEnabled,
+    isOfficialProfile,
+  ]);
   const communityTabSections: readonly ProfileSurfaceCard[] = [
+    ...(!isOfficialProfile ? [{
+      title: "Audience Posture",
+      kicker: "AUDIENCE",
+      body: audiencePostureBody,
+    }] : []),
     {
       title: "Conversation",
       kicker: "CHI'LLY CHAT",
@@ -1320,7 +1351,7 @@ export default function ProfileScreen() {
       : activeTab === "live"
         ? "Live keeps schedule, current status, and watch-together continuity distinct."
         : activeTab === "community"
-          ? "Public follow-up and trust signals without turning this route into the inbox."
+          ? "Audience posture, follow-up, and trust signals without turning this route into the inbox."
           : "Identity, trust, and channel context at a glance.";
   const loadPublicReminderEvents = async () => {
     if (!userId) {
