@@ -1,10 +1,10 @@
 # NEXT TASK
 
 ## Exact Next Task
-The next exact stage is now the `whole-app behavior closeout audit`. Repo truth is explicit: the three ranked fix batches landed cleanly, and the next decision is whether any truly narrow final polish remains or whether this lane should close.
+There is no immediate narrow follow-up on the whole-app critical behavior verification lane now. Repo truth is explicit: the lane is closed cleanly, and any next pass should be an intentionally chosen broader route-owned chapter rather than an automatic fourth cross-app polish batch.
 
 ## Current Plan
-1. Treat the public profile private friendship boundary lane plus the three ranked behavior batches as closed.
+1. Treat the public profile private friendship boundary lane and the whole-app critical behavior verification lane as closed.
 2. Carry forward the locked doctrine: friendship is mutual, person-to-person, private-first, and still distinct from followers/subscribers.
 3. Preserve the new rights-aware title/player share behavior without widening it into broader content-action changes.
 4. Preserve the waiting-room preview flow while keeping real join/access failures visible.
@@ -14,10 +14,11 @@ The next exact stage is now the `whole-app behavior closeout audit`. Repo truth 
 8. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- run the whole-app behavior closeout audit and decide whether one final trivial or narrow polish slice is honestly justified
+- do not auto-open another whole-app polish batch now that the critical behavior lane is closed
 - keep the current truthful title/player, waiting-room, and inbox behavior fixes as landed
 - preserve the shipped title, player, watch-party, chat-thread, inbox, and profile social adoptions without widening them into fake broad social rollout
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
+- treat any next work as a broader intentional route-owned chapter rather than a leftover micro-polish sweep
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
@@ -27,10 +28,10 @@ This next pass should:
 - preserve `/title/[id]` and `/player/[id]` as the canonical title/player owners
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
-- keep the current social baseline settled while verifying real behavior across the existing canonical routes
+- keep the current social baseline settled until a future broader chapter intentionally reopens one of the canonical owners
 - preserve inbox scan clarity while keeping the new error visibility on `/chat/index`
 - treat the profile friendship treatment as already landed and closed for now
-- keep any remaining work narrower than a new route chapter
+- keep any future work explicitly route-owned or chapter-owned instead of drifting back into vague cross-app polish
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
