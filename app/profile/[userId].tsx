@@ -13,6 +13,10 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import {
+  readFriendRelationshipState,
+  type FriendRelationshipState,
+} from "../../_lib/friendGraph";
+import {
   type CreatorEventSummary,
   type CreatorEventType,
 } from "../../_lib/liveEvents";
@@ -319,6 +323,7 @@ const getBrowseAccessBody = (resolution: ChannelAccessResolution | null, isOffic
 export default function ProfileScreen() {
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState("");
+  const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
   const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
@@ -580,6 +585,28 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [channelAccessPermissions, channelAccessProfile, channelAccessReady, isOfficialProfile, userId]);
+  useEffect(() => {
+    let active = true;
+
+    if (!userId || isOfficialProfile || isSelfProfile) {
+      setFriendState(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    readFriendRelationshipState(userId)
+      .then((nextState) => {
+        if (active) setFriendState(nextState);
+      })
+      .catch(() => {
+        if (active) setFriendState(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, isOfficialProfile, isSelfProfile, userId]);
   const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
   const homeConfig = resolveHomeConfig(appConfig);
   const liveNowEvent = useMemo(
@@ -674,6 +701,7 @@ export default function ProfileScreen() {
     : isOfficialProfile
       ? "Chi'lly Chat opens Rachi's official starter thread."
       : "";
+  const showFriendshipHint = !!friendState?.isFriend && !isOfficialProfile && !isSelfProfile;
 
   const backgroundSource = (() => {
     const first = localTitles[0] as any;
@@ -1625,8 +1653,15 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
-            {canReportProfile ? (
+            {showFriendshipHint || canReportProfile ? (
               <View style={styles.secondaryActionRow}>
+                {showFriendshipHint ? (
+                  <View style={[styles.actionChip, styles.actionChipConnected]}>
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                      Friends
+                    </Text>
+                  </View>
+                ) : null}
                 <TouchableOpacity
                   style={[styles.actionChip, styles.actionChipReport]}
                   activeOpacity={0.82}
