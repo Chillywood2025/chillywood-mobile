@@ -100,29 +100,40 @@ Current doctrine for that bootstrap:
 Current host-bootstrap truth now includes:
 - SSH access works
 - the non-root deploy user is `chillywood`
-- `chillywood` has working `sudo`
+- `chillywood` now has verified passwordless `sudo` for controlled infra automation
 - the host has already taken an initial package-update pass
 - the host may already have rebooted once as part of that update/hardening cycle
+- `ufw` is active and currently allows only:
+  - `22/tcp`
+  - `80/tcp`
+  - `443/tcp`
+- `fail2ban` is installed and the `sshd` jail is active
+- the base service/log layout now exists:
+  - `/opt/chillywood`
+  - `/opt/chillywood/bin`
+  - `/opt/chillywood/env`
+  - `/opt/chillywood/logs`
+  - `/opt/chillywood/proxy`
+  - `/var/log/chillywood`
+  - `/var/log/chillywood/reverse-proxy`
+  - `/var/log/chillywood/livekit`
+- Caddy is installed as the first reverse-proxy baseline
+- a placeholder HTTP surface is active on `:80`
 
 This still does not imply:
-- reverse proxy/TLS is installed
 - LiveKit is installed
 - app traffic has moved
 - the machine is already serving production Chi'llywood traffic
+- real TLS is active
+- a real FQDN already points to this host
 
-### 3.3 Base Hardening Closeout Targets
-The remaining first-host bootstrap closeout items should stay manual and host-local:
-- re-check package update status immediately before service bootstrap
-- verify SSH posture:
-  - key-first access
-  - root-login posture only after recovery access is safe
-  - no repo-stored SSH secrets
-- verify firewall posture:
-  - keep SSH narrowly exposed
-  - reserve `80` and `443` for the next reverse-proxy lane
-  - do not publicly expose internal service ports
-- verify fail2ban or equivalent SSH abuse protection
-- verify the service-owned filesystem layout
+### 3.3 Remaining Manual And DNS-Gated Items
+The remaining first-host work is now narrower:
+- confirm the final public FQDN to use for realtime ingress
+- prove that FQDN points to `87.99.145.160`
+- replace the placeholder HTTP site with the real domain host block
+- issue real TLS only after DNS truth is proved
+- keep LiveKit and any other upstream service unserved until their own cutover lane opens
 
 ### 3.4 Expected Filesystem Layout
 The first host should standardize on:
@@ -141,12 +152,13 @@ It does not claim those directories are already populated with live services.
 
 ### 3.5 Bootstrap Closeout Decision
 Based on the verified host facts above, the first-host bootstrap state is complete enough to move to:
-- narrow `Hetzner reverse proxy / TLS bootstrap prep`
+- narrow `Hetzner domain / TLS activation follow-up`
 
 That means:
 - base host access is no longer the blocker
-- reverse proxy/TLS planning is now the next exact infra lane
-- manual hardening verification still remains part of that next lane
+- base hardening is no longer the blocker
+- reverse proxy baseline is no longer the blocker
+- real domain/DNS truth is now the exact next blocker
 
 ## 4. Hetzner-First Decision
 
@@ -262,6 +274,13 @@ That proxy should own:
 - host-based routing for the realtime endpoint
 - optional later static status/legal/support hosts
 
+Current verified proxy baseline:
+- Caddy is the chosen first proxy
+- the active bootstrap config path is `/opt/chillywood/proxy/Caddyfile`
+- `/etc/caddy/Caddyfile` points at that bootstrap config
+- the current served surface is a placeholder HTTP response only
+- no production app upstream or LiveKit upstream is configured yet
+
 ### 8.2 Public Exposure Discipline
 Public exposure should stay narrow:
 - expose `80` and `443` only for web/TLS ingress
@@ -311,19 +330,14 @@ Start narrow:
 Do not invent a larger observability program in this pass.
 
 ## 10. Deployment Order
-From the current verified bootstrap state, the next production-like Hetzner rollout should happen in this order:
+From the current verified bootstrap and proxy-baseline state, the next rollout should happen in this order:
 
-1. re-confirm the known host facts for `chillywood-prod-01`, `87.99.145.160`, and the working `chillywood` deploy user
-2. finish the base-hardening closeout checks:
-   - confirm package update status
-   - confirm SSH posture
-   - confirm firewall posture
-   - confirm fail2ban posture
-   - confirm the `/opt/chillywood` and `/var/log/chillywood` layout
-3. lock the public hostname(s) and DNS ownership
-4. provision host env from the Hetzner env template
-5. stand up reverse proxy and TLS first
-6. bring up LiveKit on the Hetzner host
+1. lock the real public hostname(s) and DNS ownership
+2. prove the chosen realtime FQDN resolves to `87.99.145.160`
+3. replace the placeholder Caddy site with the real domain host block
+4. issue real TLS only after the FQDN is proved
+5. verify `443` and HTTPS for that real domain
+6. bring up LiveKit on the Hetzner host later in its own cutover lane
 7. verify the new realtime endpoint independently before mobile cutover
 8. update Supabase Edge Function env so `livekit-token` signs against the Hetzner endpoint
 9. update public mobile runtime config only after the new endpoint is healthy
@@ -377,12 +391,11 @@ OVH should not be introduced later as:
 
 ## 14. First Honest Follow-Up Lane
 Once this prep is accepted, the first real infrastructure follow-up lane should be:
-- narrow `Hetzner reverse proxy / TLS bootstrap prep`
+- narrow `Hetzner domain / TLS activation follow-up`
 
 That later lane would prove, but not necessarily immediately deploy:
-- the base host-hardening closeout checklist
 - the exact realtime hostname
-- the reverse proxy choice
-- the `/opt/chillywood` and `/var/log/chillywood` service layout
-- the first LiveKit host topology
+- the DNS-to-host mapping
+- the real HTTPS certificate path
+- the replacement of the placeholder HTTP surface with the real domain host block
 - the precise cutover/rollback checklist for the Supabase token endpoint and mobile runtime values
