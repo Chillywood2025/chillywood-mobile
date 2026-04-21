@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { titles as localTitles } from "../../_data/titles";
 import {
@@ -19,6 +19,13 @@ import {
   type TitleAccessRule,
 } from "../../_lib/monetization";
 import { trackEvent } from "../../_lib/analytics";
+import {
+  clearTitleShare,
+  markTitleShared,
+  readTitleEngagementState,
+  toggleTitleLike,
+  type TitleEngagementState,
+} from "../../_lib/contentEngagement";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
@@ -117,6 +124,9 @@ export default function TitleDetails() {
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [liveMetadata, setLiveMetadata] = useState<TitleLiveMetadata | null>(null);
+  const [engagementState, setEngagementState] = useState<TitleEngagementState | null>(null);
+  const [engagementLoading, setEngagementLoading] = useState(true);
+  const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
 
@@ -206,6 +216,35 @@ export default function TitleDetails() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const safeTitleId = String(item?.id ?? localMatch?.id ?? cleanId).trim();
+
+    if (!safeTitleId) {
+      setEngagementState(null);
+      setEngagementLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setEngagementLoading(true);
+    readTitleEngagementState(safeTitleId)
+      .then((nextState) => {
+        if (active) setEngagementState(nextState);
+      })
+      .catch(() => {
+        if (active) setEngagementState(null);
+      })
+      .finally(() => {
+        if (active) setEngagementLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [cleanId, item?.id, localMatch?.id]);
 
   const title = useMemo(() => item ?? localFallbackTitle, [item, localFallbackTitle]);
 
@@ -317,6 +356,44 @@ export default function TitleDetails() {
       setMyListIds(ids);
     } finally {
       setMyListBusy(false);
+    }
+  };
+
+  const onToggleLike = async () => {
+    if (!titleId || engagementBusy) return;
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in to like titles on Chi'llywood.");
+      return;
+    }
+
+    setEngagementBusy("like");
+    try {
+      const nextState = await toggleTitleLike(titleId);
+      setEngagementState(nextState);
+    } catch {
+      Alert.alert("Like unavailable", "Unable to update this title like right now.");
+    } finally {
+      setEngagementBusy(null);
+    }
+  };
+
+  const onToggleShare = async () => {
+    if (!titleId || engagementBusy) return;
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in to mark titles as shared on Chi'llywood.");
+      return;
+    }
+
+    setEngagementBusy("share");
+    try {
+      const nextState = engagementState?.shared
+        ? await clearTitleShare(titleId)
+        : await markTitleShared(titleId);
+      setEngagementState(nextState);
+    } catch {
+      Alert.alert("Share unavailable", "Unable to update this shared-title state right now.");
+    } finally {
+      setEngagementBusy(null);
     }
   };
 
@@ -446,6 +523,14 @@ export default function TitleDetails() {
       label: isPremiumTitle ? "Premium title" : "Open title",
       tone: isPremiumTitle ? "premium" as const : "default" as const,
     },
+    ...(engagementState?.liked ? [{
+      label: "Liked",
+      tone: "default" as const,
+    }] : []),
+    ...(engagementState?.shared ? [{
+      label: "Shared",
+      tone: "default" as const,
+    }] : []),
     ...(inMyList ? [{
       label: "In Favorites",
       tone: "default" as const,
@@ -556,6 +641,26 @@ export default function TitleDetails() {
 
             <Pressable style={styles.btnGhost} onPress={onToggleMyList} disabled={myListBusy}>
               <Text style={styles.btnText}>{inMyList ? "✓ Favorites" : "+ Favorites"}</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.btnGhost, engagementState?.liked && styles.btnGhostActive]}
+              onPress={onToggleLike}
+              disabled={engagementLoading || engagementBusy !== null}
+            >
+              <Text style={[styles.btnText, engagementState?.liked && styles.btnTextActive]}>
+                {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.btnGhost, engagementState?.shared && styles.btnGhostActive]}
+              onPress={onToggleShare}
+              disabled={engagementLoading || engagementBusy !== null}
+            >
+              <Text style={[styles.btnText, engagementState?.shared && styles.btnTextActive]}>
+                {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
+              </Text>
             </Pressable>
 
             <Pressable
@@ -775,7 +880,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: 4,
   },
-  actions: { flexDirection: "row", gap: 12, marginTop: 14, marginBottom: 12 },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 14, marginBottom: 12 },
   btnPrimary: {
     backgroundColor: ACCENT,
     paddingVertical: 12,
@@ -794,7 +899,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
+  btnGhostActive: {
+    borderColor: "rgba(243,75,116,0.4)",
+    backgroundColor: "rgba(243,75,116,0.14)",
+  },
   btnText: { color: "white", fontWeight: "900", fontSize: 16 },
+  btnTextActive: { color: "#FFE1E7" },
   sectionTitle: { color: "white", fontSize: 18, fontWeight: "900", marginTop: 14 },
   body: { color: "rgba(255,255,255,0.85)", marginTop: 6, lineHeight: 20 },
 });
