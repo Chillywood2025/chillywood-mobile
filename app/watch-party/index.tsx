@@ -772,21 +772,21 @@ export default function WatchPartyIndexScreen() {
     : (String(branding.partyWaitingRoomTitle || "Party Waiting Room").trim() || "Party Waiting Room");
   const waitingRoomBody = isLiveWaitingRoom
     ? (topRoomCode
-      ? `Pre-entry live control room · code ${topRoomCode}`
+      ? `Live room code ${topRoomCode} is ready for entry.`
       : isPreparingInitialCode
-        ? "Preparing a room code and live handoff before the room opens."
+        ? "Preparing the live room code before entry opens."
         : didInitialCodePrepFail
           ? "Live room code unavailable right now. Generate a new code to continue."
-          : "Choose the host or viewer lane, set the live entry, and then move into Live Room before stage entry.")
+          : "Choose host or viewer, then continue into Live Room.")
     : (topRoomCode
-      ? `${partyTitleName} · pre-entry party control room · code ${topRoomCode}`
+      ? `${partyTitleName} · room code ${topRoomCode}`
       : isPreparingInitialCode
-        ? "Preparing a room code for this party waiting room."
+        ? "Preparing the party room code before entry opens."
         : didInitialCodePrepFail
           ? "Room code unavailable right now. Generate a new code to continue."
           : partyTitleId
-            ? `${partyTitleName} · title-first room setup before shared playback.`
-            : "Choose the title, room code, and entry lane before Party Room opens.");
+            ? `${partyTitleName} is locked for party entry.`
+            : "Pick a title or join by code, then continue into Party Room.");
   const waitingRoomTagline = isLiveWaitingRoom
     ? "Set the live room before stage entry."
     : "Set the party room before shared playback.";
@@ -795,30 +795,6 @@ export default function WatchPartyIndexScreen() {
   const waitingRoomInviteMessage = isLiveWaitingRoom
     ? `Join me in a Chi'llywood live room.\n\nRoom code: ${topRoomCode}\n\nOpen Chi'llywood -> Live Watch-Party -> enter the code to join the live room.`
     : `Join me in Chi'llywood Watch-Party Live.\n\nRoom code: ${topRoomCode}\n\nOpen Chi'llywood -> Watch-Party Live -> enter the code to join the party room.`;
-  const liveJoinModes = [
-    {
-      id: "host",
-      title: "Host control lane",
-      body: "Create the live room code here, invite the room, and carry those defaults into Live Room.",
-    },
-    {
-      id: "viewer",
-      title: "Viewer entry lane",
-      body: "Join with the live code here, confirm the room path, and then enter Live Room before stage presentation starts.",
-    },
-  ];
-  const partyEntryModes = [
-    {
-      id: "host",
-      title: "Host control lane",
-      body: "Lock the title, generate the room code, and carry the room defaults into Party Room before playback begins.",
-    },
-    {
-      id: "viewer",
-      title: "Viewer entry lane",
-      body: "Join with the party code here, confirm the title, and then enter Party Room before shared Watch-Party Live starts.",
-    },
-  ];
   const liveReadinessRows = [
     {
       label: "Invite path",
@@ -850,13 +826,6 @@ export default function WatchPartyIndexScreen() {
     },
   ];
   const livePermissionsBody = `${getJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
-  const liveSmartHelper = topRoomCode
-    ? "Your live room code is ready. Share it here, then use Live Room for focus order, audience visibility, and the handoff into Live Stage."
-    : isPreparingInitialCode
-      ? "Stay here while Chi'llywood prepares the live code. This surface only handles pre-entry live setup."
-      : didInitialCodePrepFail
-        ? "Generate a fresh code before inviting people. Live Room cannot open without a valid live room code."
-        : "Choose the host or viewer lane here, then let Live Room handle the room defaults before stage entry.";
   const partyReadinessRows = [
     {
       label: "Title",
@@ -890,28 +859,6 @@ export default function WatchPartyIndexScreen() {
     },
   ];
   const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
-  const partySmartHelper = topRoomCode
-    ? "Your party room code is ready. Share it here, then use Party Room for visibility, privacy, and watch-together setup before shared playback starts."
-    : partyTitleId
-      ? "The title is locked in. Create the party when you are ready, or use a valid room code to open Party Room first."
-      : "Pick or confirm the title here, then let Party Room handle the room setup before shared playback begins.";
-  const roomExperienceList = isLiveWaitingRoom
-    ? [
-        "Pre-entry live identity",
-        "Host or viewer join choice",
-        "Signed-in live access check",
-        "Invite-ready room code",
-        "Visibility and control guidance",
-        "Live Room handoff only",
-      ]
-    : [
-        "Title-first entry",
-        "Create or join split",
-        "Invite-ready room code",
-        "Access-state explanation",
-        "Host and room identity",
-        "Party Room handoff only",
-      ];
 
   return (
     <View style={styles.outerFlex}>
@@ -965,30 +912,151 @@ export default function WatchPartyIndexScreen() {
           <Text style={styles.roomIdentityBody}>{waitingRoomBody}</Text>
         </View>
 
+        {/* ── Actions ─────────────────────────────────────────────────── */}
+        <View style={styles.actionArea}>
+          <Text style={styles.actionAreaLabel}>ENTRY CONTROLS</Text>
+
+          {!features.watchPartyEnabled ? (
+            <View style={styles.joinCard}>
+              <Text style={styles.joinLabel}>WATCH PARTY HIDDEN</Text>
+              <Text style={styles.roomIdentityBody}>
+                Watch Party creation and room entry are currently disabled in app configuration.
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.joinCard}>
+            <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "HOST THIS LIVE SESSION" : "HOST THIS WATCH-PARTY"}</Text>
+            {isLiveWaitingRoom ? (
+              <Text style={styles.joinSupportText}>
+                Create the live room here, keep the code handy, and continue into Live Room as host.
+              </Text>
+            ) : partyTitleLocked ? (
+              <Text style={styles.joinSupportText}>
+                {partyTitleName} is locked for this entry. Create the room here, share the code, and finish setup inside Party Room.
+              </Text>
+            ) : (
+              <TextInput
+                value={createTitleId}
+                onChangeText={(t) => {
+                  setCreateTitleId(t.trim());
+                  setCreateError(null);
+                }}
+                placeholder="Linked title (optional)"
+                placeholderTextColor="#5A5A5A"
+                style={styles.input}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!creating}
+                returnKeyType="go"
+                onSubmitEditing={onCreateRoom}
+              />
+            )}
+            {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
+            <TouchableOpacity
+              style={[styles.primaryButton, createActionBusy && styles.primaryButtonDisabled]}
+              onPress={onCreateRoom}
+              activeOpacity={0.85}
+              disabled={createActionBusy || !features.watchPartyEnabled}
+            >
+              {createActionBusy ? (
+                <View style={styles.lookingRow}>
+                  <ActivityIndicator color="#fff" size="small" />
+                  <Text style={styles.primaryButtonText}>
+                    {creating ? "  Creating room…" : "  Preparing room…"}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.primaryButtonText}>{isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.joinCard}>
+            <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "JOIN A LIVE ROOM" : "JOIN WATCH-PARTY LIVE"}</Text>
+            {isLiveWaitingRoom ? (
+              <Text style={styles.joinSupportText}>
+                Enter a live room code to preview the live lane and join Live Room before stage mode takes over.
+              </Text>
+            ) : (
+              <Text style={styles.joinSupportText}>
+                Enter a watch-party room code to preview the title and join Party Room before shared playback starts.
+              </Text>
+            )}
+
+            {preview ? (
+              <View style={styles.previewBox}>
+                <View style={styles.previewMeta}>
+                  <View style={[styles.previewDot, { backgroundColor: preview.room.playbackState === "playing" ? "#2ecc40" : "#b58900" }]} />
+                  <Text style={styles.previewStatus}>
+                    {preview.room.playbackState === "playing" ? "Playing" : "Paused"}
+                  </Text>
+                </View>
+                <Text style={styles.previewTitle} numberOfLines={2}>
+                  {getWaitingRoomPreviewTitle(preview)}
+                </Text>
+                <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
+                <View style={styles.previewActions}>
+                  <TouchableOpacity style={styles.joinNowBtn} onPress={onConfirmJoin} activeOpacity={0.88}>
+                    <Text style={styles.joinNowBtnText}>Join Now →</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={onClearPreview} activeOpacity={0.75}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <>
+                <TextInput
+                  value={joinCode}
+                  onChangeText={(t) => {
+                    setJoinCode(t.toUpperCase());
+                    setJoinError(null);
+                  }}
+                  placeholder="Enter room code"
+                  placeholderTextColor="#5A5A5A"
+                  style={styles.input}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={onLookup}
+                  editable={!joinLookupBusy}
+                />
+
+                {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, (joinLookupBusy || !joinCode.trim()) && styles.primaryButtonDisabled]}
+                  onPress={onLookup}
+                  activeOpacity={0.85}
+                  disabled={joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled}
+                >
+                  {joinLookupBusy ? (
+                    <View style={styles.lookingRow}>
+                      <ActivityIndicator color="#fff" size="small" />
+                      <Text style={styles.primaryButtonText}>  Looking up room…</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Find Room</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+
         {isLiveWaitingRoom ? (
           <>
             <View style={styles.liveContextCard}>
               <Text style={styles.liveContextLabel}>LIVE ENTRY</Text>
               <Text style={styles.liveContextTitle}>
-                {topRoomCode ? "Your live entry stays pre-stage here." : "Open the live room before Live Stage takes over."}
+                {topRoomCode ? "Your live entry stays pre-stage here." : "Set the live lane here, then continue."}
               </Text>
               <Text style={styles.liveContextBody}>
                 {topRoomCode
-                  ? "This surface only handles room code, entry lane, and access context. Live Room owns the actual room controls, and Live Stage stays separate after that."
-                  : "Live Waiting Room prepares the entry lane, code, and access path. Live Room and Live Stage stay separate until you continue."}
+                  ? "Use the controls above to host or join. Live Room owns the actual room once you continue."
+                  : "This screen handles the entry lane and room code. Live Room and Live Stage stay separate after that."}
               </Text>
-            </View>
-
-            <View style={styles.modeChoiceCard}>
-              <Text style={styles.modeChoiceLabel}>ENTRY LANES</Text>
-              <View style={styles.modeChoiceRow}>
-                {liveJoinModes.map((entry) => (
-                  <View key={entry.id} style={styles.modeChoicePane}>
-                    <Text style={styles.modeChoiceTitle}>{entry.title}</Text>
-                    <Text style={styles.modeChoiceBody}>{entry.body}</Text>
-                  </View>
-                ))}
-              </View>
             </View>
 
             <View style={styles.readinessCard}>
@@ -1017,11 +1085,6 @@ export default function WatchPartyIndexScreen() {
                 {livePermissionsBody}
               </Text>
             </View>
-
-            <View style={styles.smartHelperCard}>
-              <Text style={styles.smartHelperLabel}>NEXT ROOM</Text>
-              <Text style={styles.smartHelperBody}>{liveSmartHelper}</Text>
-            </View>
           </>
         ) : (
           <>
@@ -1030,23 +1093,11 @@ export default function WatchPartyIndexScreen() {
               <Text style={styles.partyContextTitle}>{partyTitleName}</Text>
               <Text style={styles.partyContextBody}>
                 {topRoomCode
-                  ? "This waiting room keeps title preview, access, and room-entry choice clear before Party Room and shared playback begin."
+                  ? "Use the controls above to host or join. Party Room handles the actual room once you continue."
                   : partyTitleId
-                    ? "Confirm the title, choose the host or viewer lane, and then move into Party Room when you are ready."
-                    : "Pick the title first so the watch-together entry stays social, intentional, and title-driven."}
+                    ? "Confirm the title here, then move into Party Room when you are ready."
+                    : "Pick the title first, then host or join by code."}
               </Text>
-            </View>
-
-            <View style={styles.modeChoiceCard}>
-              <Text style={styles.modeChoiceLabel}>ENTRY LANES</Text>
-              <View style={styles.modeChoiceRow}>
-                {partyEntryModes.map((entry) => (
-                  <View key={entry.id} style={styles.modeChoicePane}>
-                    <Text style={styles.modeChoiceTitle}>{entry.title}</Text>
-                    <Text style={styles.modeChoiceBody}>{entry.body}</Text>
-                  </View>
-                ))}
-              </View>
             </View>
 
             <View style={styles.readinessCard}>
@@ -1074,11 +1125,6 @@ export default function WatchPartyIndexScreen() {
               <Text style={styles.permissionsBody}>
                 {partyPermissionsBody}
               </Text>
-            </View>
-
-            <View style={styles.partyHelperCard}>
-              <Text style={styles.partyHelperLabel}>NEXT ROOM</Text>
-              <Text style={styles.partyHelperBody}>{partySmartHelper}</Text>
             </View>
           </>
         )}
@@ -1126,151 +1172,6 @@ export default function WatchPartyIndexScreen() {
           )}
         </TouchableOpacity>
 
-        {/* ── Actions ─────────────────────────────────────────────────── */}
-        <View style={styles.actionArea}>
-          <Text style={styles.actionAreaLabel}>ENTRY CONTROLS</Text>
-
-          {!features.watchPartyEnabled ? (
-            <View style={styles.joinCard}>
-              <Text style={styles.joinLabel}>WATCH PARTY HIDDEN</Text>
-              <Text style={styles.roomIdentityBody}>
-                Watch Party creation and room entry are currently disabled in app configuration.
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={styles.joinCard}>
-            <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "HOST THIS LIVE SESSION" : "HOST THIS WATCH-PARTY"}</Text>
-            {isLiveWaitingRoom ? (
-              <Text style={styles.joinSupportText}>
-                Create the live room here, keep the room code handy, and then carry your room defaults into Live Room as host.
-              </Text>
-            ) : partyTitleLocked ? (
-              <Text style={styles.joinSupportText}>
-                {partyTitleName} is locked for this entry. Create the room here, share the code, and then shape the room inside Party Room before shared playback starts.
-              </Text>
-            ) : (
-              <TextInput
-                value={createTitleId}
-                onChangeText={(t) => {
-                  setCreateTitleId(t.trim());
-                  setCreateError(null);
-                }}
-                placeholder="Linked title (optional)"
-                placeholderTextColor="#5A5A5A"
-                style={styles.input}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!creating}
-                returnKeyType="go"
-                onSubmitEditing={onCreateRoom}
-              />
-            )}
-            {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
-            <TouchableOpacity
-              style={[styles.primaryButton, createActionBusy && styles.primaryButtonDisabled]}
-              onPress={onCreateRoom}
-              activeOpacity={0.85}
-              disabled={createActionBusy || !features.watchPartyEnabled}
-            >
-              {createActionBusy ? (
-                <View style={styles.lookingRow}>
-                  <ActivityIndicator color="#fff" size="small" />
-                  <Text style={styles.primaryButtonText}>
-                    {creating ? "  Creating room…" : "  Preparing room…"}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.primaryButtonText}>{isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.joinCard}>
-            <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "JOIN A LIVE ROOM" : "JOIN WATCH-PARTY LIVE"}</Text>
-            {isLiveWaitingRoom ? (
-              <Text style={styles.joinSupportText}>
-                Enter a live room code to preview the live lane and join Live Room before any stage mode takes over.
-              </Text>
-            ) : (
-              <Text style={styles.joinSupportText}>
-                Enter a watch-party room code to preview the title and join Party Room without crossing into the live route.
-              </Text>
-            )}
-
-            {preview ? (
-              /* ── Room preview (found) ─────────────────────────────────── */
-              <View style={styles.previewBox}>
-                <View style={styles.previewMeta}>
-                  <View style={[styles.previewDot, { backgroundColor: preview.room.playbackState === "playing" ? "#2ecc40" : "#b58900" }]} />
-                  <Text style={styles.previewStatus}>
-                    {preview.room.playbackState === "playing" ? "Playing" : "Paused"}
-                  </Text>
-                </View>
-                <Text style={styles.previewTitle} numberOfLines={2}>
-                  {getWaitingRoomPreviewTitle(preview)}
-                </Text>
-                <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
-                <View style={styles.previewActions}>
-                  <TouchableOpacity style={styles.joinNowBtn} onPress={onConfirmJoin} activeOpacity={0.88}>
-                    <Text style={styles.joinNowBtnText}>Join Now →</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.cancelBtn} onPress={onClearPreview} activeOpacity={0.75}>
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              /* ── Code entry ───────────────────────────────────────────── */
-              <>
-                <TextInput
-                  value={joinCode}
-                  onChangeText={(t) => {
-                    setJoinCode(t.toUpperCase());
-                    setJoinError(null);
-                  }}
-                  placeholder="Enter room code"
-                  placeholderTextColor="#5A5A5A"
-                  style={styles.input}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  returnKeyType="go"
-                  onSubmitEditing={onLookup}
-                  editable={!joinLookupBusy}
-                />
-
-                {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, (joinLookupBusy || !joinCode.trim()) && styles.primaryButtonDisabled]}
-                  onPress={onLookup}
-                  activeOpacity={0.85}
-                  disabled={joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled}
-                >
-                  {joinLookupBusy ? (
-                    <View style={styles.lookingRow}>
-                      <ActivityIndicator color="#fff" size="small" />
-                      <Text style={styles.primaryButtonText}>  Looking up room…</Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Find Room</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-
-        {/* ── Room experience list ───────────────────────────────────── */}
-        <View style={styles.featuresCard}>
-          <Text style={styles.featuresTitle}>ROOM EXPERIENCE</Text>
-          {roomExperienceList.map((label) => (
-            <View key={label} style={styles.featureRow}>
-              <Text style={styles.featureDot}>●</Text>
-              <Text style={styles.featureLabel}>{label}</Text>
-            </View>
-          ))}
-        </View>
         </ScrollView>
       </KeyboardAvoidingView>
       {accessSheetReason ? (
