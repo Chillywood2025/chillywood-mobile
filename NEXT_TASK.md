@@ -1,14 +1,14 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the creator monetization / ad-readiness closeout audit on `app/channel-settings.tsx`. Do not auto-open Google Play readiness, OVH, database-move, or fake public ad-rollout work.
+There is no immediate narrow follow-up on the creator monetization / ad-readiness control lane now. Keep the lane closed cleanly, and only reopen monetization/ad work through an intentionally chosen broader doctrine-controlled chapter.
 
 ## Current Plan
-1. Treat the behavior/social consistency lane and the broader player architecture chapter as closed enough to move on.
+1. Treat the creator monetization / ad-readiness control lane as closed cleanly.
 2. Preserve the landed deferred-access trust fix on `components/monetization/access-sheet.tsx`.
-3. Carry forward the current truthful social baseline on profile, chat, title, player, and watch-party owners unchanged.
-4. Keep ads doctrine explicit: no current public route is honestly ads-ready yet.
-5. Use the next pass to close the lane honestly now that the current-grants summary and default-control wording are both tighter.
+3. Preserve the clearer creator-grants / ad-readiness summary and creator-facing default labels on `/channel-settings`.
+4. Carry forward the current truthful social baseline on profile, chat, title, player, and watch-party owners unchanged.
+5. Keep ads doctrine explicit: no current public route is honestly ads-ready yet.
 6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
@@ -17,13 +17,14 @@ Run the creator monetization / ad-readiness closeout audit on `app/channel-setti
 - preserve the clearer current-grants / ad-readiness summary in `Access & Monetization`
 - preserve the creator-facing watch-party and communication default labels without widening into a broader monetization rewrite
 - do not invent fake ads, fake monetization powers, Google Play readiness work, OVH work, or database-move work
+- do not auto-open another narrow `/channel-settings` monetization patch now that this lane is closed
 - keep self-view, official view, pending/request states, public friend counts, public friend lists, and universal comments later
 - keep creator/public, admin/owner, and route/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
- - preserve `/player/[id].tsx`, `/title/[id]`, `/profile/[userId].tsx`, `/watch-party/index.tsx`, `/watch-party/[partyId].tsx`, `/channel-settings`, and the canonical chat owners while creator-side monetization/ad-readiness truth is clarified
+ - preserve `/player/[id].tsx`, `/title/[id]`, `/profile/[userId].tsx`, `/watch-party/index.tsx`, `/watch-party/[partyId].tsx`, `/channel-settings`, and the canonical chat owners while monetization/ad-readiness truth stays grounded
  - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
  - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
  - keep the current social baseline settled while monetization/access/ad-readiness truth stays grounded
@@ -49,7 +50,7 @@ The next lane is successful when:
 - the shared deferred-access sheet no longer reads like an internal testing/store-readiness surface
 - `/channel-settings` makes current creator monetization grants clearer without promising live ads or broader monetization rollout
 - watch-party and communication default controls stop reading like raw internal enum values
-- the next step cleanly decides whether any remaining monetization/ad-readiness seam is still safe or should stay later
+- the lane stays closed until a broader monetization/ad doctrine chapter is intentionally chosen
 - public/profile/chat/title/player routes still make no fake social claims
 - no route drift or fake social claims are introduced
 - the staged set stays task-pure
