@@ -946,12 +946,9 @@ export default function ChillyChatThreadScreen() {
       >
         <View style={styles.composerAffordanceRow}>
           <View style={styles.composerAffordanceChip}>
-            <Text style={styles.composerAffordanceText}>Attach</Text>
+            <Text style={styles.composerAffordanceText}>Text only</Text>
           </View>
-          <View style={styles.composerAffordanceChip}>
-            <Text style={styles.composerAffordanceText}>React</Text>
-          </View>
-          <Text style={styles.composerAssistText}>Text send is live now. Media and reactions land next.</Text>
+          <Text style={styles.composerAssistText}>Text send is live now. Voice and video still start from this thread. Media and reactions are not live yet.</Text>
         </View>
         <GatedSmartReplySuggestions
           activeCallType={thread?.activeCallType}

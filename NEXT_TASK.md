@@ -1,30 +1,28 @@
 # NEXT TASK
 
 ## Exact Next Task
-The current v1 polish/workflow pass is now two batches in. Stage 1 and Stage 2 are closed on `main`: `/profile/[userId]` and `/title/[id]` no longer expose the discovery-to-room mismatch, and `app/watch-party/index.tsx` no longer buries the create/join job under lane teaching walls and room-experience filler. Route ownership is unchanged, doctrine is unchanged, and the next exact product lane is now a narrow **chat-thread affordance honesty** pass on `app/chat/[threadId].tsx`. That next pass should make the thread composer promise only what is actually live now while keeping text send intact.
+The current v1 polish/workflow pass is now three batches in. Stage 1, Stage 2, and Stage 3 are closed on `main`: public social-entry honesty is fixed, the watch-party lobby is materially lighter, and the canonical thread composer no longer pretends attachments or reactions are already live. Route ownership is unchanged, doctrine is unchanged, and there is only one clearly justified trivial polish slice left in this lane: a narrow **home reserved-area tone-down** pass on `app/(tabs)/index.tsx`. That pass should keep the current layout intact and only make the `Chi'llywood Originals` placeholder feel less visibly unfinished.
 
 ## Current Plan
 1. Re-read `CURRENT_STATE.md`, `NEXT_TASK.md`, `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `PRODUCT_DOCTRINE.md`, `ROOM_BLUEPRINT.md`, and the active whole-app audit findings first.
-2. Treat Stage 1 and Stage 2 as closed: public social-entry honesty and watch-party lobby compression now match current route truth.
-3. Keep the next active owner strictly on `app/chat/[threadId].tsx`.
-4. Remove or downgrade fake-looking composer affordances without inventing attachments or reactions.
-5. Keep the text-send flow intact and keep the route structure untouched.
-6. Keep route ownership, schema, and doctrine unchanged.
-7. After the chat-thread honesty pass, decide whether one final trivial v1 polish slice is worth doing or whether the lane should close.
+2. Treat Stage 1, Stage 2, and Stage 3 as closed: public social-entry honesty, watch-party lobby compression, and chat-thread composer honesty now match current route truth.
+3. Keep the next active owner strictly on `app/(tabs)/index.tsx`.
+4. Tone down the obviously unfinished reserved-area copy without changing Home layout or opening a broader polish chapter.
+5. Keep the current layout structure, route ownership, schema, and doctrine unchanged.
+6. After that trivial Home pass, close the v1 polish/workflow lane unless a blocker appears.
 
 ## Exact Next Batch
-- tighten `app/chat/[threadId].tsx` only
-- make the composer visually honest about what is live now
-- remove, hide, or downgrade unsupported attachment/reaction affordances
-- preserve the real text-send thread flow
+- tighten `app/(tabs)/index.tsx` only
+- tone down the unfinished-feeling `Chi'llywood Originals` placeholder copy
+- preserve the current Home layout and current discovery structure
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
-- preserve current product route truth and current room doctrine
-- focus only on the canonical thread owner
-- improve trust in the composer without widening into chat redesign
-- leave Stage 1 and Stage 2 fixes intact
+- preserve current product route truth and current Home structure
+- focus only on the lower reserved-area copy in Home
+- improve perceived polish without widening into broader Home redesign
+- leave Stages 1 through 3 intact
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
@@ -32,13 +30,12 @@ Do not:
 - change current public/product route truth
 - change schema or doctrine
 - redesign the app from scratch
-- widen into player, watch-party, admin, infra, or database work
-- invent attachments, reactions, or new chat systems
+- widen into profile, title, watch-party, chat, player, admin, infra, or database work
+- redesign Home or invent new content for the reserved rail
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the visible thread composer actions are honest about what is actually live
-- text send remains fully real
+- the Home reserved area feels intentional instead of visibly unfinished
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure
