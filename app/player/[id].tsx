@@ -4941,79 +4941,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
   },
-  watchPartyContextCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(8,8,12,0.42)",
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    marginBottom: 6,
-    gap: 7,
-  },
-  watchPartyContextHeaderRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  watchPartyContextCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  watchPartyContextKicker: {
-    color: "#F0C8D2",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-  },
-  watchPartyContextTitle: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  watchPartyContextBody: {
-    color: "#D3D7E3",
-    fontSize: 11.5,
-    fontWeight: "600",
-    lineHeight: 16,
-  },
-  watchPartyContextBtn: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.56)",
-    backgroundColor: "rgba(220,20,60,0.18)",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  watchPartyContextBtnText: {
-    color: "#FFF5F7",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  watchPartyContextMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  watchPartyContextMetaPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  watchPartyContextMetaText: {
-    color: "#EDF0F7",
-    fontSize: 10.5,
-    fontWeight: "800",
-  },
-  watchPartyContextHelper: {
-    color: "#BFC4D2",
-    fontSize: 10.5,
-    fontWeight: "700",
-    lineHeight: 15,
-  },
   text: { color: "#D6D6D6", fontSize: 14, marginBottom: 10 },
 
   videoWrap: {
@@ -5603,11 +5530,6 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     gap: 4,
   },
-  compactUtilityRow: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
   compactChip: {
     borderRadius: 999,
     borderWidth: 1,
@@ -5630,31 +5552,6 @@ const styles = StyleSheet.create({
   },
   standaloneSocialHandoffBtn: {
     alignSelf: "flex-end",
-  },
-  compactSpeedMenuRow: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  compactSpeedChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  compactSpeedChipActive: {
-    borderColor: "rgba(220,20,60,0.64)",
-    backgroundColor: "rgba(220,20,60,0.24)",
-  },
-  compactSpeedChipText: {
-    color: "#D6DAE5",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  compactSpeedChipTextActive: {
-    color: "#fff",
   },
   compactActionRow: {
     flexDirection: "row",
@@ -5871,9 +5768,6 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: 10,
   },
-  watchPartyPlayerBandHeader: {
-    paddingHorizontal: 4,
-  },
   watchPartyPlayerBandMeta: {
     flex: 1,
     gap: 3,
@@ -5884,72 +5778,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1,
   },
-  watchPartyPlayerBandBody: {
-    color: "#E7EBF6",
-    fontSize: 11.5,
-    fontWeight: "700",
-  },
   watchPartyPlayerBandSubtle: {
     color: "#AEB4C6",
     fontSize: 10.5,
     fontWeight: "700",
-  },
-  watchPartyPlayerBandBtn: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.56)",
-    backgroundColor: "rgba(220,20,60,0.18)",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  watchPartyPlayerBandBtnText: {
-    color: "#FFF5F7",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  watchPartyLiveKitCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(132, 205, 255, 0.24)",
-    backgroundColor: "rgba(8, 12, 22, 0.86)",
-    padding: 10,
-    gap: 8,
-  },
-  watchPartyLiveKitCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  watchPartyLiveKitCardCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  watchPartyLiveKitCardKicker: {
-    color: "#8FD7FF",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-  watchPartyLiveKitCardTitle: {
-    color: "#F4F7FF",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  watchPartyLiveKitCardRole: {
-    color: "#D9EEF9",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-  watchPartyLiveKitCardSurface: {
-    height: 132,
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#05070E",
-  },
-  watchPartyLiveKitCardSurfaceInner: {
-    flex: 1,
   },
   watchPartySocialShell: {
     borderRadius: 18,
@@ -5970,12 +5802,6 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 10,
-  },
-  watchPartySocialMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 8,
   },
   watchPartySocialMetaPill: {
     borderRadius: 999,
