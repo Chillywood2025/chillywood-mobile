@@ -7,6 +7,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
+    Alert,
     ActivityIndicator,
     Animated,
     Easing,
@@ -45,6 +46,14 @@ import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boun
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
+import {
+    clearTitleShare,
+    markTitleShared,
+    readTitleEngagementState,
+    toggleTitleLike,
+    type TitleEngagementState,
+} from "../../_lib/contentEngagement";
+import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import type { Tables } from "../../supabase/database.types";
 import {
@@ -375,6 +384,7 @@ const touchDistance = (touches: readonly { pageX: number; pageY: number }[]) => 
 };
 
 export default function PlayerScreen() {
+  const { isSignedIn } = useSession();
   const { id, partyId: partyIdParam, liveMode: liveModeParam } = useLocalSearchParams<{
     id?: string;
     partyId?: string | string[];
@@ -428,6 +438,9 @@ export default function PlayerScreen() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [myListIds, setMyListIds] = useState<string[]>([]);
   const [myListBusy, setMyListBusy] = useState(false);
+  const [engagementState, setEngagementState] = useState<TitleEngagementState | null>(null);
+  const [engagementLoading, setEngagementLoading] = useState(false);
+  const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
@@ -702,6 +715,34 @@ export default function PlayerScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (inWatchParty || isLiveModeFlag || !titleId) {
+      setEngagementState(null);
+      setEngagementLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setEngagementLoading(true);
+    readTitleEngagementState(titleId)
+      .then((nextState) => {
+        if (active) setEngagementState(nextState);
+      })
+      .catch(() => {
+        if (active) setEngagementState(null);
+      })
+      .finally(() => {
+        if (active) setEngagementLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [inWatchParty, isLiveModeFlag, titleId]);
 
   useEffect(() => {
     let active = true;
@@ -2306,6 +2347,48 @@ export default function PlayerScreen() {
       setMyListBusy(false);
     }
   }, [item?.poster_url, item?.thumbnail_url, item?.title, myListBusy, titleId]);
+
+  const onToggleStandaloneLike = useCallback(async () => {
+    if (!titleId || engagementBusy) return;
+    resetAutoHideTimer();
+
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in to like titles on Chi'llywood.");
+      return;
+    }
+
+    setEngagementBusy("like");
+    try {
+      const nextState = await toggleTitleLike(titleId);
+      setEngagementState(nextState);
+    } catch {
+      Alert.alert("Like unavailable", "Unable to update this title like right now.");
+    } finally {
+      setEngagementBusy(null);
+    }
+  }, [engagementBusy, isSignedIn, resetAutoHideTimer, titleId]);
+
+  const onToggleStandaloneShare = useCallback(async () => {
+    if (!titleId || engagementBusy) return;
+    resetAutoHideTimer();
+
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in to mark titles as shared on Chi'llywood.");
+      return;
+    }
+
+    setEngagementBusy("share");
+    try {
+      const nextState = engagementState?.shared
+        ? await clearTitleShare(titleId)
+        : await markTitleShared(titleId);
+      setEngagementState(nextState);
+    } catch {
+      Alert.alert("Share unavailable", "Unable to update this shared-title state right now.");
+    } finally {
+      setEngagementBusy(null);
+    }
+  }, [engagementBusy, engagementState?.shared, isSignedIn, resetAutoHideTimer, titleId]);
 
   const onWatchParty = useCallback(async () => {
     if (!titleId) {
@@ -4661,6 +4744,28 @@ export default function PlayerScreen() {
                         <Text style={styles.partyOverlayChipText}>{isStandaloneFullscreen ? "Exit Full" : "Full"}</Text>
                       </TouchableOpacity>
                     </View>
+                    <View style={styles.standaloneEngagementRow}>
+                      <TouchableOpacity
+                        style={[styles.compactChip, engagementState?.liked && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
+                        onPress={onToggleStandaloneLike}
+                        disabled={engagementLoading || engagementBusy !== null}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={[styles.compactChipText, engagementState?.liked && styles.compactChipTextAccent]}>
+                          {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.compactChip, engagementState?.shared && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
+                        onPress={onToggleStandaloneShare}
+                        disabled={engagementLoading || engagementBusy !== null}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
+                          {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                     <TouchableOpacity
                       style={[styles.compactChip, styles.compactChipAccent, styles.standaloneSocialHandoffBtn]}
                       onPress={onWatchParty}
@@ -5362,6 +5467,10 @@ const styles = StyleSheet.create({
   standaloneUtilityRow: {
     flexDirection: "row",
     gap: 5,
+  },
+  standaloneEngagementRow: {
+    flexDirection: "row",
+    gap: 6,
   },
   partyOverlayChip: {
     borderRadius: 999,
