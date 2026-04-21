@@ -1260,8 +1260,8 @@ export default function ProfileScreen() {
       body: isOfficialProfile
         ? "Official accounts need protected trust markers, bounded reporting, and auditable follow-up."
         : canReportProfile
-          ? "Reporting is already available here, so community trust can grow from a real safety floor."
-          : "Keep this channel identity-first and ready for real public activity when it exists.",
+          ? "Reporting is already available here, so audience posture and community trust can grow from a real safety floor."
+          : "Keep this channel identity-first, socially readable, and ready for real public activity when it exists.",
     },
     ...publicAudienceVisibilitySections,
   ];
@@ -1276,9 +1276,9 @@ export default function ProfileScreen() {
           accent: "official",
         },
         {
-          title: "Public Route",
+          title: "Channel Read",
           kicker: "ABOUT",
-          body: "This official profile stays on the same canonical route as every other channel. Protected behavior is additive, not a separate app.",
+          body: "Verified access, trusted follow-up, and official channel posture stay clear on this canonical route.",
         },
         {
           title: "Starter Thread",
@@ -1290,14 +1290,14 @@ export default function ProfileScreen() {
         {
           title: "Channel Identity",
           kicker: "ABOUT",
-          body: `${profile.displayName} keeps live presence, rooms, and direct follow-up inside one Chi'llywood identity.`,
+          body: `${profile.displayName} keeps live presence, access posture, and direct follow-up inside one Chi'llywood identity.`,
         },
         {
-          title: "Public Route",
+          title: "Channel Read",
           kicker: "CHANNEL",
           body: isSelfProfile
-            ? "Keep this surface public-facing first. Manage Channel stays the deeper editing handoff."
-            : "This route stays a public channel destination, not a settings page or inbox.",
+            ? "Keep this surface public-facing first. Manage Channel stays the deeper editing handoff while access and audience posture stay easy to read here."
+            : "This route stays a public channel destination where access posture, audience cues, and follow-up stay easy to read.",
         },
       ];
   const activeTabSections = activeTab === "home"
@@ -1352,7 +1352,7 @@ export default function ProfileScreen() {
         ? "Live keeps schedule, current status, and watch-together continuity distinct."
         : activeTab === "community"
           ? "Audience posture, follow-up, and trust signals without turning this route into the inbox."
-          : "Identity, trust, and channel context at a glance.";
+          : "Identity, access posture, and trust at a glance.";
   const loadPublicReminderEvents = async () => {
     if (!userId) {
       setPublicEvents([]);

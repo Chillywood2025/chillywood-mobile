@@ -1,18 +1,18 @@
 # NEXT TASK
 
 ## Exact Next Task
-The second public profile/channel access + audience batch is now closed cleanly on `main`. The next exact stage is the `final profile access/audience blend` on `app/profile/[userId].tsx`: make the route feel cohesive now that access and audience posture are both cleaner, with no awkward duplication across the hero, access card, community tab, and about framing.
+The third public profile/channel access + audience batch is now closed cleanly on `main`. The next exact stage is the `lane closeout audit`: decide whether the public profile/channel access + audience lane is complete enough to close cleanly, or whether one final trivial/narrow pass is still honestly justified inside `app/profile/[userId].tsx`.
 
 ## Current Plan
-1. Treat audience surface polish as closed.
-2. Check the remaining overlap between access, community, about, and summary language.
-3. Tighten one final route-owned hierarchy/consistency seam only if it stays narrow.
-4. Skip the batch if the remaining work is already medium or broader.
+1. Treat the final access/audience blend pass as closed.
+2. Audit what this lane fully improved on `/profile/[userId]`.
+3. Separate any remaining trivial/narrow seam from medium or broader work honestly.
+4. Only do one more pass if it is clearly justified and still fully route-owned.
 5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- remove any lingering duplication between access posture and community/audience posture
-- make the route read as one coherent premium public channel surface
+- audit whether any final trivial/narrow profile access/audience cleanup remains
+- close the lane if the remaining seams are already medium or broader
 - keep all public trust, access, and audience truth honest and non-bureaucratic
 - keep creator/public and room/doctrine boundaries intact
 - keep unrelated local dirt out of the checkpoint
@@ -20,7 +20,7 @@ The second public profile/channel access + audience batch is now closed cleanly 
 ## Scope
 This next pass should:
 - preserve `/profile/[userId]` as the canonical public profile/channel route
-- focus on final hierarchy and consistency only on that owner
+- focus on honest lane closeout and next-step grounding only on that owner
 - leave completed account/support/chat/home/title route owners alone
 - keep unrelated local dirt out of the checkpoint
 
@@ -34,7 +34,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- access and audience truth feel like one public channel story instead of adjacent policy blocks
-- the route closes this lane feeling cohesive without route or doctrine drift
+- the route's landed access/audience improvements are clearly recorded
+- any remaining seam is classified honestly as trivial, narrow, medium, or broad/risky
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure
