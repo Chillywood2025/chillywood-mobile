@@ -49,6 +49,9 @@ It means only this:
 The only later bounded slice supported by current repo truth is:
 - public legal pages
 
+Current legal-surface readiness decision:
+- `LEGAL_SURFACE_READY = YES_BOUNDED_STATIC_SLICE`
+
 Current grounded owner files:
 - `app/privacy.tsx`
 - `app/terms.tsx`
@@ -109,11 +112,11 @@ Before any later deployment-prep pass begins, Chi'llywood needs all of the follo
 
 ## 7. Recommended Next Lane
 The next exact infra lane after this doctrine pass should be:
-- narrow `public legal-surface export contract pass`
+- narrow `public legal-surface export prep`
 
 That later lane should decide only:
-- how `privacy`, `terms`, and `account-deletion` would be exported or hosted
-- whether those pages should stay in-app only or gain a bounded Hetzner-hosted static destination
+- how `privacy`, `terms`, and `account-deletion` become hostable static assets
+- what public URLs and Caddy/static-file ownership they would use
 
 That later lane should not:
 - deploy a broader app upstream

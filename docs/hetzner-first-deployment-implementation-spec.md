@@ -260,6 +260,9 @@ Still not justified yet in current repo truth:
 - broader support hosting
 - a public status host
 
+Current legal-surface readiness decision:
+- `LEGAL_SURFACE_READY = YES_BOUNDED_STATIC_SLICE`
+
 But that is secondary to the realtime edge role.
 
 ### 6.3 What Does Not Move In The First Cutover
@@ -455,9 +458,9 @@ This lane still does not include:
 
 ## 15. Next Honest Follow-Up Lane
 Once this prep chapter is accepted, the next real infrastructure follow-up lane should be:
-- narrow `public legal-surface export contract pass`
+- narrow `public legal-surface export prep`
 
 That later lane should decide, but not overclaim:
-- how the existing public legal owners would become hostable static assets, if at all
-- whether those legal pages should stay in-app only or gain a bounded Hetzner-hosted static destination
-- whether broader app-upstream hosting should remain deferred beyond that later slice
+- how the existing public legal owners become hostable static assets
+- what public legal URLs and Caddy/static-file ownership they would use
+- whether deployment is actually worth doing once the export artifact is defined
