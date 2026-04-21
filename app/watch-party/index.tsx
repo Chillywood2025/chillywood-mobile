@@ -445,6 +445,7 @@ export default function WatchPartyIndexScreen() {
   }, [navigateToRoom]);
 
   const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {
+    setJoinError(null);
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
     if (!nextPartyId) {
       setJoinError("Room is missing an id. Try another code.");
@@ -986,6 +987,7 @@ export default function WatchPartyIndexScreen() {
                     <Text style={styles.cancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
+                {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
               </View>
             ) : (
               <>
