@@ -1,20 +1,19 @@
 # NEXT TASK
 
 ## Exact Next Task
-The narrow player simplification lane is now closed cleanly on `main`. The next exact product lane is a broad **player ownership split audit** on `app/player/[id].tsx`. The cleaned-up player now reads more honestly, but the remaining seam is structural rather than cosmetic: one canonical owner still carries too many playback, social, sync, and live responsibilities to treat as another narrow patch.
+The player ownership-simplification pass is now underway on `main`, and Stage 2 is closed cleanly. The next exact stage in this chained lane is **ownership simplification batch 2** on `app/player/[id].tsx`. The player is already less visually room-management-heavy, and the next safe step is to isolate and quiet the remaining mode-specific playback-adjacent layers without reopening route ownership.
 
 ## Current Plan
-1. Treat the narrow standalone access-and-control honesty batch as closed.
-2. Treat the shared playback chrome compression batch as closed.
-3. Treat the live mode hierarchy batch as closed.
-4. Treat the stale player-local cleanup as closed.
-5. Start the next player chapter with an audit of structural ownership inside `app/player/[id].tsx`.
-6. Separate broader player-ownership questions from the completed narrow polish/simplification work.
-7. Leave unrelated local dirt out of the checkpoint.
+1. Keep the active owner on `app/player/[id].tsx`.
+2. Treat Stage 1 player ownership split audit as closed.
+3. Treat Stage 2 host-tools demotion / participant-context cleanup as closed.
+4. Use Stage 3 to isolate the next safest mode-specific playback-adjacent chunk.
+5. Keep the new participant-context summary behavior intact.
+6. Leave unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- audit the remaining structural ownership load inside `app/player/[id].tsx`
-- identify what should stay in the canonical player owner versus what is only crowding it
+- isolate one more mode-specific playback-adjacent chunk inside `app/player/[id].tsx`
+- reduce the remaining “second Party Room / second Live Stage” feel without touching route owners
 - keep the completed standalone/shared/live cleanup behavior intact
 - keep unrelated local dirt out of the checkpoint
 
@@ -22,7 +21,7 @@ The narrow player simplification lane is now closed cleanly on `main`. The next 
 This next pass should:
 - preserve current product route truth and current doctrine
 - stay centered on the canonical player owner first
-- audit structural ownership and mode boundaries before any further implementation
+- keep isolating mode-specific presentation without reopening a broad rewrite
 - leave the completed narrow player cleanup work intact
 - keep unrelated local dirt out of the checkpoint
 
@@ -31,14 +30,14 @@ Do not:
 - change current public/product route truth
 - change schema or doctrine
 - widen into profile/channel, admin, infra, or database work
-- change the canonical owner of profile, title, player, watch-party, live-stage, chat, or channel-settings routes during the audit itself
-- pretend the remaining seam is another tiny cleanup if it is broader
+- change the canonical owner of profile, title, player, watch-party, live-stage, chat, or channel-settings routes
+- turn this stage into a broad player rewrite
 - mix unrelated local dirt into the checkpoint
 
 ## Success Criteria
 The next lane is successful when:
-- the remaining player ownership seam is mapped honestly before broader changes resume
-- no fake narrow follow-up is invented for what is now a broader/risky problem
-- the next exact product lane stays explicit and task-pure
+- the next player-owned layer is isolated or demoted cleanly without doctrine drift
+- the player feels less like it owns full room management inline
+- the next exact stage stays explicit and task-pure
 - no route drift, schema drift, or doctrine drift is introduced
 - the staged set stays task-pure

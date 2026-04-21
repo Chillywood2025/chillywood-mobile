@@ -446,6 +446,7 @@ export default function PlayerScreen() {
   const [, setPartyMessages] = useState<{ id: string; text: string }[]>([]);
   const [partyParticipants, setPartyParticipants] = useState<PartyParticipant[]>([]);
   const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
+  const [activeParticipantToolsId, setActiveParticipantToolsId] = useState<string | null>(null);
   const [activeParticipantIds, setActiveParticipantIds] = useState<string[]>([]);
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
@@ -2881,6 +2882,12 @@ export default function PlayerScreen() {
   }, [activeParticipantId, partyParticipants]);
 
   useEffect(() => {
+    if (!activeParticipantToolsId) return;
+    if (partyParticipants.some((participant) => participant.id === activeParticipantToolsId)) return;
+    setActiveParticipantToolsId(null);
+  }, [activeParticipantToolsId, partyParticipants]);
+
+  useEffect(() => {
     return () => {
       if (livePresenceEventTimeoutRef.current) {
         clearTimeout(livePresenceEventTimeoutRef.current);
@@ -3453,6 +3460,19 @@ export default function PlayerScreen() {
     triggerParticipantReactionBoost,
   ]);
 
+  const onFocusPlayerParticipant = useCallback((participant: PartyParticipant) => {
+    const isHost = partySyncRole === "host";
+    markParticipantActive(participant.id, 2400);
+    bumpRoomEnergy(0.03);
+    if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
+      requestPartySeat().catch(() => {});
+    }
+    if (!isHost) return;
+    const nextParticipantId = activeParticipantId === participant.id ? null : participant.id;
+    setActiveParticipantId(nextParticipantId);
+    setActiveParticipantToolsId(null);
+  }, [activeParticipantId, bumpRoomEnergy, markParticipantActive, partySyncRole, requestPartySeat, trackedUserId]);
+
   const renderParticipantPanel = (liveLayout = false, dockLayout = false) => {
     return (
       <View
@@ -3493,6 +3513,7 @@ export default function PlayerScreen() {
           const isCurrentUser = participant.id === trackedUserId;
           const isHost = partySyncRole === "host";
           const isExpanded = liveLayout && isHost && activeParticipantId === participant.id;
+          const toolsExpanded = isExpanded && activeParticipantToolsId === participant.id;
           const isSpeaking = participant.isSpeaking && participant.canSpeak;
           const isActive = primaryActiveParticipantIds.includes(participant.id);
           const isFeatured = participant.canSpeak && (isActive || activeParticipantId === participant.id) && participant.role !== "host";
@@ -3517,6 +3538,14 @@ export default function PlayerScreen() {
           );
           const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
           const initials = getInitials(participant.name);
+          const participantSeatSummary = isRequesting
+            ? `${participant.id === trackedUserId ? "You" : participant.name} requested mic access.`
+            : participant.canSpeak
+              ? participant.isSpeaking
+                ? `${participant.id === trackedUserId ? "You are" : `${participant.name} is`} live on mic right now.`
+                : `${participant.id === trackedUserId ? "You are" : `${participant.name} is`} seated and ready to speak.`
+              : `${participant.id === trackedUserId ? "You are" : `${participant.name} is`} in the audience layer.`;
+          const participantToolsLabel = isRequesting ? "Review request" : toolsExpanded ? "Hide host tools" : "Host tools";
 
           return (
             <Animated.View
@@ -3563,13 +3592,7 @@ export default function PlayerScreen() {
                   }).start();
                 }}
                 onPress={() => {
-                  markParticipantActive(participant.id, 2400);
-                  bumpRoomEnergy(0.03);
-                  if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
-                    requestPartySeat().catch(() => {});
-                  }
-                  if (!isHost) return;
-                  setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
+                  onFocusPlayerParticipant(participant);
                 }}
                 activeOpacity={0.85}
               >
@@ -3688,161 +3711,196 @@ export default function PlayerScreen() {
               </TouchableOpacity>
 
               {isExpanded ? (
-                <View style={[styles.participantExpandedControls, dockLayout && styles.participantExpandedControlsDock]}>
-                  {isRequesting ? (
-                    <>
+                <>
+                  <View style={[styles.participantExpandedSummary, dockLayout && styles.participantExpandedSummaryDock]}>
+                    <View style={styles.participantExpandedSummaryCopy}>
+                      <Text style={styles.participantExpandedSummaryKicker}>PLAYBACK CONTEXT</Text>
+                      <Text style={styles.participantExpandedSummaryTitle}>
+                        {participant.id === trackedUserId ? "Your seat" : `${participant.name}'s seat`}
+                      </Text>
+                      <Text style={styles.participantExpandedSummaryBody}>{participantSeatSummary}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.partyParticipantControlBtn,
+                        styles.participantToolsToggleBtn,
+                        dockLayout && styles.partyParticipantControlBtnDock,
+                        toolsExpanded && styles.partyParticipantControlBtnActive,
+                      ]}
+                      onPress={() => {
+                        setActiveParticipantToolsId((current) => (current === participant.id ? null : participant.id));
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        style={[
+                          styles.partyParticipantControlBtnText,
+                          toolsExpanded && styles.partyParticipantControlBtnTextActive,
+                        ]}
+                      >
+                        {participantToolsLabel}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {toolsExpanded ? (
+                    <View style={[styles.participantExpandedControls, dockLayout && styles.participantExpandedControlsDock]}>
+                      {isRequesting ? (
+                        <>
+                          <TouchableOpacity
+                            style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
+                            onPress={() => {
+                              suppressNextSpeakingEventRef.current[participant.id] = "start";
+                              setPartyParticipants((prev) =>
+                                prev.map((entry) =>
+                                  entry.id === participant.id
+                                    ? { ...entry, canSpeak: true, stageRole: "speaker", isSpeaking: true, isRequestingToSpeak: false }
+                                    : entry,
+                                ),
+                              );
+                              speakingOrderRef.current = [
+                                ...speakingOrderRef.current.filter((id) => id !== participant.id),
+                                participant.id,
+                              ];
+                              persistPartySeatState(participant.id, {
+                                canSpeak: true,
+                                stageRole: "speaker",
+                                isRequestingToSpeak: false,
+                              }).catch(() => {});
+                              showLivePresenceEvent(`✅ ${participant.name} is now allowed to speak`);
+                              bumpRoomEnergy(0.11);
+                              markParticipantActive(participant.id, 2400);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.partyParticipantControlBtnText}>Approve</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
+                            onPress={() => {
+                              setPartyParticipants((prev) =>
+                                prev.map((entry) =>
+                                  entry.id === participant.id ? { ...entry, isRequestingToSpeak: false } : entry,
+                                ),
+                              );
+                              if (participant.id === trackedUserId) {
+                                syncCurrentPartyPresence({ isRequestingToSpeak: false }).catch(() => {});
+                              }
+                              broadcastPartySeatRequest(participant.id, false).catch(() => {});
+                              showLivePresenceEvent(`❌ ${participant.name} request denied`);
+                              bumpRoomEnergy(0.04);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.partyParticipantControlBtnText}>Deny</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
+
                       <TouchableOpacity
                         style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                         onPress={() => {
-                          suppressNextSpeakingEventRef.current[participant.id] = "start";
+                          setPartyParticipants((prev) => {
+                            const target = prev.find((entry) => entry.id === participant.id);
+                            if (!target) return prev;
+
+                            if (!target.canSpeak) {
+                              return prev;
+                            }
+
+                            const enablingSpeak = !target.isSpeaking;
+                            let nextParticipants = prev.map((entry) =>
+                              entry.id === participant.id ? { ...entry, isSpeaking: enablingSpeak } : entry,
+                            );
+
+                            if (enablingSpeak) {
+                              speakingOrderRef.current = [
+                                ...speakingOrderRef.current.filter((id) => id !== participant.id),
+                                participant.id,
+                              ];
+                            } else {
+                              speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
+                            }
+
+                            const currentlySpeakingIds = nextParticipants
+                              .filter((entry) => entry.canSpeak && entry.isSpeaking)
+                              .map((entry) => entry.id);
+
+                            if (currentlySpeakingIds.length > 2) {
+                              const orderedSpeaking = speakingOrderRef.current.filter((id) => currentlySpeakingIds.includes(id));
+                              const toDropCount = orderedSpeaking.length - 2;
+                              const dropIds = new Set(orderedSpeaking.slice(0, toDropCount));
+
+                              nextParticipants = nextParticipants.map((entry) =>
+                                dropIds.has(entry.id) ? { ...entry, isSpeaking: false } : entry,
+                              );
+                              speakingOrderRef.current = orderedSpeaking.slice(toDropCount);
+                            }
+
+                            bumpRoomEnergy(enablingSpeak ? 0.08 : 0.03);
+
+                            return nextParticipants;
+                          });
+                        }}
+                        disabled={!participant.canSpeak}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.partyParticipantControlBtnText}>
+                          {participant.canSpeak ? (participant.isSpeaking ? "Stop Speaking" : "Start Speaking") : "No Mic Access"}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
+                        onPress={() => {
+                          const nextCanSpeak = !participant.canSpeak;
                           setPartyParticipants((prev) =>
-                            prev.map((entry) =>
-                              entry.id === participant.id
-                                ? { ...entry, canSpeak: true, stageRole: "speaker", isSpeaking: true, isRequestingToSpeak: false }
-                                : entry,
-                            ),
+                            prev.map((entry) => {
+                              if (entry.id !== participant.id) return entry;
+                              return {
+                                ...entry,
+                                canSpeak: nextCanSpeak,
+                                stageRole: nextCanSpeak ? "speaker" : "listener",
+                                isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
+                                isRequestingToSpeak: false,
+                              };
+                            }),
                           );
-                          speakingOrderRef.current = [
-                            ...speakingOrderRef.current.filter((id) => id !== participant.id),
-                            participant.id,
-                          ];
+
                           persistPartySeatState(participant.id, {
-                            canSpeak: true,
-                            stageRole: "speaker",
-                            isRequestingToSpeak: false,
-                          }).catch(() => {});
-                          showLivePresenceEvent(`✅ ${participant.name} is now allowed to speak`);
-                          bumpRoomEnergy(0.11);
-                          markParticipantActive(participant.id, 2400);
-                        }}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyParticipantControlBtnText}>Approve</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
-                        onPress={() => {
-                          setPartyParticipants((prev) =>
-                            prev.map((entry) =>
-                              entry.id === participant.id ? { ...entry, isRequestingToSpeak: false } : entry,
-                            ),
-                          );
-                          if (participant.id === trackedUserId) {
-                            syncCurrentPartyPresence({ isRequestingToSpeak: false }).catch(() => {});
-                          }
-                          broadcastPartySeatRequest(participant.id, false).catch(() => {});
-                          showLivePresenceEvent(`❌ ${participant.name} request denied`);
-                          bumpRoomEnergy(0.04);
-                        }}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.partyParticipantControlBtnText}>Deny</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : null}
-
-                  <TouchableOpacity
-                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
-                    onPress={() => {
-                      setPartyParticipants((prev) => {
-                        const target = prev.find((entry) => entry.id === participant.id);
-                        if (!target) return prev;
-
-                        if (!target.canSpeak) {
-                          return prev;
-                        }
-
-                        const enablingSpeak = !target.isSpeaking;
-                        let nextParticipants = prev.map((entry) =>
-                          entry.id === participant.id ? { ...entry, isSpeaking: enablingSpeak } : entry,
-                        );
-
-                        if (enablingSpeak) {
-                          speakingOrderRef.current = [
-                            ...speakingOrderRef.current.filter((id) => id !== participant.id),
-                            participant.id,
-                          ];
-                        } else {
-                          speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
-                        }
-
-                        const currentlySpeakingIds = nextParticipants
-                          .filter((entry) => entry.canSpeak && entry.isSpeaking)
-                          .map((entry) => entry.id);
-
-                        if (currentlySpeakingIds.length > 2) {
-                          const orderedSpeaking = speakingOrderRef.current.filter((id) => currentlySpeakingIds.includes(id));
-                          const toDropCount = orderedSpeaking.length - 2;
-                          const dropIds = new Set(orderedSpeaking.slice(0, toDropCount));
-
-                          nextParticipants = nextParticipants.map((entry) =>
-                            dropIds.has(entry.id) ? { ...entry, isSpeaking: false } : entry,
-                          );
-                          speakingOrderRef.current = orderedSpeaking.slice(toDropCount);
-                        }
-
-                        bumpRoomEnergy(enablingSpeak ? 0.08 : 0.03);
-
-                        return nextParticipants;
-                      });
-                    }}
-                    disabled={!participant.canSpeak}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.partyParticipantControlBtnText}>
-                      {participant.canSpeak ? (participant.isSpeaking ? "Stop Speaking" : "Start Speaking") : "No Mic Access"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
-                    onPress={() => {
-                      const nextCanSpeak = !participant.canSpeak;
-                      setPartyParticipants((prev) =>
-                        prev.map((entry) => {
-                          if (entry.id !== participant.id) return entry;
-                          return {
-                            ...entry,
                             canSpeak: nextCanSpeak,
                             stageRole: nextCanSpeak ? "speaker" : "listener",
-                            isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
                             isRequestingToSpeak: false,
-                          };
-                        }),
-                      );
+                          }).catch(() => {});
 
-                      persistPartySeatState(participant.id, {
-                        canSpeak: nextCanSpeak,
-                        stageRole: nextCanSpeak ? "speaker" : "listener",
-                        isRequestingToSpeak: false,
-                      }).catch(() => {});
+                          if (participant.canSpeak) {
+                            speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
+                          }
+                          bumpRoomEnergy(participant.canSpeak ? 0.04 : 0.07);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.partyParticipantControlBtnText}>{participant.canSpeak ? "Move to Audience" : "Seat Participant"}</Text>
+                      </TouchableOpacity>
 
-                      if (participant.canSpeak) {
-                        speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
-                      }
-                      bumpRoomEnergy(participant.canSpeak ? 0.04 : 0.07);
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.partyParticipantControlBtnText}>{participant.canSpeak ? "Move to Audience" : "Seat Participant"}</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
-                    onPress={() => {
-                      setPartyParticipants((prev) =>
-                        prev.map((entry) =>
-                          entry.id === participant.id ? { ...entry, muted: !entry.muted } : entry,
-                        ),
-                      );
-                      bumpRoomEnergy(0.03);
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.partyParticipantControlBtnText}>{participant.muted ? "Unmute" : "Mute"}</Text>
-                  </TouchableOpacity>
-                </View>
+                      <TouchableOpacity
+                        style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
+                        onPress={() => {
+                          setPartyParticipants((prev) =>
+                            prev.map((entry) =>
+                              entry.id === participant.id ? { ...entry, muted: !entry.muted } : entry,
+                            ),
+                          );
+                          bumpRoomEnergy(0.03);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.partyParticipantControlBtnText}>{participant.muted ? "Unmute" : "Mute"}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </>
               ) : null}
             </Animated.View>
           );
@@ -4211,14 +4269,7 @@ export default function PlayerScreen() {
                           }).start();
                         }}
                         onPress={() => {
-                          const isHost = partySyncRole === "host";
-                          markParticipantActive(participant.id, 2400);
-                          bumpRoomEnergy(0.03);
-                          if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
-                            requestPartySeat().catch(() => {});
-                          }
-                          if (!isHost) return;
-                          setActiveParticipantId((current) => (current === participant.id ? null : participant.id));
+                          onFocusPlayerParticipant(participant);
                         }}
                         activeOpacity={0.9}
                       >
@@ -6798,6 +6849,40 @@ const styles = StyleSheet.create({
     fontSize: 8,
     textAlign: "center",
   },
+  participantExpandedSummary: {
+    marginTop: 7,
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(7,10,18,0.82)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 8,
+  },
+  participantExpandedSummaryDock: {
+    alignSelf: "stretch",
+  },
+  participantExpandedSummaryCopy: {
+    gap: 3,
+  },
+  participantExpandedSummaryKicker: {
+    color: "#8E98AC",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  participantExpandedSummaryTitle: {
+    color: "#F4F7FF",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  participantExpandedSummaryBody: {
+    color: "#C2CADB",
+    fontSize: 9.5,
+    lineHeight: 13,
+    fontWeight: "700",
+  },
   participantExpandedControls: {
     marginTop: 7,
     flexDirection: "row",
@@ -6820,10 +6905,21 @@ const styles = StyleSheet.create({
   partyParticipantControlBtnDock: {
     width: "100%",
   },
+  participantToolsToggleBtn: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+  },
+  partyParticipantControlBtnActive: {
+    borderColor: "rgba(220,20,60,0.62)",
+    backgroundColor: "rgba(220,20,60,0.22)",
+  },
   partyParticipantControlBtnText: {
     color: "#EEF1F8",
     fontSize: 10.5,
     fontWeight: "800",
+  },
+  partyParticipantControlBtnTextActive: {
+    color: "#FFFFFF",
   },
 
   controlsSection: {
