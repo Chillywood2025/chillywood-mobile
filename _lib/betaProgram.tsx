@@ -462,3 +462,7 @@ export function useBetaProgram() {
   }
   return context;
 }
+
+export function useOptionalBetaProgram() {
+  return useContext(BetaProgramContext);
+}

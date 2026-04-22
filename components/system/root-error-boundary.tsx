@@ -3,9 +3,9 @@ import React, { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { trackEvent } from "../../_lib/analytics";
-import { submitBetaFeedback, useBetaProgram } from "../../_lib/betaProgram";
+import { submitBetaFeedback, type BetaAccessState, useOptionalBetaProgram } from "../../_lib/betaProgram";
 import { reportRuntimeError } from "../../_lib/logger";
-import { useSession } from "../../_lib/session";
+import { useOptionalSession } from "../../_lib/session";
 import { BetaFeedbackSheet } from "../beta/beta-feedback-sheet";
 
 type RootErrorBoundaryState = {
@@ -39,6 +39,13 @@ export class RootErrorBoundary extends React.Component<React.PropsWithChildren, 
   }
 }
 
+const SIGNED_OUT_BETA_STATE: BetaAccessState = {
+  status: "signed_out",
+  membership: null,
+  issue: null,
+  needsOnboarding: false,
+};
+
 function RootBoundaryFallback({
   error,
   onRetry,
@@ -47,11 +54,14 @@ function RootBoundaryFallback({
   onRetry: () => void;
 }) {
   const pathname = usePathname();
-  const { isSignedIn } = useSession();
-  const { accessState, isActive } = useBetaProgram();
+  const session = useOptionalSession();
+  const betaProgram = useOptionalBetaProgram();
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
 
+  const isSignedIn = session?.isSignedIn ?? false;
+  const accessState = betaProgram?.accessState ?? SIGNED_OUT_BETA_STATE;
+  const isActive = betaProgram?.isActive ?? false;
   const canSendFeedback = isSignedIn && isActive;
 
   const onSubmitFeedback = async (input: {
