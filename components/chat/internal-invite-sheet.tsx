@@ -21,9 +21,51 @@ type InternalInviteSheetProps = {
   title: string;
   body: string;
   inviteMessage: string;
+  suggestedTargets?: ChatUserSearchResult[];
   onClose: () => void;
   onInviteSent?: (thread: ChatThreadSummary) => void;
   onSystemShareFallback?: () => void;
+};
+
+const normalizeInviteSearchText = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/^@+/, "");
+
+const matchesSuggestedTarget = (target: ChatUserSearchResult, rawQuery: string) => {
+  const normalizedQuery = normalizeInviteSearchText(rawQuery);
+  if (normalizedQuery.length < 2) return false;
+  return [target.displayName, target.username, target.tagline].some((value) =>
+    normalizeInviteSearchText(value).includes(normalizedQuery),
+  );
+};
+
+const mergeInviteTargets = (
+  priorityTargets: ChatUserSearchResult[],
+  secondaryTargets: ChatUserSearchResult[],
+): ChatUserSearchResult[] => {
+  const merged = new Map<string, ChatUserSearchResult>();
+
+  priorityTargets.forEach((target) => {
+    const userId = String(target.userId ?? "").trim();
+    if (!userId) return;
+    merged.set(userId, {
+      ...target,
+      userId,
+    });
+  });
+
+  secondaryTargets.forEach((target) => {
+    const userId = String(target.userId ?? "").trim();
+    if (!userId) return;
+    const existing = merged.get(userId);
+    merged.set(userId, {
+      userId,
+      displayName: existing?.displayName ?? target.displayName,
+      username: existing?.username ?? target.username,
+      avatarUrl: existing?.avatarUrl ?? target.avatarUrl ?? null,
+      tagline: existing?.tagline ?? target.tagline ?? null,
+    });
+  });
+
+  return Array.from(merged.values());
 };
 
 export function InternalInviteSheet({
@@ -32,6 +74,7 @@ export function InternalInviteSheet({
   title,
   body,
   inviteMessage,
+  suggestedTargets = [],
   onClose,
   onInviteSent,
   onSystemShareFallback,
@@ -128,6 +171,18 @@ export function InternalInviteSheet({
     return "No matching Chi'llywood members found yet.";
   }, [loading, query]);
 
+  const matchedSuggestedTargets = useMemo(
+    () => suggestedTargets.filter((target) => matchesSuggestedTarget(target, query)),
+    [query, suggestedTargets],
+  );
+
+  const displayResults = useMemo(
+    () => mergeInviteTargets(matchedSuggestedTargets, results),
+    [matchedSuggestedTargets, results],
+  );
+
+  const visibleError = displayResults.length > 0 ? null : error;
+
   const handleSendInvite = useCallback(async (target: ChatUserSearchResult) => {
     setSendingUserId(target.userId);
     setError(null);
@@ -190,8 +245,8 @@ export function InternalInviteSheet({
                 <ActivityIndicator color="#F34B74" size="small" />
                 <Text style={styles.stateText}>Searching people...</Text>
               </View>
-            ) : results.length > 0 ? (
-              results.map((person) => {
+            ) : displayResults.length > 0 ? (
+              displayResults.map((person) => {
                 const initials = (person.displayName ?? person.username ?? "U").slice(0, 1).toUpperCase();
                 const sending = sendingUserId === person.userId;
 
@@ -223,7 +278,7 @@ export function InternalInviteSheet({
               </View>
             )}
           </ScrollView>
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {visibleError ? <Text style={styles.errorText}>{visibleError}</Text> : null}
           <View style={styles.footerRow}>
             {onSystemShareFallback ? (
               <TouchableOpacity

@@ -1079,6 +1079,17 @@ export default function WatchPartyLiveStageScreen() {
     [hiddenParticipantIds, stripParticipants],
   );
   const currentUserParticipantId = trackedUserId;
+  const inviteableLiveRoomParticipants = useMemo(
+    () => displayParticipants
+      .filter((participant) => participant.userId && participant.userId !== currentUserParticipantId)
+      .map((participant) => ({
+        userId: participant.userId,
+        displayName: participant.displayName,
+        username: participant.username,
+        avatarUrl: participant.avatarUrl,
+      })),
+    [currentUserParticipantId, displayParticipants],
+  );
   const selectedParticipant = useMemo(
     () => visibleStripParticipants.find((participant) => participant.userId === selectedParticipantId) ?? null,
     [visibleStripParticipants, selectedParticipantId],
@@ -3346,6 +3357,7 @@ export default function WatchPartyLiveStageScreen() {
         title="Invite people to this live room"
         body="Find a Chi'llywood member, send the live-room code inside Chi'lly Chat, or fall back to system share if you need to leave the app."
         inviteMessage={`Join me in a Chi'llywood live room.\n\nRoom code: ${liveRoomShareCode}\n\nOpen Chi'llywood -> Live Watch-Party -> enter the code to join the live room.`}
+        suggestedTargets={inviteableLiveRoomParticipants}
         onClose={() => setInviteSheetVisible(false)}
         onInviteSent={(thread) => {
           router.push({

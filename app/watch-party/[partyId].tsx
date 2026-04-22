@@ -1451,6 +1451,17 @@ export default function WatchPartyRoomScreen() {
     () => liveBubbleParticipants.filter((participant) => !hiddenParticipantIds[participant.userId]),
     [hiddenParticipantIds, liveBubbleParticipants],
   );
+  const currentUserBubbleId = trackedUserId;
+  const inviteableRoomParticipants = useMemo(
+    () => liveBubbleParticipants
+      .filter((participant) => participant.userId && participant.userId !== currentUserBubbleId)
+      .map((participant) => ({
+        userId: participant.userId,
+        displayName: participant.displayName,
+        avatarUrl: participant.avatarUrl,
+      })),
+    [currentUserBubbleId, liveBubbleParticipants],
+  );
 
   useEffect(() => {
     if (liveBubbleParticipants.length === 0) {
@@ -1481,7 +1492,6 @@ export default function WatchPartyRoomScreen() {
   }, [liveBubbleParticipants]);
 
   const presenceParticipants: PresenceParticipant[] = liveBubbleParticipants;
-  const currentUserBubbleId = trackedUserId;
   const waitingRoomParticipantSummary = useMemo(
     () =>
       buildPartyRoomParticipantEntries({
@@ -2522,6 +2532,7 @@ export default function WatchPartyRoomScreen() {
         title="Invite people to this party room"
         body="Find a Chi'llywood member, send the party-room code inside Chi'lly Chat, or fall back to system share if you need to leave the app."
         inviteMessage={internalInviteMessage}
+        suggestedTargets={inviteableRoomParticipants}
         onClose={() => setInviteSheetVisible(false)}
         onInviteSent={(thread) => {
           router.push({
