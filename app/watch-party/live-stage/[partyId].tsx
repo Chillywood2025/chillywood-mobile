@@ -2285,6 +2285,239 @@ export default function WatchPartyLiveStageScreen() {
     </View>
   );
 
+  const renderStageTopMenuSheet = () => {
+    if (!stageMenuSheetVisible) return null;
+
+    return (
+      <View style={styles.stageTopMenuSheet}>
+        <TouchableOpacity
+          style={[styles.stageTopMenuItem, commentsOpen && styles.stageTopMenuItemActive]}
+          activeOpacity={0.84}
+          accessibilityRole="button"
+          accessibilityLabel="Open Live Stage Comments"
+          hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
+          onPress={onOpenStageComments}
+          testID="live-stage-comments-button"
+        >
+          <Text style={styles.stageTopMenuItemIcon}>🗨️</Text>
+          <View style={styles.stageTopMenuItemCopy}>
+            <Text style={styles.stageTopMenuItemTitle}>Comments</Text>
+            <Text style={styles.stageTopMenuItemBody}>
+              {usesSharedStageCommentLane ? "Open the comment lane." : "Open the room response lane."}
+            </Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.stageTopMenuItem, stageControlsOpen && styles.stageTopMenuItemActive]}
+          activeOpacity={0.84}
+          accessibilityRole="button"
+          accessibilityLabel="Open Live Stage Studio Controls"
+          hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
+          onPress={onToggleStageControls}
+          testID="live-stage-studio-button"
+        >
+          <Text style={styles.stageTopMenuItemIcon}>🎛️</Text>
+          <View style={styles.stageTopMenuItemCopy}>
+            <Text style={styles.stageTopMenuItemTitle}>Studio</Text>
+            <Text style={styles.stageTopMenuItemBody}>Focus and stage tools.</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.stageTopMenuItem, (faceFilterSheetOpen || liveFaceFilter !== "none") && styles.stageTopMenuItemActive]}
+          activeOpacity={0.84}
+          accessibilityRole="button"
+          accessibilityLabel="Open Live Stage Filters"
+          hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
+          onPress={onToggleFaceFilters}
+          testID="live-stage-filters-button"
+        >
+          <Text style={styles.stageTopMenuItemIcon}>🎭</Text>
+          <View style={styles.stageTopMenuItemCopy}>
+            <Text style={styles.stageTopMenuItemTitle}>Filters</Text>
+            <Text style={styles.stageTopMenuItemBody}>Adjust the camera look.</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.stageTopMenuItem, reactionPickerOpen && styles.stageTopMenuItemActive]}
+          activeOpacity={0.84}
+          accessibilityRole="button"
+          accessibilityLabel="Open Live Stage Reactions"
+          hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
+          onPress={() => {
+            revealStageOverlay();
+            setStageMenuOpen(false);
+            setStageControlsOpen(false);
+            setFaceFilterSheetOpen(false);
+            setCommentsOpen(false);
+            setReactionPickerOpen((value) => !value);
+          }}
+          testID="live-stage-react-button"
+        >
+          <Text style={styles.stageTopMenuItemIcon}>✨</Text>
+          <View style={styles.stageTopMenuItemCopy}>
+            <Text style={styles.stageTopMenuItemTitle}>React</Text>
+            <Text style={styles.stageTopMenuItemBody}>Send a reaction.</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderStageTopChrome = () => (
+    <View style={[styles.stageTopChrome, { top: safeAreaInsets.top + 50 }]} pointerEvents="box-none">
+      <View style={styles.stageTopChromeRow}>
+        <View style={styles.stageTopChromeCopy}>
+          <Text style={styles.stageSurfaceKicker}>LIVE STAGE</Text>
+          <Text numberOfLines={1} style={styles.stageTopChromeTitle}>
+            {isLiveFirstMode ? "Host-led live" : `${branding.watchPartyLabel} live`}
+          </Text>
+          <Text numberOfLines={1} style={styles.stageTopChromeBody}>
+            {`${lowerCommunityCountLabel} · ${liveStageProtectionStatus}`}
+          </Text>
+        </View>
+        <View style={styles.stageTopChromeActions}>
+          <TouchableOpacity
+            style={[styles.stageTopMenuButton, stageMenuSheetVisible && styles.stageTopMenuButtonActive]}
+            activeOpacity={0.84}
+            accessibilityRole="button"
+            accessibilityLabel="Live Stage Menu"
+            hitSlop={STAGE_CONTROL_HIT_SLOP}
+            onPress={onToggleStageMenu}
+            testID="live-stage-menu-button"
+          >
+            <Text style={styles.stageTopMenuButtonText}>Menu</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.stageSurfaceBackButton}
+            activeOpacity={0.84}
+            accessibilityRole="button"
+            accessibilityLabel="Return to Live Room"
+            hitSlop={STAGE_CONTROL_HIT_SLOP}
+            onPress={onReturnToLiveRoom}
+            testID="live-stage-live-room-button"
+          >
+            <Text style={styles.stageSurfaceBackText}>Live Room</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {renderStageTopMenuSheet()}
+    </View>
+  );
+
+  const renderStageControlsSheet = () => {
+    if (!stageControlsOpen) return null;
+
+    return (
+      <View pointerEvents="auto" style={styles.stageUtilitySheet}>
+        <View style={styles.stageUtilityHeader}>
+          <View style={styles.stageUtilityHeaderCopy}>
+            <Text style={styles.stageUtilityKicker}>STAGE CONTROLS</Text>
+            <Text style={styles.stageUtilityTitle}>{stageModeTitle}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.stageUtilityDismissBtn}
+            activeOpacity={0.84}
+            onPress={() => setStageControlsOpen(false)}
+          >
+            <Text style={styles.stageUtilityDismissText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.stageUtilityBody}>{stageModeBody}</Text>
+        <Text style={styles.stageUtilityHelper}>{stageHelperCopy}</Text>
+        <View style={styles.stageUtilityMetaRow}>
+          <View style={styles.stageUtilityMetaPill}>
+            <Text style={styles.stageUtilityMetaLabel}>Mode</Text>
+            <Text style={styles.stageUtilityMetaValue}>{liveRoomModeLabel}</Text>
+          </View>
+          <View style={styles.stageUtilityMetaPill}>
+            <Text style={styles.stageUtilityMetaLabel}>Focus</Text>
+            <Text style={styles.stageUtilityMetaValue}>{stageFocusLabel}</Text>
+          </View>
+          <View style={styles.stageUtilityMetaPill}>
+            <Text style={styles.stageUtilityMetaLabel}>Community</Text>
+            <Text style={styles.stageUtilityMetaValue}>{lowerCommunityCountLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.stageUtilityStatusRow}>
+          <View style={styles.stageUtilityStatusCopy}>
+            <Text style={styles.stageUtilityStatusLabel}>{liveStageProtectionCopy.title}</Text>
+            <Text style={styles.stageUtilityStatusBody}>{liveStageProtectionHint}</Text>
+          </View>
+          <View style={styles.stageUtilityStatusPill}>
+            <Text style={styles.stageUtilityStatusValue}>{liveStageProtectionStatus}</Text>
+          </View>
+        </View>
+        <View style={styles.stageUtilityActionRow}>
+          <TouchableOpacity
+            style={[
+              styles.stageUtilityActionBtn,
+              !stageFocusTarget?.userId && styles.stageUtilityActionBtnDisabled,
+            ]}
+            activeOpacity={0.84}
+            disabled={!stageFocusTarget?.userId}
+            onPress={() => {
+              if (!stageFocusTarget?.userId) return;
+              featureParticipantFirst(stageFocusTarget.userId);
+            }}
+          >
+            <Text style={styles.stageUtilityActionText}>{stagePrimaryActionLabel}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderStageFaceFilterSheet = () => {
+    if (!faceFilterSheetOpen) return null;
+
+    return (
+      <View pointerEvents="auto" style={styles.stageUtilitySheet}>
+        <View style={styles.stageUtilityHeader}>
+          <View style={styles.stageUtilityHeaderCopy}>
+            <Text style={styles.stageUtilityKicker}>FACE FILTERS</Text>
+            <Text style={styles.stageUtilityTitle}>{activeLiveFaceFilter.label}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.stageUtilityDismissBtn}
+            activeOpacity={0.84}
+            onPress={() => setFaceFilterSheetOpen(false)}
+          >
+            <Text style={styles.stageUtilityDismissText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.stageUtilityBody}>
+          Filters only change your camera view on this stage.
+        </Text>
+        <Text style={styles.stageUtilityHelper}>{activeLiveFaceFilter.subtitle}</Text>
+        <View style={styles.stageFilterRow}>
+          {LIVE_FACE_FILTER_OPTIONS.map((option) => {
+            const active = liveFaceFilter === option.id;
+            return (
+              <TouchableOpacity
+                key={option.id}
+                style={[styles.stageFilterChip, active && styles.stageFilterChipActive]}
+                activeOpacity={0.84}
+                onPress={() => setLiveFaceFilter(option.id)}
+              >
+                <Text style={[styles.stageFilterChipText, active && styles.stageFilterChipTextActive]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
+  const renderStageOverlayUtilitySheets = () => (
+    <View style={[styles.overlayBottom, { bottom: commentsLaneBottomOffset }]} pointerEvents="box-none">
+      {renderStageControlsSheet()}
+      {renderStageFaceFilterSheet()}
+    </View>
+  );
+
   debugLog("live-stage", "render branch", {
     loading,
     partyId,
@@ -2481,118 +2714,7 @@ export default function WatchPartyLiveStageScreen() {
           ]}
           pointerEvents={stageOverlayVisible ? "box-none" : "none"}
         >
-        <View style={[styles.stageTopChrome, { top: safeAreaInsets.top + 50 }]} pointerEvents="box-none">
-          <View style={styles.stageTopChromeRow}>
-            <View style={styles.stageTopChromeCopy}>
-              <Text style={styles.stageSurfaceKicker}>LIVE STAGE</Text>
-              <Text numberOfLines={1} style={styles.stageTopChromeTitle}>
-                {isLiveFirstMode ? "Host-led live" : `${branding.watchPartyLabel} live`}
-              </Text>
-              <Text numberOfLines={1} style={styles.stageTopChromeBody}>
-                {`${lowerCommunityCountLabel} · ${liveStageProtectionStatus}`}
-              </Text>
-            </View>
-            <View style={styles.stageTopChromeActions}>
-              <TouchableOpacity
-                style={[styles.stageTopMenuButton, stageMenuSheetVisible && styles.stageTopMenuButtonActive]}
-                activeOpacity={0.84}
-                accessibilityRole="button"
-                accessibilityLabel="Live Stage Menu"
-                hitSlop={STAGE_CONTROL_HIT_SLOP}
-                onPress={onToggleStageMenu}
-                testID="live-stage-menu-button"
-              >
-                <Text style={styles.stageTopMenuButtonText}>Menu</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.stageSurfaceBackButton}
-                activeOpacity={0.84}
-                accessibilityRole="button"
-                accessibilityLabel="Return to Live Room"
-                hitSlop={STAGE_CONTROL_HIT_SLOP}
-                onPress={onReturnToLiveRoom}
-                testID="live-stage-live-room-button"
-              >
-                <Text style={styles.stageSurfaceBackText}>Live Room</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {stageMenuSheetVisible ? (
-            <View style={styles.stageTopMenuSheet}>
-              <TouchableOpacity
-                style={[styles.stageTopMenuItem, commentsOpen && styles.stageTopMenuItemActive]}
-                activeOpacity={0.84}
-                accessibilityRole="button"
-                accessibilityLabel="Open Live Stage Comments"
-                hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-                onPress={onOpenStageComments}
-                testID="live-stage-comments-button"
-              >
-                <Text style={styles.stageTopMenuItemIcon}>🗨️</Text>
-                <View style={styles.stageTopMenuItemCopy}>
-                  <Text style={styles.stageTopMenuItemTitle}>Comments</Text>
-                  <Text style={styles.stageTopMenuItemBody}>
-                    {usesSharedStageCommentLane ? "Open the bottom comment lane." : "Open the room response lane."}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.stageTopMenuItem, stageControlsOpen && styles.stageTopMenuItemActive]}
-                activeOpacity={0.84}
-                accessibilityRole="button"
-                accessibilityLabel="Open Live Stage Studio Controls"
-                hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-                onPress={onToggleStageControls}
-                testID="live-stage-studio-button"
-              >
-                <Text style={styles.stageTopMenuItemIcon}>🎛️</Text>
-                <View style={styles.stageTopMenuItemCopy}>
-                  <Text style={styles.stageTopMenuItemTitle}>Studio</Text>
-                  <Text style={styles.stageTopMenuItemBody}>Focus and room-stage controls.</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.stageTopMenuItem, (faceFilterSheetOpen || liveFaceFilter !== "none") && styles.stageTopMenuItemActive]}
-                activeOpacity={0.84}
-                accessibilityRole="button"
-                accessibilityLabel="Open Live Stage Filters"
-                hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-                onPress={onToggleFaceFilters}
-                testID="live-stage-filters-button"
-              >
-                <Text style={styles.stageTopMenuItemIcon}>🎭</Text>
-                <View style={styles.stageTopMenuItemCopy}>
-                  <Text style={styles.stageTopMenuItemTitle}>Filters</Text>
-                  <Text style={styles.stageTopMenuItemBody}>Adjust the on-camera look.</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.stageTopMenuItem, reactionPickerOpen && styles.stageTopMenuItemActive]}
-                activeOpacity={0.84}
-                accessibilityRole="button"
-                accessibilityLabel="Open Live Stage Reactions"
-                hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-                onPress={() => {
-                  revealStageOverlay();
-                  setStageMenuOpen(false);
-                  setStageControlsOpen(false);
-                  setFaceFilterSheetOpen(false);
-                  setCommentsOpen(false);
-                  setReactionPickerOpen((value) => !value);
-                }}
-                testID="live-stage-react-button"
-              >
-                <Text style={styles.stageTopMenuItemIcon}>✨</Text>
-                <View style={styles.stageTopMenuItemCopy}>
-                  <Text style={styles.stageTopMenuItemTitle}>React</Text>
-                  <Text style={styles.stageTopMenuItemBody}>Send a live reaction.</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-        </View>
+        {renderStageTopChrome()}
         {isHybridMode ? (
           <View style={[styles.stageHybridDeck, { top: hybridDeckTop }]} pointerEvents="box-none">
             <View pointerEvents="auto" style={[styles.stageHybridCommunityCard, { maxHeight: hybridCommunityMaxHeight + 58 }]}>
@@ -2983,113 +3105,7 @@ export default function WatchPartyLiveStageScreen() {
             </View>
           </View>
         ) : null}
-        <View style={[styles.overlayBottom, { bottom: commentsLaneBottomOffset }]} pointerEvents="box-none">
-          {stageControlsOpen ? (
-            <View pointerEvents="auto" style={styles.stageUtilitySheet}>
-              <View style={styles.stageUtilityHeader}>
-                <View style={styles.stageUtilityHeaderCopy}>
-                  <Text style={styles.stageUtilityKicker}>STAGE CONTROLS</Text>
-                  <Text style={styles.stageUtilityTitle}>{stageModeTitle}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.stageUtilityDismissBtn}
-                  activeOpacity={0.84}
-                  onPress={() => setStageControlsOpen(false)}
-                >
-                  <Text style={styles.stageUtilityDismissText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.stageUtilityBody}>{stageModeBody}</Text>
-              <Text style={styles.stageUtilityHelper}>{stageHelperCopy}</Text>
-              <View style={styles.stageUtilityMetaRow}>
-                <View style={styles.stageUtilityMetaPill}>
-                  <Text style={styles.stageUtilityMetaLabel}>Mode</Text>
-                  <Text style={styles.stageUtilityMetaValue}>{liveRoomModeLabel}</Text>
-                </View>
-                <View style={styles.stageUtilityMetaPill}>
-                  <Text style={styles.stageUtilityMetaLabel}>Focus</Text>
-                  <Text style={styles.stageUtilityMetaValue}>{stageFocusLabel}</Text>
-                </View>
-                <View style={styles.stageUtilityMetaPill}>
-                  <Text style={styles.stageUtilityMetaLabel}>Community</Text>
-                  <Text style={styles.stageUtilityMetaValue}>{lowerCommunityCountLabel}</Text>
-                </View>
-              </View>
-              <View style={styles.stageUtilityActionRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.stageUtilityActionBtn,
-                    !stageFocusTarget?.userId && styles.stageUtilityActionBtnDisabled,
-                  ]}
-                  activeOpacity={0.84}
-                  disabled={!stageFocusTarget?.userId}
-                  onPress={() => {
-                    if (!stageFocusTarget?.userId) return;
-                    featureParticipantFirst(stageFocusTarget.userId);
-                  }}
-                >
-                  <Text style={styles.stageUtilityActionText}>{stagePrimaryActionLabel}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.stageUtilityActionBtn, styles.stageUtilityActionBtnGhost]}
-                  activeOpacity={0.84}
-                  onPress={onReturnToLiveRoom}
-                >
-                  <Text style={[styles.stageUtilityActionText, styles.stageUtilityActionTextGhost]}>Back to Live Room</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.stageUtilityStatusRow}>
-                <View style={styles.stageUtilityStatusCopy}>
-                  <Text style={styles.stageUtilityStatusLabel}>{liveStageProtectionCopy.title}</Text>
-                  <Text style={styles.stageUtilityStatusBody}>{liveStageProtectionHint}</Text>
-                </View>
-                <View style={styles.stageUtilityStatusPill}>
-                  <Text style={styles.stageUtilityStatusValue}>{liveStageProtectionStatus}</Text>
-                </View>
-              </View>
-            </View>
-          ) : null}
-
-          {faceFilterSheetOpen ? (
-            <View pointerEvents="auto" style={styles.stageUtilitySheet}>
-              <View style={styles.stageUtilityHeader}>
-                <View style={styles.stageUtilityHeaderCopy}>
-                  <Text style={styles.stageUtilityKicker}>FACE FILTERS</Text>
-                  <Text style={styles.stageUtilityTitle}>{activeLiveFaceFilter.label}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.stageUtilityDismissBtn}
-                  activeOpacity={0.84}
-                  onPress={() => setFaceFilterSheetOpen(false)}
-                >
-                  <Text style={styles.stageUtilityDismissText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.stageUtilityBody}>
-                Filters only change your camera view on this stage.
-              </Text>
-              <Text style={styles.stageUtilityHelper}>{activeLiveFaceFilter.subtitle}</Text>
-              <View style={styles.stageFilterRow}>
-                {LIVE_FACE_FILTER_OPTIONS.map((option) => {
-                  const active = liveFaceFilter === option.id;
-                  return (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.stageFilterChip, active && styles.stageFilterChipActive]}
-                      activeOpacity={0.84}
-                      onPress={() => setLiveFaceFilter(option.id)}
-                    >
-                      <Text style={[styles.stageFilterChipText, active && styles.stageFilterChipTextActive]}>
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
-        </View>
+        {renderStageOverlayUtilitySheets()}
         </Animated.View>
 
         <Animated.View
