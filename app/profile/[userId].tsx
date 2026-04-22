@@ -1506,6 +1506,80 @@ export default function ProfileScreen() {
       onPress: onPressManageChannel,
     }] : []),
   ] : [];
+  const renderOwnerHandoffCard = () => {
+    if (!isSelfProfile) return null;
+
+    return (
+      <View style={styles.ownerModeCard}>
+        <Text style={styles.ownerModeKicker}>OWNER HANDOFF</Text>
+        <Text style={styles.ownerModeTitle}>Keep the public channel in front.</Text>
+        <Text style={styles.ownerModeBody}>
+          Use Manage Channel for deeper edits while this route keeps the public read, live posture, and access truth easy to scan.
+        </Text>
+        {ownerQuickActions.length ? (
+          <View style={styles.ownerQuickActionRow}>
+            {ownerQuickActions.map((action) => (
+              <TouchableOpacity
+                key={action.label}
+                style={[
+                  styles.ownerActionChip,
+                  action.emphasis === "primary" && styles.ownerActionChipPrimary,
+                ]}
+                activeOpacity={0.84}
+                onPress={action.onPress}
+              >
+                <Text
+                  style={[
+                    styles.ownerActionChipText,
+                    action.emphasis === "primary" && styles.ownerActionChipTextPrimary,
+                  ]}
+                >
+                  {action.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+        {ownerStatsRibbon.length ? (
+          <View style={styles.ownerSignalRow}>
+            {ownerStatsRibbon.map((card) => (
+              <View
+                key={card.label}
+                style={[
+                  styles.ownerSignalChip,
+                  card.tone === "linked" && styles.ownerSignalChipLinked,
+                  card.tone === "live" && styles.ownerSignalChipLive,
+                ]}
+              >
+                <Text style={styles.ownerSignalValue}>{card.value}</Text>
+                <Text style={styles.ownerSignalLabel}>{card.label}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {ownerPromptCards.length ? (
+          <View style={styles.ownerPromptStack}>
+            {ownerPromptCards.map((prompt) => (
+              <View key={prompt.title} style={styles.ownerPromptCard}>
+                <Text style={styles.ownerPromptKicker}>{prompt.kicker}</Text>
+                <Text style={styles.ownerPromptTitle}>{prompt.title}</Text>
+                <Text style={styles.ownerPromptBody}>{prompt.body}</Text>
+                {prompt.actionLabel && prompt.onPress ? (
+                  <TouchableOpacity
+                    style={styles.ownerPromptAction}
+                    activeOpacity={0.84}
+                    onPress={prompt.onPress}
+                  >
+                    <Text style={styles.ownerPromptActionText}>{prompt.actionLabel}</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
 
   return (
     <View
@@ -1754,6 +1828,7 @@ export default function ProfileScreen() {
             </View>
             <Text style={styles.tabIntro}>{tabIntro}</Text>
           </View>
+          {renderOwnerHandoffCard()}
           {activeTabSections.map((section) => (
             <View
               key={section.title}
@@ -1923,71 +1998,6 @@ export default function ProfileScreen() {
             </>
           ) : null}
         </View>
-        {isSelfProfile ? (
-          <View style={styles.ownerModeCard}>
-            <Text style={styles.ownerModeKicker}>YOUR VIEW</Text>
-            <Text style={styles.ownerModeTitle}>Your public channel still leads here.</Text>
-            <Text style={styles.ownerModeBody}>
-              Use Manage Channel for deeper edits, and keep this route focused on the public read first.
-            </Text>
-            <View style={styles.ownerQuickActionRow}>
-              {ownerQuickActions.map((action) => (
-                <TouchableOpacity
-                  key={action.label}
-                  style={[
-                    styles.ownerActionChip,
-                    action.emphasis === "primary" && styles.ownerActionChipPrimary,
-                  ]}
-                  activeOpacity={0.84}
-                  onPress={action.onPress}
-                >
-                  <Text
-                    style={[
-                      styles.ownerActionChipText,
-                      action.emphasis === "primary" && styles.ownerActionChipTextPrimary,
-                    ]}
-                  >
-                    {action.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={styles.ownerStatsRow}>
-              {ownerStatsRibbon.map((card) => (
-                <View
-                  key={card.label}
-                  style={[
-                    styles.ownerStatCard,
-                    card.tone === "linked" && styles.ownerStatCardLinked,
-                    card.tone === "live" && styles.ownerStatCardLive,
-                  ]}
-                >
-                  <Text style={styles.ownerStatLabel}>{card.label}</Text>
-                  <Text style={styles.ownerStatValue}>{card.value}</Text>
-                  <Text style={styles.ownerStatBody}>{card.body}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={styles.ownerPromptStack}>
-              {ownerPromptCards.map((prompt) => (
-                <View key={prompt.title} style={styles.ownerPromptCard}>
-                  <Text style={styles.ownerPromptKicker}>{prompt.kicker}</Text>
-                  <Text style={styles.ownerPromptTitle}>{prompt.title}</Text>
-                  <Text style={styles.ownerPromptBody}>{prompt.body}</Text>
-                  {prompt.actionLabel && prompt.onPress ? (
-                    <TouchableOpacity
-                      style={styles.ownerPromptAction}
-                      activeOpacity={0.84}
-                      onPress={prompt.onPress}
-                    >
-                      <Text style={styles.ownerPromptActionText}>{prompt.actionLabel}</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
         <ReportSheet
           visible={reportVisible}
           title={isOfficialProfile ? "Report official account concern" : "Report profile or participant"}
@@ -2374,6 +2384,29 @@ const styles = StyleSheet.create({
   ownerModeKicker: { color: "#8390AB", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
   ownerModeTitle: { color: "#F4F7FF", fontSize: 16.5, fontWeight: "900" },
   ownerModeBody: { color: "#B4BDD1", fontSize: 13, lineHeight: 19 },
+  ownerSignalRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  ownerSignalChip: {
+    flexGrow: 1,
+    flexBasis: 92,
+    minWidth: 92,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  ownerSignalChipLinked: {
+    borderColor: "rgba(115,134,255,0.18)",
+    backgroundColor: "rgba(115,134,255,0.1)",
+  },
+  ownerSignalChipLive: {
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(220,20,60,0.1)",
+  },
+  ownerSignalValue: { color: "#EEF2FF", fontSize: 18, fontWeight: "900" },
+  ownerSignalLabel: { color: "#98A3B8", fontSize: 11.5, fontWeight: "800" },
   ownerStatsRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   ownerStatCard: {
     flexGrow: 1,
