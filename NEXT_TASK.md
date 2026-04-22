@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-The remaining active lane on current repo truth is still inside the focused Live Stage / Watch-Party Live fix pass on `app/watch-party/live-stage/[partyId].tsx`: finish the `Chi'lly Party Members` visibility and participant-quality batch cleanly before any later smoke or proof rerun.
+The remaining active lane on current repo truth is still inside the focused Live Stage / Watch-Party Live fix pass on `app/watch-party/live-stage/[partyId].tsx`: do the one-device smoke check for the newly landed control/comment/reaction/member fixes, then close the pass cleanly if only later two-phone proof remains.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
@@ -11,8 +11,9 @@ The remaining active lane on current repo truth is still inside the focused Live
    the legacy RTC renderer must stay disabled inside the native LiveKit stage owner on Android, and the LiveKit stage room must keep the contained signal read-loop behavior that avoids the earlier dev-client websocket/Event overlay.
 5. Carry forward the new lower interaction contract exactly as landed:
    the overlay now idles for 10 seconds by default, `Lock controls` can hold the control layer open, active interaction still blocks auto-hide, the reaction lane no longer duplicates tray defaults, and Live Stage comments only clear after the message lands in the real room stream.
-6. Fix the remaining `Chi'lly Party Members` visibility gap so joined viewers show up reliably, at least 8 participants are honestly supported now, and the same shared live media truth stays intact.
-7. After that, do only a one-device smoke pass for entry/connect/comments/reactions/`CAMERA LOOKS`/members rendering instead of reopening full two-phone proof in this batch.
+6. Carry forward the new member-card visibility fix exactly as landed:
+   joined viewers now rebuild into `Chi'lly Party Members` from the refreshed room snapshot and active membership truth instead of depending only on presence timing or the locally hidden stage strip.
+7. Do only a one-device smoke pass for entry/connect/lock state/comments/reactions/`CAMERA LOOKS`/members rendering instead of reopening full two-phone proof in this batch.
 8. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
@@ -20,8 +21,8 @@ The remaining active lane on current repo truth is still inside the focused Live
 - keep the verified single-device and two-phone proof baseline intact everywhere else
 - keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch, prior Live Stage interaction polish, and the Android Live Stage runtime fixes intact
 - carry forward the new 10-second lower interaction overlay contract plus `Lock controls` behavior on `app/watch-party/live-stage/[partyId].tsx`
-- finish the `Chi'lly Party Members` visibility batch honestly without inventing fake large-room claims or degrading live media quality
-- do only a later one-device smoke pass after the visibility batch; do not reopen final two-phone proof yet
+- carry forward the new `Chi'lly Party Members` visibility rebuild without inventing fake large-room claims or degrading live media quality
+- do only the one-device smoke pass now; do not reopen final two-phone proof yet
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
@@ -45,7 +46,7 @@ Do not:
 ## Success Criteria
 The next lane is successful when:
 - the first lower-interaction fix batch remains intact: the overlay now uses the 10-second default, `Lock controls` is available, reactions no longer duplicate tray defaults, and comments only clear after they land in the real room stream
-- joined viewers show up in `Chi'lly Party Members` and the owner honestly supports at least 8 participants now without fake large-room claims
+- joined viewers show up in `Chi'lly Party Members` and the owner still stays honest about current scale without fake large-room claims
 - one-device smoke later confirms the Live Stage owner still enters, connects, and keeps comments/reactions/`CAMERA LOOKS`/members rendering intact without a crash regression
 - only later proof work remains after this focused fix pass, not another open code-side Live Stage interaction chapter
 - no route drift, schema drift, fake room powers, or fake social claims are introduced

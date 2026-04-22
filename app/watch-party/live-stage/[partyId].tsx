@@ -128,6 +128,18 @@ type LiveStageCommentRow = {
   created_at?: string | null;
 };
 
+type StagePresenceEntry = {
+  userId?: string;
+  username?: string;
+  avatarUrl?: string;
+  cameraPreviewUrl?: string;
+  camera_preview_url?: string;
+  role?: string;
+  isLive?: boolean;
+  isSpeaking?: boolean;
+  isMuted?: boolean;
+};
+
 const LIVE_FACE_FILTER_OPTIONS = [
   { id: "none", label: "Reset", subtitle: "Natural look" },
   { id: "studio", label: "Studio Glow", subtitle: "Warm lift" },
@@ -572,7 +584,7 @@ export default function WatchPartyLiveStageScreen() {
   }, [myUserId, partyId, syncStageSnapshot]);
 
   const buildStageParticipantsFromPresence = useCallback((options: {
-    state: Record<string, { userId?: string; username?: string; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; role?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean }[] | undefined>;
+    state: Record<string, StagePresenceEntry[] | undefined>;
     trackedUserId: string;
     profileUsername?: string | null;
     profileAvatarUrl?: string;
@@ -588,7 +600,7 @@ export default function WatchPartyLiveStageScreen() {
     const list = [...seenIds].map<StageParticipant | null>((presenceKey) => {
       const presences = options.state[presenceKey];
       const p = Array.isArray(presences)
-        ? presences[0] as { userId?: string; username?: string; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; role?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean }
+        ? presences[0] as StagePresenceEntry
         : undefined;
       const resolvedUserId = String(p?.userId ?? presenceKey).trim();
       if (!resolvedUserId) return null;
@@ -624,6 +636,18 @@ export default function WatchPartyLiveStageScreen() {
       return bMe - aMe;
     });
   }, []);
+
+  useEffect(() => {
+    if (!canUseBetaStage || !partyId || !myUserId) return;
+
+    const state = channelRef.current?.presenceState<StagePresenceEntry>() ?? {};
+    setParticipants(buildStageParticipantsFromPresence({
+      state,
+      trackedUserId: myUserId,
+      profileUsername: myUsername,
+      profileCameraPreviewUrl: myCameraPreviewUrlRef.current,
+    }));
+  }, [buildStageParticipantsFromPresence, canUseBetaStage, myUserId, myUsername, participantStateById, partyId]);
 
   const updateStageMode = useCallback((nextMode: SharedRoomMode) => {
     setStageMode(nextMode);
@@ -1556,6 +1580,16 @@ export default function WatchPartyLiveStageScreen() {
     }
     return visibleStripParticipants;
   }, [currentUserParticipantId, isHybridMode, isLiveFirstMode, visibleStripParticipants]);
+  const communityCardParticipants = useMemo(() => {
+    const sourceParticipants = stripParticipants.filter((participant) => !participantStateById[participant.userId]?.isRemoved);
+    if (isLiveFirstMode) {
+      return sourceParticipants.filter((participant) => participant.role !== "host");
+    }
+    if (isHybridMode) {
+      return sourceParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
+    }
+    return sourceParticipants;
+  }, [currentUserParticipantId, isHybridMode, isLiveFirstMode, participantStateById, stripParticipants]);
   const lowerCommunityRows = useMemo(() => {
     const rows: typeof lowerCommunityParticipants[] = [];
     let pendingRow: typeof lowerCommunityParticipants = [];
@@ -1584,13 +1618,44 @@ export default function WatchPartyLiveStageScreen() {
 
     return rows;
   }, [featuredParticipantById, lowerCommunityParticipants]);
-  const lowerCommunityParticipantIndexById = useMemo(
-    () => Object.fromEntries(lowerCommunityParticipants.map((participant, index) => [participant.userId, index])),
-    [lowerCommunityParticipants],
+  const communityCardRows = useMemo(() => {
+    const rows: typeof communityCardParticipants[] = [];
+    let pendingRow: typeof communityCardParticipants = [];
+
+    communityCardParticipants.forEach((participant) => {
+      const isFeatured = !!featuredParticipantById[participant.userId];
+      if (isFeatured) {
+        if (pendingRow.length > 0) {
+          rows.push(pendingRow);
+          pendingRow = [];
+        }
+        rows.push([participant]);
+        return;
+      }
+
+      pendingRow.push(participant);
+      if (pendingRow.length === 2) {
+        rows.push(pendingRow);
+        pendingRow = [];
+      }
+    });
+
+    if (pendingRow.length > 0) {
+      rows.push(pendingRow);
+    }
+
+    return rows;
+  }, [communityCardParticipants, featuredParticipantById]);
+  const communityCardParticipantIndexById = useMemo(
+    () => Object.fromEntries(communityCardParticipants.map((participant, index) => [participant.userId, index])),
+    [communityCardParticipants],
   );
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
+  const communityCardCountLabel = isLiveFirstMode
+    ? (communityCardParticipants.length > 0 ? `${communityCardParticipants.length} in audience` : "Audience waiting")
+    : `${Math.max(1, communityCardParticipants.length + 1)} in room`;
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
   const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
   const liveRoomJoinLabel = room?.joinPolicy === "locked"
@@ -3146,12 +3211,12 @@ export default function WatchPartyLiveStageScreen() {
                   <View style={styles.stageCommunityDot} />
                   <Text style={styles.stageCommunityLabelHybrid}>Chi'lly Party Members</Text>
                 </View>
-                <Text style={styles.stageCommunityCount}>{lowerCommunityCountLabel}</Text>
+                <Text style={styles.stageCommunityCount}>{communityCardCountLabel}</Text>
               </View>
 
-              {lowerCommunityParticipants.length > 0 ? (
+              {communityCardParticipants.length > 0 ? (
                 <FlatList
-                  data={lowerCommunityRows}
+                  data={communityCardRows}
                   keyExtractor={(row, index) => row.map((participant) => participant.userId).join("|") || `community-row-${index}`}
                   nestedScrollEnabled
                   keyboardShouldPersistTaps="handled"
@@ -3412,7 +3477,7 @@ export default function WatchPartyLiveStageScreen() {
                                     {shouldUseHybridLiveKitVideo ? (
                                       <LiveKitHybridParticipantVideo
                                         participantId={participant.userId}
-                                        remoteTrackIndex={lowerCommunityParticipantIndexById[participant.userId] ?? 0}
+                                        remoteTrackIndex={communityCardParticipantIndexById[participant.userId] ?? 0}
                                         fallback={bubbleMediaUri ? (
                                           <Image
                                             source={{ uri: bubbleMediaUri }}
