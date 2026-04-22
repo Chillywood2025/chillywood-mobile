@@ -1849,13 +1849,6 @@ export default function WatchPartyLiveStageScreen() {
     setInviteSheetVisible(true);
   }, [liveRoomShareCode]);
 
-  useEffect(() => {
-    if (!__DEV__ || !isHost || liveSurface !== "room" || !liveRoomShareCode) return;
-    if (inviteSheetAutolaunchedRef.current === liveRoomShareCode) return;
-    inviteSheetAutolaunchedRef.current = liveRoomShareCode;
-    setInviteSheetVisible(true);
-  }, [isHost, liveRoomShareCode, liveSurface]);
-
   const onSystemShareLiveRoom = useCallback(async () => {
     if (!liveRoomShareCode) return;
     await Share.share({
