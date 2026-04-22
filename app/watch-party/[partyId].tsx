@@ -1455,11 +1455,21 @@ export default function WatchPartyRoomScreen() {
   const inviteableRoomParticipants = useMemo(
     () => liveBubbleParticipants
       .filter((participant) => participant.userId && participant.userId !== currentUserBubbleId)
-      .map((participant) => ({
-        userId: participant.userId,
-        displayName: participant.displayName,
-        avatarUrl: participant.avatarUrl,
-      })),
+      .map((participant) => {
+        const membership = membershipMapRef.current[participant.userId];
+        const searchableUsername = resolveIdentityName(
+          membership?.displayName,
+          participant.displayName,
+          participant.userId,
+        );
+
+        return {
+          userId: participant.userId,
+          displayName: participant.displayName,
+          username: searchableUsername === "Guest" ? undefined : searchableUsername,
+          avatarUrl: participant.avatarUrl,
+        };
+      }),
     [currentUserBubbleId, liveBubbleParticipants],
   );
 

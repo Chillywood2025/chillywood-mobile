@@ -32,7 +32,7 @@ const normalizeInviteSearchText = (value: unknown) => String(value ?? "").trim()
 const matchesSuggestedTarget = (target: ChatUserSearchResult, rawQuery: string) => {
   const normalizedQuery = normalizeInviteSearchText(rawQuery);
   if (normalizedQuery.length < 2) return false;
-  return [target.displayName, target.username, target.tagline].some((value) =>
+  return [target.displayName, target.username, target.tagline, target.userId].some((value) =>
     normalizeInviteSearchText(value).includes(normalizedQuery),
   );
 };
