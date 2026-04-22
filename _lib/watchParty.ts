@@ -862,7 +862,7 @@ export async function evaluatePartyRoomAccess(options: {
   return evaluateRoomAccess({
     partyId: room.partyId,
     room,
-    membership: membership ? { ...membership, userId: safeUserId } : safeUserId ? { userId: safeUserId } : null,
+    membership: membership ? { ...membership, userId: safeUserId } : null,
     hasWritableIdentity: !!writableUserId,
   });
 }

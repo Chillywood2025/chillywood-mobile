@@ -184,6 +184,13 @@ const getRoomAccessMessage = (access: Pick<RoomAccessResolution, "reason" | "lab
   return "Unable to confirm your room access right now.";
 };
 
+const getBlockedRoomTitle = (access: Pick<RoomAccessResolution, "reason"> | null | undefined) => {
+  if (access?.reason === "room_locked") return "Room locked";
+  if (access?.reason === "removed") return "Room access removed";
+  if (access?.reason === "identity_required") return "Sign in required";
+  return "Room access unavailable";
+};
+
 const getSafeRoomTitleLabel = (titleName: string | null, room: WatchPartyState, fallbackLabel: string) => {
   const resolvedTitle = String(titleName ?? "").trim();
   if (resolvedTitle) return resolvedTitle;
@@ -241,6 +248,7 @@ export default function WatchPartyRoomScreen() {
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
+  const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -507,6 +515,7 @@ export default function WatchPartyRoomScreen() {
     let cancelled = false;
     setNotFound(false);
     setAccessGate(null);
+    setBlockedRoomAccess(null);
 
     const bootstrap = async () => {
       try {
@@ -580,7 +589,7 @@ export default function WatchPartyRoomScreen() {
           setLoading(false);
           return;
         } else if (access && access.isBlocked) {
-          setNotFound(true);
+          setBlockedRoomAccess(access);
           setLoading(false);
           return;
         }
@@ -926,16 +935,20 @@ export default function WatchPartyRoomScreen() {
       reportDebugQuery({ name: "party.room", status: "loading", error: null });
       return;
     }
+    if (blockedRoomAccess) {
+      reportDebugQuery({ name: "party.room", status: "error", error: getRoomAccessMessage(blockedRoomAccess) });
+      return;
+    }
     if (notFound || !room) {
       reportDebugQuery({ name: "party.room", status: "error", error: "Room not found" });
       return;
     }
     reportDebugQuery({ name: "party.room", status: "success", error: null });
-  }, [partyId, loading, notFound, room]);
+  }, [blockedRoomAccess, partyId, loading, notFound, room]);
 
   useEffect(() => {
-    reportDebugError(notFound ? "Room not found" : null);
-  }, [notFound]);
+    reportDebugError(blockedRoomAccess ? getRoomAccessMessage(blockedRoomAccess) : (notFound ? "Room not found" : null));
+  }, [blockedRoomAccess, notFound]);
 
   // ── Host: toggle mute reactions ──────────────────────────────────────────────
   const onToggleMuteReactions = useCallback(async () => {
@@ -1756,6 +1769,20 @@ export default function WatchPartyRoomScreen() {
           }}
           onClose={() => setAccessSheetVisible(false)}
         />
+      </View>
+    );
+  }
+
+  if (blockedRoomAccess && room) {
+    return (
+      <View style={styles.center}>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>{getBlockedRoomTitle(blockedRoomAccess)}</Text>
+          <Text style={styles.errorBody}>{getRoomAccessMessage(blockedRoomAccess)}</Text>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+            <Text style={styles.secondaryBtnText}>← Go Back</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }

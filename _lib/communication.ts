@@ -603,7 +603,7 @@ export async function evaluateCommunicationRoomAccess(options: {
 }): Promise<RoomAccessDecision> {
   const writableUserId = await getWritablePartyUserId();
   const safeUserId = String(options.userId ?? writableUserId ?? "").trim();
-  const membership = options.membership ?? (safeUserId ? { userId: safeUserId } : null);
+  const membership = options.membership ?? null;
 
   return evaluateRoomAccess({
     partyId: options.room.linkedPartyId || options.room.roomId,
