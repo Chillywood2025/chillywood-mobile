@@ -118,6 +118,7 @@ export default function WatchPartyIndexScreen() {
   const isLiveEntryMode = String(Array.isArray(params.mode) ? params.mode[0] : params.mode ?? "").trim().toLowerCase() === "live";
   const sourceParam = String(Array.isArray(params.source) ? params.source[0] : params.source ?? "").trim().toLowerCase();
   const isPlayerWatchPartyLiveFlow = sourceParam === PLAYER_WATCH_PARTY_SOURCE;
+  const entryLaneKey = `${isLiveEntryMode ? "live" : "party"}:${isPlayerWatchPartyLiveFlow ? "player" : "standard"}`;
   const initialRouteRoomCode = String(Array.isArray(params.roomCode) ? params.roomCode[0] : params.roomCode ?? "").trim().toUpperCase();
   const initialRoutePartyId = String(
     (Array.isArray(params.roomId) ? params.roomId[0] : params.roomId)
@@ -158,6 +159,7 @@ export default function WatchPartyIndexScreen() {
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
+  const lastEntryLaneKeyRef = useRef(entryLaneKey);
   const branding = resolveBrandingConfig(appConfig);
   const features = resolveFeatureConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
@@ -190,6 +192,19 @@ export default function WatchPartyIndexScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (lastEntryLaneKeyRef.current === entryLaneKey) return;
+    lastEntryLaneKeyRef.current = entryLaneKey;
+    setPreview(null);
+    setJoinError(null);
+    setJoinLookupBusy(false);
+    setAccessSheetVisible(false);
+    setAccessSheetReason(null);
+    setPendingAccessPreview(null);
+    setPendingAccessDecision(null);
+    setInviteSheetVisible(false);
+  }, [entryLaneKey]);
 
   const resolveRoomTitleName = useCallback(async (roomTitleId: string | null | undefined) => {
     const normalizedTitleId = String(roomTitleId ?? "").trim();
@@ -735,7 +750,11 @@ export default function WatchPartyIndexScreen() {
 
   const inferredWaitingRoomType: WatchPartyRoomType = preview?.room.roomType
     ?? preparedRoom?.room.roomType
-    ?? (incomingHandoff?.titleId || initialRouteTitleId || isPlayerWatchPartyLiveFlow ? "title" : "live");
+    ?? (incomingHandoff?.titleId || initialRouteTitleId || isPlayerWatchPartyLiveFlow
+      ? "title"
+      : isLiveEntryMode
+        ? "live"
+        : "title");
   const activeRoomType: WatchPartyRoomType = inferredWaitingRoomType;
   const isLiveWaitingRoom = activeRoomType === "live" && !isPlayerWatchPartyLiveFlow;
   const activeRoomContext = preview?.room ?? preparedRoom?.room ?? null;
