@@ -3,6 +3,7 @@ import React from "react";
 import {
     FlatList,
     Image,
+    StyleSheet,
     Text,
     TouchableOpacity,
     View,
@@ -77,6 +78,7 @@ export function LiveBottomStrip({
   return (
     <View style={styles.overlay} pointerEvents={pointerEvents}>
       <FlatList
+        style={baseStyles.list}
         pointerEvents="box-none"
         horizontal
         data={participants}
@@ -141,3 +143,10 @@ export function LiveBottomStrip({
     </View>
   );
 }
+
+const baseStyles = StyleSheet.create({
+  list: {
+    alignSelf: "flex-start",
+    flexGrow: 0,
+  },
+});
