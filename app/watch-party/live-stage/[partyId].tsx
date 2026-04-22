@@ -1022,16 +1022,18 @@ export default function WatchPartyLiveStageScreen() {
     && !!communicationRoomId
     && !shouldRenderLiveKitStage
     && stageMode !== "hybrid";
+  // Avoid loading the legacy RTC renderer inside the native LiveKit stage path on Android.
+  const shouldAllowLegacyStageRtcModule = !liveKitFoundationEnabled || Platform.OS === "web";
   const RTCView = useMemo<CommunicationRTCViewComponent | undefined>(() => {
-    if (!shouldRenderLegacyStageRtc) return undefined;
+    if (!shouldRenderLegacyStageRtc || !shouldAllowLegacyStageRtcModule) return undefined;
     return getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
-  }, [shouldRenderLegacyStageRtc]);
+  }, [shouldAllowLegacyStageRtcModule, shouldRenderLegacyStageRtc]);
   const {
     localStreamURL,
     participants: stageMediaParticipants,
   } = useCommunicationRoomSession({
     roomId: communicationRoomId,
-    enabled: shouldRenderLegacyStageRtc,
+    enabled: shouldRenderLegacyStageRtc && shouldAllowLegacyStageRtcModule,
     analyticsContext: {
       surface: "live-room",
       role: isHost ? "host" : "viewer",

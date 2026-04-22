@@ -1,6 +1,6 @@
 import "../../_lib/livekit/dom-exception-polyfill";
 
-import { Track } from "livekit-client";
+import { Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
@@ -30,6 +30,38 @@ type LiveKitStageMediaContentProps = {
 };
 
 const LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
+
+type LiveKitSignalClientPatchable = {
+  startReadingLoop?: (...args: unknown[]) => Promise<unknown>;
+  handleWSError?: (error: unknown) => void;
+  __chillywoodStageReadingLoopPatched?: boolean;
+};
+
+const patchLiveKitSignalReadingLoop = (room: Room, surfaceLabel: string) => {
+  const client = (room as unknown as {
+    engine?: { client?: LiveKitSignalClientPatchable };
+  }).engine?.client;
+
+  if (!client || client.__chillywoodStageReadingLoopPatched || typeof client.startReadingLoop !== "function") {
+    return;
+  }
+
+  const originalStartReadingLoop = client.startReadingLoop.bind(client);
+
+  client.startReadingLoop = async (...args: unknown[]) => {
+    try {
+      return await originalStartReadingLoop(...args);
+    } catch (error) {
+      debugLog("livekit", "contained stage signal read loop error", {
+        surfaceLabel,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      client.handleWSError?.(error);
+      return undefined;
+    }
+  };
+  client.__chillywoodStageReadingLoopPatched = true;
+};
 
 const toConnectionLabel = (connectionState: unknown) => {
   const normalized = String(connectionState ?? "").trim();
@@ -182,6 +214,11 @@ export function LiveKitStageMediaSurface({
   const fallbackTriggeredRef = useRef(false);
   const [didConnectOnce, setDidConnectOnce] = useState(false);
   const publishLocalCamera = joinContract.participantRole !== "viewer";
+  const room = useMemo(() => {
+    const nextRoom = new Room({ adaptiveStream: true, dynacast: false });
+    patchLiveKitSignalReadingLoop(nextRoom, surfaceLabel);
+    return nextRoom;
+  }, [surfaceLabel]);
 
   const triggerFallback = useCallback(
     (reason: "connection_timeout" | "disconnected" | "room_error", error?: unknown) => {
@@ -242,13 +279,13 @@ export function LiveKitStageMediaSurface({
   return (
     <View style={[styles.surface, fillParent && styles.surfaceFill, containerStyle]} pointerEvents="none">
       <LiveKitRoom
+        room={room}
         serverUrl={joinContract.serverUrl}
         token={joinContract.participantToken}
         connect
         audio={false}
         video={publishLocalCamera}
         connectOptions={{ autoSubscribe: true }}
-        options={{ adaptiveStream: true, dynacast: false }}
         onConnected={() => {
           setDidConnectOnce(true);
           debugLog("livekit", "room connected", {
