@@ -773,12 +773,12 @@ export default function WatchPartyIndexScreen() {
     : (String(branding.partyWaitingRoomTitle || "Party Waiting Room").trim() || "Party Waiting Room");
   const waitingRoomBody = isLiveWaitingRoom
     ? (topRoomCode
-      ? `Live room code ${topRoomCode} is ready for entry.`
+      ? `Live room code ${topRoomCode} is ready.`
       : isPreparingInitialCode
         ? "Preparing the live room code before entry opens."
         : didInitialCodePrepFail
           ? "Live room code unavailable right now. Generate a new code to continue."
-          : "Choose host or viewer, then continue into Live Room.")
+          : "Create or join the live room to continue.")
     : (topRoomCode
       ? `${partyTitleName} · room code ${topRoomCode}`
       : isPreparingInitialCode
@@ -786,8 +786,8 @@ export default function WatchPartyIndexScreen() {
         : didInitialCodePrepFail
           ? "Room code unavailable right now. Generate a new code to continue."
           : partyTitleId
-            ? `${partyTitleName} is locked for party entry.`
-            : "Pick a title or join by code, then continue into Party Room.");
+            ? `${partyTitleName} is selected for this room.`
+            : "Create the room or join by code to continue.");
   const waitingRoomTagline = isLiveWaitingRoom
     ? "Set the live room before stage entry."
     : "Set the party room before shared playback.";
@@ -798,20 +798,14 @@ export default function WatchPartyIndexScreen() {
     : `Join me in Chi'llywood Watch-Party Live.\n\nRoom code: ${topRoomCode}\n\nOpen Chi'llywood -> Watch-Party Live -> enter the code to join the party room.`;
   const liveReadinessRows = [
     {
-      label: "Invite path",
+      label: "Room code",
       status: topRoomCode ? "Ready" : (isPreparingInitialCode ? "Preparing" : "Needed"),
       detail: topRoomCode
-        ? `Live room code ${topRoomCode} is ready to share before the room opens.`
+        ? `Live room code ${topRoomCode} is ready to share.`
         : isPreparingInitialCode
           ? "Preparing the live code before host or viewer entry opens."
           : "Generate a live room code before you invite or host this session.",
       tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
-    },
-    {
-      label: "Next room",
-      status: "Live Room",
-      detail: "Continue into Live Room first. Enter Live Stage from there when the room setup is ready.",
-      tone: "ready" as const,
     },
   ];
   const livePermissionsBody = `${getJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
@@ -820,7 +814,7 @@ export default function WatchPartyIndexScreen() {
       label: "Title",
       status: partyTitleId ? "Ready" : "Needed",
       detail: partyTitleId
-        ? `${partyTitleName} is locked for this waiting-room entry.`
+        ? `${partyTitleName} is selected for this waiting room.`
         : "Confirm the title before you host so the shared room stays title-first and intentional.",
       tone: partyTitleId ? "ready" as const : "needed" as const,
     },
@@ -834,14 +828,95 @@ export default function WatchPartyIndexScreen() {
           : "Generate or enter a party code before you bring people into Party Room.",
       tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
     },
-    {
-      label: "Next room",
-      status: "Party Room",
-      detail: "Continue into Party Room first. Shared Watch-Party Live playback starts from there, not from this waiting room.",
-      tone: "ready" as const,
-    },
   ];
   const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
+  const waitingRoomReadinessRows = isLiveWaitingRoom ? liveReadinessRows : partyReadinessRows;
+  const waitingRoomPermissionsBody = isLiveWaitingRoom ? livePermissionsBody : partyPermissionsBody;
+  const waitingRoomInviteBody = isPreparingInitialCode
+    ? (isLiveWaitingRoom
+      ? "Preparing a shareable code for this live waiting room."
+      : "Preparing a shareable room code for this waiting room.")
+    : "Invite people in Chi'lly Chat, or fall back to system share.";
+  const shouldShowWaitingRoomSetupShell = Boolean(
+    activeRoomContext || topRoomCode || partyTitleId || isPreparingInitialCode || didInitialCodePrepFail,
+  );
+  const shouldShowWaitingRoomInviteSection = Boolean(topRoomCode || isPreparingInitialCode || didInitialCodePrepFail);
+  const roomCodeButtonLabel = topRoomCode ? "Generate New Code" : "Generate Room Code";
+
+  const renderWaitingRoomSetupShell = () => {
+    if (!shouldShowWaitingRoomSetupShell) return null;
+
+    return (
+      <>
+        <View style={styles.readinessCard}>
+          <Text style={styles.readinessLabel}>SETUP STATUS</Text>
+          {waitingRoomReadinessRows.map((entry) => (
+            <View key={entry.label} style={styles.readinessRow}>
+              <View style={[styles.readinessDot, entry.tone === "ready"
+                ? styles.readinessDotReady
+                : entry.tone === "pending"
+                  ? styles.readinessDotPending
+                  : styles.readinessDotNeeded]} />
+              <View style={styles.readinessMeta}>
+                <View style={styles.readinessHeadline}>
+                  <Text style={styles.readinessTitle}>{entry.label}</Text>
+                  <Text style={styles.readinessStatus}>{entry.status}</Text>
+                </View>
+                <Text style={styles.readinessBody}>{entry.detail}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.permissionsCard}>
+          <Text style={styles.permissionsLabel}>ROOM ACCESS</Text>
+          <Text style={styles.permissionsBody}>
+            {waitingRoomPermissionsBody}
+          </Text>
+        </View>
+
+        {shouldShowWaitingRoomInviteSection ? (
+          <>
+            <RoomCodeInviteCard
+              roomCode={roomCodeCardValue}
+              bodyText={waitingRoomInviteBody}
+              actionLabel="Invite in app"
+              onActionPress={() => {
+                if (!topRoomCode || roomCodeActionBusy) return;
+                setInviteSheetVisible(true);
+              }}
+              styles={{
+                card: styles.inviteCard,
+                left: styles.inviteMeta,
+                label: styles.inviteLabel,
+                code: styles.inviteCode,
+                body: styles.inviteBody,
+                actionBtn: styles.generateCodeButton,
+                actionText: styles.generateCodeButtonText,
+              }}
+            />
+            <TouchableOpacity
+              style={[styles.generateCodeButton, roomCodeActionBusy && styles.generateCodeButtonDisabled]}
+              onPress={onGenerateNewCode}
+              activeOpacity={0.85}
+              disabled={roomCodeActionBusy || !features.watchPartyEnabled}
+            >
+              {refreshingCode || isPreparingInitialCode ? (
+                <View style={styles.lookingRow}>
+                  <ActivityIndicator color="#fff" size="small" />
+                  <Text style={styles.generateCodeButtonText}>
+                    {isPreparingInitialCode ? "  Preparing room code…" : "  Generating new code…"}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.generateCodeButtonText}>{roomCodeButtonLabel}</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : null}
+      </>
+    );
+  };
 
   return (
     <View style={styles.outerFlex}>
@@ -897,7 +972,7 @@ export default function WatchPartyIndexScreen() {
 
         {/* ── Actions ─────────────────────────────────────────────────── */}
         <View style={styles.actionArea}>
-          <Text style={styles.actionAreaLabel}>ENTRY CONTROLS</Text>
+          <Text style={styles.actionAreaLabel}>START HERE</Text>
 
           {!features.watchPartyEnabled ? (
             <View style={styles.joinCard}>
@@ -916,7 +991,7 @@ export default function WatchPartyIndexScreen() {
               </Text>
             ) : partyTitleLocked ? (
               <Text style={styles.joinSupportText}>
-                {partyTitleName} is set for this entry. Create the room, share the code, and finish setup in Party Room.
+                {partyTitleName} is set. Create the room, share the code, and finish setup in Party Room.
               </Text>
             ) : (
               <TextInput
@@ -959,11 +1034,11 @@ export default function WatchPartyIndexScreen() {
             <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "JOIN A LIVE ROOM" : "JOIN WATCH-PARTY LIVE"}</Text>
             {isLiveWaitingRoom ? (
               <Text style={styles.joinSupportText}>
-                Enter a live room code, preview the lane, and continue into Live Room.
+                Enter a live room code to preview the lane and continue.
               </Text>
             ) : (
               <Text style={styles.joinSupportText}>
-                Enter a room code, preview the title, and continue into Party Room.
+                Enter a room code to preview the title and continue.
               </Text>
             )}
 
@@ -1029,108 +1104,7 @@ export default function WatchPartyIndexScreen() {
           </View>
         </View>
 
-        {isLiveWaitingRoom ? (
-          <>
-            <View style={styles.readinessCard}>
-              <Text style={styles.readinessLabel}>READY CHECK</Text>
-              {liveReadinessRows.map((entry) => (
-                <View key={entry.label} style={styles.readinessRow}>
-                  <View style={[styles.readinessDot, entry.tone === "ready"
-                    ? styles.readinessDotReady
-                    : entry.tone === "pending"
-                      ? styles.readinessDotPending
-                      : styles.readinessDotNeeded]} />
-                  <View style={styles.readinessMeta}>
-                    <View style={styles.readinessHeadline}>
-                      <Text style={styles.readinessTitle}>{entry.label}</Text>
-                      <Text style={styles.readinessStatus}>{entry.status}</Text>
-                    </View>
-                    <Text style={styles.readinessBody}>{entry.detail}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.permissionsCard}>
-              <Text style={styles.permissionsLabel}>ROOM ACCESS</Text>
-              <Text style={styles.permissionsBody}>
-                {livePermissionsBody}
-              </Text>
-            </View>
-          </>
-        ) : (
-          <>
-            <View style={styles.readinessCard}>
-              <Text style={styles.readinessLabel}>READY CHECK</Text>
-              {partyReadinessRows.map((entry) => (
-                <View key={entry.label} style={styles.readinessRow}>
-                  <View style={[styles.readinessDot, entry.tone === "ready"
-                    ? styles.readinessDotReady
-                    : entry.tone === "pending"
-                      ? styles.readinessDotPending
-                      : styles.readinessDotNeeded]} />
-                  <View style={styles.readinessMeta}>
-                    <View style={styles.readinessHeadline}>
-                      <Text style={styles.readinessTitle}>{entry.label}</Text>
-                      <Text style={styles.readinessStatus}>{entry.status}</Text>
-                    </View>
-                    <Text style={styles.readinessBody}>{entry.detail}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.permissionsCard}>
-              <Text style={styles.permissionsLabel}>ROOM ACCESS</Text>
-              <Text style={styles.permissionsBody}>
-                {partyPermissionsBody}
-              </Text>
-            </View>
-          </>
-        )}
-
-        {/* ── Room code / invite ──────────────────────────────────────── */}
-        <RoomCodeInviteCard
-          roomCode={roomCodeCardValue}
-          bodyText={isPreparingInitialCode
-            ? (isLiveWaitingRoom
-              ? "Preparing a shareable code for this live waiting room."
-              : "Preparing a shareable room code for this waiting room.")
-            : (isLiveWaitingRoom
-              ? "Invite people in Chi'lly Chat before the room opens, or fall back to system share."
-              : "Invite people in Chi'lly Chat before the party opens, or fall back to system share.")}
-          actionLabel="Invite in app"
-          onActionPress={() => {
-            if (!topRoomCode || roomCodeActionBusy) return;
-            setInviteSheetVisible(true);
-          }}
-          styles={{
-            card: styles.inviteCard,
-            left: styles.inviteMeta,
-            label: styles.inviteLabel,
-            code: styles.inviteCode,
-            body: styles.inviteBody,
-            actionBtn: styles.generateCodeButton,
-            actionText: styles.generateCodeButtonText,
-          }}
-        />
-        <TouchableOpacity
-          style={[styles.generateCodeButton, roomCodeActionBusy && styles.generateCodeButtonDisabled]}
-          onPress={onGenerateNewCode}
-          activeOpacity={0.85}
-          disabled={roomCodeActionBusy || !features.watchPartyEnabled}
-        >
-          {refreshingCode || isPreparingInitialCode ? (
-            <View style={styles.lookingRow}>
-              <ActivityIndicator color="#fff" size="small" />
-              <Text style={styles.generateCodeButtonText}>
-                {isPreparingInitialCode ? "  Preparing room code…" : "  Generating new code…"}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.generateCodeButtonText}>Generate New Code</Text>
-          )}
-        </TouchableOpacity>
+        {renderWaitingRoomSetupShell()}
 
         </ScrollView>
       </KeyboardAvoidingView>
