@@ -484,6 +484,7 @@ export default function WatchPartyLiveStageScreen() {
   const [hybridCommentSending, setHybridCommentSending] = useState(false);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
+  const [stageOverlayAutoHideArmed, setStageOverlayAutoHideArmed] = useState(false);
   const [controlsLocked, setControlsLocked] = useState(false);
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [sessionSeconds, setSessionSeconds] = useState(0);
@@ -1319,10 +1320,13 @@ export default function WatchPartyLiveStageScreen() {
     }, 220);
   }, [clearStageOverlayAutoHideTimeout, clearStageOverlayFinalizeHideTimeout, closeStageOverlayPanels, stageOverlayMotion]);
 
-  const revealStageOverlay = useCallback(() => {
+  const revealStageOverlay = useCallback((options?: { armAutoHide?: boolean }) => {
     clearStageOverlayAutoHideTimeout();
     clearStageOverlayFinalizeHideTimeout();
     stageOverlayLastInteractionAtRef.current = Date.now();
+    if (options?.armAutoHide !== false) {
+      setStageOverlayAutoHideArmed(true);
+    }
     setStageOverlayVisible(true);
     stageOverlayMotion.stopAnimation();
     Animated.timing(stageOverlayMotion, {
@@ -1335,6 +1339,10 @@ export default function WatchPartyLiveStageScreen() {
   const onToggleControlsLock = useCallback(() => {
     revealStageOverlay();
     setControlsLocked((value) => !value);
+  }, [revealStageOverlay]);
+
+  const armAndRevealStageOverlay = useCallback(() => {
+    revealStageOverlay();
   }, [revealStageOverlay]);
 
   const emitParticipantUpdate = useCallback(async (participantId: string, changes: Partial<SharedParticipantLocalState>) => {
@@ -2031,6 +2039,7 @@ export default function WatchPartyLiveStageScreen() {
     }
 
     closeStageOverlayPanels();
+    setStageOverlayAutoHideArmed(false);
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
@@ -2050,6 +2059,7 @@ export default function WatchPartyLiveStageScreen() {
 
   const onReturnToLiveRoom = useCallback(() => {
     closeStageOverlayPanels();
+    setStageOverlayAutoHideArmed(false);
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
@@ -2180,17 +2190,19 @@ export default function WatchPartyLiveStageScreen() {
 
   useEffect(() => {
     setControlsLocked(false);
+    setStageOverlayAutoHideArmed(false);
   }, [partyId]);
 
   useEffect(() => {
     if (isLiveRoomSurface) {
+      setStageOverlayAutoHideArmed(false);
       stageOverlayLastInteractionAtRef.current = Date.now();
       setStageOverlayVisible(true);
       stageOverlayMotion.setValue(1);
       return;
     }
 
-    revealStageOverlay();
+    revealStageOverlay({ armAutoHide: false });
   }, [isLiveRoomSurface, revealStageOverlay, stageOverlayMotion]);
 
   useEffect(() => {
@@ -2200,6 +2212,8 @@ export default function WatchPartyLiveStageScreen() {
     }
 
     if (
+      !stageOverlayAutoHideArmed
+      || (
       controlsLocked
       || commentsOpen
       || hybridCommentFocused
@@ -2207,6 +2221,7 @@ export default function WatchPartyLiveStageScreen() {
       || stageControlsOpen
       || faceFilterSheetOpen
       || stageMenuOpen
+      )
     ) {
       clearStageOverlayAutoHideTimeout();
       return;
@@ -2231,6 +2246,7 @@ export default function WatchPartyLiveStageScreen() {
     reactionPickerOpen,
     stageControlsOpen,
     stageMenuOpen,
+    stageOverlayAutoHideArmed,
     stageOverlayVisible,
   ]);
 
@@ -2590,6 +2606,7 @@ export default function WatchPartyLiveStageScreen() {
             accessibilityRole="button"
             accessibilityLabel={controlsLocked ? "Unlock Live Stage controls" : "Lock Live Stage controls"}
             hitSlop={STAGE_CONTROL_HIT_SLOP}
+            onPressIn={armAndRevealStageOverlay}
             onPress={onToggleControlsLock}
             testID="live-stage-lock-controls-button"
           >
@@ -2605,6 +2622,7 @@ export default function WatchPartyLiveStageScreen() {
             accessibilityRole="button"
             accessibilityLabel="Live Stage Menu"
             hitSlop={STAGE_CONTROL_HIT_SLOP}
+            onPressIn={armAndRevealStageOverlay}
             onPress={onToggleStageMenu}
             testID="live-stage-menu-button"
           >
@@ -2618,6 +2636,7 @@ export default function WatchPartyLiveStageScreen() {
             accessibilityRole="button"
             accessibilityLabel="Return to Live Room"
             hitSlop={STAGE_CONTROL_HIT_SLOP}
+            onPressIn={armAndRevealStageOverlay}
             onPress={onReturnToLiveRoom}
             testID="live-stage-live-room-button"
           >
@@ -2752,7 +2771,7 @@ export default function WatchPartyLiveStageScreen() {
       pointerEvents="box-none"
       collapsable={false}
       renderToHardwareTextureAndroid
-      onTouchStart={revealStageOverlay}
+      onTouchStart={armAndRevealStageOverlay}
     >
       <View
         style={[styles.liveStageLowerDock, styles.liveStageLowerDockHybrid]}
@@ -3186,7 +3205,7 @@ export default function WatchPartyLiveStageScreen() {
         {!stageOverlayVisible ? (
           <Pressable
             style={[styles.stageTapRevealSurface, styles.stageTapRevealSurfaceHybrid]}
-            onPress={revealStageOverlay}
+            onPress={armAndRevealStageOverlay}
           />
         ) : null}
 

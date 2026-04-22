@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-The remaining active lane on current repo truth is still inside the focused Live Stage / Watch-Party Live fix pass on `app/watch-party/live-stage/[partyId].tsx`: do the one-device smoke check for the newly landed control/comment/reaction/member fixes, then close the pass cleanly if only later two-phone proof remains.
+The remaining active lane on current repo truth is still inside the focused Live Stage / Watch-Party Live fix pass on `app/watch-party/live-stage/[partyId].tsx`: run the one-device smoke check after the newly landed stage-entry overlay fix, then close the pass cleanly if only later two-phone proof remains.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
@@ -11,16 +11,19 @@ The remaining active lane on current repo truth is still inside the focused Live
    the legacy RTC renderer must stay disabled inside the native LiveKit stage owner on Android, and the LiveKit stage room must keep the contained signal read-loop behavior that avoids the earlier dev-client websocket/Event overlay.
 5. Carry forward the new lower interaction contract exactly as landed:
    the overlay now idles for 10 seconds by default, `Lock controls` can hold the control layer open, active interaction still blocks auto-hide, the reaction lane no longer duplicates tray defaults, and Live Stage comments only clear after the message lands in the real room stream.
-6. Carry forward the new member-card visibility fix exactly as landed:
+6. Carry forward the new stage-entry overlay fix exactly as landed:
+   when the actual Live Stage owner first opens, the overlay stays visible until the user begins interacting with the stage controls, so the first tap no longer loses the top-row controls during entry.
+7. Carry forward the new member-card visibility fix exactly as landed:
    joined viewers now rebuild into `Chi'lly Party Members` from the refreshed room snapshot and active membership truth instead of depending only on presence timing or the locally hidden stage strip.
-7. Do only a one-device smoke pass for entry/connect/lock state/comments/reactions/`CAMERA LOOKS`/members rendering instead of reopening full two-phone proof in this batch.
-8. Keep unrelated local dirt out of the checkpoint.
+8. Do only a one-device smoke pass for entry/connect/lock state/comments/reactions/`CAMERA LOOKS`/members rendering instead of reopening full two-phone proof in this batch.
+9. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
 - do not widen beyond the remaining Live Stage / Watch-Party Live owner fixes
 - keep the verified single-device and two-phone proof baseline intact everywhere else
 - keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch, prior Live Stage interaction polish, and the Android Live Stage runtime fixes intact
 - carry forward the new 10-second lower interaction overlay contract plus `Lock controls` behavior on `app/watch-party/live-stage/[partyId].tsx`
+- carry forward the new stage-entry overlay arming fix so the first top-row stage interaction is not lost during entry
 - carry forward the new `Chi'lly Party Members` visibility rebuild without inventing fake large-room claims or degrading live media quality
 - do only the one-device smoke pass now; do not reopen final two-phone proof yet
 - keep unrelated local dirt out of the checkpoint
