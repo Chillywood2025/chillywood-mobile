@@ -175,7 +175,7 @@ const SIM_REACTIONS = ["👍", "🔥", "👏", "❤️", "✨", "😂"];
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
 const STAGE_HEARTBEAT_INTERVAL_MILLIS = 10_000;
-const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 12_000;
+const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 10_000;
 const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as const;
 const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
 type CommunicationRTCViewComponent = React.ComponentType<{
@@ -468,9 +468,11 @@ export default function WatchPartyLiveStageScreen() {
   const [hybridCommentFocused, setHybridCommentFocused] = useState(false);
   const [hybridComments, setHybridComments] = useState<LiveStageComment[]>([]);
   const [hybridCommentDraft, setHybridCommentDraft] = useState("");
+  const [hybridCommentError, setHybridCommentError] = useState("");
   const [hybridCommentSending, setHybridCommentSending] = useState(false);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
+  const [controlsLocked, setControlsLocked] = useState(false);
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
@@ -1211,21 +1213,9 @@ export default function WatchPartyLiveStageScreen() {
   }, [displayParticipants]);
 
   const emitFloatingReaction = useCallback((emoji: string) => {
-    const dominantCandidate = visibleStripParticipants.find((participant) => {
-      const participantState = participantStateById[participant.userId];
-      const isMuted = participantState?.isMuted ?? !!participant.isMuted;
-      const role = participantState?.role ?? (participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener");
-      const isSpeakerRole = role === "speaker";
-      const isSpeakingNow = !isMuted && !!(isSpeakingById[participant.userId] || (isSpeakerRole && (!!participant.isSpeaking || participant.userId === activeSpeakerUserId)));
-      return isSpeakingNow;
-    });
-    const dominantIndex = dominantCandidate ? visibleStripParticipants.findIndex((participant) => participant.userId === dominantCandidate.userId) : -1;
-    const dominantBiasX = dominantIndex >= 0 && visibleStripParticipants.length > 1
-      ? ((dominantIndex / (visibleStripParticipants.length - 1)) - 0.5) * 52
-      : 0;
     const id = `reaction-${Date.now()}-${reactionCounterRef.current++}`;
-    const originX = Math.round(dominantBiasX);
-    const drift = Math.floor(Math.random() * 90) - 45;
+    const originX = Math.floor(Math.random() * 26) - 13;
+    const drift = Math.floor(Math.random() * 44) - 22;
     const rise = new Animated.Value(0);
     const opacity = new Animated.Value(1);
     const scale = new Animated.Value(0.85);
@@ -1243,7 +1233,7 @@ export default function WatchPartyLiveStageScreen() {
     ]).start(() => {
       setFloatingReactions((prev) => prev.filter((reaction) => reaction.id !== id));
     });
-  }, [visibleStripParticipants, participantStateById, isSpeakingById, activeSpeakerUserId]);
+  }, []);
 
   const triggerReactionBurst = useCallback((emoji: string) => {
     Animated.sequence([
@@ -1317,6 +1307,11 @@ export default function WatchPartyLiveStageScreen() {
       useNativeDriver: true,
     }).start();
   }, [clearStageOverlayAutoHideTimeout, clearStageOverlayFinalizeHideTimeout, stageOverlayMotion]);
+
+  const onToggleControlsLock = useCallback(() => {
+    revealStageOverlay();
+    setControlsLocked((value) => !value);
+  }, [revealStageOverlay]);
 
   const emitParticipantUpdate = useCallback(async (participantId: string, changes: Partial<SharedParticipantLocalState>) => {
     if (!partyId || !participantId || !isHost) return;
@@ -1675,11 +1670,7 @@ export default function WatchPartyLiveStageScreen() {
     ? "Host-led live presentation mode with audience energy at the front."
     : `${branding.watchPartyLabel} keeps shared content inside the live presentation while comments, reactions, and audience presence stay active.`;
   const stageReactionQuickEmojis = useMemo(
-    () => Array.from(new Set([
-      ...recentReactionEmojis,
-      "❤️",
-      "👏",
-    ])).slice(0, 2),
+    () => Array.from(new Set(recentReactionEmojis)).slice(0, 2),
     [recentReactionEmojis],
   );
   const stageReactionQuickLabel = stageReactionsEnabled
@@ -1731,6 +1722,7 @@ export default function WatchPartyLiveStageScreen() {
   const stageFaceFilterHelper = canUseStageFaceFilters
     ? activeLiveFaceFilter.subtitle
     : "Viewers can watch, comment, and react here. Camera looks unlock once you're on camera.";
+  const stageTopChromeStatusLabel = `${lowerCommunityCountLabel} · ${liveStageProtectionStatus}${controlsLocked ? " · Controls locked" : ""}`;
 
   const mapLiveStageCommentRow = useCallback((row: LiveStageCommentRow): LiveStageComment | null => {
     const id = String(row.id ?? "").trim();
@@ -1756,6 +1748,27 @@ export default function WatchPartyLiveStageScreen() {
       isMe: userId === trackedUserId,
     };
   }, [resolvedCurrentUsername, trackedUserId]);
+
+  const fetchHybridComments = useCallback(async () => {
+    if (!partyId) return [] as LiveStageComment[];
+
+    try {
+      const { data, error } = await supabase
+        .from("watch_party_room_messages")
+        .select("id,user_id,username,text,created_at")
+        .eq("party_id", partyId)
+        .order("created_at", { ascending: true })
+        .limit(120);
+
+      if (error || !data) return [] as LiveStageComment[];
+
+      return (data as LiveStageCommentRow[])
+        .map((row) => mapLiveStageCommentRow(row))
+        .filter(Boolean) as LiveStageComment[];
+    } catch {
+      return [] as LiveStageComment[];
+    }
+  }, [mapLiveStageCommentRow, partyId]);
 
   useEffect(() => {
     if (!__DEV__ || !canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
@@ -1792,6 +1805,7 @@ export default function WatchPartyLiveStageScreen() {
   useEffect(() => {
     if (!canUseBetaStage || !partyId || !usesSharedStageCommentLane) {
       setHybridComments([]);
+      setHybridCommentError("");
       if (roomMessagesChannelRef.current) {
         supabase.removeChannel(roomMessagesChannelRef.current);
         roomMessagesChannelRef.current = null;
@@ -1802,27 +1816,9 @@ export default function WatchPartyLiveStageScreen() {
     let active = true;
 
     const loadHybridComments = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("watch_party_room_messages")
-          .select("id,user_id,username,text,created_at")
-          .eq("party_id", partyId)
-          .order("created_at", { ascending: true })
-          .limit(120);
-
-        if (!active) return;
-        if (error || !data) {
-          setHybridComments([]);
-          return;
-        }
-
-        const nextComments = (data as LiveStageCommentRow[])
-          .map((row) => mapLiveStageCommentRow(row))
-          .filter(Boolean) as LiveStageComment[];
-        setHybridComments(nextComments);
-      } catch {
-        if (active) setHybridComments([]);
-      }
+      const nextComments = await fetchHybridComments();
+      if (!active) return;
+      setHybridComments(nextComments);
     };
 
     void loadHybridComments();
@@ -1862,7 +1858,7 @@ export default function WatchPartyLiveStageScreen() {
         roomMessagesChannelRef.current = null;
       }
     };
-  }, [canUseBetaStage, mapLiveStageCommentRow, partyId, usesSharedStageCommentLane]);
+  }, [canUseBetaStage, fetchHybridComments, partyId, usesSharedStageCommentLane]);
 
   useEffect(() => {
     if (!usesSharedStageCommentLane || hybridComments.length === 0) return;
@@ -2070,10 +2066,38 @@ export default function WatchPartyLiveStageScreen() {
     if (!safeBody || !partyId || hybridCommentSending) return;
 
     setHybridCommentSending(true);
+    setHybridCommentError("");
     try {
+      const startedAt = Date.now();
       await sendPartyMessage(partyId, trackedUserId, "chat", safeBody, {
         username: resolvedCurrentUsername,
       });
+
+      let landedComments: LiveStageComment[] | null = null;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const candidateComments = await fetchHybridComments();
+        const commentLanded = candidateComments.some((comment) => (
+          comment.userId === trackedUserId
+          && comment.body === safeBody
+          && Date.parse(comment.createdAt) >= startedAt - 2_000
+        ));
+
+        if (commentLanded) {
+          landedComments = candidateComments;
+          break;
+        }
+
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 180));
+        }
+      }
+
+      if (!landedComments) {
+        setHybridCommentError("Comment did not appear in the room yet. Try sending it again.");
+        return;
+      }
+
+      setHybridComments(landedComments);
       setHybridCommentDraft("");
       setCommentsOpen(true);
       setTimeout(() => {
@@ -2082,12 +2106,16 @@ export default function WatchPartyLiveStageScreen() {
     } finally {
       setHybridCommentSending(false);
     }
-  }, [hybridCommentDraft, hybridCommentSending, partyId, resolvedCurrentUsername, trackedUserId]);
+  }, [fetchHybridComments, hybridCommentDraft, hybridCommentSending, partyId, resolvedCurrentUsername, trackedUserId]);
 
   useEffect(() => {
     if (canUseStageFaceFilters) return;
     setFaceFilterSheetOpen(false);
   }, [canUseStageFaceFilters]);
+
+  useEffect(() => {
+    setControlsLocked(false);
+  }, [partyId]);
 
   useEffect(() => {
     if (isLiveRoomSurface) {
@@ -2107,7 +2135,8 @@ export default function WatchPartyLiveStageScreen() {
     }
 
     if (
-      commentsOpen
+      controlsLocked
+      || commentsOpen
       || hybridCommentFocused
       || reactionPickerOpen
       || stageControlsOpen
@@ -2129,6 +2158,7 @@ export default function WatchPartyLiveStageScreen() {
   }, [
     clearStageOverlayAutoHideTimeout,
     commentsOpen,
+    controlsLocked,
     faceFilterSheetOpen,
     hideStageOverlay,
     hybridCommentFocused,
@@ -2474,7 +2504,7 @@ export default function WatchPartyLiveStageScreen() {
             {isLiveFirstMode ? "Host-led live" : `${branding.watchPartyLabel} live`}
           </Text>
           <Text numberOfLines={1} style={styles.stageTopChromeBody}>
-            {`${lowerCommunityCountLabel} · ${liveStageProtectionStatus}`}
+            {stageTopChromeStatusLabel}
           </Text>
           {activeStageLookLabel ? (
             <View style={styles.stageTopChromeLookRow}>
@@ -2487,6 +2517,21 @@ export default function WatchPartyLiveStageScreen() {
           ) : null}
         </View>
         <View style={styles.stageTopChromeActions}>
+          <TouchableOpacity
+            style={[styles.stageTopMenuButton, controlsLocked && styles.stageTopMenuButtonActive]}
+            activeOpacity={0.84}
+            accessible
+            focusable
+            accessibilityRole="button"
+            accessibilityLabel={controlsLocked ? "Unlock Live Stage controls" : "Lock Live Stage controls"}
+            hitSlop={STAGE_CONTROL_HIT_SLOP}
+            onPress={onToggleControlsLock}
+            testID="live-stage-lock-controls-button"
+          >
+            <Text style={styles.stageTopMenuButtonText}>
+              {controlsLocked ? "Unlock controls" : "Lock controls"}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.stageTopMenuButton, stageMenuSheetVisible && styles.stageTopMenuButtonActive]}
             activeOpacity={0.84}
@@ -2728,7 +2773,10 @@ export default function WatchPartyLiveStageScreen() {
             <TextInput
               ref={hybridCommentInputRef}
               value={hybridCommentDraft}
-              onChangeText={setHybridCommentDraft}
+              onChangeText={(value) => {
+                if (hybridCommentError) setHybridCommentError("");
+                setHybridCommentDraft(value);
+              }}
               onFocus={() => {
                 revealStageOverlay();
                 setStageMenuOpen(false);
@@ -2775,6 +2823,9 @@ export default function WatchPartyLiveStageScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          {hybridCommentError ? (
+            <Text style={styles.stageHybridCommentError}>{hybridCommentError}</Text>
+          ) : null}
           <View style={styles.stageHybridReactionRow}>
             <Text
               style={[
@@ -3043,7 +3094,13 @@ export default function WatchPartyLiveStageScreen() {
               ]}
             />
           ) : null}
-          <View pointerEvents="none" style={styles.floatingReactionsLayer}>
+          <View
+            pointerEvents="none"
+            style={[
+              styles.floatingReactionsLayer,
+              { bottom: liveDockBottomInset + 54 },
+            ]}
+          >
             {floatingReactions.map((reaction) => (
               <Animated.Text
                 key={reaction.id}
@@ -4436,15 +4493,16 @@ const styles = StyleSheet.create({
   selfSub: { color: "#D8D8D8", fontSize: 9.5, fontWeight: "700" },
 
   floatingReactionsLayer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "flex-end",
+    position: "absolute",
+    right: 20,
+    width: 104,
+    height: 228,
+    alignItems: "center",
     justifyContent: "flex-end",
-    paddingBottom: 70,
-    paddingRight: 22,
   },
   floatingReactionEmoji: {
     position: "absolute",
-    bottom: 12,
+    bottom: 0,
     fontSize: 34,
     fontWeight: "900",
   },
@@ -4792,6 +4850,13 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 12,
     fontWeight: "800",
+  },
+  stageHybridCommentError: {
+    color: "#FFC9C9",
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: "700",
+    marginTop: -2,
   },
   stageHybridReactionRow: {
     flexDirection: "row",
