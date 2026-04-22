@@ -277,7 +277,12 @@ export function LiveKitStageMediaSurface({
   }, [didConnectOnce, triggerFallback]);
 
   return (
-    <View style={[styles.surface, fillParent && styles.surfaceFill, containerStyle]} pointerEvents="none">
+    <View
+      style={[styles.surface, fillParent && styles.surfaceFill, containerStyle]}
+      pointerEvents="none"
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
+    >
       <LiveKitRoom
         room={room}
         serverUrl={joinContract.serverUrl}

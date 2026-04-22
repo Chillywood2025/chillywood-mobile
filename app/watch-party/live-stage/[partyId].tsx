@@ -175,7 +175,7 @@ const SIM_REACTIONS = ["👍", "🔥", "👏", "❤️", "✨", "😂"];
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
 const STAGE_HEARTBEAT_INTERVAL_MILLIS = 10_000;
-const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 5_000;
+const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 12_000;
 const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as const;
 const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
 type CommunicationRTCViewComponent = React.ComponentType<{
@@ -465,6 +465,7 @@ export default function WatchPartyLiveStageScreen() {
   const [stageControlsOpen, setStageControlsOpen] = useState(false);
   const [faceFilterSheetOpen, setFaceFilterSheetOpen] = useState(false);
   const [stageMenuOpen, setStageMenuOpen] = useState(false);
+  const [hybridCommentFocused, setHybridCommentFocused] = useState(false);
   const [hybridComments, setHybridComments] = useState<LiveStageComment[]>([]);
   const [hybridCommentDraft, setHybridCommentDraft] = useState("");
   const [hybridCommentSending, setHybridCommentSending] = useState(false);
@@ -1283,6 +1284,7 @@ export default function WatchPartyLiveStageScreen() {
     setReactionPickerOpen(false);
     setStageControlsOpen(false);
     setFaceFilterSheetOpen(false);
+    setHybridCommentFocused(false);
     hybridCommentInputRef.current?.blur();
   }, []);
 
@@ -2104,6 +2106,18 @@ export default function WatchPartyLiveStageScreen() {
       return;
     }
 
+    if (
+      commentsOpen
+      || hybridCommentFocused
+      || reactionPickerOpen
+      || stageControlsOpen
+      || faceFilterSheetOpen
+      || stageMenuOpen
+    ) {
+      clearStageOverlayAutoHideTimeout();
+      return;
+    }
+
     clearStageOverlayAutoHideTimeout();
     stageOverlayAutoHideTimeoutRef.current = setTimeout(() => {
       hideStageOverlay();
@@ -2117,6 +2131,7 @@ export default function WatchPartyLiveStageScreen() {
     commentsOpen,
     faceFilterSheetOpen,
     hideStageOverlay,
+    hybridCommentFocused,
     isLiveRoomSurface,
     reactionPickerOpen,
     stageControlsOpen,
@@ -2621,6 +2636,252 @@ export default function WatchPartyLiveStageScreen() {
     </View>
   );
 
+  const renderStageLowerDock = () => (
+    <View
+      style={styles.stageDockOverlay}
+      pointerEvents="box-none"
+      collapsable={false}
+      renderToHardwareTextureAndroid
+      onTouchStart={revealStageOverlay}
+    >
+      <View
+        style={[styles.liveStageLowerDock, styles.liveStageLowerDockHybrid]}
+        pointerEvents="auto"
+        collapsable={false}
+        renderToHardwareTextureAndroid
+        importantForAccessibility="yes"
+      >
+        <View style={[styles.modeRow, styles.modeRowHybrid]}>
+          <TouchableOpacity
+            style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
+            activeOpacity={0.82}
+            accessible
+            focusable
+            accessibilityRole="button"
+            accessibilityLabel="Switch to Live-First mode"
+            hitSlop={STAGE_CONTROL_HIT_SLOP}
+            onPress={() => updateStageMode("live")}
+            testID="live-stage-mode-live"
+          >
+            <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
+            activeOpacity={0.82}
+            accessible
+            focusable
+            accessibilityRole="button"
+            accessibilityLabel={`Switch to ${branding.watchPartyLabel} mode`}
+            hitSlop={STAGE_CONTROL_HIT_SLOP}
+            onPress={() => updateStageMode("hybrid")}
+            testID="live-stage-mode-hybrid"
+          >
+            <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.stageHybridCommentsCard, commentsOpen && styles.stageHybridCommentsCardActive]}>
+          <View style={styles.stageHybridCommentsHeader}>
+            <Text style={styles.stageHybridCommentsTitle}>Room comments</Text>
+            <Text style={styles.stageHybridCommentsCount}>{hybridCommentCountLabel}</Text>
+          </View>
+
+          <ScrollView
+            ref={hybridCommentsScrollRef}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={styles.stageHybridCommentsList}
+            contentContainerStyle={styles.stageHybridCommentsListContent}
+          >
+            {hybridComments.length > 0 ? (
+              hybridComments.map((comment) => (
+                <View
+                  key={comment.id}
+                  style={[
+                    styles.stageHybridCommentRow,
+                    comment.isMe && styles.stageHybridCommentRowMe,
+                  ]}
+                >
+                  <View style={styles.stageHybridCommentMeta}>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.stageHybridCommentAuthor,
+                        comment.isMe && styles.stageHybridCommentAuthorMe,
+                      ]}
+                    >
+                      {comment.authorLabel}
+                    </Text>
+                  </View>
+                  <Text style={styles.stageHybridCommentBody}>{comment.body}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.stageHybridCommentEmpty}>
+                Room comments will land here. Say something to get it moving.
+              </Text>
+            )}
+          </ScrollView>
+
+          <View style={styles.stageHybridCommentInputRow}>
+            <TextInput
+              ref={hybridCommentInputRef}
+              value={hybridCommentDraft}
+              onChangeText={setHybridCommentDraft}
+              onFocus={() => {
+                revealStageOverlay();
+                setStageMenuOpen(false);
+                setStageControlsOpen(false);
+                setFaceFilterSheetOpen(false);
+                setReactionPickerOpen(false);
+                setCommentsOpen(true);
+                setHybridCommentFocused(true);
+              }}
+              onBlur={() => setHybridCommentFocused(false)}
+              placeholder={hybridCommentPlaceholder}
+              placeholderTextColor="rgba(190,206,232,0.72)"
+              returnKeyType="send"
+              blurOnSubmit={false}
+              editable={!hybridCommentSending}
+              accessible
+              focusable
+              accessibilityLabel={isHost ? "Live Stage comment input as host" : "Live Stage comment input"}
+              onSubmitEditing={() => {
+                void onSendHybridComment();
+              }}
+              style={styles.stageHybridCommentInput}
+              testID="live-stage-comment-input"
+            />
+            <TouchableOpacity
+              style={[
+                styles.stageHybridCommentSendButton,
+                (!hybridCommentDraft.trim() || hybridCommentSending) && styles.stageHybridCommentSendButtonDisabled,
+              ]}
+              activeOpacity={0.84}
+              accessible
+              focusable
+              accessibilityRole="button"
+              accessibilityLabel={hybridCommentSending ? "Sending Live Stage comment" : "Send Live Stage comment"}
+              hitSlop={STAGE_CONTROL_HIT_SLOP}
+              disabled={!hybridCommentDraft.trim() || hybridCommentSending}
+              onPress={() => {
+                void onSendHybridComment();
+              }}
+              testID="live-stage-comment-send"
+            >
+              <Text style={styles.stageHybridCommentSendText}>
+                {hybridCommentSending ? "Sending" : "Send"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.stageHybridReactionRow}>
+            <Text
+              style={[
+                styles.stageHybridReactionLabel,
+                !stageReactionsEnabled && styles.stageHybridReactionLabelMuted,
+              ]}
+            >
+              {stageReactionQuickLabel}
+            </Text>
+            <Animated.View
+              style={[
+                styles.footerReactionQuickRow,
+                { transform: [{ scale: stageReactionQuickScale }] },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.footerIconBtn,
+                  reactionPickerOpen && styles.stageFooterActionActiveBtn,
+                  !stageReactionsEnabled && styles.stageFooterActionDisabledBtn,
+                ]}
+                activeOpacity={0.84}
+                accessible
+                focusable
+                accessibilityRole="button"
+                accessibilityLabel={stageReactionsEnabled ? "Open Live Stage reaction picker" : "Live Stage reactions muted"}
+                hitSlop={STAGE_CONTROL_HIT_SLOP}
+                disabled={!stageReactionsEnabled}
+                onPress={onOpenStageReactionPicker}
+                testID="live-stage-reaction-picker-button"
+              >
+                <Text style={styles.footerIconBtnText}>✨</Text>
+                <Text
+                  style={[
+                    styles.footerIconBtnLabel,
+                    reactionPickerOpen && styles.stageFooterActionActiveLabel,
+                    !stageReactionsEnabled && styles.stageFooterActionDisabledLabel,
+                  ]}
+                >
+                  {stageReactionsEnabled ? "React" : "Muted"}
+                </Text>
+              </TouchableOpacity>
+              {stageReactionQuickEmojis.map((emoji, index) => (
+                <TouchableOpacity
+                  key={`${emoji}-${index}`}
+                  style={[
+                    styles.footerReactionQuickBtn,
+                    !stageReactionsEnabled && styles.stageFooterActionDisabledBtn,
+                  ]}
+                  activeOpacity={0.84}
+                  accessible
+                  focusable
+                  accessibilityRole="button"
+                  accessibilityLabel={stageReactionsEnabled ? `Send ${emoji} reaction` : `${emoji} reaction unavailable while reactions are muted`}
+                  hitSlop={STAGE_CONTROL_HIT_SLOP}
+                  disabled={!stageReactionsEnabled}
+                  onPress={() => onSendQuickStageReaction(emoji)}
+                  testID={`live-stage-quick-reaction-${index}`}
+                >
+                  <Text
+                    style={[
+                      styles.footerReactionQuickText,
+                      !stageReactionsEnabled && styles.stageFooterActionDisabledLabel,
+                    ]}
+                  >
+                    {emoji}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </Animated.View>
+          </View>
+        </View>
+      </View>
+      <RoomReactionPicker
+        visible={reactionPickerOpen}
+        onClose={() => {
+          revealStageOverlay();
+          setReactionPickerOpen(false);
+        }}
+        onSelectEmoji={(emoji) => {
+          revealStageOverlay();
+          if (!stageReactionsEnabled) return;
+          onSelectReactionFromPicker(emoji);
+        }}
+        recentEmojis={recentReactionEmojis}
+        title="React"
+        subtitle={stageReactionsEnabled ? "Browse and tap to send" : "The host has reactions muted"}
+        styles={{
+          root: styles.reactionPickerRoot,
+          backdrop: styles.reactionPickerBackdrop,
+          sheet: styles.reactionPickerSheet,
+          header: styles.reactionPickerHeader,
+          title: styles.reactionPickerTitle,
+          subtitle: styles.reactionPickerSubtitle,
+          closeBtn: styles.reactionPickerCloseBtn,
+          closeText: styles.reactionPickerCloseText,
+          body: styles.reactionPickerBody,
+          section: styles.reactionPickerSection,
+          sectionTitle: styles.reactionPickerSectionTitle,
+          grid: styles.reactionPickerGrid,
+          emojiBtn: styles.reactionPickerEmojiBtn,
+          emojiText: styles.reactionPickerEmojiText,
+        }}
+      />
+    </View>
+  );
+
   debugLog("live-stage", "render branch", {
     loading,
     partyId,
@@ -2816,6 +3077,8 @@ export default function WatchPartyLiveStageScreen() {
             },
           ]}
           pointerEvents={stageOverlayVisible ? "box-none" : "none"}
+          collapsable={false}
+          renderToHardwareTextureAndroid
         >
         {renderStageTopChrome()}
         {isHybridMode ? (
@@ -3209,241 +3472,7 @@ export default function WatchPartyLiveStageScreen() {
           </View>
         ) : null}
         {renderStageOverlayUtilitySheets()}
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.stageDockOverlay,
-            {
-              paddingBottom: liveDockBottomInset,
-              opacity: stageOverlayOpacity,
-              transform: [{ translateY: stageOverlayTranslate }],
-            },
-          ]}
-          pointerEvents={stageOverlayVisible ? "auto" : "none"}
-        >
-        <View style={[styles.liveStageLowerDock, styles.liveStageLowerDockHybrid]}>
-          <View style={[styles.modeRow, styles.modeRowHybrid]}>
-            <TouchableOpacity
-              style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
-              activeOpacity={0.82}
-              accessible
-              focusable
-              accessibilityRole="button"
-              accessibilityLabel="Switch to Live-First mode"
-              onPress={() => updateStageMode("live")}
-              testID="live-stage-mode-live"
-            >
-              <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
-              activeOpacity={0.82}
-              accessible
-              focusable
-              accessibilityRole="button"
-              accessibilityLabel={`Switch to ${branding.watchPartyLabel} mode`}
-              onPress={() => updateStageMode("hybrid")}
-              testID="live-stage-mode-hybrid"
-            >
-              <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.stageHybridCommentsCard, commentsOpen && styles.stageHybridCommentsCardActive]}>
-            <View style={styles.stageHybridCommentsHeader}>
-              <Text style={styles.stageHybridCommentsTitle}>Room comments</Text>
-              <Text style={styles.stageHybridCommentsCount}>{hybridCommentCountLabel}</Text>
-            </View>
-
-            <ScrollView
-              ref={hybridCommentsScrollRef}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              style={styles.stageHybridCommentsList}
-              contentContainerStyle={styles.stageHybridCommentsListContent}
-            >
-              {hybridComments.length > 0 ? (
-                hybridComments.map((comment) => (
-                  <View
-                    key={comment.id}
-                    style={[
-                      styles.stageHybridCommentRow,
-                      comment.isMe && styles.stageHybridCommentRowMe,
-                    ]}
-                  >
-                    <View style={styles.stageHybridCommentMeta}>
-                      <Text
-                        numberOfLines={1}
-                        style={[
-                          styles.stageHybridCommentAuthor,
-                          comment.isMe && styles.stageHybridCommentAuthorMe,
-                        ]}
-                      >
-                        {comment.authorLabel}
-                      </Text>
-                    </View>
-                    <Text style={styles.stageHybridCommentBody}>{comment.body}</Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.stageHybridCommentEmpty}>
-                  Room comments will land here. Say something to get it moving.
-                </Text>
-              )}
-            </ScrollView>
-
-            <View style={styles.stageHybridCommentInputRow}>
-              <TextInput
-                ref={hybridCommentInputRef}
-                value={hybridCommentDraft}
-                onChangeText={setHybridCommentDraft}
-                onFocus={() => {
-                  revealStageOverlay();
-                  setStageMenuOpen(false);
-                  setStageControlsOpen(false);
-                  setFaceFilterSheetOpen(false);
-                  setReactionPickerOpen(false);
-                  setCommentsOpen(true);
-                }}
-                placeholder={hybridCommentPlaceholder}
-                placeholderTextColor="rgba(190,206,232,0.72)"
-                returnKeyType="send"
-                blurOnSubmit={false}
-                editable={!hybridCommentSending}
-                accessible
-                focusable
-                accessibilityLabel={isHost ? "Live Stage comment input as host" : "Live Stage comment input"}
-                onSubmitEditing={() => {
-                  void onSendHybridComment();
-                }}
-                style={styles.stageHybridCommentInput}
-                testID="live-stage-comment-input"
-              />
-              <TouchableOpacity
-                style={[
-                  styles.stageHybridCommentSendButton,
-                  (!hybridCommentDraft.trim() || hybridCommentSending) && styles.stageHybridCommentSendButtonDisabled,
-                ]}
-                activeOpacity={0.84}
-                accessible
-                focusable
-                accessibilityRole="button"
-                accessibilityLabel={hybridCommentSending ? "Sending Live Stage comment" : "Send Live Stage comment"}
-                disabled={!hybridCommentDraft.trim() || hybridCommentSending}
-                onPress={() => {
-                  void onSendHybridComment();
-                }}
-                testID="live-stage-comment-send"
-              >
-                <Text style={styles.stageHybridCommentSendText}>
-                  {hybridCommentSending ? "Sending" : "Send"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.stageHybridReactionRow}>
-              <Text
-                style={[
-                  styles.stageHybridReactionLabel,
-                  !stageReactionsEnabled && styles.stageHybridReactionLabelMuted,
-                ]}
-              >
-                {stageReactionQuickLabel}
-              </Text>
-              <Animated.View
-                style={[
-                  styles.footerReactionQuickRow,
-                  { transform: [{ scale: stageReactionQuickScale }] },
-                ]}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.footerIconBtn,
-                    reactionPickerOpen && styles.stageFooterActionActiveBtn,
-                    !stageReactionsEnabled && styles.stageFooterActionDisabledBtn,
-                  ]}
-                  activeOpacity={0.84}
-                  accessible
-                  focusable
-                  accessibilityRole="button"
-                  accessibilityLabel={stageReactionsEnabled ? "Open Live Stage reaction picker" : "Live Stage reactions muted"}
-                  disabled={!stageReactionsEnabled}
-                  onPress={onOpenStageReactionPicker}
-                  testID="live-stage-reaction-picker-button"
-                >
-                  <Text style={styles.footerIconBtnText}>✨</Text>
-                  <Text
-                    style={[
-                      styles.footerIconBtnLabel,
-                      reactionPickerOpen && styles.stageFooterActionActiveLabel,
-                      !stageReactionsEnabled && styles.stageFooterActionDisabledLabel,
-                    ]}
-                  >
-                    {stageReactionsEnabled ? "React" : "Muted"}
-                  </Text>
-                </TouchableOpacity>
-                {stageReactionQuickEmojis.map((emoji, index) => (
-                  <TouchableOpacity
-                    key={`${emoji}-${index}`}
-                    style={[
-                      styles.footerReactionQuickBtn,
-                      !stageReactionsEnabled && styles.stageFooterActionDisabledBtn,
-                    ]}
-                    activeOpacity={0.84}
-                    accessible
-                    focusable
-                    accessibilityRole="button"
-                    accessibilityLabel={stageReactionsEnabled ? `Send ${emoji} reaction` : `${emoji} reaction unavailable while reactions are muted`}
-                    disabled={!stageReactionsEnabled}
-                    onPress={() => onSendQuickStageReaction(emoji)}
-                    testID={`live-stage-quick-reaction-${index}`}
-                  >
-                    <Text
-                      style={[
-                        styles.footerReactionQuickText,
-                        !stageReactionsEnabled && styles.stageFooterActionDisabledLabel,
-                      ]}
-                    >
-                      {emoji}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </Animated.View>
-            </View>
-          </View>
-        </View>
-        <RoomReactionPicker
-          visible={reactionPickerOpen}
-          onClose={() => {
-            revealStageOverlay();
-            setReactionPickerOpen(false);
-          }}
-          onSelectEmoji={(emoji) => {
-            revealStageOverlay();
-            if (!stageReactionsEnabled) return;
-            onSelectReactionFromPicker(emoji);
-          }}
-          recentEmojis={recentReactionEmojis}
-          title="React"
-          subtitle={stageReactionsEnabled ? "Browse and tap to send" : "The host has reactions muted"}
-          styles={{
-            root: styles.reactionPickerRoot,
-            backdrop: styles.reactionPickerBackdrop,
-            sheet: styles.reactionPickerSheet,
-            header: styles.reactionPickerHeader,
-            title: styles.reactionPickerTitle,
-            subtitle: styles.reactionPickerSubtitle,
-            closeBtn: styles.reactionPickerCloseBtn,
-            closeText: styles.reactionPickerCloseText,
-            body: styles.reactionPickerBody,
-            section: styles.reactionPickerSection,
-            sectionTitle: styles.reactionPickerSectionTitle,
-            grid: styles.reactionPickerGrid,
-            emojiBtn: styles.reactionPickerEmojiBtn,
-            emojiText: styles.reactionPickerEmojiText,
-          }}
-        />
+        {renderStageLowerDock()}
         </Animated.View>
         </>
         </ConditionalWrap>
