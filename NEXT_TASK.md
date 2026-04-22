@@ -1,27 +1,27 @@
 # NEXT TASK
 
 ## Exact Next Task
-The active broader watch-party/live seam is now the pre-stage Live Room hierarchy chapter. Repo truth is explicit: the watch-party entry owner and Party Room owner are both closed cleanly enough to stay untouched, and the next safe batch should focus on `app/watch-party/live-stage/[partyId].tsx` so the pre-stage Live Room reads less memo-like, less visually loud, and more hierarchy-first without changing actual stage semantics.
+The pre-stage Live Room hierarchy chapter is still active, but its first safe batch is now landed cleanly. Repo truth is explicit: `app/watch-party/live-stage/[partyId].tsx` now groups and demotes its lower-value support chrome while keeping behavior intact. The exact next step is the chapter closeout audit, with a second batch allowed only if one final narrow pre-stage adjustment is still clearly justified.
 
 ## Current Plan
 1. Treat the watch-party entry / waiting-room chapter and Party Room setup-shell chapter as closed cleanly for now.
-2. Preserve the landed entry-owner cleanup on `app/watch-party/index.tsx`.
-3. Preserve the landed Party Room shell isolation on `app/watch-party/[partyId].tsx`.
-4. Keep `app/watch-party/live-stage/[partyId].tsx` as the active owner for this hierarchy pass.
-5. Make the pre-stage Live Room feel more action-first by regrouping and demoting support chrome instead of changing route truth.
+2. Preserve the landed pre-stage Live Room regrouping on `app/watch-party/live-stage/[partyId].tsx`.
+3. Keep the route-owned overview and viewing-default controls prominent.
+4. Run the chapter closeout audit before considering any second batch.
+5. Only reopen the same owner for one more narrow pass if the closeout audit proves a real remaining seam that is still safe.
 6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- isolate the lower-value pre-stage support chrome inside `app/watch-party/live-stage/[partyId].tsx` so invite/share and room-default setup no longer compete equally with the core pre-stage overview
-- keep the pre-stage overview and viewing-default controls prominent because they still belong before stage entry
-- tighten repeated host/viewer setup copy so the route stops restating the same `before stage` truth across multiple cards
-- keep room sync, invite/share behavior, moderation truth, host/viewer powers, and actual stage semantics unchanged
+- do not auto-open a second batch now that the first pre-stage regrouping is landed
+- audit whether the chapter can stop cleanly with `app/watch-party/live-stage/[partyId].tsx` improved and behavior intact
+- only if clearly justified, use one final narrow pass for pre-stage hierarchy or copy alignment without touching room sync or stage semantics
+- otherwise close the chapter and record the exact later live-room seam
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
 This next pass should:
 - preserve `app/watch-party/index.tsx` as the canonical watch-party entry owner and keep it closed in this pass
-- preserve `app/watch-party/live-stage/[partyId].tsx` as the active Live Room / Live Stage owner for this hierarchy cleanup
+- preserve `app/watch-party/live-stage/[partyId].tsx` as the active Live Room / Live Stage owner for the closeout decision
 - preserve `app/watch-party/[partyId].tsx` as the already-closed Party Room owner
 - keep the current social baseline, monetization/access truth, and no-fake-comments/no-fake-ads doctrine intact
 - keep the landed entry and Party Room cleanups intact and do not reopen them casually
@@ -41,9 +41,9 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- `app/watch-party/live-stage/[partyId].tsx` becomes materially cleaner without changing invite/share, room-default, or stage-entry behavior
-- the pre-stage Live Room stops feeling like four equally loud setup memos before stage entry
-- the overview and viewing-default controls stay prominent while support chrome becomes easier to scan past
+- `app/watch-party/live-stage/[partyId].tsx` stays materially cleaner without changing invite/share, room-default, or stage-entry behavior
+- the pre-stage Live Room now stops feeling like four equally loud setup memos before stage entry
+- the overview and viewing-default controls stay prominent while support chrome is easier to scan past
 - watch-party entry, Party Room, and admin / owner / Rachi stay closed cleanly in this pass
 - no route drift, schema drift, fake room powers, or fake social claims are introduced
 - the staged set stays task-pure
