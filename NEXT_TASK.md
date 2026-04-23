@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Resume the active two-real-device multi-client validation lane on the current live/watch-party owners, keep the just-landed Live Stage shared-comment recovery fix intact, and isolate the new viewer-side Live Stage -> live waiting-room drop before attempting any broader proof matrix again.
+Resume the active two-real-device multi-client validation lane on the current live/watch-party owners, keep the just-landed Live Stage shared-comment recovery fix intact, keep the premium title/player dead-end fix intact, and isolate the new viewer-side Live Stage -> live waiting-room drop before attempting any broader proof matrix again.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, bounded admin, and the corrected systems map.
@@ -13,13 +13,17 @@ Resume the active two-real-device multi-client validation lane on the current li
    `app/player/[id].tsx`
 4. Keep the just-landed Live Stage shared-comment recovery fix intact on:
    `app/watch-party/live-stage/[partyId].tsx`
-5. Re-enter the same real owner paths with the current live/watch routes unchanged:
+5. Keep the just-landed premium title/player dead-end fix intact on:
+   `app/title/[id].tsx`
+   `app/player/[id].tsx`
+   `components/monetization/access-sheet.tsx`
+6. Re-enter the same real owner paths with the current live/watch routes unchanged:
    `app/watch-party/index.tsx`
    `app/watch-party/[partyId].tsx`
    `app/watch-party/live-stage/[partyId].tsx`
    `app/player/[id].tsx`
-6. Use the same two real phones first; do not add an emulator unless a real third participant is actually required.
-7. Keep unrelated local dirt out of the checkpoint.
+7. Use the same two real phones first; do not add an emulator unless a real third participant is actually required.
+8. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
 - use the two real devices already attached to continue the shared live path honestly on:
@@ -29,6 +33,10 @@ Resume the active two-real-device multi-client validation lane on the current li
   `app/player/[id].tsx`
 - keep the just-landed comment recovery truth intact on:
   `app/watch-party/live-stage/[partyId].tsx`
+- keep the just-landed premium title/player access truth intact on:
+  `app/title/[id].tsx`
+  `app/player/[id].tsx`
+  `components/monetization/access-sheet.tsx`
 - isolate first:
   why the viewer-side device can drop from `app/watch-party/live-stage/[partyId].tsx` back to the live waiting-room owner while the host remains on stage
 - then resume proving:

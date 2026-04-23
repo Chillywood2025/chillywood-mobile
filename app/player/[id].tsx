@@ -42,8 +42,10 @@ import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveBrandingConfig,
+    resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
+import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
 import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
@@ -83,6 +85,7 @@ import {
     type WatchPartyState,
 } from "../../_lib/watchParty";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
+import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
@@ -594,6 +597,7 @@ export default function PlayerScreen() {
   const [standaloneAccess, setStandaloneAccess] = useState<ContentAccessResolution | null>(null);
   const [standaloneAccessLoading, setStandaloneAccessLoading] = useState(true);
   const [standaloneAccessRetryToken, setStandaloneAccessRetryToken] = useState(0);
+  const [standaloneAccessSheetVisible, setStandaloneAccessSheetVisible] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [watchPartyEntryLoading, setWatchPartyEntryLoading] = useState(inWatchParty);
   const [watchPartyEntryMissing, setWatchPartyEntryMissing] = useState(false);
@@ -3527,6 +3531,7 @@ export default function PlayerScreen() {
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
+  const monetizationConfig = resolveMonetizationConfig(appConfig);
 
   useEffect(() => {
     let active = true;
@@ -3579,9 +3584,71 @@ export default function PlayerScreen() {
   const standalonePlaybackGateActive = isStandalonePlayer && (
     standaloneAccessLoading || standalonePlaybackBlocked || standalonePlaybackUnknown
   );
+  const standaloneAccessSheetReason =
+    standalonePlaybackBlocked
+    && standaloneAccess
+    && (standaloneAccess.reason === "premium_required" || standaloneAccess.reason === "party_pass_required")
+      ? standaloneAccess.reason
+      : null;
+  const standaloneAccessSheetPresentation = standaloneAccessSheetReason && standaloneAccess
+    ? getMonetizationAccessSheetPresentation({
+        gate: standaloneAccess,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
+  const blockedStandaloneAccessEntryLabel = standaloneAccessSheetReason && standaloneAccess
+    ? getAccessSheetEntryLabel({
+        reason: standaloneAccessSheetReason,
+        canPurchase: standaloneAccess.monetization.canPurchase,
+      })
+    : "Review access";
   const retryStandaloneAccessCheck = useCallback(() => {
     setStandaloneAccessRetryToken((current) => current + 1);
   }, []);
+  const refreshStandaloneAccessAfterSheetAction = useCallback(async (action: "purchase" | "restore") => {
+    const safeTitleId = String(displayItem?.id ?? cleanId).trim();
+    if (!safeTitleId) {
+      return {
+        message: "Unable to confirm playback access right now.",
+        tone: "error" as const,
+      };
+    }
+
+    const refreshed = await resolveContentAccess({
+      titleId: safeTitleId,
+      accessRule: displayItem?.content_access_rule,
+    }).catch(() => null);
+    setStandaloneAccess(refreshed);
+
+    if (refreshed?.isAllowed) {
+      trackEvent("monetization_unlock_success", {
+        action,
+        surface: "standalone-player",
+        titleId: safeTitleId,
+      });
+      setAccessError(null);
+      setStandaloneAccessSheetVisible(false);
+      return {
+        message: action === "restore" ? "Purchases restored. Playback access is active." : "Playback access unlocked. You're ready to watch.",
+        tone: "success" as const,
+      };
+    }
+
+    const message = refreshed?.monetization.issues[0]
+      ?? "Playback is still locked for this title after the monetization check.";
+    trackEvent("monetization_unlock_failure", {
+      action,
+      surface: "standalone-player",
+      titleId: safeTitleId,
+    });
+    setAccessError(message);
+    return {
+      message,
+      tone: "error" as const,
+    };
+  }, [cleanId, displayItem?.content_access_rule, displayItem?.id]);
 
   useEffect(() => {
     if (inWatchParty || isLiveMode) {
@@ -3672,14 +3739,18 @@ export default function PlayerScreen() {
             : `${standaloneAccess.label} access required`;
       const body =
         standaloneAccess.reason === "premium_required"
-          ? "This title needs an active Premium entitlement before standalone playback can start here."
+          ? standaloneAccess.monetization.canPurchase
+            ? `Open ${blockedStandaloneAccessEntryLabel} to unlock this title through ${branding.appDisplayName} Premium and start playback here.`
+            : `Open ${blockedStandaloneAccessEntryLabel} to review the current Premium status, restore purchases, or manage your subscription before standalone playback can start here.`
           : standaloneAccess.reason === "party_pass_required"
-            ? "This title needs an active Party Pass before standalone playback can start here."
+            ? standaloneAccess.monetization.canPurchase
+              ? `Open ${blockedStandaloneAccessEntryLabel} to unlock this title through the current Party Pass flow and start playback here.`
+              : `Open ${blockedStandaloneAccessEntryLabel} to review the current room-access status, restore purchases, or manage your subscription before standalone playback can start here.`
             : "Standalone playback is not available for this title on this account right now.";
       return {
         title,
         body,
-        primaryLabel: "Refresh access",
+        primaryLabel: blockedStandaloneAccessEntryLabel,
         primaryDisabled: false,
       };
     }
@@ -3694,6 +3765,8 @@ export default function PlayerScreen() {
     return null;
   }, [
     accessError,
+    blockedStandaloneAccessEntryLabel,
+    branding.appDisplayName,
     isStandalonePlayer,
     standaloneAccess,
     standaloneAccessLoading,
@@ -5079,7 +5152,18 @@ export default function PlayerScreen() {
                         styles.playerAccessPrimaryBtn,
                         standaloneAccessPresentation.primaryDisabled && styles.secondaryBtnDisabled,
                       ]}
-                      onPress={retryStandaloneAccessCheck}
+                      onPress={() => {
+                        if (standalonePlaybackBlocked && standaloneAccessSheetReason) {
+                          trackEvent("monetization_gate_shown", {
+                            surface: "standalone-player",
+                            reason: standaloneAccessSheetReason,
+                            titleId: String(displayItem?.id ?? cleanId).trim(),
+                          });
+                          setStandaloneAccessSheetVisible(true);
+                          return;
+                        }
+                        retryStandaloneAccessCheck();
+                      }}
                       disabled={standaloneAccessPresentation.primaryDisabled}
                       activeOpacity={0.85}
                     >
@@ -5088,6 +5172,36 @@ export default function PlayerScreen() {
                   </View>
                 </View>
               </View>
+            ) : null}
+
+            {standaloneAccessSheetReason && standaloneAccess ? (
+              <AccessSheet
+                visible={standaloneAccessSheetVisible}
+                reason={standaloneAccessSheetReason}
+                gate={standaloneAccess}
+                appDisplayName={branding.appDisplayName}
+                premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+                premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+                kickerOverride={standaloneAccessSheetPresentation?.kicker}
+                titleOverride={standaloneAccessSheetPresentation?.title}
+                bodyOverride={standaloneAccessSheetPresentation?.body}
+                actionLabelOverride={standaloneAccessSheetPresentation?.actionLabel}
+                onPurchaseResult={(result) => {
+                  if (!result.ok) {
+                    setAccessError(result.message);
+                    return;
+                  }
+                  return refreshStandaloneAccessAfterSheetAction("purchase");
+                }}
+                onRestoreResult={(result) => {
+                  if (!result.ok) {
+                    setAccessError(result.message);
+                    return;
+                  }
+                  return refreshStandaloneAccessAfterSheetAction("restore");
+                }}
+                onClose={() => setStandaloneAccessSheetVisible(false)}
+              />
             ) : null}
 
             {seekFeedback ? (

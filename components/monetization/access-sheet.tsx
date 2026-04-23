@@ -58,6 +58,17 @@ export const getAccessSheetCopy = (options: {
   };
 };
 
+export const getAccessSheetEntryLabel = (options: {
+  reason: AccessSheetReason;
+  canPurchase?: boolean;
+}) => {
+  if (options.reason === "premium_required") {
+    return options.canPurchase ? "Unlock Premium" : "View Premium Access";
+  }
+
+  return options.canPurchase ? "Get Party Pass" : "View Room Access";
+};
+
 type AccessSheetProps = {
   visible: boolean;
   reason: AccessSheetReason;

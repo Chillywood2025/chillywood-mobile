@@ -30,7 +30,7 @@ import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
-import { AccessSheet } from "../../components/monetization/access-sheet";
+import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import type { Tables } from "../../supabase/database.types";
 
@@ -548,6 +548,13 @@ export default function TitleDetails() {
         premiumUpsellBody: monetizationConfig.premiumUpsellBody,
       })
     : null;
+  const blockedTitleAccessEntryLabel = titleAccess && !titleAccess.isAllowed
+    && (titleAccess.reason === "premium_required" || titleAccess.reason === "party_pass_required")
+    ? getAccessSheetEntryLabel({
+        reason: titleAccess.reason,
+        canPurchase: titleAccess.monetization.canPurchase,
+      })
+    : "Review access";
   const canMarkTitleShared = !accessLoading && !!titleAccess?.isAllowed;
 
   return (
@@ -596,7 +603,9 @@ export default function TitleDetails() {
               <Text style={styles.statusBody}>
                 {titleAccess?.isAllowed
                   ? `${titleAccess.label} access is active for this title inside ${branding.appDisplayName}.`
-                  : `${titleAccess?.label ?? "Premium"} access is not currently available for this title on this device or account.`}
+                  : titleAccess?.monetization.canPurchase
+                    ? `Open ${blockedTitleAccessEntryLabel} to unlock this title through ${branding.appDisplayName} Premium and start playback here.`
+                    : `Open ${blockedTitleAccessEntryLabel} to review the current Premium status, restore purchases, or manage your subscription for this title.`}
               </Text>
             </View>
           ) : null}
@@ -636,7 +645,7 @@ export default function TitleDetails() {
               disabled={accessLoading}
             >
               <Text style={styles.btnPrimaryText}>
-                {accessLoading ? "Checking access..." : titleAccess && !titleAccess.isAllowed ? "Access Unavailable" : "Play"}
+                {accessLoading ? "Checking access..." : titleAccess && !titleAccess.isAllowed ? blockedTitleAccessEntryLabel : "Play"}
               </Text>
             </Pressable>
 
@@ -700,7 +709,6 @@ export default function TitleDetails() {
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
-          deferredMonetization
           kickerOverride={accessSheetPresentation?.kicker}
           titleOverride={accessSheetPresentation?.title}
           bodyOverride={accessSheetPresentation?.body}
