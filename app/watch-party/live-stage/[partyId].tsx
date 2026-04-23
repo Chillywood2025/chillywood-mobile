@@ -1905,6 +1905,25 @@ export default function WatchPartyLiveStageScreen() {
     };
   }, [resolvedCurrentUsername, trackedUserId]);
 
+  const mergeHybridCommentsIfChanged = useCallback((nextComments: LiveStageComment[]) => {
+    setHybridComments((prev) => {
+      if (
+        prev.length === nextComments.length
+        && prev.every((comment, index) => {
+          const nextComment = nextComments[index];
+          return !!nextComment
+            && comment.id === nextComment.id
+            && comment.body === nextComment.body
+            && comment.createdAt === nextComment.createdAt;
+        })
+      ) {
+        return prev;
+      }
+
+      return nextComments;
+    });
+  }, []);
+
   const fetchHybridComments = useCallback(async () => {
     if (!partyId) return [] as LiveStageComment[];
 
@@ -1974,7 +1993,7 @@ export default function WatchPartyLiveStageScreen() {
     const loadHybridComments = async () => {
       const nextComments = await fetchHybridComments();
       if (!active) return;
-      setHybridComments(nextComments);
+      mergeHybridCommentsIfChanged(nextComments);
     };
 
     void loadHybridComments();
@@ -2003,7 +2022,11 @@ export default function WatchPartyLiveStageScreen() {
           });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          void loadHybridComments();
+        }
+      });
 
     roomMessagesChannelRef.current = channel;
 
@@ -2014,7 +2037,37 @@ export default function WatchPartyLiveStageScreen() {
         roomMessagesChannelRef.current = null;
       }
     };
-  }, [canUseBetaStage, fetchHybridComments, partyId, usesSharedStageCommentLane]);
+  }, [canUseBetaStage, fetchHybridComments, mergeHybridCommentsIfChanged, partyId, usesSharedStageCommentLane]);
+
+  useEffect(() => {
+    if (!canUseBetaStage || !isFocused || !partyId || !usesSharedStageCommentLane || liveSurface !== "stage") return;
+
+    let active = true;
+
+    const syncHybridComments = async () => {
+      const nextComments = await fetchHybridComments();
+      if (!active) return;
+      mergeHybridCommentsIfChanged(nextComments);
+    };
+
+    void syncHybridComments();
+    const interval = setInterval(() => {
+      void syncHybridComments();
+    }, 2_500);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [
+    canUseBetaStage,
+    fetchHybridComments,
+    isFocused,
+    liveSurface,
+    mergeHybridCommentsIfChanged,
+    partyId,
+    usesSharedStageCommentLane,
+  ]);
 
   useEffect(() => {
     if (!usesSharedStageCommentLane || hybridComments.length === 0) return;
