@@ -53,7 +53,7 @@ import {
   type UserProfile,
 } from "../../_lib/userData";
 import type { Tables } from "../../supabase/database.types";
-import { getSafePartyUserId } from "../../_lib/watchParty";
+import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { supabase } from "../lib/_supabase";
 
@@ -377,7 +377,7 @@ export default function ProfileScreen() {
   });
   useEffect(() => {
     let active = true;
-    getSafePartyUserId()
+    getWritablePartyUserId()
       .then((resolvedUserId) => {
         if (active) setCurrentUserId(String(resolvedUserId ?? "").trim());
       })
@@ -472,8 +472,10 @@ export default function ProfileScreen() {
 
   const requestedSelfProfile = selfParam === "1" || selfParam === "true";
   const isOfficialProfile = profile.identityKind === "official_platform";
+  const hasVerifiedSelfIdentity = !!userId && !!currentUserId && userId === currentUserId;
   const isSelfProfile = !profile.isProtectedFromClaim
-    && (requestedSelfProfile || (!!userId && !!currentUserId && userId === currentUserId));
+    && hasVerifiedSelfIdentity
+    && (!requestedSelfProfile || hasVerifiedSelfIdentity);
   useEffect(() => {
     let active = true;
 

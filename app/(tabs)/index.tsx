@@ -16,7 +16,7 @@ import {
     resolveFeatureConfig,
     resolveHomeConfig,
 } from "../../_lib/appConfig";
-import { getSafePartyUserId } from "../../_lib/watchParty";
+import { getWritablePartyUserId } from "../../_lib/watchParty";
 
 import {
     ActivityIndicator,
@@ -302,11 +302,17 @@ export default function HomeScreen() {
   async function fetchCurrentChannelProfile() {
     const [profile, userId] = await Promise.all([
       readUserProfile().catch(() => null),
-      getSafePartyUserId().catch(() => ""),
+      getWritablePartyUserId().catch(() => null),
     ]);
 
+    const signedInUserId = String(userId ?? "").trim();
+    if (!signedInUserId) {
+      setCurrentChannel(null);
+      return;
+    }
+
     const nextChannel = buildUserChannelProfile({
-      id: userId,
+      id: signedInUserId,
       profile,
       fallbackDisplayName: "You",
       isLive: false,
