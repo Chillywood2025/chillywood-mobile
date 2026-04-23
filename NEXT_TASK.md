@@ -1,30 +1,26 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the whole-lane branch-truth re-audit now that the three audited implementation batches and the one trivial profile→chat auth-copy cleanup are landed. Close the lane if the re-audit shows no remaining branch-truth leak stronger than later-proof work.
+Run the later two-phone Live Stage / Watch-Party Live proof lane now that the whole-app branch-truth correction lane is closed cleanly.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
-2. Keep the completed runtime, interaction, invite, locked-room, and Live Stage proof groundwork intact while correcting only the narrower branch-truth leaks found in the audit.
-3. Keep the now-landed watch-party/live direct-entry access fix intact:
-   `app/watch-party/live-stage/[partyId].tsx` and the `partyId` branch inside `app/player/[id].tsx` now resolve room access before admitted live/watch behavior and should stay closed while the rest of this lane lands.
-4. Keep the now-landed signed-out self/public separation intact:
-   `app/(tabs)/index.tsx` no longer surfaces a faux signed-out “your channel” path, and `app/profile/[userId].tsx` no longer trusts `self=1` without a real signed-in identity match.
-5. Keep the now-landed signed-out chat gate intact:
-   `app/chat/index.tsx` and `app/chat/[threadId].tsx` now render honest signed-out gating instead of generic member-style load/missing-thread errors, while `_lib/chat.ts` stays strict about requiring a real signed-in identity.
-6. Keep unrelated local dirt out of the checkpoint.
+2. Keep the closed branch-truth fixes intact:
+   live/watch direct-entry admission truth, signed-out self/public separation, and signed-out Chi'lly Chat auth gating should stay closed while proof work resumes.
+3. Re-enter the real two-phone Live Stage / Watch-Party Live proof lane with the current route owners unchanged:
+   `app/watch-party/[partyId].tsx`
+   `app/watch-party/live-stage/[partyId].tsx`
+   `app/player/[id].tsx`
+4. Keep the landed runtime, interaction, member-visibility, invite, locked-room, and overlay fixes intact while proving the remaining live behavior honestly.
+5. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- re-audit the corrected owners:
+- run the later two-phone proof path on the current live/watch owners:
+  `app/watch-party/[partyId].tsx`
   `app/watch-party/live-stage/[partyId].tsx`
   `app/player/[id].tsx`
-  `app/(tabs)/index.tsx`
-  `app/profile/[userId].tsx`
-  `app/chat/index.tsx`
-  `app/chat/[threadId].tsx`
-- no more implementation unless the re-audit finds a truly remaining narrow branch-truth seam
-- keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch removal, Live Stage interaction/runtime hardening, and stage-entry overlay arming fix intact
-- do not widen into broad route redesign, schema changes, or the later two-phone proof lane until these branch leaks are closed
+- keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch removal, Live Stage interaction/runtime hardening, stage-entry overlay arming fix, and branch-truth corrections intact
+- do not widen into broad route redesign, schema changes, or unrelated product work
 - keep unrelated local dirt out of the checkpoint
 
 ## Scope
@@ -33,8 +29,7 @@ This next pass should:
 - keep the current social baseline, monetization/access truth, and no-fake-comments/no-fake-ads doctrine intact
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
-- keep the active owners on the narrow audited branch-leak surfaces only, with the watch-party/live owners first
-- treat later two-phone Live Stage proof as still required, but not as the only remaining lane until these branch-truth leaks are fixed
+- treat later two-phone Live Stage / Watch-Party Live proof as the active remaining lane again
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
@@ -51,6 +46,6 @@ The next lane is successful when:
 - the landed Home/Profile fix stays intact and signed-out users can no longer drift into a faux self/owner profile branch
 - the landed chat fix stays intact and signed-out users hitting Chi'lly Chat see an honest gate instead of a generic member-style failure state
 - the existing Live Stage interaction, member-visibility, invite, and locked-room fixes stay intact
-- later two-phone Live Stage proof becomes the honest remaining proof lane again after these branch leaks are closed
+- the remaining two-phone Live Stage / Watch-Party Live proof is completed honestly without reopening branch-truth leaks
 - no route drift, schema drift, fake room powers, or fake social claims are introduced
 - the staged set stays task-pure
