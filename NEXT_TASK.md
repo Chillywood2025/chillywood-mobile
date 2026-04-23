@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the later two-phone Live Stage / Watch-Party Live proof lane now that the whole-app branch-truth correction lane is closed cleanly.
+Run the later two-phone Live Stage / Watch-Party Live proof lane now that the whole-app systems inventory confirms this is still the most important remaining cross-system integration lane.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
@@ -11,14 +11,19 @@ Run the later two-phone Live Stage / Watch-Party Live proof lane now that the wh
    `app/watch-party/[partyId].tsx`
    `app/watch-party/live-stage/[partyId].tsx`
    `app/player/[id].tsx`
-4. Keep the landed runtime, interaction, member-visibility, invite, locked-room, and overlay fixes intact while proving the remaining live behavior honestly.
-5. Keep unrelated local dirt out of the checkpoint.
+4. Keep the systems-audit ranking in mind while doing that proof:
+   the next two later seams after the live/media lane are `scheduled events/reminders -> canonical room/access integration` and `discovery/content-data read-model unification`, but neither should be reopened before the active live proof lane closes.
+5. Keep the durable systems map current:
+   `docs/app-systems-inventory-and-integration-audit.md`
+6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
 - run the later two-phone proof path on the current live/watch owners:
   `app/watch-party/[partyId].tsx`
   `app/watch-party/live-stage/[partyId].tsx`
   `app/player/[id].tsx`
+- treat the systems-audit result as confirmed:
+  this is still the highest-priority remaining cross-system lane on current `main`
 - keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch removal, Live Stage interaction/runtime hardening, stage-entry overlay arming fix, and branch-truth corrections intact
 - do not widen into broad route redesign, schema changes, or unrelated product work
 - keep unrelated local dirt out of the checkpoint
@@ -29,6 +34,7 @@ This next pass should:
 - keep the current social baseline, monetization/access truth, and no-fake-comments/no-fake-ads doctrine intact
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
+- use `docs/app-systems-inventory-and-integration-audit.md` as the current systems/integration truth map
 - treat later two-phone Live Stage / Watch-Party Live proof as the active remaining lane again
 - keep unrelated local dirt out of the checkpoint
 
