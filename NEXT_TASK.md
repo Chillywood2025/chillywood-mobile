@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Continue the active two-real-device multi-client validation lane on the current live/watch-party owners, keep the just-landed Live Stage shared-comment recovery fix intact, and only widen into another code batch if the next real-device failure proves it is both narrow and safe.
+Resume the active two-real-device multi-client validation lane on the current live/watch-party owners, keep the just-landed Live Stage shared-comment recovery fix intact, and isolate the new viewer-side Live Stage -> live waiting-room drop before attempting any broader proof matrix again.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, bounded admin, and the corrected systems map.
@@ -13,12 +13,12 @@ Continue the active two-real-device multi-client validation lane on the current 
    `app/player/[id].tsx`
 4. Keep the just-landed Live Stage shared-comment recovery fix intact on:
    `app/watch-party/live-stage/[partyId].tsx`
-5. Continue proving the real owner paths with the current live/watch routes unchanged:
+5. Re-enter the same real owner paths with the current live/watch routes unchanged:
    `app/watch-party/index.tsx`
    `app/watch-party/[partyId].tsx`
    `app/watch-party/live-stage/[partyId].tsx`
    `app/player/[id].tsx`
-6. Stay on two real phones unless a third participant is actually required.
+6. Use the same two real phones first; do not add an emulator unless a real third participant is actually required.
 7. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
@@ -29,15 +29,18 @@ Continue the active two-real-device multi-client validation lane on the current 
   `app/player/[id].tsx`
 - keep the just-landed comment recovery truth intact on:
   `app/watch-party/live-stage/[partyId].tsx`
-- continue proving:
-  shared Live Stage comments on both sides
+- isolate first:
+  why the viewer-side device can drop from `app/watch-party/live-stage/[partyId].tsx` back to the live waiting-room owner while the host remains on stage
+- then resume proving:
+  reverse viewer-to-host Live Stage comments
   reactions on both sides
   `CAMERA LOOKS` on the roles that should have it
   participant/member visibility
+  Party Room host/viewer proof
   audio truth where the current setup allows honest proof
 - do not widen into broad route redesign, schema changes, or unrelated product work
 - keep unrelated local dirt out of the checkpoint
-- if the next failure proves a second safe code batch is needed, keep it narrow and tied only to the route/helper that actually failed
+- if the route drop proves a second safe code batch is needed, keep it narrow and tied only to the exact owner/helper that actually fails
 - if the lane still cannot close honestly with multi-device proof, record the exact seam before reopening any new code batch
 
 ## Scope
