@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the later two-phone Live Stage / Watch-Party Live proof lane now that the whole-app systems inventory confirms this is still the most important remaining cross-system integration lane.
+Run the live/watch-party realtime + audio proof and handoff validation lane now that the systems map explicitly includes audio and confirms this is still the most important remaining cross-system integration lane.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
@@ -23,7 +23,7 @@ Run the later two-phone Live Stage / Watch-Party Live proof lane now that the wh
   `app/watch-party/live-stage/[partyId].tsx`
   `app/player/[id].tsx`
 - treat the systems-audit result as confirmed:
-  this is still the highest-priority remaining cross-system lane on current `main`
+  this is still the highest-priority remaining cross-system lane on current `main`, and audio truth is part of the same lane rather than an implied sub-detail
 - keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch removal, Live Stage interaction/runtime hardening, stage-entry overlay arming fix, and branch-truth corrections intact
 - do not widen into broad route redesign, schema changes, or unrelated product work
 - keep unrelated local dirt out of the checkpoint
@@ -35,7 +35,7 @@ This next pass should:
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
 - use `docs/app-systems-inventory-and-integration-audit.md` as the current systems/integration truth map
-- treat later two-phone Live Stage / Watch-Party Live proof as the active remaining lane again
+- treat live/watch-party realtime plus audio proof as the active remaining lane again
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope
@@ -52,6 +52,6 @@ The next lane is successful when:
 - the landed Home/Profile fix stays intact and signed-out users can no longer drift into a faux self/owner profile branch
 - the landed chat fix stays intact and signed-out users hitting Chi'lly Chat see an honest gate instead of a generic member-style failure state
 - the existing Live Stage interaction, member-visibility, invite, and locked-room fixes stay intact
-- the remaining two-phone Live Stage / Watch-Party Live proof is completed honestly without reopening branch-truth leaks
+- the remaining live/watch-party realtime and audio proof is completed honestly without reopening branch-truth leaks
 - no route drift, schema drift, fake room powers, or fake social claims are introduced
 - the staged set stays task-pure

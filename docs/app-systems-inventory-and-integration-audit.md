@@ -53,7 +53,8 @@ It does not:
 | 20 | Admin / owner / Rachi | `app/admin.tsx`, `app/profile/[userId].tsx`, `app/chat/*` | `_lib/moderation.ts`, `_lib/officialAccounts.ts`, `_lib/channelReadModels.ts`, `_lib/monetization.ts`, `_lib/appConfig.ts`, `_lib/session.tsx` | Bounded admin/operator console, official Rachi identity, creator grants, programming/config control | `PARTIALLY_REAL` | `internal` | owner vs operator vs moderator vs member, official vs ordinary identity, privileged write allowed vs blocked |
 | 21 | Legal / support / account | `app/privacy.tsx`, `app/terms.tsx`, `app/account-deletion.tsx`, `components/legal/legal-page-shell.tsx`, `app/support.tsx`, `app/beta-support.tsx`, `components/system/support-screen.tsx`, `app/settings.tsx` | `_lib/runtimeConfig.ts`, `_lib/betaProgram.tsx`, `_lib/session.tsx` | Public legal content, signed-in support/feedback, legal URL routing, account-deletion instructions | `PARTIALLY_REAL` | `shared` | public legal vs signed-in support, closed-beta vs public-v1, topic-specific support flows |
 | 22 | Realtime / media / LiveKit | `components/watch-party-live/livekit-stage-media-surface.tsx`, `app/player/[id].tsx`, `app/watch-party/live-stage/[partyId].tsx`, `_lib/livekit/*` | `_lib/runtimeConfig.ts`, `_lib/livekit/join-boundary.ts`, `_lib/livekit/token-contract.ts`, `_lib/livekit/react-native-module.tsx` | LiveKit bootstrap, join-contract prep, native media surface for Watch-Party Live and Live Stage | `PARTIALLY_REAL` | `shared` | host vs viewer publish posture, contract ready vs unavailable, connected vs fallback, native vs web |
-| 23 | Runtime / config / env | `app.config.ts`, `_lib/runtimeConfig.ts`, `_lib/appConfig.ts`, `_lib/featureFlags.ts`, `app/_layout.tsx` | Firebase bootstrap helpers, RevenueCat bootstrap, LiveKit bootstrap | Runtime values, app defaults, legal URLs, feature toggles, provider bootstrap | `FULLY_REAL` | `shared` | closed-beta vs public-v1, valid vs invalid runtime config, remote-config default vs override |
+| 23 | Live audio / mic / playback routing | `components/watch-party-live/livekit-stage-media-surface.tsx`, `app/watch-party/live-stage/[partyId].tsx`, `app/player/[id].tsx`, `app/watch-party/[partyId].tsx`, `app/communication/index.tsx`, `app/communication/[roomId].tsx` | `_lib/livekit/react-native-module.tsx`, `hooks/use-communication-room-session.ts`, `_lib/watchParty.ts`, `_lib/communication.ts` | Mic capture, mute/unmute truth, playback output routing, permission handling, connected-vs-silent honesty across live/watch and communication flows | `PARTIALLY_REAL` | `shared` | host vs viewer vs speaker, mic allowed vs denied vs blocked, muted vs unmuted, connected vs connected-but-silent, joined vs left, playback output routed vs not |
+| 24 | Runtime / config / env | `app.config.ts`, `_lib/runtimeConfig.ts`, `_lib/appConfig.ts`, `_lib/featureFlags.ts`, `app/_layout.tsx` | Firebase bootstrap helpers, RevenueCat bootstrap, LiveKit bootstrap | Runtime values, app defaults, legal URLs, feature toggles, provider bootstrap | `FULLY_REAL` | `shared` | closed-beta vs public-v1, valid vs invalid runtime config, remote-config default vs override |
 
 ## Integration Map
 
@@ -81,14 +82,15 @@ It does not:
 | Admin / owner / Rachi | session, beta, moderation, monetization grants, app config, official account truth | `PARTIAL` | shared truth | admin surface feels broader than current owner/Rachi control truth |
 | Legal / support / account | legal runtime URLs, support screen, beta feedback, session | `PARTIAL` | public legal routes plus signed-in support | support/account deletion expectations exceed current manual support flow |
 | Realtime / media / LiveKit | runtime config, Supabase token function, join-boundary handoff, player/live-stage surfaces | `FRAGILE` | shared truth with route fallback paths | media join/fallback behavior on current live/watch surfaces |
+| Live audio / mic / playback routing | LiveKit media surfaces, communication RTC, Expo Audio permissions/session, watch-party room truth | `FRAGILE` | shared truth plus route-local mute/permission state | participants look live or muted while no real local audio is publishing, or audio routes as silent even though the room looks connected |
 | Runtime / config / env | Expo config, runtime config, app config, feature flags, provider bootstrap | `SOLID` | shared truth | environment misconfiguration, wrong URLs, wrong feature posture |
 
 ## Critical And Major Integration Seams
 
 ### 1. Critical blocker
-- Systems involved: `Party Room`, `Live Room / Live Stage`, `Standalone player`, `Realtime / media / LiveKit`
-- Exact owner files: `app/watch-party/[partyId].tsx`, `app/watch-party/live-stage/[partyId].tsx`, `app/player/[id].tsx`, `components/watch-party-live/livekit-stage-media-surface.tsx`, `_lib/livekit/join-boundary.ts`
-- Why it matters: this is the one core Public v1 social/live stack whose cross-route media behavior is still only partially integrated and still depends on fallback paths and later two-phone proof.
+- Systems involved: `Party Room`, `Live Room / Live Stage`, `Standalone player`, `Realtime / media / LiveKit`, `Live audio / mic / playback routing`
+- Exact owner files: `app/watch-party/[partyId].tsx`, `app/watch-party/live-stage/[partyId].tsx`, `app/player/[id].tsx`, `components/watch-party-live/livekit-stage-media-surface.tsx`, `_lib/livekit/join-boundary.ts`, `_lib/livekit/react-native-module.tsx`
+- Why it matters: this is the one core Public v1 social/live stack whose cross-route media and audio behavior is still only partially integrated and still depends on fallback paths plus later multi-device proof.
 - Type: `wiring`, `state-handling`, `structural ownership`
 - Safest fix size: `medium`
 
@@ -125,9 +127,9 @@ It does not:
 ## Best Next 3 Systems / Integration Lanes
 
 ### 1. Most important next lane
-- Lane: `Live/watch-party realtime proof and handoff validation`
-- Systems: `Party Room`, `Live Room / Live Stage`, `Standalone player`, `Realtime / media / LiveKit`
-- Why first: it is the highest-risk current Public v1 integration seam on a core user-facing stack, and it is already the active next lane in repo truth.
+- Lane: `Live/watch-party realtime + audio proof and handoff validation`
+- Systems: `Party Room`, `Live Room / Live Stage`, `Standalone player`, `Realtime / media / LiveKit`, `Live audio / mic / playback routing`
+- Why first: it is the highest-risk current Public v1 integration seam on a core user-facing stack, and audio truth is part of the same unresolved cross-route live proof.
 
 ### 2. Second
 - Lane: `Scheduled events / reminders -> canonical room/access integration`
@@ -142,4 +144,4 @@ It does not:
 ## Honest Bottom Line
 - Chi'llywood already has many real systems, not just screens.
 - The most mature shared systems today are session/auth, beta gating, access resolution for current supported states, title/player engagement, legal content, runtime config, and bounded official-account truth.
-- The biggest current cross-system risk is not a missing later-phase feature. It is the still-partial live/watch-party realtime integration proof across player, party room, live stage, and LiveKit media handoff.
+- The biggest current cross-system risk is not a missing later-phase feature. It is the still-partial live/watch-party realtime and audio integration proof across player, party room, live stage, and LiveKit media/audio handoff.
