@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the whole-lane branch-truth re-audit now that the three audited implementation batches are landed. Only do one final trivial/narrow branch-specific copy cleanup if the re-audit proves it is still justified and lane-pure.
+Run the whole-lane branch-truth re-audit now that the three audited implementation batches and the one trivial profile→chat auth-copy cleanup are landed. Close the lane if the re-audit shows no remaining branch-truth leak stronger than later-proof work.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
@@ -22,7 +22,7 @@ Run the whole-lane branch-truth re-audit now that the three audited implementati
   `app/profile/[userId].tsx`
   `app/chat/index.tsx`
   `app/chat/[threadId].tsx`
-- only land one final trivial/narrow branch-specific copy cleanup if the re-audit proves it is still justified and lane-pure
+- no more implementation unless the re-audit finds a truly remaining narrow branch-truth seam
 - keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch removal, Live Stage interaction/runtime hardening, and stage-entry overlay arming fix intact
 - do not widen into broad route redesign, schema changes, or the later two-phone proof lane until these branch leaks are closed
 - keep unrelated local dirt out of the checkpoint

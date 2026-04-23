@@ -810,10 +810,12 @@ export default function ProfileScreen() {
         },
       });
     } catch (error) {
+      const isChatAuthFailure = error instanceof Error
+        && error.message === "Chi'lly Chat requires a signed-in user.";
       trackEvent("communication_profile_entry_blocked", {
         entryPath: "profile",
         profileIsSelf: "false",
-        reason: "thread_open_failed",
+        reason: isChatAuthFailure ? "auth_required" : "thread_open_failed",
         targetUserId: userId,
       });
       const normalizedError = reportRuntimeError("profile-open-chilly-chat", error, {
@@ -821,7 +823,9 @@ export default function ProfileScreen() {
       });
       Alert.alert(
         "Chi'lly Chat",
-        normalizedError.message || "Unable to open Chi'lly Chat right now.",
+        isChatAuthFailure
+          ? "Sign in to open Chi'lly Chat from public channels."
+          : (normalizedError.message || "Unable to open Chi'lly Chat right now."),
       );
     }
   };
