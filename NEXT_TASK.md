@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Resume the active two-real-device multi-client validation lane on the current live/watch-party owners, keep the just-landed Live Stage shared-comment recovery fix intact, keep the premium title/player dead-end fix intact, and isolate the new viewer-side Live Stage -> live waiting-room drop before attempting any broader proof matrix again.
+Resume the active two-real-device live/watch-party proof lane on the current live owners, keep the just-landed real-device touch-stack fixes intact, keep the Live Stage shared-comment recovery fix intact, keep the premium title/player dead-end fix intact, and isolate the LiveKit `Unexpected first message` handshake/runtime seam before attempting broader sustained two-phone interaction proof again.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, bounded admin, and the corrected systems map.
@@ -13,17 +13,20 @@ Resume the active two-real-device multi-client validation lane on the current li
    `app/player/[id].tsx`
 4. Keep the just-landed Live Stage shared-comment recovery fix intact on:
    `app/watch-party/live-stage/[partyId].tsx`
-5. Keep the just-landed premium title/player dead-end fix intact on:
+5. Keep the just-landed real-device touch fixes intact on:
+   `app/watch-party/index.tsx`
+   `app/watch-party/live-stage/[partyId].tsx`
+6. Keep the just-landed premium title/player dead-end fix intact on:
    `app/title/[id].tsx`
    `app/player/[id].tsx`
    `components/monetization/access-sheet.tsx`
-6. Re-enter the same real owner paths with the current live/watch routes unchanged:
+7. Re-enter the same real owner paths with the current live/watch routes unchanged:
    `app/watch-party/index.tsx`
    `app/watch-party/[partyId].tsx`
    `app/watch-party/live-stage/[partyId].tsx`
    `app/player/[id].tsx`
-7. Use the same two real phones first; do not add an emulator unless a real third participant is actually required.
-8. Keep unrelated local dirt out of the checkpoint.
+8. Use the same two real phones first; do not add an emulator unless a real third participant is actually required.
+9. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
 - use the two real devices already attached to continue the shared live path honestly on:
@@ -31,6 +34,10 @@ Resume the active two-real-device multi-client validation lane on the current li
   `app/watch-party/[partyId].tsx`
   `app/watch-party/live-stage/[partyId].tsx`
   `app/player/[id].tsx`
+- keep the just-landed preview-room action fix intact on:
+  `app/watch-party/index.tsx`
+- keep the just-landed pre-stage Live Stage entry CTA hardening intact on:
+  `app/watch-party/live-stage/[partyId].tsx`
 - keep the just-landed comment recovery truth intact on:
   `app/watch-party/live-stage/[partyId].tsx`
 - keep the just-landed premium title/player access truth intact on:
@@ -38,7 +45,11 @@ Resume the active two-real-device multi-client validation lane on the current li
   `app/player/[id].tsx`
   `components/monetization/access-sheet.tsx`
 - isolate first:
-  why the viewer-side device can drop from `app/watch-party/live-stage/[partyId].tsx` back to the live waiting-room owner while the host remains on stage
+  why one real device can still fall back to the wrong owner during sustained Live Stage proof while the other remains on-stage
+  and whether the concrete LiveKit runtime error
+  `Unexpected first message`
+  from `node_modules/livekit-client/src/api/SignalClient.ts`
+  is the root signal-handshake seam that needs route-local containment
 - then resume proving:
   reverse viewer-to-host Live Stage comments
   reactions on both sides
@@ -71,6 +82,8 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
+- the just-landed live-room preview action fix stays intact and the preview `Join Now` path is physically tappable on Android
+- the just-landed pre-stage Live Stage footer CTA fix stays intact and both real devices can still advance into the actual stage owner by the canonical owner path
 - the landed direct-entry Live Stage / `partyId` player fix stays intact and direct entry can no longer bypass real room-access and membership truth
 - the landed Home/Profile fix stays intact and signed-out users can no longer drift into a faux self/owner profile branch
 - the landed chat fix stays intact and signed-out users hitting Chi'lly Chat see an honest gate instead of a generic member-style failure state

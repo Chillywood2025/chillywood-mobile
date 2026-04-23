@@ -2602,7 +2602,17 @@ export default function WatchPartyLiveStageScreen() {
       </ScrollView>
 
       <View style={[styles.liveRoomFooter, { paddingBottom: liveRoomFooterInset }]}>
-        <TouchableOpacity style={styles.liveRoomPrimaryButton} activeOpacity={0.88} onPress={onEnterLiveStage}>
+        <TouchableOpacity
+          style={styles.liveRoomPrimaryButton}
+          activeOpacity={0.88}
+          accessible
+          focusable
+          accessibilityRole="button"
+          accessibilityLabel={liveRoomEntryLabel}
+          hitSlop={STAGE_CONTROL_HIT_SLOP}
+          onPress={onEnterLiveStage}
+          testID="live-room-enter-stage-button"
+        >
           <Text style={styles.liveRoomPrimaryButtonText}>{liveRoomEntryLabel}</Text>
         </TouchableOpacity>
       </View>
@@ -4030,6 +4040,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(6,8,14,0.88)",
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.06)",
+    position: "relative",
+    zIndex: 14,
+    elevation: 14,
   },
 
   stageHudTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
@@ -4347,10 +4360,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#DC143C",
     paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
     shadowColor: "#DC143C",
     shadowOpacity: 0.22,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
+    elevation: 16,
   },
   liveRoomPrimaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900", letterSpacing: 0.3 },
   stageModeCard: {

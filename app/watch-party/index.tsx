@@ -1074,10 +1074,24 @@ export default function WatchPartyIndexScreen() {
                 </Text>
                 <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
                 <View style={styles.previewActions}>
-                  <TouchableOpacity style={styles.joinNowBtn} onPress={onConfirmJoin} activeOpacity={0.88}>
+                  <TouchableOpacity
+                    style={styles.joinNowBtn}
+                    onPress={onConfirmJoin}
+                    activeOpacity={0.88}
+                    accessibilityRole="button"
+                    accessibilityLabel="Join Now"
+                    testID="watch-party-preview-join"
+                  >
                     <Text style={styles.joinNowBtnText}>Join Now →</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.cancelBtn} onPress={onClearPreview} activeOpacity={0.75}>
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={onClearPreview}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel room preview"
+                    testID="watch-party-preview-cancel"
+                  >
                     <Text style={styles.cancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
@@ -1393,19 +1407,30 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.09)",
     padding: 12,
     gap: 7,
+    position: "relative",
+    zIndex: 2,
+    elevation: 2,
   },
   previewMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
   previewDot: { width: 7, height: 7, borderRadius: 999 },
   previewStatus: { color: "#888", fontSize: 11, fontWeight: "700" },
   previewTitle: { color: "#fff", fontSize: 19, fontWeight: "900", lineHeight: 24 },
   previewCode: { color: "#555", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
-  previewActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  previewActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+    position: "relative",
+    zIndex: 3,
+  },
   joinNowBtn: {
     flex: 1,
     backgroundColor: "#DC143C",
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
+    justifyContent: "center",
+    elevation: 4,
   },
   joinNowBtnText: { color: "#fff", fontSize: 14, fontWeight: "900" },
   cancelBtn: {
@@ -1415,6 +1440,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: "center",
+    justifyContent: "center",
+    elevation: 4,
   },
   cancelBtnText: { color: "#888", fontSize: 14, fontWeight: "700" },
 
