@@ -1,32 +1,39 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run the live/watch-party realtime + audio proof and handoff validation lane now that the systems map explicitly includes audio and confirms this is still the most important remaining cross-system integration lane.
+Finish the current live/watch-party realtime + audio validation pass by using the single attached Android device for an honest owner-path smoke, then decide whether the only remaining blocker is later multi-device proof.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
 2. Keep the closed branch-truth fixes intact:
    live/watch direct-entry admission truth, signed-out self/public separation, and signed-out Chi'lly Chat auth gating should stay closed while proof work resumes.
-3. Re-enter the real two-phone Live Stage / Watch-Party Live proof lane with the current route owners unchanged:
+3. Keep the just-landed realtime/audio batch intact on the current route owners:
+   `components/watch-party-live/livekit-stage-media-surface.tsx`
+   `app/watch-party/live-stage/[partyId].tsx`
+   `app/player/[id].tsx`
+4. Re-enter the real owner path with the current live/watch routes unchanged:
    `app/watch-party/[partyId].tsx`
    `app/watch-party/live-stage/[partyId].tsx`
    `app/player/[id].tsx`
-4. Keep the systems-audit ranking in mind while doing that proof:
+5. Keep the systems-audit ranking in mind while doing that proof:
    the next two later seams after the live/media lane are `scheduled events/reminders -> canonical room/access integration` and `discovery/content-data read-model unification`, but neither should be reopened before the active live proof lane closes.
-5. Keep the durable systems map current:
+6. Keep the durable systems map current:
    `docs/app-systems-inventory-and-integration-audit.md`
-6. Keep unrelated local dirt out of the checkpoint.
+7. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- run the later two-phone proof path on the current live/watch owners:
-  `app/watch-party/[partyId].tsx`
+- use the currently attached Android device to smoke the live owner path honestly:
+  `app/watch-party/index.tsx`
+  `app/watch-party/live-stage/[partyId].tsx`
+- keep the just-landed local-audio publish truth intact on:
+  `components/watch-party-live/livekit-stage-media-surface.tsx`
   `app/watch-party/live-stage/[partyId].tsx`
   `app/player/[id].tsx`
-- treat the systems-audit result as confirmed:
-  this is still the highest-priority remaining cross-system lane on current `main`, and audio truth is part of the same lane rather than an implied sub-detail
-- keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch removal, Live Stage interaction/runtime hardening, stage-entry overlay arming fix, and branch-truth corrections intact
+- then decide whether the exact remaining blocker is later multi-device audio/realtime proof
 - do not widen into broad route redesign, schema changes, or unrelated product work
 - keep unrelated local dirt out of the checkpoint
+- if the lane cannot close honestly with one device attached, record that blocker exactly
+- do not reopen later systems lanes ahead of this one
 
 ## Scope
 This next pass should:
@@ -35,7 +42,7 @@ This next pass should:
 - use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
 - use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
 - use `docs/app-systems-inventory-and-integration-audit.md` as the current systems/integration truth map
-- treat live/watch-party realtime plus audio proof as the active remaining lane again
+- treat live/watch-party realtime plus audio validation as the active remaining lane
 - keep unrelated local dirt out of the checkpoint
 
 ## Out Of Scope

@@ -373,14 +373,17 @@ function LiveKitHybridHeroVideo({
 function LiveKitHybridCommunityRoomHost({
   joinContract,
   onFallback,
+  publishLocalAudio,
   children,
 }: {
   joinContract: LiveKitTokenReady;
   onFallback: (reason: LiveKitStageFallbackReason) => void;
+  publishLocalAudio: boolean;
   children: React.ReactNode;
 }) {
   const fallbackTriggeredRef = useRef(false);
   const [didConnectOnce, setDidConnectOnce] = useState(false);
+  const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
   const publishLocalCamera = joinContract.participantRole !== "viewer";
 
   const triggerFallback = useCallback(
@@ -405,6 +408,7 @@ function LiveKitHybridCommunityRoomHost({
   useEffect(() => {
     fallbackTriggeredRef.current = false;
     setDidConnectOnce(false);
+    setMediaDeviceFailure(null);
   }, [joinContract.participantToken, joinContract.roomName]);
 
   useEffect(() => {
@@ -444,7 +448,7 @@ function LiveKitHybridCommunityRoomHost({
       serverUrl={joinContract.serverUrl}
       token={joinContract.participantToken}
       connect
-      audio={false}
+      audio={publishLocalAudio}
       video={publishLocalCamera}
       connectOptions={{ autoSubscribe: true }}
       options={{ adaptiveStream: true, dynacast: false }}
@@ -466,13 +470,22 @@ function LiveKitHybridCommunityRoomHost({
         triggerFallback("room_error", error);
       }}
       onMediaDeviceFailure={(failure) => {
-        triggerFallback(
-          "room_error",
-          new Error(`LiveKit media-device failure: ${String(failure ?? "unknown_failure")}`),
-        );
+        const normalizedFailure = String(failure ?? "unknown_failure");
+        setMediaDeviceFailure(normalizedFailure);
+        reportRuntimeError("livekit-hybrid-community-media-device", new Error(`LiveKit media-device failure: ${normalizedFailure}`), {
+          roomName: joinContract.roomName,
+          participantRole: joinContract.participantRole,
+          publishLocalAudio,
+          publishLocalCamera,
+        });
       }}
     >
       {children}
+      {mediaDeviceFailure ? (
+        <View pointerEvents="none" style={styles.hybridLiveKitStatusPill}>
+          <Text style={styles.hybridLiveKitStatusText}>Audio/device issue: {mediaDeviceFailure}</Text>
+        </View>
+      ) : null}
     </HybridLiveKitRoom>
   );
 }
@@ -1782,6 +1795,11 @@ export default function WatchPartyLiveStageScreen() {
         || membershipMapRef.current[trackedUserId]?.canSpeak
         ? "speaker"
         : "viewer";
+  const isCurrentStageParticipantMuted = !!(
+    participantStateById[trackedUserId]?.isMuted
+    ?? membershipMapRef.current[trackedUserId]?.isMuted
+  );
+  const publishLocalStageAudio = liveKitParticipantRole !== "viewer" && !isCurrentStageParticipantMuted;
   const canUseStageFaceFilters = liveKitParticipantRole !== "viewer";
   const stageModeTitle = isLiveFirstMode
     ? "Host-led live focus"
@@ -3244,6 +3262,7 @@ export default function WatchPartyLiveStageScreen() {
             <LiveKitHybridCommunityRoomHost
               joinContract={liveKitJoinContract as LiveKitTokenReady}
               onFallback={onLiveKitStageFallback}
+              publishLocalAudio={publishLocalStageAudio}
             >
               {children}
             </LiveKitHybridCommunityRoomHost>
@@ -3269,6 +3288,7 @@ export default function WatchPartyLiveStageScreen() {
                 <LiveKitStageMediaSurface
                   joinContract={liveKitJoinContract}
                   onFallback={onLiveKitStageFallback}
+                  publishLocalAudio={publishLocalStageAudio}
                 />
               </View>
             )
@@ -4497,6 +4517,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "700",
+  },
+  hybridLiveKitStatusPill: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: "rgba(7,12,24,0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  hybridLiveKitStatusText: {
+    color: "#F4F7FF",
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
   },
   stageHybridHeroSecondaryWrap: {
     position: "absolute",

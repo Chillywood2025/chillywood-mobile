@@ -22,11 +22,14 @@ type LiveKitStageMediaSurfaceProps = {
   containerStyle?: StyleProp<ViewStyle>;
   fillParent?: boolean;
   surfaceLabel?: string;
+  publishLocalAudio?: boolean;
 };
 
 type LiveKitStageMediaContentProps = {
   joinContract: LiveKitTokenReady;
   surfaceLabel: string;
+  publishLocalAudio: boolean;
+  mediaDeviceFailure: string | null;
 };
 
 const LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
@@ -73,12 +76,19 @@ const getParticipantLabel = (identity: string, currentIdentity: string) => (
   identity === currentIdentity ? "You" : "Guest"
 );
 
-function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMediaContentProps) {
+function LiveKitStageMediaContent({
+  joinContract,
+  surfaceLabel,
+  publishLocalAudio,
+  mediaDeviceFailure,
+}: LiveKitStageMediaContentProps) {
   const connectionState = useConnectionState();
   const {
     cameraTrack,
     isCameraEnabled,
+    isMicrophoneEnabled,
     lastCameraError,
+    lastMicrophoneError,
     localParticipant,
   } = useLocalParticipant();
   const shouldPublishLocalCamera = joinContract.participantRole !== "viewer";
@@ -123,19 +133,27 @@ function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMe
       roomName: joinContract.roomName,
       participantRole: joinContract.participantRole,
       shouldPublishLocalCamera,
+      publishLocalAudio,
       isCameraEnabled,
+      isMicrophoneEnabled,
       hasLocalCameraTrack: !!cameraTrack,
       hasRemoteTrack: !!primaryRemoteTrack,
       remoteTrackCount: remoteTracks.length,
       visibleTrackCount,
       connectionState: String(connectionState ?? ""),
+      lastMicrophoneError: lastMicrophoneError?.message ?? null,
+      mediaDeviceFailure,
     });
   }, [
     cameraTrack,
     connectionState,
     isCameraEnabled,
+    isMicrophoneEnabled,
     joinContract.participantRole,
     joinContract.roomName,
+    lastMicrophoneError?.message,
+    mediaDeviceFailure,
+    publishLocalAudio,
     primaryRemoteTrack,
     remoteTracks.length,
     shouldPublishLocalCamera,
@@ -180,19 +198,42 @@ function LiveKitStageMediaContent({ joinContract, surfaceLabel }: LiveKitStageMe
 
   const connectionLabel = toConnectionLabel(connectionState);
   const isConnecting = String(connectionState ?? "").toLowerCase() !== "connected";
-  const showPublishWaitingState = !isConnecting && shouldPublishLocalCamera && !lastCameraError;
+  const showCameraWaitingState = !isConnecting && shouldPublishLocalCamera && !lastCameraError && !mediaDeviceFailure;
+  const showMicrophoneWaitingState = !isConnecting && publishLocalAudio && !lastMicrophoneError && !mediaDeviceFailure && !isMicrophoneEnabled;
+  const microphoneFailureMessage = lastMicrophoneError?.message ?? null;
+  const mediaFailureLabel = mediaDeviceFailure
+    ? `Media device issue: ${mediaDeviceFailure}`
+    : null;
   const placeholderTitle = isConnecting
     ? `Connecting ${surfaceLabel}…`
-    : showPublishWaitingState
-      ? "Preparing your camera…"
-      : `${surfaceLabel} connected`;
+    : lastCameraError
+      ? "Camera unavailable"
+      : microphoneFailureMessage
+        ? "Microphone unavailable"
+        : mediaFailureLabel
+          ? "Media device unavailable"
+          : showCameraWaitingState && showMicrophoneWaitingState
+            ? "Preparing camera and microphone…"
+            : showCameraWaitingState
+              ? "Preparing your camera…"
+              : showMicrophoneWaitingState
+                ? "Preparing your microphone…"
+                : `${surfaceLabel} connected`;
   const placeholderBody = isConnecting
     ? `LiveKit is preparing the room connection for ${joinContract.roomName}.`
     : lastCameraError
       ? `LiveKit connected, but camera publish failed: ${lastCameraError.message}`
-      : showPublishWaitingState
-        ? "The room is connected and your camera is still preparing for live video."
-        : "The room is connected, but no published stage video is available yet.";
+      : microphoneFailureMessage
+        ? `LiveKit connected, but microphone publish failed: ${microphoneFailureMessage}`
+        : mediaFailureLabel
+          ? `LiveKit connected, but local media setup still failed: ${mediaFailureLabel}`
+          : showCameraWaitingState && showMicrophoneWaitingState
+            ? "The room is connected and your camera plus microphone are still preparing for live media."
+            : showCameraWaitingState
+              ? "The room is connected and your camera is still preparing for live video."
+              : showMicrophoneWaitingState
+                ? "The room is connected and your microphone is still preparing for live audio."
+                : "The room is connected, but no published stage video is available yet.";
 
   return (
     <View style={styles.placeholderSurface}>
@@ -210,9 +251,11 @@ export function LiveKitStageMediaSurface({
   containerStyle,
   fillParent = true,
   surfaceLabel = "Live Stage",
+  publishLocalAudio = joinContract.participantRole !== "viewer",
 }: LiveKitStageMediaSurfaceProps) {
   const fallbackTriggeredRef = useRef(false);
   const [didConnectOnce, setDidConnectOnce] = useState(false);
+  const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
   const publishLocalCamera = joinContract.participantRole !== "viewer";
   const room = useMemo(() => {
     const nextRoom = new Room({ adaptiveStream: true, dynacast: false });
@@ -242,6 +285,7 @@ export function LiveKitStageMediaSurface({
   useEffect(() => {
     fallbackTriggeredRef.current = false;
     setDidConnectOnce(false);
+    setMediaDeviceFailure(null);
   }, [joinContract.participantToken, joinContract.roomName]);
 
   useEffect(() => {
@@ -282,13 +326,13 @@ export function LiveKitStageMediaSurface({
       pointerEvents="none"
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-    >
-      <LiveKitRoom
+      >
+        <LiveKitRoom
         room={room}
         serverUrl={joinContract.serverUrl}
         token={joinContract.participantToken}
         connect
-        audio={false}
+        audio={publishLocalAudio}
         video={publishLocalCamera}
         connectOptions={{ autoSubscribe: true }}
         onConnected={() => {
@@ -310,13 +354,22 @@ export function LiveKitStageMediaSurface({
           triggerFallback("room_error", error);
         }}
         onMediaDeviceFailure={(failure) => {
-          triggerFallback(
-            "room_error",
-            new Error(`LiveKit media-device failure: ${String(failure ?? "unknown_failure")}`),
-          );
+          const normalizedFailure = String(failure ?? "unknown_failure");
+          setMediaDeviceFailure(normalizedFailure);
+          reportRuntimeError("livekit-stage-media-device", new Error(`LiveKit media-device failure: ${normalizedFailure}`), {
+            roomName: joinContract.roomName,
+            participantRole: joinContract.participantRole,
+            publishLocalAudio,
+            publishLocalCamera,
+          });
         }}
       >
-        <LiveKitStageMediaContent joinContract={joinContract} surfaceLabel={surfaceLabel} />
+        <LiveKitStageMediaContent
+          joinContract={joinContract}
+          surfaceLabel={surfaceLabel}
+          publishLocalAudio={publishLocalAudio}
+          mediaDeviceFailure={mediaDeviceFailure}
+        />
       </LiveKitRoom>
     </View>
   );

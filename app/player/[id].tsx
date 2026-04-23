@@ -3172,6 +3172,14 @@ export default function PlayerScreen() {
     [liveBubbleParticipants, trackedUserId],
   );
   const shouldRenderWatchPartyLiveKit = inWatchParty && watchPartyEntryAllowed && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
+  const currentWatchPartyParticipantMuted = useMemo(() => {
+    const currentParticipant = partyParticipants.find((participant) => participant.id === trackedUserId);
+    if (currentParticipant) return !!currentParticipant.muted;
+    return !!partyMembershipMapRef.current[trackedUserId]?.isMuted;
+  }, [partyParticipants, trackedUserId]);
+  const publishWatchPartyLiveKitAudio = !!watchPartyLiveKitJoinContract
+    && watchPartyLiveKitJoinContract.participantRole !== "viewer"
+    && !currentWatchPartyParticipantMuted;
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
     if (livePrimarySpeakers.length === 1) return `🎤 ${livePrimarySpeakers[0].name} speaking`;
@@ -4302,6 +4310,7 @@ export default function PlayerScreen() {
               onFallback={onWatchPartyLiveKitFallback}
               fillParent={false}
               surfaceLabel="Watch-Party Live"
+              publishLocalAudio={publishWatchPartyLiveKitAudio}
               containerStyle={styles.watchPartySocialMediaFrameInner}
             />
           </View>
