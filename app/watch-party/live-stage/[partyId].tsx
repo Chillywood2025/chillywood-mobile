@@ -30,6 +30,10 @@ import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../../_data/titles";
 import {
+  resolveRoomAccess,
+  type RoomAccessResolution,
+} from "../../../_lib/accessEntitlements";
+import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveBrandingConfig,
@@ -57,7 +61,7 @@ import { readUserProfile } from "../../../_lib/userData";
 import {
     getActivePartyMemberships,
     getPartyRoomSnapshot,
-    getSafePartyUserId,
+    getWritablePartyUserId,
     joinPartyRoomSession,
     sendPartyMessage,
     setPartyRoomPolicies,
@@ -126,6 +130,30 @@ type LiveStageCommentRow = {
   username?: string | null;
   text?: string | null;
   created_at?: string | null;
+};
+
+const getLiveStageAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | null | undefined) => {
+  if (access?.reason === "room_locked") return "Live room locked";
+  if (access?.reason === "removed") return "Live room access removed";
+  if (access?.reason === "identity_required") return "Sign in required";
+  if (access?.reason === "premium_required") return "Premium access required";
+  if (access?.reason === "party_pass_required") return "Party Pass required";
+  return "Live room access unavailable";
+};
+
+const getLiveStageAccessBody = (access: Pick<RoomAccessResolution, "reason" | "label"> | null | undefined) => {
+  if (access?.reason === "room_locked") return "This live room is locked right now. Ask the host to reopen it.";
+  if (access?.reason === "removed") return "You no longer have access to this live room.";
+  if (access?.reason === "identity_required") {
+    return "Sign in before entering Live Stage so room membership, moderation, and reconnect truth stay reliable.";
+  }
+  if (access?.reason === "premium_required") {
+    return "Premium access is required before this live room can open from the direct Live Stage route.";
+  }
+  if (access?.reason === "party_pass_required") {
+    return "Party Pass access is required before this live room can open from the direct Live Stage route.";
+  }
+  return `${access?.label ?? "Room"} access is unavailable right now.`;
 };
 
 type StagePresenceEntry = {
@@ -466,6 +494,9 @@ export default function WatchPartyLiveStageScreen() {
 
   const [loading, setLoading] = useState(true);
   const [room, setRoom] = useState<WatchPartyState | null>(null);
+  const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
+  const [roomMissing, setRoomMissing] = useState(false);
+  const [roomEntryError, setRoomEntryError] = useState("");
   const [participants, setParticipants] = useState<StageParticipant[]>([]);
   const [myUserId, setMyUserId] = useState<string>("");
   const [myUsername, setMyUsername] = useState<string>("You");
@@ -547,6 +578,9 @@ export default function WatchPartyLiveStageScreen() {
   useEffect(() => {
     setCommunicationRoomId("");
     setLiveKitJoinContract(null);
+    setBlockedRoomAccess(null);
+    setRoomMissing(false);
+    setRoomEntryError("");
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -702,12 +736,17 @@ export default function WatchPartyLiveStageScreen() {
         if (!partyId) {
           debugLog("live-stage", "missing party id");
           debugLog("live-stage", "set loading false", { reason: "missing-party-id" });
+          setRoomMissing(true);
           setLoading(false);
           return;
         }
 
-        const userId = await getSafePartyUserId().catch(() => "");
-        const trackedUserId = String(userId || "anon").trim() || "anon";
+        setBlockedRoomAccess(null);
+        setRoomMissing(false);
+        setRoomEntryError("");
+
+        const userId = await getWritablePartyUserId().catch(() => null);
+        const trackedUserId = String(userId ?? "").trim();
         const profile = await readUserProfile().catch(() => null);
         let profileAvatarUrl = "";
         let profileCameraPreviewUrl = "";
@@ -736,6 +775,32 @@ export default function WatchPartyLiveStageScreen() {
         myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
 
         if (!snapshot) {
+          setRoomMissing(true);
+          setLoading(false);
+          return;
+        }
+
+        const currentMembership = trackedUserId
+          ? snapshot.memberships.find((membership) => membership.userId === trackedUserId) ?? null
+          : null;
+        const access = await resolveRoomAccess({
+          roomSurface: "watch_party",
+          partyId,
+          room: snapshot.room,
+          membership: currentMembership,
+          ...(trackedUserId ? { userId: trackedUserId } : {}),
+        }).catch(() => null);
+
+        if (cancelled) return;
+
+        if (!access) {
+          setRoomEntryError("Unable to confirm live-room access right now.");
+          setLoading(false);
+          return;
+        }
+
+        if (!access.isAllowed) {
+          setBlockedRoomAccess(access);
           setLoading(false);
           return;
         }
@@ -3062,6 +3127,78 @@ export default function WatchPartyLiveStageScreen() {
     );
   }
 
+  if (roomMissing) {
+    return (
+      <View style={styles.center}>
+        <View style={styles.routeGateCard}>
+          <Text style={styles.routeGateTitle}>Live room unavailable</Text>
+          <Text style={styles.routeGateBody}>
+            This live room could not be found anymore. Open Party Room if you want to re-check the canonical room route.
+          </Text>
+          <View style={styles.routeGateActions}>
+            <TouchableOpacity
+              style={styles.routeGateSecondaryButton}
+              activeOpacity={0.86}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.routeGateSecondaryText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.routeGatePrimaryButton}
+              activeOpacity={0.86}
+              onPress={() => {
+                router.replace({
+                  pathname: "/watch-party/[partyId]",
+                  params: { partyId },
+                });
+              }}
+            >
+              <Text style={styles.routeGatePrimaryText}>Open Party Room</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (roomEntryError || blockedRoomAccess) {
+    return (
+      <View style={styles.center}>
+        <View style={styles.routeGateCard}>
+          <Text style={styles.routeGateTitle}>
+            {blockedRoomAccess ? getLiveStageAccessTitle(blockedRoomAccess) : "Live room access unavailable"}
+          </Text>
+          <Text style={styles.routeGateBody}>
+            {blockedRoomAccess ? getLiveStageAccessBody(blockedRoomAccess) : roomEntryError}
+          </Text>
+          <View style={styles.routeGateActions}>
+            <TouchableOpacity
+              style={styles.routeGateSecondaryButton}
+              activeOpacity={0.86}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.routeGateSecondaryText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.routeGatePrimaryButton}
+              activeOpacity={0.86}
+              onPress={() => {
+                router.replace({
+                  pathname: "/watch-party/[partyId]",
+                  params: { partyId },
+                });
+              }}
+            >
+              <Text style={styles.routeGatePrimaryText}>
+                {blockedRoomAccess ? "Open Party Room" : "Retry in Party Room"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.outerFlex}>
       {backgroundSource ? (
@@ -3759,6 +3896,58 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent", paddingTop: 56, paddingBottom: 18, paddingHorizontal: 10 },
   center: { flex: 1, backgroundColor: "#050505", alignItems: "center", justifyContent: "center" },
   loadingText: { color: "#888", marginTop: 14, fontSize: 14 },
+  routeGateCard: {
+    width: "88%",
+    maxWidth: 460,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(8,10,16,0.94)",
+    paddingHorizontal: 22,
+    paddingVertical: 22,
+    gap: 12,
+  },
+  routeGateTitle: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  routeGateBody: {
+    color: "rgba(232,236,242,0.82)",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  routeGateActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
+  routeGatePrimaryButton: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#DC143C",
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  routeGatePrimaryText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  routeGateSecondaryButton: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  routeGateSecondaryText: {
+    color: "#F2F4F8",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   liveRoomSurface: { flex: 1 },
   liveRoomSurfaceScroll: { flex: 1 },
   liveRoomSurfaceContent: { paddingBottom: 20 },

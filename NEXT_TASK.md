@@ -1,23 +1,20 @@
 # NEXT TASK
 
 ## Exact Next Task
-Run a narrow whole-app branch-truth correction pass before any more “later two-phone proof only” work is treated as the sole next lane. The priority is to fix the critical access/membership leak across the watch-party/live owners, then close the signed-out self/public leak on Home/Profile, then give Chi'lly Chat an honest signed-out gate instead of member-style error fallthrough.
+Continue the narrow whole-app branch-truth correction pass now that the critical watch-party/live direct-entry admission leak is fixed. The next priority is to close the signed-out self/public leak on Home/Profile, then give Chi'lly Chat an honest signed-out gate instead of member-style error fallthrough.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
 2. Keep the completed runtime, interaction, invite, locked-room, and Live Stage proof groundwork intact while correcting only the narrower branch-truth leaks found in the audit.
-3. Fix the highest-risk watch-party/live branch leak first:
-   `app/watch-party/live-stage/[partyId].tsx` and the `partyId` branch inside `app/player/[id].tsx` must stop behaving like admitted member surfaces before room access, membership, and blocked-room truth are resolved.
-4. Fix the signed-out self/public leak second:
+3. Keep the now-landed watch-party/live direct-entry access fix intact:
+   `app/watch-party/live-stage/[partyId].tsx` and the `partyId` branch inside `app/player/[id].tsx` now resolve room access before admitted live/watch behavior and should stay closed while the rest of this lane lands.
+4. Fix the signed-out self/public leak next:
    `app/(tabs)/index.tsx` must stop surfacing a faux signed-out “your channel” path, and `app/profile/[userId].tsx` must stop trusting `self=1` strongly enough to produce a self/owner branch without a real signed-in identity.
-5. Fix the signed-out chat branch third:
+5. Fix the signed-out chat branch after that:
    `app/chat/index.tsx`, `app/chat/[threadId].tsx`, and the directly-related `_lib/chat.ts` entry path must render honest signed-out gating instead of generic member-style load/missing-thread errors.
 6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- fix direct-entry room access and membership truth on:
-  `app/watch-party/live-stage/[partyId].tsx`
-  `app/player/[id].tsx`
 - fix signed-out self/public separation on:
   `app/(tabs)/index.tsx`
   `app/profile/[userId].tsx`
@@ -49,7 +46,7 @@ Do not:
 
 ## Success Criteria
 The next lane is successful when:
-- direct entry into Live Stage or the `partyId` player branch can no longer bypass real room-access and membership truth
+- the landed direct-entry Live Stage / `partyId` player fix stays intact and direct entry can no longer bypass real room-access and membership truth
 - signed-out users can no longer drift into a faux self/owner profile branch from Home/Profile
 - signed-out users hitting Chi'lly Chat see an honest gate instead of a generic member-style failure state
 - the existing Live Stage interaction, member-visibility, invite, and locked-room fixes stay intact

@@ -33,7 +33,9 @@ import {
 
 import { titles } from "../../_data/titles";
 import {
+    resolveRoomAccess,
     resolveContentAccess,
+    type RoomAccessResolution,
     type ContentAccessResolution,
 } from "../../_lib/accessEntitlements";
 import {
@@ -71,6 +73,7 @@ import {
     getPartyRoom,
     getPartyRoomSnapshot,
     getSafePartyUserId,
+    getWritablePartyUserId,
     joinPartyRoomSession,
     sendPartyMessage,
     setPartyParticipantState,
@@ -114,6 +117,30 @@ const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
 const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
+
+const getWatchPartyAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | null | undefined) => {
+  if (access?.reason === "room_locked") return "Watch party locked";
+  if (access?.reason === "removed") return "Watch party access removed";
+  if (access?.reason === "identity_required") return "Sign in required";
+  if (access?.reason === "premium_required") return "Premium access required";
+  if (access?.reason === "party_pass_required") return "Party Pass required";
+  return "Watch-party access unavailable";
+};
+
+const getWatchPartyAccessBody = (access: Pick<RoomAccessResolution, "reason" | "label"> | null | undefined) => {
+  if (access?.reason === "room_locked") return "This watch party is locked right now. Ask the host to reopen it.";
+  if (access?.reason === "removed") return "You no longer have access to this watch party.";
+  if (access?.reason === "identity_required") {
+    return "Sign in before joining Watch-Party Live so room membership and sync stay tied to a real Chi'llywood identity.";
+  }
+  if (access?.reason === "premium_required") {
+    return "Premium access is required before Watch-Party Live can open from this direct route.";
+  }
+  if (access?.reason === "party_pass_required") {
+    return "Party Pass access is required before Watch-Party Live can open from this direct route.";
+  }
+  return `${access?.label ?? "Room"} access is unavailable right now.`;
+};
 
 type TitleDbBaseRow = Pick<
   Tables<"titles">,
@@ -568,6 +595,17 @@ export default function PlayerScreen() {
   const [standaloneAccessLoading, setStandaloneAccessLoading] = useState(true);
   const [standaloneAccessRetryToken, setStandaloneAccessRetryToken] = useState(0);
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [watchPartyEntryLoading, setWatchPartyEntryLoading] = useState(inWatchParty);
+  const [watchPartyEntryMissing, setWatchPartyEntryMissing] = useState(false);
+  const [watchPartyEntryError, setWatchPartyEntryError] = useState<string | null>(null);
+  const [watchPartyAccess, setWatchPartyAccess] = useState<RoomAccessResolution | null>(null);
+  const [watchPartyEntryRetryToken, setWatchPartyEntryRetryToken] = useState(0);
+  const watchPartyEntryAllowed = !inWatchParty || (
+    !watchPartyEntryLoading
+    && !watchPartyEntryMissing
+    && !watchPartyEntryError
+    && !!watchPartyAccess?.isAllowed
+  );
 
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -973,7 +1011,7 @@ export default function PlayerScreen() {
   );
 
   useEffect(() => {
-    if (!inWatchParty || !partyId) {
+    if (!inWatchParty || !partyId || !watchPartyEntryAllowed) {
       setPartySyncRole(null);
       setPartySyncStatus(null);
       partySyncRoleRef.current = null;
@@ -1011,9 +1049,9 @@ export default function PlayerScreen() {
 
     const bootstrapPartySync = async () => {
       setPartySyncStatus("Waiting for host…");
-      const currentUserId = await getSafePartyUserId().catch(() => "");
+      const currentUserId = await getWritablePartyUserId().catch(() => null);
       if (!active) return;
-      partySyncUserIdRef.current = currentUserId || null;
+      partySyncUserIdRef.current = String(currentUserId ?? "").trim() || null;
 
       const initialRoom = await getPartyRoom(partyId).catch(() => null);
       if (!active) return;
@@ -1071,13 +1109,70 @@ export default function PlayerScreen() {
         partySyncPollRef.current = null;
       }
     };
-  }, [applyPartyRoomStateToGuest, inWatchParty, partyId]);
+  }, [applyPartyRoomStateToGuest, inWatchParty, partyId, watchPartyEntryAllowed]);
 
   const updatePartyMembershipMap = useCallback((memberships: WatchPartyRoomMembership[]) => {
     partyMembershipMapRef.current = Object.fromEntries(
       memberships.map((membership) => [membership.userId, membership]),
     );
   }, []);
+
+  useEffect(() => {
+    if (!inWatchParty || !partyId) {
+      setWatchPartyEntryLoading(false);
+      setWatchPartyEntryMissing(false);
+      setWatchPartyEntryError(null);
+      setWatchPartyAccess(null);
+      return;
+    }
+
+    let active = true;
+    setWatchPartyEntryLoading(true);
+    setWatchPartyEntryMissing(false);
+    setWatchPartyEntryError(null);
+    setWatchPartyAccess(null);
+
+    (async () => {
+      const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
+      if (!active) return;
+
+      if (!snapshot) {
+        setWatchPartyEntryMissing(true);
+        setWatchPartyEntryLoading(false);
+        return;
+      }
+
+      updatePartyMembershipMap(snapshot.memberships);
+      const writableUserId = await getWritablePartyUserId().catch(() => null);
+      if (!active) return;
+      const trackedUserId = String(writableUserId ?? "").trim();
+      const membership = trackedUserId
+        ? snapshot.memberships.find((entry) => entry.userId === trackedUserId) ?? null
+        : null;
+      const access = await resolveRoomAccess({
+        roomSurface: "watch_party",
+        partyId,
+        room: snapshot.room,
+        membership,
+        ...(trackedUserId ? { userId: trackedUserId } : {}),
+      }).catch(() => null);
+
+      if (!active) return;
+
+      if (!access) {
+        setWatchPartyEntryError("Unable to confirm watch-party access right now.");
+        setWatchPartyEntryLoading(false);
+        return;
+      }
+
+      setWatchPartyAccess(access);
+      setWatchPartyEntryLoading(false);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [inWatchParty, partyId, updatePartyMembershipMap, watchPartyEntryRetryToken]);
 
   const refreshPartyMembershipSnapshot = useCallback(async () => {
     if (!partyId) return null;
@@ -1152,7 +1247,7 @@ export default function PlayerScreen() {
   }, []);
 
   useEffect(() => {
-    if (!inWatchParty || !partyId) {
+    if (!inWatchParty || !partyId || !watchPartyEntryAllowed) {
       setWatchPartyLiveKitJoinContract((current) => (current ? null : current));
       setPartyViewerCount((current) => (current === 0 ? current : 0));
       setViewerCount((current) => (current === 1 ? current : 1));
@@ -1233,8 +1328,11 @@ export default function PlayerScreen() {
     };
 
     const bootstrapPartySocial = async () => {
-      const safeUserId = String(partySyncUserIdRef.current || (await getSafePartyUserId().catch(() => "")) || "").trim();
-      const trackedUserId = safeUserId || "anon";
+      const safeUserId = String(
+        partySyncUserIdRef.current || (await getWritablePartyUserId().catch(() => null)) || "",
+      ).trim();
+      if (!safeUserId) return;
+      const trackedUserId = safeUserId;
       if (!active) return;
       setPartyUserId(trackedUserId);
 
@@ -1661,7 +1759,7 @@ export default function PlayerScreen() {
         partySocialChannelRef.current = null;
       }
     };
-  }, [inWatchParty, partyId, pushPartyOverlayMessage, refreshPartyMembershipSnapshot, syncCurrentPartyPresence]);
+  }, [inWatchParty, partyId, pushPartyOverlayMessage, refreshPartyMembershipSnapshot, syncCurrentPartyPresence, watchPartyEntryAllowed]);
 
   useEffect(() => {
     return () => {
@@ -3073,7 +3171,7 @@ export default function PlayerScreen() {
     () => liveBubbleParticipants.find((participant) => participant.id === trackedUserId)?.name || "You",
     [liveBubbleParticipants, trackedUserId],
   );
-  const shouldRenderWatchPartyLiveKit = inWatchParty && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
+  const shouldRenderWatchPartyLiveKit = inWatchParty && watchPartyEntryAllowed && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
     if (livePrimarySpeakers.length === 1) return `🎤 ${livePrimarySpeakers[0].name} speaking`;
@@ -3081,7 +3179,7 @@ export default function PlayerScreen() {
   }, [livePrimarySpeakers]);
 
   useEffect(() => {
-    if (!inWatchParty || !partyId || Platform.OS === "web") {
+    if (!inWatchParty || !partyId || !watchPartyEntryAllowed || Platform.OS === "web") {
       setWatchPartyLiveKitJoinContract(null);
       return;
     }
@@ -3103,7 +3201,7 @@ export default function PlayerScreen() {
       participantRole: preparedContract.participantRole,
       requestedGrants: preparedContract.requestedGrants,
     });
-  }, [inWatchParty, partyId, trackedUserId, watchPartyLiveKitJoinContract?.roomName]);
+  }, [inWatchParty, partyId, trackedUserId, watchPartyEntryAllowed, watchPartyLiveKitJoinContract?.roomName]);
 
   const onWatchPartyLiveKitFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
     debugLog("livekit", "falling back to legacy watch-party-live playback path", {
@@ -4620,6 +4718,81 @@ export default function PlayerScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.container}>
           <Text style={styles.text}>Loading title…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (inWatchParty && watchPartyEntryLoading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.container}>
+          <View style={styles.playerAccessCard}>
+            <Text style={styles.playerAccessKicker}>WATCH-PARTY LIVE</Text>
+            <Text style={styles.playerAccessTitle}>Checking watch-party access</Text>
+            <Text style={styles.playerAccessBody}>
+              Chi&apos;llywood is confirming room membership and access truth before Watch-Party Live opens.
+            </Text>
+            <View style={styles.playerAccessActions}>
+              <TouchableOpacity
+                style={[styles.playerAccessPrimaryBtn, styles.secondaryBtnDisabled]}
+                disabled
+                activeOpacity={0.85}
+              >
+                <Text style={styles.playerAccessPrimaryText}>Checking...</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (inWatchParty && (watchPartyEntryMissing || !!watchPartyEntryError || (watchPartyAccess && !watchPartyAccess.isAllowed))) {
+    const blockedAccess = watchPartyAccess && !watchPartyAccess.isAllowed ? watchPartyAccess : null;
+    const title = watchPartyEntryMissing
+      ? "Watch party unavailable"
+      : blockedAccess
+        ? getWatchPartyAccessTitle(blockedAccess)
+        : "Watch-party access unavailable";
+    const body = watchPartyEntryMissing
+      ? "This watch party could not be found anymore. Open the canonical Party Room route if you want to re-check the room."
+      : blockedAccess
+        ? getWatchPartyAccessBody(blockedAccess)
+        : (watchPartyEntryError ?? "Unable to confirm watch-party access right now.");
+
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.container}>
+          <View style={styles.playerAccessCard}>
+            <Text style={styles.playerAccessKicker}>WATCH-PARTY LIVE</Text>
+            <Text style={styles.playerAccessTitle}>{title}</Text>
+            <Text style={styles.playerAccessBody}>{body}</Text>
+            <View style={styles.playerAccessActions}>
+              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+                <Text style={styles.playerAccessSecondaryText}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.playerAccessPrimaryBtn}
+                onPress={() => {
+                  if (blockedAccess || watchPartyEntryMissing) {
+                    router.replace({
+                      pathname: "/watch-party/[partyId]",
+                      params: { partyId },
+                    });
+                    return;
+                  }
+
+                  setWatchPartyEntryRetryToken((current) => current + 1);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.playerAccessPrimaryText}>
+                  {blockedAccess || watchPartyEntryMissing ? "Open Party Room" : "Retry access"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </SafeAreaView>
     );
