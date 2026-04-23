@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Continue the narrow whole-app branch-truth correction pass now that the direct-entry live/watch leak and the signed-out self/public profile leak are both fixed. The next priority is to give Chi'lly Chat an honest signed-out gate instead of member-style error fallthrough, then re-audit the lane for any final narrow branch-specific copy cleanup.
+Run the whole-lane branch-truth re-audit now that the three audited implementation batches are landed. Only do one final trivial/narrow branch-specific copy cleanup if the re-audit proves it is still justified and lane-pure.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, and bounded admin.
@@ -10,16 +10,19 @@ Continue the narrow whole-app branch-truth correction pass now that the direct-e
    `app/watch-party/live-stage/[partyId].tsx` and the `partyId` branch inside `app/player/[id].tsx` now resolve room access before admitted live/watch behavior and should stay closed while the rest of this lane lands.
 4. Keep the now-landed signed-out self/public separation intact:
    `app/(tabs)/index.tsx` no longer surfaces a faux signed-out “your channel” path, and `app/profile/[userId].tsx` no longer trusts `self=1` without a real signed-in identity match.
-5. Fix the signed-out chat branch next:
-   `app/chat/index.tsx`, `app/chat/[threadId].tsx`, and the directly-related `_lib/chat.ts` entry path must render honest signed-out gating instead of generic member-style load/missing-thread errors.
+5. Keep the now-landed signed-out chat gate intact:
+   `app/chat/index.tsx` and `app/chat/[threadId].tsx` now render honest signed-out gating instead of generic member-style load/missing-thread errors, while `_lib/chat.ts` stays strict about requiring a real signed-in identity.
 6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- fix signed-out chat gating on:
+- re-audit the corrected owners:
+  `app/watch-party/live-stage/[partyId].tsx`
+  `app/player/[id].tsx`
+  `app/(tabs)/index.tsx`
+  `app/profile/[userId].tsx`
   `app/chat/index.tsx`
   `app/chat/[threadId].tsx`
-  `_lib/chat.ts`
-- re-audit for one final trivial branch-specific copy cleanup only if it stays narrow and lane-pure
+- only land one final trivial/narrow branch-specific copy cleanup if the re-audit proves it is still justified and lane-pure
 - keep the landed Party Room invite, room-aware invite search, locked-room denial, live-room autolaunch removal, Live Stage interaction/runtime hardening, and stage-entry overlay arming fix intact
 - do not widen into broad route redesign, schema changes, or the later two-phone proof lane until these branch leaks are closed
 - keep unrelated local dirt out of the checkpoint
@@ -46,7 +49,7 @@ Do not:
 The next lane is successful when:
 - the landed direct-entry Live Stage / `partyId` player fix stays intact and direct entry can no longer bypass real room-access and membership truth
 - the landed Home/Profile fix stays intact and signed-out users can no longer drift into a faux self/owner profile branch
-- signed-out users hitting Chi'lly Chat see an honest gate instead of a generic member-style failure state
+- the landed chat fix stays intact and signed-out users hitting Chi'lly Chat see an honest gate instead of a generic member-style failure state
 - the existing Live Stage interaction, member-visibility, invite, and locked-room fixes stay intact
 - later two-phone Live Stage proof becomes the honest remaining proof lane again after these branch leaks are closed
 - no route drift, schema drift, fake room powers, or fake social claims are introduced

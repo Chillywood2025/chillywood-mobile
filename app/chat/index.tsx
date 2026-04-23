@@ -17,6 +17,7 @@ import { trackEvent } from "../../_lib/analytics";
 import { getOrCreateDirectThread, listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../../_lib/chat";
 import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { getOfficialPlatformAccount, RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
+import { useSession } from "../../_lib/session";
 
 type InboxErrorState = {
   message: string;
@@ -65,6 +66,7 @@ function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
 export default function ChillyChatInboxScreen() {
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
+  const { isLoading: authLoading, isSignedIn } = useSession();
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -75,6 +77,15 @@ export default function ChillyChatInboxScreen() {
   const [activeFriendUserIds, setActiveFriendUserIds] = useState<string[]>([]);
 
   const loadThreads = useCallback(async (refresh = false) => {
+    if (!isSignedIn) {
+      setThreads([]);
+      setError(null);
+      setActiveFriendUserIds([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     if (refresh) {
       setRefreshing(true);
     } else {
@@ -102,10 +113,23 @@ export default function ChillyChatInboxScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [isSignedIn]);
 
   useFocusEffect(
     useCallback(() => {
+      if (authLoading) {
+        return () => {};
+      }
+
+      if (!isSignedIn) {
+        setThreads([]);
+        setError(null);
+        setActiveFriendUserIds([]);
+        setLoading(false);
+        setRefreshing(false);
+        return () => {};
+      }
+
       void loadThreads();
       trackEvent("chat_inbox_opened", {
         surface: "chat-inbox",
@@ -116,7 +140,7 @@ export default function ChillyChatInboxScreen() {
       });
 
       return unsubscribe;
-    }, [loadThreads]),
+    }, [authLoading, isSignedIn, loadThreads]),
   );
 
   const filteredThreads = useMemo(
@@ -398,11 +422,24 @@ export default function ChillyChatInboxScreen() {
     unreadThreadCount,
   ]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <ActivityIndicator size="small" color="#F34B74" />
-        <Text style={styles.stateText}>Loading Chi&apos;lly Chat...</Text>
+        <Text style={styles.stateText}>{authLoading ? "Checking Chi&apos;lly Chat access..." : "Loading Chi&apos;lly Chat..."}</Text>
+      </View>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Sign in to open Chi&apos;lly Chat</Text>
+          <Text style={styles.emptyBody}>
+            Chi&apos;lly Chat inbox, direct threads, and official support threads only open on a signed-in Chi&apos;llywood identity.
+          </Text>
+        </View>
       </View>
     );
   }

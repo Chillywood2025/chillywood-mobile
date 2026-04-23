@@ -163,7 +163,7 @@ function GatedSmartReplySuggestions(_: {
 export default function ChillyChatThreadScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useSession();
+  const { user, isLoading: authLoading, isSignedIn } = useSession();
   const { threadId: threadIdParam, startCall: startCallParam } = useLocalSearchParams<{ threadId?: string; startCall?: string }>();
   const threadId = String(Array.isArray(threadIdParam) ? threadIdParam[0] : threadIdParam ?? "").trim();
   const requestedCallMode = String(Array.isArray(startCallParam) ? startCallParam[0] : startCallParam ?? "").trim().toLowerCase();
@@ -221,6 +221,14 @@ export default function ChillyChatThreadScreen() {
       return;
     }
 
+    if (!isSignedIn) {
+      setThread(null);
+      setMessages([]);
+      setError("Sign in to open Chi'lly Chat.");
+      setLoading(false);
+      return;
+    }
+
     try {
       logChatThread("load_state_start", { threadId });
       const [loadedThread, nextMessages] = await Promise.all([
@@ -258,10 +266,22 @@ export default function ChillyChatThreadScreen() {
       setError(loadError?.message ?? "Unable to load this Chi'lly Chat thread.");
       setLoading(false);
     }
-  }, [reconcileEndedCallState, threadId]);
+  }, [isSignedIn, reconcileEndedCallState, threadId]);
 
   useFocusEffect(
     useCallback(() => {
+      if (authLoading) {
+        return () => {};
+      }
+
+      if (!isSignedIn) {
+        setLoading(false);
+        setThread(null);
+        setMessages([]);
+        setError("Sign in to open Chi'lly Chat.");
+        return () => {};
+      }
+
       setLoading(true);
       void loadThreadState();
       trackEvent("chat_thread_opened", {
@@ -279,7 +299,7 @@ export default function ChillyChatThreadScreen() {
       });
 
       return unsubscribe;
-    }, [loadThreadState, threadId]),
+    }, [authLoading, isSignedIn, loadThreadState, threadId]),
   );
 
   const initialCallMediaPreferences = useMemo(() => {
@@ -794,11 +814,22 @@ export default function ChillyChatThreadScreen() {
     }
   }, [friendBusy, officialAccount, otherMember?.userId]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <ActivityIndicator size="small" color="#F34B74" />
-        <Text style={styles.stateText}>Loading thread…</Text>
+        <Text style={styles.stateText}>{authLoading ? "Checking Chi&apos;lly Chat access..." : "Loading thread…"}</Text>
+      </View>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+        <Text style={styles.stateText}>Sign in to open Chi&apos;lly Chat.</Text>
+        <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
+          <Text style={styles.secondaryBtnText}>Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
