@@ -3538,7 +3538,6 @@ export default function WatchPartyLiveStageScreen() {
               <Text style={styles.stageHeroFallbackInitial}>{heroFallbackInitial}</Text>
             </View>
           )}
-          {isHybridMode ? <View pointerEvents="none" style={styles.stageHybridMediaScrim} /> : null}
           {!isHybridMode && (showHeroLocalRtcVideo || showHeroRemoteImage) && liveFaceFilter !== "none" ? (
             <View
               pointerEvents="none"
@@ -4921,10 +4920,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.45,
-  },
-  stageHybridMediaScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(5,9,18,0.76)",
   },
   stageHeroCaption: {
     alignSelf: "flex-start",
