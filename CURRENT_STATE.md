@@ -30,6 +30,8 @@ Preserve the LiveKit camera-visibility and stale-runtime containment fixes. Resu
 
 During proof, save raw logcat, screenshots, and long command output to `/tmp` or a task-specific proof artifact file, then summarize only the facts needed for `CURRENT_STATE.md` and `NEXT_TASK.md`.
 
+Use `npm run proof:session -- live-stage-two-phone` before long proof runs. It creates a `/tmp/chillywood-proof-*` artifact directory plus `/tmp/chillywood-proof-latest.txt` so the next session can resume from files if remote Codex compaction disconnects.
+
 ## Staging Discipline
 - Work on current `main` only.
 - Keep unrelated local dirt out of the checkpoint.

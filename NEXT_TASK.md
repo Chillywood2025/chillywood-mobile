@@ -5,6 +5,8 @@ Preserve the April 24, 2026 two-real-device LiveKit camera-visibility fix on the
 
 The proof-session stability fix is now part of the lane discipline: keep preflight compact, do not load archived checkpoint history during normal proof, and save raw two-phone proof output to artifact files instead of pasting long logs into the Codex conversation.
 
+Before any long two-phone proof, run `npm run proof:session -- live-stage-two-phone` and keep the generated artifact directory as the recovery point if Codex remote compaction disconnects.
+
 ## Current Plan
 1. Keep the newly proved LiveKit entry-role fix intact on `app/watch-party/live-stage/[partyId].tsx`.
 2. Keep Live First and Live Watch-Party as modes of `/watch-party/live-stage/[partyId]`; do not hand off to Party Room.
@@ -13,6 +15,7 @@ The proof-session stability fix is now part of the lane discipline: keep preflig
 5. Treat repeated-deeplink route-stack noise as the only known follow-up seam from this pass unless a later proof lane produces a stronger blocker.
 6. Keep unrelated local dirt out of the checkpoint.
 7. Keep proof sessions below remote compaction pressure by summarizing control truth and storing raw logs/screenshots outside chat.
+8. Use the `/tmp/chillywood-proof-latest.txt` pointer to resume after any Codex compact-stream disconnect.
 
 ## Exact Next Batch
 - Optional narrow audit:

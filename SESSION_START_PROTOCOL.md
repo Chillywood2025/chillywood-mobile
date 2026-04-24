@@ -26,4 +26,5 @@
 - Update `NEXT_TASK.md` second.
 - Keep `CURRENT_STATE.md` compact. Move detailed older checkpoint history to `docs/archive/` instead of letting the hot-path control file grow without bound.
 - During proof lanes, save raw screenshots, logcat output, and long terminal output to artifact files, then summarize the small factual result in the control files.
+- For long proof lanes, run `npm run proof:session -- <label>` first and use `/tmp/chillywood-proof-latest.txt` as the resume pointer after any remote compact-stream disconnect.
 - Only mark proof or reconciliation complete when the current build and terminal/workflow output support it.

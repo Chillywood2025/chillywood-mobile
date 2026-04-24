@@ -8,6 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "proof:session": "node ./scripts/start-proof-session.mjs",
     "validate:runtime": "node ./scripts/validate-runtime.mjs",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit"
