@@ -40,7 +40,11 @@ type LiveKitSignalClientPatchable = {
   __chillywoodStageReadingLoopPatched?: boolean;
 };
 
-const patchLiveKitSignalReadingLoop = (room: Room, surfaceLabel: string) => {
+export const patchLiveKitSignalReadingLoop = (
+  room: Room,
+  surfaceLabel: string,
+  shouldSuppressError?: () => boolean,
+) => {
   const client = (room as unknown as {
     engine?: { client?: LiveKitSignalClientPatchable };
   }).engine?.client;
@@ -55,6 +59,13 @@ const patchLiveKitSignalReadingLoop = (room: Room, surfaceLabel: string) => {
     try {
       return await originalStartReadingLoop(...args);
     } catch (error) {
+      if (shouldSuppressError?.()) {
+        debugLog("livekit", "suppressed stale stage signal read loop error", {
+          surfaceLabel,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return undefined;
+      }
       debugLog("livekit", "contained stage signal read loop error", {
         surfaceLabel,
         error: error instanceof Error ? error.message : String(error),
@@ -261,7 +272,11 @@ export function LiveKitStageMediaSurface({
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const room = useMemo(() => {
     const nextRoom = new Room({ adaptiveStream: true, dynacast: false });
-    patchLiveKitSignalReadingLoop(nextRoom, surfaceLabel);
+    patchLiveKitSignalReadingLoop(
+      nextRoom,
+      surfaceLabel,
+      () => tearingDownRoomsRef.current.has(nextRoom),
+    );
     return nextRoom;
   }, [joinContract.participantToken, joinContract.roomName, surfaceLabel]);
 

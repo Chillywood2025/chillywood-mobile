@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Resume the active Live Stage runtime lane on the current live owners, keep the just-landed room-lifecycle/fallback patch intact, and isolate why stale LiveKit websocket/runtime errors from an older room can still bleed into a fresh Live Room / Live Stage session before reopening broader two-phone proof.
+Resume the active two-real-device live/watch-party proof lane on the current live owners, keep the just-landed Live Stage runtime containment fixes intact, and re-prove sustained multi-device interaction/media retention now that the stale one-device runtime seam has been narrowed.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, bounded admin, and the corrected systems map.
@@ -20,36 +20,37 @@ Resume the active Live Stage runtime lane on the current live owners, keep the j
    `app/title/[id].tsx`
    `app/player/[id].tsx`
    `components/monetization/access-sheet.tsx`
-7. Keep the new LiveKit room-lifecycle patch intact on:
+7. Keep the new LiveKit room-lifecycle and stale-signal containment patches intact on:
    `components/watch-party-live/livekit-stage-media-surface.tsx`
    `app/watch-party/live-stage/[partyId].tsx`
-8. Re-enter the same real owner path on one real Android device first and isolate why an older room error (`AR5VPC`) can still surface while the current room is a different live room (`XZUSVN`).
-9. Only resume the two-real-device proof lane after that stale-room/runtime bleed is narrowed honestly.
+8. Re-enter the same real owner paths on two real Android devices and verify that the earlier wrong-owner/runtime drop no longer returns under sustained interaction.
+9. Re-test the same multi-device proof matrix only after preserving the now-clean one-device runtime path.
 10. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- use one real Android device first on:
+ - use two real Android devices on:
   `app/watch-party/index.tsx`
+  `app/watch-party/[partyId].tsx`
   `app/watch-party/live-stage/[partyId].tsx`
+  `app/player/[id].tsx`
 - keep the just-landed comment recovery truth intact on:
   `app/watch-party/live-stage/[partyId].tsx`
-- keep the just-landed LiveKit room-lifecycle / teardown-fallback fix intact on:
+- keep the just-landed LiveKit room-lifecycle / teardown-fallback / stale-signal containment fixes intact on:
   `components/watch-party-live/livekit-stage-media-surface.tsx`
   `app/watch-party/live-stage/[partyId].tsx`
 - keep the just-landed premium title/player access truth intact on:
   `app/title/[id].tsx`
   `app/player/[id].tsx`
   `components/monetization/access-sheet.tsx`
-- isolate first:
-  why a stale LiveKit websocket/runtime error from older room `AR5VPC` can still surface while the current live room is `XZUSVN`
-  and whether the remaining stale state lives in the route-local hybrid host path, the shared stage surface, or the current dev/runtime error overlay
-- then, only after that single-device seam is narrowed, resume proving:
+- resume proving:
   reverse viewer-to-host Live Stage comments
   reactions on both sides
   `CAMERA LOOKS` on the roles that should have it
   participant/member visibility
   Party Room host/viewer proof
   audio truth where the current setup allows honest proof
+- isolate only if it still fails:
+  whether any remaining route drop or media split now lives in the current LiveKit stage path, the hybrid host path, or cross-device session retention rather than the already-contained stale one-device websocket seam
 - do not widen into broad route redesign, schema changes, or unrelated product work
 - keep unrelated local dirt out of the checkpoint
 - if the route drop proves a second safe code batch is needed, keep it narrow and tied only to the exact owner/helper that actually fails

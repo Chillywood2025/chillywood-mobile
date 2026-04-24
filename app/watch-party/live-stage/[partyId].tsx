@@ -2,7 +2,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Track } from "livekit-client";
+import { Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Alert,
@@ -83,7 +83,10 @@ import { RoomReactionPicker, pushRecentReaction } from "../../../components/room
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
-import { LiveKitStageMediaSurface } from "../../../components/watch-party-live/livekit-stage-media-surface";
+import {
+  LiveKitStageMediaSurface,
+  patchLiveKitSignalReadingLoop,
+} from "../../../components/watch-party-live/livekit-stage-media-surface";
 import {
     buildOrderedParticipantsWithSelf,
     buildParticipantProfileParams,
@@ -388,6 +391,15 @@ function LiveKitHybridCommunityRoomHost({
   const publishLocalCamera = joinContract.participantRole !== "viewer";
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const roomOptions = useMemo(() => ({ adaptiveStream: true, dynacast: false }), []);
+  const room = useMemo(() => {
+    const nextRoom = new Room({ adaptiveStream: true, dynacast: false });
+    patchLiveKitSignalReadingLoop(
+      nextRoom,
+      "Hybrid Live Stage",
+      () => suppressDisconnectRef.current,
+    );
+    return nextRoom;
+  }, [joinContract.participantToken, joinContract.roomName]);
 
   const triggerFallback = useCallback(
     (reason: LiveKitStageFallbackReason, error?: unknown) => {
@@ -491,6 +503,7 @@ function LiveKitHybridCommunityRoomHost({
   return (
     <HybridLiveKitRoom
       key={`${joinContract.roomName}:${joinContract.participantToken}`}
+      room={room}
       serverUrl={joinContract.serverUrl}
       token={joinContract.participantToken}
       connect
