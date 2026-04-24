@@ -1,60 +1,28 @@
 # NEXT TASK
 
 ## Exact Next Task
-Resume the active two-real-device live/watch-party proof lane on the current live owners, keep the just-landed Live Stage runtime containment fixes intact, and re-prove sustained multi-device interaction/media retention now that the stale one-device runtime seam has been narrowed.
+Preserve the April 24, 2026 two-real-device LiveKit camera-visibility fix on the current live-stage owner, then move to a narrow follow-up only if a real proof lane exposes it. The next honest candidate is a route-stack / repeated-deeplink cleanup audit for `/watch-party/live-stage/[partyId]`, because repeated Android deep links can leave older proof-room route instances logging harmless render-branch lines even while the current LiveKit room works.
 
 ## Current Plan
-1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, bounded admin, and the corrected systems map.
-2. Keep the closed branch-truth fixes intact:
-   live/watch direct-entry admission truth, signed-out self/public separation, and signed-out Chi'lly Chat auth gating should stay closed while this proof lane runs.
-3. Keep the landed realtime/audio batch intact on the current route owners:
-   `components/watch-party-live/livekit-stage-media-surface.tsx`
-   `app/watch-party/live-stage/[partyId].tsx`
-   `app/player/[id].tsx`
-4. Keep the just-landed Live Stage shared-comment recovery fix intact on:
-   `app/watch-party/live-stage/[partyId].tsx`
-5. Keep the just-landed real-device touch fixes intact on:
-   `app/watch-party/index.tsx`
-   `app/watch-party/live-stage/[partyId].tsx`
-6. Keep the just-landed premium title/player dead-end fix intact on:
-   `app/title/[id].tsx`
-   `app/player/[id].tsx`
-   `components/monetization/access-sheet.tsx`
-7. Keep the new LiveKit room-lifecycle and stale-signal containment patches intact on:
-   `components/watch-party-live/livekit-stage-media-surface.tsx`
-   `app/watch-party/live-stage/[partyId].tsx`
-8. Re-enter the same real owner paths on two real Android devices and verify that the earlier wrong-owner/runtime drop no longer returns under sustained interaction.
-9. Re-test the same multi-device proof matrix only after preserving the now-clean one-device runtime path.
-10. Keep unrelated local dirt out of the checkpoint.
+1. Keep the newly proved LiveKit entry-role fix intact on `app/watch-party/live-stage/[partyId].tsx`.
+2. Keep Live First and Live Watch-Party as modes of `/watch-party/live-stage/[partyId]`; do not hand off to Party Room.
+3. Keep the route-local hybrid LiveKit owner on explicit `Room` ownership with room-specific teardown tracking.
+4. Keep the Android proof standard from room `E4U5FP` and room `NN9RLU`: both devices in the same LiveKit room, local camera true on both, remote track count 1 on both, visible count 2 on both, and no stale signal/read-loop blocker.
+5. Treat repeated-deeplink route-stack noise as the only known follow-up seam from this pass unless a later proof lane produces a stronger blocker.
+6. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
- - use two real Android devices on:
-  `app/watch-party/index.tsx`
-  `app/watch-party/[partyId].tsx`
+- Optional narrow audit:
   `app/watch-party/live-stage/[partyId].tsx`
-  `app/player/[id].tsx`
-- keep the just-landed comment recovery truth intact on:
-  `app/watch-party/live-stage/[partyId].tsx`
-- keep the just-landed LiveKit room-lifecycle / teardown-fallback / stale-signal containment fixes intact on:
-  `components/watch-party-live/livekit-stage-media-surface.tsx`
-  `app/watch-party/live-stage/[partyId].tsx`
-- keep the just-landed premium title/player access truth intact on:
-  `app/title/[id].tsx`
-  `app/player/[id].tsx`
-  `components/monetization/access-sheet.tsx`
-- resume proving:
-  reverse viewer-to-host Live Stage comments
-  reactions on both sides
-  `CAMERA LOOKS` on the roles that should have it
-  participant/member visibility
-  Party Room host/viewer proof
-  audio truth where the current setup allows honest proof
-- isolate only if it still fails:
-  whether any remaining route drop or media split now lives in the current LiveKit stage path, the hybrid host path, or cross-device session retention rather than the already-contained stale one-device websocket seam
-- do not widen into broad route redesign, schema changes, or unrelated product work
-- keep unrelated local dirt out of the checkpoint
-- if the route drop proves a second safe code batch is needed, keep it narrow and tied only to the exact owner/helper that actually fails
-- if the lane still cannot close honestly with multi-device proof, record the exact seam before reopening any new code batch
+  repeated deep-link behavior on Android
+  route replacement vs stacked route instances
+  mode-parameter changes while a LiveKit room is already mounted
+- Preserve, do not reopen, the proved LiveKit camera path:
+  Live First room `E4U5FP`
+  Live Watch-Party room `NN9RLU`
+  hybrid leave/rejoin proof on `NN9RLU`
+- Do not widen into broad route redesign, schema changes, or unrelated product work.
+- If a later proof lane finds a real media split again, isolate the exact owner/function before editing.
 
 ## Scope
 This next pass should:

@@ -301,9 +301,11 @@ function LiveKitHybridParticipantVideo({
 function LiveKitHybridHeroVideo({
   fallbackInitial,
   participantRole,
+  roomName,
 }: {
   fallbackInitial: string;
   participantRole: LiveKitTokenReady["participantRole"];
+  roomName: string;
 }) {
   const connectionState = useHybridLiveKitConnectionState();
   const {
@@ -343,6 +345,32 @@ function LiveKitHybridHeroVideo({
     },
     [localCameraTrackRef, primaryRemoteTrack, shouldPublishLocalCamera],
   );
+  const visibleTrackCount = (localCameraTrackRef ? 1 : 0) + remoteTracks.length;
+
+  useEffect(() => {
+    debugLog("livekit", "hybrid stage media publish state", {
+      surfaceLabel: "Hybrid Live Stage",
+      roomName,
+      participantRole,
+      shouldPublishLocalCamera,
+      hasLocalCameraTrack: !!cameraTrack,
+      hasRemoteTrack: !!primaryRemoteTrack,
+      remoteTrackCount: remoteTracks.length,
+      visibleTrackCount,
+      connectionState: String(connectionState ?? ""),
+      lastCameraError: lastCameraError?.message ?? null,
+    });
+  }, [
+    cameraTrack,
+    connectionState,
+    lastCameraError?.message,
+    participantRole,
+    primaryRemoteTrack,
+    remoteTracks.length,
+    roomName,
+    shouldPublishLocalCamera,
+    visibleTrackCount,
+  ]);
 
   if (primaryTrack && isHybridLiveKitTrackReference(primaryTrack)) {
     const showLocalPrimary = primaryTrack.participant.identity === localParticipant.identity;
@@ -385,21 +413,22 @@ function LiveKitHybridCommunityRoomHost({
   children: React.ReactNode;
 }) {
   const fallbackTriggeredRef = useRef(false);
-  const suppressDisconnectRef = useRef(false);
+  const tearingDownRoomsRef = useRef(new Set<Room>());
   const [didConnectOnce, setDidConnectOnce] = useState(false);
   const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
   const publishLocalCamera = joinContract.participantRole !== "viewer";
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
-  const roomOptions = useMemo(() => ({ adaptiveStream: true, dynacast: false }), []);
+  const roomKey = `${joinContract.roomName}:${joinContract.participantToken}`;
   const room = useMemo(() => {
+    void roomKey;
     const nextRoom = new Room({ adaptiveStream: true, dynacast: false });
     patchLiveKitSignalReadingLoop(
       nextRoom,
       "Hybrid Live Stage",
-      () => suppressDisconnectRef.current,
+      () => tearingDownRoomsRef.current.has(nextRoom),
     );
     return nextRoom;
-  }, [joinContract.participantToken, joinContract.roomName]);
+  }, [roomKey]);
 
   const triggerFallback = useCallback(
     (reason: LiveKitStageFallbackReason, error?: unknown) => {
@@ -422,17 +451,18 @@ function LiveKitHybridCommunityRoomHost({
 
   useEffect(() => {
     fallbackTriggeredRef.current = false;
-    suppressDisconnectRef.current = false;
+    tearingDownRoomsRef.current.delete(room);
     setDidConnectOnce(false);
     setMediaDeviceFailure(null);
-  }, [joinContract.participantToken, joinContract.roomName]);
+  }, [room]);
 
   useEffect(() => {
+    const tearingDownRooms = tearingDownRoomsRef.current;
     return () => {
-      suppressDisconnectRef.current = true;
+      tearingDownRooms.add(room);
       fallbackTriggeredRef.current = true;
     };
-  }, [joinContract.participantToken, joinContract.roomName]);
+  }, [room]);
 
   useEffect(() => {
     let active = true;
@@ -467,27 +497,27 @@ function LiveKitHybridCommunityRoomHost({
   }, [didConnectOnce, triggerFallback]);
 
   const handleConnected = useCallback(() => {
-    suppressDisconnectRef.current = false;
+    tearingDownRoomsRef.current.delete(room);
     setDidConnectOnce(true);
     debugLog("livekit", "hybrid community room connected", {
       roomName: joinContract.roomName,
       participantRole: joinContract.participantRole,
       publishLocalCamera,
     });
-  }, [joinContract.participantRole, joinContract.roomName, publishLocalCamera]);
+  }, [joinContract.participantRole, joinContract.roomName, publishLocalCamera, room]);
 
   const handleDisconnected = useCallback(() => {
-    if (suppressDisconnectRef.current) return;
+    if (tearingDownRoomsRef.current.has(room)) return;
     triggerFallback(
       "disconnected",
       new Error("LiveKit disconnected before the hybrid community feed could stay stable."),
     );
-  }, [triggerFallback]);
+  }, [room, triggerFallback]);
 
   const handleError = useCallback((error: Error) => {
-    if (suppressDisconnectRef.current) return;
+    if (tearingDownRoomsRef.current.has(room)) return;
     triggerFallback("room_error", error);
-  }, [triggerFallback]);
+  }, [room, triggerFallback]);
 
   const handleMediaDeviceFailure = useCallback((failure: unknown) => {
     const normalizedFailure = String(failure ?? "unknown_failure");
@@ -502,7 +532,7 @@ function LiveKitHybridCommunityRoomHost({
 
   return (
     <HybridLiveKitRoom
-      key={`${joinContract.roomName}:${joinContract.participantToken}`}
+      key={roomKey}
       room={room}
       serverUrl={joinContract.serverUrl}
       token={joinContract.participantToken}
@@ -510,7 +540,6 @@ function LiveKitHybridCommunityRoomHost({
       audio={publishLocalAudio}
       video={publishLocalCamera}
       connectOptions={connectOptions}
-      options={roomOptions}
       onConnected={handleConnected}
       onDisconnected={handleDisconnected}
       onError={handleError}
@@ -2169,14 +2198,101 @@ export default function WatchPartyLiveStageScreen() {
     setLiveKitJoinContract(null);
   }, [liveKitJoinContract?.roomName, partyId]);
 
+  const resolveLiveKitStageEntryRole = useCallback(async (): Promise<LiveKitTokenReady["participantRole"]> => {
+    if (
+      isHost
+      || !isLiveFirstMode
+      || liveKitParticipantRole !== "viewer"
+      || !partyId
+      || !trackedUserId
+      || trackedUserId === "anon"
+    ) {
+      return liveKitParticipantRole;
+    }
+
+    const currentState = participantStateById[trackedUserId] ?? null;
+    const seatUpdate = await setPartyParticipantState(partyId, trackedUserId, {
+      stageRole: "speaker",
+      canSpeak: true,
+      membershipState: "active",
+      cameraEnabled: true,
+      micEnabled: true,
+      displayName: resolvedCurrentUsername,
+      cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
+    }).catch((error) => {
+      reportRuntimeError("livekit-live-stage-entry-seat", error, {
+        partyId,
+        userId: trackedUserId,
+      });
+      return null;
+    });
+
+    if (!seatUpdate) {
+      debugLog("livekit", "live-stage entry seat unavailable", {
+        roomName: partyId,
+        participantRole: liveKitParticipantRole,
+        userId: trackedUserId,
+      });
+      return liveKitParticipantRole;
+    }
+
+    membershipMapRef.current = {
+      ...membershipMapRef.current,
+      [trackedUserId]: seatUpdate,
+    };
+    setParticipantStateById((prev) => ({
+      ...prev,
+      [trackedUserId]: {
+        ...(prev[trackedUserId] ?? currentState ?? createDefaultParticipantState({
+          role: "viewer",
+          isSpeaking: true,
+          isMuted: seatUpdate.isMuted,
+        })),
+        role: "speaker",
+        isMuted: seatUpdate.isMuted,
+        isRemoved: seatUpdate.membershipState === "removed",
+      },
+    }));
+    setSeatRequestsById((prev) => {
+      if (!prev[trackedUserId]) return prev;
+      const next = { ...prev };
+      delete next[trackedUserId];
+      return next;
+    });
+    broadcastSeatState(trackedUserId, {
+      role: "speaker",
+      isMuted: seatUpdate.isMuted,
+      pending: false,
+    });
+    await refreshStageSnapshot(trackedUserId).catch(() => null);
+    debugLog("livekit", "live-stage entry seat resolved", {
+      roomName: partyId,
+      participantRole: "speaker",
+      previousParticipantRole: liveKitParticipantRole,
+      userId: trackedUserId,
+    });
+    return "speaker";
+  }, [
+    broadcastSeatState,
+    isHost,
+    isLiveFirstMode,
+    liveKitParticipantRole,
+    participantStateById,
+    partyId,
+    refreshStageSnapshot,
+    resolvedCurrentUsername,
+    trackedUserId,
+  ]);
+
   const onEnterLiveStage = useCallback(async () => {
     if (liveKitFoundationEnabled && partyId) {
+      const participantRole = await resolveLiveKitStageEntryRole();
       const joinResult = await prepareLiveKitJoinBoundary({
         surface: "live-stage",
         roomName: partyId,
         participantIdentity: trackedUserId,
         participantName: resolvedCurrentUsername,
-        participantRole: liveKitParticipantRole,
+        participantRole,
         metadata: {
           roomCode: room?.roomCode ?? null,
           stageMode,
@@ -2218,9 +2334,9 @@ export default function WatchPartyLiveStageScreen() {
     setLiveSurface("stage");
   }, [
     closeStageOverlayPanels,
-    liveKitParticipantRole,
     liveKitFoundationEnabled,
     partyId,
+    resolveLiveKitStageEntryRole,
     resolvedCurrentUsername,
     room?.roomCode,
     source,
@@ -3381,6 +3497,7 @@ export default function WatchPartyLiveStageScreen() {
               <LiveKitHybridHeroVideo
                 fallbackInitial={heroFallbackInitial}
                 participantRole={liveKitJoinContract.participantRole}
+                roomName={liveKitJoinContract.roomName}
               />
             ) : (
               <View style={styles.stageHeroMediaFill}>
@@ -3484,7 +3601,7 @@ export default function WatchPartyLiveStageScreen() {
               <View style={styles.stageCommunityHeader}>
                 <View style={styles.stageCommunityHeaderLeft}>
                   <View style={styles.stageCommunityDot} />
-                  <Text style={styles.stageCommunityLabelHybrid}>Chi'lly Party Members</Text>
+                  <Text style={styles.stageCommunityLabelHybrid}>{"Chi'lly Party Members"}</Text>
                 </View>
                 <Text style={styles.stageCommunityCount}>{communityCardCountLabel}</Text>
               </View>
