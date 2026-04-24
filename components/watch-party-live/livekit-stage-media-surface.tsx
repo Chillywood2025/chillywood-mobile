@@ -254,14 +254,16 @@ export function LiveKitStageMediaSurface({
   publishLocalAudio = joinContract.participantRole !== "viewer",
 }: LiveKitStageMediaSurfaceProps) {
   const fallbackTriggeredRef = useRef(false);
+  const tearingDownRoomsRef = useRef(new Set<Room>());
   const [didConnectOnce, setDidConnectOnce] = useState(false);
   const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
   const publishLocalCamera = joinContract.participantRole !== "viewer";
+  const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const room = useMemo(() => {
     const nextRoom = new Room({ adaptiveStream: true, dynacast: false });
     patchLiveKitSignalReadingLoop(nextRoom, surfaceLabel);
     return nextRoom;
-  }, [surfaceLabel]);
+  }, [joinContract.participantToken, joinContract.roomName, surfaceLabel]);
 
   const triggerFallback = useCallback(
     (reason: "connection_timeout" | "disconnected" | "room_error", error?: unknown) => {
@@ -286,7 +288,14 @@ export function LiveKitStageMediaSurface({
     fallbackTriggeredRef.current = false;
     setDidConnectOnce(false);
     setMediaDeviceFailure(null);
-  }, [joinContract.participantToken, joinContract.roomName]);
+  }, [room]);
+
+  useEffect(() => {
+    return () => {
+      tearingDownRoomsRef.current.add(room);
+      fallbackTriggeredRef.current = true;
+    };
+  }, [room]);
 
   useEffect(() => {
     let active = true;
@@ -320,6 +329,41 @@ export function LiveKitStageMediaSurface({
     };
   }, [didConnectOnce, triggerFallback]);
 
+  const handleConnected = useCallback(() => {
+    tearingDownRoomsRef.current.delete(room);
+    setDidConnectOnce(true);
+    debugLog("livekit", "room connected", {
+      surfaceLabel,
+      roomName: joinContract.roomName,
+      participantRole: joinContract.participantRole,
+      publishLocalCamera,
+    });
+  }, [joinContract.participantRole, joinContract.roomName, publishLocalCamera, room, surfaceLabel]);
+
+  const handleDisconnected = useCallback(() => {
+    if (tearingDownRoomsRef.current.has(room)) return;
+    triggerFallback(
+      "disconnected",
+      new Error("LiveKit disconnected before the stage path was stable enough to replace the legacy fallback."),
+    );
+  }, [room, triggerFallback]);
+
+  const handleError = useCallback((error: Error) => {
+    if (tearingDownRoomsRef.current.has(room)) return;
+    triggerFallback("room_error", error);
+  }, [room, triggerFallback]);
+
+  const handleMediaDeviceFailure = useCallback((failure: unknown) => {
+    const normalizedFailure = String(failure ?? "unknown_failure");
+    setMediaDeviceFailure(normalizedFailure);
+    reportRuntimeError("livekit-stage-media-device", new Error(`LiveKit media-device failure: ${normalizedFailure}`), {
+      roomName: joinContract.roomName,
+      participantRole: joinContract.participantRole,
+      publishLocalAudio,
+      publishLocalCamera,
+    });
+  }, [joinContract.participantRole, joinContract.roomName, publishLocalAudio, publishLocalCamera]);
+
   return (
     <View
       style={[styles.surface, fillParent && styles.surfaceFill, containerStyle]}
@@ -328,41 +372,18 @@ export function LiveKitStageMediaSurface({
       importantForAccessibility="no-hide-descendants"
       >
         <LiveKitRoom
+        key={`${joinContract.roomName}:${joinContract.participantToken}`}
         room={room}
         serverUrl={joinContract.serverUrl}
         token={joinContract.participantToken}
         connect
         audio={publishLocalAudio}
         video={publishLocalCamera}
-        connectOptions={{ autoSubscribe: true }}
-        onConnected={() => {
-          setDidConnectOnce(true);
-          debugLog("livekit", "room connected", {
-            surfaceLabel,
-            roomName: joinContract.roomName,
-            participantRole: joinContract.participantRole,
-            publishLocalCamera,
-          });
-        }}
-        onDisconnected={() => {
-          triggerFallback(
-            "disconnected",
-            new Error("LiveKit disconnected before the stage path was stable enough to replace the legacy fallback."),
-          );
-        }}
-        onError={(error) => {
-          triggerFallback("room_error", error);
-        }}
-        onMediaDeviceFailure={(failure) => {
-          const normalizedFailure = String(failure ?? "unknown_failure");
-          setMediaDeviceFailure(normalizedFailure);
-          reportRuntimeError("livekit-stage-media-device", new Error(`LiveKit media-device failure: ${normalizedFailure}`), {
-            roomName: joinContract.roomName,
-            participantRole: joinContract.participantRole,
-            publishLocalAudio,
-            publishLocalCamera,
-          });
-        }}
+        connectOptions={connectOptions}
+        onConnected={handleConnected}
+        onDisconnected={handleDisconnected}
+        onError={handleError}
+        onMediaDeviceFailure={handleMediaDeviceFailure}
       >
         <LiveKitStageMediaContent
           joinContract={joinContract}

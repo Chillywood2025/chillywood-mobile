@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Resume the active two-real-device live/watch-party proof lane on the current live owners, keep the just-landed real-device touch-stack fixes intact, keep the Live Stage shared-comment recovery fix intact, keep the premium title/player dead-end fix intact, and isolate the LiveKit `Unexpected first message` handshake/runtime seam before attempting broader sustained two-phone interaction proof again.
+Resume the active Live Stage runtime lane on the current live owners, keep the just-landed room-lifecycle/fallback patch intact, and isolate why stale LiveKit websocket/runtime errors from an older room can still bleed into a fresh Live Room / Live Stage session before reopening broader two-phone proof.
 
 ## Current Plan
 1. Preserve the current truthful product baseline exactly as landed across profile, watch-party/live, chat, title/player, settings/legal/support, channel settings, bounded admin, and the corrected systems map.
@@ -20,37 +20,30 @@ Resume the active two-real-device live/watch-party proof lane on the current liv
    `app/title/[id].tsx`
    `app/player/[id].tsx`
    `components/monetization/access-sheet.tsx`
-7. Re-enter the same real owner paths with the current live/watch routes unchanged:
-   `app/watch-party/index.tsx`
-   `app/watch-party/[partyId].tsx`
+7. Keep the new LiveKit room-lifecycle patch intact on:
+   `components/watch-party-live/livekit-stage-media-surface.tsx`
    `app/watch-party/live-stage/[partyId].tsx`
-   `app/player/[id].tsx`
-8. Use the same two real phones first; do not add an emulator unless a real third participant is actually required.
-9. Keep unrelated local dirt out of the checkpoint.
+8. Re-enter the same real owner path on one real Android device first and isolate why an older room error (`AR5VPC`) can still surface while the current room is a different live room (`XZUSVN`).
+9. Only resume the two-real-device proof lane after that stale-room/runtime bleed is narrowed honestly.
+10. Keep unrelated local dirt out of the checkpoint.
 
 ## Exact Next Batch
-- use the two real devices already attached to continue the shared live path honestly on:
+- use one real Android device first on:
   `app/watch-party/index.tsx`
-  `app/watch-party/[partyId].tsx`
-  `app/watch-party/live-stage/[partyId].tsx`
-  `app/player/[id].tsx`
-- keep the just-landed preview-room action fix intact on:
-  `app/watch-party/index.tsx`
-- keep the just-landed pre-stage Live Stage entry CTA hardening intact on:
   `app/watch-party/live-stage/[partyId].tsx`
 - keep the just-landed comment recovery truth intact on:
+  `app/watch-party/live-stage/[partyId].tsx`
+- keep the just-landed LiveKit room-lifecycle / teardown-fallback fix intact on:
+  `components/watch-party-live/livekit-stage-media-surface.tsx`
   `app/watch-party/live-stage/[partyId].tsx`
 - keep the just-landed premium title/player access truth intact on:
   `app/title/[id].tsx`
   `app/player/[id].tsx`
   `components/monetization/access-sheet.tsx`
 - isolate first:
-  why one real device can still fall back to the wrong owner during sustained Live Stage proof while the other remains on-stage
-  and whether the concrete LiveKit runtime error
-  `Unexpected first message`
-  from `node_modules/livekit-client/src/api/SignalClient.ts`
-  is the root signal-handshake seam that needs route-local containment
-- then resume proving:
+  why a stale LiveKit websocket/runtime error from older room `AR5VPC` can still surface while the current live room is `XZUSVN`
+  and whether the remaining stale state lives in the route-local hybrid host path, the shared stage surface, or the current dev/runtime error overlay
+- then, only after that single-device seam is narrowed, resume proving:
   reverse viewer-to-host Live Stage comments
   reactions on both sides
   `CAMERA LOOKS` on the roles that should have it

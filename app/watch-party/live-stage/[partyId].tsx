@@ -382,9 +382,12 @@ function LiveKitHybridCommunityRoomHost({
   children: React.ReactNode;
 }) {
   const fallbackTriggeredRef = useRef(false);
+  const suppressDisconnectRef = useRef(false);
   const [didConnectOnce, setDidConnectOnce] = useState(false);
   const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
   const publishLocalCamera = joinContract.participantRole !== "viewer";
+  const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
+  const roomOptions = useMemo(() => ({ adaptiveStream: true, dynacast: false }), []);
 
   const triggerFallback = useCallback(
     (reason: LiveKitStageFallbackReason, error?: unknown) => {
@@ -407,8 +410,16 @@ function LiveKitHybridCommunityRoomHost({
 
   useEffect(() => {
     fallbackTriggeredRef.current = false;
+    suppressDisconnectRef.current = false;
     setDidConnectOnce(false);
     setMediaDeviceFailure(null);
+  }, [joinContract.participantToken, joinContract.roomName]);
+
+  useEffect(() => {
+    return () => {
+      suppressDisconnectRef.current = true;
+      fallbackTriggeredRef.current = true;
+    };
   }, [joinContract.participantToken, joinContract.roomName]);
 
   useEffect(() => {
@@ -443,42 +454,54 @@ function LiveKitHybridCommunityRoomHost({
     };
   }, [didConnectOnce, triggerFallback]);
 
+  const handleConnected = useCallback(() => {
+    suppressDisconnectRef.current = false;
+    setDidConnectOnce(true);
+    debugLog("livekit", "hybrid community room connected", {
+      roomName: joinContract.roomName,
+      participantRole: joinContract.participantRole,
+      publishLocalCamera,
+    });
+  }, [joinContract.participantRole, joinContract.roomName, publishLocalCamera]);
+
+  const handleDisconnected = useCallback(() => {
+    if (suppressDisconnectRef.current) return;
+    triggerFallback(
+      "disconnected",
+      new Error("LiveKit disconnected before the hybrid community feed could stay stable."),
+    );
+  }, [triggerFallback]);
+
+  const handleError = useCallback((error: Error) => {
+    if (suppressDisconnectRef.current) return;
+    triggerFallback("room_error", error);
+  }, [triggerFallback]);
+
+  const handleMediaDeviceFailure = useCallback((failure: unknown) => {
+    const normalizedFailure = String(failure ?? "unknown_failure");
+    setMediaDeviceFailure(normalizedFailure);
+    reportRuntimeError("livekit-hybrid-community-media-device", new Error(`LiveKit media-device failure: ${normalizedFailure}`), {
+      roomName: joinContract.roomName,
+      participantRole: joinContract.participantRole,
+      publishLocalAudio,
+      publishLocalCamera,
+    });
+  }, [joinContract.participantRole, joinContract.roomName, publishLocalAudio, publishLocalCamera]);
+
   return (
     <HybridLiveKitRoom
+      key={`${joinContract.roomName}:${joinContract.participantToken}`}
       serverUrl={joinContract.serverUrl}
       token={joinContract.participantToken}
       connect
       audio={publishLocalAudio}
       video={publishLocalCamera}
-      connectOptions={{ autoSubscribe: true }}
-      options={{ adaptiveStream: true, dynacast: false }}
-      onConnected={() => {
-        setDidConnectOnce(true);
-        debugLog("livekit", "hybrid community room connected", {
-          roomName: joinContract.roomName,
-          participantRole: joinContract.participantRole,
-          publishLocalCamera,
-        });
-      }}
-      onDisconnected={() => {
-        triggerFallback(
-          "disconnected",
-          new Error("LiveKit disconnected before the hybrid community feed could stay stable."),
-        );
-      }}
-      onError={(error) => {
-        triggerFallback("room_error", error);
-      }}
-      onMediaDeviceFailure={(failure) => {
-        const normalizedFailure = String(failure ?? "unknown_failure");
-        setMediaDeviceFailure(normalizedFailure);
-        reportRuntimeError("livekit-hybrid-community-media-device", new Error(`LiveKit media-device failure: ${normalizedFailure}`), {
-          roomName: joinContract.roomName,
-          participantRole: joinContract.participantRole,
-          publishLocalAudio,
-          publishLocalCamera,
-        });
-      }}
+      connectOptions={connectOptions}
+      options={roomOptions}
+      onConnected={handleConnected}
+      onDisconnected={handleDisconnected}
+      onError={handleError}
+      onMediaDeviceFailure={handleMediaDeviceFailure}
     >
       {children}
       {mediaDeviceFailure ? (
