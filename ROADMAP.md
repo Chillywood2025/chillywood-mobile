@@ -3,7 +3,8 @@
 ## Planning Rule
 `ROADMAP.md` now records Chi'llywood's phased product planning truth rather than older chapter-by-chapter execution history.
 
-- detailed checkpoint history belongs in `CURRENT_STATE.md`
+- current checkpoint truth belongs in `CURRENT_STATE.md`
+- detailed older checkpoint history belongs in `docs/archive/`
 - the immediate next working lane belongs in `NEXT_TASK.md`
 - Locked Chi'lly Chat communication doctrine and locked Rachi official-account doctrine remain carried forward unchanged and are not reopened by this planning rewrite.
 

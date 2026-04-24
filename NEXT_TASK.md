@@ -3,6 +3,8 @@
 ## Exact Next Task
 Preserve the April 24, 2026 two-real-device LiveKit camera-visibility fix on the current live-stage owner, then move to a narrow follow-up only if a real proof lane exposes it. The next honest candidate is a route-stack / repeated-deeplink cleanup audit for `/watch-party/live-stage/[partyId]`, because repeated Android deep links can leave older proof-room route instances logging harmless render-branch lines even while the current LiveKit room works.
 
+The proof-session stability fix is now part of the lane discipline: keep preflight compact, do not load archived checkpoint history during normal proof, and save raw two-phone proof output to artifact files instead of pasting long logs into the Codex conversation.
+
 ## Current Plan
 1. Keep the newly proved LiveKit entry-role fix intact on `app/watch-party/live-stage/[partyId].tsx`.
 2. Keep Live First and Live Watch-Party as modes of `/watch-party/live-stage/[partyId]`; do not hand off to Party Room.
@@ -10,6 +12,7 @@ Preserve the April 24, 2026 two-real-device LiveKit camera-visibility fix on the
 4. Keep the Android proof standard from room `E4U5FP` and room `NN9RLU`: both devices in the same LiveKit room, local camera true on both, remote track count 1 on both, visible count 2 on both, and no stale signal/read-loop blocker.
 5. Treat repeated-deeplink route-stack noise as the only known follow-up seam from this pass unless a later proof lane produces a stronger blocker.
 6. Keep unrelated local dirt out of the checkpoint.
+7. Keep proof sessions below remote compaction pressure by summarizing control truth and storing raw logs/screenshots outside chat.
 
 ## Exact Next Batch
 - Optional narrow audit:
@@ -23,6 +26,7 @@ Preserve the April 24, 2026 two-real-device LiveKit camera-visibility fix on the
   hybrid leave/rejoin proof on `NN9RLU`
 - Do not widen into broad route redesign, schema changes, or unrelated product work.
 - If a later proof lane finds a real media split again, isolate the exact owner/function before editing.
+- Do not reopen archived checkpoint history unless a specific old checkpoint must be reconciled.
 
 ## Scope
 This next pass should:
@@ -53,3 +57,4 @@ The next lane is successful when:
 - the remaining live/watch-party realtime and audio proof is completed honestly without reopening branch-truth leaks
 - no route drift, schema drift, fake room powers, or fake social claims are introduced
 - the staged set stays task-pure
+- long two-phone proof runs can continue from repo artifacts even if the chat session disconnects
