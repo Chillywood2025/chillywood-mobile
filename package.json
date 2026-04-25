@@ -14,7 +14,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@config-plugins/react-native-webrtc": "^13.0.0",
     "@expo/vector-icons": "^15.0.3",
     "@livekit/react-native": "^2.10.0",
     "@livekit/react-native-expo-plugin": "^1.0.2",
@@ -68,7 +67,6 @@
     "react-native-svg": "15.12.1",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-web": "~0.21.0",
-    "react-native-webrtc": "^124.0.7",
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
@@ -81,7 +79,6 @@
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [
-          "react-native-webrtc",
           "@livekit/react-native-webrtc"
         ]
       }

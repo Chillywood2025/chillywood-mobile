@@ -107,7 +107,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     plugins: mergePlugins(base.plugins, [
       "@livekit/react-native-expo-plugin",
-      "@config-plugins/react-native-webrtc",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "@react-native-firebase/perf",

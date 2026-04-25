@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import type { MediaStream } from "react-native-webrtc";
+import type { MediaStream } from "@livekit/react-native-webrtc";
 
 import { CommunicationPreviewCard } from "../../components/communication/communication-preview-card";
 import {
