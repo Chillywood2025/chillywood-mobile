@@ -50,7 +50,7 @@ import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boun
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
-import { readCreatorVideoForPlayer } from "../../_lib/creatorVideos";
+import { readCreatorVideoForPlayer, type CreatorVideo } from "../../_lib/creatorVideos";
 import {
     clearTitleShare,
     markTitleShared,
@@ -121,6 +121,7 @@ const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
 const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
+const CREATOR_VIDEO_BRANDED_BACKGROUND = WATCH_PARTY_BRANDED_BACKGROUND;
 
 const getWatchPartyAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | null | undefined) => {
   if (access?.reason === "room_locked") return "Watch party locked";
@@ -175,6 +176,19 @@ const buildLocalPlayerTitle = (chosen: any): TitleRow => ({
   video_url: null,
   content_access_rule: "open",
   video: chosen?.video,
+});
+
+const buildCreatorPlayerTitle = (video: CreatorVideo): TitleRow => ({
+  id: video.id,
+  title: video.title,
+  category: "Creator Video",
+  year: null,
+  runtime: null,
+  synopsis: video.description,
+  poster_url: video.thumbnailUrl || null,
+  thumbnail_url: video.thumbnailUrl || null,
+  video_url: video.playbackUrl,
+  content_access_rule: "open",
 });
 
 type PartyParticipant = {
@@ -812,18 +826,7 @@ export default function PlayerScreen() {
           if (video && active) {
             console.log("PLAYER MATCH SOURCE: matched from", "creator-video:id");
             setPlaybackSourceKind("creator-video");
-            setItem({
-              id: video.id,
-              title: video.title,
-              category: "Creator Video",
-              year: null,
-              runtime: null,
-              synopsis: video.description,
-              poster_url: video.thumbnailUrl || null,
-              thumbnail_url: video.thumbnailUrl || null,
-              video_url: video.playbackUrl,
-              content_access_rule: "open",
-            });
+            setItem(buildCreatorPlayerTitle(video));
             setTitleLoading(false);
           } else if (active) {
             setTitleLoading(false);
@@ -867,18 +870,7 @@ export default function PlayerScreen() {
         if (video && active) {
           console.log("PLAYER MATCH SOURCE: matched from", "creator-video:fallback");
           setPlaybackSourceKind("creator-video");
-          setItem({
-            id: video.id,
-            title: video.title,
-            category: "Creator Video",
-            year: null,
-            runtime: null,
-            synopsis: video.description,
-            poster_url: video.thumbnailUrl || null,
-            thumbnail_url: video.thumbnailUrl || null,
-            video_url: video.playbackUrl,
-            content_access_rule: "open",
-          });
+          setItem(buildCreatorPlayerTitle(video));
           setTitleLoading(false);
           return;
         }
@@ -3588,9 +3580,10 @@ export default function PlayerScreen() {
     if (poster) return { uri: poster };
     const thumb = String((displayItem as any)?.thumbnail_url ?? "").trim();
     if (thumb) return { uri: thumb };
+    if (isCreatorVideoPlayback) return CREATOR_VIDEO_BRANDED_BACKGROUND;
     const localVisual = (localTitle ?? fallbackTitle) as any;
     return localVisual?.image || localVisual?.poster || null;
-  }, [displayItem, localTitle, fallbackTitle]);
+  }, [displayItem, fallbackTitle, isCreatorVideoPlayback, localTitle]);
   const isLiveMode = isLiveModeFlag;
   const isSharedPartyPlayback = inWatchParty && !isLiveMode;
   const shouldUseSharedAndroidVideoSurface = Platform.OS === "android" && isSharedPartyPlayback;
@@ -4856,7 +4849,7 @@ export default function PlayerScreen() {
       ? typeof source === "number"
         ? "bundle:require"
         : typeof source === "object" && source && "uri" in source
-          ? `remote:${String((source as { uri?: unknown }).uri ?? "")}`
+          ? "remote"
           : "object:unknown"
       : "none";
     console.log("PLAYER VIDEO SOURCE:", sourceLabel);
@@ -4990,7 +4983,7 @@ export default function PlayerScreen() {
           />
         ) : null}
 
-        {source || isLiveMode ? (
+        {source || isLiveMode || isCreatorVideoPlayback ? (
           <>
           <View
             style={[
