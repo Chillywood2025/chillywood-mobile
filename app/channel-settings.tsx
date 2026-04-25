@@ -1,7 +1,9 @@
 import { useRouter } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ImageBackground,
   ScrollView,
   StyleSheet,
@@ -58,6 +60,15 @@ import {
   type CreatorEventType,
 } from "../_lib/liveEvents";
 import {
+  deleteCreatorVideo,
+  readCreatorVideos,
+  updateCreatorVideoMetadata,
+  uploadCreatorVideo,
+  type CreatorVideo,
+  type CreatorVideoFile,
+  type CreatorVideoVisibility,
+} from "../_lib/creatorVideos";
+import {
   readCreatorEventReminderSummaries,
   type CreatorEventReminderSummary,
 } from "../_lib/notifications";
@@ -104,6 +115,14 @@ type ChannelEventEditorState = {
   reminderReady: boolean;
 };
 
+type ChannelVideoEditorState = {
+  editingVideoId: string | null;
+  title: string;
+  description: string;
+  thumbUrl: string;
+  visibility: CreatorVideoVisibility;
+};
+
 const createEmptyEventEditorState = (): ChannelEventEditorState => ({
   editingEventId: null,
   eventTitle: "",
@@ -116,6 +135,14 @@ const createEmptyEventEditorState = (): ChannelEventEditorState => ({
   replayAvailableAt: "",
   replayExpiresAt: "",
   reminderReady: false,
+});
+
+const createEmptyVideoEditorState = (): ChannelVideoEditorState => ({
+  editingVideoId: null,
+  title: "",
+  description: "",
+  thumbUrl: "",
+  visibility: "draft",
 });
 
 const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
@@ -351,6 +378,7 @@ export default function ChannelSettingsScreen() {
   const [creatorAnalyticsSummary, setCreatorAnalyticsSummary] = useState<CreatorAnalyticsReadModel | null>(null);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
+  const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
   const [creatorReminderSummaries, setCreatorReminderSummaries] = useState<CreatorEventReminderSummary[]>([]);
   const [audienceActionNotice, setAudienceActionNotice] = useState<string | null>(null);
   const [audienceActionResult, setAudienceActionResult] = useState<ChannelAudienceActionResult | null>(null);
@@ -363,6 +391,11 @@ export default function ChannelSettingsScreen() {
   const [eventSaving, setEventSaving] = useState(false);
   const [eventNotice, setEventNotice] = useState<string | null>(null);
   const [eventEditor, setEventEditor] = useState<ChannelEventEditorState>(createEmptyEventEditorState);
+  const [videosLoading, setVideosLoading] = useState(false);
+  const [videoSaving, setVideoSaving] = useState(false);
+  const [videoNotice, setVideoNotice] = useState<string | null>(null);
+  const [videoEditor, setVideoEditor] = useState<ChannelVideoEditorState>(createEmptyVideoEditorState);
+  const [selectedVideoFile, setSelectedVideoFile] = useState<CreatorVideoFile | null>(null);
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel settings");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
@@ -448,7 +481,9 @@ export default function ChannelSettingsScreen() {
     if (!canUseChannelSettings) {
       setCreatorEvents([]);
       setCreatorReminderSummaries([]);
+      setCreatorVideos([]);
       setEventsLoading(false);
+      setVideosLoading(false);
       return () => {
         active = false;
       };
@@ -475,6 +510,35 @@ export default function ChannelSettingsScreen() {
     };
   }, [canUseChannelSettings, user?.id]);
 
+  useEffect(() => {
+    let active = true;
+
+    if (!canUseChannelSettings || !user?.id) {
+      setCreatorVideos([]);
+      setVideosLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setVideosLoading(true);
+    void readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 })
+      .then((videos) => {
+        if (!active) return;
+        setCreatorVideos(videos);
+        setVideosLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCreatorVideos([]);
+        setVideosLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canUseChannelSettings, user?.id]);
+
   const updateProfile = (patch: Partial<UserProfile>) => {
     setProfile((prev) => normalizeUserProfile({ ...(prev ?? {}), ...patch }));
     setNotice(null);
@@ -483,6 +547,11 @@ export default function ChannelSettingsScreen() {
   const updateEventEditor = (patch: Partial<ChannelEventEditorState>) => {
     setEventEditor((prev) => ({ ...prev, ...patch }));
     setEventNotice(null);
+  };
+
+  const updateVideoEditor = (patch: Partial<ChannelVideoEditorState>) => {
+    setVideoEditor((prev) => ({ ...prev, ...patch }));
+    setVideoNotice(null);
   };
 
   const refreshAudienceSummary = async () => {
@@ -553,6 +622,135 @@ export default function ChannelSettingsScreen() {
     } finally {
       setEventsLoading(false);
     }
+  };
+
+  const loadCreatorVideos = async () => {
+    if (!user?.id) {
+      setCreatorVideos([]);
+      return;
+    }
+
+    setVideosLoading(true);
+    try {
+      const videos = await readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 });
+      setCreatorVideos(videos);
+    } finally {
+      setVideosLoading(false);
+    }
+  };
+
+  const resetVideoEditor = () => {
+    setVideoEditor(createEmptyVideoEditorState());
+    setSelectedVideoFile(null);
+  };
+
+  const onPickVideoFile = async () => {
+    try {
+      setVideoNotice(null);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        setVideoNotice("Choose a video file before uploading.");
+        return;
+      }
+
+      setSelectedVideoFile({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: asset.mimeType,
+        size: asset.size,
+      });
+      if (!videoEditor.title.trim() && asset.name) {
+        updateVideoEditor({ title: asset.name.replace(/\.[^.]+$/, "") });
+      }
+    } catch {
+      setVideoNotice("Unable to open the video picker right now.");
+    }
+  };
+
+  const onEditVideo = (video: CreatorVideo) => {
+    setVideoEditor({
+      editingVideoId: video.id,
+      title: video.title,
+      description: video.description,
+      thumbUrl: video.thumbnailUrl,
+      visibility: video.visibility,
+    });
+    setSelectedVideoFile(null);
+    setVideoNotice(null);
+  };
+
+  const onSaveVideo = async () => {
+    try {
+      setVideoSaving(true);
+      setVideoNotice(null);
+
+      if (videoEditor.editingVideoId) {
+        await updateCreatorVideoMetadata(videoEditor.editingVideoId, {
+          title: videoEditor.title,
+          description: videoEditor.description,
+          thumbUrl: videoEditor.thumbUrl,
+          visibility: videoEditor.visibility,
+        });
+        setVideoNotice("Creator video updated.");
+      } else {
+        if (!selectedVideoFile) {
+          setVideoNotice("Choose a video file before uploading.");
+          return;
+        }
+        await uploadCreatorVideo({
+          file: selectedVideoFile,
+          title: videoEditor.title,
+          description: videoEditor.description,
+          thumbUrl: videoEditor.thumbUrl,
+          visibility: videoEditor.visibility,
+        });
+        setVideoNotice("Creator video uploaded.");
+      }
+
+      await loadCreatorVideos();
+      resetVideoEditor();
+    } catch (error) {
+      setVideoNotice(error instanceof Error ? error.message : "Unable to save creator video right now.");
+    } finally {
+      setVideoSaving(false);
+    }
+  };
+
+  const onDeleteVideo = (video: CreatorVideo) => {
+    Alert.alert(
+      "Delete Video",
+      `Remove "${video.title}" from your channel?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                setVideoSaving(true);
+                setVideoNotice(null);
+                await deleteCreatorVideo(video);
+                await loadCreatorVideos();
+                if (videoEditor.editingVideoId === video.id) resetVideoEditor();
+                setVideoNotice("Creator video deleted.");
+              } catch {
+                setVideoNotice("Unable to delete creator video right now.");
+              } finally {
+                setVideoSaving(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const onEditEvent = (event: CreatorEventSummary) => {
@@ -661,6 +859,11 @@ export default function ChannelSettingsScreen() {
       body: "Schedule live sessions and replays.",
     },
     {
+      title: "Content",
+      status: "current",
+      body: "Upload and manage creator videos.",
+    },
+    {
       title: "Audience",
       status: "current",
       body: "Followers, requests, blocks, and visibility.",
@@ -680,11 +883,6 @@ export default function ChannelSettingsScreen() {
       status: "near_term",
       body: "Hero, avatar, and brand treatment.",
     },
-    {
-      title: "Content",
-      status: "near_term",
-      body: "Spotlight rows and public shelves.",
-    },
   ];
   const currentSectionMap = sectionMap.filter((section) => section.status === "current");
   const buildNextSectionMap = sectionMap.filter((section) => section.status !== "current");
@@ -699,12 +897,6 @@ export default function ChannelSettingsScreen() {
     "Default tab emphasis",
     "Shelf hierarchy",
     "Live module priority",
-  ] as const;
-  const contentSectionHighlights = [
-    "Spotlight pick",
-    "Featured shelves",
-    "Programming rows",
-    "Public activity curation",
   ] as const;
   const accessSummary = {
     title: channelAccessResolution?.label ?? "Loading Access",
@@ -1449,6 +1641,195 @@ export default function ChannelSettingsScreen() {
 
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Content</Text>
+                <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
+              </View>
+              <Text style={styles.permissionCopy}>
+                Upload playable videos to your public channel. Drafts stay visible only to you; public videos can appear on your Profile/Channel and open in Player.
+              </Text>
+
+              {videoNotice ? (
+                <View style={styles.noticeCard}>
+                  <Text style={styles.noticeText}>{videoNotice}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Videos</Text>
+                  <Text style={styles.summaryValue}>{videosLoading ? "..." : String(creatorVideos.length)}</Text>
+                  <Text style={styles.summaryBody}>creator-owned uploads in this channel library</Text>
+                </View>
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Public</Text>
+                  <Text style={styles.summaryValue}>
+                    {videosLoading ? "..." : String(creatorVideos.filter((video) => video.visibility === "public").length)}
+                  </Text>
+                  <Text style={styles.summaryBody}>visible to public profile visitors</Text>
+                </View>
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Drafts</Text>
+                  <Text style={styles.summaryValue}>
+                    {videosLoading ? "..." : String(creatorVideos.filter((video) => video.visibility === "draft").length)}
+                  </Text>
+                  <Text style={styles.summaryBody}>owner-only until published</Text>
+                </View>
+              </View>
+
+              <Text style={styles.sectionLabel}>Current Videos</Text>
+              {videosLoading ? (
+                <View style={styles.loadingCard}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.loadingText}>Loading creator videos...</Text>
+                </View>
+              ) : creatorVideos.length ? (
+                <View style={styles.eventList}>
+                  {creatorVideos.map((video) => (
+                    <View key={video.id} style={styles.eventCard}>
+                      <View style={styles.eventCardHeader}>
+                        <View style={styles.eventCardCopy}>
+                          <Text style={styles.eventCardTitle}>{video.title}</Text>
+                          <Text style={styles.eventCardMeta}>{video.visibility === "public" ? "Public" : "Draft"}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.eventActionButton}
+                          onPress={() => onEditVideo(video)}
+                          activeOpacity={0.86}
+                        >
+                          <Text style={styles.eventActionButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.eventCardBody}>
+                        {video.description || "No description yet."}
+                        {video.fileSizeBytes ? `\nFile size: ${Math.round(video.fileSizeBytes / 1024 / 1024)} MB` : ""}
+                      </Text>
+                      <View style={styles.eventActionRow}>
+                        <TouchableOpacity
+                          style={styles.eventSecondaryButton}
+                          activeOpacity={0.86}
+                          onPress={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
+                        >
+                          <Text style={styles.eventSecondaryButtonText}>Open Player</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.eventSecondaryButton}
+                          activeOpacity={0.86}
+                          disabled={videoSaving}
+                          onPress={() => {
+                            void updateCreatorVideoMetadata(video.id, {
+                              visibility: video.visibility === "public" ? "draft" : "public",
+                            })
+                              .then(() => loadCreatorVideos())
+                              .then(() => setVideoNotice(video.visibility === "public" ? "Video moved to draft." : "Video published."))
+                              .catch(() => setVideoNotice("Unable to update video visibility right now."));
+                          }}
+                        >
+                          <Text style={styles.eventSecondaryButtonText}>
+                            {video.visibility === "public" ? "Unpublish" : "Publish"}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.eventSecondaryButton}
+                          activeOpacity={0.86}
+                          disabled={videoSaving}
+                          onPress={() => onDeleteVideo(video)}
+                        >
+                          <Text style={styles.eventSecondaryButtonText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Upload your first video</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Your channel can now start with a real creator-owned video. Draft first, then publish when it is ready.
+                  </Text>
+                </View>
+              )}
+
+              <Text style={styles.sectionLabel}>
+                {videoEditor.editingVideoId ? "Edit Video" : "Upload Video"}
+              </Text>
+              {!videoEditor.editingVideoId ? (
+                <TouchableOpacity
+                  style={styles.eventSecondaryButton}
+                  activeOpacity={0.86}
+                  onPress={onPickVideoFile}
+                  disabled={videoSaving}
+                >
+                  <Text style={styles.eventSecondaryButtonText}>
+                    {selectedVideoFile?.name ? selectedVideoFile.name : "Choose Video File"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              <TextInput
+                style={styles.input}
+                placeholder="Video title"
+                placeholderTextColor="#8d8d8d"
+                value={videoEditor.title}
+                onChangeText={(text) => updateVideoEditor({ title: text })}
+              />
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Description"
+                placeholderTextColor="#8d8d8d"
+                value={videoEditor.description}
+                onChangeText={(text) => updateVideoEditor({ description: text })}
+                multiline
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Thumbnail URL (optional)"
+                placeholderTextColor="#8d8d8d"
+                value={videoEditor.thumbUrl}
+                onChangeText={(text) => updateVideoEditor({ thumbUrl: text })}
+                autoCapitalize="none"
+              />
+              <Text style={styles.sectionLabel}>Visibility</Text>
+              <View style={styles.chipRow}>
+                {(["draft", "public"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.chip, videoEditor.visibility === value && styles.chipActive]}
+                    onPress={() => updateVideoEditor({ visibility: value })}
+                    disabled={videoSaving}
+                  >
+                    <Text style={[styles.chipText, videoEditor.visibility === value && styles.chipTextActive]}>
+                      {value.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.eventActionRow}>
+                <TouchableOpacity
+                  style={styles.eventPrimaryButton}
+                  onPress={onSaveVideo}
+                  activeOpacity={0.88}
+                  disabled={videoSaving}
+                >
+                  {videoSaving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.eventPrimaryButtonText}>
+                      {videoEditor.editingVideoId ? "Update Video" : "Upload Video"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.eventSecondaryButton}
+                  onPress={resetVideoEditor}
+                  activeOpacity={0.88}
+                  disabled={videoSaving}
+                >
+                  <Text style={styles.eventSecondaryButtonText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Live Events</Text>
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
@@ -2096,23 +2477,6 @@ export default function ChannelSettingsScreen() {
               </View>
             </View>
 
-            <View style={[styles.panel, styles.panelSubtle]}>
-              <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Content</Text>
-                <Text style={styles.panelStatusMuted}>BUILD NEXT</Text>
-              </View>
-              <Text style={styles.permissionCopy}>
-                Spotlight rows, featured shelves, and public content curation stay on this route when creator programming deepens.
-              </Text>
-              <View style={styles.previewChipRow}>
-                {contentSectionHighlights.map((item) => (
-                  <View key={item} style={styles.previewChip}>
-                    <Text style={styles.previewChipText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
             <TouchableOpacity style={styles.saveButton} onPress={onSave} activeOpacity={0.88} disabled={saving}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Channel Settings</Text>}
             </TouchableOpacity>
@@ -2369,6 +2733,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 11,
     marginBottom: 10,
+  },
+  textArea: {
+    minHeight: 86,
+    textAlignVertical: "top",
   },
   chipRow: {
     flexDirection: "row",

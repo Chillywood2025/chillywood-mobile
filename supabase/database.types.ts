@@ -981,29 +981,47 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          file_size_bytes: number | null
           id: string
+          mime_type: string | null
           owner_id: string
           playback_url: string | null
+          storage_path: string | null
+          thumb_storage_path: string | null
           thumb_url: string | null
           title: string | null
+          updated_at: string
+          visibility: string
         }
         Insert: {
           created_at?: string | null
           description?: string | null
+          file_size_bytes?: number | null
           id?: string
+          mime_type?: string | null
           owner_id: string
           playback_url?: string | null
+          storage_path?: string | null
+          thumb_storage_path?: string | null
           thumb_url?: string | null
           title?: string | null
+          updated_at?: string
+          visibility?: string
         }
         Update: {
           created_at?: string | null
           description?: string | null
+          file_size_bytes?: number | null
           id?: string
+          mime_type?: string | null
           owner_id?: string
           playback_url?: string | null
+          storage_path?: string | null
+          thumb_storage_path?: string | null
           thumb_url?: string | null
           title?: string | null
+          updated_at?: string
+          visibility?: string
         }
         Relationships: []
       }

@@ -50,6 +50,7 @@ import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boun
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
+import { readCreatorVideoForPlayer } from "../../_lib/creatorVideos";
 import {
     clearTitleShare,
     markTitleShared,
@@ -555,16 +556,21 @@ const touchDistance = (touches: readonly { pageX: number; pageY: number }[]) => 
 
 export default function PlayerScreen() {
   const { isSignedIn } = useSession();
-  const { id, partyId: partyIdParam, liveMode: liveModeParam } = useLocalSearchParams<{
+  const { id, partyId: partyIdParam, liveMode: liveModeParam, source: sourceParam } = useLocalSearchParams<{
     id?: string;
     partyId?: string | string[];
     liveMode?: string | string[];
+    source?: string | string[];
   }>();
   const partyId = Array.isArray(partyIdParam) ? String(partyIdParam[0] ?? "").trim() : String(partyIdParam ?? "").trim();
   const inWatchParty = !!partyId;
   const liveModeRaw = Array.isArray(liveModeParam)
     ? String(liveModeParam[0] ?? "").trim().toLowerCase()
     : String(liveModeParam ?? "").trim().toLowerCase();
+  const sourceRaw = Array.isArray(sourceParam)
+    ? String(sourceParam[0] ?? "").trim().toLowerCase()
+    : String(sourceParam ?? "").trim().toLowerCase();
+  const expectsCreatorVideo = sourceRaw === "creator-video";
   const isLiveModeFlag = liveModeRaw === "1" || liveModeRaw === "true" || liveModeRaw === "yes" || liveModeRaw === "live";
   let rawId = id;
   if (typeof rawId !== "string") rawId = String(rawId ?? "");
@@ -592,6 +598,7 @@ export default function PlayerScreen() {
 
   const videoRef = useRef<PlayerController | null>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
+  const [playbackSourceKind, setPlaybackSourceKind] = useState<"title" | "creator-video">("title");
   const [titleLoading, setTitleLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [standaloneAccess, setStandaloneAccess] = useState<ContentAccessResolution | null>(null);
@@ -787,6 +794,7 @@ export default function PlayerScreen() {
       const routeId = cleanId || String((localTitle as any)?.id ?? (fallbackTitle as any)?.id ?? "").trim();
       setTitleLoading(true);
       setItem(null);
+      setPlaybackSourceKind("title");
 
       if (!routeId) {
         if ((localTitle || fallbackTitle) && active) {
@@ -799,6 +807,30 @@ export default function PlayerScreen() {
       }
 
       try {
+        if (expectsCreatorVideo) {
+          const video = await readCreatorVideoForPlayer(routeId);
+          if (video && active) {
+            console.log("PLAYER MATCH SOURCE: matched from", "creator-video:id");
+            setPlaybackSourceKind("creator-video");
+            setItem({
+              id: video.id,
+              title: video.title,
+              category: "Creator Video",
+              year: null,
+              runtime: null,
+              synopsis: video.description,
+              poster_url: video.thumbnailUrl || null,
+              thumbnail_url: video.thumbnailUrl || null,
+              video_url: video.playbackUrl,
+              content_access_rule: "open",
+            });
+            setTitleLoading(false);
+          } else if (active) {
+            setTitleLoading(false);
+          }
+          return;
+        }
+
         const primary = await supabase
           .from("titles")
           .select(ADVANCED_SELECT)
@@ -831,6 +863,26 @@ export default function PlayerScreen() {
           return;
         }
 
+        const video = await readCreatorVideoForPlayer(routeId);
+        if (video && active) {
+          console.log("PLAYER MATCH SOURCE: matched from", "creator-video:fallback");
+          setPlaybackSourceKind("creator-video");
+          setItem({
+            id: video.id,
+            title: video.title,
+            category: "Creator Video",
+            year: null,
+            runtime: null,
+            synopsis: video.description,
+            poster_url: video.thumbnailUrl || null,
+            thumbnail_url: video.thumbnailUrl || null,
+            video_url: video.playbackUrl,
+            content_access_rule: "open",
+          });
+          setTitleLoading(false);
+          return;
+        }
+
         if ((localTitle || fallbackTitle) && active) {
           const chosen = (localTitle ?? fallbackTitle) as any;
           console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
@@ -847,7 +899,9 @@ export default function PlayerScreen() {
         }
       } catch {
         if (active) {
-          if (localTitle || fallbackTitle) {
+          if (expectsCreatorVideo) {
+            setItem(null);
+          } else if (localTitle || fallbackTitle) {
             const chosen = (localTitle ?? fallbackTitle) as any;
             console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
             setItem(buildLocalPlayerTitle(chosen));
@@ -862,7 +916,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [cleanId, localMatchSource, localTitle, fallbackTitle]);
+  }, [cleanId, expectsCreatorVideo, localMatchSource, localTitle, fallbackTitle]);
 
   useEffect(() => {
     let active = true;
@@ -2633,6 +2687,14 @@ export default function PlayerScreen() {
   }, [engagementBusy, engagementState?.shared, isSignedIn, resetAutoHideTimer, titleId]);
 
   const onWatchParty = useCallback(async () => {
+    if (playbackSourceKind === "creator-video") {
+      Alert.alert(
+        "Watch-Party Live not ready",
+        "Uploaded creator videos open in Player now. Watch-Party Live support for uploaded videos needs a separate room-linking pass.",
+      );
+      return;
+    }
+
     if (!titleId) {
       console.log("WATCH PARTY: missing titleId, fallback to /watch-party");
       router.push("/watch-party");
@@ -2695,7 +2757,7 @@ export default function PlayerScreen() {
 
     console.log("WATCH PARTY: room creation failed, fallback to /watch-party");
     router.push("/watch-party");
-  }, [isPlaying, titleId, item?.id, item?.title, localTitle, fallbackTitle]);
+  }, [isPlaying, playbackSourceKind, titleId, item?.id, item?.title, localTitle, fallbackTitle]);
 
   const onReturnToPartyRoom = useCallback(() => {
     if (!partyId) {
@@ -3457,11 +3519,12 @@ export default function PlayerScreen() {
 
   const displayItem = useMemo<TitleRow | null>(() => {
     if (item) return item;
+    if (expectsCreatorVideo) return null;
     if (!localTitle && !fallbackTitle) return null;
 
     const chosen = (localTitle ?? fallbackTitle) as any;
     return buildLocalPlayerTitle(chosen);
-  }, [item, localTitle, fallbackTitle]);
+  }, [expectsCreatorVideo, item, localTitle, fallbackTitle]);
 
   const source = useMemo(() => {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
@@ -3536,7 +3599,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     let active = true;
 
-    if (!isStandalonePlayer) {
+    if (!isStandalonePlayer || playbackSourceKind === "creator-video") {
       setStandaloneAccess(null);
       setStandaloneAccessLoading(false);
       setAccessError(null);
@@ -3577,7 +3640,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [cleanId, displayItem?.content_access_rule, displayItem?.id, isStandalonePlayer, standaloneAccessRetryToken]);
+  }, [cleanId, displayItem?.content_access_rule, displayItem?.id, isStandalonePlayer, playbackSourceKind, standaloneAccessRetryToken]);
 
   const standalonePlaybackBlocked = isStandalonePlayer && !!standaloneAccess && !standaloneAccess.isAllowed;
   const standalonePlaybackUnknown = isStandalonePlayer && !standaloneAccessLoading && !standaloneAccess && !!accessError;

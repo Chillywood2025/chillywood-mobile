@@ -6,6 +6,12 @@ This file is intentionally compact. Long two-phone proof lanes were repeatedly f
 Full checkpoint history through April 24, 2026 is preserved at `docs/archive/current-state-history-through-2026-04-24.md`. Read that archive only when investigating an older checkpoint or reconciling historical branch truth.
 
 ## Current Checkpoint
+The current `main` checkpoint now includes the Public v1 Creator Media System foundation for creator-uploaded videos. The active owners are `_lib/creatorVideos.ts`, `app/channel-settings.tsx`, `app/profile/[userId].tsx`, `app/player/[id].tsx`, `supabase/migrations/202604250001_creator_video_upload_foundation.sql`, and `supabase/database.types.ts`.
+
+The creator media foundation adds a signed-in Channel Settings upload/manage lane, `expo-document-picker` file selection, `videos` metadata with `draft` / `public` visibility, private `creator-videos` Supabase Storage bucket policy intent, owner CRUD, public-read-only-public video policy intent, Profile/Channel uploaded-video display, owner-only empty state and draft badges, and Player support for `/player/[id]?source=creator-video`. Watch-Party Live for uploaded videos is intentionally blocked with honest copy until uploaded-video room linking is designed. This pass did not add comment media upload, native game streaming, paid/subscriber videos, payouts, or automatic transcoding.
+
+Static validation passed for the creator media foundation with `npm run typecheck`, `npm run lint`, and `git diff --check`. Android upload/player runtime proof is deferred because `adb devices -l` showed no connected Android devices. Do not claim runtime upload proof until a physical-device pass verifies the file picker, upload, Profile/Channel display, Player playback, and public/draft visibility.
+
 The current `main` checkpoint preserves the April 24, 2026 two-real-device LiveKit live-stage camera-visibility fix. The active owner remains `app/watch-party/live-stage/[partyId].tsx`, with route-local hybrid LiveKit ownership using explicit `Room` instances and room-specific teardown tracking.
 
 The proved bug was Live First stage entry for a signed-in non-host who could enter while still holding a `viewer` LiveKit participant role. The fix resolves the entry role before minting the LiveKit token: the route claims the participant seat as `speaker`, persists `canSpeak`, updates local participant state, clears any pending seat request, broadcasts the seat state, refreshes the snapshot, and only then prepares the LiveKit join contract.
@@ -26,7 +32,7 @@ Saved proof artifacts from the latest two-phone pass include `/tmp/chillywood-R3
 - The `Error running remote compact task: stream disconnected before completion` message is Codex session/tooling failure, not a Live Stage app-runtime failure. The durable repo mitigation is to keep control-file preflight compact and store raw proof logs in files rather than pouring them into chat.
 
 ## Current Next Action
-Preserve the LiveKit camera-visibility and stale-runtime containment fixes. Resume later two-phone Live Stage / Watch-Party Live proof only as a proof lane, not a broad runtime redesign.
+Run Android runtime proof for the Creator Media System foundation. Connect an Android device, confirm `adb devices -l`, rebuild the dev client if `expo-document-picker` requires it, then test Channel Settings upload, Profile/Channel display, Player playback through `source=creator-video`, creator management, and public/draft visibility. Keep the LiveKit camera-visibility and stale-runtime containment fixes preserved while doing this proof.
 
 During proof, save raw logcat, screenshots, and long command output to `/tmp` or a task-specific proof artifact file, then summarize only the facts needed for `CURRENT_STATE.md` and `NEXT_TASK.md`.
 

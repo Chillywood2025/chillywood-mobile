@@ -31,6 +31,10 @@ import {
   readCreatorPermissions,
   type CreatorPermissionSet,
 } from "../../_lib/monetization";
+import {
+  readCreatorVideos,
+  type CreatorVideo,
+} from "../../_lib/creatorVideos";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
@@ -333,6 +337,8 @@ export default function ProfileScreen() {
   const [continueWatchingCount, setContinueWatchingCount] = useState(0);
   const [channelSignalsReady, setChannelSignalsReady] = useState(false);
   const [contentProgrammingTitles, setContentProgrammingTitles] = useState<ContentProgrammingTitle[]>([]);
+  const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
+  const [creatorVideosReady, setCreatorVideosReady] = useState(false);
   const [contentProgrammingReady, setContentProgrammingReady] = useState(false);
   const [channelAccessProfile, setChannelAccessProfile] = useState<UserProfile | null>(null);
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
@@ -510,6 +516,36 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [isSelfProfile]);
+
+  useEffect(() => {
+    let active = true;
+
+    setCreatorVideosReady(false);
+
+    if (isOfficialProfile || !userId) {
+      setCreatorVideos([]);
+      setCreatorVideosReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    void readCreatorVideos(userId, { includeDrafts: isSelfProfile, limit: 24 })
+      .then((videos) => {
+        if (!active) return;
+        setCreatorVideos(videos);
+        setCreatorVideosReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCreatorVideos([]);
+        setCreatorVideosReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOfficialProfile, isSelfProfile, userId]);
   useEffect(() => {
     let active = true;
 
@@ -973,6 +1009,9 @@ export default function ProfileScreen() {
     || trendingProgrammingTitles.length
     || topRowProgrammingTitles.length
   );
+  const publicCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
+  const draftCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
+  const hasCreatorVideoTruth = creatorVideos.length > 0;
   const heroProgrammingLabel = getTitleLabel(heroProgrammingTitle);
   const programmingSignalsSummary = [
     heroProgrammingTitle ? `hero lead ${heroProgrammingLabel}` : null,
@@ -988,18 +1027,24 @@ export default function ProfileScreen() {
   ].filter(Boolean).join(" · ");
   const contentHomeBody = isSelfProfile
     ? channelSignalsReady
-      ? hasProgrammingTruth
+      ? hasCreatorVideoTruth
+        ? `Your channel has ${publicCreatorVideoCount} public video${publicCreatorVideoCount === 1 ? "" : "s"} and ${draftCreatorVideoCount} draft${draftCreatorVideoCount === 1 ? "" : "s"}, plus saved and resume cues.`
+        : hasProgrammingTruth
         ? `Your channel already points into ${programmingSignalsSummary}, plus ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
         : `Your channel can grow from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
       : "Loading the titles that can anchor your first channel shelves."
     : contentProgrammingReady
-      ? hasProgrammingTruth
+      ? hasCreatorVideoTruth
+        ? `${publicCreatorVideoCount} creator video${publicCreatorVideoCount === 1 ? "" : "s"} already give this channel a real library.`
+        : hasProgrammingTruth
         ? `${programmingSignalsSummary} already gives this channel a real lineup.`
         : "This channel can stay lean until real shelves or creator programming are ready."
       : "Loading the lineup this channel can point people into.";
   const contentProgrammingSurfaceBody = isSelfProfile
     ? channelSignalsReady
-      ? hasProgrammingTruth
+      ? hasCreatorVideoTruth
+        ? `Manage uploaded videos in Channel Settings. Public videos appear here for visitors while drafts stay owner-only.`
+        : hasProgrammingTruth
         ? `Build the public lineup from ${programmingSignalsSummary}, then let saved titles and resume cues support it.`
         : "Build the first public lineup from saved titles and resume cues."
       : "Loading the signals that can anchor your first content shelves."
@@ -1009,6 +1054,8 @@ export default function ProfileScreen() {
           ? `Official programming already lives here: ${programmingSignalsSummary}.`
           : "This official channel stays lean until real platform programming is ready."
         : "Loading the official programming signals for this channel surface."
+      : creatorVideosReady && hasCreatorVideoTruth
+        ? `${publicCreatorVideoCount} creator-uploaded video${publicCreatorVideoCount === 1 ? "" : "s"} are ready to watch.`
       : contentProgrammingReady
         ? hasProgrammingTruth
           ? `${programmingSignalsSummary} already anchors this channel lineup.`
@@ -1077,7 +1124,7 @@ export default function ProfileScreen() {
     { key: "live", label: "Live" },
     { key: "community", label: "Community" },
     { key: "about", label: "About" },
-  ] as const satisfies ReadonlyArray<{ key: PublicProfileTabKey; label: string }>;
+  ] as const satisfies readonly { key: PublicProfileTabKey; label: string }[];
   const featuredSpotlightTitle = isOfficialProfile
     ? "Official Spotlight"
     : isSelfProfile
@@ -1457,8 +1504,8 @@ export default function ProfileScreen() {
   const ownerStatsRibbon: readonly OwnerStatCard[] = isSelfProfile ? [
     {
       label: "Shelves",
-      value: channelSignalsReady ? String(savedTitleCount) : "...",
-      body: "saved titles ready for public shelves",
+      value: creatorVideosReady ? String(creatorVideos.length) : "...",
+      body: "uploaded videos in your channel library",
     },
     {
       label: "Resume",
@@ -1480,6 +1527,11 @@ export default function ProfileScreen() {
       emphasis: "primary",
     },
     {
+      label: "Upload Video",
+      onPress: onPressManageChannel,
+      emphasis: "primary",
+    },
+    {
       label: "Open Chi'lly Chat",
       onPress: () => {
         void onPressCommunication("message");
@@ -1488,7 +1540,7 @@ export default function ProfileScreen() {
   ] : [];
   const ownerNextSteps = [
     !profile.tagline ? "add a sharper channel line" : null,
-    channelSignalsReady && savedTitleCount === 0 ? "build the first visible shelf" : null,
+    creatorVideosReady && creatorVideos.length === 0 ? "upload your first video" : null,
   ].filter(Boolean);
   const ownerPromptCards: readonly OwnerPromptCard[] = isSelfProfile ? [
     ...(!creatorSettingsEnabled ? [{
@@ -1501,13 +1553,15 @@ export default function ProfileScreen() {
       title: ownerNextSteps.length > 1 ? "Shape the next public read" : (
         ownerNextSteps[0] === "add a sharper channel line"
           ? "Add a sharper channel line"
-          : "Build the first visible shelf"
+          : ownerNextSteps[0] === "upload your first video"
+            ? "Upload your first video"
+            : "Build the first visible shelf"
       ),
       body: ownerNextSteps.length > 1
-        ? "Start by adding a sharper channel line and building the first visible shelf."
+        ? "Start by adding a sharper channel line and uploading the first playable channel video."
         : ownerNextSteps[0] === "add a sharper channel line"
           ? "Give visitors a clearer first read on your lane with a short tagline."
-          : "Saved titles are the simplest honest seed for your first public shelf.",
+          : "Upload a real video so your Channel starts feeling like a mini streaming platform.",
       actionLabel: "Open Manage Channel",
       onPress: onPressManageChannel,
     }] : []),
@@ -1849,6 +1903,72 @@ export default function ProfileScreen() {
               <Text style={styles.sectionBody}>{section.body}</Text>
             </View>
           ))}
+          {activeTab === "content" ? (
+            <View style={styles.quickActionsCard}>
+              <Text style={styles.quickActionsTitle}>
+                {isSelfProfile ? "Your Uploaded Videos" : "Creator Videos"}
+              </Text>
+              {!creatorVideosReady ? (
+                <Text style={styles.sectionBody}>Loading creator videos...</Text>
+              ) : creatorVideos.length ? (
+                <View style={styles.creatorVideoGrid}>
+                  {creatorVideos.map((video) => (
+                    <TouchableOpacity
+                      key={video.id}
+                      style={styles.creatorVideoCard}
+                      activeOpacity={0.86}
+                      onPress={() => {
+                        router.push({
+                          pathname: "/player/[id]",
+                          params: {
+                            id: video.id,
+                            source: "creator-video",
+                          },
+                        });
+                      }}
+                    >
+                      <View style={styles.creatorVideoThumb}>
+                        {video.thumbnailUrl ? (
+                          <Image source={{ uri: video.thumbnailUrl }} style={styles.creatorVideoThumbImage} />
+                        ) : (
+                          <Text style={styles.creatorVideoThumbText}>VIDEO</Text>
+                        )}
+                        {isSelfProfile ? (
+                          <View style={styles.creatorVideoVisibilityBadge}>
+                            <Text style={styles.creatorVideoVisibilityText}>
+                              {video.visibility === "public" ? "PUBLIC" : "DRAFT"}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.creatorVideoTitle}>{video.title}</Text>
+                      <Text style={styles.creatorVideoBody} numberOfLines={2}>
+                        {video.description || "Open this creator video in Player."}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : isSelfProfile ? (
+                <View style={styles.creatorVideoEmptyCard}>
+                  <Text style={styles.creatorVideoTitle}>Upload your first video</Text>
+                  <Text style={styles.creatorVideoBody}>
+                    Add a playable video from Manage Channel so this profile becomes a real channel library.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.ownerPromptAction}
+                    activeOpacity={0.84}
+                    onPress={onPressManageChannel}
+                  >
+                    <Text style={styles.ownerPromptActionText}>Upload Video</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <Text style={styles.sectionBody}>
+                  This channel has not published creator videos yet.
+                </Text>
+              )}
+            </View>
+          ) : null}
           {activeTab === "content" && contentActionTitles.length ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>Jump Into The Lineup</Text>
@@ -2256,6 +2376,75 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   quickActionChipText: { color: "#E0E7FF", fontSize: 12, fontWeight: "800" },
+  creatorVideoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  creatorVideoCard: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 142,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 10,
+    gap: 8,
+  },
+  creatorVideoThumb: {
+    aspectRatio: 16 / 9,
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(220,20,60,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  creatorVideoThumbImage: {
+    width: "100%",
+    height: "100%",
+  },
+  creatorVideoThumbText: {
+    color: "#FFE4EB",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  creatorVideoVisibilityBadge: {
+    position: "absolute",
+    right: 6,
+    top: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.66)",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  creatorVideoVisibilityText: {
+    color: "#F4F7FF",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  creatorVideoTitle: {
+    color: "#F3F6FF",
+    fontSize: 13.5,
+    fontWeight: "900",
+  },
+  creatorVideoBody: {
+    color: "#AAB3C7",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
+  creatorVideoEmptyCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(220,20,60,0.08)",
+    padding: 12,
+    gap: 8,
+  },
   tabStripCard: {
     borderRadius: 16,
     borderWidth: 1,

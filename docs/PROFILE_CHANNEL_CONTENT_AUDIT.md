@@ -1,12 +1,13 @@
 # Profile Channel Content Audit
 
 Date: 2026-04-24
-Updated: 2026-04-25 for creator upload and comment media scope
+Updated: 2026-04-25 for creator upload foundation and comment media scope
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
 HEAD audited: `8d6f62fa8e73288d6ed7347076dd5002ad9bb15a`
 HEAD at upload/comment scope update: `2ad56268e3abfb2aa2c322f5943a4a43615790c7`
+HEAD at creator media foundation closeout: pending commit after static validation
 
 Unrelated dirty files at audit start:
 
@@ -15,7 +16,7 @@ Unrelated dirty files at audit start:
 - `docs/LIVE_STAGE_TWO_DEVICE_PROOF.md`
 - `scripts/proof-live-stage-video-check.sh`
 
-This audit is documentation only. It does not change product code, schema, Live Stage, token ownership, upload behavior, or route ownership.
+This audit began as documentation only. The follow-up creator media foundation now implements the first Public v1 creator-upload path, with Android/runtime proof still deferred because no Android devices were attached during closeout.
 
 ## Files Read
 
@@ -36,6 +37,8 @@ This audit is documentation only. It does not change product code, schema, Live 
 - `app/(tabs)/index.tsx`
 - `app/title/[id].tsx`
 - `app/player/[id].tsx`
+- `_lib/creatorVideos.ts`
+- `supabase/migrations/202604250001_creator_video_upload_foundation.sql`
 - `app/chat/[threadId].tsx`
 - `app/watch-party/[partyId].tsx`
 - `app/watch-party/live-stage/[partyId].tsx`
@@ -121,14 +124,20 @@ Channel exists as a product layer, but it does not exist as a separate public ro
 - creator analytics summary: hosted room counts, active rooms, latest hosted activity, follower/subscriber signal
 - safety/admin summary: actor role, admin/review access, platform roles, recent safety report summary where allowed
 
+Channel settings now supports a first creator video upload/manage foundation:
+
+- owner-only `Content` panel in `/channel-settings`
+- video file picker through `expo-document-picker`
+- title, description, optional thumbnail URL, and draft/public visibility
+- upload/save state and error/notice state
+- current creator video list with edit, publish/unpublish, delete, and open Player actions
+
 Channel settings does not yet support:
 
-- uploading actual creator videos
 - choosing uploaded channel shelves from a creator-owned media library
 - true visual design controls beyond current layout preset and planned design chips
 - avatar or hero image upload
 - public/private/subscriber content access on uploaded creator content
-- deleting/managing creator-owned VOD/media from a channel library
 - native game/video streaming source management
 
 ## Profile <-> Channel Integration
@@ -143,13 +152,19 @@ Working connections:
 - Channel settings writes the same `user_profiles` fields that profile reads.
 - Channel settings reads the same creator/event/audience/permission state surfaced publicly where appropriate.
 
+Updated working connections:
+
+- Profile Content can render creator-owned videos from `videos`.
+- Owner Profile view links to Channel Settings for upload.
+- Uploaded videos open in `/player/[id]?source=creator-video`.
+- Draft videos are intended to stay owner-only through query shape and RLS policy intent.
+
 Confusing or missing connections:
 
 - "Channel" is real in the UI but has no standalone public URL, so a user expecting a separate Channel destination may not know that Profile is the Channel home.
-- The Content tab currently reflects platform-programmed titles, not the creator's own uploaded channel library.
-- Owner prompts mention building public shelves, but there is no self-serve shelf builder or upload flow attached to that prompt yet.
-- Channel settings has a "Content" build-next panel, but no current content manager beyond creator events.
-- The app has both `titles` and `videos` schema truth, but the route experience is driven mostly by `titles`; `videos` is not wired into the current Profile/Channel public experience.
+- The Content tab now has a creator-video section, but shelf curation beyond the simple uploaded-video grid is still later.
+- Channel settings has a current upload/manage lane, but not a full shelf builder or advanced creator studio.
+- The app still has both `titles` and `videos`: `titles` remain platform/admin programming and `videos` now cover creator-owned uploads.
 
 No route drift was found against doctrine. `/profile/[userId]` and `/channel-settings` match the control files.
 
@@ -161,15 +176,22 @@ Current user-facing add/content management paths:
 - `/channel-settings` can link Watch-Party Live events to an existing title id.
 - `/admin` can create/edit platform `titles` with title, category, year, runtime, synopsis, poster URL, thumbnail URL where present, video URL, preview URL where present, status, release date, sort order, hero/featured/trending/top-row flags, access rule, ads, sponsor placement, and sponsor label.
 
-What does not exist for normal creators:
+What now exists for normal creators:
 
-- no creator upload route
-- no file picker or media picker for video/poster/thumbnail upload
-- no Supabase Storage upload call for creator videos, thumbnails, or avatars
-- no creator-facing content list tied to `owner_id` or `channel_id`
-- no self-serve create/edit/delete flow for channel VODs
+- creator upload/manage panel in `/channel-settings`
+- video picker, title, description, optional thumbnail URL, and draft/public visibility
+- creator-owned upload metadata in `videos`
+- private `creator-videos` storage bucket policy intent
+- Profile/Channel display for uploaded videos
+- Player support for uploaded videos through `source=creator-video`
+- edit, publish/unpublish, delete, and open Player controls for the owner
+
+What still does not exist for normal creators:
+
 - no channel shelf picker using creator-owned media
 - no creator content category/genre visibility workflow outside internal/admin `titles`
+- no thumbnail file upload yet; the foundation supports optional thumbnail URL
+- no automatic transcoding or moderation queue automation
 
 Where content goes today:
 
@@ -178,9 +200,9 @@ Where content goes today:
 - User favorites go into `user_list` and AsyncStorage fallback.
 - Likes/share markers go into `user_content_relationships`.
 - Creator events go into `creator_events` and can appear on Profile Live tab.
-- The `videos` table exists with `owner_id`, `title`, `description`, `playback_url`, and `thumb_url`, but no app route found reads or writes it for the current profile/channel experience.
+- The `videos` table now carries owner upload metadata and is read by Profile/Channel and Player.
 
-Ease assessment: confusing for a normal creator. The app says "channel" and "lineup" clearly, but a creator cannot yet add a video to their channel from the creator-facing route. The only real content creation path is internal/admin URL-entry programming, not a normal upload flow.
+Ease assessment: improved but not runtime-proved. A creator now has a concrete upload/manage lane in Channel Settings and a Profile/Channel display path, but Android picker/upload/player proof is still pending.
 
 ## Public V1 Creator Upload Decision
 
@@ -188,21 +210,21 @@ Basic creator video upload is now Public v1 required.
 
 This is separate from advanced creator studio, paid media, subscriber-only media, payouts, native game streaming, and automatic transcoding. Public v1 only needs the smallest honest path that lets a channel owner upload a playable video, describe it, control draft/public visibility, see it on their Profile/Channel, edit or remove it, and open it in the player.
 
-Current upload truth:
+Current upload truth after foundation:
 
-- `/channel-settings` has creator-event management but no creator video upload button, picker, progress state, or media manager.
-- `/profile/[userId]` displays channel/programming cues, but it reads public `titles` rows rather than creator-owned `videos`.
+- `/channel-settings` has creator-event management plus a creator video upload/manage panel.
+- `/profile/[userId]` displays creator-owned videos from `videos` alongside existing platform-programming cues from `titles`.
 - `/admin` can create platform `titles` by URL. That is internal programming, not creator upload.
-- `app/player/[id].tsx` can play a remote URL through title `video_url`, so the player can likely support uploaded media after a source-kind/read-model bridge.
-- `_lib/mediaSources.ts` maps title `video_url`, `preview_video_url`, `poster_url`, and `thumbnail_url`; it does not map `videos.playback_url` or `videos.thumb_url`.
-- The `videos` table exists and can be the base table, but it is not ready as-is for Public v1.
+- `app/player/[id].tsx` supports uploaded creator videos through `/player/[id]?source=creator-video`.
+- `_lib/creatorVideos.ts` is the creator-video read/write/upload owner.
+- Android runtime proof is pending.
 
 `videos` table readiness:
 
-- Usable foundation: `id`, `owner_id`, `title`, `description`, `playback_url`, `thumb_url`, and owner insert/update/delete policies already exist in checked-in schema truth.
-- Missing Public v1 fields: visibility/status, draft/public state, category or genre, storage object path, thumbnail storage path, updated timestamp, optional duration/mime/file-size metadata, and moderation/reportability hooks.
-- Current risk: the checked-in RLS policy `"Public videos readable"` uses `true`, which is incompatible with draft/private uploads. Public v1 must change public reads to public videos only while preserving owner access to their own draft/private videos.
-- Missing storage truth: no repo-owned Supabase Storage bucket or storage RLS migration was found for creator videos/thumbnails, and no `supabase.storage.from(...)` upload path exists in app code.
+- Implemented foundation: `visibility`, `storage_path`, `thumb_storage_path`, `mime_type`, `file_size_bytes`, and `updated_at`.
+- RLS policy intent now distinguishes public videos from owner drafts.
+- `creator-videos` private storage bucket and owner/public storage policy intent are in the repo migration.
+- Still missing: category/genre, thumbnail file upload, moderation/reportability hooks, transcoding, and Android/runtime proof.
 
 Smallest safe Public v1 upload requirements:
 
@@ -213,15 +235,14 @@ Smallest safe Public v1 upload requirements:
 5. Player integration for uploaded media URLs. Watch-Party Live should be disabled or explicitly unsupported for uploaded videos until uploaded-video room ownership is designed; do not fake it.
 6. Creator management for edit metadata, unpublish/draft, and delete. No placeholder manage button.
 
-Recommended implementation order:
+Recommended remaining implementation order:
 
-1. Add schema/storage migration for creator video visibility, storage paths, thumbnail paths, updated timestamps, and RLS that distinguishes owner drafts from public videos.
-2. Regenerate Supabase types.
-3. Add a narrow `_lib/creatorVideos.ts` read/write/upload helper that owns `videos` access and storage paths.
-4. Add `/channel-settings` upload/manage UI using that helper.
-5. Add `/profile/[userId]` creator-video read model and owner/public empty states.
-6. Add player support for uploaded video source kind.
-7. Add report/delete/unpublish polish and only then consider Watch-Party support for uploaded videos.
+1. Apply the migration in the target Supabase environment.
+2. Connect Android device and run runtime proof.
+3. Rebuild dev client if `expo-document-picker` requires it.
+4. Verify upload, metadata save, Profile/Channel display, Player playback, and public/draft visibility.
+5. Add report/moderation polish after runtime proof.
+6. Consider Watch-Party support only after uploaded-video room linking is designed.
 
 ## Viewer Content Experience
 
@@ -256,13 +277,12 @@ Creators can currently:
 - see limited analytics and safety/admin summaries
 - open their public profile/channel route
 
-Creators cannot currently:
+Creators still cannot currently:
 
-- upload a video or thumbnail
-- manage a creator-owned content library
-- edit/delete uploaded media from channel settings
+- upload a thumbnail file directly
+- manage advanced shelves/sections from a creator-owned content library
 - pick shelves/sections from creator-owned content
-- set per-upload visibility/access
+- set per-upload category, genre, age, or safety metadata
 - set content safety/age metadata on uploads
 - start native game/video streaming from Profile or Channel settings
 - see creator content performance aggregates for uploaded media
@@ -320,9 +340,9 @@ Creator events/notifications:
 
 Storage:
 
-- No active Supabase Storage bucket migration or product upload code was found outside `supabase/.temp` metadata.
-- No active `supabase.storage.from(...)` media upload flow was found in app code.
-- Current media entry uses URL fields, local assets, and fallback media rather than first-party storage uploads.
+- `supabase/migrations/202604250001_creator_video_upload_foundation.sql` creates/updates the private `creator-videos` bucket and storage policies.
+- `_lib/creatorVideos.ts` owns the first `supabase.storage.from("creator-videos")` upload path for creator videos.
+- Thumbnail file upload is not implemented yet; the foundation supports optional thumbnail URL and thumbnail storage-path columns for later.
 
 ## Comment Uploads Scope
 
@@ -378,18 +398,18 @@ Later implementation order:
 
 ### B. Must Fix Before Public V1
 
-- Add basic creator video upload for Profile/Channel. A mini streaming platform needs owner-uploaded playable videos for Public v1.
-- Connect the `videos` table through repo-owned schema/storage/RLS, creator upload UI, Profile/Channel display, and player support.
-- Fix `videos` visibility ownership before public upload ships. Public read-all is not compatible with draft/private videos.
-- Add creator management for edit metadata, unpublish/draft, and delete.
+- Complete Android runtime proof for basic creator video upload. The foundation exists and static validation passed, but physical-device picker/upload/player proof is still pending.
+- Apply and verify the creator media migration in the target Supabase environment.
+- Verify `videos` public/draft visibility with real owner and non-owner accounts.
+- Verify creator management for edit metadata, unpublish/draft, and delete at runtime.
 - Make Watch-Party support for uploaded videos truthful: either supported through a real uploaded-video room link or clearly disabled until implemented.
 - Add a normal-user explanation of where Profile ends and Channel begins, because the public route is unified and there is no separate `/channel` URL.
 
 ### C. Should Improve Before Public V1 If Easy
 
-- Add a clear owner-only Profile Content empty-state CTA that points to creator upload once implemented.
+- Polish the owner-only Profile Content empty-state CTA after Android proof.
 - Add remote `poster_url` display support on Title Detail hero so remote-programmed titles look premium without requiring local assets.
-- Make Channel Settings "Content" panel become the upload/manage lane, or explicitly point to the upload lane if it is split out.
+- Add thumbnail file upload and category/genre metadata if the runtime proof is clean.
 - Add a visible public follow/unfollow action only if the existing `channelAudience` helpers are intentionally ready for viewer use.
 - Add clearer "platform programmed" vs "creator uploaded" language wherever `titles` drives a channel shelf.
 - Keep text comments/reactions polished where they already exist.
@@ -450,11 +470,11 @@ Phase recommendation: post-v1 or later. It should not block public v1 if Profile
 
 ## Recommended Next Fix Order
 
-1. Public v1 creator upload schema/storage lane: extend `videos`, add storage bucket/policies, fix public-vs-owner RLS, and regenerate types.
-2. Add `_lib/creatorVideos.ts` as the single creator-video read/write/upload owner.
-3. Add `/channel-settings` upload/manage UI with draft/public, edit, unpublish, and delete.
-4. Add Profile/Channel uploaded-video display and owner/public empty states.
-5. Add player support for uploaded video source kind.
+1. Apply the creator media migration in the target Supabase environment.
+2. Connect Android hardware and run creator upload runtime proof.
+3. Rebuild the dev client if `expo-document-picker` requires it.
+4. Verify owner upload controls, public/draft visibility, Profile/Channel display, Player playback, edit, unpublish, and delete.
+5. Add thumbnail file upload, category/genre metadata, and report/moderation hooks after proof.
 6. Improve Title Detail remote art support using existing `poster_url`/`thumbnail_url`.
 7. Keep comment media post-v1; continue only text comments/reactions where already backed.
 8. Defer native game/video streaming until after public v1 proof and Live Stage stability remain clean.

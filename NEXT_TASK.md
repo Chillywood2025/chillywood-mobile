@@ -1,63 +1,50 @@
 # NEXT TASK
 
 ## Exact Next Task
-Preserve the April 24, 2026 two-real-device LiveKit camera-visibility fix on the current live-stage owner, then move to a narrow follow-up only if a real proof lane exposes it. The next honest candidate is a route-stack / repeated-deeplink cleanup audit for `/watch-party/live-stage/[partyId]`, because repeated Android deep links can leave older proof-room route instances logging harmless render-branch lines even while the current LiveKit room works.
+Run Android runtime proof for the Public v1 Creator Media System foundation.
 
-The proof-session stability fix is now part of the lane discipline: keep preflight compact, do not load archived checkpoint history during normal proof, and save raw two-phone proof output to artifact files instead of pasting long logs into the Codex conversation.
-
-Before any long two-phone proof, run `npm run proof:session -- live-stage-two-phone` and keep the generated artifact directory as the recovery point if Codex remote compaction disconnects.
+The foundation is implemented in code and static validation passed, but Android/runtime proof is intentionally deferred because `adb devices -l` showed no connected Android devices during closeout.
 
 ## Current Plan
-1. Keep the newly proved LiveKit entry-role fix intact on `app/watch-party/live-stage/[partyId].tsx`.
-2. Keep Live First and Live Watch-Party as modes of `/watch-party/live-stage/[partyId]`; do not hand off to Party Room.
-3. Keep the route-local hybrid LiveKit owner on explicit `Room` ownership with room-specific teardown tracking.
-4. Keep the Android proof standard from room `E4U5FP` and room `NN9RLU`: both devices in the same LiveKit room, local camera true on both, remote track count 1 on both, visible count 2 on both, and no stale signal/read-loop blocker.
-5. Treat repeated-deeplink route-stack noise as the only known follow-up seam from this pass unless a later proof lane produces a stronger blocker.
-6. Keep unrelated local dirt out of the checkpoint.
-7. Keep proof sessions below remote compaction pressure by summarizing control truth and storing raw logs/screenshots outside chat.
-8. Use the `/tmp/chillywood-proof-latest.txt` pointer to resume after any Codex compact-stream disconnect.
-
-## Exact Next Batch
-- Optional narrow audit:
-  `app/watch-party/live-stage/[partyId].tsx`
-  repeated deep-link behavior on Android
-  route replacement vs stacked route instances
-  mode-parameter changes while a LiveKit room is already mounted
-- Preserve, do not reopen, the proved LiveKit camera path:
-  Live First room `E4U5FP`
-  Live Watch-Party room `NN9RLU`
-  hybrid leave/rejoin proof on `NN9RLU`
-- Do not widen into broad route redesign, schema changes, or unrelated product work.
-- If a later proof lane finds a real media split again, isolate the exact owner/function before editing.
-- Do not reopen archived checkpoint history unless a specific old checkpoint must be reconciled.
+1. Connect at least one physical Android device.
+2. Confirm the device is visible with `adb devices -l`.
+3. Rebuild or reinstall the dev client if the new native `expo-document-picker` dependency requires it.
+4. Open the owner account's `/profile/[userId]` route and confirm owner-only upload CTAs are visible only on the owner view.
+5. Open `/channel-settings` and confirm the `Content` / `Upload Video` lane is visible to the signed-in owner.
+6. Upload a real local video file through the picker.
+7. Confirm metadata saves to `videos` and storage writes to the `creator-videos` bucket path.
+8. Confirm the uploaded video appears on the creator's Profile/Channel content tab.
+9. Open the uploaded video in `/player/[id]?source=creator-video` and confirm real playback, not a placeholder.
+10. Confirm a draft video does not appear for public/non-owner viewers.
+11. Confirm a public video appears for public/non-owner viewers.
+12. Confirm the creator can edit metadata, publish/unpublish, and delete.
+13. Confirm a non-owner cannot manage another creator's video.
+14. Confirm Watch-Party Live stays honestly blocked for uploaded videos until uploaded-video room linking is implemented.
 
 ## Scope
-This next pass should:
-- preserve all current canonical route owners and landed doctrine exactly as-is
-- keep the current social baseline, monetization/access truth, and no-fake-comments/no-fake-ads doctrine intact
-- use `docs/native-friend-graph-implementation-spec.md` as the implementation source of truth
-- use `docs/native-social-engagement-foundation-spec.md` as the engagement-truth source of truth
-- use `docs/app-systems-inventory-and-integration-audit.md` as the current systems/integration truth map
-- treat later multi-device live/watch-party realtime plus audio proof as the active remaining lane
-- keep unrelated local dirt out of the checkpoint
+This proof lane should:
+- keep the creator upload implementation scoped to Profile, Channel Settings, Player, `videos`, and `creator-videos` storage
+- preserve Live Stage / Watch-Party Live runtime fixes
+- avoid comment media upload
+- avoid native game streaming
+- avoid paid/subscriber videos, payouts, automatic transcoding, and advanced creator studio
+- keep unrelated proof workflow files out of the commit
 
-## Out Of Scope
-Do not:
-- change route truth
-- reopen broader product or release-hardening work in this pass
-- reopen Google Play readiness, OVH work, or database-move work
-- invent fake room powers, fake comments, fake social claims, fake ads, or fake entitlements
-- mix unrelated local dirt into the checkpoint
+## Validation
+- `npm run typecheck`
+- `npm run lint`
+- `git diff --check`
+- Android runtime proof on the connected physical device
 
 ## Success Criteria
-The next lane is successful when:
-- the just-landed live-room preview action fix stays intact and the preview `Join Now` path is physically tappable on Android
-- the just-landed pre-stage Live Stage footer CTA fix stays intact and both real devices can still advance into the actual stage owner by the canonical owner path
-- the landed direct-entry Live Stage / `partyId` player fix stays intact and direct entry can no longer bypass real room-access and membership truth
-- the landed Home/Profile fix stays intact and signed-out users can no longer drift into a faux self/owner profile branch
-- the landed chat fix stays intact and signed-out users hitting Chi'lly Chat see an honest gate instead of a generic member-style failure state
-- the existing Live Stage interaction, member-visibility, invite, and locked-room fixes stay intact
-- the remaining live/watch-party realtime and audio proof is completed honestly without reopening branch-truth leaks
-- no route drift, schema drift, fake room powers, or fake social claims are introduced
-- the staged set stays task-pure
-- long two-phone proof runs can continue from repo artifacts even if the chat session disconnects
+The lane is successful when:
+- owner upload controls are visible only to the owner
+- public viewers cannot see upload/manage controls
+- upload saves video metadata and storage object
+- public videos appear on Profile/Channel for public viewers
+- draft videos stay owner-only
+- uploaded videos open and play in Player with `source=creator-video`
+- creator management actions work for owner and are denied for non-owner
+- Watch-Party Live for uploaded videos remains honestly blocked until a real linking pass
+- no comment media upload, native game streaming, monetization, payout, or transcoding scope is introduced
+- staged files stay task-pure
