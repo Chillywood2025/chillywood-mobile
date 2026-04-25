@@ -1,4 +1,7 @@
-import { supabase } from "./supabase";
+import { File } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
+
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
 export const CREATOR_VIDEO_BUCKET = "creator-videos";
@@ -38,6 +41,11 @@ const CREATOR_VIDEO_SELECT =
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
+const logCreatorVideoUpload = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[creator-video-upload]", event, details ?? {});
+};
+
 const normalizeVisibility = (value: unknown): CreatorVideoVisibility => (
   toText(value).toLowerCase() === "public" ? "public" : "draft"
 );
@@ -73,6 +81,99 @@ async function createSignedUrl(path: string) {
 
   if (error || !data?.signedUrl) return "";
   return data.signedUrl;
+}
+
+const encodeStoragePath = (path: string) => path
+  .split("/")
+  .map((part) => encodeURIComponent(part))
+  .join("/");
+
+async function uploadLocalFileToStorage(input: {
+  uri: string;
+  storagePath: string;
+  mimeType: string;
+  fileName?: string | null;
+}) {
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (error || !accessToken) {
+    throw new Error("Sign in before uploading creator videos.");
+  }
+
+  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${CREATOR_VIDEO_BUCKET}/${encodeStoragePath(input.storagePath)}`;
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    apikey: SUPABASE_ANON_KEY,
+    "x-upsert": "false",
+  };
+  const parseStorageError = (body: string) => {
+    let message = "Unable to upload the selected video file.";
+    try {
+      const parsed = JSON.parse(body) as { message?: string; error?: string };
+      message = toText(parsed.message) || toText(parsed.error) || message;
+    } catch {
+      message = toText(body) || message;
+    }
+    return message;
+  };
+
+  try {
+    const localFile = new File(input.uri);
+    const { error } = await supabase.storage
+      .from(CREATOR_VIDEO_BUCKET)
+      .upload(input.storagePath, localFile, {
+        contentType: input.mimeType,
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (error) throw error;
+    return;
+  } catch (error) {
+    logCreatorVideoUpload("file_object_upload_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+
+  try {
+    const result = await FileSystem.uploadAsync(uploadUrl, input.uri, {
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      headers: {
+        ...headers,
+        "Content-Type": input.mimeType,
+        "cache-control": "max-age=3600",
+      },
+    });
+
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error(parseStorageError(result.body));
+    }
+    return;
+  } catch (error) {
+    logCreatorVideoUpload("native_upload_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+
+  const formData = new FormData();
+  formData.append("cacheControl", "3600");
+  formData.append("", {
+    uri: input.uri,
+    name: toText(input.fileName) || `creator-video.${input.mimeType.split("/").pop() || "mp4"}`,
+    type: input.mimeType,
+  } as unknown as Blob);
+
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(parseStorageError(body));
+  }
 }
 
 async function parseCreatorVideo(row: CreatorVideoRow): Promise<CreatorVideo> {
@@ -161,18 +262,29 @@ export async function uploadCreatorVideo(input: {
   const id = createClientId();
   const mimeType = toText(input.file.mimeType) || "video/mp4";
   const storagePath = `${ownerId}/${id}/source.${getFileExtension(input.file)}`;
-  const response = await fetch(fileUri);
-  if (!response.ok) throw new Error("Unable to read the selected video file.");
-  const blob = await response.blob();
 
-  const { error: uploadError } = await supabase.storage
-    .from(CREATOR_VIDEO_BUCKET)
-    .upload(storagePath, blob, {
-      contentType: mimeType,
-      upsert: false,
+  try {
+    logCreatorVideoUpload("storage_upload_start", {
+      id,
+      name: toText(input.file.name) || "unnamed",
+      mimeType,
+      size: input.file.size ?? null,
+      visibility: normalizeVisibility(input.visibility),
     });
+    await uploadLocalFileToStorage({
+      uri: fileUri,
+      storagePath,
+      mimeType,
+      fileName: input.file.name,
+    });
+  } catch (error) {
+    logCreatorVideoUpload("storage_upload_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    throw error;
+  }
 
-  if (uploadError) throw uploadError;
+  logCreatorVideoUpload("storage_upload_succeeded", { id });
 
   const payload: CreatorVideoInsert = {
     id,
@@ -197,9 +309,15 @@ export async function uploadCreatorVideo(input: {
     .single();
 
   if (error || !data) {
+    logCreatorVideoUpload("metadata_insert_failed", {
+      id,
+      message: error instanceof Error ? error.message : "missing data",
+    });
     await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([storagePath]).catch(() => undefined);
     throw error ?? new Error("Unable to save uploaded video metadata.");
   }
+
+  logCreatorVideoUpload("metadata_insert_succeeded", { id, visibility: payload.visibility });
 
   return parseCreatorVideo(data);
 }

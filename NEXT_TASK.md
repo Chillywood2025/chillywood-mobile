@@ -1,25 +1,20 @@
 # NEXT TASK
 
 ## Exact Next Task
-Complete Android runtime proof for the Public v1 Creator Media System foundation.
+Complete the remaining Creator Media public/draft and owner/non-owner runtime checks.
 
-The foundation is implemented in code and static validation passed. A partial Android pass on device `R5CT30GM6NY` rebuilt and installed the dev client, opened `/channel-settings`, confirmed the owner Content panel, and confirmed the native Android file picker opens from `Choose Video File`. Full upload proof is still pending because no selectable local media appeared in the system picker during the pass.
+The foundation is implemented in code and static validation passed. Android proof on device `R5CT30GM6NY` now confirms `/channel-settings` opens, the owner Content panel renders, the native Android file picker opens from `Choose Video File`, selected file name appears, Upload visibly enters an uploading state, and metadata/storage save succeeds for creator video `f6a5c96a-812a-4132-8a2b-e3ecab51c983` in the private `creator-videos` bucket path. Human device proof also confirmed tapping an uploaded video card opens the standalone Player for the creator video rather than the platform/admin title surface or bundled sample fallback; Metro logged `PLAYER MATCH SOURCE: matched from creator-video:id` and `PLAYER VIDEO SOURCE: remote:` for creator video `5cf469eb-d375-436a-861a-e82ece5cc47d`.
 
 ## Current Plan
 1. Connect at least one physical Android device.
 2. Confirm the device is visible with `adb devices -l`.
-3. Make a real video file selectable in Android's system picker, for example by recording a short clip on-device or otherwise importing media through a picker-visible provider.
-4. Open the owner account's `/profile/[userId]` route and confirm owner-only upload CTAs are visible only on the owner view.
-5. Open `/channel-settings` and confirm the `Content` / `Upload Video` lane is visible to the signed-in owner.
-6. Upload the real local video file through the picker.
-7. Confirm metadata saves to `videos` and storage writes to the `creator-videos` bucket path.
-8. Confirm the uploaded video appears on the creator's Profile/Channel content tab.
-9. Open the uploaded video in `/player/[id]?source=creator-video` and confirm real playback, not a placeholder.
-10. Confirm a draft video does not appear for public/non-owner viewers.
-11. Confirm a public video appears for public/non-owner viewers.
-12. Confirm the creator can edit metadata, publish/unpublish, and delete.
-13. Confirm a non-owner cannot manage another creator's video.
-14. Confirm Watch-Party Live stays honestly blocked for uploaded videos until uploaded-video room linking is implemented.
+3. Reopen `/channel-settings` as the creator owner and confirm uploaded video `f6a5c96a-812a-4132-8a2b-e3ecab51c983` appears in the Content list.
+4. Confirm the uploaded card opens `/player/[id]?source=creator-video` and Player resolves the creator-video source, not a platform/admin title or bundled sample fallback.
+5. Confirm Watch-Party Live stays honestly blocked for uploaded videos until uploaded-video room linking is implemented.
+6. Confirm a draft video does not appear for public/non-owner viewers.
+7. Publish the video and confirm it appears for public/non-owner viewers on Profile/Channel.
+8. Confirm creator can edit metadata, publish/unpublish, and delete.
+9. Confirm a non-owner cannot manage another creator's video.
 
 ## Scope
 This proof lane should:
@@ -36,11 +31,11 @@ This proof lane should:
 - `git diff --check`
 - Android runtime proof on the connected physical device
 
-## Latest Partial Proof Artifact
+## Latest Runtime Proof Artifact
 
-- Folder: `/tmp/chillywood-proof-2026-04-25T13-57-18-617Z-creator-media-android-runtime`
+- Folder: `/tmp/chillywood-proof-2026-04-25T16-43-07-920Z-creator-media-upload-submit-retry`
 - Device: `R5CT30GM6NY`
-- Result: dev client rebuild/install passed after fixing duplicate WebRTC native ownership; `/channel-settings` Content panel and native file picker were reached; upload/playback/public-draft proof is still pending because the picker had no selectable local media.
+- Result: `/channel-settings` Content panel and native picker were reached; selected video upload saved metadata/storage for creator video `f6a5c96a-812a-4132-8a2b-e3ecab51c983`; human proof confirmed tapping the uploaded video card opened standalone Player; screenshot artifact `player-after-upload-card-tap.png` also captured the honest "Watch-Party Live not ready" block for uploaded creator videos.
 
 ## Success Criteria
 The lane is successful when:

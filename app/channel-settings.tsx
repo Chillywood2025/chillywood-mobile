@@ -145,6 +145,11 @@ const createEmptyVideoEditorState = (): ChannelVideoEditorState => ({
   visibility: "draft",
 });
 
+const logCreatorVideoUploadUi = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[creator-video-upload-ui]", event, details ?? {});
+};
+
 const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
   if (value === "party_pass") return "Party Pass";
   if (value === "premium") return "Premium";
@@ -396,6 +401,17 @@ export default function ChannelSettingsScreen() {
   const [videoNotice, setVideoNotice] = useState<string | null>(null);
   const [videoEditor, setVideoEditor] = useState<ChannelVideoEditorState>(createEmptyVideoEditorState);
   const [selectedVideoFile, setSelectedVideoFile] = useState<CreatorVideoFile | null>(null);
+  const videoTitleReady = videoEditor.title.trim().length > 0;
+  const videoSubmitRequirement = videoEditor.editingVideoId
+    ? videoTitleReady
+      ? ""
+      : "Enter a title to update this video."
+    : !selectedVideoFile
+      ? "Choose a video file to enable upload."
+      : videoTitleReady
+        ? ""
+        : "Enter a title to enable upload.";
+  const isVideoSubmitDisabled = videoSaving || !!videoSubmitRequirement;
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel settings");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
@@ -647,29 +663,45 @@ export default function ChannelSettingsScreen() {
   const onPickVideoFile = async () => {
     try {
       setVideoNotice(null);
+      logCreatorVideoUploadUi("picker_open");
       const result = await DocumentPicker.getDocumentAsync({
         type: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"],
         copyToCacheDirectory: true,
         multiple: false,
       });
 
-      if (result.canceled) return;
+      if (result.canceled) {
+        logCreatorVideoUploadUi("picker_canceled");
+        return;
+      }
       const asset = result.assets[0];
       if (!asset?.uri) {
+        logCreatorVideoUploadUi("picker_missing_asset");
         setVideoNotice("Choose a video file before uploading.");
         return;
       }
 
-      setSelectedVideoFile({
+      const pickedFile = {
         uri: asset.uri,
         name: asset.name,
         mimeType: asset.mimeType,
         size: asset.size,
+      };
+
+      setSelectedVideoFile(pickedFile);
+      logCreatorVideoUploadUi("picker_selected", {
+        name: pickedFile.name ?? "unnamed",
+        mimeType: pickedFile.mimeType ?? null,
+        size: pickedFile.size ?? null,
       });
+      setVideoNotice(`Selected ${pickedFile.name || "video file"}. Enter a title, then tap Upload Video.`);
       if (!videoEditor.title.trim() && asset.name) {
         updateVideoEditor({ title: asset.name.replace(/\.[^.]+$/, "") });
       }
-    } catch {
+    } catch (error) {
+      logCreatorVideoUploadUi("picker_failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
       setVideoNotice("Unable to open the video picker right now.");
     }
   };
@@ -687,9 +719,29 @@ export default function ChannelSettingsScreen() {
   };
 
   const onSaveVideo = async () => {
+    if (!videoEditor.title.trim()) {
+      logCreatorVideoUploadUi("submit_blocked", { reason: "missing_title" });
+      setVideoNotice(videoEditor.editingVideoId ? "Enter a title before updating." : "Enter a title before uploading.");
+      return;
+    }
+
+    if (!videoEditor.editingVideoId && !selectedVideoFile) {
+      logCreatorVideoUploadUi("submit_blocked", { reason: "missing_file" });
+      setVideoNotice("Choose a video file before uploading.");
+      return;
+    }
+
+    const fileToUpload = selectedVideoFile;
+
     try {
       setVideoSaving(true);
-      setVideoNotice(null);
+      setVideoNotice(videoEditor.editingVideoId ? "Saving creator video..." : "Uploading creator video...");
+      logCreatorVideoUploadUi("submit_start", {
+        mode: videoEditor.editingVideoId ? "edit" : "upload",
+        fileName: selectedVideoFile?.name ?? null,
+        fileSize: selectedVideoFile?.size ?? null,
+        visibility: videoEditor.visibility,
+      });
 
       if (videoEditor.editingVideoId) {
         await updateCreatorVideoMetadata(videoEditor.editingVideoId, {
@@ -700,23 +752,22 @@ export default function ChannelSettingsScreen() {
         });
         setVideoNotice("Creator video updated.");
       } else {
-        if (!selectedVideoFile) {
-          setVideoNotice("Choose a video file before uploading.");
-          return;
-        }
-        await uploadCreatorVideo({
-          file: selectedVideoFile,
+        const uploadedVideo = await uploadCreatorVideo({
+          file: fileToUpload!,
           title: videoEditor.title,
           description: videoEditor.description,
           thumbUrl: videoEditor.thumbUrl,
           visibility: videoEditor.visibility,
         });
-        setVideoNotice("Creator video uploaded.");
+        setVideoNotice(`Creator video uploaded: ${uploadedVideo.title}.`);
       }
 
       await loadCreatorVideos();
       resetVideoEditor();
     } catch (error) {
+      logCreatorVideoUploadUi("submit_failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
       setVideoNotice(error instanceof Error ? error.message : "Unable to save creator video right now.");
     } finally {
       setVideoSaving(false);
@@ -1759,10 +1810,15 @@ export default function ChannelSettingsScreen() {
                   onPress={onPickVideoFile}
                   disabled={videoSaving}
                 >
-                  <Text style={styles.eventSecondaryButtonText}>
+                  <Text style={styles.eventSecondaryButtonText} numberOfLines={2}>
                     {selectedVideoFile?.name ? selectedVideoFile.name : "Choose Video File"}
                   </Text>
                 </TouchableOpacity>
+              ) : null}
+              {selectedVideoFile && !videoEditor.editingVideoId ? (
+                <Text style={styles.videoSelectedFileText} numberOfLines={2}>
+                  Selected: {selectedVideoFile.name || "video file"}
+                </Text>
               ) : null}
               <TextInput
                 style={styles.input}
@@ -1802,15 +1858,23 @@ export default function ChannelSettingsScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+              {videoSubmitRequirement ? (
+                <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
+              ) : null}
               <View style={styles.eventActionRow}>
                 <TouchableOpacity
-                  style={styles.eventPrimaryButton}
+                  style={[styles.eventPrimaryButton, isVideoSubmitDisabled && styles.eventPrimaryButtonDisabled]}
                   onPress={onSaveVideo}
                   activeOpacity={0.88}
-                  disabled={videoSaving}
+                  disabled={isVideoSubmitDisabled}
                 >
                   {videoSaving ? (
-                    <ActivityIndicator color="#fff" />
+                    <View style={styles.eventPrimaryButtonBusyRow}>
+                      <ActivityIndicator color="#fff" />
+                      <Text style={styles.eventPrimaryButtonText}>
+                        {videoEditor.editingVideoId ? "Saving..." : "Uploading..."}
+                      </Text>
+                    </View>
                   ) : (
                     <Text style={styles.eventPrimaryButtonText}>
                       {videoEditor.editingVideoId ? "Update Video" : "Upload Video"}
@@ -2980,6 +3044,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  eventPrimaryButtonDisabled: {
+    backgroundColor: "rgba(220,20,60,0.38)",
+  },
+  eventPrimaryButtonBusyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   eventPrimaryButtonText: {
     color: "#fff",
     fontSize: 13,
@@ -2999,6 +3072,19 @@ const styles = StyleSheet.create({
     color: "#D9E0EE",
     fontSize: 12,
     fontWeight: "800",
+    textAlign: "center",
+  },
+  videoSelectedFileText: {
+    color: "#ACB5C9",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  videoRequirementText: {
+    color: "#F4B4C0",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
   },
   saveButton: {
     borderRadius: 14,
