@@ -1,10 +1,12 @@
 # Profile Channel Content Audit
 
 Date: 2026-04-24
+Updated: 2026-04-25 for creator upload and comment media scope
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
 HEAD audited: `8d6f62fa8e73288d6ed7347076dd5002ad9bb15a`
+HEAD at upload/comment scope update: `2ad56268e3abfb2aa2c322f5943a4a43615790c7`
 
 Unrelated dirty files at audit start:
 
@@ -34,12 +36,17 @@ This audit is documentation only. It does not change product code, schema, Live 
 - `app/(tabs)/index.tsx`
 - `app/title/[id].tsx`
 - `app/player/[id].tsx`
+- `app/chat/[threadId].tsx`
+- `app/watch-party/[partyId].tsx`
+- `app/watch-party/live-stage/[partyId].tsx`
 - `app/admin.tsx`
 - `_lib/userData.ts`
 - `_lib/channelReadModels.ts`
 - `_lib/channelAudience.ts`
 - `_lib/contentEngagement.ts`
 - `_lib/mediaSources.ts`
+- `_lib/chat.ts`
+- `_lib/watchParty.ts`
 - `supabase/database.types.ts`
 - `supabase/migrations/202604190004_baseline_current_schema_truth.sql`
 - `supabase/migrations/202604190005_create_channel_audience_relationships.sql`
@@ -175,6 +182,47 @@ Where content goes today:
 
 Ease assessment: confusing for a normal creator. The app says "channel" and "lineup" clearly, but a creator cannot yet add a video to their channel from the creator-facing route. The only real content creation path is internal/admin URL-entry programming, not a normal upload flow.
 
+## Public V1 Creator Upload Decision
+
+Basic creator video upload is now Public v1 required.
+
+This is separate from advanced creator studio, paid media, subscriber-only media, payouts, native game streaming, and automatic transcoding. Public v1 only needs the smallest honest path that lets a channel owner upload a playable video, describe it, control draft/public visibility, see it on their Profile/Channel, edit or remove it, and open it in the player.
+
+Current upload truth:
+
+- `/channel-settings` has creator-event management but no creator video upload button, picker, progress state, or media manager.
+- `/profile/[userId]` displays channel/programming cues, but it reads public `titles` rows rather than creator-owned `videos`.
+- `/admin` can create platform `titles` by URL. That is internal programming, not creator upload.
+- `app/player/[id].tsx` can play a remote URL through title `video_url`, so the player can likely support uploaded media after a source-kind/read-model bridge.
+- `_lib/mediaSources.ts` maps title `video_url`, `preview_video_url`, `poster_url`, and `thumbnail_url`; it does not map `videos.playback_url` or `videos.thumb_url`.
+- The `videos` table exists and can be the base table, but it is not ready as-is for Public v1.
+
+`videos` table readiness:
+
+- Usable foundation: `id`, `owner_id`, `title`, `description`, `playback_url`, `thumb_url`, and owner insert/update/delete policies already exist in checked-in schema truth.
+- Missing Public v1 fields: visibility/status, draft/public state, category or genre, storage object path, thumbnail storage path, updated timestamp, optional duration/mime/file-size metadata, and moderation/reportability hooks.
+- Current risk: the checked-in RLS policy `"Public videos readable"` uses `true`, which is incompatible with draft/private uploads. Public v1 must change public reads to public videos only while preserving owner access to their own draft/private videos.
+- Missing storage truth: no repo-owned Supabase Storage bucket or storage RLS migration was found for creator videos/thumbnails, and no `supabase.storage.from(...)` upload path exists in app code.
+
+Smallest safe Public v1 upload requirements:
+
+1. Owner entry point from `/channel-settings`, with a clear `Upload Video` or `Add Video` action and an owner-only Profile empty-state CTA.
+2. Upload form with video file picker, title, description, optional thumbnail or fallback, optional category/genre, draft/public visibility, creator `owner_id`, and Profile/Channel linkage through that owner id.
+3. Storage/backend lane with repo-owned bucket/policy migrations, video metadata rows, owner CRUD, public read for public videos only, and no token/secret exposure.
+4. Profile/Channel display where public uploaded videos appear for visitors, owner drafts are visible only to the owner, public empty state stays premium, and owner empty state points to upload.
+5. Player integration for uploaded media URLs. Watch-Party Live should be disabled or explicitly unsupported for uploaded videos until uploaded-video room ownership is designed; do not fake it.
+6. Creator management for edit metadata, unpublish/draft, and delete. No placeholder manage button.
+
+Recommended implementation order:
+
+1. Add schema/storage migration for creator video visibility, storage paths, thumbnail paths, updated timestamps, and RLS that distinguishes owner drafts from public videos.
+2. Regenerate Supabase types.
+3. Add a narrow `_lib/creatorVideos.ts` read/write/upload helper that owns `videos` access and storage paths.
+4. Add `/channel-settings` upload/manage UI using that helper.
+5. Add `/profile/[userId]` creator-video read model and owner/public empty states.
+6. Add player support for uploaded video source kind.
+7. Add report/delete/unpublish polish and only then consider Watch-Party support for uploaded videos.
+
 ## Viewer Content Experience
 
 Already working or partly working:
@@ -276,6 +324,43 @@ Storage:
 - No active `supabase.storage.from(...)` media upload flow was found in app code.
 - Current media entry uses URL fields, local assets, and fallback media rather than first-party storage uploads.
 
+## Comment Uploads Scope
+
+Main decision: comment media upload is post-v1 unless a future pass discovers a mostly complete implementation outside the checked-in code audited here. It is separate from creator channel video upload and should not block the Public v1 creator-upload lane.
+
+Current comment truth:
+
+- Watch-party room comments use `watch_party_room_messages` with `party_id`, `user_id`, `username`, `text`, and `created_at`.
+- Live Stage comments use the same `watch_party_room_messages` table through `_lib/watchParty.ts` and `app/watch-party/live-stage/[partyId].tsx`.
+- Player room comments use `sendPartyMessage(...)` and `fetchPartyMessages(...)`; they are text-only room messages.
+- Chi'lly Chat direct messages use `chat_messages` with a `message_type = 'text'` check. `_lib/chat.ts` inserts only text, and `app/chat/[threadId].tsx` explicitly says media and reactions are not live yet.
+- Reactions exist as emoji/floating room reactions and content relationship markers, not as comment attachments.
+- There is no comment/reply table for universal Profile, Channel, Title, or VOD comments outside room/live/chat contexts.
+- There is no attachment table, comment media bucket, storage policy, media picker, upload helper, thumbnail path, moderation queue, or RLS path for comment media.
+- `safety_reports` exists for `participant`, `room`, and `title`, but not for `comment`, `message`, or `attachment` targets in the checked-in baseline constraint.
+
+Public v1 recommendation:
+
+- Keep text comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, player room comments, Chi'lly Chat text, and existing reactions.
+- Prioritize creator video upload to Channel/Profile before comment media.
+- Do not allow full video uploads in live comments for Public v1.
+- Do not add comment media UI until schema, storage, rate limits, moderation, deletion, and report targets exist.
+
+Later comment media scope:
+
+- Start with images in non-live surfaces, then consider short clips or voice notes with strict type, size, duration, and rate limits.
+- Live comments should remain fast and safe. Full video uploads in live comments should be disallowed or heavily restricted even after v1.
+- Required later pieces: canonical comment/thread tables or a deliberate extension of room/chat messages, `comment_attachments` or `message_attachments`, a `comment-media` storage bucket, owner/member/public RLS, moderation status, report target types for comment/message/attachment, delete/takedown paths, file scanning, thumbnail generation, and client upload progress/error states.
+
+Later implementation order:
+
+1. Finish Public v1 creator video upload first.
+2. Decide whether Public v1 needs any universal text comments outside rooms/chat.
+3. Design comment/thread/attachment ownership and report targets.
+4. Add storage/RLS and moderation for image attachments.
+5. Add non-live image comments first.
+6. Re-evaluate short clips or voice notes after moderation proof.
+
 ## Public V1 Decision
 
 ### A. Already Working
@@ -293,25 +378,29 @@ Storage:
 
 ### B. Must Fix Before Public V1
 
-- Make the creator "add content" truth explicit in-product. Either hide/soften channel shelf prompts that imply self-serve content upload, or add a small honest creator content manager lane backed by current schema.
-- Decide whether public v1 content is platform-programmed only or creator-upload capable. The current UI language leans creator-channel, but the data path is platform `titles`.
-- Connect or intentionally defer the `videos` table. It currently looks like creator-owned media schema, but is not part of the route experience.
+- Add basic creator video upload for Profile/Channel. A mini streaming platform needs owner-uploaded playable videos for Public v1.
+- Connect the `videos` table through repo-owned schema/storage/RLS, creator upload UI, Profile/Channel display, and player support.
+- Fix `videos` visibility ownership before public upload ships. Public read-all is not compatible with draft/private videos.
+- Add creator management for edit metadata, unpublish/draft, and delete.
+- Make Watch-Party support for uploaded videos truthful: either supported through a real uploaded-video room link or clearly disabled until implemented.
 - Add a normal-user explanation of where Profile ends and Channel begins, because the public route is unified and there is no separate `/channel` URL.
 
 ### C. Should Improve Before Public V1 If Easy
 
-- Add a clear empty-state CTA in Profile Content/owner mode that points to the truthful current action: schedule a live event, manage channel basics, or "content upload coming later".
+- Add a clear owner-only Profile Content empty-state CTA that points to creator upload once implemented.
 - Add remote `poster_url` display support on Title Detail hero so remote-programmed titles look premium without requiring local assets.
-- Make Channel Settings "Content" panel say explicitly that upload/shelf management is not live yet.
+- Make Channel Settings "Content" panel become the upload/manage lane, or explicitly point to the upload lane if it is split out.
 - Add a visible public follow/unfollow action only if the existing `channelAudience` helpers are intentionally ready for viewer use.
 - Add clearer "platform programmed" vs "creator uploaded" language wherever `titles` drives a channel shelf.
+- Keep text comments/reactions polished where they already exist.
 
 ### D. Later Phase / Do Not Build Now
 
 - Native Chi'llywood game/video streaming.
 - Full creator mini-platform builder.
 - Drag/drop channel shelves and full visual theming.
-- Native VOD upload pipeline, transcoding, thumbnails, and moderation queue.
+- Advanced creator studio, automatic transcoding, moderation queue automation, paid media, subscriber-only media, and payouts.
+- Comment media upload, including images, short clips, and voice notes.
 - Subscriber-only creator media and creator payout surfaces.
 - Full creator analytics for profile visits, content launches, retention, conversion, and gated views.
 - Public VIP/mod/co-host audience roles.
@@ -361,10 +450,11 @@ Phase recommendation: post-v1 or later. It should not block public v1 if Profile
 
 ## Recommended Next Fix Order
 
-1. Product copy and empty-state cleanup: make Profile Content and Channel Settings Content truthful about current platform-programmed titles vs future creator upload.
-2. Decide public v1 content ownership: platform `titles` only, or creator `videos` integration.
-3. If creator upload is in public v1, create a narrow `videos`-backed content manager in `/channel-settings` before any visual redesign.
-4. If creator upload is not in public v1, hide upload implications and keep content as programmed titles plus live events.
-5. Improve Title Detail remote art support using existing `poster_url`/`thumbnail_url`.
-6. Add storage bucket/policy migrations only when upload is actually implemented.
-7. Defer native game/video streaming until after public v1 proof and Live Stage stability remain clean.
+1. Public v1 creator upload schema/storage lane: extend `videos`, add storage bucket/policies, fix public-vs-owner RLS, and regenerate types.
+2. Add `_lib/creatorVideos.ts` as the single creator-video read/write/upload owner.
+3. Add `/channel-settings` upload/manage UI with draft/public, edit, unpublish, and delete.
+4. Add Profile/Channel uploaded-video display and owner/public empty states.
+5. Add player support for uploaded video source kind.
+6. Improve Title Detail remote art support using existing `poster_url`/`thumbnail_url`.
+7. Keep comment media post-v1; continue only text comments/reactions where already backed.
+8. Defer native game/video streaming until after public v1 proof and Live Stage stability remain clean.
