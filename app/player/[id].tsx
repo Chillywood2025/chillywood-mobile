@@ -3526,18 +3526,21 @@ export default function PlayerScreen() {
     return buildLocalPlayerTitle(chosen);
   }, [expectsCreatorVideo, item, localTitle, fallbackTitle]);
 
+  const isCreatorVideoPlayback = playbackSourceKind === "creator-video" || expectsCreatorVideo;
   const source = useMemo(() => {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
+    if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
-  }, [displayItem?.video, displayItem?.video_url, fallbackVideo]);
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, isCreatorVideoPlayback]);
   const sharedPartyResolvedSource = useMemo(() => {
     if (!inWatchParty) return source;
     if (displayItem?.video_url && displayItem.video_url.trim()) {
       return { uri: displayItem.video_url.trim() };
     }
     if (titleLoading) return null;
+    if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
-  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, source, titleLoading]);
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, isCreatorVideoPlayback, source, titleLoading]);
   const [playbackSource, setPlaybackSource] = useState<any>(() =>
     typeof sharedPartyResolvedSource === "number" ? null : sharedPartyResolvedSource,
   );
@@ -3579,6 +3582,7 @@ export default function PlayerScreen() {
       cancelled = true;
     };
   }, [sharedPartyResolvedSource]);
+  const isCreatorVideoPlaybackUnavailable = isCreatorVideoPlayback && !titleLoading && !source;
   const frameworkBackgroundSource = useMemo<ImageSourcePropType | null>(() => {
     const poster = String((displayItem as any)?.poster_url ?? "").trim();
     if (poster) return { uri: poster };
@@ -5194,8 +5198,13 @@ export default function PlayerScreen() {
                 )
               ) : (
                 <View style={styles.videoLoadingFallback}>
-                  <ActivityIndicator color={ACCENT} />
-                  <Text style={styles.videoLoadingText}>Preparing video…</Text>
+                  {isCreatorVideoPlaybackUnavailable ? null : <ActivityIndicator color={ACCENT} />}
+                  <Text style={styles.videoLoadingText}>
+                    {isCreatorVideoPlaybackUnavailable ? "Creator video unavailable" : "Preparing video..."}
+                  </Text>
+                  {isCreatorVideoPlaybackUnavailable ? (
+                    <Text style={styles.videoLoadingSubtext}>This upload does not have a playable source yet.</Text>
+                  ) : null}
                 </View>
               )}
             </Animated.View>
@@ -5796,6 +5805,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     letterSpacing: 0.2,
+  },
+  videoLoadingSubtext: {
+    color: "#8D97AA",
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+    maxWidth: 260,
+    textAlign: "center",
   },
   video: {
     width: "100%",
