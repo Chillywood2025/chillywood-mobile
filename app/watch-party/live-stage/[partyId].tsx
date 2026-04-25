@@ -3316,10 +3316,15 @@ export default function WatchPartyLiveStageScreen() {
   );
 
   debugLog("live-stage", "render branch", {
+    route: "/watch-party/live-stage/[partyId]",
     loading,
     partyId,
+    roomCode: room?.roomCode ?? partyId,
+    mode: stageMode,
+    liveSurface,
     participants: participants.length,
     displayParticipants: displayParticipants.length,
+    liveKitRoomName: liveKitJoinContract?.roomName ?? null,
   });
 
   if (authLoading || betaLoading) {
@@ -3581,6 +3586,7 @@ export default function WatchPartyLiveStageScreen() {
           />
         ) : null}
 
+        {stageOverlayVisible ? (
         <Animated.View
           style={[
             styles.stageOverlayPanelWrap,
@@ -3589,7 +3595,7 @@ export default function WatchPartyLiveStageScreen() {
               transform: [{ translateY: stageOverlayTranslate }],
             },
           ]}
-          pointerEvents={stageOverlayVisible ? "box-none" : "none"}
+          pointerEvents="box-none"
           collapsable={false}
           renderToHardwareTextureAndroid
         >
@@ -3987,6 +3993,7 @@ export default function WatchPartyLiveStageScreen() {
         {renderStageOverlayUtilitySheets()}
         {renderStageLowerDock()}
         </Animated.View>
+        ) : null}
         </>
         </ConditionalWrap>
         ) : null}
