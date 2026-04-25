@@ -84,7 +84,6 @@ import { getProtectedSessionCopy } from "../../../components/prototype/protected
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
 import {
-  LiveKitStageMediaSurface,
   patchLiveKitSignalReadingLoop,
 } from "../../../components/watch-party-live/livekit-stage-media-surface";
 import {
@@ -301,10 +300,12 @@ function LiveKitHybridParticipantVideo({
 function LiveKitHybridHeroVideo({
   fallbackInitial,
   participantRole,
+  preferLocalHero,
   roomName,
 }: {
   fallbackInitial: string;
   participantRole: LiveKitTokenReady["participantRole"];
+  preferLocalHero: boolean;
   roomName: string;
 }) {
   const connectionState = useHybridLiveKitConnectionState();
@@ -338,12 +339,12 @@ function LiveKitHybridHeroVideo({
   }, [cameraTrack, localParticipant, shouldPublishLocalCamera]);
   const primaryTrack = useMemo(
     () => {
-      if (shouldPublishLocalCamera && localCameraTrackRef) {
+      if (preferLocalHero && shouldPublishLocalCamera && localCameraTrackRef) {
         return localCameraTrackRef;
       }
       return primaryRemoteTrack ?? localCameraTrackRef;
     },
-    [localCameraTrackRef, primaryRemoteTrack, shouldPublishLocalCamera],
+    [localCameraTrackRef, preferLocalHero, primaryRemoteTrack, shouldPublishLocalCamera],
   );
   const visibleTrackCount = (localCameraTrackRef ? 1 : 0) + remoteTracks.length;
 
@@ -352,6 +353,7 @@ function LiveKitHybridHeroVideo({
       surfaceLabel: "Hybrid Live Stage",
       roomName,
       participantRole,
+      preferLocalHero,
       shouldPublishLocalCamera,
       hasLocalCameraTrack: !!cameraTrack,
       hasRemoteTrack: !!primaryRemoteTrack,
@@ -365,6 +367,7 @@ function LiveKitHybridHeroVideo({
     connectionState,
     lastCameraError?.message,
     participantRole,
+    preferLocalHero,
     primaryRemoteTrack,
     remoteTracks.length,
     roomName,
@@ -3477,7 +3480,7 @@ export default function WatchPartyLiveStageScreen() {
 
         {!isLiveRoomSurface ? (
         <ConditionalWrap
-          condition={!!(isHybridMode && shouldRenderLiveKitStage && liveKitJoinContract)}
+          condition={!!(shouldRenderLiveKitStage && liveKitJoinContract)}
           wrap={(children) => (
             <LiveKitHybridCommunityRoomHost
               joinContract={liveKitJoinContract as LiveKitTokenReady}
@@ -3498,21 +3501,12 @@ export default function WatchPartyLiveStageScreen() {
           collapsable={false}
         >
           {shouldRenderLiveKitStage && liveKitJoinContract ? (
-            isHybridMode ? (
-              <LiveKitHybridHeroVideo
-                fallbackInitial={heroFallbackInitial}
-                participantRole={liveKitJoinContract.participantRole}
-                roomName={liveKitJoinContract.roomName}
-              />
-            ) : (
-              <View style={styles.stageHeroMediaFill}>
-                <LiveKitStageMediaSurface
-                  joinContract={liveKitJoinContract}
-                  onFallback={onLiveKitStageFallback}
-                  publishLocalAudio={publishLocalStageAudio}
-                />
-              </View>
-            )
+            <LiveKitHybridHeroVideo
+              fallbackInitial={heroFallbackInitial}
+              participantRole={liveKitJoinContract.participantRole}
+              preferLocalHero={isHost}
+              roomName={liveKitJoinContract.roomName}
+            />
           ) : isHybridMode ? (
             <View style={styles.stageHeroFallback}>
               <Text style={styles.stageHeroFallbackInitial}>{heroFallbackInitial}</Text>
