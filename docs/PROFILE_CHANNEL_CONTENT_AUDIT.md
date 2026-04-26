@@ -186,6 +186,7 @@ What now exists for normal creators:
 - Profile/Channel display for uploaded videos
 - Player support for uploaded videos through `source=creator-video`
 - edit, publish/unpublish, delete, and open Player controls for the owner
+- creator-video report intake from Player, admin hide/remove/restore status, and public playback/list filtering for moderated videos
 
 What still does not exist for normal creators:
 
@@ -218,14 +219,14 @@ Current upload truth after foundation:
 - `/admin` can create platform `titles` by URL. That is internal programming, not creator upload.
 - `app/player/[id].tsx` supports uploaded creator videos through `/player/[id]?source=creator-video`.
 - `_lib/creatorVideos.ts` is the creator-video read/write/upload owner.
-- Android runtime proof is pending.
+- Android upload/player proof exists for the initial upload and standalone Player path; public/draft, non-owner, report, admin moderation, and live Supabase/RLS proof remain pending.
 
 `videos` table readiness:
 
-- Implemented foundation: `visibility`, `storage_path`, `thumb_storage_path`, `mime_type`, `file_size_bytes`, and `updated_at`.
-- RLS policy intent now distinguishes public videos from owner drafts.
-- `creator-videos` private storage bucket and owner/public storage policy intent are in the repo migration.
-- Still missing: category/genre, thumbnail file upload, moderation/reportability hooks, transcoding, and Android/runtime proof.
+- Implemented foundation: `visibility`, `storage_path`, `thumb_storage_path`, `mime_type`, `file_size_bytes`, `updated_at`, and `moderation_status` with admin moderation metadata.
+- RLS policy intent now distinguishes public clean/reported videos from owner drafts and hidden/removed/banned videos.
+- `creator-videos` private storage bucket and owner/public storage policy intent are in the repo migrations.
+- Still missing: category/genre, thumbnail file upload, transcoding, and live Supabase/RLS proof.
 
 Smallest safe Public v1 upload requirements:
 
@@ -242,7 +243,7 @@ Recommended remaining implementation order:
 2. Connect Android device and run runtime proof.
 3. Rebuild dev client if `expo-document-picker` requires it.
 4. Verify upload, metadata save, Profile/Channel display, Player playback, and public/draft visibility.
-5. Add report/moderation polish after runtime proof.
+5. Verify creator-video report intake, admin hide/remove/restore, and hidden/removed public/player blocking against live Supabase/RLS.
 6. Consider Watch-Party support only after uploaded-video room linking is designed.
 
 ## Viewer Content Experience
@@ -476,7 +477,8 @@ Phase recommendation: post-v1 or later. It should not block public v1 if Profile
 2. Connect Android hardware and run creator upload runtime proof.
 3. Rebuild the dev client if `expo-document-picker` requires it.
 4. Verify owner upload controls, public/draft visibility, Profile/Channel display, Player playback, edit, unpublish, and delete.
-5. Add thumbnail file upload, category/genre metadata, and report/moderation hooks after proof.
-6. Improve Title Detail remote art support using existing `poster_url`/`thumbnail_url`.
-7. Keep comment media post-v1; continue only text comments/reactions where already backed.
-8. Defer native game/video streaming until after public v1 proof and Live Stage stability remain clean.
+5. Prove live Supabase/RLS for creator videos, creator-video reports, moderation status, and premium entitlements.
+6. Add thumbnail file upload and category/genre metadata after proof.
+7. Improve Title Detail remote art support using existing `poster_url`/`thumbnail_url`.
+8. Keep comment media post-v1; continue only text comments/reactions where already backed.
+9. Defer native game/video streaming until after public v1 proof and Live Stage stability remain clean.

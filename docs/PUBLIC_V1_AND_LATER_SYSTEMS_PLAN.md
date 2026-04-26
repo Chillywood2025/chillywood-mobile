@@ -516,6 +516,7 @@ Current route/surface owners:
 Current helper/component owners:
 
 - `_lib/monetization.ts`: monetization snapshot, entitlement target definitions, creator permissions, title access evaluation, room access resolution hooks, purchase/restore helpers.
+- `_lib/premiumEntitlements.ts`: backend-trusted entitlement reads for active/expired/revoked/pending account access.
 - `_lib/revenuecat.ts`: RevenueCat configuration, customer info, offerings, purchases, restore, manage subscription handoff.
 - `_lib/roomRules.ts`: room-level access decision for join policy and premium/party-pass content access.
 - `_lib/watchParty.ts`: watch-party room persistence and room policy data.
@@ -524,13 +525,14 @@ Current helper/component owners:
 Suggested future helper owners:
 
 - `_lib/accessGate.ts`: one shared resolver for route/content/room/event gate state.
-- `_lib/premiumEntitlements.ts`: backend-trusted entitlement reads once server entitlement writes exist.
 - `_lib/subscriptionStatus.ts`: normalized user subscription/restore status.
 
 Current backend owners:
 
-- `user_subscriptions`: current simple `free` / `premium` row truth.
-- `watch_party_pass_unlocks`: current room-level party pass unlock rows.
+- `user_entitlements`: backend-trusted account entitlement rows for `premium`, `premium_watch_party`, `premium_live`, and `paid_content`, including active/expired/canceled/revoked/pending state.
+- `billing_events`: operator-backed billing/entitlement event audit anchor until real store receipt validation is fully wired.
+- `user_subscriptions`: legacy `free` / `premium` row truth kept readable for compatibility, but ordinary users must not self-write it to unlock protected access.
+- `watch_party_pass_unlocks`: legacy room-level party pass rows kept readable for compatibility, but ordinary users must not self-write them to unlock protected access.
 - `creator_permissions`: creator ability to use premium rooms, party-pass rooms, premium titles, sponsor/ad hooks.
 - `app_configurations`: runtime feature/config posture.
 - `titles.content_access_rule`: platform/admin title access truth.
@@ -538,10 +540,8 @@ Current backend owners:
 
 Suggested future backend owners:
 
-- `user_entitlements`
 - `subscription_receipts`
 - `premium_access_grants`
-- `billing_events`
 - backend receipt-validation edge function or API
 
 Relationship to Billing / Subscription:
@@ -732,8 +732,8 @@ Current route/surface owners:
 - `app/admin.tsx`: operator/admin visibility, platform title programming, bounded safety report queue, role-aware review access.
 - `app/profile/[userId].tsx`: profile/channel report entry.
 - `app/title/[id].tsx`: title report entry.
-- `app/player/[id].tsx`: playback unavailable states and creator-video not-ready states.
-- `app/channel-settings.tsx`: creator/channel safety summary, not global moderation queue.
+- `app/player/[id].tsx`: playback unavailable states, creator-video not-ready states, and creator-video report entry.
+- `app/channel-settings.tsx`: creator/channel safety summary, moderated creator-video status display, and owner management constraints, not global moderation queue.
 - `app/watch-party/[partyId].tsx`: Party Room report entry.
 - `app/watch-party/live-stage/[partyId].tsx`: Live Room report entry.
 - `app/chat/[threadId].tsx`: direct-thread report context where supported.
@@ -752,10 +752,11 @@ Suggested future helpers:
 
 Current backend owners:
 
-- `safety_reports`
+- `safety_reports`, including `creator_video` targets for uploaded creator videos.
 - `platform_role_memberships`
 - `channel_audience_blocks`
-- `videos` owner/public visibility fields
+- `videos` owner/public visibility fields plus `moderation_status`, `moderated_at`, `moderated_by`, and `moderation_reason`.
+- `creator-videos` storage select policy tied to public clean/reported `videos` rows or object owner access.
 
 Suggested future backend owners:
 
@@ -765,7 +766,6 @@ Suggested future backend owners:
 - `user_blocks`
 - `channel_bans`
 - `admin_audit_log`
-- video moderation fields
 - comment reports
 - room reports
 - live stream reports
@@ -1648,8 +1648,8 @@ Recommendation:
 
 ### Creator Media + Moderation
 
-- Uploaded videos need report/removal/unpublish.
-- `moderation_status` affects public visibility and player access when built.
+- Uploaded videos now support report intake, creator unpublish/delete, and owner/operator hide/remove/restore status.
+- `moderation_status` affects public visibility and player access for creator uploads.
 - Owner draft/public visibility is not enough for platform takedown.
 - Creator cannot bypass admin removal.
 

@@ -3,6 +3,8 @@
 ## Exact Next Task
 Complete the remaining Creator Media public/draft and owner/non-owner runtime checks.
 
+Also apply/prove the new Public v1 hardening migrations in a live Supabase environment: `202604260001_billing_entitlement_foundation.sql` and `202604260002_creator_video_moderation_foundation.sql`. Local Supabase/RLS proof was attempted with Supabase CLI `2.75.0`, but `supabase status` could not connect to Docker, so current RLS proof is static-only.
+
 The foundation is implemented in code and static validation passed. Android proof on device `R5CT30GM6NY` now confirms `/channel-settings` opens, the owner Content panel renders, the native Android file picker opens from `Choose Video File`, selected file name appears, Upload visibly enters an uploading state, and metadata/storage save succeeds for creator video `f6a5c96a-812a-4132-8a2b-e3ecab51c983` in the private `creator-videos` bucket path. Human device proof also confirmed tapping an uploaded video card opens the standalone Player for the creator video rather than the platform/admin title surface or bundled sample fallback. The follow-up Player proof confirmed `/player/5cf469eb-d375-436a-861a-e82ece5cc47d?source=creator-video` uses the same premium Player shell as `/player/t1`, resolves the uploaded creator-video source as `remote`, does not log signed URLs, does not fall back to sample/platform media, and keeps Watch-Party Live blocked with honest not-ready copy.
 
 ## Current Plan
@@ -13,7 +15,10 @@ The foundation is implemented in code and static validation passed. Android proo
 5. Publish the video and confirm it appears for public/non-owner viewers on Profile/Channel.
 6. Confirm creator can edit metadata, publish/unpublish, and delete.
 7. Confirm a non-owner cannot manage another creator's video.
-8. Re-check uploaded card Player routing only if a later edit touches Player, Profile cards, Channel Settings cards, or creator-video source resolution.
+8. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
+9. As owner/operator, hide/remove a creator video from `/admin` and confirm it no longer appears publicly or plays publicly.
+10. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
+11. Re-check uploaded card Player routing only if a later edit touches Player, Profile cards, Channel Settings cards, or creator-video source resolution.
 
 ## Scope
 This proof lane should:
@@ -49,7 +54,10 @@ The lane is successful when:
 - upload saves video metadata and storage object
 - public videos appear on Profile/Channel for public viewers
 - draft videos stay owner-only
+- hidden/removed creator videos stay unavailable publicly and in Player
 - uploaded videos open and play in Player with `source=creator-video`
+- creator-video reports create real safety report rows
+- premium/protected access uses backend entitlement or RevenueCat truth, not local-only cache
 - creator management actions work for owner and are denied for non-owner
 - Watch-Party Live for uploaded videos remains honestly blocked until a real linking pass
 - no comment media upload, native game streaming, monetization, payout, or transcoding scope is introduced
