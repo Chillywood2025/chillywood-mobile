@@ -1053,6 +1053,10 @@ export type Database = {
           file_size_bytes: number | null
           id: string
           mime_type: string | null
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_reason: string | null
+          moderation_status: string
           owner_id: string
           playback_url: string | null
           storage_path: string | null
@@ -1068,6 +1072,10 @@ export type Database = {
           file_size_bytes?: number | null
           id?: string
           mime_type?: string | null
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
           owner_id: string
           playback_url?: string | null
           storage_path?: string | null
@@ -1083,6 +1091,10 @@ export type Database = {
           file_size_bytes?: number | null
           id?: string
           mime_type?: string | null
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
           owner_id?: string
           playback_url?: string | null
           storage_path?: string | null

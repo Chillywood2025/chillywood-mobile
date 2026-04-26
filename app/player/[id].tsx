@@ -87,10 +87,16 @@ import {
 } from "../../_lib/watchParty";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
+import { ReportSheet } from "../../components/safety/report-sheet";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
 import { LiveKitStageMediaSurface } from "../../components/watch-party-live/livekit-stage-media-surface";
+import {
+    buildSafetyReportContext,
+    submitSafetyReport,
+    type SafetyReportCategory,
+} from "../../_lib/moderation";
 import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/_room-shared";
 
 const ACCENT = "#DC143C";
@@ -393,6 +399,9 @@ type StandalonePlayerTopChromeProps = {
   canMarkShared: boolean;
   onToggleShare: () => void;
   onWatchParty: () => void;
+  canReport: boolean;
+  reportBusy: boolean;
+  onReport: () => void;
   speedMenuOpen: boolean;
   onSelectRate: (rate: number) => void;
 };
@@ -416,6 +425,9 @@ function StandalonePlayerTopChrome({
   canMarkShared,
   onToggleShare,
   onWatchParty,
+  canReport,
+  reportBusy,
+  onReport,
   speedMenuOpen,
   onSelectRate,
 }: StandalonePlayerTopChromeProps) {
@@ -479,6 +491,16 @@ function StandalonePlayerTopChrome({
                   <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
                     {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
                   </Text>
+                </TouchableOpacity>
+              ) : null}
+              {canReport ? (
+                <TouchableOpacity
+                  style={[styles.compactChip, reportBusy && styles.secondaryBtnDisabled]}
+                  onPress={onReport}
+                  disabled={reportBusy}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.compactChipText}>{reportBusy ? "Sending..." : "Report"}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -644,6 +666,8 @@ export default function PlayerScreen() {
   const [engagementState, setEngagementState] = useState<TitleEngagementState | null>(null);
   const [engagementLoading, setEngagementLoading] = useState(false);
   const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
+  const [creatorVideoReportVisible, setCreatorVideoReportVisible] = useState(false);
+  const [creatorVideoReportBusy, setCreatorVideoReportBusy] = useState(false);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
@@ -2750,6 +2774,45 @@ export default function PlayerScreen() {
     console.log("WATCH PARTY: room creation failed, fallback to /watch-party");
     router.push("/watch-party");
   }, [isPlaying, playbackSourceKind, titleId, item?.id, item?.title, localTitle, fallbackTitle]);
+
+  const onSubmitCreatorVideoReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
+    if (playbackSourceKind !== "creator-video" || !titleId || creatorVideoReportBusy) return;
+
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in before sending a creator-video safety report.");
+      return;
+    }
+
+    setCreatorVideoReportBusy(true);
+    try {
+      await submitSafetyReport({
+        targetType: "creator_video",
+        targetId: titleId,
+        category: input.category,
+        note: input.note,
+        titleId: null,
+        context: buildSafetyReportContext({
+          sourceSurface: "player",
+          sourceRoute: `/player/${titleId}?source=creator-video`,
+          targetLabel: item?.title ?? "Creator video",
+          targetRoleLabel: "Creator video",
+          platformOwnedTarget: false,
+          context: {
+            sourceKind: "creator-video",
+          },
+        }),
+      });
+      setCreatorVideoReportVisible(false);
+      Alert.alert("Report sent", "Thanks. Chi'llywood moderation can review this creator video.");
+    } catch (error) {
+      Alert.alert(
+        "Report unavailable",
+        error instanceof Error ? error.message : "Unable to send this report right now.",
+      );
+    } finally {
+      setCreatorVideoReportBusy(false);
+    }
+  }, [creatorVideoReportBusy, isSignedIn, item?.title, playbackSourceKind, titleId]);
 
   const onReturnToPartyRoom = useCallback(() => {
     if (!partyId) {
@@ -5269,6 +5332,17 @@ export default function PlayerScreen() {
               />
             ) : null}
 
+            <ReportSheet
+              visible={creatorVideoReportVisible}
+              title="Report creator video"
+              description="Send this uploaded video to Chi'llywood moderation review."
+              busy={creatorVideoReportBusy}
+              onSubmit={onSubmitCreatorVideoReport}
+              onClose={() => {
+                if (!creatorVideoReportBusy) setCreatorVideoReportVisible(false);
+              }}
+            />
+
             {seekFeedback ? (
               <Animated.View style={[styles.seekFeedback, { opacity: seekFeedbackOpacity }]}> 
                 <Text style={styles.seekFeedbackText}>{seekFeedback}</Text>
@@ -5371,6 +5445,9 @@ export default function PlayerScreen() {
                 canMarkShared={canMarkStandaloneShared}
                 onToggleShare={onToggleStandaloneShare}
                 onWatchParty={onWatchParty}
+                canReport={isCreatorVideoPlayback}
+                reportBusy={creatorVideoReportBusy}
+                onReport={() => setCreatorVideoReportVisible(true)}
                 speedMenuOpen={speedMenuOpen}
                 onSelectRate={onSelectRate}
               />

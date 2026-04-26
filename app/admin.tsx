@@ -55,6 +55,7 @@ import {
   type TitleAccessRule,
 } from "../_lib/monetization";
 import { supabase } from "../_lib/supabase";
+import { moderateCreatorVideo, type CreatorVideoModerationStatus } from "../_lib/creatorVideos";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 
 type TitleId = Database["public"]["Tables"]["titles"]["Row"]["id"];
@@ -457,6 +458,9 @@ export default function AdminStudioScreen() {
   const [safetyReportQueueSummary, setSafetyReportQueueSummary] = useState<SafetyReportQueueSummary | null>(null);
   const [safetyReportsLoading, setSafetyReportsLoading] = useState(false);
   const [moderationNotice, setModerationNotice] = useState<string | null>(null);
+  const [creatorVideoModerationId, setCreatorVideoModerationId] = useState("");
+  const [creatorVideoModerationReason, setCreatorVideoModerationReason] = useState("");
+  const [creatorVideoModerationBusy, setCreatorVideoModerationBusy] = useState<CreatorVideoModerationStatus | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
   const [form, setForm] = useState<EditorForm>({
     title: "",
@@ -506,6 +510,9 @@ export default function AdminStudioScreen() {
       setSafetyReports([]);
       setSafetyReportsLoading(false);
       setModerationNotice(null);
+      setCreatorVideoModerationId("");
+      setCreatorVideoModerationReason("");
+      setCreatorVideoModerationBusy(null);
       setAdminOpsNotice(null);
       return;
     }
@@ -1071,6 +1078,37 @@ export default function AdminStudioScreen() {
       setSafetyReportsLoading(false);
     }
   }, []);
+
+  const applyCreatorVideoModeration = useCallback(async (status: CreatorVideoModerationStatus) => {
+    const videoId = creatorVideoModerationId.trim();
+    if (!videoId || creatorVideoModerationBusy || !canManagePrivilegedWrites) return;
+
+    try {
+      setCreatorVideoModerationBusy(status);
+      setModerationNotice(null);
+      await moderateCreatorVideo({
+        videoId,
+        moderationStatus: status,
+        reason: creatorVideoModerationReason,
+      });
+      setCreatorVideoModerationReason("");
+      setModerationNotice(`Creator video ${videoId} is now ${status.replace("_", " ")}.`);
+      if (canReviewSafetyReports) {
+        void loadSafetyReports();
+      }
+    } catch (err: any) {
+      setModerationNotice(err?.message ?? "Unable to update creator video moderation status.");
+    } finally {
+      setCreatorVideoModerationBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    canReviewSafetyReports,
+    creatorVideoModerationBusy,
+    creatorVideoModerationId,
+    creatorVideoModerationReason,
+    loadSafetyReports,
+  ]);
 
   const loadStaffAndAuditVisibility = useCallback(async () => {
     const canViewStaffRoles = canManagePrivilegedWrites;
@@ -1757,6 +1795,64 @@ export default function AdminStudioScreen() {
               <Text style={styles.noticeText}>{moderationNotice}</Text>
             </View>
           ) : null}
+
+          {canManagePrivilegedWrites ? (
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Creator video safety action</Text>
+                <Text style={styles.configListBody}>
+                  Hide, remove, or restore an uploaded creator video by id. This is backed by `videos.moderation_status`, not a fake review control.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Creator video id"
+                  placeholderTextColor="#8d8d8d"
+                  value={creatorVideoModerationId}
+                  onChangeText={setCreatorVideoModerationId}
+                  autoCapitalize="none"
+                />
+                <TextInput
+                  style={[styles.input, styles.multiline]}
+                  placeholder="Reason for audit context"
+                  placeholderTextColor="#8d8d8d"
+                  value={creatorVideoModerationReason}
+                  onChangeText={setCreatorVideoModerationReason}
+                  multiline
+                />
+                <View style={styles.actionsRow}>
+                  {(["hidden", "removed", "clean"] as const).map((status) => {
+                    const busy = creatorVideoModerationBusy === status;
+                    const disabled = !creatorVideoModerationId.trim() || creatorVideoModerationBusy !== null;
+                    return (
+                      <TouchableOpacity
+                        key={status}
+                        style={[status === "clean" ? styles.actionBtn : styles.actionBtnPrimary, disabled && styles.configSaveBtnDisabled]}
+                        onPress={() => void applyCreatorVideoModeration(status)}
+                        disabled={disabled}
+                      >
+                        {busy ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Text style={status === "clean" ? styles.actionText : styles.actionTextPrimary}>
+                            {status === "clean" ? "Restore Clean" : status === "hidden" ? "Hide" : "Remove"}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Creator video safety actions locked</Text>
+                <Text style={styles.configListBody}>
+                  Reports can be reviewed by moderation roles, but creator-video hide/remove writes require owner or operator truth.
+                </Text>
+              </View>
+            </View>
+          )}
 
           {!platformRolesLoading && !platformRoles.length ? (
             <View style={styles.configListRow}>

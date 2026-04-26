@@ -7,7 +7,7 @@ import { supabase } from "./supabase";
 export const SAFETY_REPORTS_TABLE = "safety_reports";
 export const PLATFORM_ROLE_MEMBERSHIPS_TABLE = "platform_role_memberships";
 
-export type SafetyReportTargetType = "participant" | "room" | "title";
+export type SafetyReportTargetType = "participant" | "room" | "title" | "creator_video";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
 export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner";
 export type PlatformRole = "owner" | "operator" | "moderator";
@@ -72,6 +72,7 @@ export type SafetyReportRecord = {
 
 export type SafetyReportQueueSourceSurface =
   | "profile"
+  | "player"
   | "title-detail"
   | "chat-thread"
   | "watch-party-room"
@@ -204,7 +205,7 @@ const buildRoleIdentityLabel = (entry: {
 
 const normalizeSafetyReportTargetType = (value: unknown): SafetyReportTargetType => {
   const normalized = normalizeText(value).toLowerCase();
-  if (normalized === "room" || normalized === "title") {
+  if (normalized === "room" || normalized === "title" || normalized === "creator_video") {
     return normalized;
   }
   return "participant";
@@ -238,6 +239,7 @@ const normalizeSafetyReportQueueSourceSurface = (value: unknown): SafetyReportQu
   const normalized = normalizeText(value).toLowerCase();
   switch (normalized) {
     case "profile":
+    case "player":
     case "title-detail":
     case "chat-thread":
     case "watch-party-room":
