@@ -49,6 +49,7 @@ Current official Google Play guidance says store listing preview assets include 
 | Feature graphic | No Play feature graphic asset found | Missing |
 | Play Console listing | Not created or verified by this repo lane | External Setup Pending |
 | Runtime proof | Not run in this lane | Proof Pending |
+| Default Expo/template assets | `partial-react-logo.png`, `react-logo.png`, `react-logo@2x.png`, and `react-logo@3x.png` remain in `assets/images`; no active app/component references were found in this audit | Cleanup Recommended |
 
 ## Draft Listing Metadata
 
@@ -180,6 +181,100 @@ Avoid:
 | Platform art | `assets/images/chicago-skyline.jpg` and title images | 1024 x 1536 or 576 x 576 | Title/runtime art; avoid using content imagery in listing unless rights are confirmed. |
 | Store screenshots | Not found | Missing | Must capture from release-like build. |
 | Feature graphic | Not found | Missing | Must create 1024 x 500 asset before Play submission. |
+
+## Chi'llywood Brand Asset Audit
+
+This audit covers repo assets and references only. It does not replace final device screenshots, Play Console upload validation, or a design-owner visual review.
+
+### App Icon
+
+| Check | Result |
+| --- | --- |
+| Config owner | `app.json` uses `./assets/images/icon.png` as the Expo app icon. |
+| File truth | `assets/images/icon.png`, 1024 x 1024 PNG, RGB, no alpha, about 388 KB. |
+| Brand posture | Present and app-owned; appears to be the current source icon. |
+| Play Store posture | Not a Play-ready export yet. Google Play's current preview-asset guidance lists app icon requirements as 512 x 512, 32-bit PNG with alpha, and max file size 1024 KB. |
+| Next action | Export/verify a Play-specific 512 x 512 icon from approved Chi'llywood brand art before submission. Keep the 1024 x 1024 source if it remains the Expo source. |
+
+### Adaptive Icon
+
+| Check | Result |
+| --- | --- |
+| Config owner | `app.json` Android adaptive icon config. |
+| Foreground | `assets/images/android-icon-foreground.png`, 512 x 512 PNG, RGBA. |
+| Background | `assets/images/android-icon-background.png`, 512 x 512 PNG, RGBA; config also sets `backgroundColor` to `#E6F4FE`. |
+| Monochrome | `assets/images/android-icon-monochrome.png`, 432 x 432 PNG, RGBA. |
+| Brand posture | Present and separated into adaptive layers. |
+| Proof status | Needs release-build launcher proof on a physical Android device and Play listing icon export proof. |
+| Next action | Verify adaptive icon cropping, themed icon behavior, and legibility on Android launcher before release. |
+
+### Splash Screen
+
+| Check | Result |
+| --- | --- |
+| Config owner | `app.json` `expo-splash-screen` plugin. |
+| File truth | `assets/images/splash-icon.png`, 1024 x 1024 PNG with alpha; displayed at `imageWidth: 200`. |
+| Backgrounds | Light background `#ffffff`, dark background `#000000`. |
+| Brand posture | Present and configured. |
+| Proof status | Needs preview/release build open proof to confirm splash scale, dark-mode treatment, and transition into Login/Home. |
+| Next action | Capture splash in a release-like Android build and confirm it feels premium rather than default/template. |
+
+### Login And Branded Background
+
+| Check | Result |
+| --- | --- |
+| Login owner | `app/(auth)/login.tsx` uses `assets/images/chicago-skyline.jpg` as `LOGIN_BACKGROUND_SOURCE`. |
+| Other branded shells | `components/system/support-screen.tsx`, `app/admin.tsx`, and `app/channel-settings.tsx` also use `assets/images/chicago-skyline.jpg`. |
+| Player brand background | `app/player/[id].tsx` uses `assets/images/chillywood-branded-background.png` for the Watch-Party branded framework background. |
+| Background asset truth | `assets/images/chicago-skyline.jpg` is 1024 x 1536 JPEG; `assets/images/chillywood-branded-background.png` is 1024 x 1536 PNG. |
+| Brand posture | Aligned with `ARCHITECTURE_RULES.md`: active branded shells converge on the shared skyline runtime asset while content/room owners retain their own treatments. |
+| Premium/modern assessment | Repo usage supports a premium dark cinematic direction: skyline image, dark overlays, branded cards, and route-specific Player treatment. Final judgement still requires release screenshots because this docs lane did not run visual proof. |
+| Next action | Keep the skyline/dark-cinematic direction, then capture release screenshots to verify the background is crisp, modern, and not too dark/muddy on real Android devices. |
+
+### Play Store Feature Graphic / Cover
+
+| Check | Result |
+| --- | --- |
+| Repo asset | No dedicated Play Store feature graphic found. |
+| Search result | No `feature graphic`, `store`, `screenshot`, or `mockup` asset folder was found outside ignored build artifacts. |
+| Required asset | Google Play's current preview-asset guidance requires a feature graphic to publish the store listing: JPEG or 24-bit PNG, no alpha, 1024 x 500. |
+| Status | Missing / External Setup Pending. |
+| Required design direction | Premium dark cinematic background, Chi'llywood logo or wordmark centered, clean modern 2026 streaming-app feel, no clutter, no fake screenshots, no copyrighted movie imagery, no Google Play badge, no ranking/price/promo claims, no later-phase promises. |
+| Composition guidance | Keep the Chi'llywood logo/wordmark and focal point safely centered so Play cropping/overlays do not cut off the brand. Use the feature graphic as a brand extension, not a duplicate app icon pasted large. |
+| Next action | Create `1024 x 500` Play feature graphic from approved brand art. Recommended alt text: `Chi'llywood premium social streaming app logo over a dark cinematic background.` |
+
+### Screenshots And Mockups
+
+| Check | Result |
+| --- | --- |
+| Store screenshot folder | Not found. |
+| Mockup folder | Not found. |
+| Existing screenshots | Only runtime/proof screenshots under `/tmp` are mentioned in docs; those are not store-safe assets. |
+| Play requirements | Current Google guidance requires at least two screenshots across device types for publishing and recommends at least four app screenshots at 1080 px minimum resolution for large-format recommendation eligibility. |
+| Status | Missing / Proof Pending. |
+| Next action | Capture clean release-like screenshots from the screenshot plan in this runbook, then store final assets in a deliberate non-secret asset folder or outside the repo according to release-owner preference. |
+
+### Chi'llywood Logo And Naming Consistency
+
+| Check | Result |
+| --- | --- |
+| Product name | `app.json`, app copy, legal pages, support copy, and route copy consistently use `Chi'llywood`. |
+| Logo asset | No separate reusable `logo` or `wordmark` file was found by repo search. The icon/splash/adaptive assets appear to carry the app mark, but a standalone store wordmark source is not documented. |
+| UI usage | Login uses text `CHI'LLYWOOD`; many app surfaces use text branding rather than a shared logo component. |
+| Store risk | Feature graphic creation needs an approved high-resolution logo/wordmark source. Do not rebuild it from screenshots. |
+| Next action | Design owner should identify or create the canonical Chi'llywood wordmark/logo source, then use it consistently for feature graphic, store screenshots, splash review, and future brand kit. |
+
+### Default Expo / Template Asset Findings
+
+| Asset | Current finding | Release recommendation |
+| --- | --- | --- |
+| `assets/images/react-logo.png` | Present; no active runtime reference found in `app`, `components`, or `_lib`. | Remove in a separate cleanup pass before final store packaging if no hidden workflow needs it. |
+| `assets/images/react-logo@2x.png` | Present; no active runtime reference found. | Remove in a separate cleanup pass if unused. |
+| `assets/images/react-logo@3x.png` | Present; no active runtime reference found. | Remove in a separate cleanup pass if unused. |
+| `assets/images/partial-react-logo.png` | Present; no active runtime reference found. | Remove in a separate cleanup pass if unused. |
+| Template modal route | Already hardened in earlier route-owner pass; no template modal UI remains as a launch surface. | Keep closed unless regression appears. |
+
+Do not mix template asset cleanup into Play Console dashboard setup unless the release owner explicitly chooses to do a repo cleanup pass. These files are not currently a runtime brand leak, but they are avoidable launch-packaging clutter.
 
 ### Required / Recommended Asset Set
 
