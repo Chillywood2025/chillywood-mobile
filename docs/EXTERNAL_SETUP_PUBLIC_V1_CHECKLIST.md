@@ -78,7 +78,7 @@ Use current official documentation during actual setup because console requireme
 | LiveKit production server | App defaults to `wss://live.chillywoodstream.com`; `infra/hetzner/livekit.env.example` and `docs/hetzner-first-deployment-implementation-spec.md` document a self-hosting scaffold and prior host truth. LiveKit runtime code requests tokens from the Supabase Edge Function; the client does not mint tokens. | Confirm production LiveKit server, domain, TLS, API key/secret, TURN/ICE settings, firewall ports, server health, scaling/monitoring, and retention/logging posture. | LiveKit infrastructure owner. | Two Android devices can join Live First and Live Watch-Party on production LiveKit, reconnect, and avoid stale-room bleed; server health is observable. | Partial / Proof Pending | Follow `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md`: verify `live.chillywoodstream.com`, token endpoint secrets, host health, then run bounded one-device and two-device proof. |
 | LiveKit TURN/domain/TLS | Domain fallback exists in config and the Hetzner spec records prior TLS/Caddy truth, but this lane did not re-prove DNS, WebSocket upgrade, TURN, firewall, or cellular path behavior. | Configure or verify TLS certs, DNS, firewall, UDP/TCP ports, TURN if needed, and any load balancer/proxy settings. | LiveKit infrastructure owner. | Cellular and Wi-Fi devices can establish media, not only local-network proof. | Partial / Proof Pending | Use `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md` to run DNS/TLS/firewall/TURN checks and record LiveKit connection diagnostics without tokens. |
 | Android release build and signing | `eas.json` has development, preview, and production profiles; production builds Android `app-bundle`. `app.json` includes package `com.chillywood.mobile`, EAS project id, Expo Updates URL, icon/splash assets, and camera/microphone permissions. The Lane 3 runbook now documents app identity, signing posture, env requirements, native rebuild risks, and build commands. | Confirm EAS Android credentials/signing ownership, Play App Signing, versionCode strategy, production env values, release track, and final preview/production build approval. | Release manager. | Current `main` builds successfully with preview and production profiles; production AAB installs or reaches Play internal testing; release route smoke and log audit pass. | External Setup Pending | Follow `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`: verify credentials, choose versionCode strategy, configure EAS production env, then run preview/production builds after runtime proof lanes are green. |
-| Production runtime environment | `scripts/validate-runtime.mjs` checks Supabase URL/anon key, beta allowlist/env, Expo project id/update URL/runtime. `app.config.ts` reads RevenueCat, LiveKit, legal/support, and Firebase config. | Populate release env for Supabase, RevenueCat, LiveKit token endpoint/server URL, legal/support URLs, beta/public flags, and any Firebase/EAS secrets. | Release manager plus system owners. | `npm run validate:runtime` passes for release environment; release build shows correct endpoints without dev fallbacks. | External Setup Pending | Create release env profile and run runtime validation immediately before production build. |
+| Production runtime environment | `scripts/validate-runtime.mjs` now checks base runtime values and supports strict production-env validation. `app.config.ts` reads RevenueCat, LiveKit, legal/support, Firebase config, and `_lib/supabase.ts` now honors runtime Supabase URL/anon config when present. Detailed setup is in `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`. | Populate release env for Supabase, RevenueCat, LiveKit token endpoint/server URL, legal/support URLs, beta/public flags, and any Firebase/EAS values. Keep server secrets in Supabase/RevenueCat/Firebase/Google/host secret stores. | Release manager plus system owners. | `npm run validate:runtime` and `CHILLYWOOD_VALIDATE_PRODUCTION_ENV=1 npm run validate:runtime` pass for release environment; release build shows correct endpoints without dev fallbacks. | External Setup Pending | Follow `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`, configure EAS production env, then run strict validation immediately before preview/production builds. |
 | Production logging and secret safety | Recent route/source logs moved behind dev-only logger. Repo owners already avoid printing signed creator media URLs in Player logs. | Audit release build logs for Supabase JWTs, signed URLs, RevenueCat receipts, LiveKit participant tokens, Firebase keys beyond public config, and service-role secrets. | Release manager plus security owner. | Release candidate log audit shows no secrets/signed URLs and no noisy debug-only operational logs. | Proof Pending | Run bounded release log audit during final smoke. |
 | Store submission and final smoke | Public v1 readiness checklist tracks runtime proof lanes. This checklist tracks external prerequisites. | Complete proof lanes, external setup, release build, internal testing, Play Console review, and rollback plan. | Product owner/release manager. | Final route smoke passes on release build: auth, settings, Profile/Channel, creator media, Player, platform Watch-Party, creator-video Watch-Party, Live Stage, Chat, Admin denial, Premium gate, legal/support. | Proof Pending | Do not submit production until proof artifacts exist and `docs/PUBLIC_V1_READINESS_CHECKLIST.md` has no v1 Blocked items. |
 
@@ -472,6 +472,60 @@ Stop and do not mark Done if:
 - Live Stage proof falls back to the legacy media path in normal production use.
 - Any artifact would expose tokens, keys, service-role secrets, TURN credentials, or signed URLs.
 
+## Lane 7 Runbook - Production Env / Secrets Readiness
+
+Processed: 2026-04-26
+
+Detailed owner doc: `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`
+
+Scope for this lane only:
+
+- Production runtime variables, EAS env readiness, and secrets boundary documentation.
+- Base/strict runtime validation prep.
+- Small config-safety hardening for Supabase runtime config and RevenueCat production logging.
+- No secret creation, key rotation, live store actions, Android proof, Supabase migration work, or LiveKit network proof.
+
+Repo-ready facts:
+
+- `app.config.ts` writes `extra.runtime` for Supabase, beta/public-v1 flags, legal/support URLs, RevenueCat public SDK keys, LiveKit URL/token endpoint, and communication ICE/STUN/TURN config.
+- `_lib/runtimeConfig.ts` reads those values from Expo config and `EXPO_PUBLIC_*` env overrides.
+- `_lib/supabase.ts` now honors runtime Supabase URL/anon config when present, with the current deployed public project as fallback.
+- `scripts/validate-runtime.mjs` still validates base Supabase/beta/EAS runtime shape and now supports strict production validation through `CHILLYWOOD_VALIDATE_PRODUCTION_ENV=1`.
+- Strict production validation requires LiveKit public URL/token endpoint, RevenueCat Android production public SDK key, final legal/support URLs, and `EXPO_PUBLIC_BETA_ENVIRONMENT=public-v1`.
+- RevenueCat SDK log mirroring is suppressed outside `__DEV__`; purchase/restore failures still use app-owned error paths without printing receipts or purchase tokens.
+- `.gitignore` protects `.env*.local`, native folders, keystores, private keys, and common certificate formats.
+- `.env.local` exists locally and remains ignored. Values were not printed.
+- `supabase/.temp/` may exist from Supabase CLI linking and must remain uncommitted.
+
+Manual actions before marking Done:
+
+1. Configure EAS production env for all required public runtime values in `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`.
+2. Keep Supabase service-role keys, database passwords, LiveKit API secrets, RevenueCat private/API/webhook secrets, Play service account JSON, Firebase service account JSON, keystore passwords, JWT secrets, and provider tokens out of Expo public config.
+3. Verify final Privacy, Terms, Account Deletion, and Support URLs are public and approved.
+4. Verify RevenueCat Android production public SDK key is from the intended Chi'llywood RevenueCat app.
+5. Verify LiveKit public URL and token endpoint match production server/function truth.
+6. Run `CHILLYWOOD_VALIDATE_PRODUCTION_ENV=1 npm run validate:runtime` from the intended release env without printing values.
+7. Run preview/release build proof later and confirm the app uses the intended endpoints.
+8. Run release log audit for JWTs, participant tokens, purchase receipts/tokens, signed URLs, service keys, and keystore details.
+
+Proof required:
+
+- Base and strict runtime validation pass from the intended release environment.
+- Public Expo config shape shows required fields present without raw value disclosure.
+- Preview/release build uses intended Supabase, LiveKit, RevenueCat, Firebase, support, and legal config.
+- Release logs do not expose secrets or signed URLs.
+- Store, Supabase, Firebase, and LiveKit dashboard proofs remain linked to this env truth.
+
+Stop and do not mark Done if:
+
+- Required env names are missing or only present in an uncommitted local `.env` file.
+- `EXPO_PUBLIC_BETA_ENVIRONMENT` is not `public-v1` for production validation.
+- Server secrets are placed in `EXPO_PUBLIC_*` values or client-visible config.
+- RevenueCat public SDK key points at the wrong app/environment.
+- LiveKit URL/token endpoint points at the wrong server/function.
+- Legal/support URLs are placeholders when preparing a Play submission.
+- Release log audit finds Supabase JWTs, LiveKit participant tokens, signed media URLs, RevenueCat receipts/purchase tokens, service-role keys, Google private credentials, or keystore details.
+
 ## Current External Setup Summary
 
 Already repo-backed:
@@ -482,6 +536,7 @@ Already repo-backed:
 - Firebase packages/plugins/helpers exist, and Firebase Crashlytics/Performance proof prep now has a dedicated runbook.
 - Supabase migrations for creator media, billing entitlements, moderation, storage policy intent, and Watch-Party source/RLS exist, and remote migration history is aligned through `202604260004`.
 - LiveKit client/token contract owners exist, the token function is present in the Supabase functions tree, and `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md` now defines production domain/TURN/TLS/network proof.
+- Production env/secrets readiness now has a dedicated runbook at `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`, and runtime validation can run a strict production presence check without printing values.
 - EAS production Android build profile exists.
 
 External setup still required:
@@ -494,7 +549,7 @@ External setup still required:
 - Supabase Edge Function secret/request proof for LiveKit token issuance.
 - LiveKit production domain/TURN/TLS/firewall proof using `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md`.
 - EAS release signing/production AAB build proof.
-- Release runtime env validation and final route smoke.
+- Release runtime env validation using `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md` and final route smoke.
 
 ## Recommended External Setup Order
 
@@ -503,11 +558,12 @@ External setup still required:
 3. Verify Supabase `livekit-token` function deployment and secret configuration.
 4. Verify LiveKit server/domain/TURN/TLS from Wi-Fi and cellular networks.
 5. Configure RevenueCat/Google Play Premium subscription product and public SDK keys.
-6. Build internal Android release candidate with production runtime env.
-7. Prove Firebase Crashlytics/Performance in the internal build.
-8. Run final release candidate route smoke and log audit.
-9. Complete Play Console Data Safety, content rating, store listing, screenshots, support/legal links, and account deletion declaration.
-10. Submit to internal/closed testing before production rollout.
+6. Configure EAS production env and run strict runtime validation from `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`.
+7. Build internal Android release candidate with production runtime env.
+8. Prove Firebase Crashlytics/Performance in the internal build.
+9. Run final release candidate route smoke and log audit.
+10. Complete Play Console Data Safety, content rating, store listing, screenshots, support/legal links, and account deletion declaration.
+11. Submit to internal/closed testing before production rollout.
 
 ## Do Not Mark Done Until
 
