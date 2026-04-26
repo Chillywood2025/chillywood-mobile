@@ -77,6 +77,39 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_events: {
+        Row: {
+          entitlement_key: string | null
+          event_type: string
+          id: number
+          metadata: Json
+          occurred_at: string
+          provider: string
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          entitlement_key?: string | null
+          event_type: string
+          id?: number
+          metadata?: Json
+          occurred_at?: string
+          provider?: string
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          entitlement_key?: string | null
+          event_type?: string
+          id?: number
+          metadata?: Json
+          occurred_at?: string
+          provider?: string
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       beta_feedback_items: {
         Row: {
           category: string
@@ -956,6 +989,42 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string
+        }
+        Relationships: []
+      }
+      user_entitlements: {
+        Row: {
+          entitlement_key: string
+          expires_at: string | null
+          metadata: Json
+          revoked_at: string | null
+          source: string
+          starts_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          entitlement_key: string
+          expires_at?: string | null
+          metadata?: Json
+          revoked_at?: string | null
+          source?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          entitlement_key?: string
+          expires_at?: string | null
+          metadata?: Json
+          revoked_at?: string | null
+          source?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

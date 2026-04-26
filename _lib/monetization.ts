@@ -16,6 +16,12 @@ import {
   type RevenueCatConfigurationState,
 } from "./revenuecat";
 import type { Tables, TablesInsert } from "../supabase/database.types";
+import {
+  hasActiveEntitlement as hasActiveBackendEntitlement,
+  readCurrentUserEntitlements,
+  type PremiumEntitlementDecision,
+  type PremiumEntitlementKey,
+} from "./premiumEntitlements";
 import { supabase } from "./supabase";
 
 export type PlanTier = "free" | "premium";
@@ -186,12 +192,9 @@ type GateLike = {
 
 type CreatorPermissionRow = Tables<"creator_permissions">;
 type CreatorPermissionInsert = TablesInsert<"creator_permissions">;
-type UserSubscriptionInsert = TablesInsert<"user_subscriptions">;
-type WatchPartyPassUnlockInsert = TablesInsert<"watch_party_pass_unlocks">;
 
 const USER_PLAN_KEY = "@chillywood/user-plan";
 const SUBSCRIPTIONS_TABLE = "user_subscriptions";
-const PARTY_PASS_TABLE = "watch_party_pass_unlocks";
 const CREATOR_PERMISSIONS_TABLE = "creator_permissions";
 
 const defaultPlan: UserPlan = {
@@ -644,6 +647,52 @@ const buildMonetizationGateResolution = (
     canPurchase: !!purchaseTargetId && snapshot.configuration.shouldConfigure && snapshot.canMakePayments,
     snapshotStatus: snapshot.status,
     issues: [...snapshot.issues],
+  };
+};
+
+const getBackendEntitlementKeyForTarget = (
+  targetId: MonetizationTargetId,
+): PremiumEntitlementKey => {
+  switch (targetId) {
+    case "premium_watch_party_access":
+      return "premium_watch_party";
+    case "premium_live_access":
+      return "premium_live";
+    case "paid_title_access":
+      return "paid_content";
+    case "premium_subscription":
+    default:
+      return "premium";
+  }
+};
+
+const buildBackendEntitledTargetIds = (
+  policy: MonetizationAccessPolicy,
+  decisions: readonly PremiumEntitlementDecision[],
+) => {
+  if (!decisions.length || !hasActiveBackendEntitlement(decisions)) return [];
+
+  const activeKeys = new Set(
+    decisions
+      .filter((decision) => decision.isActive)
+      .map((decision) => decision.entitlementKey),
+  );
+
+  return policy.qualifyingTargetIds.filter((targetId) => {
+    const key = getBackendEntitlementKeyForTarget(targetId);
+    return activeKeys.has(key);
+  });
+};
+
+const mergeBackendEntitlementsIntoGate = (
+  monetization: MonetizationGateResolution,
+  backendEntitledTargetIds: readonly MonetizationTargetId[],
+): MonetizationGateResolution => {
+  if (!backendEntitledTargetIds.length) return monetization;
+
+  return {
+    ...monetization,
+    entitledTargetIds: Array.from(new Set([...monetization.entitledTargetIds, ...backendEntitledTargetIds])),
   };
 };
 
@@ -1189,28 +1238,6 @@ async function readLegacyUserPlan(): Promise<UserPlan> {
   }
 }
 
-async function hasLegacyPartyPassGrant(partyId: string): Promise<boolean> {
-  const safePartyId = String(partyId ?? "").trim();
-  if (!safePartyId) return false;
-
-  const userId = await getSignedInUserId();
-  if (!userId) return false;
-
-  try {
-    const { data, error } = await supabase
-      .from(PARTY_PASS_TABLE)
-      .select("id")
-      .eq("room_id", safePartyId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error || !data) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function readUserPlan(): Promise<UserPlan> {
   const legacy = await readLegacyUserPlan();
   const runtime = getAppMonetizationRuntimeFeatures();
@@ -1232,40 +1259,32 @@ export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
     throw new Error("Sign in is required before changing premium access.");
   }
 
+  if (tier === "premium") {
+    throw new Error("Premium access must be granted by billing or an operator-backed entitlement.");
+  }
+
   const next: UserPlan = {
     tier,
-    adFree: tier === "premium",
-    watchPartyPerks: tier === "premium",
+    adFree: false,
+    watchPartyPerks: false,
     updatedAt: Date.now(),
   };
 
   await saveLocalPlan(next);
-  if (!FEATURE_FLAGS.monetization.subscriptions) return next;
-
-  try {
-    const payload: UserSubscriptionInsert = {
-      user_id: userId,
-      tier,
-      updated_at: new Date(next.updatedAt).toISOString(),
-    };
-    await supabase.from(SUBSCRIPTIONS_TABLE).upsert(payload, { onConflict: "user_id" });
-  } catch {
-    // table may not exist yet; local fallback still works
-  }
-
   return next;
 }
 
 export async function hasPremiumAccess(): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return true;
+
   const snapshot = await readMonetizationSnapshot();
   if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
     return snapshot.targets.premium_subscription.hasEntitlement;
   }
 
-  const plan = await readLegacyUserPlan();
-  return plan.tier === "premium";
+  const entitlements = await readCurrentUserEntitlements(["premium"]);
+  return hasActiveBackendEntitlement(entitlements);
 }
 
 export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
@@ -1282,30 +1301,18 @@ export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
     }
   }
 
-  const plan = await readLegacyUserPlan();
-  if (plan.watchPartyPerks) return true;
-  return hasLegacyPartyPassGrant(partyId);
+  const entitlements = await readCurrentUserEntitlements(["premium", "premium_watch_party"]);
+  return hasActiveBackendEntitlement(entitlements);
 }
 
 export async function unlockPartyPass(partyId: string): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.partyPass || !runtime.partyPassEnabled) return true;
+  void partyId;
 
   const userId = await getSignedInUserId();
   if (!userId) return false;
-
-  try {
-    const payload: WatchPartyPassUnlockInsert = {
-      room_id: partyId,
-      user_id: userId,
-      unlocked_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.from(PARTY_PASS_TABLE).upsert(payload, { onConflict: "room_id,user_id" });
-
-    return !error;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 export async function readCreatorPermissions(userId?: string | null): Promise<CreatorPermissionSet> {
@@ -1437,21 +1444,43 @@ export async function resolveMonetizationAccess(options: {
   const accessKey = String(options.accessKey ?? "").trim() || undefined;
   const snapshot = await readMonetizationSnapshot();
   const fallbackPlan = options.plan ?? await readLegacyUserPlan();
-  const plan = snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded
+  const snapshotPlan = snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded
     ? derivePlanFromMonetizationSnapshot(snapshot, fallbackPlan)
     : fallbackPlan;
   const policy = getMonetizationAccessPolicy({
     accessRule,
     targetHint: options.targetHint,
   });
-  const monetization = buildMonetizationGateResolution(snapshot, policy);
+  const backendEntitlements = policy.qualifyingTargetIds.length > 0
+    ? await readCurrentUserEntitlements(
+      Array.from(new Set(policy.qualifyingTargetIds.map(getBackendEntitlementKeyForTarget))),
+    )
+    : [];
+  const backendEntitledTargetIds = buildBackendEntitledTargetIds(policy, backendEntitlements);
+  const monetization = mergeBackendEntitlementsIntoGate(
+    buildMonetizationGateResolution(snapshot, policy),
+    backendEntitledTargetIds,
+  );
+  const hasTrustedEntitlement = monetization.entitledTargetIds.length > 0;
+  const plan: UserPlan = hasTrustedEntitlement && monetization.entitledTargetIds.includes("premium_subscription")
+    ? {
+      tier: "premium",
+      adFree: true,
+      watchPartyPerks: true,
+      updatedAt: Date.now(),
+    }
+    : {
+      ...snapshotPlan,
+      tier: "free",
+      adFree: false,
+      watchPartyPerks: false,
+    };
 
   if (accessRule === "premium") {
     if (
       !FEATURE_FLAGS.monetization.subscriptions
       || !runtime.premiumEnabled
-      || plan.tier === "premium"
-      || monetization.entitledTargetIds.length > 0
+      || hasTrustedEntitlement
     ) {
       return {
         allowed: true,
@@ -1481,23 +1510,8 @@ export async function resolveMonetizationAccess(options: {
     if (
       !FEATURE_FLAGS.monetization.partyPass
       || !runtime.partyPassEnabled
-      || plan.watchPartyPerks
-      || monetization.entitledTargetIds.length > 0
+      || hasTrustedEntitlement
     ) {
-      return {
-        allowed: true,
-        reason: "allowed",
-        accessRule,
-        requiresPremium: false,
-        requiresPartyPass: false,
-        accessKey,
-        plan,
-        monetization,
-      };
-    }
-
-    const hasAccess = accessKey ? await hasLegacyPartyPassGrant(accessKey) : false;
-    if (hasAccess) {
       return {
         allowed: true,
         reason: "allowed",
