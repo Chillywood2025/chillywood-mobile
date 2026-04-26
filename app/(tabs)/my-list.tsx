@@ -137,7 +137,7 @@ export default function MyListScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
         ListHeaderComponent={<Text style={styles.header}>My List</Text>}
-        ListEmptyComponent={<Text style={styles.emptyText}>Your list is empty</Text>}
+        ListEmptyComponent={<Text style={styles.emptyText}>Your saved titles will land here.</Text>}
         renderItem={({ item }) => {
           const source = getImageSource(item);
           return (

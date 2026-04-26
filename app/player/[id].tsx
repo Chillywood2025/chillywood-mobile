@@ -618,7 +618,7 @@ export default function PlayerScreen() {
   if (typeof rawId !== "string") rawId = String(rawId ?? "");
   const cleanId = rawId.replace(/["']/g, "").trim();
 
-  console.log("PLAYER ID:", cleanId);
+  debugLog("player", "route id resolved", { id: cleanId });
 
   const localExactIdMatch = titles.find((t: any) => String(t.id) === cleanId);
   const localSlugMatch = localExactIdMatch ? null : titles.find((t: any) => String(t.slug) === cleanId);
@@ -845,7 +845,7 @@ export default function PlayerScreen() {
       if (!routeId) {
         if (localTitle && active) {
           const chosen = localTitle as any;
-          console.log("PLAYER MATCH SOURCE: matched from", localMatchSource);
+          debugLog("player", "match source resolved", { source: localMatchSource });
           setItem(buildLocalPlayerTitle(chosen));
         }
         setTitleLoading(false);
@@ -856,7 +856,7 @@ export default function PlayerScreen() {
         if (expectsCreatorVideo) {
           const video = await readCreatorVideoForPlayer(routeId);
           if (video && active) {
-            console.log("PLAYER MATCH SOURCE: matched from", "creator-video:id");
+            debugLog("player", "match source resolved", { source: "creator-video:id" });
             setPlaybackSourceKind("creator-video");
             setCreatorVideo(video);
             setItem(buildCreatorPlayerTitle(video));
@@ -876,7 +876,7 @@ export default function PlayerScreen() {
 
         if (primary.data && !primary.error) {
           if (active) {
-            console.log("PLAYER MATCH SOURCE: matched from", "db:advanced:id");
+            debugLog("player", "match source resolved", { source: "db:advanced:id" });
             setItem(primary.data);
             setTitleLoading(false);
           }
@@ -892,7 +892,7 @@ export default function PlayerScreen() {
 
         if (fallback.data && !fallback.error) {
           if (active) {
-            console.log("PLAYER MATCH SOURCE: matched from", "db:base:id");
+            debugLog("player", "match source resolved", { source: "db:base:id" });
             setItem(fallback.data);
             setTitleLoading(false);
           }
@@ -901,7 +901,7 @@ export default function PlayerScreen() {
 
         const video = await readCreatorVideoForPlayer(routeId);
         if (video && active) {
-          console.log("PLAYER MATCH SOURCE: matched from", "creator-video:fallback");
+          debugLog("player", "match source resolved", { source: "creator-video:fallback" });
           setPlaybackSourceKind("creator-video");
           setCreatorVideo(video);
           setItem(buildCreatorPlayerTitle(video));
@@ -911,7 +911,7 @@ export default function PlayerScreen() {
 
         if (localTitle && active) {
           const chosen = localTitle as any;
-          console.log("PLAYER MATCH SOURCE: matched from", localMatchSource);
+          debugLog("player", "match source resolved", { source: localMatchSource });
           setItem(buildLocalPlayerTitle(chosen));
           setTitleLoading(false);
           return;
@@ -929,7 +929,7 @@ export default function PlayerScreen() {
             setItem(null);
           } else if (localTitle) {
             const chosen = localTitle as any;
-            console.log("PLAYER MATCH SOURCE: matched from", localMatchSource);
+            debugLog("player", "match source resolved", { source: localMatchSource });
             setItem(buildLocalPlayerTitle(chosen));
           }
           setTitleLoading(false);
@@ -2755,7 +2755,7 @@ export default function PlayerScreen() {
 
       try {
         const hostUserId = await getSafePartyUserId();
-        console.log("WATCH_PARTY SOURCE: creator_video", { sourceId: creatorVideoId });
+        debugLog("watch-party", "source resolved", { sourceType: "creator_video", sourceId: creatorVideoId });
         const room = await createPartyRoom(null, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused", {
           roomType: "title",
           sourceType: "creator_video",
@@ -2821,7 +2821,7 @@ export default function PlayerScreen() {
         }
       }
 
-      console.log("WATCH PARTY: creating room", {
+      debugLog("watch-party", "creating room", {
         titleId: createTitleId,
         hostUserId,
         positionMillis: currentPositionRef.current,
@@ -2834,7 +2834,13 @@ export default function PlayerScreen() {
         sourceType: createTitleId ? "platform_title" : null,
         sourceId: createTitleId || null,
       });
-      console.log("WATCH PARTY: createPartyRoom returned", room);
+      debugLog("watch-party", "createPartyRoom returned", {
+        ok: !!(room && "partyId" in room && room.partyId),
+        partyId: room && "partyId" in room ? room.partyId : null,
+        roomCode: room && "roomCode" in room ? room.roomCode : null,
+        sourceType: room && "sourceType" in room ? room.sourceType : null,
+        sourceId: room && "sourceId" in room ? room.sourceId : null,
+      });
 
       if (room && "partyId" in room && room.partyId) {
         const roomSourceType = room.sourceType ?? (createTitleId ? "platform_title" : null);
@@ -2847,7 +2853,12 @@ export default function PlayerScreen() {
           ...(roomSourceType ? { sourceType: roomSourceType } : {}),
           ...(roomSourceId ? { sourceId: roomSourceId } : {}),
         };
-        console.log("WATCH PARTY: navigating with params", navParams);
+        debugLog("watch-party", "navigating to waiting room", {
+          roomId: navParams.roomId,
+          roomCode: navParams.roomCode,
+          sourceType: roomSourceType,
+          sourceId: roomSourceId,
+        });
         router.push({ pathname: "/watch-party", params: navParams });
         return;
       }
@@ -2855,7 +2866,7 @@ export default function PlayerScreen() {
       // fallback navigation below
     }
 
-    console.log("WATCH PARTY: room creation failed, fallback to /watch-party");
+    debugLog("watch-party", "room creation failed, using waiting room fallback");
     router.push("/watch-party");
   }, [creatorVideo, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
 
@@ -5000,7 +5011,7 @@ export default function PlayerScreen() {
           ? "remote"
           : "object:unknown"
       : "none";
-    console.log("PLAYER VIDEO SOURCE:", sourceLabel);
+    debugLog("player", "video source resolved", { source: sourceLabel });
   }, [source]);
 
   if (titleLoading) {

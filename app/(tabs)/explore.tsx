@@ -356,8 +356,8 @@ export default function ExploreScreen() {
             }
             ListEmptyComponent={
               <View style={styles.center}>
-                <Text style={styles.muted}>No titles yet.</Text>
-                <Text style={styles.mutedSmall}>Add rows in Supabase → table “titles”.</Text>
+                <Text style={styles.muted}>No published titles yet.</Text>
+                <Text style={styles.mutedSmall}>The Chi&apos;llywood lineup will appear here once programming is live.</Text>
               </View>
             }
           />
