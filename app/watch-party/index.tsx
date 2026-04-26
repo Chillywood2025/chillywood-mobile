@@ -34,8 +34,20 @@ import {
 } from "../../_lib/monetization";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { useSession } from "../../_lib/session";
-import { supabase } from "../../_lib/supabase";
-import { createPartyRoom, getPartyRoom, getSafePartyUserId, type WatchPartyRoomType, type WatchPartyState } from "../../_lib/watchParty";
+import {
+  createPartyRoom,
+  getPartyRoom,
+  getSafePartyUserId,
+  type WatchPartyContentSourceType,
+  type WatchPartyRoomType,
+  type WatchPartyState,
+} from "../../_lib/watchParty";
+import {
+  resolveWatchPartyContentSource,
+  resolveWatchPartyContentSourceByParts,
+  resolveWatchPartySourceId,
+  resolveWatchPartySourceType,
+} from "../../_lib/watchPartyContentSources";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
@@ -50,6 +62,8 @@ type IncomingHandoff = {
   roomCode: string;
   partyId: string | null;
   titleId: string | null;
+  sourceType: WatchPartyContentSourceType | null;
+  sourceId: string | null;
 };
 
 const getWaitingRoomPreviewTitle = (preview: RoomPreview) => {
@@ -114,6 +128,8 @@ export default function WatchPartyIndexScreen() {
     partyId?: string;
     mode?: string;
     source?: string;
+    sourceType?: string;
+    sourceId?: string;
   }>();
   const isLiveEntryMode = String(Array.isArray(params.mode) ? params.mode[0] : params.mode ?? "").trim().toLowerCase() === "live";
   const sourceParam = String(Array.isArray(params.source) ? params.source[0] : params.source ?? "").trim().toLowerCase();
@@ -127,6 +143,14 @@ export default function WatchPartyIndexScreen() {
   ).trim().toUpperCase();
   const initialLookupId = initialRouteRoomCode || initialRoutePartyId;
   const initialRouteTitleId = String(Array.isArray(params.titleId) ? params.titleId[0] : params.titleId ?? "").trim();
+  const initialRouteSourceTypeRaw = String(Array.isArray(params.sourceType) ? params.sourceType[0] : params.sourceType ?? "").trim().toLowerCase();
+  const initialRouteSourceType: WatchPartyContentSourceType | null =
+    initialRouteSourceTypeRaw === "creator_video"
+      ? "creator_video"
+      : initialRouteSourceTypeRaw === "platform_title"
+        ? "platform_title"
+        : null;
+  const initialRouteSourceId = String(Array.isArray(params.sourceId) ? params.sourceId[0] : params.sourceId ?? "").trim();
   const [joinCode, setJoinCode] = useState(() => (!isPlayerWatchPartyLiveFlow ? initialRouteRoomCode : ""));
   const [joinLookupBusy, setJoinLookupBusy] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -142,6 +166,8 @@ export default function WatchPartyIndexScreen() {
           roomCode: initialRouteRoomCode,
           partyId: initialRoutePartyId || null,
           titleId: initialRouteTitleId || null,
+          sourceType: initialRouteSourceType,
+          sourceId: initialRouteSourceId || initialRouteTitleId || null,
         }
       : null,
   );
@@ -206,45 +232,43 @@ export default function WatchPartyIndexScreen() {
     setInviteSheetVisible(false);
   }, [entryLaneKey]);
 
-  const resolveRoomTitleName = useCallback(async (roomTitleId: string | null | undefined) => {
-    const normalizedTitleId = String(roomTitleId ?? "").trim();
-    if (!normalizedTitleId) return null;
-
+  const resolveContentDisplayName = useCallback(async (input: {
+    sourceType: WatchPartyContentSourceType | null;
+    sourceId: string | null;
+  }) => {
     try {
-      const { data } = await supabase
-        .from("titles")
-        .select("title")
-        .eq("id", normalizedTitleId)
-        .maybeSingle();
-      return data?.title ? String(data.title) : null;
+      const source = await resolveWatchPartyContentSourceByParts(input);
+      return source.displayName;
     } catch {
       return null;
     }
   }, []);
 
   const buildRoomPreview = useCallback(async (room: WatchPartyState): Promise<RoomPreview> => {
-    const titleName = await resolveRoomTitleName(room.titleId);
+    const source = await resolveWatchPartyContentSource(room).catch(() => null);
+    const titleName = source?.displayName ?? null;
     return { room, titleName };
-  }, [resolveRoomTitleName]);
+  }, []);
 
   useEffect(() => {
     let active = true;
-    const nextTitleId = String(
-      preview?.room.titleId
-      ?? preparedRoom?.room.titleId
-      ?? incomingHandoff?.titleId
-      ?? initialRouteTitleId
-      ?? "",
-    ).trim();
+    const previewRoom = preview?.room ?? preparedRoom?.room ?? null;
+    const fallbackSourceType = incomingHandoff?.sourceType
+      ?? initialRouteSourceType
+      ?? (incomingHandoff?.titleId || initialRouteTitleId ? "platform_title" : null);
+    const nextSourceType = previewRoom ? resolveWatchPartySourceType(previewRoom) : fallbackSourceType;
+    const nextSourceId = previewRoom
+      ? resolveWatchPartySourceId(previewRoom)
+      : String(incomingHandoff?.sourceId ?? incomingHandoff?.titleId ?? initialRouteSourceId ?? initialRouteTitleId ?? "").trim() || null;
 
-    if (!nextTitleId) {
+    if (!nextSourceId) {
       setEntryTitleName(null);
       return () => {
         active = false;
       };
     }
 
-    resolveRoomTitleName(nextTitleId)
+    resolveContentDisplayName({ sourceType: nextSourceType, sourceId: nextSourceId })
       .then((name) => {
         if (active) setEntryTitleName(name);
       })
@@ -255,17 +279,41 @@ export default function WatchPartyIndexScreen() {
     return () => {
       active = false;
     };
-  }, [incomingHandoff?.titleId, initialRouteTitleId, preparedRoom?.room.titleId, preview?.room.titleId, resolveRoomTitleName]);
+  }, [
+    incomingHandoff?.sourceId,
+    incomingHandoff?.sourceType,
+    incomingHandoff?.titleId,
+    initialRouteSourceId,
+    initialRouteSourceType,
+    initialRouteTitleId,
+    preparedRoom?.room,
+    preview?.room,
+    resolveContentDisplayName,
+  ]);
 
-  const createPreparedWaitingRoom = useCallback(async (titleId: string | null, roomType: WatchPartyRoomType): Promise<RoomPreview | null> => {
+  const createPreparedWaitingRoom = useCallback(async (
+    titleId: string | null,
+    roomType: WatchPartyRoomType,
+    sourceOptions?: { sourceType?: WatchPartyContentSourceType | null; sourceId?: string | null },
+  ): Promise<RoomPreview | null> => {
     if (!canUseBetaRooms) return null;
     const hostUserId = await getSafePartyUserId();
-    const room = await createPartyRoom(titleId, hostUserId, 0, "paused", { roomType });
+    const room = await createPartyRoom(titleId, hostUserId, 0, "paused", {
+      roomType,
+      sourceType: sourceOptions?.sourceType,
+      sourceId: sourceOptions?.sourceId,
+    });
     if (!room || "error" in room) return null;
 
     const nextPreparedRoom = await buildRoomPreview(room);
     setPreparedRoom(nextPreparedRoom);
-    setIncomingHandoff({ roomCode: room.roomCode, partyId: room.partyId, titleId: room.titleId });
+    setIncomingHandoff({
+      roomCode: room.roomCode,
+      partyId: room.partyId,
+      titleId: room.titleId,
+      sourceType: room.sourceType,
+      sourceId: room.sourceId,
+    });
     setHostLabel("You are hosting");
     return nextPreparedRoom;
   }, [buildRoomPreview, canUseBetaRooms]);
@@ -279,10 +327,20 @@ export default function WatchPartyIndexScreen() {
     const rawRoomId = Array.isArray(params.roomId) ? params.roomId[0] : params.roomId;
     const rawPartyId = Array.isArray(params.partyId) ? params.partyId[0] : params.partyId;
     const rawTitleId = Array.isArray(params.titleId) ? params.titleId[0] : params.titleId;
+    const rawSourceType = Array.isArray(params.sourceType) ? params.sourceType[0] : params.sourceType;
+    const rawSourceId = Array.isArray(params.sourceId) ? params.sourceId[0] : params.sourceId;
     const incomingLookupId = String(rawRoomCode ?? rawRoomId ?? rawPartyId ?? "").trim().toUpperCase();
     const incomingPartyId = String(rawRoomId ?? rawPartyId ?? rawRoomCode ?? "").trim().toUpperCase();
     const incomingRoomCode = String(rawRoomCode ?? "").trim().toUpperCase();
     const incomingTitleId = String(rawTitleId ?? "").trim();
+    const incomingSourceTypeRaw = String(rawSourceType ?? "").trim().toLowerCase();
+    const incomingSourceType: WatchPartyContentSourceType | null =
+      incomingSourceTypeRaw === "creator_video"
+        ? "creator_video"
+        : incomingSourceTypeRaw === "platform_title"
+          ? "platform_title"
+          : null;
+    const incomingSourceId = String(rawSourceId ?? incomingTitleId ?? "").trim();
 
     if (!incomingLookupId) return;
     handoffLoadedRef.current = true;
@@ -292,6 +350,8 @@ export default function WatchPartyIndexScreen() {
       roomCode: incomingRoomCode,
       partyId: incomingPartyId || null,
       titleId: incomingTitleId || null,
+      sourceType: incomingSourceType,
+      sourceId: incomingSourceId || null,
     });
     const loadIncomingRoom = async () => {
       try {
@@ -303,7 +363,13 @@ export default function WatchPartyIndexScreen() {
         const safeUserId = await getSafePartyUserId();
         setHostLabel(safeUserId === room.hostUserId ? "You are hosting" : "You joined as viewer");
         if (!isPlayerWatchPartyLiveFlow) setJoinCode(room.roomCode);
-        setIncomingHandoff({ roomCode: room.roomCode, partyId: room.partyId, titleId: room.titleId });
+        setIncomingHandoff({
+          roomCode: room.roomCode,
+          partyId: room.partyId,
+          titleId: room.titleId,
+          sourceType: room.sourceType,
+          sourceId: room.sourceId,
+        });
         setPreparedRoom(await buildRoomPreview(room));
       } catch (error) {
         reportRuntimeError("watch-party-handoff", error, {
@@ -313,7 +379,7 @@ export default function WatchPartyIndexScreen() {
     };
 
     loadIncomingRoom();
-  }, [buildRoomPreview, canUseBetaRooms, configReady, features.watchPartyEnabled, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId, params.titleId]);
+  }, [buildRoomPreview, canUseBetaRooms, configReady, features.watchPartyEnabled, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId, params.sourceId, params.sourceType, params.titleId]);
 
   useEffect(() => {
     if (!canUseBetaRooms) return;
@@ -407,28 +473,41 @@ export default function WatchPartyIndexScreen() {
     }
   };
 
-  const buildRoomEntryParams = useCallback((nextPartyId: string, options?: { roomCode?: string | null; titleId?: string | null }) => {
+  const buildRoomEntryParams = useCallback((nextPartyId: string, options?: {
+    roomCode?: string | null;
+    titleId?: string | null;
+    sourceType?: WatchPartyContentSourceType | null;
+    sourceId?: string | null;
+  }) => {
     const nextRoomCode = String(options?.roomCode ?? "").trim().toUpperCase();
     const nextTitleId = String(options?.titleId ?? "").trim();
+    const nextSourceType = options?.sourceType ?? (nextTitleId ? "platform_title" : null);
+    const nextSourceId = String(options?.sourceId ?? nextTitleId ?? "").trim();
 
     return {
       partyId: nextPartyId,
       ...(nextRoomCode ? { roomCode: nextRoomCode } : {}),
       ...(nextTitleId ? { titleId: nextTitleId } : {}),
+      ...(nextSourceType ? { sourceType: nextSourceType } : {}),
+      ...(nextSourceId ? { sourceId: nextSourceId } : {}),
       ...(isPlayerWatchPartyLiveFlow ? { source: PLAYER_WATCH_PARTY_SOURCE } : {}),
     };
   }, [isPlayerWatchPartyLiveFlow]);
 
   const navigateToRoom = useCallback((options: {
     partyId: string;
-    roomType: WatchPartyRoomType;
-    roomCode?: string | null;
-    titleId?: string | null;
-  }) => {
-    const params = buildRoomEntryParams(options.partyId, {
-      roomCode: options.roomCode,
-      titleId: options.titleId,
-    });
+	    roomType: WatchPartyRoomType;
+	    roomCode?: string | null;
+	    titleId?: string | null;
+	    sourceType?: WatchPartyContentSourceType | null;
+	    sourceId?: string | null;
+	  }) => {
+	    const params = buildRoomEntryParams(options.partyId, {
+	      roomCode: options.roomCode,
+	      titleId: options.titleId,
+	      sourceType: options.sourceType,
+	      sourceId: options.sourceId,
+	    });
 
     if (options.roomType === "live") {
       router.push({
@@ -456,6 +535,8 @@ export default function WatchPartyIndexScreen() {
       roomType: nextPreview.room.roomType,
       roomCode: nextPreview.room.roomCode,
       titleId: nextPreview.room.titleId,
+      sourceType: nextPreview.room.sourceType,
+      sourceId: nextPreview.room.sourceId,
     });
   }, [navigateToRoom]);
 
@@ -615,8 +696,16 @@ export default function WatchPartyIndexScreen() {
     }
     const trimmedTitleId = createTitleId.trim();
     const defaultPartyTitleId = String(preparedRoom?.room.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim();
+    const defaultSourceType = preparedRoom?.room.sourceType ?? incomingHandoff?.sourceType ?? initialRouteSourceType;
+    const defaultSourceId = String(preparedRoom?.room.sourceId ?? incomingHandoff?.sourceId ?? initialRouteSourceId ?? defaultPartyTitleId ?? "").trim();
     const activeWaitingRoomType: WatchPartyRoomType = inferredWaitingRoomType;
     const effectiveTitleId = activeWaitingRoomType === "live" ? null : (trimmedTitleId || defaultPartyTitleId || null);
+    const effectiveSourceType = activeWaitingRoomType === "live"
+      ? null
+      : (defaultSourceType ?? (effectiveTitleId ? "platform_title" : null));
+    const effectiveSourceId = activeWaitingRoomType === "live"
+      ? null
+      : (defaultSourceId || effectiveTitleId || null);
     const preparedTargetPartyId = String(preparedRoom?.room.partyId ?? incomingHandoff?.partyId ?? initialRoutePartyId ?? "").trim();
     const preparedTargetRoomCode = String(preparedRoom?.room.roomCode ?? incomingHandoff?.roomCode ?? initialRouteRoomCode ?? "").trim().toUpperCase();
     const preparedTargetTitleId = String(preparedRoom?.room.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim();
@@ -636,6 +725,8 @@ export default function WatchPartyIndexScreen() {
             roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
             roomCode: preparedTargetRoomCode,
             titleId: preparedTargetTitleId,
+            sourceType: defaultSourceType,
+            sourceId: defaultSourceId || null,
           });
           return;
         }
@@ -646,6 +737,8 @@ export default function WatchPartyIndexScreen() {
 
       const room = await createPartyRoom(effectiveTitleId, hostUserId, 0, "paused", {
         roomType,
+        sourceType: effectiveSourceType,
+        sourceId: effectiveSourceId,
       });
 
       if (!room || "error" in room) {
@@ -673,10 +766,14 @@ export default function WatchPartyIndexScreen() {
         roomType: room.roomType,
         roomCode: room.roomCode,
         titleId: room.titleId,
+        sourceType: room.sourceType,
+        sourceId: room.sourceId,
       });
     } catch (error) {
       reportRuntimeError("watch-party-create", error, {
         titleId: effectiveTitleId,
+        sourceType: effectiveSourceType,
+        sourceId: effectiveSourceId,
       });
       trackEvent("room_create_failure", {
         surface: "watch-party-lobby",
@@ -725,8 +822,13 @@ export default function WatchPartyIndexScreen() {
 
     try {
       const requestedTitleId = String(preparedRoom?.room.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim() || null;
-      const roomType: WatchPartyRoomType = preparedRoom?.room.roomType ?? (requestedTitleId ? "title" : "live");
-      const nextPreparedRoom = await createPreparedWaitingRoom(requestedTitleId, roomType);
+      const requestedSourceType = preparedRoom?.room.sourceType ?? incomingHandoff?.sourceType ?? initialRouteSourceType ?? (requestedTitleId ? "platform_title" : null);
+      const requestedSourceId = String(preparedRoom?.room.sourceId ?? incomingHandoff?.sourceId ?? initialRouteSourceId ?? requestedTitleId ?? "").trim() || null;
+      const roomType: WatchPartyRoomType = preparedRoom?.room.roomType ?? (requestedTitleId || requestedSourceId ? "title" : "live");
+      const nextPreparedRoom = await createPreparedWaitingRoom(requestedTitleId, roomType, {
+        sourceType: requestedSourceType,
+        sourceId: requestedSourceId,
+      });
       if (!nextPreparedRoom) {
         setCreateError("Unable to generate a new room code right now.");
         return;
@@ -750,7 +852,7 @@ export default function WatchPartyIndexScreen() {
 
   const inferredWaitingRoomType: WatchPartyRoomType = preview?.room.roomType
     ?? preparedRoom?.room.roomType
-    ?? (incomingHandoff?.titleId || initialRouteTitleId || isPlayerWatchPartyLiveFlow
+    ?? (incomingHandoff?.sourceId || incomingHandoff?.titleId || initialRouteSourceId || initialRouteTitleId || isPlayerWatchPartyLiveFlow
       ? "title"
       : isLiveEntryMode
         ? "live"
@@ -759,11 +861,17 @@ export default function WatchPartyIndexScreen() {
   const isLiveWaitingRoom = activeRoomType === "live" && !isPlayerWatchPartyLiveFlow;
   const activeRoomContext = preview?.room ?? preparedRoom?.room ?? null;
   const partyTitleId = String(activeRoomContext?.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim();
+  const partySourceType = activeRoomContext?.sourceType ?? incomingHandoff?.sourceType ?? initialRouteSourceType ?? (partyTitleId ? "platform_title" : null);
+  const partySourceId = String(activeRoomContext?.sourceId ?? incomingHandoff?.sourceId ?? initialRouteSourceId ?? partyTitleId ?? "").trim();
   const partyTitleName = preview?.titleName
     ?? preparedRoom?.titleName
     ?? entryTitleName
-    ?? (partyTitleId ? "Selected Title" : "Title selection needed");
-  const partyTitleLocked = !isLiveWaitingRoom && !!partyTitleId;
+    ?? (partySourceType === "creator_video"
+      ? "Creator Video"
+      : partyTitleId
+        ? "Selected Title"
+        : "Title selection needed");
+  const partyTitleLocked = !isLiveWaitingRoom && !!(partyTitleId || partySourceId);
   const topRoomCode = preparedRoom?.room.roomCode ?? incomingHandoff?.roomCode ?? initialRouteRoomCode ?? "";
   const isPreparingInitialCode = initialCodeStatus === "preparing" && !topRoomCode;
   const didInitialCodePrepFail = initialCodeStatus === "failed" && !topRoomCode;
@@ -804,7 +912,7 @@ export default function WatchPartyIndexScreen() {
         ? "Preparing the party room code before entry opens."
         : didInitialCodePrepFail
           ? "Room code unavailable right now. Generate a new code to continue."
-          : partyTitleId
+          : partyTitleId || partySourceId
             ? `${partyTitleName} is selected for this room.`
             : "Create the room or join by code to continue.");
   const waitingRoomTagline = isLiveWaitingRoom
@@ -831,11 +939,11 @@ export default function WatchPartyIndexScreen() {
   const partyReadinessRows = [
     {
       label: "Title",
-      status: partyTitleId ? "Ready" : "Needed",
-      detail: partyTitleId
+      status: partyTitleId || partySourceId ? "Ready" : "Needed",
+      detail: partyTitleId || partySourceId
         ? `${partyTitleName} is selected for this waiting room.`
         : "Confirm the title before you host so the shared room stays title-first and intentional.",
-      tone: partyTitleId ? "ready" as const : "needed" as const,
+      tone: partyTitleId || partySourceId ? "ready" as const : "needed" as const,
     },
     {
       label: "Room code",
@@ -857,7 +965,7 @@ export default function WatchPartyIndexScreen() {
       : "Preparing a shareable room code for this waiting room.")
     : "Invite people in Chi'lly Chat, or fall back to system share.";
   const shouldShowWaitingRoomSetupShell = Boolean(
-    activeRoomContext || topRoomCode || partyTitleId || isPreparingInitialCode || didInitialCodePrepFail,
+    activeRoomContext || topRoomCode || partyTitleId || partySourceId || isPreparingInitialCode || didInitialCodePrepFail,
   );
   const shouldShowWaitingRoomInviteSection = Boolean(topRoomCode || isPreparingInitialCode || didInitialCodePrepFail);
   const roomCodeButtonLabel = topRoomCode ? "Generate New Code" : "Generate Room Code";

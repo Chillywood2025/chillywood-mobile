@@ -234,7 +234,7 @@ Smallest safe Public v1 upload requirements:
 2. Upload form with video file picker, title, description, optional thumbnail or fallback, optional category/genre, draft/public visibility, creator `owner_id`, and Profile/Channel linkage through that owner id.
 3. Storage/backend lane with repo-owned bucket/policy migrations, video metadata rows, owner CRUD, public read for public videos only, and no token/secret exposure.
 4. Profile/Channel display where public uploaded videos appear for visitors, owner drafts are visible only to the owner, public empty state stays premium, and owner empty state points to upload.
-5. Player integration for uploaded media URLs. Watch-Party Live should be disabled or explicitly unsupported for uploaded videos until uploaded-video room ownership is designed; do not fake it.
+5. Player integration for uploaded media URLs. Creator-upload Watch-Party linking now has code/local schema support through the normal Party Waiting Room and Party Room flow; live runtime proof still requires the remote Supabase source-model migration.
 6. Creator management for edit metadata, unpublish/draft, and delete. No placeholder manage button.
 
 Recommended remaining implementation order:
@@ -244,7 +244,7 @@ Recommended remaining implementation order:
 3. Rebuild dev client if `expo-document-picker` requires it.
 4. Verify upload, metadata save, Profile/Channel display, Player playback, and public/draft visibility.
 5. Verify creator-video report intake, admin hide/remove/restore, and hidden/removed public/player blocking against live Supabase/RLS.
-6. Consider Watch-Party support only after uploaded-video room linking is designed.
+6. After remote migration proof, verify uploaded-video Watch-Party routing, no Live Stage drift, no platform/sample fallback, and draft/private blocking.
 
 ## Viewer Content Experience
 
@@ -405,7 +405,7 @@ Later implementation order:
 - Apply and verify the creator media migration in the target Supabase environment.
 - Verify `videos` public/draft visibility with real owner and non-owner accounts.
 - Verify creator management for edit metadata, unpublish/draft, and delete at runtime.
-- Make Watch-Party support for uploaded videos truthful: either supported through a real uploaded-video room link or clearly disabled until implemented.
+- Prove Watch-Party support for uploaded videos after the remote source-model migration; until that proof passes, keep unavailable states honest and do not claim runtime success.
 - Add a normal-user explanation of where Profile ends and Channel begins, because the public route is unified and there is no separate `/channel` URL.
 
 ### C. Should Improve Before Public V1 If Easy

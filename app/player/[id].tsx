@@ -52,6 +52,12 @@ import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { readCreatorVideoForPlayer, type CreatorVideo } from "../../_lib/creatorVideos";
 import {
+    getCreatorVideoWatchPartyBlockCopy,
+    getCreatorVideoWatchPartyBlockReason,
+    resolveWatchPartySourceId,
+    resolveWatchPartySourceType,
+} from "../../_lib/watchPartyContentSources";
+import {
     clearTitleShare,
     markTitleShared,
     readTitleEngagementState,
@@ -97,7 +103,7 @@ import {
     submitSafetyReport,
     type SafetyReportCategory,
 } from "../../_lib/moderation";
-import { getInitials, getLiveParticipantStatusText, resolveIdentityName } from "../watch-party/_lib/_room-shared";
+import { getInitials, getLiveParticipantStatusText, PLAYER_WATCH_PARTY_SOURCE, resolveIdentityName } from "../watch-party/_lib/_room-shared";
 
 const ACCENT = "#DC143C";
 const BG = "#0B0B10";
@@ -634,6 +640,7 @@ export default function PlayerScreen() {
 
   const videoRef = useRef<PlayerController | null>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
+  const [creatorVideo, setCreatorVideo] = useState<CreatorVideo | null>(null);
   const [playbackSourceKind, setPlaybackSourceKind] = useState<"title" | "creator-video">("title");
   const [titleLoading, setTitleLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
@@ -832,6 +839,7 @@ export default function PlayerScreen() {
       const routeId = cleanId || String((localTitle as any)?.id ?? (fallbackTitle as any)?.id ?? "").trim();
       setTitleLoading(true);
       setItem(null);
+      setCreatorVideo(null);
       setPlaybackSourceKind("title");
 
       if (!routeId) {
@@ -850,6 +858,7 @@ export default function PlayerScreen() {
           if (video && active) {
             console.log("PLAYER MATCH SOURCE: matched from", "creator-video:id");
             setPlaybackSourceKind("creator-video");
+            setCreatorVideo(video);
             setItem(buildCreatorPlayerTitle(video));
             setTitleLoading(false);
           } else if (active) {
@@ -894,6 +903,7 @@ export default function PlayerScreen() {
         if (video && active) {
           console.log("PLAYER MATCH SOURCE: matched from", "creator-video:fallback");
           setPlaybackSourceKind("creator-video");
+          setCreatorVideo(video);
           setItem(buildCreatorPlayerTitle(video));
           setTitleLoading(false);
           return;
@@ -1216,6 +1226,22 @@ export default function PlayerScreen() {
         return;
       }
 
+      const roomSourceType = resolveWatchPartySourceType(snapshot.room);
+      const roomSourceId = resolveWatchPartySourceId(snapshot.room);
+      if (snapshot.room.roomType === "title") {
+        if (roomSourceType === "creator_video" && (!expectsCreatorVideo || String(roomSourceId ?? "") !== cleanId)) {
+          setWatchPartyEntryError("This watch party is linked to a different creator video source.");
+          setWatchPartyEntryLoading(false);
+          return;
+        }
+
+        if (roomSourceType === "platform_title" && (expectsCreatorVideo || String(roomSourceId ?? snapshot.room.titleId ?? "") !== cleanId)) {
+          setWatchPartyEntryError("This watch party is linked to a different title source.");
+          setWatchPartyEntryLoading(false);
+          return;
+        }
+      }
+
       updatePartyMembershipMap(snapshot.memberships);
       const writableUserId = await getWritablePartyUserId().catch(() => null);
       if (!active) return;
@@ -1246,7 +1272,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [inWatchParty, partyId, updatePartyMembershipMap, watchPartyEntryRetryToken]);
+  }, [cleanId, expectsCreatorVideo, inWatchParty, partyId, updatePartyMembershipMap, watchPartyEntryRetryToken]);
 
   const refreshPartyMembershipSnapshot = useCallback(async () => {
     if (!partyId) return null;
@@ -2704,10 +2730,60 @@ export default function PlayerScreen() {
 
   const onWatchParty = useCallback(async () => {
     if (playbackSourceKind === "creator-video") {
-      Alert.alert(
-        "Watch-Party Live not ready",
-        "Uploaded creator videos open in Player now. Watch-Party Live support for uploaded videos needs a separate room-linking pass.",
-      );
+      if (!isSignedIn) {
+        Alert.alert("Sign in required", "Sign in before starting Watch-Party Live from a creator video.");
+        return;
+      }
+
+      if (titleLoading) {
+        Alert.alert("Checking video", "Chi'llywood is still resolving this creator video.");
+        return;
+      }
+
+      const blockReason = getCreatorVideoWatchPartyBlockReason(creatorVideo);
+      const blockCopy = getCreatorVideoWatchPartyBlockCopy(blockReason);
+      if (blockCopy) {
+        Alert.alert(blockCopy.title, blockCopy.body);
+        return;
+      }
+
+      const creatorVideoId = String(creatorVideo?.id ?? titleId ?? "").trim();
+      if (!creatorVideoId) {
+        Alert.alert("Creator video unavailable", "Chi'llywood could not resolve this uploaded video for Watch-Party Live.");
+        return;
+      }
+
+      try {
+        const hostUserId = await getSafePartyUserId();
+        console.log("WATCH_PARTY SOURCE: creator_video", { sourceId: creatorVideoId });
+        const room = await createPartyRoom(null, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused", {
+          roomType: "title",
+          sourceType: "creator_video",
+          sourceId: creatorVideoId,
+        });
+
+        if (room && "partyId" in room && room.partyId) {
+          router.push({
+            pathname: "/watch-party",
+            params: {
+              roomId: room.partyId,
+              roomCode: room.roomCode,
+              source: PLAYER_WATCH_PARTY_SOURCE,
+              sourceType: "creator_video",
+              sourceId: creatorVideoId,
+            },
+          });
+          return;
+        }
+
+        const rawMessage = room && "error" in room ? room.error.message : "";
+        const message = /source_(type|id)|column/i.test(rawMessage)
+          ? "Watch-Party is unavailable for this video until the creator-video room source model is available."
+          : "Watch-Party is unavailable for this video.";
+        Alert.alert("Watch-Party unavailable", message);
+      } catch {
+        Alert.alert("Watch-Party unavailable", "Unable to create a Watch-Party room for this creator video right now.");
+      }
       return;
     }
 
@@ -2753,15 +2829,21 @@ export default function PlayerScreen() {
       const roomType = createTitleId ? "title" : "live";
       const room = await createPartyRoom(createTitleId || null, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused", {
         roomType,
+        sourceType: createTitleId ? "platform_title" : null,
+        sourceId: createTitleId || null,
       });
       console.log("WATCH PARTY: createPartyRoom returned", room);
 
       if (room && "partyId" in room && room.partyId) {
+        const roomSourceType = room.sourceType ?? (createTitleId ? "platform_title" : null);
+        const roomSourceId = room.sourceId ?? createTitleId;
         const navParams = {
           roomId: room.partyId,
           roomCode: room.roomCode,
           titleId: room.titleId || createTitleId,
-          source: "player-watch-party-live",
+          source: PLAYER_WATCH_PARTY_SOURCE,
+          ...(roomSourceType ? { sourceType: roomSourceType } : {}),
+          ...(roomSourceId ? { sourceId: roomSourceId } : {}),
         };
         console.log("WATCH PARTY: navigating with params", navParams);
         router.push({ pathname: "/watch-party", params: navParams });
@@ -2773,7 +2855,7 @@ export default function PlayerScreen() {
 
     console.log("WATCH PARTY: room creation failed, fallback to /watch-party");
     router.push("/watch-party");
-  }, [isPlaying, playbackSourceKind, titleId, item?.id, item?.title, localTitle, fallbackTitle]);
+  }, [creatorVideo, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle, fallbackTitle]);
 
   const onSubmitCreatorVideoReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
     if (playbackSourceKind !== "creator-video" || !titleId || creatorVideoReportBusy) return;

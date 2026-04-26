@@ -77,6 +77,11 @@ import {
     type WatchPartyRoomMembership,
     type WatchPartyState,
 } from "../../_lib/watchParty";
+import {
+  resolveWatchPartyContentSource,
+  resolveWatchPartySourceId,
+  resolveWatchPartySourceType,
+} from "../../_lib/watchPartyContentSources";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
@@ -594,18 +599,14 @@ export default function WatchPartyRoomScreen() {
           return;
         }
 
-        if (snapshot.room.titleId) {
-          supabase
-            .from("titles")
-            .select("title")
-            .eq("id", snapshot.room.titleId)
-            .maybeSingle()
-            .then(
-              ({ data }) => { if (data?.title && !cancelled) setTitleName(String(data.title)); },
-              () => {},
-            );
-        } else {
+        if (snapshot.room.roomType === "live") {
           setTitleName("Live Room");
+        } else {
+          resolveWatchPartyContentSource(snapshot.room)
+            .then((contentSource) => {
+              if (contentSource.displayName && !cancelled) setTitleName(contentSource.displayName);
+            })
+            .catch(() => {});
         }
 
         const { data: recentRows } = await supabase
@@ -651,7 +652,7 @@ export default function WatchPartyRoomScreen() {
           }, ROOM_HEARTBEAT_INTERVAL_MILLIS);
         }
 
-        if (partyId && snapshot.room.titleId) {
+        if (partyId && snapshot.room.sourceType !== "creator_video" && snapshot.room.titleId) {
           await saveLastPartySession({ partyId, titleId: snapshot.room.titleId, joinedAt: Date.now() }).catch(() => {});
         }
 
@@ -1315,18 +1316,24 @@ export default function WatchPartyRoomScreen() {
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async () => {
     const nextPartyId = String(room?.partyId ?? partyId ?? "").trim();
+    let targetSourceType = resolveWatchPartySourceType(room);
+    let targetSourceId = resolveWatchPartySourceId(room);
     let targetTitleId = String(room?.titleId ?? "").trim();
 
-    if (!targetTitleId && nextPartyId) {
+    if ((!targetSourceId || !targetSourceType) && nextPartyId) {
       const latestRoom = await getPartyRoom(nextPartyId).catch(() => null);
+      targetSourceType = resolveWatchPartySourceType(latestRoom);
+      targetSourceId = resolveWatchPartySourceId(latestRoom);
       targetTitleId = String(latestRoom?.titleId ?? "").trim();
     }
 
-    if (!targetTitleId) {
+    if (!targetSourceId) {
       targetTitleId = String(titleIdHint ?? "").trim();
+      targetSourceType = targetTitleId ? "platform_title" : targetSourceType;
+      targetSourceId = targetTitleId || null;
     }
 
-    if (!nextPartyId || !targetTitleId) {
+    if (!nextPartyId || !targetSourceId) {
       Alert.alert("Unable to go live", "This room is missing required watch-party context.");
       return;
     }
@@ -1347,7 +1354,9 @@ export default function WatchPartyRoomScreen() {
       participantRole,
       metadata: {
         roomCode: room?.roomCode ?? null,
-        titleId: targetTitleId,
+        titleId: targetSourceType === "platform_title" ? targetSourceId : null,
+        sourceType: targetSourceType,
+        sourceId: targetSourceId,
         source: "party-room-watch-party-live",
       },
     });
@@ -1373,19 +1382,21 @@ export default function WatchPartyRoomScreen() {
       }
     }
 
-    debugLog("watch-party", "open player", { targetTitleId });
+    debugLog("watch-party", "open player", {
+      sourceType: targetSourceType,
+      sourceId: targetSourceId,
+    });
     router.push({
       pathname: "/player/[id]",
       params: {
-        id: targetTitleId,
+        id: targetSourceId,
         partyId: nextPartyId,
+        ...(targetSourceType === "creator_video" ? { source: "creator-video" } : {}),
       },
     });
   }, [
     partyId,
-    room?.partyId,
-    room?.roomCode,
-    room?.titleId,
+    room,
     router,
     titleIdHint,
   ]);
@@ -1407,7 +1418,7 @@ export default function WatchPartyRoomScreen() {
   };
 
   const isPlaying = room?.playbackState === "playing";
-  const isLiveRoom = room?.roomType === "live" || !room?.titleId;
+  const isLiveRoom = room?.roomType === "live";
   const backgroundSource: ImageSourcePropType | null = (() => {
     const first = localTitles[0] as any;
     return first?.image || first?.poster || null;

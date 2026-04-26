@@ -1266,6 +1266,8 @@ export type Database = {
           playback_state: string
           reactions_policy: string
           room_type: string
+          source_id: string | null
+          source_type: string | null
           started_at: string
           title_id: string | null
           updated_at: string
@@ -1283,6 +1285,8 @@ export type Database = {
           playback_state?: string
           reactions_policy?: string
           room_type?: string
+          source_id?: string | null
+          source_type?: string | null
           started_at?: string
           title_id?: string | null
           updated_at?: string
@@ -1300,6 +1304,8 @@ export type Database = {
           playback_state?: string
           reactions_policy?: string
           room_type?: string
+          source_id?: string | null
+          source_type?: string | null
           started_at?: string
           title_id?: string | null
           updated_at?: string

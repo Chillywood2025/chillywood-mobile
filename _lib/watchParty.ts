@@ -31,6 +31,7 @@ import { readUserProfile } from "./userData";
 export type WatchPartyRole = "host" | "viewer";
 export type WatchPartyPlaybackState = "playing" | "paused" | "buffering";
 export type WatchPartyRoomType = "live" | "title";
+export type WatchPartyContentSourceType = "platform_title" | "creator_video";
 export type WatchPartyStageRole = "host" | "speaker" | "listener";
 
 export type WatchPartyState = {
@@ -38,6 +39,8 @@ export type WatchPartyState = {
   roomCode: string;
   roomType: WatchPartyRoomType;
   titleId: string | null;
+  sourceType: WatchPartyContentSourceType | null;
+  sourceId: string | null;
   hostUserId: string;
   playbackPositionMillis: number;
   playbackState: WatchPartyPlaybackState;
@@ -107,6 +110,8 @@ export type WatchPartyHostAction =
 export type WatchPartyRoomDraft = {
   roomType?: WatchPartyRoomType;
   titleId?: string | null;
+  sourceType?: WatchPartyContentSourceType | null;
+  sourceId?: string | null;
   hostUserId: string;
   playbackPositionMillis?: number;
   playbackState?: WatchPartyPlaybackState;
@@ -145,6 +150,8 @@ type MembershipUpsertOptions = {
 
 type WatchPartyRoomCreateOptions = {
   roomType?: WatchPartyRoomType;
+  sourceType?: WatchPartyContentSourceType | null;
+  sourceId?: string | null;
   joinPolicy?: JoinPolicy;
   reactionsPolicy?: ReactionsPolicy;
   contentAccessRule?: ContentAccessRule;
@@ -194,6 +201,8 @@ type PartyRoomBaseInsert = Pick<
   | "room_type"
   | "host_user_id"
   | "title_id"
+  | "source_type"
+  | "source_id"
   | "playback_position_millis"
   | "playback_state"
   | "started_at"
@@ -204,6 +213,20 @@ type PartyMembershipInsert = TablesInsert<"watch_party_room_memberships">;
 type PartyMembershipUpdate = TablesUpdate<"watch_party_room_memberships">;
 
 type PartyRoomBaseRow = Pick<
+  Tables<"watch_party_rooms">,
+  | "party_id"
+  | "room_type"
+  | "host_user_id"
+  | "title_id"
+  | "source_type"
+  | "source_id"
+  | "playback_position_millis"
+  | "playback_state"
+  | "started_at"
+  | "updated_at"
+>;
+
+type PartyRoomLegacyBaseRow = Pick<
   Tables<"watch_party_rooms">,
   | "party_id"
   | "room_type"
@@ -220,7 +243,7 @@ type PartyRoomFullRow = PartyRoomBaseRow & Pick<
   "join_policy" | "reactions_policy" | "content_access_rule" | "capture_policy" | "last_activity_at"
 >;
 
-export type PartyRoomRow = PartyRoomBaseRow | PartyRoomFullRow;
+export type PartyRoomRow = PartyRoomLegacyBaseRow | PartyRoomBaseRow | PartyRoomFullRow;
 
 type PartyMembershipRow = Pick<
   Tables<"watch_party_room_memberships">,
@@ -242,8 +265,10 @@ type PartyMembershipRow = Pick<
   | "updated_at"
 >;
 
-const PARTY_ROOMS_BASE_SELECT =
+const PARTY_ROOMS_LEGACY_BASE_SELECT =
   "party_id,room_type,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at";
+const PARTY_ROOMS_BASE_SELECT =
+  `${PARTY_ROOMS_LEGACY_BASE_SELECT},source_type,source_id`;
 const PARTY_ROOMS_POLICY_SELECT =
   `${PARTY_ROOMS_BASE_SELECT},join_policy,reactions_policy,content_access_rule,capture_policy,last_activity_at`;
 const PARTY_ROOM_MEMBERSHIP_SELECT =
@@ -259,6 +284,15 @@ let cachedGuestUserId: string | null = null;
 const isDefined = <T>(value: T | null): value is T => value !== null;
 const isNonEmptyString = (value: string | null | undefined): value is string =>
   typeof value === "string" && value.length > 0;
+
+const normalizeWatchPartyContentSourceType = (
+  value: string | null | undefined,
+): WatchPartyContentSourceType | null => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "creator_video") return "creator_video";
+  if (normalized === "platform_title") return "platform_title";
+  return null;
+};
 
 export const createPartyId = () => {
   const stamp = Date.now().toString(36);
@@ -398,14 +432,21 @@ export async function getSafePartyUserId(): Promise<string> {
 export const createWatchPartyDraft = (draft: WatchPartyRoomDraft): WatchPartyState => {
   const now = new Date().toISOString();
   const partyId = createPartyId();
-  const roomType: WatchPartyRoomType = draft.roomType ?? (draft.titleId ? "title" : "live");
+  const sourceType = normalizeWatchPartyContentSourceType(draft.sourceType)
+    ?? (draft.titleId ? "platform_title" : null);
+  const roomType: WatchPartyRoomType = draft.roomType ?? (sourceType || draft.titleId ? "title" : "live");
   const titleId = roomType === "title" ? String(draft.titleId ?? "").trim() || null : null;
+  const sourceId = roomType === "title"
+    ? String(draft.sourceId ?? titleId ?? "").trim() || null
+    : null;
 
   return {
     partyId,
     roomCode: partyId,
     roomType,
     titleId,
+    sourceType,
+    sourceId,
     hostUserId: draft.hostUserId,
     playbackPositionMillis: Math.max(0, Math.floor(draft.playbackPositionMillis ?? 0)),
     playbackState: draft.playbackState ?? "paused",
@@ -423,13 +464,22 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
   const primaryId = String(row.party_id ?? "").trim();
   const hostUserId = String(row.host_user_id ?? "").trim();
   const titleIdRaw = String(row.title_id ?? "").trim();
+  const sourceTypeRaw = "source_type" in row ? String(row.source_type ?? "").trim().toLowerCase() : "";
+  const sourceIdRaw = "source_id" in row ? String(row.source_id ?? "").trim() : "";
   const roomTypeRaw = String(row.room_type ?? "").trim().toLowerCase();
+  const sourceType = normalizeWatchPartyContentSourceType(sourceTypeRaw)
+    ?? (titleIdRaw ? "platform_title" : null);
+  const sourceId = sourceType === "platform_title"
+    ? (sourceIdRaw || titleIdRaw || null)
+    : sourceType === "creator_video"
+      ? (sourceIdRaw || null)
+      : null;
   const roomType: WatchPartyRoomType =
     roomTypeRaw === "live"
       ? "live"
       : roomTypeRaw === "title"
         ? "title"
-        : titleIdRaw
+        : titleIdRaw || sourceId
           ? "title"
           : "live";
   const joinPolicy = "join_policy" in row ? row.join_policy : undefined;
@@ -439,7 +489,7 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
   const lastActivityAt = "last_activity_at" in row ? row.last_activity_at : undefined;
 
   if (!primaryId || !hostUserId) return null;
-  if (roomType === "title" && !titleIdRaw) return null;
+  if (roomType === "title" && !titleIdRaw && !sourceId) return null;
 
   const now = new Date().toISOString();
 
@@ -449,6 +499,8 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
     roomType,
     hostUserId,
     titleId: titleIdRaw || null,
+    sourceType,
+    sourceId,
     playbackPositionMillis: Math.max(0, Number(row.playback_position_millis ?? 0)),
     playbackState: row.playback_state === "playing" ? "playing" : "paused",
     joinPolicy: normalizeJoinPolicy(joinPolicy),
@@ -536,12 +588,19 @@ async function fetchPartyRoomRow(lookupPartyId: string): Promise<PartyRoomRow | 
 
   if (!query.error && query.data) return query.data;
 
-  if (query.error && isMissingColumnError(query.error, "join_policy")) {
+  if (
+    query.error
+    && (
+      isMissingColumnError(query.error, "join_policy")
+      || isMissingColumnError(query.error, "source_type")
+      || isMissingColumnError(query.error, "source_id")
+    )
+  ) {
     const fallback = await supabase
       .from(PARTY_ROOMS_TABLE)
-      .select(PARTY_ROOMS_BASE_SELECT)
+      .select(PARTY_ROOMS_LEGACY_BASE_SELECT)
       .eq("party_id", normalizedPartyId)
-      .returns<PartyRoomBaseRow>()
+      .returns<PartyRoomLegacyBaseRow>()
       .maybeSingle();
     if (!fallback.error && fallback.data) return fallback.data;
   }
@@ -613,8 +672,14 @@ export async function createPartyRoom(
   options?: WatchPartyRoomCreateOptions,
 ): Promise<WatchPartyCreateResult> {
   const requestedTitleId = String(titleId ?? "").trim();
-  const requestedRoomType: WatchPartyRoomType = options?.roomType ?? (requestedTitleId ? "title" : "live");
-  const resolvedTitleId = requestedRoomType === "title" ? await resolvePartyTitleId(requestedTitleId) : null;
+  const requestedSourceType = normalizeWatchPartyContentSourceType(options?.sourceType);
+  const requestedSourceId = String(options?.sourceId ?? "").trim();
+  const isCreatorVideoRoom = requestedSourceType === "creator_video";
+  const requestedRoomType: WatchPartyRoomType = options?.roomType ?? (isCreatorVideoRoom || requestedTitleId ? "title" : "live");
+  const platformTitleRequestId = requestedTitleId || (requestedSourceType === "platform_title" ? requestedSourceId : "");
+  const resolvedTitleId = requestedRoomType === "title" && !isCreatorVideoRoom
+    ? await resolvePartyTitleId(platformTitleRequestId)
+    : null;
   const requestedHostUserId = String(hostUserId ?? "").trim();
   const resolvedHostUserId = await resolvePartyHostUserId(requestedHostUserId);
   const [appConfig, profile] = await Promise.all([
@@ -647,9 +712,10 @@ export async function createPartyRoom(
       ?? roomDefaults.capturePolicy,
   );
   const titleIdCandidates: (string | null)[] =
-    requestedRoomType === "live"
+    requestedRoomType === "live" || isCreatorVideoRoom
       ? [null]
-      : Array.from(new Set([resolvedTitleId, requestedTitleId].filter(isNonEmptyString)));
+      : Array.from(new Set([resolvedTitleId, platformTitleRequestId].filter(isNonEmptyString)));
+  const creatorVideoSourceId = isCreatorVideoRoom ? requestedSourceId : "";
   const hostUserIdCandidates = Array.from(new Set([resolvedHostUserId].filter(isNonEmptyString)));
 
   if (!hostUserIdCandidates.length) {
@@ -661,10 +727,19 @@ export async function createPartyRoom(
     return { error: explicitError };
   }
 
-  if (requestedRoomType === "title" && !titleIdCandidates.length) {
+  if (requestedRoomType === "title" && isCreatorVideoRoom && !creatorVideoSourceId) {
+    const explicitError = toCreateError(
+      { message: "Unable to resolve valid creator video source for watch party room" },
+      { requestedSourceType, requestedSourceId },
+    );
+    debugLog("watch-party", "createPartyRoom creator video source resolution failed", explicitError);
+    return { error: explicitError };
+  }
+
+  if (requestedRoomType === "title" && !isCreatorVideoRoom && !titleIdCandidates.length) {
     const explicitError = toCreateError(
       { message: "Unable to resolve valid titleId for watch party room" },
-      { requestedTitleId, resolvedTitleId },
+      { requestedTitleId, requestedSourceId, resolvedTitleId },
     );
     debugLog("watch-party", "createPartyRoom title resolution failed", explicitError);
     return { error: explicitError };
@@ -678,11 +753,19 @@ export async function createPartyRoom(
         for (let attempt = 0; attempt < 5; attempt += 1) {
           const generatedPartyId = createPartyIdentifier();
           const now = new Date().toISOString();
+          const sourceType: WatchPartyContentSourceType | null = isCreatorVideoRoom
+            ? "creator_video"
+            : requestedRoomType === "title"
+              ? "platform_title"
+              : null;
+          const sourceId = isCreatorVideoRoom ? creatorVideoSourceId : (safeTitleId ?? null);
           const payload: PartyRoomInsert = {
             party_id: generatedPartyId,
             room_type: requestedRoomType,
             host_user_id: safeHostUserId,
             title_id: safeTitleId,
+            source_type: sourceType,
+            source_id: sourceId,
             playback_position_millis: Math.max(0, Math.floor(positionMillis)),
             playback_state: state,
             join_policy: joinPolicy,
@@ -710,7 +793,32 @@ export async function createPartyRoom(
             );
           }
 
-          if (error && isMissingColumnError(error, "join_policy")) {
+          if (
+            error
+            && (
+              isMissingColumnError(error, "join_policy")
+              || isMissingColumnError(error, "source_type")
+              || isMissingColumnError(error, "source_id")
+            )
+            && isCreatorVideoRoom
+          ) {
+            lastError = toCreateError(error, {
+              requestedSourceType,
+              requestedSourceId,
+              source: "createPartyRoom.creatorVideoMissingSourceColumns",
+            });
+            debugLog("watch-party", "createPartyRoom creator video insert missing source columns", lastError);
+            break;
+          }
+
+          if (
+            error
+            && (
+              isMissingColumnError(error, "join_policy")
+              || isMissingColumnError(error, "source_type")
+              || isMissingColumnError(error, "source_id")
+            )
+          ) {
             const fallbackPayload: PartyRoomBaseInsert = {
               party_id: generatedPartyId,
               room_type: requestedRoomType,
@@ -725,8 +833,8 @@ export async function createPartyRoom(
             const { data: fallbackData, error: fallbackError } = await supabase
               .from(PARTY_ROOMS_TABLE)
               .insert(fallbackPayload)
-              .select(PARTY_ROOMS_BASE_SELECT)
-              .returns<PartyRoomBaseRow>()
+              .select(PARTY_ROOMS_LEGACY_BASE_SELECT)
+              .returns<PartyRoomLegacyBaseRow>()
               .single();
 
             if (!fallbackError && fallbackData) {
@@ -755,10 +863,12 @@ export async function createPartyRoom(
         lastError ??
         toCreateError(
           { message: "Room creation failed without a Supabase error payload" },
-          {
-            requestedTitleId,
-            resolvedTitleId,
-            titleIdCandidates,
+            {
+              requestedTitleId,
+              resolvedTitleId,
+              requestedSourceType,
+              requestedSourceId,
+              titleIdCandidates,
             requestedHostUserId,
             resolvedHostUserId,
             hostUserIdCandidates,
@@ -775,6 +885,8 @@ export async function createPartyRoom(
     const explicitError = toCreateError(error, {
       requestedTitleId,
       resolvedTitleId,
+      requestedSourceType,
+      requestedSourceId,
       titleIdCandidates,
       requestedHostUserId,
       resolvedHostUserId,
@@ -791,6 +903,8 @@ export async function createPartyRoom(
       resolvedTitleId,
       requestedHostUserId,
       resolvedHostUserId,
+      requestedSourceType,
+      requestedSourceId,
     });
     return { error: explicitError };
   }

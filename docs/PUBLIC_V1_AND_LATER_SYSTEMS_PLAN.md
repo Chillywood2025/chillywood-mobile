@@ -36,7 +36,7 @@ Current Public v1 truth:
 - Creator upload is Public v1 required.
 - Creator-uploaded videos upload, save metadata/storage, show on Profile/Channel, and open the standalone premium Player through `/player/[id]?source=creator-video`.
 - Creator videos use the same premium Player shell as platform/admin titles.
-- Creator-upload Watch-Party Live is intentionally blocked with honest not-ready copy until creator-upload Watch-Party linking is built.
+- Creator-upload Watch-Party linking is implemented in code/local schema, but Public v1 runtime proof still requires the remote Supabase source-model migration and Android proof.
 - Comment media upload is post-v1.
 - Native game/video streaming is later phase.
 - Paid/subscriber media, tips, coins, payouts, VIPs, and advanced creator studio are later phase.
@@ -979,14 +979,14 @@ Because creator uploads exist, v1 must include or clearly schedule before launch
 
 ### Purpose
 
-This system will eventually allow creator-uploaded videos to start Watch-Party sessions. It is not the same as creator upload, standalone Player playback, Live Stage, or LiveKit camera rooms.
+This system allows creator-uploaded videos to start Watch-Party sessions once the shared room source model is present in the backend. It is not the same as creator upload, standalone Player playback, Live Stage, or LiveKit camera rooms.
 
 Current truth:
 
 - Creator-uploaded videos open in standalone premium Player.
-- Creator-uploaded videos do not currently start Watch-Party.
-- Watch-Party Live for creator uploads is honestly blocked.
-- That is correct unless/until this linking system is built and proven.
+- Creator-upload Watch-Party linking is implemented in code with `watch_party_rooms.source_type/source_id`, normal Party Waiting Room routing, Party Room handoff, and Player resolution for `/player/[id]?source=creator-video`.
+- Local Supabase migration proof passed for the source model and trigger behavior.
+- Live Android proof is pending because the remote Supabase project must apply `202604260003_creator_video_watch_party_linking.sql` before room creation can persist creator-video source truth.
 
 ### A. System ownership
 
@@ -998,7 +998,7 @@ Suggested future helper owners:
 
 Current route owners that will interact:
 
-- `app/player/[id].tsx`: creator-video Watch-Party CTA must stay blocked until linking exists.
+- `app/player/[id].tsx`: creator-video Watch-Party CTA owns eligibility and normal waiting-room handoff.
 - `app/watch-party/index.tsx`: current waiting room / room creation entry.
 - `app/watch-party/[partyId].tsx`: Party Room shared playback owner.
 - waiting room route files if split later.
@@ -1010,7 +1010,7 @@ Current backend owners:
 - `watch_party_sync_events`
 - `watch_party_room_messages`
 
-Suggested future backend owners:
+Suggested later backend owners if the current `watch_party_rooms` source model grows too large:
 
 - `watch_party_sessions`
 - `watch_party_content_sources`
@@ -1042,7 +1042,7 @@ Suggested future backend owners:
 
 ### D. Source model
 
-Future shared source fields:
+Shared source fields:
 
 - `source_type = platform_title | creator_video`
 - `source_id = id of platform title or creator video`
@@ -1055,7 +1055,7 @@ Future shared source fields:
 - `created_at`
 - `expires_at`
 
-Current `watch_party_rooms.title_id` only models platform/title-style rooms. Do not overload `title_id` with creator-video ids unless a deliberate compatibility plan maps it safely.
+Current `watch_party_rooms.title_id` remains the platform-title compatibility field. Creator uploads use `source_type = creator_video` and `source_id = videos.id`; do not overload `title_id` with creator-video ids.
 
 ### E. Eligibility rules
 
@@ -1111,13 +1111,11 @@ When built:
 
 ### I. Current v1 recommendation
 
-For Public v1, keep creator-upload Watch-Party blocked unless the linking system is intentionally built and fully proven.
+For Public v1, creator-upload Watch-Party may ship only after the remote migration and Android runtime proof pass. Until then, failures must remain honest, for example:
 
-Required honest copy:
+`Watch-Party is unavailable for this video.`
 
-`Watch-Party for creator uploads is coming soon.`
-
-The current Player copy "Watch-Party Live not ready" is an acceptable honest variant.
+Do not claim creator-upload Watch-Party support from TypeScript or local Supabase proof alone.
 
 ### J. Proof checklist when built
 
@@ -1642,9 +1640,9 @@ Recommendation:
 ### Creator Media + Watch-Party
 
 - Creator uploads play in Player now.
-- Watch-Party is blocked until linking is built.
-- Future linking needs `source_type` and `source_id`.
-- Future Party Room must resolve creator-video source without platform fallback.
+- Creator-upload Watch-Party linking now uses `source_type` and `source_id`.
+- Runtime support must stay unavailable until remote backend schema and route proof pass.
+- Party Room must resolve creator-video source without platform fallback.
 
 ### Creator Media + Moderation
 
@@ -1705,7 +1703,7 @@ Recommendation:
 
 ### Public v1 optional
 
-- creator-upload Watch-Party linking
+- creator-upload Watch-Party linking runtime proof
 - more advanced audience roles
 - push notifications
 - deeper analytics
@@ -1726,7 +1724,7 @@ Recommendation:
 - full Audience Role Roster
 - advanced creator studio
 - automatic transcoding
-- creator-upload Watch-Party linking if not intentionally pulled into v1
+- creator-upload Watch-Party linking follow-up if runtime proof is not completed for Public v1
 
 ## SECTION 11 - Failure Behavior Standards
 
@@ -1754,7 +1752,7 @@ User-facing failure copy style:
 | Billing | "Could not verify purchase." |
 | Upload | "Upload failed. Try again." |
 | Player | "Creator video unavailable." |
-| Watch-Party linking | "Watch-Party for creator uploads is coming soon." |
+| Watch-Party linking | "Watch-Party is unavailable for this video." |
 | Moderation | "This content is unavailable." |
 | Native game streaming later | "Game streaming is not available yet." |
 
@@ -1764,7 +1762,7 @@ System-specific rules:
 - Billing pending state does not unlock protected actions.
 - Creator upload failure shows visible error and does not create broken public cards.
 - Player missing creator source stays in premium Player shell with honest unavailable copy.
-- Watch-Party creator upload CTA stays blocked until source linking is built.
+- Watch-Party creator upload CTA must block or show unavailable copy until remote source-model truth exists and eligibility passes.
 - Moderation hidden/removed content must not play publicly.
 - Native game streaming unavailable state must not open Live Stage as a fake substitute.
 
