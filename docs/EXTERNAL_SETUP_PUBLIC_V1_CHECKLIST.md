@@ -49,6 +49,7 @@ Use current official documentation during actual setup because console requireme
 - Android release/EAS signing lane runbook: `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`
 - Firebase Crashlytics: `https://firebase.google.com/docs/crashlytics/get-started?platform=android`
 - Firebase Performance Monitoring: `https://firebase.google.com/docs/perf-mon/get-started-android`
+- Firebase Crashlytics/Performance lane runbook: `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`
 - Supabase migrations and local development: `https://supabase.com/docs/guides/deployment/database-migrations` and `https://supabase.com/docs/guides/local-development/overview`
 - LiveKit authentication and networking: `https://docs.livekit.io/frontends/build/authentication/` and `https://docs.livekit.io/transport/self-hosting/ports-firewall/`
 - Expo EAS Build and Play submission: `https://docs.expo.dev/build/introduction/` and `https://docs.expo.dev/submit/android/`
@@ -65,9 +66,9 @@ Use current official documentation during actual setup because console requireme
 | Account deletion policy | `app/account-deletion.tsx` exists and `app.config.ts` has fallback hosted URL `https://live.chillywoodstream.com/account-deletion`; Settings links to deletion support. It is an honest request/help flow, not fake automated deletion. The route now explicitly names Profile, Channel, uploaded videos, chat messages, room records, billing/subscription records, and moderation/report records. | Confirm public hosted account deletion URL, process owner, response SLA, backend deletion/export policy, and Play Console account deletion declaration. | Product owner plus support/legal owner. | URL is public, opens outside the app, explains delete request flow, and Play Console accepts it. | External Setup Pending | Follow the Lane 2 runbook below and `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`; do not build destructive deletion until the backend retention plan is approved. |
 | Legal pages and support | Routes exist for Privacy, Terms, Community Guidelines, Copyright/DMCA, Support, and account deletion. `app.config.ts` has privacy/terms/account deletion fallbacks and supports `EXPO_PUBLIC_SUPPORT_EMAIL`. Privacy, Terms, and account-deletion fallback URLs returned HTTP 200 during the Lane 2 audit. | Legal review, final hosted URLs, final support email, DMCA/contact process, and support inbox ownership. | Legal/support owner. | Links open in release build, public URLs are reachable, support email/inbox receives a test request, and legal copy is approved. | External Setup Pending | Finalize legal copy, hosted policy URLs, and support mailbox, then set release env for privacy, terms, account deletion, and support email. |
 | Android permissions and policy declarations | `app.json` requests `CAMERA`, `RECORD_AUDIO`, and `MODIFY_AUDIO_SETTINGS`. Live Stage/LiveKit uses camera/microphone. Notification packages are present but push delivery is not a v1 proof target. | Declare camera/microphone purpose in Play Console, privacy copy, and store listing. Confirm any notification/runtime permissions used by release build. | Release manager plus product owner. | Install release build, verify permission prompts are contextual and Play declarations match actual features. | External Setup Pending | Run release build permission smoke and update Play Console declarations before production review. |
-| Firebase project and Android config | Firebase packages and config plugins are present. `firebase.json` enables Crashlytics collection/debug settings. `google-services.json` exists for project `chillywood-app` and package `com.chillywood.mobile`. Helpers exist for Crashlytics, Performance, Analytics, and Remote Config. | Verify Firebase project ownership, Android app registration, SHA/package match if required, Crashlytics and Performance dashboard setup, and production data collection posture. | Release manager/Firebase owner. | Internal/release build reports a non-fatal Crashlytics event, Performance traces appear, and dashboards show the expected Android app. | Proof Pending | Build an internal release candidate, trigger a safe non-fatal/test crash path if available, and confirm dashboard arrival without logging secrets. |
-| Firebase Crashlytics | `@react-native-firebase/crashlytics` and helper code exist. | Confirm Crashlytics is enabled in Firebase console and compatible with the release build type. | Firebase owner. | A controlled non-fatal report or test crash appears in Crashlytics for `com.chillywood.mobile`. | Proof Pending | Run Crashlytics proof in an internal build and save dashboard/screenshot evidence. |
-| Firebase Performance and analytics/remote config | `@react-native-firebase/perf`, analytics, and remote config packages/helpers exist. | Confirm performance monitoring and analytics collection are appropriate for policy disclosures and release environment. | Firebase owner plus privacy owner. | Performance trace/network metric appears in Firebase; privacy policy/Data Safety mentions applicable diagnostics/analytics behavior. | Proof Pending | Run a short release-candidate Performance proof and update policy declarations if data collection differs. |
+| Firebase project and Android config | Firebase packages and config plugins are present. `firebase.json` enables Crashlytics collection/debug settings. `google-services.json` exists for project `chillywood-app` and package `com.chillywood.mobile`. Helpers exist for Crashlytics, Performance, Analytics, and Remote Config. Detailed lane prep now lives in `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`. | Verify Firebase project ownership, Android app registration, SHA/package match if required, Crashlytics and Performance dashboard setup, and production data collection posture. | Release manager/Firebase owner. | Internal/release build reports a non-fatal Crashlytics event, Performance traces appear, and dashboards show the expected Android app. | Proof Pending | Follow `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`: verify the Firebase Console app, build/install a release-like candidate, and capture dashboard receipt. |
+| Firebase Crashlytics | `@react-native-firebase/crashlytics`, `app.config.ts` plugin setup, `_lib/firebaseCrashlytics.ts`, app-shell bootstrap, root error reporting, and dev-only proof helpers exist. | Confirm Crashlytics is enabled in Firebase Console and compatible with the release build type. Approve any forced crash proof before running it. | Firebase owner. | A controlled non-fatal report or approved test crash appears in Crashlytics for `com.chillywood.mobile`. | Proof Pending | Run approved non-fatal proof in an internal/release-like build and save dashboard evidence; run forced crash only with explicit approval. |
+| Firebase Performance and analytics/remote config | `@react-native-firebase/perf`, analytics, and remote config packages/helpers exist. `_lib/firebasePerformance.ts` enables collection and emits `app_runtime_bootstrap`; dev-only trace/network probes exist. | Confirm performance monitoring and analytics collection are appropriate for policy disclosures and release environment. | Firebase owner plus privacy owner. | Performance app/screen/custom trace or network metric appears in Firebase; privacy policy/Data Safety mentions applicable diagnostics/analytics behavior. | Proof Pending | Run a short release-candidate Performance proof, then update policy declarations if data collection differs from the runbook. |
 | Supabase remote project link | App config and control docs identify the remote project through deployed endpoints, and current repo truth says migrations are applied/proved through `202604260004`. This local CLI session is not linked, so migration status could not be re-run here. | Link local Supabase CLI to the production project when needed, without committing `.temp` metadata. Confirm project ref, migration list, storage buckets, Edge Function deployment, and secrets in dashboard. | Backend/Supabase owner. | `supabase migration list` shows local/remote alignment, schema has creator media/watch-party columns, and no migration drift exists. | Proof Pending | Run `supabase link --project-ref bmkkhihfbmsnnmcqkoly` in a controlled session, verify migrations read-only, and leave local metadata uncommitted. |
 | Supabase remote migrations and RLS | Migrations define `videos`, `creator-videos` storage policies, `safety_reports`, `user_entitlements`, `billing_events`, Watch-Party source fields, and tightened room RLS. Local and previous remote proof are recorded in control docs. | Re-run safe remote proof before launch for creator media, storage, reports, entitlements, admin writes, Watch-Party rooms, and anon denial. | Backend/Supabase owner. | Live RLS proof shows owner/non-owner/public/admin/anon behavior exactly matches Public v1 access rules. | Proof Pending | Run focused non-destructive live RLS proof after CLI link, then document artifacts in `CURRENT_STATE.md` and `NEXT_TASK.md`. |
 | Supabase storage buckets | Migration creates a private `creator-videos` bucket with owner write/delete and public-or-owner read policy intent. Direct SQL delete is intentionally blocked by Supabase storage protection, so Storage API proof remains separate. | Verify bucket exists remotely, MIME/file-size limits match product needs, public access is policy-mediated, and Storage API owner delete/remove works. | Backend/Supabase owner. | Owner uploads/removes own object, non-owner cannot overwrite/delete, public reads only public clean videos, draft/hidden/removed sources do not leak. | Proof Pending | Run Storage API proof against remote project using real owner/non-owner sessions, not service-role-only SQL. |
@@ -298,6 +299,63 @@ Stop and do not mark Done if:
 - Route smoke or release log audit fails.
 - Any credential, keystore, receipt, token, service key, or signed URL would be exposed in proof artifacts.
 
+## Lane 4 Runbook - Firebase Crashlytics + Performance Proof Prep
+
+Processed: 2026-04-26
+
+Detailed owner doc: `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`
+
+Scope for this lane only:
+
+- Firebase project/config readiness for Android package `com.chillywood.mobile`.
+- Crashlytics package/plugin/bootstrap readiness.
+- Performance package/plugin/bootstrap readiness.
+- Privacy/logging posture for Firebase diagnostics.
+- Manual Firebase Console proof steps.
+- No forced crash, Android runtime proof, Sentry/PostHog re-add, or broad runtime behavior change.
+
+Repo-ready facts:
+
+- `google-services.json` exists and safe identity inspection confirmed Firebase project `chillywood-app`, one Android client, Android package `com.chillywood.mobile`, and present SDK/API-key fields without printing key values.
+- `app.config.ts` wires `@react-native-firebase/app`, `@react-native-firebase/crashlytics`, and `@react-native-firebase/perf`.
+- `firebase.json` enables Crashlytics auto collection and debug setting.
+- `package.json` includes Firebase app, analytics, Crashlytics, Performance, and Remote Config packages.
+- `app/_layout.tsx` bootstraps Firebase Analytics, Crashlytics, Performance, and Remote Config.
+- `_lib/firebaseCrashlytics.ts` owns Crashlytics bootstrap, user identity, non-fatal reports, dev-only test helpers, and approved forced crash helper.
+- `_lib/firebasePerformance.ts` owns Performance bootstrap, `app_runtime_bootstrap`, and dev-only trace/network probes.
+- `components/dev/dev-debug-overlay.tsx` exposes monitoring proof buttons only in `__DEV__`.
+- Static log audit found no lane-specific issue requiring a code change. Runtime proof and release log audit remain pending.
+
+Manual actions before marking Done:
+
+1. Open Firebase Console and select project `chillywood-app`.
+2. Verify the Android app package is `com.chillywood.mobile`.
+3. Confirm `google-services.json` came from that Android app.
+4. Confirm Crashlytics is enabled and ready to receive reports.
+5. Confirm Performance Monitoring is enabled and ready to receive app/trace/network data.
+6. Confirm diagnostics, analytics, Performance, user id, and email association posture is approved for Privacy Policy and Play Data Safety.
+7. Install a preview or release-like Android build from current `main`.
+8. Trigger an approved non-fatal Crashlytics report.
+9. Trigger a forced crash only after explicit owner approval, then relaunch the app.
+10. Navigate the app enough to emit Performance lifecycle data; use dev/internal probes only if the build supports the dev overlay.
+11. Capture Firebase Console screenshots or written proof under `/tmp/chillywood-firebase-proof-*` without private values.
+
+Proof required:
+
+- Crashlytics dashboard shows the approved non-fatal report or forced crash for `com.chillywood.mobile`.
+- Performance dashboard shows app-start/screen/custom trace/network data for `com.chillywood.mobile`.
+- Release/preview log audit shows no signed media URLs, Supabase JWTs, LiveKit participant tokens, RevenueCat receipts, purchase tokens, service-role keys, Google private credentials, or keystore details.
+- Privacy/Data Safety disclosures account for Firebase diagnostics/performance/analytics behavior.
+
+Stop and do not mark Done if:
+
+- Firebase Console project or Android package does not match repo config.
+- Crashlytics is still waiting for SDK detection after proof.
+- Performance Monitoring is still waiting for SDK/data after proof.
+- Proof would require printing or storing secrets, receipts, tokens, signed URLs, or personal payment details.
+- Forced crash proof is requested without explicit approval.
+- Privacy/Data Safety has not been reconciled with Firebase collection behavior.
+
 ## Current External Setup Summary
 
 Already repo-backed:
@@ -305,7 +363,7 @@ Already repo-backed:
 - Premium/Billing UX has real owners and does not grant local fake Premium.
 - Creator Media, creator-video Player, and creator-video Watch-Party source-model code exist.
 - Bundled legal/support/account-deletion routes exist.
-- Firebase packages/plugins/helpers exist.
+- Firebase packages/plugins/helpers exist, and Firebase Crashlytics/Performance proof prep now has a dedicated runbook.
 - Supabase migrations for creator media, billing entitlements, moderation, storage policy intent, and Watch-Party source/RLS exist.
 - LiveKit client/token contract owners exist, and the token function is present in the Supabase functions tree.
 - EAS production Android build profile exists.
