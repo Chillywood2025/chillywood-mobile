@@ -45,6 +45,7 @@ Use current official documentation during actual setup because console requireme
 - RevenueCat entitlements: `https://www.revenuecat.com/docs/getting-started/entitlements`
 - Google Play Data safety: `https://support.google.com/googleplay/android-developer/answer/10787469`
 - Google Play account deletion: `https://support.google.com/googleplay/android-developer/answer/13327111`
+- Account/legal/Data Safety lane runbook: `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`
 - Firebase Crashlytics: `https://firebase.google.com/docs/crashlytics/get-started?platform=android`
 - Firebase Performance Monitoring: `https://firebase.google.com/docs/perf-mon/get-started-android`
 - Supabase migrations and local development: `https://supabase.com/docs/guides/deployment/database-migrations` and `https://supabase.com/docs/guides/local-development/overview`
@@ -59,9 +60,9 @@ Use current official documentation during actual setup because console requireme
 | RevenueCat configuration | Runtime config supports `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV`, `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`, and `EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY`. Monetization targets include `premium_subscription`, `premium_live_access`, and `premium_watch_party_access`; later paid content targets remain non-v1. | Configure Android app `com.chillywood.mobile`, Play service credentials, offerings, products, entitlements, and public SDK keys in RevenueCat. | Billing owner. | `/subscribe` shows configured offer, purchase and restore call RevenueCat, active entitlement is reflected by account-owned truth, and missing/expired/revoked states remain blocked. | External Setup Pending | Add the RevenueCat Android public SDK key to release env, keep all Play service credentials in RevenueCat/dashboard storage only, and verify offering `premium` loads in `/subscribe`. |
 | Billing restore path | `/subscribe` exposes restore/manage actions through the existing RevenueCat owner and shows honest failure copy when unavailable. | Ensure store account restore is configured and RevenueCat is connected to the Play app. | Billing owner. | Reinstall/login on a second install, tap Restore, validate server/store result, and confirm Premium unlocks only after entitlement refresh. | External Setup Pending | After purchase setup, run restore proof with the same Google license tester and capture screenshots/logs without receipt tokens. |
 | Google Play Store listing | `app.json` names the app `Chi'llywood`, version `1.0.0`, Android package `com.chillywood.mobile`, and icons/splash assets under `assets/images`. `eas.json` has a production Android app-bundle profile. | Prepare Play Store app listing, short/full descriptions, screenshots, feature graphic, app category, contact email, privacy policy URL, account deletion URL, content rating, target audience, and tester tracks. | Product owner plus release manager. | Play Console listing checklist passes, internal/closed testing track accepts AAB, policy declarations are accepted. | External Setup Pending | Create/complete Play Console listing for `com.chillywood.mobile` and upload first production-profile AAB to internal testing. |
-| Google Play Data Safety | Repo has policy pages and support surfaces, but Data Safety answers are a Play Console responsibility. App uses Supabase auth/storage, Firebase, RevenueCat, LiveKit, camera, microphone, and notifications dependencies. | Complete Data Safety with actual data collected/shared, encryption/deletion practices, diagnostics/analytics, account creation/deletion, camera/microphone use, and user-generated content moderation. | Product owner plus privacy/legal reviewer. | Data Safety form is accepted by Play Console and matches app behavior plus third-party SDK use. | External Setup Pending | Inventory data by SDK/system, answer Play Console Data Safety, and cross-check with Privacy Policy before submission. |
-| Account deletion policy | `app/account-deletion.tsx` exists and `app.config.ts` has fallback hosted URL `https://live.chillywoodstream.com/account-deletion`; Settings links to deletion support. It is an honest request/help flow, not fake automated deletion. | Confirm public hosted account deletion URL, process owner, response SLA, backend deletion/export policy, and Play Console account deletion declaration. | Product owner plus support/legal owner. | URL is public, opens outside the app, explains delete request flow, and Play Console accepts it. | External Setup Pending | Finalize the hosted account deletion page/process and configure `EXPO_PUBLIC_ACCOUNT_DELETION_URL` if the fallback is not final. |
-| Legal pages and support | Routes exist for Privacy, Terms, Community Guidelines, Copyright/DMCA, Support, and account deletion. `app.config.ts` has privacy/terms/account deletion fallbacks and supports `EXPO_PUBLIC_SUPPORT_EMAIL`. | Legal review, final hosted URLs, final support email, DMCA/contact process, and support inbox ownership. | Legal/support owner. | Links open in release build, public URLs are reachable, support email/inbox receives a test request, and legal copy is approved. | External Setup Pending | Finalize legal copy, hosted policy URLs, and support mailbox, then set release env for privacy, terms, account deletion, and support email. |
+| Google Play Data Safety | Repo has policy pages and support surfaces, but Data Safety answers are a Play Console responsibility. App uses Supabase auth/storage, Firebase, RevenueCat, LiveKit, camera, microphone, and notifications dependencies. | Complete Data Safety with actual data collected/shared, encryption/deletion practices, diagnostics/analytics, account creation/deletion, camera/microphone use, and user-generated content moderation. | Product owner plus privacy/legal reviewer. | Data Safety form is accepted by Play Console and matches app behavior plus third-party SDK use. | External Setup Pending | Use `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` to fill the Play Console Data Safety form, then legal/privacy owner must approve it before submission. |
+| Account deletion policy | `app/account-deletion.tsx` exists and `app.config.ts` has fallback hosted URL `https://live.chillywoodstream.com/account-deletion`; Settings links to deletion support. It is an honest request/help flow, not fake automated deletion. The route now explicitly names Profile, Channel, uploaded videos, chat messages, room records, billing/subscription records, and moderation/report records. | Confirm public hosted account deletion URL, process owner, response SLA, backend deletion/export policy, and Play Console account deletion declaration. | Product owner plus support/legal owner. | URL is public, opens outside the app, explains delete request flow, and Play Console accepts it. | External Setup Pending | Follow the Lane 2 runbook below and `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`; do not build destructive deletion until the backend retention plan is approved. |
+| Legal pages and support | Routes exist for Privacy, Terms, Community Guidelines, Copyright/DMCA, Support, and account deletion. `app.config.ts` has privacy/terms/account deletion fallbacks and supports `EXPO_PUBLIC_SUPPORT_EMAIL`. Privacy, Terms, and account-deletion fallback URLs returned HTTP 200 during the Lane 2 audit. | Legal review, final hosted URLs, final support email, DMCA/contact process, and support inbox ownership. | Legal/support owner. | Links open in release build, public URLs are reachable, support email/inbox receives a test request, and legal copy is approved. | External Setup Pending | Finalize legal copy, hosted policy URLs, and support mailbox, then set release env for privacy, terms, account deletion, and support email. |
 | Android permissions and policy declarations | `app.json` requests `CAMERA`, `RECORD_AUDIO`, and `MODIFY_AUDIO_SETTINGS`. Live Stage/LiveKit uses camera/microphone. Notification packages are present but push delivery is not a v1 proof target. | Declare camera/microphone purpose in Play Console, privacy copy, and store listing. Confirm any notification/runtime permissions used by release build. | Release manager plus product owner. | Install release build, verify permission prompts are contextual and Play declarations match actual features. | External Setup Pending | Run release build permission smoke and update Play Console declarations before production review. |
 | Firebase project and Android config | Firebase packages and config plugins are present. `firebase.json` enables Crashlytics collection/debug settings. `google-services.json` exists for project `chillywood-app` and package `com.chillywood.mobile`. Helpers exist for Crashlytics, Performance, Analytics, and Remote Config. | Verify Firebase project ownership, Android app registration, SHA/package match if required, Crashlytics and Performance dashboard setup, and production data collection posture. | Release manager/Firebase owner. | Internal/release build reports a non-fatal Crashlytics event, Performance traces appear, and dashboards show the expected Android app. | Proof Pending | Build an internal release candidate, trigger a safe non-fatal/test crash path if available, and confirm dashboard arrival without logging secrets. |
 | Firebase Crashlytics | `@react-native-firebase/crashlytics` and helper code exist. | Confirm Crashlytics is enabled in Firebase console and compatible with the release build type. | Firebase owner. | A controlled non-fatal report or test crash appears in Crashlytics for `com.chillywood.mobile`. | Proof Pending | Run Crashlytics proof in an internal build and save dashboard/screenshot evidence. |
@@ -175,6 +176,58 @@ Stop and do not mark Done if:
 - Restore does not recover a valid active purchase.
 - The app unlocks Premium from local-only state, a hidden button, or an untrusted row.
 - Any proof artifact would expose secrets, receipt payloads, purchase tokens, or personal payment details.
+
+## Lane 2 Runbook - Account Deletion / Legal URLs / Play Data Safety
+
+Processed: 2026-04-26
+
+Detailed owner doc: `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`
+
+Scope for this lane only:
+
+- Account deletion instructions and support handoff.
+- Privacy, Terms, Community Guidelines, Copyright/DMCA, Support, and account deletion URL readiness.
+- Google Play Data Safety preparation.
+- User-generated-content safety readiness for creator uploads.
+- No destructive account deletion or account data mutation.
+
+Repo-ready facts:
+
+- Public legal routes exist for `/privacy`, `/terms`, `/account-deletion`, `/community-guidelines`, and `/copyright`.
+- `app/_layout.tsx` allows those legal routes to render publicly without requiring sign-in or full runtime config.
+- Settings links to Privacy, Terms, Community Guidelines, Copyright/DMCA, and Request Account Deletion.
+- Support links to the same policy/account-help surfaces and can collect signed-in feedback.
+- Configured fallback URLs for Privacy, Terms, and Account Deletion returned HTTP 200 in this audit.
+- Account deletion is request-based and honest; it does not pretend destructive deletion has completed.
+- The account deletion route now explicitly documents impact/retention posture for Profile, Channel, uploaded videos, chat, rooms, billing/subscription records, and moderation/report records.
+- A Play Data Safety preparation matrix now exists in `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`.
+
+Manual actions before marking Done:
+
+1. Legal/support owner approves Privacy, Terms, Community Guidelines, Copyright/DMCA, and Account Deletion copy.
+2. Product/support owner finalizes support email/URL, support inbox owner, and response SLA.
+3. Backend/legal owner approves the deletion/de-identification and retained-record process for Supabase auth, profiles, channels, videos/storage, chat, room records, entitlements/billing events, moderation reports, support rows, notifications/reminders, logs, and backups.
+4. Release owner confirms final public URLs are reachable without login where Play requires it.
+5. Play Console owner enters Privacy Policy URL.
+6. Play Console owner enters Account Deletion URL and confirms the form describes deletion and retained data accurately.
+7. Play Console owner fills Data Safety using `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` plus current SDK/provider disclosures.
+8. Play Console owner answers user-generated-content/content-moderation questions using the Community Guidelines, report-abuse, admin/moderation, and DMCA process truth.
+
+Proof required:
+
+- Android release build opens Settings legal/support/deletion links correctly.
+- External Privacy, Terms, and Account Deletion URLs open from a non-authenticated browser.
+- Support/account deletion request lands in the expected support queue.
+- Creator-video report/admin moderation proof passes for user-generated-content safety readiness.
+- Play Console accepts Data Safety and account deletion entries.
+
+Stop and do not mark Done if:
+
+- Final legal copy is not approved.
+- Account deletion URL is not public or not accepted by Play Console.
+- Data Safety answers are not reconciled with Firebase, RevenueCat/Google Play, Supabase, LiveKit, Expo, and app-feature behavior.
+- The app claims automated deletion but no backend deletion/de-identification process is built and proved.
+- UGC policy/report/moderation/DMCA paths are not available or not proveable.
 
 ## Current External Setup Summary
 

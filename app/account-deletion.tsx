@@ -34,8 +34,25 @@ export default function AccountDeletionPage() {
           items={[
             "Your account may be disabled or closed.",
             "Profile information associated with your account may be removed or de-identified.",
+            "Your Channel surface and creator-upload ownership may be removed, unpublished, or de-identified where the current backend and legal process allow it.",
             "Access to Chi'lly Chat, profiles, room participation, and related account-linked features may be removed.",
             "Normal access to account-level settings and social functionality tied to that account may stop.",
+          ]}
+        />
+      </LegalSection>
+
+      <LegalSection title="Account Surfaces Reviewed During Deletion">
+        <LegalParagraph>
+          A deletion request may involve account records across Profile, Channel, creator uploads, Chi&apos;lly Chat, Watch-Party rooms, Live Stage participation, support, billing, and moderation systems.
+        </LegalParagraph>
+        <LegalList
+          items={[
+            "Profile and Channel information may be deleted or de-identified where possible.",
+            "Creator-uploaded videos may be deleted, unpublished, disconnected from the account, or retained only where legal, safety, copyright, or abuse-review obligations require it.",
+            "Chi'lly Chat messages and room participation records may be deleted, de-identified, or retained in limited form when needed for safety, abuse prevention, legal compliance, or another user's conversation context.",
+            "Watch-Party and Live Stage room records may be retained or de-identified for security, abuse prevention, audit, or service integrity.",
+            "Billing, subscription, refund, chargeback, accounting, or entitlement records may need to be retained for financial, legal, tax, fraud-prevention, or platform compliance reasons.",
+            "Moderation reports, takedown records, abuse reports, and admin safety actions may be retained when needed to protect users and enforce the rules.",
           ]}
         />
       </LegalSection>
@@ -62,6 +79,12 @@ export default function AccountDeletionPage() {
             "Backup, logging, or security integrity data for a limited period.",
           ]}
         />
+      </LegalSection>
+
+      <LegalSection title="Subscriptions and External Purchases">
+        <LegalParagraph>
+          Requesting deletion from Chi&apos;llywood does not itself guarantee cancellation of a subscription or purchase managed by an app store or billing provider. If Premium or paid access is active, you may need to cancel or manage that subscription through the store account or billing provider used for the purchase.
+        </LegalParagraph>
       </LegalSection>
 
       <LegalSection title="Messages, Calls, Rooms, and Social Data">
