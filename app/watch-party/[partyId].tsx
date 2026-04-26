@@ -523,6 +523,7 @@ export default function WatchPartyRoomScreen() {
     setBlockedRoomAccess(null);
 
     const bootstrap = async () => {
+      let resolvedRoomForBootstrap = false;
       try {
         const profile = await readUserProfile();
         let profileCameraPreviewUrl = "";
@@ -551,6 +552,7 @@ export default function WatchPartyRoomScreen() {
           return;
         }
 
+        resolvedRoomForBootstrap = true;
         syncRoomFromSnapshot(snapshot, userId);
         const currentMembership = snapshot.memberships.find((membership) => membership.userId === userId) ?? null;
         const access = await resolveRoomAccess({
@@ -659,9 +661,17 @@ export default function WatchPartyRoomScreen() {
         startChatChannel(userId, myRoleRef.current === "host" ? "host" : "viewer", snapshot.room, profile);
         startRoomRealtimeSync();
         startRoomChatRealtimeSync();
-      } catch {
+      } catch (error) {
+        reportRuntimeError("watch-party-room-bootstrap", error, {
+          partyId,
+          resolvedRoomForBootstrap,
+        });
         if (!cancelled) {
-          setNotFound(true);
+          if (!resolvedRoomForBootstrap) {
+            setNotFound(true);
+          } else {
+            setConnState("error");
+          }
           setLoading(false);
         }
       }

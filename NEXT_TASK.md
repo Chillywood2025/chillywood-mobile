@@ -1,11 +1,11 @@
 # NEXT TASK
 
 ## Exact Next Task
-Complete the remaining Creator Media public/draft and owner/non-owner runtime checks, then prove creator-upload Watch-Party linking on Android against the updated remote Supabase schema.
+Complete the remaining Creator Media public/draft and owner/non-owner runtime checks, then run two-device creator-video Watch-Party join/rejoin proof if practical.
 
 The Public v1 hardening migrations through `202604260004_tighten_watch_party_room_rls.sql` are now applied to the remote Supabase project. `supabase migration list` shows local and remote aligned from `202604190004` through `202604260004`; the remote schema dump confirms `watch_party_rooms.source_type`, `watch_party_rooms.source_id`, the source validation trigger, and the tightened membership insert policy. Rollback-only remote SQL proof saved at `/tmp/chillywood-remote-creator-video-watch-party-proof-20260426-114433.txt` confirmed platform-title source persistence, public/clean creator-video source persistence, draft/hidden creator-video source blocking, open room membership insert, premium room membership blocking without entitlement, and anon room-create denial. Local Supabase is still running; `supabase migration up --local` and a fresh `supabase db reset` previously passed, and focused local RLS proof still covers creator video metadata, storage read/write policy intent except Storage API delete, moderation/safety reports, premium/billing entitlements, creator events, notifications, reminders, and Watch-Party room access.
 
-The foundation is implemented in code and static validation passed. Android proof on device `R5CT30GM6NY` now confirms `/channel-settings` opens, the owner Content panel renders, the native Android file picker opens from `Choose Video File`, selected file name appears, Upload visibly enters an uploading state, and metadata/storage save succeeds for creator video `f6a5c96a-812a-4132-8a2b-e3ecab51c983` in the private `creator-videos` bucket path. Human device proof also confirmed tapping an uploaded video card opens the standalone Player for the creator video rather than the platform/admin title surface or bundled sample fallback. The follow-up Player proof confirmed `/player/5cf469eb-d375-436a-861a-e82ece5cc47d?source=creator-video` uses the same premium Player shell as `/player/t1`, resolves the uploaded creator-video source as `remote`, does not log signed URLs, and does not fall back to sample/platform media. Creator-upload Watch-Party linking code and remote schema now exist; Android route/runtime proof is next.
+The foundation is implemented in code and static validation passed. Android proof on device `R5CT30GM6NY` now confirms `/channel-settings` opens, the owner Content panel renders, the native Android file picker opens from `Choose Video File`, selected file name appears, Upload visibly enters an uploading state, and metadata/storage save succeeds for creator video `f6a5c96a-812a-4132-8a2b-e3ecab51c983` in the private `creator-videos` bucket path. Human device proof also confirmed tapping an uploaded video card opens the standalone Player for the creator video rather than the platform/admin title surface or bundled sample fallback. The follow-up Player proof confirmed `/player/5cf469eb-d375-436a-861a-e82ece5cc47d?source=creator-video` uses the same premium Player shell as `/player/t1`, resolves the uploaded creator-video source as `remote`, does not log signed URLs, and does not fall back to sample/platform media. Creator-upload Watch-Party linking code, remote schema, and one-device Android runtime proof now pass: device `R5CR120QCBF` uploaded/published `20260326_113131`, opened `/player/677650c2-4790-4298-8ddb-03ba7df5b424?source=creator-video`, started Watch-Party Live into normal waiting room/Party Room room code `87AXTR`, opened the shared Watch-Party Live player with creator-video source, and direct-rejoined the Party Room after the false "Room not found" bootstrap state was fixed.
 
 ## Current Plan
 1. Connect at least one physical Android device.
@@ -16,14 +16,12 @@ The foundation is implemented in code and static validation passed. Android proo
 6. Confirm creator can edit metadata, publish/unpublish, and delete.
 7. Confirm a non-owner cannot manage another creator's video.
 8. Use the now-proved remote schema; do not rerun broad remote migration pushes unless `supabase migration list` shows drift.
-9. Open a public uploaded creator video and tap Watch-Party Live.
-10. Confirm it enters the normal `/watch-party` waiting room with a room code, then `/watch-party/[partyId]`, then `/player/[id]?source=creator-video`.
-11. Confirm no `/watch-party/live-stage/[partyId]` route, no platform title fallback, and no bundled sample fallback.
-12. Confirm draft/private creator videos are blocked from public Watch-Party.
-13. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
-14. As owner/operator, hide/remove a creator video from `/admin` and confirm it no longer appears publicly or plays publicly.
-15. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
-16. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
+9. Run two-device creator-video Watch-Party join proof if two phones are available: host starts room, second device joins by code, both resolve `source_type=creator_video`, no Live Stage route, no sample/platform fallback.
+10. Confirm draft/private creator videos are blocked from public Watch-Party.
+11. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
+12. As owner/operator, hide/remove a creator video from `/admin` and confirm it no longer appears publicly or plays publicly.
+13. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
+14. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
 
 ## Scope
 This proof lane should:
@@ -51,6 +49,12 @@ This proof lane should:
 - Folder: `/tmp/chillywood-proof-2026-04-25T17-27-25-889Z-creator-video-premium-player-shell`
 - Device: `R5CT30GM6NY`
 - Result: `/player/t1` platform title shell remained unchanged; `/player/5cf469eb-d375-436a-861a-e82ece5cc47d?source=creator-video` used the same premium standalone Player shell and resolved the uploaded creator-video source; logcat showed `PLAYER MATCH SOURCE: matched from creator-video:id` and `PLAYER VIDEO SOURCE: remote`; invalid creator-video source stayed inside the premium shell with "Creator video unavailable"; Watch-Party Live stayed blocked with not-ready copy.
+
+## Latest Creator-video Watch-Party Proof Artifact
+
+- Folder: `/tmp/chillywood-android-creator-video-watch-party-proof-20260426-115259`
+- Device: `R5CR120QCBF`
+- Result: one-device Android runtime proof passed for creator video `677650c2-4790-4298-8ddb-03ba7df5b424` / `20260326_113131`. Platform title `Chicago Streets` still entered normal waiting room and Party Room. Creator video entered normal waiting room, Party Room `87AXTR`, and shared Watch-Party Live player with `source=creator-video`; remote row persisted `source_type=creator_video`, no Live Stage route was used, and no platform/sample fallback appeared. Direct rejoin to `/watch-party/87AXTR` now renders the Party Room after the scoped bootstrap false-not-found fix in `app/watch-party/[partyId].tsx`.
 
 ## Success Criteria
 The lane is successful when:
