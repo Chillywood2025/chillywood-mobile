@@ -46,6 +46,9 @@ Use current official documentation during actual setup because console requireme
 - Google Play Data safety: `https://support.google.com/googleplay/android-developer/answer/10787469`
 - Google Play account deletion: `https://support.google.com/googleplay/android-developer/answer/13327111`
 - Account/legal/Data Safety lane runbook: `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`
+- Google Play store listing assets: `https://support.google.com/googleplay/android-developer/answer/1078870`
+- Google Play content ratings: `https://support.google.com/googleplay/answer/188189`
+- Play Store listing/content rating lane runbook: `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`
 - Android release/EAS signing lane runbook: `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`
 - Firebase Crashlytics: `https://firebase.google.com/docs/crashlytics/get-started?platform=android`
 - Firebase Performance Monitoring: `https://firebase.google.com/docs/perf-mon/get-started-android`
@@ -63,8 +66,8 @@ Use current official documentation during actual setup because console requireme
 | Google Play Billing product | `react-native-purchases` and `react-native-purchases-ui` are installed. `_lib/revenuecat.ts`, `_lib/monetization.ts`, `_lib/premiumEntitlements.ts`, and `app/subscribe.tsx` own Premium billing UX and entitlement checks. The app does not grant Premium from local-only state. | Create the Google Play subscription product for Chi'llywood Premium, configure base plan/offers, and connect the product to RevenueCat. Confirm product IDs match the RevenueCat offering/entitlement model used by the app. | Product owner plus Play Console/RevenueCat operator. | Internal build purchase starts, product loads, purchase completes, backend entitlement becomes active, and protected routes unlock only after trusted entitlement truth. | External Setup Pending | Follow the Lane 1 runbook below: create the Play subscription product/base plan, connect it to RevenueCat entitlement `premium`, then run license-tester purchase proof. |
 | RevenueCat configuration | Runtime config supports `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV`, `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`, and `EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY`. Monetization targets include `premium_subscription`, `premium_live_access`, and `premium_watch_party_access`; later paid content targets remain non-v1. | Configure Android app `com.chillywood.mobile`, Play service credentials, offerings, products, entitlements, and public SDK keys in RevenueCat. | Billing owner. | `/subscribe` shows configured offer, purchase and restore call RevenueCat, active entitlement is reflected by account-owned truth, and missing/expired/revoked states remain blocked. | External Setup Pending | Add the RevenueCat Android public SDK key to release env, keep all Play service credentials in RevenueCat/dashboard storage only, and verify offering `premium` loads in `/subscribe`. |
 | Billing restore path | `/subscribe` exposes restore/manage actions through the existing RevenueCat owner and shows honest failure copy when unavailable. | Ensure store account restore is configured and RevenueCat is connected to the Play app. | Billing owner. | Reinstall/login on a second install, tap Restore, validate server/store result, and confirm Premium unlocks only after entitlement refresh. | External Setup Pending | After purchase setup, run restore proof with the same Google license tester and capture screenshots/logs without receipt tokens. |
-| Google Play Store listing | `app.json` names the app `Chi'llywood`, version `1.0.0`, Android package `com.chillywood.mobile`, and icons/splash assets under `assets/images`. `eas.json` has a production Android app-bundle profile. | Prepare Play Store app listing, short/full descriptions, screenshots, feature graphic, app category, contact email, privacy policy URL, account deletion URL, content rating, target audience, and tester tracks. | Product owner plus release manager. | Play Console listing checklist passes, internal/closed testing track accepts AAB, policy declarations are accepted. | External Setup Pending | Create/complete Play Console listing for `com.chillywood.mobile` and upload first production-profile AAB to internal testing. |
-| Google Play Data Safety | Repo has policy pages and support surfaces, but Data Safety answers are a Play Console responsibility. App uses Supabase auth/storage, Firebase, RevenueCat, LiveKit, camera, microphone, and notifications dependencies. | Complete Data Safety with actual data collected/shared, encryption/deletion practices, diagnostics/analytics, account creation/deletion, camera/microphone use, and user-generated content moderation. | Product owner plus privacy/legal reviewer. | Data Safety form is accepted by Play Console and matches app behavior plus third-party SDK use. | External Setup Pending | Use `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` to fill the Play Console Data Safety form, then legal/privacy owner must approve it before submission. |
+| Google Play Store listing | `app.json` names the app `Chi'llywood`, version `1.0.0`, Android package `com.chillywood.mobile`, and icons/splash assets under `assets/images`. `eas.json` has a production Android app-bundle profile. `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md` now records draft listing copy, asset gaps, screenshot plan, category guidance, and content-rating prep. | Prepare Play Store app listing, short/full descriptions, screenshots, feature graphic, app category, contact email, privacy policy URL, account deletion URL, content rating, target audience, and tester tracks. | Product owner plus release manager. | Play Console listing checklist passes, internal/closed testing track accepts AAB, policy declarations are accepted. | External Setup Pending | Follow `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`: approve copy, create icon/feature/screenshot assets, fill content rating/target audience, then upload first production-profile AAB to internal testing after release proof. |
+| Google Play Data Safety | Repo has policy pages and support surfaces, but Data Safety answers are a Play Console responsibility. App uses Supabase auth/storage, Firebase, RevenueCat, LiveKit, camera, microphone, and notifications dependencies. The listing/content-rating runbook flags Data Safety consistency issues that must not be contradicted by store copy. | Complete Data Safety with actual data collected/shared, encryption/deletion practices, diagnostics/analytics, account creation/deletion, camera/microphone use, and user-generated content moderation. | Product owner plus privacy/legal reviewer. | Data Safety form is accepted by Play Console and matches app behavior plus third-party SDK use. | External Setup Pending | Use `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` and `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md` to fill the Play Console Data Safety form, then legal/privacy owner must approve it before submission. |
 | Account deletion policy | `app/account-deletion.tsx` exists and `app.config.ts` has fallback hosted URL `https://live.chillywoodstream.com/account-deletion`; Settings links to deletion support. It is an honest request/help flow, not fake automated deletion. The route now explicitly names Profile, Channel, uploaded videos, chat messages, room records, billing/subscription records, and moderation/report records. | Confirm public hosted account deletion URL, process owner, response SLA, backend deletion/export policy, and Play Console account deletion declaration. | Product owner plus support/legal owner. | URL is public, opens outside the app, explains delete request flow, and Play Console accepts it. | External Setup Pending | Follow the Lane 2 runbook below and `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`; do not build destructive deletion until the backend retention plan is approved. |
 | Legal pages and support | Routes exist for Privacy, Terms, Community Guidelines, Copyright/DMCA, Support, and account deletion. `app.config.ts` has privacy/terms/account deletion fallbacks and supports `EXPO_PUBLIC_SUPPORT_EMAIL`. Privacy, Terms, and account-deletion fallback URLs returned HTTP 200 during the Lane 2 audit. | Legal review, final hosted URLs, final support email, DMCA/contact process, and support inbox ownership. | Legal/support owner. | Links open in release build, public URLs are reachable, support email/inbox receives a test request, and legal copy is approved. | External Setup Pending | Finalize legal copy, hosted policy URLs, and support mailbox, then set release env for privacy, terms, account deletion, and support email. |
 | Android permissions and policy declarations | `app.json` requests `CAMERA`, `RECORD_AUDIO`, and `MODIFY_AUDIO_SETTINGS`. Live Stage/LiveKit uses camera/microphone. Notification packages are present but push delivery is not a v1 proof target. | Declare camera/microphone purpose in Play Console, privacy copy, and store listing. Confirm any notification/runtime permissions used by release build. | Release manager plus product owner. | Install release build, verify permission prompts are contextual and Play declarations match actual features. | External Setup Pending | Run release build permission smoke and update Play Console declarations before production review. |
@@ -526,6 +529,60 @@ Stop and do not mark Done if:
 - Legal/support URLs are placeholders when preparing a Play submission.
 - Release log audit finds Supabase JWTs, LiveKit participant tokens, signed media URLs, RevenueCat receipts/purchase tokens, service-role keys, Google private credentials, or keystore details.
 
+## Lane 8 Runbook - Store Listing Assets / Content Rating Checklist
+
+Processed: 2026-04-26
+
+Detailed owner doc: `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`
+
+Scope for this lane only:
+
+- Play Store listing metadata prep.
+- Store graphic asset and screenshot readiness.
+- Content Rating, Target Audience, Data Safety consistency, and UGC policy prep.
+- No Play Console submission, asset upload, Android runtime proof, legal finalization, or product-code changes.
+
+Repo-ready facts:
+
+- `app.json` names the app `Chi'llywood`, package `com.chillywood.mobile`, version `1.0.0`, and uses `assets/images/icon.png` plus Android adaptive icon assets.
+- The app has bundled public legal/support routes for Privacy, Terms, Account Deletion, Community Guidelines, Copyright/DMCA, and Support.
+- `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` already maps account/legal/Data Safety truth.
+- `docs/ANDROID_RELEASE_EAS_RUNBOOK.md` already maps preview/production build and signing proof.
+- Current asset inspection found launcher/splash/source art but no Play feature graphic and no dedicated store screenshot set.
+- Current feature truth includes Profile, Channel, creator uploads, Player, Watch-Party, Live Stage, Chi'lly Chat, Premium/access foundations, and safety/reporting basics.
+- Later-phase truth remains excluded from store copy: native game streaming, paid creator videos, subscriber-only media, tips, coins, payouts, ads, VIPs, comment media uploads, advanced creator studio, and automatic transcoding.
+- The signup route does not visibly show Terms/Privacy/Community Guidelines acceptance copy in the inspected code, so UGC/store policy readiness has a decision gap before final submission.
+
+Manual actions before marking Done:
+
+1. Product/legal owner approves final app name, short description, full description, category, tags, and support/developer contact posture.
+2. Release owner exports or creates a Play-ready 512 x 512 app icon from approved brand art.
+3. Brand/product owner creates a 1024 x 500 feature graphic that does not overpromise later features.
+4. Release owner captures sanitized phone screenshots from a preview or release-like Android build.
+5. Product/legal owner confirms final Privacy, Terms, Account Deletion, Community Guidelines, Copyright/DMCA, and Support URLs.
+6. Product/legal owner decides whether explicit Terms/Privacy/Community Guidelines acceptance needs to be added to signup before Play review.
+7. Play Console owner completes Content Rating, Target Audience, Ads declaration, Data Safety, Account Deletion, and UGC policy answers using the runbooks.
+8. Play Console owner uploads listing assets and keeps proof screenshots/notes free of secrets or private account data.
+
+Proof required:
+
+- Play Console accepts the main store listing metadata.
+- Feature graphic, icon, and screenshot assets are uploaded and accepted.
+- Content Rating questionnaire is completed and accepted.
+- Target Audience and app content declarations are completed and accepted.
+- Data Safety answers are accepted and match app behavior plus SDK disclosures.
+- Account deletion URL is accepted.
+- UGC policy declarations match the real report/moderation/copyright/account deletion paths.
+- Internal/closed testing track accepts the production-profile AAB after release build proof.
+
+Stop and do not mark Done if:
+
+- Final legal/support URLs are not approved or publicly reachable where Play requires them.
+- Feature graphic or screenshots show unproved later-phase features.
+- Store copy claims no UGC, no data collection, no camera/mic, or live paid/payout/game-streaming features contrary to repo truth.
+- The app's UGC acceptance/report/moderation posture is not approved.
+- Data Safety, Content Rating, Target Audience, or Account Deletion forms are not accepted by Play Console.
+
 ## Current External Setup Summary
 
 Already repo-backed:
@@ -537,12 +594,13 @@ Already repo-backed:
 - Supabase migrations for creator media, billing entitlements, moderation, storage policy intent, and Watch-Party source/RLS exist, and remote migration history is aligned through `202604260004`.
 - LiveKit client/token contract owners exist, the token function is present in the Supabase functions tree, and `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md` now defines production domain/TURN/TLS/network proof.
 - Production env/secrets readiness now has a dedicated runbook at `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`, and runtime validation can run a strict production presence check without printing values.
+- Play Store listing/content-rating readiness now has a dedicated runbook at `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`, including draft listing copy, asset gap list, screenshot plan, content-rating prep, and UGC/store-policy decisions.
 - EAS production Android build profile exists.
 
 External setup still required:
 
 - Google Play subscription product and RevenueCat dashboard configuration.
-- Play Store listing, screenshots, content rating, Data Safety, camera/microphone declarations, support URL, privacy URL, and account deletion URL.
+- Play Store listing, screenshots, feature graphic, content rating, target audience, Data Safety, camera/microphone declarations, support URL, privacy URL, and account deletion URL.
 - Final legal/support/DMCA/account deletion process review.
 - Firebase dashboard proof for Crashlytics and Performance.
 - Supabase linked DB lint/schema proof, live RLS proof, and Storage API proof.
@@ -562,7 +620,7 @@ External setup still required:
 7. Build internal Android release candidate with production runtime env.
 8. Prove Firebase Crashlytics/Performance in the internal build.
 9. Run final release candidate route smoke and log audit.
-10. Complete Play Console Data Safety, content rating, store listing, screenshots, support/legal links, and account deletion declaration.
+10. Complete Play Console Data Safety, content rating, target audience, store listing, feature graphic, screenshots, support/legal links, and account deletion declaration using `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`.
 11. Submit to internal/closed testing before production rollout.
 
 ## Do Not Mark Done Until
