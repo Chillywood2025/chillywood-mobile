@@ -41,7 +41,6 @@ import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveBrandingConfig,
-    resolveFeatureConfig,
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import {
@@ -289,7 +288,6 @@ export default function WatchPartyRoomScreen() {
   const activityPulse = useRef(new Animated.Value(0)).current;
   const liveBubbleOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
-  const features = resolveFeatureConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
 
   useEffect(() => {
@@ -1083,7 +1081,7 @@ export default function WatchPartyRoomScreen() {
       leftAt: shouldRemove ? new Date().toISOString() : null,
     }).catch(() => null);
     await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
-  }, [partyId, refreshRoomSnapshot]);
+  }, [partyId, refreshRoomSnapshot, room?.titleId]);
 
   const emitParticipantSpeaking = useCallback((participantId: string, isSpeaking: boolean) => {
     const channel = chatChannelRef.current;
