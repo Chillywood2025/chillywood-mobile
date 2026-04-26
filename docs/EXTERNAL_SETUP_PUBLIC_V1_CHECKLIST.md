@@ -53,6 +53,7 @@ Use current official documentation during actual setup because console requireme
 - Supabase migrations and local development: `https://supabase.com/docs/guides/deployment/database-migrations` and `https://supabase.com/docs/guides/local-development/overview`
 - Supabase remote Public v1 lane runbook: `docs/SUPABASE_REMOTE_PUBLIC_V1_RUNBOOK.md`
 - LiveKit authentication and networking: `https://docs.livekit.io/frontends/build/authentication/` and `https://docs.livekit.io/transport/self-hosting/ports-firewall/`
+- LiveKit production readiness lane runbook: `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md`
 - Expo EAS Build and Play submission: `https://docs.expo.dev/build/introduction/` and `https://docs.expo.dev/submit/android/`
 
 ## Checklist
@@ -73,9 +74,9 @@ Use current official documentation during actual setup because console requireme
 | Supabase remote project link | App config and control docs identify the remote project through deployed endpoints. This lane linked the local CLI to project ref `bmkkhihfbmsnnmcqkoly` and created local `supabase/.temp/` metadata that must remain uncommitted. | Confirm project ref/dashboard ownership, keep local `.temp` metadata out of commits, and relink clean checkouts only when needed. | Backend/Supabase owner. | `supabase migration list` shows local/remote alignment, schema has creator media/watch-party columns, and no migration drift exists. | Partial / Proof Pending | Follow `docs/SUPABASE_REMOTE_PUBLIC_V1_RUNBOOK.md`; migration history is aligned, but direct DB lint/schema proof needs approved remote DB login auth. |
 | Supabase remote migrations and RLS | Migrations define `videos`, `creator-videos` storage policies, `safety_reports`, `user_entitlements`, `billing_events`, Watch-Party source fields, and tightened room RLS. `supabase migration list` now shows local/remote aligned through `202604260004`. Linked DB lint was attempted but blocked by remote login password auth. | Re-run safe remote lint/schema proof before launch, then run focused remote API/RLS proof for creator media, storage, reports, entitlements, admin writes, Watch-Party rooms, and anon denial. | Backend/Supabase owner. | Live RLS proof shows owner/non-owner/public/admin/anon behavior exactly matches Public v1 access rules. | Proof Pending | Configure approved remote DB login path, run `supabase db lint --linked --schema public --fail-on none`, then run focused non-destructive live RLS proof with sanitized artifacts. |
 | Supabase storage buckets | Migration creates a private `creator-videos` bucket with owner write/delete and public-or-owner read policy intent. Direct SQL delete is intentionally blocked by Supabase storage protection, so Storage API proof remains separate. | Verify bucket exists remotely, MIME/file-size limits match product needs, public access is policy-mediated, and Storage API owner delete/remove works. | Backend/Supabase owner. | Owner uploads/removes own object, non-owner cannot overwrite/delete, public reads only public clean videos, draft/hidden/removed sources do not leak. | Proof Pending | Run Storage API proof against remote project using real owner/non-owner sessions, not service-role-only SQL. |
-| Supabase Edge Functions | `supabase/functions/livekit-token/index.ts` exists and `supabase/config.toml` disables automatic JWT verification for that function because the function validates bearer auth internally. `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly` shows `livekit-token` ACTIVE, version 7. | Verify function secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`. | Backend/LiveKit owner. | Authenticated app request receives server URL and participant token; signed-out/malformed requests are rejected; no secrets appear in logs. | Partial / Proof Pending | Verify secrets in Supabase dashboard, then run token request/denial proof from a release-like build. |
-| LiveKit production server | App defaults to `wss://live.chillywoodstream.com` and `infra/hetzner/livekit.env.example` documents a self-hosting scaffold. LiveKit runtime code requests tokens from the Supabase Edge Function; the client does not mint tokens. | Confirm production LiveKit server, domain, TLS, API key/secret, TURN/ICE settings, firewall ports, server health, scaling/monitoring, and retention/logging posture. | LiveKit infrastructure owner. | Two Android devices can join Live First and Live Watch-Party on production LiveKit, reconnect, and avoid stale-room bleed; server health is observable. | Proof Pending | Verify `live.chillywoodstream.com` infrastructure, TURN/port reachability, and token endpoint secrets, then run bounded two-device proof. |
-| LiveKit TURN/domain/TLS | Domain fallback exists in config, but TURN/TLS/port readiness is external. | Configure TLS certs, DNS, firewall, UDP/TCP ports, TURN if needed, and any load balancer/proxy settings. | LiveKit infrastructure owner. | Cellular and Wi-Fi devices can establish media, not only local-network proof. | External Setup Pending | Run network reachability proof from cellular/Wi-Fi and record LiveKit connection diagnostics without tokens. |
+| Supabase Edge Functions | `supabase/functions/livekit-token/index.ts` exists and `supabase/config.toml` disables automatic JWT verification for that function because the function validates bearer auth internally. `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly` shows `livekit-token` ACTIVE, version 7. `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md` now maps the token request/denial proof. | Verify function secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`. | Backend/LiveKit owner. | Authenticated app request receives server URL and participant token; signed-out/malformed requests are rejected; no secrets appear in logs. | Partial / Proof Pending | Verify secrets in Supabase dashboard, then run token request/denial proof from a release-like build using the LiveKit runbook. |
+| LiveKit production server | App defaults to `wss://live.chillywoodstream.com`; `infra/hetzner/livekit.env.example` and `docs/hetzner-first-deployment-implementation-spec.md` document a self-hosting scaffold and prior host truth. LiveKit runtime code requests tokens from the Supabase Edge Function; the client does not mint tokens. | Confirm production LiveKit server, domain, TLS, API key/secret, TURN/ICE settings, firewall ports, server health, scaling/monitoring, and retention/logging posture. | LiveKit infrastructure owner. | Two Android devices can join Live First and Live Watch-Party on production LiveKit, reconnect, and avoid stale-room bleed; server health is observable. | Partial / Proof Pending | Follow `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md`: verify `live.chillywoodstream.com`, token endpoint secrets, host health, then run bounded one-device and two-device proof. |
+| LiveKit TURN/domain/TLS | Domain fallback exists in config and the Hetzner spec records prior TLS/Caddy truth, but this lane did not re-prove DNS, WebSocket upgrade, TURN, firewall, or cellular path behavior. | Configure or verify TLS certs, DNS, firewall, UDP/TCP ports, TURN if needed, and any load balancer/proxy settings. | LiveKit infrastructure owner. | Cellular and Wi-Fi devices can establish media, not only local-network proof. | Partial / Proof Pending | Use `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md` to run DNS/TLS/firewall/TURN checks and record LiveKit connection diagnostics without tokens. |
 | Android release build and signing | `eas.json` has development, preview, and production profiles; production builds Android `app-bundle`. `app.json` includes package `com.chillywood.mobile`, EAS project id, Expo Updates URL, icon/splash assets, and camera/microphone permissions. The Lane 3 runbook now documents app identity, signing posture, env requirements, native rebuild risks, and build commands. | Confirm EAS Android credentials/signing ownership, Play App Signing, versionCode strategy, production env values, release track, and final preview/production build approval. | Release manager. | Current `main` builds successfully with preview and production profiles; production AAB installs or reaches Play internal testing; release route smoke and log audit pass. | External Setup Pending | Follow `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`: verify credentials, choose versionCode strategy, configure EAS production env, then run preview/production builds after runtime proof lanes are green. |
 | Production runtime environment | `scripts/validate-runtime.mjs` checks Supabase URL/anon key, beta allowlist/env, Expo project id/update URL/runtime. `app.config.ts` reads RevenueCat, LiveKit, legal/support, and Firebase config. | Populate release env for Supabase, RevenueCat, LiveKit token endpoint/server URL, legal/support URLs, beta/public flags, and any Firebase/EAS secrets. | Release manager plus system owners. | `npm run validate:runtime` passes for release environment; release build shows correct endpoints without dev fallbacks. | External Setup Pending | Create release env profile and run runtime validation immediately before production build. |
 | Production logging and secret safety | Recent route/source logs moved behind dev-only logger. Repo owners already avoid printing signed creator media URLs in Player logs. | Audit release build logs for Supabase JWTs, signed URLs, RevenueCat receipts, LiveKit participant tokens, Firebase keys beyond public config, and service-role secrets. | Release manager plus security owner. | Release candidate log audit shows no secrets/signed URLs and no noisy debug-only operational logs. | Proof Pending | Run bounded release log audit during final smoke. |
@@ -412,6 +413,65 @@ Stop and do not mark Done if:
 - Live RLS proof uses only service-role or superuser behavior.
 - Any proof would expose service keys, JWTs, database passwords, anon key values, signed URLs, LiveKit secrets, or user PII beyond approved test identities.
 
+## Lane 6 Runbook - LiveKit Production Domain / TURN / TLS / Network Proof Prep
+
+Processed: 2026-04-26
+
+Detailed owner doc: `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md`
+
+Scope for this lane only:
+
+- LiveKit production runtime config status.
+- Supabase `livekit-token` endpoint readiness.
+- Domain, TLS, reverse-proxy, TURN, firewall, and mobile network proof preparation.
+- Server/provider status from repo docs.
+- Privacy/logging posture for LiveKit diagnostics.
+- No server restarts, key rotation, Android/two-device proof, Supabase migration work, or secret exposure.
+
+Repo-ready facts:
+
+- `app.config.ts` defaults the production LiveKit server URL to `wss://live.chillywoodstream.com`.
+- `app.config.ts` defaults the token endpoint to the deployed Supabase `livekit-token` function and allows release env overrides with `EXPO_PUBLIC_LIVEKIT_URL` and `EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT`.
+- `_lib/runtimeConfig.ts`, `_lib/livekit/token-contract.ts`, and `_lib/livekit/join-boundary.ts` own the runtime token contract and prepared join handoff.
+- `supabase/functions/livekit-token/index.ts` validates the Supabase bearer session, supports `live-stage`, `watch-party-live`, and `chat-call` surfaces, and mints roles `host`, `speaker`, or `viewer` according to room membership truth.
+- The mobile client does not mint LiveKit tokens locally.
+- `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly` previously showed `livekit-token` ACTIVE, version 7.
+- `docs/hetzner-first-deployment-implementation-spec.md` records prior Hetzner/Caddy/TLS/LiveKit host truth for `live.chillywoodstream.com`, but this lane did not SSH to the server or re-prove it.
+- Static logging audit found no mobile code path printing `participantToken`, LiveKit API keys, or LiveKit API secrets. Release log proof is still required.
+
+Manual actions before marking Done:
+
+1. Confirm `live.chillywoodstream.com` DNS, TLS certificate, HTTPS behavior, and WebSocket upgrade path.
+2. Confirm Caddy/reverse-proxy config on the host supports LiveKit signaling and legal static paths without exposing admin surfaces.
+3. Confirm LiveKit host/container health, pinned image/version, protected host-only config, and log retention.
+4. Confirm Supabase `livekit-token` secrets are present and aligned with the production LiveKit server.
+5. Confirm firewall rules for the chosen LiveKit network mode: API/WebSocket, UDP media, ICE/TCP, TURN/UDP, and TURN/TLS where configured.
+6. Confirm TURN/STUN behavior from Wi-Fi and cellular networks.
+7. Confirm production EAS/runtime env points at the intended LiveKit URL and token endpoint.
+8. Run bounded one-device and two-device Android proof with sanitized artifacts.
+9. Run token request and denial proof without printing tokens.
+10. Run release log audit for participant tokens, JWTs, LiveKit secrets, TURN credentials, signed media URLs, and service keys.
+
+Proof required:
+
+- One Android device enters Live Stage using production LiveKit and publishes/receives expected camera state.
+- Two Android devices pass Live First proof.
+- Two Android devices pass Live Watch-Party proof.
+- Leave/rejoin keeps the same LiveKit source truth and does not surface stale-room bleed.
+- Wi-Fi/cellular or different-NAT proof establishes media, not just signaling.
+- Signed-out, malformed, missing-room, and unauthorized-role token requests are denied.
+- No production logs expose participant tokens, Supabase bearer tokens, LiveKit API secrets, TURN credentials, service-role keys, or signed URLs.
+
+Stop and do not mark Done if:
+
+- DNS/TLS/WebSocket behavior is not verified for `live.chillywoodstream.com`.
+- Supabase `livekit-token` secrets are missing or point at the wrong server.
+- Firewall/TURN/ICE config cannot be verified.
+- Cellular/different-NAT devices cannot establish media.
+- Signed-out or unauthorized requests mint participant tokens.
+- Live Stage proof falls back to the legacy media path in normal production use.
+- Any artifact would expose tokens, keys, service-role secrets, TURN credentials, or signed URLs.
+
 ## Current External Setup Summary
 
 Already repo-backed:
@@ -421,7 +481,7 @@ Already repo-backed:
 - Bundled legal/support/account-deletion routes exist.
 - Firebase packages/plugins/helpers exist, and Firebase Crashlytics/Performance proof prep now has a dedicated runbook.
 - Supabase migrations for creator media, billing entitlements, moderation, storage policy intent, and Watch-Party source/RLS exist, and remote migration history is aligned through `202604260004`.
-- LiveKit client/token contract owners exist, and the token function is present in the Supabase functions tree.
+- LiveKit client/token contract owners exist, the token function is present in the Supabase functions tree, and `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md` now defines production domain/TURN/TLS/network proof.
 - EAS production Android build profile exists.
 
 External setup still required:
@@ -432,7 +492,7 @@ External setup still required:
 - Firebase dashboard proof for Crashlytics and Performance.
 - Supabase linked DB lint/schema proof, live RLS proof, and Storage API proof.
 - Supabase Edge Function secret/request proof for LiveKit token issuance.
-- LiveKit production domain/TURN/TLS/firewall proof.
+- LiveKit production domain/TURN/TLS/firewall proof using `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md`.
 - EAS release signing/production AAB build proof.
 - Release runtime env validation and final route smoke.
 
