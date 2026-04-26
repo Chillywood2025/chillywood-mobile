@@ -59,7 +59,7 @@ import {
 import type { Tables } from "../../supabase/database.types";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
-import { supabase } from "../lib/_supabase";
+import { supabase } from "../../_lib/supabase";
 
 type PublicProfileTabKey = "home" | "content" | "live" | "community" | "about";
 

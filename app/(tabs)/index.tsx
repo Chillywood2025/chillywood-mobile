@@ -35,7 +35,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
 import type { Tables } from "../../supabase/database.types";
-import { supabase } from "../lib/_supabase";
+import { supabase } from "../../_lib/supabase";
 
 type TitleRow = Omit<
   Pick<

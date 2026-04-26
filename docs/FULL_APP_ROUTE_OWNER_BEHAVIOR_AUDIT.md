@@ -41,12 +41,12 @@ The important recent behavior is correct:
 - Platform/admin title Watch-Party still uses the normal title/content Party flow.
 - Remote Supabase schema/RLS for creator-video Watch-Party is applied and proven through `202604260004`.
 
-The biggest audit findings are not broad architecture failures. They are launch-hardening and ownership cleanup items:
+The biggest audit findings are not broad architecture failures. They are launch-hardening and ownership cleanup items. The highest-priority route/owner hardening findings from this audit were fixed after the initial docs pass:
 
-1. `app/modal.tsx` is still an Expo template-style modal route. It should be removed, replaced, or made intentionally unreachable before public v1.
-2. `/communication` is a real lobby/room route even though doctrine says communication is native room/chat behavior and `/communication` should be compatibility-only. It is guarded, but should not become a normal destination.
-3. `app/lib/_supabase.ts` duplicates the Supabase client and hardcodes the public project URL/anon key instead of using the canonical `_lib/supabase.ts` runtime owner.
-4. Non-creator `/player/[id]` can still fall back to local sample title data if a platform title is missing. Creator-video explicit routes are honest, but platform fallback should be tightened before public v1.
+1. `app/modal.tsx` no longer renders a template modal. It redirects to the canonical tabs surface.
+2. `/communication` no longer exposes a standalone lobby/create/join surface. It redirects to `/chat`, while `/communication/[roomId]` remains for guarded call-room compatibility.
+3. `app/lib/_supabase.ts` is now only a compatibility shim that re-exports the canonical `_lib/supabase.ts` client, and active route imports were pointed at the canonical owner.
+4. Non-creator `/player/[id]` no longer falls back to the first local title or bundled sample media for missing platform ids. Missing platform title routes now show an honest unavailable state.
 5. Billing/premium purchase UX exists as access-sheet/RevenueCat foundation, but there is no dedicated `/subscribe` route. Do not add one until store entitlement proof needs it.
 6. Public v1 still needs deferred runtime proof: two-device creator-video Watch-Party, draft/private blocked state, signed-out/non-premium blocked state, and final route smoke.
 
@@ -67,7 +67,7 @@ This audit recommends documentation and targeted follow-up fixes. It does not re
 | Account deletion info | `app/account-deletion.tsx` | Legal/support | Public account deletion instructions | Self-serve deletion execution | Public legal path | None | Settings/support/web | Support/account process | V1 support route; self-serve delete still needs launch proof |
 | Support | `app/support.tsx`, `components/system/support-screen.tsx` | Support | Help, feedback entry, sign-in prompt for account deletion support | Legal policy or account deletion execution | Public; richer feedback when signed in/beta | Beta feedback only | Settings, beta-support, beta access | Auth/login, feedback sheet | V1 core |
 | Beta support | `app/beta-support.tsx` | Support compatibility | Redirects non-beta env to `/support` | Separate support product | Public | Config | Old support links | `/support` | Compatibility |
-| Modal | `app/modal.tsx` | None/legacy | Template modal only | Product behavior | Public/deep-linkable if route exposed | None | Root stack | `/` | Public v1 blocker: replace/remove/guard |
+| Modal | `app/modal.tsx` | Compatibility redirect | Redirects accidental modal deep links to the canonical tabs surface | Product behavior | Root stack redirect | None | Root stack/deep link | `/(tabs)` | Resolved hardening item |
 
 ### Tab and Discovery Routes
 
@@ -85,7 +85,7 @@ This audit recommends documentation and targeted follow-up fixes. It does not re
 | Profile/Channel `/profile/[userId]` | `app/profile/[userId].tsx` | Profile + Channel surface | Public identity, owner/public channel surface, creator video display, profile actions, channel empty states | Upload/save/delete logic, Player playback, admin moderation writes | Signed-in normal app route; public viewer vs owner behavior is user-id based | `user_profiles`, `videos`, creator events, audience summaries, room snapshots, safety reports | Home, Chat, Party Room, Live Stage, creator cards | `/channel-settings`, `/player/[id]?source=creator-video`, `/title/[id]`, `/watch-party`, `/watch-party/[partyId]`, `/watch-party/live-stage/[partyId]`, `/chat`, `/chat/[threadId]` | V1 core |
 | Channel Settings `/channel-settings` | `app/channel-settings.tsx` | Channel owner controls | Owner channel management, creator upload/manage, profile/channel settings, creator events, audience summaries, safety/admin summaries | Public channel display, standalone playback, admin platform-title ownership | Signed-in active beta user only | `user_profiles`, `creator_permissions`, `videos`, creator video storage, `creator_events`, `channel_*`, `safety_reports`, admin summaries | Owner profile/settings | `/player/[id]?source=creator-video` | V1 core |
 | Title detail `/title/[id]` | `app/title/[id].tsx` | Platform/Admin Title detail | Platform title metadata, access sheet, title play, title Watch-Party entry, title report | Creator upload/player source, Live Stage | Signed-in normal app route; access checks through content entitlements | `titles`, access entitlements, engagement, safety reports | Home, Explore, My List, Profile linked content | `/player/[id]`, `/watch-party?titleId=...` | V1 core |
-| Platform Player `/player/[id]` | `app/player/[id].tsx` | Player | Premium standalone platform title playback, title Watch-Party start, report title/player content, party playback when `partyId` present | Upload management, Profile display, Live Stage room creation | Signed-in route; access sheet/premium checks | `titles`, media sources, watch history, engagement, watch-party rooms, safety reports | Home/title/party room/admin | `/watch-party`, `/watch-party/[partyId]` | V1 core; platform missing-title fallback needs hardening |
+| Platform Player `/player/[id]` | `app/player/[id].tsx` | Player | Premium standalone platform title playback, title Watch-Party start, report title/player content, party playback when `partyId` present | Upload management, Profile display, Live Stage room creation | Signed-in route; access sheet/premium checks | `titles`, media sources, watch history, engagement, watch-party rooms, safety reports | Home/title/party room/admin | `/watch-party`, `/watch-party/[partyId]` | V1 core; missing platform ids now show honest unavailable state |
 | Creator Video Player `/player/[id]?source=creator-video` | `app/player/[id].tsx`, `_lib/creatorVideos.ts`, `_lib/watchPartyContentSources.ts` | Creator Media + Player | Standalone creator video playback in premium shell, creator-video Watch-Party start, creator-video report, honest unavailable state | Platform fallback, upload management | Signed-in route; owner/public visibility follows video query/RLS | `videos`, `creator-videos` storage, watch-party source model, safety reports | Profile/Channel, Channel Settings | `/watch-party`, `/watch-party/[partyId]` | V1 core; two-device and blocked-state proof deferred |
 
 ### Watch-Party, Live Stage, and Communication
@@ -97,7 +97,7 @@ This audit recommends documentation and targeted follow-up fixes. It does not re
 | Live Stage `/watch-party/live-stage/[partyId]` | `app/watch-party/live-stage/[partyId].tsx`, `components/watch-party-live/livekit-stage-media-surface.tsx` | Live Watch-Party / LiveKit | Live camera stage, Live First/Live Watch-Party mode, LiveKit join contract, participant media, live-stage reporting | Creator video party player, platform title source model | Signed-in active beta; room access resolved before join | `watch_party_rooms`, memberships, LiveKit token contract, safety reports | Home Live waiting room, live room CTA, profile linked live | `/watch-party/[partyId]`, profile, chat, `/watch-party?mode=live` | V1 core; separate from creator-video Watch-Party |
 | Chat inbox `/chat` | `app/chat/index.tsx` | Chi'lly Chat | Native chat inbox, official starter, direct thread entry | Room media rendering, Profile ownership | Signed-in route behavior expected; empty/signed-out state is local | `chat_threads`, `chat_thread_members`, `chat_messages`, profiles | Profile self/public, room invites | `/chat/[threadId]`, `/profile/[userId]` | V1 core |
 | Chat thread `/chat/[threadId]` | `app/chat/[threadId].tsx` | Chi'lly Chat | Direct messages, message send, thread membership, profile/report/call actions | Channel settings, Party Room playback | Signed-in thread member | `chat_threads`, `chat_thread_members`, `chat_messages`, profiles, communication room helpers | Chat inbox/profile | `/profile/[userId]`, communication call helpers | V1 core |
-| Communication lobby `/communication` | `app/communication/index.tsx` | Communication compatibility | Standalone communication lobby/room creation | Normal Chat destination, normal Watch-Party destination | Signed-in active beta plus feature/native gates | `communication_rooms`, memberships, access entitlements | Direct route or communication fallback | `/communication/[roomId]` | Compatibility/suspicious: keep hidden or mark compatibility-only |
+| Communication lobby `/communication` | `app/communication/index.tsx` | Communication compatibility redirect | Redirects old communication lobby hits to canonical Chi'lly Chat | Normal Chat destination, normal Watch-Party destination, standalone call-room creation | Redirect only | None | Direct/legacy route | `/chat` | Resolved hardening item |
 | Communication room `/communication/[roomId]` | `app/communication/[roomId].tsx` | Communication compatibility/calls | Call room media, membership, return to linked watch-party/live route | Watch-Party or Live Stage ownership | Signed-in active beta plus feature/native gates | `communication_rooms`, memberships, safety reports | Chat/call helpers/direct communication lobby | Return to `/watch-party/[partyId]`, `/watch-party/live-stage/[partyId]`, `/communication` | Compatibility; guard retained |
 
 ### Admin, Settings, Data, and Route-Local Helpers
@@ -107,7 +107,7 @@ This audit recommends documentation and targeted follow-up fixes. It does not re
 | Admin `/admin` | `app/admin.tsx` | Admin/Operator | App config, platform title programming, creator grants, role visibility, safety queue, creator-video moderation actions | Public user flow, hidden-button-only admin security | Signed-in active beta plus platform role gate | `platform_role_memberships`, `titles`, `app_configurations`, `creator_permissions`, `safety_reports`, `videos` | Direct/admin tooling | `/player/[id]` for preview | V1 core; backend-enforced roles required |
 | Settings `/settings` | `app/settings.tsx` | Account settings | Logout, support/legal links, entitlement status view | Billing purchase execution, Profile/channel management | Signed-in; redirects to login if signed out | Supabase auth, monetization snapshot | Home/profile | `/support`, `/privacy`, `/terms`, login | V1 core |
 | Local title data | `app/data/titles.ts` | Compatibility sample data | Legacy sample assets | Production source of truth | Not route | Bundled assets | Imported by legacy paths if any | N/A | Compatibility-only |
-| Local Supabase duplicate | `app/lib/_supabase.ts` | Data client compatibility | Duplicate Supabase client for some tab routes | Canonical runtime config/security owner | Not route | Supabase public URL/anon key | Imported by Home/Explore/My List | N/A | V1 hardening issue |
+| Local Supabase duplicate | `app/lib/_supabase.ts` | Data client compatibility shim | Re-exports canonical `_lib/supabase.ts` for any legacy imports | Second client creation, separate storage key, separate runtime config | Not route | Canonical `_lib/supabase.ts` | Legacy imports only | N/A | Resolved hardening item |
 | Watch-party shared helper | `app/watch-party/_lib/_room-shared.ts` | Route-local helper | UI helpers, source marker, participant display helpers | Backend session ownership | Not route | None/direct helpers | Watch-party route files | N/A | V1 helper |
 | Waiting-room shared helper | `app/watch-party/_lib/_waiting-room-shared.ts` | Route-local helper | Waiting room participant/status helpers | Backend session ownership | Not route | None/direct helpers | Waiting room/live route files | N/A | V1 helper |
 
@@ -321,59 +321,59 @@ Status: foundation exists; full public v1 proof still required.
 
 ## 9. Legacy, Dead, Duplicate, or Compatibility Findings
 
-### Public v1 blockers
+### Resolved hardening items
 
-1. `app/modal.tsx` is an Expo template modal route. It should not ship as an accidental public/deep-linkable screen.
-   - Fix recommendation: remove from the root stack or replace with an intentional Chi'llywood modal owner.
-   - Scope: small route cleanup.
+1. `app/modal.tsx` no longer ships the template modal UI.
+   - Resolution: accidental modal deep links redirect to `/(tabs)`.
+   - Remaining note: keep it as a compatibility redirect unless the route is removed intentionally later.
+
+2. `/communication` no longer owns standalone call-room creation/join UI.
+   - Resolution: `/communication` redirects to `/chat`.
+   - Remaining note: `/communication/[roomId]` stays as guarded compatibility for direct/thread call rooms.
+
+3. `app/lib/_supabase.ts` no longer creates a duplicate Supabase client.
+   - Resolution: active imports use `_lib/supabase.ts`, and the old file only re-exports the canonical client.
+
+4. Platform Player missing ids no longer fall back to a sample/local first title.
+   - Resolution: unresolved platform ids show a "Title unavailable" Player state, and valid local `Chicago Streets` playback remains available by its actual local id.
 
 ### Risky but non-blocking
 
-1. `/communication` and `/communication/[roomId]` are real guarded routes. Doctrine says `/communication` is compatibility-only and native communication should live inside Chat/rooms.
-   - Fix recommendation: keep guarded, avoid new navigation into `/communication`, and later redirect the lobby unless a compatibility entry is explicitly needed.
+1. `/communication/[roomId]` is still a guarded compatibility route. Doctrine allows compatibility-only retention, but new product navigation should continue to use `/chat`, Party Room, and Live Room.
 
-2. `app/lib/_supabase.ts` duplicates the canonical Supabase client.
-   - Fix recommendation: migrate tab routes to `_lib/supabase.ts` and runtime config. Do not change behavior in this audit pass.
-
-3. Platform Player local fallback can make a missing platform route look playable.
-   - Fix recommendation: allow local fallback only for known compatibility IDs or development/sample mode, and show an honest unavailable state otherwise.
-
-4. `docs/public-v1-release-checklist.md` appears older than the current migration chain and should be refreshed later.
+2. `docs/public-v1-release-checklist.md` appears older than the current migration chain and should be refreshed later.
    - Fix recommendation: update checklist after this audit, but do not mix that work into runtime owners.
 
 ## 10. Public v1 Blockers
 
-1. Remove, guard, or intentionally replace `app/modal.tsx`.
-2. Complete creator-video Watch-Party proof:
+1. Complete creator-video Watch-Party proof:
    - two-device join/rejoin
    - draft/private blocked state
    - signed-out/non-premium blocked state
-3. Prove creator media visibility/security:
+2. Prove creator media visibility/security:
    - public sees public only
    - owner sees drafts
    - non-owner cannot manage
    - hidden/removed content does not play publicly
-4. Prove premium/access gates:
+3. Prove premium/access gates:
    - signed-out blocked
    - non-premium blocked where premium required
    - deep links cannot bypass
    - restore/purchase path is honest
-5. Prove admin/operator protection:
+4. Prove admin/operator protection:
    - non-admin cannot enter or execute admin actions
    - admin safety actions are backend-protected
-6. Prove support/settings/account requirements:
+5. Prove support/settings/account requirements:
    - logout works
    - privacy/terms/support/deletion links are reachable and accurate
-7. Run final Android release build and route smoke.
+6. Run final Android release build and route smoke.
 
 ## 11. Risky but Non-Blocking Issues
 
-1. `/communication` compatibility route should stay hidden from normal navigation and not become a second chat/call product owner.
-2. Duplicate Supabase client should be consolidated.
-3. Platform Player fallback should be made more honest.
-4. Home/Explore/My List discover platform titles only. Creator videos appear on Profile/Channel, which is acceptable for v1, but global creator-video discovery is a later product decision.
-5. No dedicated `/subscribe` route is okay if the access sheet remains the real paywall. Add a route only if the billing UX needs it.
-6. Notification/reminder helpers exist without a dedicated notification center route. This is not a v1 blocker unless surfaced elsewhere.
+1. `/communication/[roomId]` compatibility should stay guarded and should not become a second chat/call product owner.
+2. Home/Explore/My List discover platform titles only. Creator videos appear on Profile/Channel, which is acceptable for v1, but global creator-video discovery is a later product decision.
+3. No dedicated `/subscribe` route is okay if the access sheet remains the real paywall. Add a route only if the billing UX needs it.
+4. Notification/reminder helpers exist without a dedicated notification center route. This is not a v1 blocker unless surfaced elsewhere.
 
 ## 12. Later-Phase Route and System Recommendations
 
@@ -390,24 +390,21 @@ Status: foundation exists; full public v1 proof still required.
 
 ## 13. Recommended Fix Order
 
-1. Remove or replace `app/modal.tsx` template route.
-2. Finish creator media proof:
+1. Finish creator media proof:
    - draft/public
    - edit
    - publish/unpublish
    - delete/unpublish
    - non-owner cannot manage
-3. Finish creator-video Watch-Party proof:
+2. Finish creator-video Watch-Party proof:
    - two-device join/rejoin
    - draft/private blocked
    - signed-out/non-premium blocked
-4. Tighten platform Player missing-title fallback.
-5. Consolidate `app/lib/_supabase.ts` into the canonical `_lib/supabase.ts` client.
-6. Prove premium/access gates for Watch-Party Live.
-7. Prove admin/safety non-admin denial and admin moderation writes.
-8. Prove settings/support/account deletion/store link readiness.
-9. Keep `/communication` compatibility route guarded and hidden; decide after v1 whether to redirect or remove it.
-10. Final Android release build and route smoke.
+3. Prove premium/access gates for Watch-Party Live.
+4. Prove admin/safety non-admin denial and admin moderation writes.
+5. Prove settings/support/account deletion/store link readiness.
+6. Keep `/communication/[roomId]` compatibility guarded; decide after v1 whether to redirect or remove it.
+7. Final Android release build and route smoke.
 
 ## 14. Manual Android Route Proof Checklist
 

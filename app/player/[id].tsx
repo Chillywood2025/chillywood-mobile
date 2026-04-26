@@ -634,8 +634,7 @@ export default function PlayerScreen() {
       : localTitleMatch
         ? "local:title"
         : "none";
-  const fallbackTitle = (titles[0] as any) ?? null;
-  const fallbackVideo = getVideoSource(localTitle ?? fallbackTitle ?? {});
+  const fallbackVideo = localTitle ? getVideoSource(localTitle) : null;
   const showProtectedSessionNote = isLiveModeFlag;
 
   const videoRef = useRef<PlayerController | null>(null);
@@ -797,9 +796,10 @@ export default function PlayerScreen() {
   const compactControlsTranslateY = useRef(new Animated.Value(0)).current;
 
   const titleId = useMemo(
-    () => String(item?.id ?? (localTitle as any)?.id ?? (fallbackTitle as any)?.id ?? cleanId).trim(),
-    [item?.id, localTitle, fallbackTitle, cleanId],
+    () => String(item?.id ?? (localTitle as any)?.id ?? cleanId).trim(),
+    [item?.id, localTitle, cleanId],
   );
+  const hasResolvedPlatformTitle = playbackSourceKind !== "creator-video" && !!(item || localTitle);
   const inMyList = useMemo(() => (titleId ? myListIds.includes(titleId) : false), [myListIds, titleId]);
   const nextTitle = useMemo(() => {
     const index = titles.findIndex((entry) => String(entry.id) === titleId);
@@ -836,16 +836,16 @@ export default function PlayerScreen() {
     let active = true;
 
     const loadTitle = async () => {
-      const routeId = cleanId || String((localTitle as any)?.id ?? (fallbackTitle as any)?.id ?? "").trim();
+      const routeId = cleanId || String((localTitle as any)?.id ?? "").trim();
       setTitleLoading(true);
       setItem(null);
       setCreatorVideo(null);
       setPlaybackSourceKind("title");
 
       if (!routeId) {
-        if ((localTitle || fallbackTitle) && active) {
-          const chosen = (localTitle ?? fallbackTitle) as any;
-          console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
+        if (localTitle && active) {
+          const chosen = localTitle as any;
+          console.log("PLAYER MATCH SOURCE: matched from", localMatchSource);
           setItem(buildLocalPlayerTitle(chosen));
         }
         setTitleLoading(false);
@@ -909,9 +909,9 @@ export default function PlayerScreen() {
           return;
         }
 
-        if ((localTitle || fallbackTitle) && active) {
-          const chosen = (localTitle ?? fallbackTitle) as any;
-          console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
+        if (localTitle && active) {
+          const chosen = localTitle as any;
+          console.log("PLAYER MATCH SOURCE: matched from", localMatchSource);
           setItem(buildLocalPlayerTitle(chosen));
           setTitleLoading(false);
           return;
@@ -927,9 +927,9 @@ export default function PlayerScreen() {
         if (active) {
           if (expectsCreatorVideo) {
             setItem(null);
-          } else if (localTitle || fallbackTitle) {
-            const chosen = (localTitle ?? fallbackTitle) as any;
-            console.log("PLAYER MATCH SOURCE: matched from", localTitle ? localMatchSource : "local:fallback:first-title");
+          } else if (localTitle) {
+            const chosen = localTitle as any;
+            console.log("PLAYER MATCH SOURCE: matched from", localMatchSource);
             setItem(buildLocalPlayerTitle(chosen));
           }
           setTitleLoading(false);
@@ -942,7 +942,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [cleanId, expectsCreatorVideo, localMatchSource, localTitle, fallbackTitle]);
+  }, [cleanId, expectsCreatorVideo, localMatchSource, localTitle]);
 
   useEffect(() => {
     let active = true;
@@ -2787,9 +2787,11 @@ export default function PlayerScreen() {
       return;
     }
 
-    if (!titleId) {
-      console.log("WATCH PARTY: missing titleId, fallback to /watch-party");
-      router.push("/watch-party");
+    if (!titleId || !hasResolvedPlatformTitle) {
+      Alert.alert(
+        "Watch-Party unavailable",
+        "Chi'llywood could not resolve this platform title for Watch-Party Live.",
+      );
       return;
     }
 
@@ -2801,7 +2803,7 @@ export default function PlayerScreen() {
       let createTitleId = preferredRawId || fallbackRawId;
 
       if (!UUID_LIKE_REGEX.test(createTitleId)) {
-        const titleNameCandidate = String(item?.title ?? (localTitle as any)?.title ?? (fallbackTitle as any)?.title ?? "").trim();
+        const titleNameCandidate = String(item?.title ?? (localTitle as any)?.title ?? "").trim();
         if (titleNameCandidate) {
           try {
             const byName: { data: TitleIdLookupRow | null } = await supabase
@@ -2855,7 +2857,7 @@ export default function PlayerScreen() {
 
     console.log("WATCH PARTY: room creation failed, fallback to /watch-party");
     router.push("/watch-party");
-  }, [creatorVideo, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle, fallbackTitle]);
+  }, [creatorVideo, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
 
   const onSubmitCreatorVideoReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
     if (playbackSourceKind !== "creator-video" || !titleId || creatorVideoReportBusy) return;
@@ -3657,11 +3659,10 @@ export default function PlayerScreen() {
   const displayItem = useMemo<TitleRow | null>(() => {
     if (item) return item;
     if (expectsCreatorVideo) return null;
-    if (!localTitle && !fallbackTitle) return null;
+    if (!localTitle) return null;
 
-    const chosen = (localTitle ?? fallbackTitle) as any;
-    return buildLocalPlayerTitle(chosen);
-  }, [expectsCreatorVideo, item, localTitle, fallbackTitle]);
+    return buildLocalPlayerTitle(localTitle as any);
+  }, [expectsCreatorVideo, item, localTitle]);
 
   const isCreatorVideoPlayback = playbackSourceKind === "creator-video" || expectsCreatorVideo;
   const source = useMemo(() => {
@@ -3720,15 +3721,17 @@ export default function PlayerScreen() {
     };
   }, [sharedPartyResolvedSource]);
   const isCreatorVideoPlaybackUnavailable = isCreatorVideoPlayback && !titleLoading && !source;
+  const isPlatformVideoUnavailable = !isCreatorVideoPlayback && !titleLoading && !!displayItem && !source;
+  const isPlatformTitleUnavailable = !expectsCreatorVideo && !titleLoading && !displayItem;
   const frameworkBackgroundSource = useMemo<ImageSourcePropType | null>(() => {
     const poster = String((displayItem as any)?.poster_url ?? "").trim();
     if (poster) return { uri: poster };
     const thumb = String((displayItem as any)?.thumbnail_url ?? "").trim();
     if (thumb) return { uri: thumb };
     if (isCreatorVideoPlayback) return CREATOR_VIDEO_BRANDED_BACKGROUND;
-    const localVisual = (localTitle ?? fallbackTitle) as any;
+    const localVisual = localTitle as any;
     return localVisual?.image || localVisual?.poster || null;
-  }, [displayItem, fallbackTitle, isCreatorVideoPlayback, localTitle]);
+  }, [displayItem, isCreatorVideoPlayback, localTitle]);
   const isLiveMode = isLiveModeFlag;
   const isSharedPartyPlayback = inWatchParty && !isLiveMode;
   const shouldUseSharedAndroidVideoSurface = Platform.OS === "android" && isSharedPartyPlayback;
@@ -5085,6 +5088,30 @@ export default function PlayerScreen() {
     );
   }
 
+  if (isPlatformTitleUnavailable) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.container}>
+          <View style={styles.playerAccessCard}>
+            <Text style={styles.playerAccessKicker}>PLAYER</Text>
+            <Text style={styles.playerAccessTitle}>Title unavailable</Text>
+            <Text style={styles.playerAccessBody}>
+              Chi&apos;llywood could not find a playable platform title for this route.
+            </Text>
+            <View style={styles.playerAccessActions}>
+              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+                <Text style={styles.playerAccessSecondaryText}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.playerAccessPrimaryBtn} onPress={() => router.replace("/(tabs)")} activeOpacity={0.85}>
+                <Text style={styles.playerAccessPrimaryText}>Browse Titles</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.playerFrameworkRoot}>
@@ -5336,12 +5363,19 @@ export default function PlayerScreen() {
                 )
               ) : (
                 <View style={styles.videoLoadingFallback}>
-                  {isCreatorVideoPlaybackUnavailable ? null : <ActivityIndicator color={ACCENT} />}
+                  {isCreatorVideoPlaybackUnavailable || isPlatformVideoUnavailable ? null : <ActivityIndicator color={ACCENT} />}
                   <Text style={styles.videoLoadingText}>
-                    {isCreatorVideoPlaybackUnavailable ? "Creator video unavailable" : "Preparing video..."}
+                    {isCreatorVideoPlaybackUnavailable
+                      ? "Creator video unavailable"
+                      : isPlatformVideoUnavailable
+                        ? "Video unavailable"
+                        : "Preparing video..."}
                   </Text>
                   {isCreatorVideoPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>This upload does not have a playable source yet.</Text>
+                  ) : null}
+                  {isPlatformVideoUnavailable ? (
+                    <Text style={styles.videoLoadingSubtext}>This title does not have a playable source yet.</Text>
                   ) : null}
                 </View>
               )}
