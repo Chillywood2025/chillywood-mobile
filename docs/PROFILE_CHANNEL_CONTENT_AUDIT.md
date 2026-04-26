@@ -46,6 +46,7 @@ This audit began as documentation only. The follow-up creator media foundation n
 - `_lib/userData.ts`
 - `_lib/channelReadModels.ts`
 - `_lib/channelAudience.ts`
+- `docs/AUDIENCE_ROLE_ROSTER_SYSTEM.md`
 - `_lib/contentEngagement.ts`
 - `_lib/mediaSources.ts`
 - `_lib/chat.ts`
@@ -303,6 +304,7 @@ Channel/audience:
 - `channel_audience_blocks`
 - `_lib/channelAudience.ts`
 - `_lib/channelReadModels.ts`
+- `docs/AUDIENCE_ROLE_ROSTER_SYSTEM.md`: durable Audience Role Roster System definition. Current Public v1 truth is backed followers, subscriber rows, audience requests, and blocks only; unified roster, VIP, moderator, co-host, manager/team, invites, bans, permissions, role audit logs, and paid/subscriber creator media stay post-v1 unless a narrow safety blocker changes scope.
 
 Creator permissions and monetization flags:
 
