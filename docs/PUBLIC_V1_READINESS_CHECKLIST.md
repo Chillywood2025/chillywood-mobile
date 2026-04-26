@@ -2,7 +2,7 @@
 
 Date: 2026-04-26
 
-Purpose: track Public v1 launch readiness without treating static validation as runtime proof. Use this document with `CURRENT_STATE.md`, `NEXT_TASK.md`, `docs/FULL_APP_ROUTE_OWNER_BEHAVIOR_AUDIT.md`, and `docs/PUBLIC_V1_AND_LATER_SYSTEMS_PLAN.md`.
+Purpose: track Public v1 launch readiness without treating static validation as runtime proof. Use this document with `CURRENT_STATE.md`, `NEXT_TASK.md`, `docs/FULL_APP_ROUTE_OWNER_BEHAVIOR_AUDIT.md`, `docs/PUBLIC_V1_AND_LATER_SYSTEMS_PLAN.md`, and `docs/EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST.md`.
 
 Status key:
 
@@ -90,6 +90,7 @@ Category D, later phase by product decision:
 
 ## External Setup Pending
 
+- External setup details, dashboard/manual owners, proof requirements, and exact next actions now live in `docs/EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST.md`.
 - RevenueCat products, offerings, public SDK keys, and store-side subscription setup.
 - Google Play listing metadata, policy declarations, screenshots, support URL, privacy URL, terms URL, and account-deletion URL.
 - Final legal review of bundled policy pages and public hosted URLs.
