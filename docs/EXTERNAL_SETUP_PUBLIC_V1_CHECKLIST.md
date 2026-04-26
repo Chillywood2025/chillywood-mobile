@@ -40,6 +40,9 @@ Use this checklist with `docs/PUBLIC_V1_READINESS_CHECKLIST.md`, `docs/PUBLIC_V1
 Use current official documentation during actual setup because console requirements change over time:
 
 - Google Play Billing and subscriptions: `https://developer.android.com/google/play/billing`
+- RevenueCat Android product setup: `https://www.revenuecat.com/docs/getting-started/entitlements/android-products`
+- RevenueCat SDK configuration: `https://www.revenuecat.com/docs/getting-started/configuring-sdk`
+- RevenueCat entitlements: `https://www.revenuecat.com/docs/getting-started/entitlements`
 - Google Play Data safety: `https://support.google.com/googleplay/android-developer/answer/10787469`
 - Google Play account deletion: `https://support.google.com/googleplay/android-developer/answer/13327111`
 - Firebase Crashlytics: `https://firebase.google.com/docs/crashlytics/get-started?platform=android`
@@ -52,9 +55,9 @@ Use current official documentation during actual setup because console requireme
 
 | Area | Current repo status | Dashboard/manual action needed | Owner/responsible person | Proof required | Status | Exact next action |
 | --- | --- | --- | --- | --- | --- | --- |
-| Google Play Billing product | `react-native-purchases` and `react-native-purchases-ui` are installed. `_lib/revenuecat.ts`, `_lib/monetization.ts`, `_lib/premiumEntitlements.ts`, and `app/subscribe.tsx` own Premium billing UX and entitlement checks. The app does not grant Premium from local-only state. | Create the Google Play subscription product for Chi'llywood Premium, configure base plan/offers, and connect the product to RevenueCat. Confirm product IDs match the RevenueCat offering/entitlement model used by the app. | Product owner plus Play Console/RevenueCat operator. | Internal build purchase starts, product loads, purchase completes, backend entitlement becomes active, and protected routes unlock only after trusted entitlement truth. | External Setup Pending | Decide final Android product ID(s), create subscription/base plan in Play Console, wire RevenueCat offering `premium` and entitlement `premium`, then run a sandbox purchase proof. |
-| RevenueCat configuration | Runtime config supports `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV`, `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`, and `EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY`. Monetization targets include `premium_subscription`, `premium_live_access`, and `premium_watch_party_access`; later paid content targets remain non-v1. | Configure Android app `com.chillywood.mobile`, Play service credentials, offerings, products, entitlements, and public SDK keys in RevenueCat. | Billing owner. | `/subscribe` shows configured offer, purchase and restore call RevenueCat, active entitlement is reflected by account-owned truth, and missing/expired/revoked states remain blocked. | External Setup Pending | Add release RevenueCat public SDK key to release env and verify `premium` offering/package availability in a preview/release build. |
-| Billing restore path | `/subscribe` exposes restore/manage actions through the existing RevenueCat owner and shows honest failure copy when unavailable. | Ensure store account restore is configured and RevenueCat is connected to the Play app. | Billing owner. | Reinstall/login on a second install, tap Restore, validate server/store result, and confirm Premium unlocks only after entitlement refresh. | External Setup Pending | After purchase setup, run restore proof with the same Google test account and capture screenshots/logs without receipt tokens. |
+| Google Play Billing product | `react-native-purchases` and `react-native-purchases-ui` are installed. `_lib/revenuecat.ts`, `_lib/monetization.ts`, `_lib/premiumEntitlements.ts`, and `app/subscribe.tsx` own Premium billing UX and entitlement checks. The app does not grant Premium from local-only state. | Create the Google Play subscription product for Chi'llywood Premium, configure base plan/offers, and connect the product to RevenueCat. Confirm product IDs match the RevenueCat offering/entitlement model used by the app. | Product owner plus Play Console/RevenueCat operator. | Internal build purchase starts, product loads, purchase completes, backend entitlement becomes active, and protected routes unlock only after trusted entitlement truth. | External Setup Pending | Follow the Lane 1 runbook below: create the Play subscription product/base plan, connect it to RevenueCat entitlement `premium`, then run license-tester purchase proof. |
+| RevenueCat configuration | Runtime config supports `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV`, `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`, and `EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY`. Monetization targets include `premium_subscription`, `premium_live_access`, and `premium_watch_party_access`; later paid content targets remain non-v1. | Configure Android app `com.chillywood.mobile`, Play service credentials, offerings, products, entitlements, and public SDK keys in RevenueCat. | Billing owner. | `/subscribe` shows configured offer, purchase and restore call RevenueCat, active entitlement is reflected by account-owned truth, and missing/expired/revoked states remain blocked. | External Setup Pending | Add the RevenueCat Android public SDK key to release env, keep all Play service credentials in RevenueCat/dashboard storage only, and verify offering `premium` loads in `/subscribe`. |
+| Billing restore path | `/subscribe` exposes restore/manage actions through the existing RevenueCat owner and shows honest failure copy when unavailable. | Ensure store account restore is configured and RevenueCat is connected to the Play app. | Billing owner. | Reinstall/login on a second install, tap Restore, validate server/store result, and confirm Premium unlocks only after entitlement refresh. | External Setup Pending | After purchase setup, run restore proof with the same Google license tester and capture screenshots/logs without receipt tokens. |
 | Google Play Store listing | `app.json` names the app `Chi'llywood`, version `1.0.0`, Android package `com.chillywood.mobile`, and icons/splash assets under `assets/images`. `eas.json` has a production Android app-bundle profile. | Prepare Play Store app listing, short/full descriptions, screenshots, feature graphic, app category, contact email, privacy policy URL, account deletion URL, content rating, target audience, and tester tracks. | Product owner plus release manager. | Play Console listing checklist passes, internal/closed testing track accepts AAB, policy declarations are accepted. | External Setup Pending | Create/complete Play Console listing for `com.chillywood.mobile` and upload first production-profile AAB to internal testing. |
 | Google Play Data Safety | Repo has policy pages and support surfaces, but Data Safety answers are a Play Console responsibility. App uses Supabase auth/storage, Firebase, RevenueCat, LiveKit, camera, microphone, and notifications dependencies. | Complete Data Safety with actual data collected/shared, encryption/deletion practices, diagnostics/analytics, account creation/deletion, camera/microphone use, and user-generated content moderation. | Product owner plus privacy/legal reviewer. | Data Safety form is accepted by Play Console and matches app behavior plus third-party SDK use. | External Setup Pending | Inventory data by SDK/system, answer Play Console Data Safety, and cross-check with Privacy Policy before submission. |
 | Account deletion policy | `app/account-deletion.tsx` exists and `app.config.ts` has fallback hosted URL `https://live.chillywoodstream.com/account-deletion`; Settings links to deletion support. It is an honest request/help flow, not fake automated deletion. | Confirm public hosted account deletion URL, process owner, response SLA, backend deletion/export policy, and Play Console account deletion declaration. | Product owner plus support/legal owner. | URL is public, opens outside the app, explains delete request flow, and Play Console accepts it. | External Setup Pending | Finalize the hosted account deletion page/process and configure `EXPO_PUBLIC_ACCOUNT_DELETION_URL` if the fallback is not final. |
@@ -73,6 +76,105 @@ Use current official documentation during actual setup because console requireme
 | Production runtime environment | `scripts/validate-runtime.mjs` checks Supabase URL/anon key, beta allowlist/env, Expo project id/update URL/runtime. `app.config.ts` reads RevenueCat, LiveKit, legal/support, and Firebase config. | Populate release env for Supabase, RevenueCat, LiveKit token endpoint/server URL, legal/support URLs, beta/public flags, and any Firebase/EAS secrets. | Release manager plus system owners. | `npm run validate:runtime` passes for release environment; release build shows correct endpoints without dev fallbacks. | External Setup Pending | Create release env profile and run runtime validation immediately before production build. |
 | Production logging and secret safety | Recent route/source logs moved behind dev-only logger. Repo owners already avoid printing signed creator media URLs in Player logs. | Audit release build logs for Supabase JWTs, signed URLs, RevenueCat receipts, LiveKit participant tokens, Firebase keys beyond public config, and service-role secrets. | Release manager plus security owner. | Release candidate log audit shows no secrets/signed URLs and no noisy debug-only operational logs. | Proof Pending | Run bounded release log audit during final smoke. |
 | Store submission and final smoke | Public v1 readiness checklist tracks runtime proof lanes. This checklist tracks external prerequisites. | Complete proof lanes, external setup, release build, internal testing, Play Console review, and rollback plan. | Product owner/release manager. | Final route smoke passes on release build: auth, settings, Profile/Channel, creator media, Player, platform Watch-Party, creator-video Watch-Party, Live Stage, Chat, Admin denial, Premium gate, legal/support. | Proof Pending | Do not submit production until proof artifacts exist and `docs/PUBLIC_V1_READINESS_CHECKLIST.md` has no v1 Blocked items. |
+
+## Lane 1 Runbook - Google Play Billing / RevenueCat / Premium
+
+Processed: 2026-04-26
+
+Scope for this lane only:
+
+- Prepare Google Play Billing / RevenueCat / Premium external setup.
+- Do not configure paid creator videos, subscriber-only videos, tips, coins, payouts, ads, or paid title access.
+- Do not run live store actions from Codex.
+- Do not put Play service account JSON, RevenueCat API keys, receipts, purchase tokens, or screenshots containing sensitive account details in the repo.
+
+### Repo-Ready Facts
+
+- Android package/application id: `com.chillywood.mobile`.
+- App name/version: `Chi'llywood` / `1.0.0`.
+- Billing libraries are installed: `react-native-purchases` and `react-native-purchases-ui`.
+- Premium route exists: `app/subscribe.tsx`.
+- Billing/runtime owners exist: `_lib/revenuecat.ts`, `_lib/monetization.ts`, and `_lib/premiumEntitlements.ts`.
+- Backend entitlement table owner exists: `user_entitlements`.
+- Billing event table owner exists: `billing_events`.
+- Runtime config reads:
+  - `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV`
+  - `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`
+  - `EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY`
+- App-side Public v1 Premium target is:
+  - monetization target id: `premium_subscription`
+  - RevenueCat offering id: `premium`
+  - RevenueCat entitlement id: `premium`
+- Later/non-v1 monetization targets are present in code for planning compatibility but must not be enabled as active Public v1 products in this lane:
+  - `paid_title_access` / offering `paid-content`
+  - `premium_live_access` / offering `premium-live`
+  - `premium_watch_party_access` / offering `premium-watch-party`
+- `/subscribe` is honest when setup is missing: it reports unavailable/partial setup and does not grant Premium locally.
+- `hasPremiumAccess()` and Watch-Party gate helpers read RevenueCat/backend entitlement truth rather than trusting a local-only toggle when subscriptions are enabled.
+
+### Manual Dashboard Steps
+
+1. In Google Play Console, confirm the app exists with package `com.chillywood.mobile`.
+2. Upload an internal or closed-test Android build first if Play Console will not allow subscription creation yet. RevenueCat's Android product setup notes that Google Play product setup may require an uploaded APK/AAB before products can be created.
+3. In Play Console, open the app and go to Monetize / Products / Subscriptions.
+4. Create the Public v1 subscription product for Chi'llywood Premium.
+   - Recommended product id: `chillywood_premium_v1`
+   - Product name: `Chi'llywood Premium`
+   - Entitlement represented: `premium`
+   - Do not create paid creator-video, tip, coin, payout, ad, or subscriber-only products in this lane.
+5. Add a base plan for the first Public v1 subscription.
+   - Recommended base plan id: `monthly-autorenewing`
+   - Renewal type: auto-renewing
+   - Billing period: monthly unless the product owner chooses a different v1 price strategy
+   - Set the launch/test price in required regions.
+   - Activate the base plan when ready for testing.
+6. Optional: create an introductory offer only if the product owner wants it for Public v1. If used, keep it simple and make sure the RevenueCat package selected by the app still maps to the intended Premium entitlement.
+7. Configure Google Play license testers for purchase proof.
+8. In RevenueCat, create or verify the Chi'llywood project and Android app for `com.chillywood.mobile`.
+9. Connect Google Play to RevenueCat using the approved Play service account / API integration. Store this credential in RevenueCat/Google systems only, not in the repo.
+10. Import or add the Google subscription product/base plan in RevenueCat.
+    - For newer Google subscription products, RevenueCat may show the product identifier as `<subscription_id>:<base-plan-id>`, for example `chillywood_premium_v1:monthly-autorenewing`.
+11. In RevenueCat Product Catalog / Entitlements, create entitlement id `premium`.
+12. Attach the Google subscription product/base plan to entitlement `premium`.
+13. In RevenueCat Offerings, create or verify offering id `premium`.
+14. Add the Premium package to offering `premium`, preferably as the monthly/default package.
+15. Mark offering `premium` as the current/default offering if RevenueCat requires it for `getOfferings()` to return the expected package.
+16. Copy only the RevenueCat Android public SDK key into the release environment as `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`.
+17. If testing debug/dev client against RevenueCat, copy the Android debug public SDK key into the test environment as `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV`.
+18. Do not place Play service account JSON, RevenueCat secret API keys, or purchase tokens in `app.config.ts`, `.env` committed files, docs, screenshots, or chat.
+
+### Proof Required Before Marking This Lane Done
+
+Use an internal/closed-test Android build or a release-like build with the correct RevenueCat public SDK key.
+
+1. Sign into Chi'llywood with a normal test account.
+2. Open `/subscribe`.
+3. Confirm `/subscribe` shows the configured Premium offer, not "No Premium offer is available".
+4. Tap Unlock Premium with a Google Play license tester account.
+5. Confirm the native Play purchase sheet opens for Chi'llywood Premium.
+6. Complete a license-tester purchase with the test payment method that always approves.
+7. Confirm RevenueCat customer info shows active entitlement `premium`.
+8. Confirm the app shows Premium active for the signed-in Chi'llywood account.
+9. Confirm a protected Watch-Party/Premium action unlocks only after entitlement truth refreshes.
+10. Reinstall or clear app state, sign into the same Chi'llywood account, tap Restore, and confirm Premium is restored only from store/RevenueCat/backend truth.
+11. Test a revoked/expired/canceled state using RevenueCat, Play Console refund/revoke, or Play Billing Lab where appropriate.
+12. Confirm missing/expired/revoked/pending entitlement states block Premium access and show honest copy.
+13. Confirm signed-out and non-premium users remain blocked from Premium-required Watch-Party flows.
+14. Save screenshots/logs under `/tmp/chillywood-premium-billing-proof-*`.
+15. Do not save purchase tokens, receipts, service account details, or personal payment details in proof artifacts.
+
+### Stop Conditions
+
+Stop and do not mark Done if:
+
+- Play Console subscription product is missing.
+- RevenueCat offering `premium` is missing or empty.
+- RevenueCat entitlement `premium` is not attached to the Google subscription product/base plan.
+- `/subscribe` still says no Premium offer is available in a release-like build.
+- Purchase succeeds in Google Play but RevenueCat entitlement does not become active.
+- Restore does not recover a valid active purchase.
+- The app unlocks Premium from local-only state, a hidden button, or an untrusted row.
+- Any proof artifact would expose secrets, receipt payloads, purchase tokens, or personal payment details.
 
 ## Current External Setup Summary
 
