@@ -51,6 +51,7 @@ Use current official documentation during actual setup because console requireme
 - Firebase Performance Monitoring: `https://firebase.google.com/docs/perf-mon/get-started-android`
 - Firebase Crashlytics/Performance lane runbook: `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`
 - Supabase migrations and local development: `https://supabase.com/docs/guides/deployment/database-migrations` and `https://supabase.com/docs/guides/local-development/overview`
+- Supabase remote Public v1 lane runbook: `docs/SUPABASE_REMOTE_PUBLIC_V1_RUNBOOK.md`
 - LiveKit authentication and networking: `https://docs.livekit.io/frontends/build/authentication/` and `https://docs.livekit.io/transport/self-hosting/ports-firewall/`
 - Expo EAS Build and Play submission: `https://docs.expo.dev/build/introduction/` and `https://docs.expo.dev/submit/android/`
 
@@ -69,10 +70,10 @@ Use current official documentation during actual setup because console requireme
 | Firebase project and Android config | Firebase packages and config plugins are present. `firebase.json` enables Crashlytics collection/debug settings. `google-services.json` exists for project `chillywood-app` and package `com.chillywood.mobile`. Helpers exist for Crashlytics, Performance, Analytics, and Remote Config. Detailed lane prep now lives in `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`. | Verify Firebase project ownership, Android app registration, SHA/package match if required, Crashlytics and Performance dashboard setup, and production data collection posture. | Release manager/Firebase owner. | Internal/release build reports a non-fatal Crashlytics event, Performance traces appear, and dashboards show the expected Android app. | Proof Pending | Follow `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`: verify the Firebase Console app, build/install a release-like candidate, and capture dashboard receipt. |
 | Firebase Crashlytics | `@react-native-firebase/crashlytics`, `app.config.ts` plugin setup, `_lib/firebaseCrashlytics.ts`, app-shell bootstrap, root error reporting, and dev-only proof helpers exist. | Confirm Crashlytics is enabled in Firebase Console and compatible with the release build type. Approve any forced crash proof before running it. | Firebase owner. | A controlled non-fatal report or approved test crash appears in Crashlytics for `com.chillywood.mobile`. | Proof Pending | Run approved non-fatal proof in an internal/release-like build and save dashboard evidence; run forced crash only with explicit approval. |
 | Firebase Performance and analytics/remote config | `@react-native-firebase/perf`, analytics, and remote config packages/helpers exist. `_lib/firebasePerformance.ts` enables collection and emits `app_runtime_bootstrap`; dev-only trace/network probes exist. | Confirm performance monitoring and analytics collection are appropriate for policy disclosures and release environment. | Firebase owner plus privacy owner. | Performance app/screen/custom trace or network metric appears in Firebase; privacy policy/Data Safety mentions applicable diagnostics/analytics behavior. | Proof Pending | Run a short release-candidate Performance proof, then update policy declarations if data collection differs from the runbook. |
-| Supabase remote project link | App config and control docs identify the remote project through deployed endpoints, and current repo truth says migrations are applied/proved through `202604260004`. This local CLI session is not linked, so migration status could not be re-run here. | Link local Supabase CLI to the production project when needed, without committing `.temp` metadata. Confirm project ref, migration list, storage buckets, Edge Function deployment, and secrets in dashboard. | Backend/Supabase owner. | `supabase migration list` shows local/remote alignment, schema has creator media/watch-party columns, and no migration drift exists. | Proof Pending | Run `supabase link --project-ref bmkkhihfbmsnnmcqkoly` in a controlled session, verify migrations read-only, and leave local metadata uncommitted. |
-| Supabase remote migrations and RLS | Migrations define `videos`, `creator-videos` storage policies, `safety_reports`, `user_entitlements`, `billing_events`, Watch-Party source fields, and tightened room RLS. Local and previous remote proof are recorded in control docs. | Re-run safe remote proof before launch for creator media, storage, reports, entitlements, admin writes, Watch-Party rooms, and anon denial. | Backend/Supabase owner. | Live RLS proof shows owner/non-owner/public/admin/anon behavior exactly matches Public v1 access rules. | Proof Pending | Run focused non-destructive live RLS proof after CLI link, then document artifacts in `CURRENT_STATE.md` and `NEXT_TASK.md`. |
+| Supabase remote project link | App config and control docs identify the remote project through deployed endpoints. This lane linked the local CLI to project ref `bmkkhihfbmsnnmcqkoly` and created local `supabase/.temp/` metadata that must remain uncommitted. | Confirm project ref/dashboard ownership, keep local `.temp` metadata out of commits, and relink clean checkouts only when needed. | Backend/Supabase owner. | `supabase migration list` shows local/remote alignment, schema has creator media/watch-party columns, and no migration drift exists. | Partial / Proof Pending | Follow `docs/SUPABASE_REMOTE_PUBLIC_V1_RUNBOOK.md`; migration history is aligned, but direct DB lint/schema proof needs approved remote DB login auth. |
+| Supabase remote migrations and RLS | Migrations define `videos`, `creator-videos` storage policies, `safety_reports`, `user_entitlements`, `billing_events`, Watch-Party source fields, and tightened room RLS. `supabase migration list` now shows local/remote aligned through `202604260004`. Linked DB lint was attempted but blocked by remote login password auth. | Re-run safe remote lint/schema proof before launch, then run focused remote API/RLS proof for creator media, storage, reports, entitlements, admin writes, Watch-Party rooms, and anon denial. | Backend/Supabase owner. | Live RLS proof shows owner/non-owner/public/admin/anon behavior exactly matches Public v1 access rules. | Proof Pending | Configure approved remote DB login path, run `supabase db lint --linked --schema public --fail-on none`, then run focused non-destructive live RLS proof with sanitized artifacts. |
 | Supabase storage buckets | Migration creates a private `creator-videos` bucket with owner write/delete and public-or-owner read policy intent. Direct SQL delete is intentionally blocked by Supabase storage protection, so Storage API proof remains separate. | Verify bucket exists remotely, MIME/file-size limits match product needs, public access is policy-mediated, and Storage API owner delete/remove works. | Backend/Supabase owner. | Owner uploads/removes own object, non-owner cannot overwrite/delete, public reads only public clean videos, draft/hidden/removed sources do not leak. | Proof Pending | Run Storage API proof against remote project using real owner/non-owner sessions, not service-role-only SQL. |
-| Supabase Edge Functions | `supabase/functions/livekit-token/index.ts` exists and `supabase/config.toml` disables automatic JWT verification for that function because the function validates bearer auth internally. | Deploy/verify function in remote project and configure function secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`. | Backend/LiveKit owner. | Authenticated app request receives server URL and participant token; signed-out/malformed requests are rejected; no secrets appear in logs. | Proof Pending | Verify deployment and secrets in Supabase dashboard, then run token request proof from release-like build. |
+| Supabase Edge Functions | `supabase/functions/livekit-token/index.ts` exists and `supabase/config.toml` disables automatic JWT verification for that function because the function validates bearer auth internally. `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly` shows `livekit-token` ACTIVE, version 7. | Verify function secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`. | Backend/LiveKit owner. | Authenticated app request receives server URL and participant token; signed-out/malformed requests are rejected; no secrets appear in logs. | Partial / Proof Pending | Verify secrets in Supabase dashboard, then run token request/denial proof from a release-like build. |
 | LiveKit production server | App defaults to `wss://live.chillywoodstream.com` and `infra/hetzner/livekit.env.example` documents a self-hosting scaffold. LiveKit runtime code requests tokens from the Supabase Edge Function; the client does not mint tokens. | Confirm production LiveKit server, domain, TLS, API key/secret, TURN/ICE settings, firewall ports, server health, scaling/monitoring, and retention/logging posture. | LiveKit infrastructure owner. | Two Android devices can join Live First and Live Watch-Party on production LiveKit, reconnect, and avoid stale-room bleed; server health is observable. | Proof Pending | Verify `live.chillywoodstream.com` infrastructure, TURN/port reachability, and token endpoint secrets, then run bounded two-device proof. |
 | LiveKit TURN/domain/TLS | Domain fallback exists in config, but TURN/TLS/port readiness is external. | Configure TLS certs, DNS, firewall, UDP/TCP ports, TURN if needed, and any load balancer/proxy settings. | LiveKit infrastructure owner. | Cellular and Wi-Fi devices can establish media, not only local-network proof. | External Setup Pending | Run network reachability proof from cellular/Wi-Fi and record LiveKit connection diagnostics without tokens. |
 | Android release build and signing | `eas.json` has development, preview, and production profiles; production builds Android `app-bundle`. `app.json` includes package `com.chillywood.mobile`, EAS project id, Expo Updates URL, icon/splash assets, and camera/microphone permissions. The Lane 3 runbook now documents app identity, signing posture, env requirements, native rebuild risks, and build commands. | Confirm EAS Android credentials/signing ownership, Play App Signing, versionCode strategy, production env values, release track, and final preview/production build approval. | Release manager. | Current `main` builds successfully with preview and production profiles; production AAB installs or reaches Play internal testing; release route smoke and log audit pass. | External Setup Pending | Follow `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`: verify credentials, choose versionCode strategy, configure EAS production env, then run preview/production builds after runtime proof lanes are green. |
@@ -356,6 +357,61 @@ Stop and do not mark Done if:
 - Forced crash proof is requested without explicit approval.
 - Privacy/Data Safety has not been reconciled with Firebase collection behavior.
 
+## Lane 5 Runbook - Supabase Remote Public V1 Verification
+
+Processed: 2026-04-26
+
+Detailed owner doc: `docs/SUPABASE_REMOTE_PUBLIC_V1_RUNBOOK.md`
+
+Scope for this lane only:
+
+- Supabase remote project/link status.
+- Remote migration alignment.
+- Core schema readiness by applied migration/generated-type truth.
+- Storage/RLS/Edge Function readiness status.
+- Safe proof commands and manual dashboard steps.
+- No remote data mutation, migration push, Android runtime proof, or destructive SQL.
+
+Repo/remote-ready facts:
+
+- Supabase CLI version observed: `2.75.0`.
+- `supabase projects list` showed project ref `bmkkhihfbmsnnmcqkoly`, name `Chillywood2025's Project`, region West US (Oregon).
+- `supabase link --project-ref bmkkhihfbmsnnmcqkoly` completed without a password prompt.
+- Local `supabase/.temp/` metadata now exists because of the link and must stay uncommitted.
+- `supabase migration list` showed local and remote aligned through every migration in `supabase/migrations`, from `202604190004` through `202604260004`.
+- `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly` showed `livekit-token` ACTIVE, version 7.
+- `supabase db lint --linked --schema public --fail-on none` was attempted but blocked by remote CLI login password authentication. No password was entered.
+
+Manual actions before marking Done:
+
+1. Keep `supabase/.temp/` out of commits.
+2. Confirm the Supabase dashboard project ref is `bmkkhihfbmsnnmcqkoly` and is the intended Public v1 project.
+3. Confirm dashboard migration history matches local through `202604260004`.
+4. Configure the approved remote DB login/password path for linked lint/schema checks, without pasting secrets into chat/docs.
+5. Confirm `creator-videos` bucket exists, is private, and has expected MIME/file-size limits.
+6. Confirm RLS is enabled on v1 tables and Storage policies exist.
+7. Confirm `livekit-token` function secrets are present and current.
+8. Confirm EAS/release runtime env points at the production Supabase project.
+
+Proof required:
+
+- Linked migration list remains aligned.
+- Linked DB lint/schema inspection succeeds.
+- Live creator media API/RLS proof passes for owner, non-owner, public, anon, and operator cases.
+- Live Storage API proof passes for owner upload/remove and non-owner denial.
+- Live moderation/report/admin proof passes.
+- Live entitlement proof passes for active/expired/revoked states.
+- `livekit-token` authenticated request, signed-out denial, malformed request denial, and role denial are proved without logging secrets.
+
+Stop and do not mark Done if:
+
+- Project ref does not match the intended production project.
+- Pending migrations appear and have not been audited.
+- Linked DB lint cannot authenticate.
+- Storage bucket/policies cannot be verified.
+- Live RLS proof uses only service-role or superuser behavior.
+- Any proof would expose service keys, JWTs, database passwords, anon key values, signed URLs, LiveKit secrets, or user PII beyond approved test identities.
+
 ## Current External Setup Summary
 
 Already repo-backed:
@@ -364,7 +420,7 @@ Already repo-backed:
 - Creator Media, creator-video Player, and creator-video Watch-Party source-model code exist.
 - Bundled legal/support/account-deletion routes exist.
 - Firebase packages/plugins/helpers exist, and Firebase Crashlytics/Performance proof prep now has a dedicated runbook.
-- Supabase migrations for creator media, billing entitlements, moderation, storage policy intent, and Watch-Party source/RLS exist.
+- Supabase migrations for creator media, billing entitlements, moderation, storage policy intent, and Watch-Party source/RLS exist, and remote migration history is aligned through `202604260004`.
 - LiveKit client/token contract owners exist, and the token function is present in the Supabase functions tree.
 - EAS production Android build profile exists.
 
@@ -374,8 +430,8 @@ External setup still required:
 - Play Store listing, screenshots, content rating, Data Safety, camera/microphone declarations, support URL, privacy URL, and account deletion URL.
 - Final legal/support/DMCA/account deletion process review.
 - Firebase dashboard proof for Crashlytics and Performance.
-- Supabase CLI project link and live migration/RLS/storage re-proof.
-- Supabase Edge Function deployment/secrets proof for LiveKit token issuance.
+- Supabase linked DB lint/schema proof, live RLS proof, and Storage API proof.
+- Supabase Edge Function secret/request proof for LiveKit token issuance.
 - LiveKit production domain/TURN/TLS/firewall proof.
 - EAS release signing/production AAB build proof.
 - Release runtime env validation and final route smoke.
@@ -383,7 +439,7 @@ External setup still required:
 ## Recommended External Setup Order
 
 1. Finalize hosted legal/support/account deletion URLs and support inbox ownership.
-2. Link Supabase CLI read-only, verify remote migration alignment, and run focused live RLS/storage proof.
+2. Use the linked Supabase CLI, verify remote migration alignment, and run focused live RLS/storage proof.
 3. Verify Supabase `livekit-token` function deployment and secret configuration.
 4. Verify LiveKit server/domain/TURN/TLS from Wi-Fi and cellular networks.
 5. Configure RevenueCat/Google Play Premium subscription product and public SDK keys.
