@@ -46,6 +46,7 @@ Use current official documentation during actual setup because console requireme
 - Google Play Data safety: `https://support.google.com/googleplay/android-developer/answer/10787469`
 - Google Play account deletion: `https://support.google.com/googleplay/android-developer/answer/13327111`
 - Account/legal/Data Safety lane runbook: `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`
+- Android release/EAS signing lane runbook: `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`
 - Firebase Crashlytics: `https://firebase.google.com/docs/crashlytics/get-started?platform=android`
 - Firebase Performance Monitoring: `https://firebase.google.com/docs/perf-mon/get-started-android`
 - Supabase migrations and local development: `https://supabase.com/docs/guides/deployment/database-migrations` and `https://supabase.com/docs/guides/local-development/overview`
@@ -73,7 +74,7 @@ Use current official documentation during actual setup because console requireme
 | Supabase Edge Functions | `supabase/functions/livekit-token/index.ts` exists and `supabase/config.toml` disables automatic JWT verification for that function because the function validates bearer auth internally. | Deploy/verify function in remote project and configure function secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`. | Backend/LiveKit owner. | Authenticated app request receives server URL and participant token; signed-out/malformed requests are rejected; no secrets appear in logs. | Proof Pending | Verify deployment and secrets in Supabase dashboard, then run token request proof from release-like build. |
 | LiveKit production server | App defaults to `wss://live.chillywoodstream.com` and `infra/hetzner/livekit.env.example` documents a self-hosting scaffold. LiveKit runtime code requests tokens from the Supabase Edge Function; the client does not mint tokens. | Confirm production LiveKit server, domain, TLS, API key/secret, TURN/ICE settings, firewall ports, server health, scaling/monitoring, and retention/logging posture. | LiveKit infrastructure owner. | Two Android devices can join Live First and Live Watch-Party on production LiveKit, reconnect, and avoid stale-room bleed; server health is observable. | Proof Pending | Verify `live.chillywoodstream.com` infrastructure, TURN/port reachability, and token endpoint secrets, then run bounded two-device proof. |
 | LiveKit TURN/domain/TLS | Domain fallback exists in config, but TURN/TLS/port readiness is external. | Configure TLS certs, DNS, firewall, UDP/TCP ports, TURN if needed, and any load balancer/proxy settings. | LiveKit infrastructure owner. | Cellular and Wi-Fi devices can establish media, not only local-network proof. | External Setup Pending | Run network reachability proof from cellular/Wi-Fi and record LiveKit connection diagnostics without tokens. |
-| Android release build and signing | `eas.json` production profile builds Android `app-bundle`. `docs/public-v1-release-checklist.md` names the production build command. `app.json` includes EAS project id and updates URL. | Confirm EAS project access, Android credentials/signing ownership, package `com.chillywood.mobile`, Play App Signing, release track, and environment profile secrets. | Release manager. | `npx eas-cli@latest build --platform android --profile production --non-interactive` succeeds and the AAB installs/submits to internal testing. | External Setup Pending | Confirm EAS credentials, then run production AAB build after runtime proof lanes are green. |
+| Android release build and signing | `eas.json` has development, preview, and production profiles; production builds Android `app-bundle`. `app.json` includes package `com.chillywood.mobile`, EAS project id, Expo Updates URL, icon/splash assets, and camera/microphone permissions. The Lane 3 runbook now documents app identity, signing posture, env requirements, native rebuild risks, and build commands. | Confirm EAS Android credentials/signing ownership, Play App Signing, versionCode strategy, production env values, release track, and final preview/production build approval. | Release manager. | Current `main` builds successfully with preview and production profiles; production AAB installs or reaches Play internal testing; release route smoke and log audit pass. | External Setup Pending | Follow `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`: verify credentials, choose versionCode strategy, configure EAS production env, then run preview/production builds after runtime proof lanes are green. |
 | Production runtime environment | `scripts/validate-runtime.mjs` checks Supabase URL/anon key, beta allowlist/env, Expo project id/update URL/runtime. `app.config.ts` reads RevenueCat, LiveKit, legal/support, and Firebase config. | Populate release env for Supabase, RevenueCat, LiveKit token endpoint/server URL, legal/support URLs, beta/public flags, and any Firebase/EAS secrets. | Release manager plus system owners. | `npm run validate:runtime` passes for release environment; release build shows correct endpoints without dev fallbacks. | External Setup Pending | Create release env profile and run runtime validation immediately before production build. |
 | Production logging and secret safety | Recent route/source logs moved behind dev-only logger. Repo owners already avoid printing signed creator media URLs in Player logs. | Audit release build logs for Supabase JWTs, signed URLs, RevenueCat receipts, LiveKit participant tokens, Firebase keys beyond public config, and service-role secrets. | Release manager plus security owner. | Release candidate log audit shows no secrets/signed URLs and no noisy debug-only operational logs. | Proof Pending | Run bounded release log audit during final smoke. |
 | Store submission and final smoke | Public v1 readiness checklist tracks runtime proof lanes. This checklist tracks external prerequisites. | Complete proof lanes, external setup, release build, internal testing, Play Console review, and rollback plan. | Product owner/release manager. | Final route smoke passes on release build: auth, settings, Profile/Channel, creator media, Player, platform Watch-Party, creator-video Watch-Party, Live Stage, Chat, Admin denial, Premium gate, legal/support. | Proof Pending | Do not submit production until proof artifacts exist and `docs/PUBLIC_V1_READINESS_CHECKLIST.md` has no v1 Blocked items. |
@@ -228,6 +229,74 @@ Stop and do not mark Done if:
 - Data Safety answers are not reconciled with Firebase, RevenueCat/Google Play, Supabase, LiveKit, Expo, and app-feature behavior.
 - The app claims automated deletion but no backend deletion/de-identification process is built and proved.
 - UGC policy/report/moderation/DMCA paths are not available or not proveable.
+
+## Lane 3 Runbook - Android Release Build / EAS Signing Readiness
+
+Processed: 2026-04-26
+
+Detailed owner doc: `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`
+
+Scope for this lane only:
+
+- Android release build configuration.
+- EAS build profiles and signing readiness.
+- Android package identity and versioning posture.
+- Production runtime environment checklist.
+- Native dependency rebuild notes.
+- Release proof commands and manual EAS/Play steps.
+- No full build, Play submission, credential generation, or credential rotation.
+
+Repo-ready facts:
+
+- `app.json` names the app `Chi'llywood` and uses Android package `com.chillywood.mobile`.
+- `app.json` sets Expo project id `c384ed57-5454-4e80-81ad-dcc218b8a3c8`, app version `1.0.0`, runtime version policy `appVersion`, scheme `chillywoodmobile`, and Expo Updates URL.
+- `eas.json` defines:
+  - `development`: internal dev client on channel `development`
+  - `preview`: internal release-like build on channel `preview`
+  - `production`: store distribution on channel `production` with Android `app-bundle`
+  - `submit.production`: present but empty
+- EAS CLI was available as `eas-cli/18.8.1`; Expo CLI was available as `54.0.23`.
+- The local Expo session was authenticated to the Chi'llywood Expo account during audit.
+- `google-services.json` is present and matches Firebase project `chillywood-app` plus Android package `com.chillywood.mobile`; only project/package identity was inspected.
+- Recent older production Android EAS builds exist for earlier commits, but current `main` was not release-built in this lane.
+- Native build-sensitive dependencies include LiveKit/WebRTC, Firebase, RevenueCat, `expo-document-picker`, `expo-camera`, `expo-notifications`, `expo-video`, `expo-av`, `expo-dev-client`, and `expo-build-properties`.
+- `.gitignore` now protects `*.keystore` in addition to other native signing/key patterns.
+
+Manual actions before marking Done:
+
+1. Verify EAS Android credentials with `npx eas-cli credentials --platform android` without printing credential details.
+2. Confirm whether EAS-managed signing credentials already exist for `com.chillywood.mobile`.
+3. If no credentials exist, decide whether EAS should generate the upload key or whether the release owner will upload an existing Play-approved key.
+4. Confirm Google Play App Signing / first-upload requirements in Play Console.
+5. Decide version-code strategy. `android.versionCode` is not explicitly configured in repo config; older builds showed version code `1`.
+6. Configure EAS production env values for Supabase, LiveKit, RevenueCat, legal/support URLs, beta/public-v1 flags, Firebase, and any communication STUN/TURN values that the release build needs.
+7. Run `npm run validate:runtime`, `npm run typecheck`, `npm run lint`, `git diff --check`, and `npx expo config --type public` from the intended release env.
+8. Run preview build first:
+   `npx eas-cli build --platform android --profile preview --non-interactive`
+9. After preview proof and external blockers are resolved, run production AAB:
+   `npx eas-cli build --platform android --profile production --non-interactive`
+10. Upload the AAB to Google Play internal testing manually if it is the first Play upload.
+11. Use `npx eas-cli submit --platform android --profile production` only after Play service account/submit setup is proved.
+
+Proof required:
+
+- Preview build from current `main` completes and installs on a physical Android device.
+- Production AAB from current `main` completes with release signing credentials.
+- Play internal testing accepts the AAB or the exact Play blocker is documented.
+- Release route smoke passes: auth, settings/legal/support/account deletion, Profile/Channel, creator media, Player, platform Watch-Party, creator-video Watch-Party, Live Stage, Chat, Admin denial, Premium gate.
+- Release log audit shows no signed URLs, LiveKit tokens, Supabase JWTs, purchase receipts, service keys, keystore details, or noisy dev-only logs.
+- Camera/microphone permission prompts match Play Store declarations.
+- Firebase Crashlytics/Performance proof is run from an internal/release-like build.
+
+Stop and do not mark Done if:
+
+- Current `main` has not been built with preview and production profiles.
+- EAS credentials are missing, unknown, or rotated without release-owner approval.
+- `versionCode` would collide with an existing Play upload.
+- Production runtime env is missing required Supabase, LiveKit, RevenueCat, legal/support, or Firebase values.
+- AAB cannot be uploaded to internal testing.
+- Route smoke or release log audit fails.
+- Any credential, keystore, receipt, token, service key, or signed URL would be exposed in proof artifacts.
 
 ## Current External Setup Summary
 
