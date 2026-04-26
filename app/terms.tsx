@@ -14,6 +14,12 @@ export default function TermsOfServicePage() {
       <LegalMeta label="Effective Date" value={TODAY} />
       <LegalMeta label="Last Updated" value={TODAY} />
 
+      <LegalSection title="Legal Review Status">
+        <LegalParagraph>
+          These Terms are draft launch-readiness language for Chi&apos;llywood and must be reviewed and approved by an attorney/legal owner before public launch. They are not final legal advice and do not guarantee any legal outcome.
+        </LegalParagraph>
+      </LegalSection>
+
       <LegalSection title="1. Eligibility">
         <LegalList
           items={[
@@ -48,14 +54,16 @@ export default function TermsOfServicePage() {
         <LegalList
           items={[
             "Do not violate any law or regulation.",
-            "Do not infringe or misappropriate intellectual property or other rights.",
+            "Do not upload, stream, post, message, share, or otherwise make available content you do not own or have rights to use.",
+            "Do not upload, stream, post, message, or share copyrighted movies, shows, music, clips, images, creator uploads, or other media without permission or another valid legal basis.",
+            "Do not infringe, misappropriate, or violate intellectual property, privacy, publicity, or other rights.",
             "Do not harass, threaten, stalk, exploit, or harm others.",
-            "Do not upload, send, or share unlawful, abusive, defamatory, fraudulent, hateful, sexually exploitative, or otherwise objectionable content.",
+            "Do not upload, stream, post, message, or share illegal, abusive, defamatory, fraudulent, hateful, sexually exploitative, minor-safety, violent, dangerous, or otherwise objectionable content.",
+            "Do not upload, stream, post, message, or share scams, spam, phishing, malware, deceptive links, or harmful code.",
             "Do not impersonate another person or misrepresent your identity, affiliation, or authority.",
             "Do not interfere with the Service, its security, or its integrity.",
             "Do not attempt unauthorized access to accounts, systems, rooms, threads, or data.",
             "Do not use bots, scraping, automation, or abusive traffic in a way that disrupts the Service.",
-            "Do not use the Service to distribute malware, spam, or harmful code.",
             "Do not evade suspensions, restrictions, or moderation actions.",
             "Do not misuse reporting, support, or moderation systems.",
           ]}
@@ -64,10 +72,16 @@ export default function TermsOfServicePage() {
 
       <LegalSection title="5. User Content">
         <LegalParagraph>
-          You may submit, upload, send, or otherwise make available content through the Service, including profile information, messages, reports, room activity, and other materials.
+          You may submit, upload, stream, post, message, share, send, or otherwise make available content through the Service, including profile information, Channel information, creator-uploaded videos, messages, reports, room activity, live participation, and other materials.
         </LegalParagraph>
         <LegalParagraph>
-          You retain whatever ownership rights you have in your content. But by submitting content through the Service, you grant Chi&apos;llywood a non-exclusive, worldwide, royalty-free license to host, store, reproduce, process, adapt, display, perform, distribute, and otherwise use that content as reasonably necessary to operate and provide the Service, support messaging, room, playback, and social features, moderate content and investigate reports, maintain safety, security, and integrity, and improve and support the Service.
+          You are responsible for the content and activity you upload, stream, post, message, share, or otherwise make available through your account. You represent that you own that content or have the rights, permissions, licenses, and approvals needed to use it on Chi&apos;llywood.
+        </LegalParagraph>
+        <LegalParagraph>
+          You retain whatever ownership rights you have in your content. Chi&apos;llywood does not own your content because you uploaded, streamed, posted, messaged, or shared it through the Service.
+        </LegalParagraph>
+        <LegalParagraph>
+          By submitting content through the Service, you grant Chi&apos;llywood a non-exclusive, worldwide, royalty-free license to host, store, reproduce, process, transcode or otherwise process if those technical features are later built, adapt for display or playback, display, perform, stream, distribute within the Service, make available to other users according to your selected visibility settings, and otherwise use that content as reasonably necessary to operate and provide the Service, support messaging, room, playback, creator, profile, Channel, Watch-Party, live, and social features, moderate content and investigate reports, maintain safety, security, and integrity, and improve and support the Service.
         </LegalParagraph>
       </LegalSection>
 
@@ -83,7 +97,12 @@ export default function TermsOfServicePage() {
         </LegalParagraph>
         <LegalList
           items={[
-            "We may remove content or restrict, suspend, or terminate access if we reasonably believe you violated these Terms or our rules.",
+            "We may remove, hide, disable access to, or restrict content if we reasonably believe it violates these Terms, Community Guidelines, copyright process, safety rules, or applicable law.",
+            "We may restrict, suspend, or terminate accounts or access if we reasonably believe you violated these Terms or our rules.",
+            "We may respond to user reports, safety reports, copyright reports, support requests, and abuse signals.",
+            "We may preserve account, content, report, safety, billing, or technical records when legally required or reasonably needed for fraud, abuse, safety, copyright, moderation, chargeback, dispute, or legal review.",
+            "We may cooperate with lawful requests, court orders, legal process, law enforcement, rights-holder notices, or regulatory obligations where applicable.",
+            "We may enforce community rules through warnings, restrictions, content removal, account suspension, account termination, or other supported controls.",
             "We may act if your conduct creates safety, legal, operational, or reputational risk.",
             "We may act if your account is involved in abuse, fraud, or unauthorized activity.",
             "We may act if required to do so by law or legal process.",
@@ -112,6 +131,12 @@ export default function TermsOfServicePage() {
         </LegalParagraph>
         <LegalParagraph>
           We do not guarantee that the Service will be uninterrupted, error-free, secure, or available at all times, or that content or communications will never be lost, delayed, intercepted, or altered.
+        </LegalParagraph>
+        <LegalParagraph>
+          User-generated content is created or provided by users, not by Chi&apos;llywood. To the maximum extent permitted by law, Chi&apos;llywood is not responsible for user-generated content, user conduct, or user communications except as required by applicable law and the moderation, reporting, and legal processes we actually support.
+        </LegalParagraph>
+        <LegalParagraph>
+          This disclaimer section, the limitation of liability below, and the indemnification section are placeholders pending attorney/legal review before launch.
         </LegalParagraph>
       </LegalSection>
 
@@ -151,6 +176,9 @@ export default function TermsOfServicePage() {
       <LegalSection title="15. Changes to the Service or Terms">
         <LegalParagraph>
           We may modify the Service or these Terms from time to time. If we make material changes, we may provide notice by updating the date above, through the app, or by other appropriate means. Your continued use after updated Terms become effective means you accept the updated Terms.
+        </LegalParagraph>
+        <LegalParagraph>
+          We may change, suspend, limit, replace, remove, or stop offering features or parts of the Service at any time, subject to applicable law and any paid-access terms that apply.
         </LegalParagraph>
       </LegalSection>
 

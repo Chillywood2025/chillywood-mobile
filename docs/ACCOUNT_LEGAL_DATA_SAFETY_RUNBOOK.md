@@ -8,6 +8,15 @@ Purpose: prepare Chi'llywood's account deletion, legal/support URL, content poli
 
 This runbook is not legal advice and does not complete Google Play Console submission. It is a repo-backed source of truth for what the app currently supports and what a release owner must enter or verify manually.
 
+## Official References To Recheck Before Submission
+
+Use current official docs during final setup because requirements can change:
+
+- Google Play User Generated Content policy: `https://support.google.com/googleplay/android-developer/answer/9876937`
+- Google Play Data Safety: `https://support.google.com/googleplay/android-developer/answer/10787469`
+- Google Play account deletion requirements: `https://support.google.com/googleplay/android-developer/answer/13327111`
+- U.S. Copyright Office DMCA designated agent directory: `https://www.copyright.gov/dmca-directory/`
+
 ## Status Key
 
 - Done: implemented and proof captured.
@@ -19,6 +28,7 @@ This runbook is not legal advice and does not complete Google Play Console submi
 
 | Surface | Route / config | Reachable from Settings | Reachable from Support | Current status | External URL/domain need |
 | --- | --- | --- | --- | --- | --- |
+| Signup acceptance | `app/(auth)/signup.tsx` | N/A | N/A | Signup now shows visible Terms of Service, Privacy Policy, and Community Guidelines acceptance copy with links before account creation; Android/release smoke still pending | Final wording needs attorney/legal approval before launch |
 | Privacy Policy | `app/privacy.tsx`; runtime env `EXPO_PUBLIC_PRIVACY_POLICY_URL`; fallback `https://live.chillywoodstream.com/privacy` | Yes; Settings opens configured external URL first, otherwise bundled `/privacy` | Yes | Route exists; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Privacy Policy URL must be approved and entered in Play Console |
 | Terms of Service | `app/terms.tsx`; runtime env `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`; fallback `https://live.chillywoodstream.com/terms` | Yes; Settings opens configured external URL first, otherwise bundled `/terms` | Yes | Route exists; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Terms URL must be approved and available without login |
 | Account Deletion | `app/account-deletion.tsx`; runtime env `EXPO_PUBLIC_ACCOUNT_DELETION_URL`; fallback `https://live.chillywoodstream.com/account-deletion` | Yes; Settings opens configured external URL first, otherwise bundled `/account-deletion` | Yes; signed-in support can start request/help | Request-based; no destructive deletion runs in app; configured fallback returned HTTP 200 during this audit; final backend/support process pending | Final public account deletion URL must be approved, reachable without login where Play requires it, and entered in Play Console |
@@ -26,6 +36,30 @@ This runbook is not legal advice and does not complete Google Play Console submi
 | Community Guidelines / Content Policy | `app/community-guidelines.tsx` | Yes | Yes | Bundled route exists; legal/content policy review pending | Public hosted URL is recommended before Play listing submission |
 | Copyright / DMCA | `app/copyright.tsx` | Yes | Yes | Bundled route exists; copyright contact path uses Chi'llywood Support; legal review pending | Public hosted URL and DMCA contact/process should be confirmed before store submission |
 | Report Abuse / Safety Contact | `components/safety/report-sheet.tsx`, `_lib/moderation.ts`, `app/player/[id].tsx`, `app/admin.tsx`, Support route | Contextual report actions, not one global Settings route | Support can collect help requests | Creator-video report/admin safety foundation exists; report/admin proof still pending | Play listing/support materials should explain report-abuse path and support contact |
+
+## Legal And UGC Protection Language Status
+
+This section is not legal advice and does not say Chi'llywood cannot be sued. It records launch-readiness language that reduces avoidable platform-risk gaps and must be approved by an attorney/legal owner before public launch.
+
+Implemented in this lane:
+
+- Signup now states: "By creating an account, you agree to Chi'llywood's Terms of Service, Privacy Policy, and Community Guidelines." It links to the bundled Terms, Privacy, and Community Guidelines routes.
+- Terms now say users are responsible for what they upload, stream, post, message, share, or otherwise make available.
+- Terms and Community Guidelines now explicitly prohibit uploading or streaming content users do not own or have rights to use, including copyrighted movies, shows, music, clips, images, pirated media, illegal content, sexual exploitation/minor-safety content, harassment, threats, hate, dangerous/violent content, scams, spam, malware, impersonation, and misleading content.
+- Terms now state that users keep ownership of their content, and grant Chi'llywood a limited license to host, store, display, stream, process/transcode if later built, distribute within the app, and make content available according to selected visibility settings.
+- Terms and Guidelines now state that Chi'llywood may remove or hide content, restrict/suspend/terminate accounts, respond to reports, preserve records when legally required or needed for safety/enforcement, cooperate with lawful requests, and enforce community rules.
+- Copyright/DMCA now describes takedown notice information, counter-notice posture, repeat-infringer handling, and the need for final DMCA agent/contact approval.
+- Copyright/DMCA now notes that real DMCA safe-harbor readiness should be reviewed by an attorney and may require registering a designated DMCA agent with the U.S. Copyright Office.
+- Terms now include launch placeholder language for service provided as-is, no uninterrupted-service guarantee, user-generated-content responsibility limits, limitation of liability, indemnification, and right to change/remove features, all marked for legal review.
+- Account Deletion now says some records may be retained for legal, fraud, security, billing, moderation, chargeback, dispute, copyright, or compliance reasons, and that Profile/Channel/upload deletion handling needs final legal/backend approval.
+
+Still pending:
+
+- Attorney/legal approval of final Terms, Privacy, Community Guidelines, Copyright/DMCA, account deletion, and signup acceptance wording.
+- Final hosted public URLs for legal/support pages, especially Community Guidelines and Copyright/DMCA if Play listing links to them.
+- Final DMCA agent/contact decision and any required U.S. Copyright Office designated-agent registration.
+- Final backend deletion/de-identification and retention runbook.
+- Release-build proof that signup legal links open correctly and remain readable on Android.
 
 ## Account Deletion Decision
 
@@ -39,6 +73,7 @@ What exists now:
 - Settings prefers the configured external account deletion URL when available and otherwise opens the bundled local route.
 - `components/system/support-screen.tsx` supports `topic=account-deletion`; signed-out users are sent to sign in before sending account-specific support feedback.
 - The account deletion route now explicitly names Profile, Channel, uploaded videos, Chi'lly Chat messages, Watch-Party/Live room records, billing/subscription records, and moderation/report records as surfaces that may be reviewed during deletion.
+- The account deletion route now says final Profile, Channel, uploaded video, storage object, thumbnail, comment, message, report, room, and metadata handling needs legal/backend approval before claiming a purge method or timing.
 - No account or data is deleted by this route.
 
 What still needs legal/backend/manual work:
@@ -77,8 +112,9 @@ This table is a preparation aid for manual Google Play Console entry. Use Google
 
 Current repo-ready posture:
 
+- Signup now presents Terms, Privacy Policy, and Community Guidelines acceptance copy with links before account creation.
 - Community Guidelines route exists and covers creator uploads, profiles, Chi'lly Chat, Watch-Party rooms, Live Stage, reports, and enforcement.
-- Copyright/DMCA route exists and explains takedown notice information, review, removal, and counter-notice contact.
+- Copyright/DMCA route exists and explains takedown notice information, review, removal, counter-notice posture, repeat-infringer posture, and pending DMCA agent/legal approval.
 - Creator-video reports exist through Player/report sheet ownership.
 - Admin/operator moderation surface exists in `app/admin.tsx`.
 - Safety reports use `safety_reports`; creator-video moderation uses `videos.moderation_status`.
@@ -106,6 +142,7 @@ Still proof-pending:
    - describes data retained and why
    - gives a support/contact path
 6. Complete any user-generated-content policy questions:
+   - signup acceptance copy links to Terms, Privacy Policy, and Community Guidelines
    - content policy exists
    - in-app report abuse path exists
    - moderation/admin review path exists
@@ -131,15 +168,19 @@ Still proof-pending:
 
 Done:
 
+- Signup acceptance copy now links Terms, Privacy Policy, and Community Guidelines before account creation.
 - Bundled legal routes exist for Privacy, Terms, Account Deletion, Community Guidelines, and Copyright/DMCA.
 - Settings links to privacy, terms, community guidelines, copyright/DMCA, and account deletion.
 - Support route provides account-deletion help and signed-in feedback handoff.
 - Configured privacy, terms, and account-deletion fallback URLs returned HTTP 200 in this audit.
 - Data Safety preparation categories are documented for manual Play Console entry.
+- Draft UGC responsibility, platform moderation rights, user-content license, DMCA/copyright, repeat-infringer, limitation/disclaimer, and deletion-retention language is documented in-app and marked pending attorney/legal approval.
 
 External Setup Pending:
 
 - Final legal review and approval of Privacy, Terms, Community Guidelines, Copyright/DMCA, and account deletion copy.
+- Final legal review and approval of signup acceptance wording.
+- Final DMCA agent/contact process and any required designated-agent registration.
 - Final public support email/URL and account deletion support process/SLA.
 - Final backend deletion/de-identification and retention runbook.
 - Play Console Data Safety form entry.
@@ -148,6 +189,7 @@ External Setup Pending:
 
 Proof Pending:
 
+- Signup legal-link route smoke on Android/release build.
 - Android Settings legal/support/account deletion route smoke.
 - Release build opens configured URLs correctly.
 - Support/account deletion request lands in expected backend/support queue.
@@ -156,4 +198,4 @@ Proof Pending:
 
 ## Exact Next Action
 
-Legal/support owner should finalize the account deletion process and public URL set, then manually complete Google Play Data Safety and account deletion entries using this runbook. Engineering should not implement destructive account deletion until the backend deletion/de-identification and retention plan is explicitly approved.
+Legal/support owner should finalize the signup acceptance wording, account deletion process, DMCA agent/contact process, and public URL set, then manually complete Google Play Data Safety, UGC, copyright, and account deletion entries using this runbook. Engineering should not implement destructive account deletion until the backend deletion/de-identification and retention plan is explicitly approved.

@@ -14,9 +14,18 @@ export default function CommunityGuidelinesPage() {
       <LegalMeta label="Effective Date" value={TODAY} />
       <LegalMeta label="Last Updated" value={TODAY} />
 
+      <LegalSection title="Legal Review Status">
+        <LegalParagraph>
+          These Community Guidelines are draft launch-readiness language and require attorney/legal and safety-owner approval before public launch. They are not final legal advice and do not guarantee any legal outcome.
+        </LegalParagraph>
+      </LegalSection>
+
       <LegalSection title="1. Community Standard">
         <LegalParagraph>
           Chi&apos;llywood is for adult creators and viewers to watch, chat, go live, and build channels without harassment, impersonation, abuse, or unsafe content.
+        </LegalParagraph>
+        <LegalParagraph>
+          You are responsible for what you upload, stream, post, message, share, or otherwise make available through your account, Profile, Channel, Chi&apos;lly Chat, Watch-Party rooms, Live Stage, support, and reporting surfaces.
         </LegalParagraph>
       </LegalSection>
 
@@ -28,7 +37,7 @@ export default function CommunityGuidelinesPage() {
             "Hate, dehumanization, or discrimination against protected classes.",
             "Sexual exploitation, minor safety violations, or non-consensual intimate content.",
             "Graphic violence, credible threats, self-harm encouragement, or dangerous challenges.",
-            "Copyright infringement, pirated media, stolen creator uploads, or unauthorized broadcasts.",
+            "Copyright infringement, pirated media, stolen creator uploads, unauthorized broadcasts, or copyrighted movies, shows, music, clips, images, or other media used without permission or another valid legal basis.",
             "Spam, scams, phishing, malware, deceptive links, or fake engagement.",
             "Impersonation, misleading identity, fake official status, or false affiliation.",
             "Attempts to bypass bans, blocks, account restrictions, Premium gates, room access, or backend security.",
@@ -69,7 +78,7 @@ export default function CommunityGuidelinesPage() {
 
       <LegalSection title="6. Enforcement">
         <LegalParagraph>
-          Chi&apos;llywood may remove content, hide uploads, restrict accounts, block access, preserve safety records, or escalate legal/copyright issues when needed to protect users and the service.
+          Chi&apos;llywood may remove content, hide uploads, restrict accounts, suspend or terminate accounts, block access, respond to reports, preserve records when legally required or needed for safety and enforcement, cooperate with lawful requests, and enforce these Community Guidelines when needed to protect users and the service.
         </LegalParagraph>
       </LegalSection>
 

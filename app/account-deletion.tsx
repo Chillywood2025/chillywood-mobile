@@ -14,6 +14,12 @@ export default function AccountDeletionPage() {
       <LegalMeta label="Effective Date" value={TODAY} />
       <LegalMeta label="Last Updated" value={TODAY} />
 
+      <LegalSection title="Legal and Backend Review Status">
+        <LegalParagraph>
+          This account deletion page is draft launch-readiness language. Final deletion, de-identification, retention, support, and backend handling rules require attorney/legal and backend owner approval before public launch.
+        </LegalParagraph>
+      </LegalSection>
+
       <LegalSection title="How to Request Deletion">
         <LegalParagraph>
           To request deletion of your Chi&apos;llywood account, use the public account deletion page linked from Chi&apos;llywood&apos;s legal and account surfaces.
@@ -57,6 +63,12 @@ export default function AccountDeletionPage() {
         />
       </LegalSection>
 
+      <LegalSection title="Profile, Channel, and Uploaded Video Handling">
+        <LegalParagraph>
+          Final handling for Profile data, Channel data, uploaded videos, creator-video storage objects, thumbnails, comments, messages, reports, room records, and related metadata still needs legal and backend approval. Chi&apos;llywood should not claim a specific deletion method, timing, or permanent purge path until that process is fully approved and proved.
+        </LegalParagraph>
+      </LegalSection>
+
       <LegalSection title="What May Be Deleted">
         <LegalList
           items={[
@@ -74,7 +86,7 @@ export default function AccountDeletionPage() {
             "Information needed for legal compliance.",
             "Information needed for fraud prevention or abuse prevention.",
             "Moderation and safety investigation records.",
-            "Information needed for dispute resolution or enforcement of terms and policies.",
+            "Information needed for dispute resolution, chargebacks, refunds, or enforcement of terms and policies.",
             "Financial, tax, accounting, or billing records if applicable.",
             "Backup, logging, or security integrity data for a limited period.",
           ]}

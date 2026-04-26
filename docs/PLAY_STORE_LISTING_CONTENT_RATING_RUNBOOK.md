@@ -402,14 +402,16 @@ Chi'llywood has UGC and user interaction. Store readiness must cover:
 | Report abuse | Report sheet/moderation helper/player/admin foundation exists | Implemented / Proof Pending | Prove report writes and admin review on launch backend. |
 | Blocking users | Audience/blocking foundations exist in docs and `channel_audience_blocks`; direct 1:1 block UX/proof is not fully proven | Partial / Proof Pending | Evaluate whether Play's UGC/direct interaction policy requires a visible block action before launch. |
 | Admin moderation | `app/admin.tsx`, `safety_reports`, `videos.moderation_status` exist | Implemented / Proof Pending | Prove non-admin denial and admin hide/remove/restore. |
-| DMCA/copyright | `/copyright` exists and names support path | Implemented / Proof Pending | Legal review and public hosted page/contact proof. |
+| DMCA/copyright | `/copyright` exists, names support path, covers takedown notice info, counter-notice posture, repeat-infringer posture, and pending DMCA agent/legal approval | Implemented / Proof Pending | Legal review, final DMCA agent/contact decision, any required designated-agent registration, and public hosted page proof. |
 | Account deletion/data deletion | `/account-deletion` and support handoff exist | External Setup Pending | Final deletion process/SLA and Play Console acceptance. |
 | Minor safety | Legal pages state 18+ | External Setup Pending | Confirm target audience, age restriction, and policy copy in Play Console. |
-| Terms acceptance at signup | Signup route does not visibly show legal/guidelines acceptance text or checkbox in current code | Gap / Review Required | Decide whether to add explicit acceptance/linking before store review. Do not mark UGC policy Done without this decision. |
+| Terms acceptance at signup | Signup route now visibly says account creation agrees to Terms of Service, Privacy Policy, and Community Guidelines, with links to each bundled route | Implemented / Proof Pending | Attorney/legal approval and Android/release smoke that links open correctly. |
 
-Important UGC gap to resolve before final store submission:
+Important UGC legal readiness still pending before final store submission:
 
-- The current signup route creates an account with email/password and does not visibly present Terms, Privacy, or Community Guidelines acceptance copy in the inspected code. Because Chi'llywood has UGC and direct interaction, the release owner should decide whether Public v1 needs explicit signup legal acceptance UI or another documented acceptance path before Play submission.
+- The signup acceptance copy, Terms, Community Guidelines, Copyright/DMCA page, and Account Deletion page are launch-readiness drafts only. Final wording must be approved by an attorney/legal owner.
+- The final DMCA agent/contact process must be approved, and real DMCA safe-harbor readiness may require registering a designated DMCA agent with the U.S. Copyright Office.
+- Play Data Safety, UGC, and content-rating answers must not claim "no data collected" or "no user-generated content" because Chi'llywood has accounts, profiles, creator uploads, chat, rooms/live participation, reports, support, diagnostics, and potentially purchase entitlement data.
 
 ## Manual Play Console Checklist
 
@@ -458,9 +460,9 @@ Important UGC gap to resolve before final store submission:
 | Data Safety consistency | External Setup Pending | Data Safety runbook exists, Play form not completed | Fill Play Console after SDK/legal review |
 | Content rating | External Setup Pending | Prep matrix exists, official questionnaire not completed | Complete Play content rating questionnaire |
 | Target audience | External Setup Pending | Legal copy says 18+, Play target decision not entered/proved | Select accurate target age and consider Restrict Minor Access |
-| UGC policy readiness | Partial / Proof Pending | Guidelines/report/admin/copyright surfaces exist, proof and explicit signup acceptance decision remain | Prove report/admin, decide legal acceptance UI/path |
+| UGC policy readiness | Implemented / Proof Pending | Guidelines/report/admin/copyright surfaces exist, and signup now includes explicit Terms/Privacy/Guidelines acceptance copy; legal approval and runtime proof remain | Prove signup links, report/admin, hosted URLs, and final legal approval |
 | Store upload/submission | External Setup Pending | No upload/submission run in this lane | Upload AAB only after release proof |
 
 ## Exact Next Action
 
-Product/legal owner should approve final store listing copy, finalize public URLs, and decide the explicit Terms/Privacy/Community Guidelines acceptance posture for signup. Release owner should then create a Play-ready 512 x 512 icon export, a 1024 x 500 feature graphic, and a sanitized screenshot set from a release-like Android build before entering the Content Rating, Target Audience, Data Safety, and UGC policy answers in Play Console.
+Product/legal owner should approve final store listing copy, signup acceptance wording, Terms, Privacy, Community Guidelines, Copyright/DMCA, account deletion copy, DMCA agent/contact process, and public URLs. Release owner should then create a Play-ready 512 x 512 icon export, a 1024 x 500 feature graphic, and a sanitized screenshot set from a release-like Android build before entering the Content Rating, Target Audience, Data Safety, and UGC policy answers in Play Console.

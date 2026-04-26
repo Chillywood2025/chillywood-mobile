@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
@@ -9,13 +9,14 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { supabase } from "../../_lib/supabase";
+
+const COMMUNITY_GUIDELINES_HREF = "/community-guidelines" as Href;
 
 export default function Signup() {
   const router = useRouter();
@@ -99,6 +100,21 @@ export default function Signup() {
             ? "Sign up with the invited email for this small Chi'llywood beta. Accounts that are not on the invite list will stay blocked from invite-only flows."
             : "Create an account so you can join rooms, manage your channel, and send in-app support feedback."}
         </Text>
+        <Text style={styles.legalNotice}>
+          By creating an account, you agree to Chi&apos;llywood&apos;s{" "}
+          <Link href="/terms" style={styles.legalLink}>
+            Terms of Service
+          </Link>
+          {", "}
+          <Link href="/privacy" style={styles.legalLink}>
+            Privacy Policy
+          </Link>
+          {" and "}
+          <Link href={COMMUNITY_GUIDELINES_HREF} style={styles.legalLink}>
+            Community Guidelines
+          </Link>
+          {"."}
+        </Text>
 
         <TextInput
           style={styles.input}
@@ -155,7 +171,19 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     lineHeight: 20,
     fontWeight: "600",
+    marginBottom: 14,
+  },
+  legalNotice: {
+    color: "#A9B3C8",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
     marginBottom: 20,
+  },
+  legalLink: {
+    color: "#FF5A76",
+    fontWeight: "800",
+    textDecorationLine: "underline",
   },
   input: {
     backgroundColor: "#1A1A22",
