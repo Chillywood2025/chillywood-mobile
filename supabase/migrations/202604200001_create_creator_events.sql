@@ -1,6 +1,6 @@
 create table public."creator_events" (
     "id" uuid default gen_random_uuid() not null,
-    "host_user_id" text not null,
+    "host_user_id" uuid not null,
     "event_title" text not null,
     "event_type" text not null,
     "status" text default 'draft'::text not null,
@@ -76,26 +76,26 @@ create policy "creator_events_host_insert_policy"
   on public."creator_events"
   for insert
   to PUBLIC
-  with check (((auth.uid() IS NOT NULL) AND (host_user_id = (auth.uid())::text)));
+  with check (((auth.uid() IS NOT NULL) AND (host_user_id = auth.uid())));
 
 create policy "creator_events_host_update_policy"
   on public."creator_events"
   for update
   to PUBLIC
-  using (((auth.uid() IS NOT NULL) AND (host_user_id = (auth.uid())::text)))
-  with check (((auth.uid() IS NOT NULL) AND (host_user_id = (auth.uid())::text)));
+  using (((auth.uid() IS NOT NULL) AND (host_user_id = auth.uid())))
+  with check (((auth.uid() IS NOT NULL) AND (host_user_id = auth.uid())));
 
 create policy "creator_events_host_delete_policy"
   on public."creator_events"
   for delete
   to PUBLIC
-  using (((auth.uid() IS NOT NULL) AND (host_user_id = (auth.uid())::text)));
+  using (((auth.uid() IS NOT NULL) AND (host_user_id = auth.uid())));
 
 create policy "creator_events_select_policy"
   on public."creator_events"
   for select
   to PUBLIC
-  using ((((auth.uid() IS NOT NULL) AND (host_user_id = (auth.uid())::text))) OR (status <> 'draft'::text));
+  using ((((auth.uid() IS NOT NULL) AND (host_user_id = auth.uid()))) OR (status <> 'draft'::text));
 
 grant SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN on table public."creator_events" to "anon";
 grant SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN on table public."creator_events" to "authenticated";

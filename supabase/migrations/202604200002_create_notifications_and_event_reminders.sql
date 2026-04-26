@@ -1,6 +1,6 @@
 create table public."notifications" (
     "id" uuid default gen_random_uuid() not null,
-    "user_id" text not null,
+    "user_id" uuid not null,
     "category" text not null,
     "title" text not null,
     "body" text,
@@ -51,14 +51,14 @@ create policy "notifications_select_policy"
   on public."notifications"
   for select
   to PUBLIC
-  using (((auth.uid() IS NOT NULL) AND (user_id = (auth.uid())::text)));
+  using (((auth.uid() IS NOT NULL) AND (user_id = auth.uid())));
 
 create policy "notifications_update_policy"
   on public."notifications"
   for update
   to PUBLIC
-  using (((auth.uid() IS NOT NULL) AND (user_id = (auth.uid())::text)))
-  with check (((auth.uid() IS NOT NULL) AND (user_id = (auth.uid())::text)));
+  using (((auth.uid() IS NOT NULL) AND (user_id = auth.uid())))
+  with check (((auth.uid() IS NOT NULL) AND (user_id = auth.uid())));
 
 grant SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN on table public."notifications" to "anon";
 grant SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN on table public."notifications" to "authenticated";
@@ -68,7 +68,7 @@ grant SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN on
 create table public."event_reminders" (
     "id" uuid default gen_random_uuid() not null,
     "event_id" uuid not null,
-    "user_id" text not null,
+    "user_id" uuid not null,
     "status" text default 'active'::text not null,
     "created_at" timestamp with time zone default timezone('utc'::text, now()) not null,
     "updated_at" timestamp with time zone default timezone('utc'::text, now()) not null
@@ -102,12 +102,12 @@ create policy "event_reminders_select_policy"
   for select
   to PUBLIC
   using (
-    ((auth.uid() IS NOT NULL) AND (user_id = (auth.uid())::text))
+    ((auth.uid() IS NOT NULL) AND (user_id = auth.uid()))
     OR EXISTS (
       SELECT 1
       FROM public."creator_events"
       WHERE creator_events.id = event_reminders.event_id
-        AND creator_events.host_user_id = (auth.uid())::text
+        AND creator_events.host_user_id = auth.uid()
     )
   );
 
@@ -115,14 +115,14 @@ create policy "event_reminders_insert_policy"
   on public."event_reminders"
   for insert
   to PUBLIC
-  with check (((auth.uid() IS NOT NULL) AND (user_id = (auth.uid())::text)));
+  with check (((auth.uid() IS NOT NULL) AND (user_id = auth.uid())));
 
 create policy "event_reminders_update_policy"
   on public."event_reminders"
   for update
   to PUBLIC
-  using (((auth.uid() IS NOT NULL) AND (user_id = (auth.uid())::text)))
-  with check (((auth.uid() IS NOT NULL) AND (user_id = (auth.uid())::text)));
+  using (((auth.uid() IS NOT NULL) AND (user_id = auth.uid())))
+  with check (((auth.uid() IS NOT NULL) AND (user_id = auth.uid())));
 
 grant SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN on table public."event_reminders" to "anon";
 grant SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN on table public."event_reminders" to "authenticated";

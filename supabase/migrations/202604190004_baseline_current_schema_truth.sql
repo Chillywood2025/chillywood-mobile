@@ -323,6 +323,19 @@ alter table only public."beta_feedback_items" add constraint "beta_feedback_item
 alter table only public."beta_feedback_items" add constraint "beta_feedback_items_status_check" CHECK (status = ANY (ARRAY['new'::text, 'confirmed'::text, 'planned'::text, 'fixed'::text, 'deferred'::text, 'needs_info'::text]));
 alter table only public."beta_feedback_items" add constraint "beta_feedback_items_type_check" CHECK (feedback_type = ANY (ARRAY['bug'::text, 'product_feedback'::text, 'onboarding_feedback'::text]));
 
+alter table only public."communication_rooms" add constraint "communication_rooms_pkey" PRIMARY KEY (room_id);
+alter table only public."communication_rooms" add constraint "communication_rooms_room_code_key" UNIQUE (room_code);
+alter table only public."communication_rooms" add constraint "communication_rooms_capture_policy_check" CHECK (capture_policy = ANY (ARRAY['best_effort'::text, 'host_managed'::text]));
+alter table only public."communication_rooms" add constraint "communication_rooms_content_access_rule_check" CHECK (content_access_rule = ANY (ARRAY['open'::text, 'party_pass'::text, 'premium'::text]));
+alter table only public."communication_rooms" add constraint "communication_rooms_linked_room_mode_check" CHECK (linked_room_mode IS NULL OR (linked_room_mode = ANY (ARRAY['live'::text, 'hybrid'::text])));
+alter table only public."communication_rooms" add constraint "communication_rooms_status_check" CHECK (status = ANY (ARRAY['active'::text, 'ended'::text]));
+
+alter table only public."chat_threads" add constraint "chat_threads_pkey" PRIMARY KEY (id);
+alter table only public."chat_threads" add constraint "chat_threads_participant_pair_key_key" UNIQUE (participant_pair_key);
+alter table only public."chat_threads" add constraint "chat_threads_active_communication_room_id_fkey" FOREIGN KEY (active_communication_room_id) REFERENCES communication_rooms(room_id) ON DELETE SET NULL;
+alter table only public."chat_threads" add constraint "chat_threads_active_call_type_check" CHECK (active_call_type = ANY (ARRAY['voice'::text, 'video'::text]));
+alter table only public."chat_threads" add constraint "chat_threads_thread_kind_check" CHECK (thread_kind = 'direct'::text);
+
 alter table only public."chat_messages" add constraint "chat_messages_pkey" PRIMARY KEY (id);
 alter table only public."chat_messages" add constraint "chat_messages_thread_id_fkey" FOREIGN KEY (thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE;
 alter table only public."chat_messages" add constraint "chat_messages_message_type_check" CHECK (message_type = 'text'::text);
@@ -331,23 +344,10 @@ alter table only public."chat_thread_members" add constraint "chat_thread_member
 alter table only public."chat_thread_members" add constraint "chat_thread_members_thread_id_fkey" FOREIGN KEY (thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE;
 alter table only public."chat_thread_members" add constraint "chat_thread_members_unread_count_check" CHECK (unread_count >= 0);
 
-alter table only public."chat_threads" add constraint "chat_threads_pkey" PRIMARY KEY (id);
-alter table only public."chat_threads" add constraint "chat_threads_participant_pair_key_key" UNIQUE (participant_pair_key);
-alter table only public."chat_threads" add constraint "chat_threads_active_communication_room_id_fkey" FOREIGN KEY (active_communication_room_id) REFERENCES communication_rooms(room_id) ON DELETE SET NULL;
-alter table only public."chat_threads" add constraint "chat_threads_active_call_type_check" CHECK (active_call_type = ANY (ARRAY['voice'::text, 'video'::text]));
-alter table only public."chat_threads" add constraint "chat_threads_thread_kind_check" CHECK (thread_kind = 'direct'::text);
-
 alter table only public."communication_room_memberships" add constraint "communication_room_memberships_pkey" PRIMARY KEY (room_id, user_id);
 alter table only public."communication_room_memberships" add constraint "communication_room_memberships_room_id_fkey" FOREIGN KEY (room_id) REFERENCES communication_rooms(room_id) ON DELETE CASCADE;
 alter table only public."communication_room_memberships" add constraint "communication_room_memberships_role_check" CHECK (role = ANY (ARRAY['host'::text, 'participant'::text]));
 alter table only public."communication_room_memberships" add constraint "communication_room_memberships_state_check" CHECK (membership_state = ANY (ARRAY['active'::text, 'reconnecting'::text, 'left'::text, 'removed'::text]));
-
-alter table only public."communication_rooms" add constraint "communication_rooms_pkey" PRIMARY KEY (room_id);
-alter table only public."communication_rooms" add constraint "communication_rooms_room_code_key" UNIQUE (room_code);
-alter table only public."communication_rooms" add constraint "communication_rooms_capture_policy_check" CHECK (capture_policy = ANY (ARRAY['best_effort'::text, 'host_managed'::text]));
-alter table only public."communication_rooms" add constraint "communication_rooms_content_access_rule_check" CHECK (content_access_rule = ANY (ARRAY['open'::text, 'party_pass'::text, 'premium'::text]));
-alter table only public."communication_rooms" add constraint "communication_rooms_linked_room_mode_check" CHECK (linked_room_mode IS NULL OR (linked_room_mode = ANY (ARRAY['live'::text, 'hybrid'::text])));
-alter table only public."communication_rooms" add constraint "communication_rooms_status_check" CHECK (status = ANY (ARRAY['active'::text, 'ended'::text]));
 
 alter table only public."creator_permissions" add constraint "creator_permissions_pkey" PRIMARY KEY (user_id);
 
@@ -384,14 +384,6 @@ alter table only public."watch_history" add constraint "watch_history_user_id_fk
 
 alter table only public."watch_party_pass_unlocks" add constraint "watch_party_pass_unlocks_pkey" PRIMARY KEY (id);
 
-alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_pkey" PRIMARY KEY (party_id, user_id);
-alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_party_id_fkey" FOREIGN KEY (party_id) REFERENCES watch_party_rooms(party_id) ON DELETE CASCADE;
-alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_role_check" CHECK (role = ANY (ARRAY['host'::text, 'viewer'::text]));
-alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_stage_role_check" CHECK (stage_role = ANY (ARRAY['host'::text, 'speaker'::text, 'listener'::text]));
-alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_state_check" CHECK (membership_state = ANY (ARRAY['active'::text, 'reconnecting'::text, 'left'::text, 'removed'::text]));
-
-alter table only public."watch_party_room_messages" add constraint "watch_party_room_messages_pkey" PRIMARY KEY (id);
-
 alter table only public."watch_party_rooms" add constraint "watch_party_rooms_pkey" PRIMARY KEY (party_id);
 alter table only public."watch_party_rooms" add constraint "watch_party_rooms_host_user_id_fkey" FOREIGN KEY (host_user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table only public."watch_party_rooms" add constraint "watch_party_room_type_check" CHECK (room_type = ANY (ARRAY['title'::text, 'live'::text]));
@@ -401,6 +393,14 @@ alter table only public."watch_party_rooms" add constraint "watch_party_rooms_jo
 alter table only public."watch_party_rooms" add constraint "watch_party_rooms_playback_state_check" CHECK (playback_state = ANY (ARRAY['playing'::text, 'paused'::text, 'buffering'::text]));
 alter table only public."watch_party_rooms" add constraint "watch_party_rooms_reactions_policy_check" CHECK (reactions_policy = ANY (ARRAY['enabled'::text, 'muted'::text]));
 alter table only public."watch_party_rooms" add constraint "watch_party_rooms_room_type_check" CHECK (room_type = ANY (ARRAY['title'::text, 'live'::text]));
+
+alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_pkey" PRIMARY KEY (party_id, user_id);
+alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_party_id_fkey" FOREIGN KEY (party_id) REFERENCES watch_party_rooms(party_id) ON DELETE CASCADE;
+alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_role_check" CHECK (role = ANY (ARRAY['host'::text, 'viewer'::text]));
+alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_stage_role_check" CHECK (stage_role = ANY (ARRAY['host'::text, 'speaker'::text, 'listener'::text]));
+alter table only public."watch_party_room_memberships" add constraint "watch_party_room_memberships_state_check" CHECK (membership_state = ANY (ARRAY['active'::text, 'reconnecting'::text, 'left'::text, 'removed'::text]));
+
+alter table only public."watch_party_room_messages" add constraint "watch_party_room_messages_pkey" PRIMARY KEY (id);
 
 alter table only public."watch_party_sync_events" add constraint "watch_party_sync_events_pkey" PRIMARY KEY (id);
 alter table only public."watch_party_sync_events" add constraint "watch_party_sync_events_party_id_fkey" FOREIGN KEY (party_id) REFERENCES watch_party_rooms(party_id) ON DELETE CASCADE;
