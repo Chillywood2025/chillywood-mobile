@@ -1936,7 +1936,11 @@ export default function ProfileScreen() {
                         {isSelfProfile ? (
                           <View style={styles.creatorVideoVisibilityBadge}>
                             <Text style={styles.creatorVideoVisibilityText}>
-                              {video.visibility === "public" ? "PUBLIC" : "DRAFT"}
+                              {video.moderationStatus === "hidden"
+                                || video.moderationStatus === "removed"
+                                || video.moderationStatus === "banned"
+                                ? video.moderationStatus.toUpperCase()
+                                : video.visibility === "public" ? "PUBLIC" : "DRAFT"}
                             </Text>
                           </View>
                         ) : null}
