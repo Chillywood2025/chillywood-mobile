@@ -22,7 +22,7 @@ const SKYLINE_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 const PUBLIC_SUPPORT_FLOWS = [
   "Browse Home, Explore, Title, and Player while signed out.",
   "Sign in, then create or join a watch party and leave cleanly.",
-  "Open a communication room, background the app, then reconnect.",
+  "Open Chi'lly Chat, start a thread or call handoff, then reconnect cleanly.",
   "Try premium or Party Pass gating and confirm retry works.",
   "Send a safety report and one support feedback item from a signed-in account.",
 ];
@@ -31,7 +31,7 @@ const CLOSED_BETA_FLOWS = [
   "Sign in and confirm invite-only access resolves cleanly.",
   "Home -> Title -> Player with normal playback and return flow.",
   "Watch-party create/join -> room -> live stage -> leave/rejoin.",
-  "Communication room create/join with reconnect after backgrounding.",
+  "Chi'lly Chat thread and call handoff with reconnect after backgrounding.",
   "Premium or Party Pass gates, unlock retry, and room re-entry.",
   "Safety reports after sign-in is fully restored for beta accounts.",
 ];
@@ -62,6 +62,14 @@ export function SupportScreen() {
         : "Use this support surface to request permanent account deletion from the signed-in Chi'llywood account. The support team reviews and confirms manual deletion requests until a dedicated deletion portal is published.";
     }
 
+    if (topic === "community-guidelines") {
+      return "Review Chi'llywood's launch community and content rules for creator uploads, profiles, Chi'lly Chat, Watch-Party rooms, and Live Stage behavior.";
+    }
+
+    if (topic === "copyright") {
+      return "Review the copyright and DMCA contact path for creator-upload rights issues, takedown requests, and counter-notices.";
+    }
+
     if (topic === "privacy") {
       return legalConfig.privacyPolicyUrl
         ? "Open the current Privacy Policy in your browser, or use support if you need help reviewing the latest policy for your account."
@@ -74,11 +82,13 @@ export function SupportScreen() {
         : "Use this support surface if you need the current Terms of Use while the public legal URL is not configured in this build.";
     }
 
-    return "Open the current Privacy Policy, review the Terms of Use, or request account deletion from the same support surface that already owns signed-in feedback and launch help.";
+    return "Open the current Privacy Policy, review the Terms of Use, check community and copyright policies, or request account deletion from the same support surface that already owns signed-in feedback and launch help.";
   }, [legalConfig.accountDeletionUrl, legalConfig.privacyPolicyUrl, legalConfig.termsOfServiceUrl, topic]);
 
   const legalCardTitle = useMemo(() => {
     if (topic === "account-deletion") return "Account deletion help";
+    if (topic === "community-guidelines") return "Community guidelines";
+    if (topic === "copyright") return "Copyright and DMCA help";
     if (topic === "privacy") return "Privacy help";
     if (topic === "terms") return "Terms help";
     return "Privacy, terms, and account help";
@@ -86,6 +96,10 @@ export function SupportScreen() {
 
   const primaryLegalAction = topic === "account-deletion"
     ? "account-deletion"
+    : topic === "community-guidelines"
+      ? "community-guidelines"
+      : topic === "copyright"
+        ? "copyright"
     : topic === "terms"
       ? "terms"
       : "privacy";
@@ -117,10 +131,7 @@ export function SupportScreen() {
       return;
     }
 
-    Alert.alert(
-      "Privacy Policy",
-      "Use Chi'llywood Support from this screen if you need the current Privacy Policy for your account.",
-    );
+    router.push("/privacy");
   };
 
   const onPressTerms = async () => {
@@ -129,10 +140,15 @@ export function SupportScreen() {
       return;
     }
 
-    Alert.alert(
-      "Terms of Use",
-      "Use Chi'llywood Support from this screen if you need the current Terms of Use for your account.",
-    );
+    router.push("/terms");
+  };
+
+  const onPressCommunityGuidelines = () => {
+    router.push("/community-guidelines" as Parameters<typeof router.push>[0]);
+  };
+
+  const onPressCopyright = () => {
+    router.push("/copyright" as Parameters<typeof router.push>[0]);
   };
 
   const onPressAccountDeletion = () => {
@@ -320,6 +336,24 @@ export function SupportScreen() {
             >
               <Text style={primaryLegalAction === "account-deletion" ? styles.primaryButtonText : styles.secondaryButtonText}>
                 Request Account Deletion
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={primaryLegalAction === "community-guidelines" ? styles.primaryButton : styles.secondaryButton}
+              activeOpacity={0.86}
+              onPress={onPressCommunityGuidelines}
+            >
+              <Text style={primaryLegalAction === "community-guidelines" ? styles.primaryButtonText : styles.secondaryButtonText}>
+                Community Guidelines
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={primaryLegalAction === "copyright" ? styles.primaryButton : styles.secondaryButton}
+              activeOpacity={0.86}
+              onPress={onPressCopyright}
+            >
+              <Text style={primaryLegalAction === "copyright" ? styles.primaryButtonText : styles.secondaryButtonText}>
+                Copyright / DMCA
               </Text>
             </TouchableOpacity>
           </View>

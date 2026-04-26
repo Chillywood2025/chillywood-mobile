@@ -47,7 +47,7 @@ The biggest audit findings are not broad architecture failures. They are launch-
 2. `/communication` no longer exposes a standalone lobby/create/join surface. It redirects to `/chat`, while `/communication/[roomId]` remains for guarded call-room compatibility.
 3. `app/lib/_supabase.ts` is now only a compatibility shim that re-exports the canonical `_lib/supabase.ts` client, and active route imports were pointed at the canonical owner.
 4. Non-creator `/player/[id]` no longer falls back to the first local title or bundled sample media for missing platform ids. Missing platform title routes now show an honest unavailable state.
-5. Billing/premium purchase UX exists as access-sheet/RevenueCat foundation, but there is no dedicated `/subscribe` route. Do not add one until store entitlement proof needs it.
+5. Billing/premium purchase UX now includes an honest `/subscribe` account-owned Premium surface. It reads the existing RevenueCat/entitlement owners, exposes restore/manage only through real helpers, and does not grant Premium locally when store setup is unavailable.
 6. Public v1 still needs deferred runtime proof: two-device creator-video Watch-Party, draft/private blocked state, signed-out/non-premium blocked state, and final route smoke.
 
 This audit recommends documentation and targeted follow-up fixes. It does not recommend a route redesign.
@@ -65,6 +65,8 @@ This audit recommends documentation and targeted follow-up fixes. It does not re
 | Privacy | `app/privacy.tsx` | Legal | Privacy copy | Runtime settings | Public legal path | None | Settings/support/web | None | V1 core |
 | Terms | `app/terms.tsx` | Legal | Terms copy | Runtime settings | Public legal path | None | Settings/support/web | None | V1 core |
 | Account deletion info | `app/account-deletion.tsx` | Legal/support | Public account deletion instructions | Self-serve deletion execution | Public legal path | None | Settings/support/web | Support/account process | V1 support route; self-serve delete still needs launch proof |
+| Community Guidelines | `app/community-guidelines.tsx` | Legal/safety | Launch content and conduct rules | Moderation enforcement workflow | Public legal path | None | Settings/support/web | Support/report paths | V1 core; legal review pending |
+| Copyright / DMCA | `app/copyright.tsx` | Legal/safety | Copyright contact path and creator-upload rights guidance | Automated takedown adjudication | Public legal path | None | Settings/support/web | Support/report paths | V1 core; legal review pending |
 | Support | `app/support.tsx`, `components/system/support-screen.tsx` | Support | Help, feedback entry, sign-in prompt for account deletion support | Legal policy or account deletion execution | Public; richer feedback when signed in/beta | Beta feedback only | Settings, beta-support, beta access | Auth/login, feedback sheet | V1 core |
 | Beta support | `app/beta-support.tsx` | Support compatibility | Redirects non-beta env to `/support` | Separate support product | Public | Config | Old support links | `/support` | Compatibility |
 | Modal | `app/modal.tsx` | Compatibility redirect | Redirects accidental modal deep links to the canonical tabs surface | Product behavior | Root stack redirect | None | Root stack/deep link | `/(tabs)` | Resolved hardening item |
@@ -105,7 +107,8 @@ This audit recommends documentation and targeted follow-up fixes. It does not re
 | Route/file | Owner file | System | What it owns | Must not own | Access | Backend dependencies | Enters | Exits | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Admin `/admin` | `app/admin.tsx` | Admin/Operator | App config, platform title programming, creator grants, role visibility, safety queue, creator-video moderation actions | Public user flow, hidden-button-only admin security | Signed-in active beta plus platform role gate | `platform_role_memberships`, `titles`, `app_configurations`, `creator_permissions`, `safety_reports`, `videos` | Direct/admin tooling | `/player/[id]` for preview | V1 core; backend-enforced roles required |
-| Settings `/settings` | `app/settings.tsx` | Account settings | Logout, support/legal links, entitlement status view | Billing purchase execution, Profile/channel management | Signed-in; redirects to login if signed out | Supabase auth, monetization snapshot | Home/profile | `/support`, `/privacy`, `/terms`, login | V1 core |
+| Settings `/settings` | `app/settings.tsx` | Account settings | Logout, Profile/Channel shortcuts, support/legal links, Premium status handoff | Billing entitlement truth, creator upload execution | Signed-in; redirects to login if signed out | Supabase auth, monetization snapshot | Home/profile | `/profile/[userId]`, `/channel-settings`, `/subscribe`, `/support`, legal routes, login | V1 core |
+| Subscribe `/subscribe` | `app/subscribe.tsx` | Premium / Billing UX | Account-owned Premium status, purchase/restore/manage handoff through existing monetization owners, honest unavailable states | Backend entitlement writes, fake purchase success, store configuration | Signed-in for actions; signed-out sees sign-in prompt | RevenueCat configuration, monetization snapshot, backend entitlement truth | Settings, access-gate surfaces | Login, platform subscription manager | V1 Premium surface; store proof pending |
 | Local title data | `app/data/titles.ts` | Compatibility sample data | Legacy sample assets | Production source of truth | Not route | Bundled assets | Imported by legacy paths if any | N/A | Compatibility-only |
 | Local Supabase duplicate | `app/lib/_supabase.ts` | Data client compatibility shim | Re-exports canonical `_lib/supabase.ts` for any legacy imports | Second client creation, separate storage key, separate runtime config | Not route | Canonical `_lib/supabase.ts` | Legacy imports only | N/A | Resolved hardening item |
 | Watch-party shared helper | `app/watch-party/_lib/_room-shared.ts` | Route-local helper | UI helpers, source marker, participant display helpers | Backend session ownership | Not route | None/direct helpers | Watch-party route files | N/A | V1 helper |
@@ -372,21 +375,20 @@ Status: foundation exists; full public v1 proof still required.
 
 1. `/communication/[roomId]` compatibility should stay guarded and should not become a second chat/call product owner.
 2. Home/Explore/My List discover platform titles only. Creator videos appear on Profile/Channel, which is acceptable for v1, but global creator-video discovery is a later product decision.
-3. No dedicated `/subscribe` route is okay if the access sheet remains the real paywall. Add a route only if the billing UX needs it.
+3. `/subscribe` now exists as an account-owned Premium status and restore/purchase handoff. Store product configuration and live purchase proof remain pending.
 4. Notification/reminder helpers exist without a dedicated notification center route. This is not a v1 blocker unless surfaced elsewhere.
 
 ## 12. Later-Phase Route and System Recommendations
 
 1. Add a public Channel alias only if user testing shows Profile/Channel is not clear enough.
 2. Add a Creator Dashboard only when Channel Settings becomes too dense for owner workflows.
-3. Add `/subscribe` if billing UX needs a full-screen store/restore surface.
-4. Add `/admin/reports` when report volume justifies a dedicated moderation queue.
-5. Add Native Game Streaming routes only after Public v1:
+3. Add `/admin/reports` when report volume justifies a dedicated moderation queue.
+4. Add Native Game Streaming routes only after Public v1:
    - `/live/game-start`
    - `/live/game-stage/[streamId]`
-6. Add monetization/payout routes only after ledger, KYC/tax, and payout backend owners exist.
-7. Add comment media upload only after moderation/storage limits and report flows are designed.
-8. Add full Audience Role Roster routes only after a unified backend roster and role audit model exist.
+5. Add monetization/payout routes only after ledger, KYC/tax, and payout backend owners exist.
+6. Add comment media upload only after moderation/storage limits and report flows are designed.
+7. Add full Audience Role Roster routes only after a unified backend roster and role audit model exist.
 
 ## 13. Recommended Fix Order
 

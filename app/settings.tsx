@@ -9,7 +9,7 @@ import {
   readMonetizationSnapshot,
   subscribeToMonetizationSnapshot,
 } from "../_lib/monetization";
-import { getRuntimeLegalConfig, getSupportRoutePath } from "../_lib/runtimeConfig";
+import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
 import { useSession } from "../_lib/session";
 
@@ -21,7 +21,6 @@ export default function SettingsScreen() {
   const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
   const [monetizationLoading, setMonetizationLoading] = useState(false);
   const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
-  const supportRoutePath = useMemo(() => getSupportRoutePath(), []);
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;
@@ -76,8 +75,8 @@ export default function SettingsScreen() {
 
   const issueLabel = useMemo(() => (
     monetizationSnapshot.targets.premium_subscription?.hasEntitlement
-      ? "Settings stays read-only here. New Premium purchases still begin from supported locked routes, not from this screen."
-      : "Settings can confirm current Premium posture on this account, but purchase entry still begins from supported locked routes instead of this screen."
+      ? "Manage Premium opens the account-owned Premium surface for restore, subscription management, and rechecking entitlement truth."
+      : "Manage Premium opens the account-owned Premium surface. It will not grant access unless store billing and backend entitlement truth are active."
   ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
 
   const onPressSignOut = async () => {
@@ -116,6 +115,15 @@ export default function SettingsScreen() {
     }
   };
 
+  const onPressOpenProfile = useCallback(() => {
+    if (!user?.id) return;
+    router.push({ pathname: "/profile/[userId]", params: { userId: user.id, self: "1" } });
+  }, [router, user?.id]);
+
+  const onPressManageChannel = useCallback(() => {
+    router.push("/channel-settings");
+  }, [router]);
+
   const openExternalDestination = useCallback(async (url: string, label: string) => {
     try {
       const supported = await Linking.canOpenURL(url);
@@ -130,18 +138,17 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  const openSupportFallback = useCallback((topic: "privacy" | "terms" | "account-deletion") => {
-    router.push({
-      pathname: supportRoutePath as Parameters<typeof router.push>[0] extends { pathname: infer P } ? P : "/support",
-      params: { topic },
-    } as Parameters<typeof router.push>[0]);
-  }, [router, supportRoutePath]);
+  const openLocalLegalRoute = useCallback((
+    path: "/privacy" | "/terms" | "/account-deletion" | "/community-guidelines" | "/copyright",
+  ) => {
+    router.push(path as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const onPressPrivacyPolicy = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
       target: "privacy_policy",
-      destination: legalConfig.privacyPolicyUrl ? "external" : "support",
+      destination: legalConfig.privacyPolicyUrl ? "external" : "local",
     });
 
     if (legalConfig.privacyPolicyUrl) {
@@ -149,14 +156,14 @@ export default function SettingsScreen() {
       return;
     }
 
-    openSupportFallback("privacy");
-  }, [legalConfig.privacyPolicyUrl, openExternalDestination, openSupportFallback]);
+    openLocalLegalRoute("/privacy");
+  }, [legalConfig.privacyPolicyUrl, openExternalDestination, openLocalLegalRoute]);
 
   const onPressTerms = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
       target: "terms_of_use",
-      destination: legalConfig.termsOfServiceUrl ? "external" : "support",
+      destination: legalConfig.termsOfServiceUrl ? "external" : "local",
     });
 
     if (legalConfig.termsOfServiceUrl) {
@@ -164,14 +171,14 @@ export default function SettingsScreen() {
       return;
     }
 
-    openSupportFallback("terms");
-  }, [legalConfig.termsOfServiceUrl, openExternalDestination, openSupportFallback]);
+    openLocalLegalRoute("/terms");
+  }, [legalConfig.termsOfServiceUrl, openExternalDestination, openLocalLegalRoute]);
 
   const onPressAccountDeletion = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
       target: "account_deletion",
-      destination: legalConfig.accountDeletionUrl ? "external" : "support",
+      destination: legalConfig.accountDeletionUrl ? "external" : "local",
     });
 
     if (legalConfig.accountDeletionUrl) {
@@ -179,8 +186,37 @@ export default function SettingsScreen() {
       return;
     }
 
-    openSupportFallback("account-deletion");
-  }, [legalConfig.accountDeletionUrl, openExternalDestination, openSupportFallback]);
+    openLocalLegalRoute("/account-deletion");
+  }, [legalConfig.accountDeletionUrl, openExternalDestination, openLocalLegalRoute]);
+
+  const onPressCommunityGuidelines = useCallback(() => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "community_guidelines",
+      destination: "local",
+    });
+
+    openLocalLegalRoute("/community-guidelines");
+  }, [openLocalLegalRoute]);
+
+  const onPressCopyright = useCallback(() => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "copyright_dmca",
+      destination: "local",
+    });
+
+    openLocalLegalRoute("/copyright");
+  }, [openLocalLegalRoute]);
+
+  const onPressManagePremium = useCallback(() => {
+    trackEvent("settings_premium_manage_opened", {
+      source: "settings",
+      snapshotStatus: monetizationSnapshot.status,
+      hasPremium: !!monetizationSnapshot.targets.premium_subscription?.hasEntitlement,
+    });
+    router.push("/subscribe" as Parameters<typeof router.push>[0]);
+  }, [monetizationSnapshot.status, monetizationSnapshot.targets.premium_subscription?.hasEntitlement, router]);
 
   if (isLoading) {
     return (
@@ -221,6 +257,19 @@ export default function SettingsScreen() {
           <Text style={styles.identityLabel}>Signed in as</Text>
           <Text style={styles.identityValue}>{String(user?.email ?? "Unknown account")}</Text>
         </View>
+        <View style={styles.utilityRow}>
+          <TouchableOpacity
+            style={[styles.utilityButton, !user?.id && styles.utilityButtonDisabled]}
+            activeOpacity={0.86}
+            onPress={onPressOpenProfile}
+            disabled={!user?.id}
+          >
+            <Text style={styles.utilityButtonText}>Open Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressManageChannel}>
+            <Text style={styles.utilityButtonText}>Manage Channel</Text>
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity
           style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]}
           activeOpacity={0.86}
@@ -248,11 +297,19 @@ export default function SettingsScreen() {
             <Text style={styles.utilityButtonText}>Terms of Use</Text>
           </TouchableOpacity>
         </View>
+        <View style={styles.utilityRow}>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCommunityGuidelines}>
+            <Text style={styles.utilityButtonText}>Community Guidelines</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyright}>
+            <Text style={styles.utilityButtonText}>Copyright / DMCA</Text>
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressAccountDeletion}>
           <Text style={styles.secondaryActionButtonText}>Request Account Deletion</Text>
         </TouchableOpacity>
         <Text style={styles.metaText}>
-          If a public legal link is not configured on this build yet, Settings hands off to Chi&apos;llywood Support so the request still lands on the official help path.
+          If a public legal link is not configured on this build yet, Settings opens the bundled launch policy page or hands off to Chi&apos;llywood Support for account help.
         </Text>
       </View>
 
@@ -260,7 +317,7 @@ export default function SettingsScreen() {
         <Text style={styles.cardKicker}>PREMIUM ACCOUNT</Text>
         <Text style={styles.secondaryTitle}>Premium access on this account</Text>
         <Text style={styles.body}>
-          Settings shows the current Premium posture for this signed-in account. Purchase entry still begins from supported locked routes, so this surface stays read-only and status-first.
+          Settings shows the current Premium posture for this signed-in account. Manage Premium opens the dedicated account-owned surface for restore, purchase, and subscription-management handoff.
         </Text>
 
         <View style={styles.identityBlock}>
@@ -296,6 +353,14 @@ export default function SettingsScreen() {
             {monetizationLoading
               ? <ActivityIndicator color="#E5ECF8" size="small" />
               : <Text style={styles.utilityButtonText}>Refresh status</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.utilityButton}
+            onPress={onPressManagePremium}
+            activeOpacity={0.86}
+            disabled={monetizationLoading}
+          >
+            <Text style={styles.utilityButtonText}>Manage Premium</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -1,10 +1,12 @@
 # Chi'llywood Public V1 Release Checklist
 
+> Current tracker: use `docs/PUBLIC_V1_READINESS_CHECKLIST.md` for the active Public v1 readiness matrix. This older release checklist remains as a packaging/EAS smoke reference.
+
 ## Before Build
 
 1. Confirm `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and `EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST` are set.
 2. Set `EXPO_PUBLIC_BETA_ENVIRONMENT=public-v1`.
-3. Apply migrations through `202603270010_public_v1_feedback_policy.sql`.
+3. Apply migrations through `202604260004_tighten_watch_party_room_rls.sql` and verify local/remote schema alignment before runtime proof.
 4. Confirm real sign-in is enabled in the launch build. Do not treat temporary no-login behavior as release-ready.
 5. Run `npm run validate:runtime`.
 6. Run `npm run lint`.

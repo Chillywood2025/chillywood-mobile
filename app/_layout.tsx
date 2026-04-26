@@ -29,7 +29,13 @@ import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
 
-const PUBLIC_LEGAL_PATHS = new Set(["/privacy", "/terms", "/account-deletion"]);
+const PUBLIC_LEGAL_PATHS = new Set([
+  "/privacy",
+  "/terms",
+  "/account-deletion",
+  "/community-guidelines",
+  "/copyright",
+]);
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
 
@@ -160,6 +166,7 @@ function RootNavigator() {
         <Stack.Screen name="communication/[roomId]" />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="subscribe" />
         <Stack.Screen name="admin" />
         <Stack.Screen name="channel-settings" />
         <Stack.Screen name="support" />
