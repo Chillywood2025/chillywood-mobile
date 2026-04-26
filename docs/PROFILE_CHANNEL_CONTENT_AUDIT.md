@@ -219,12 +219,12 @@ Current upload truth after foundation:
 - `/admin` can create platform `titles` by URL. That is internal programming, not creator upload.
 - `app/player/[id].tsx` supports uploaded creator videos through `/player/[id]?source=creator-video`.
 - `_lib/creatorVideos.ts` is the creator-video read/write/upload owner.
-- Android upload/player proof exists for the initial upload and standalone Player path; public/draft, non-owner, report, admin moderation, and live Supabase/RLS proof remain pending.
+- Android upload/player proof exists for the initial upload and standalone Player path; focused local Supabase/RLS proof now passes for creator video metadata visibility, moderation/report rows, premium/billing entitlement writes, and tightened Watch-Party room policies. Public/draft, non-owner, Storage API delete, report/admin moderation runtime, and live Supabase/RLS proof remain pending.
 
 `videos` table readiness:
 
 - Implemented foundation: `visibility`, `storage_path`, `thumb_storage_path`, `mime_type`, `file_size_bytes`, `updated_at`, and `moderation_status` with admin moderation metadata.
-- RLS policy intent now distinguishes public clean/reported videos from owner drafts and hidden/removed/banned videos.
+- RLS policy proof now distinguishes public clean/reported videos from owner drafts and hidden/removed/banned videos in local Supabase.
 - `creator-videos` private storage bucket and owner/public storage policy intent are in the repo migrations.
 - Still missing: category/genre, thumbnail file upload, transcoding, and live Supabase/RLS proof.
 
@@ -243,7 +243,7 @@ Recommended remaining implementation order:
 2. Connect Android device and run runtime proof.
 3. Rebuild dev client if `expo-document-picker` requires it.
 4. Verify upload, metadata save, Profile/Channel display, Player playback, and public/draft visibility.
-5. Verify creator-video report intake, admin hide/remove/restore, and hidden/removed public/player blocking against live Supabase/RLS.
+5. Verify creator-video report intake, admin hide/remove/restore, hidden/removed public/player blocking, and Storage API delete/remove against live Supabase/RLS.
 6. After remote migration proof, verify uploaded-video Watch-Party routing, no Live Stage drift, no platform/sample fallback, and draft/private blocking.
 
 ## Viewer Content Experience

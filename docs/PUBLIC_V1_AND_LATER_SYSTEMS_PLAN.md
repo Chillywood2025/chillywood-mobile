@@ -36,13 +36,13 @@ Current Public v1 truth:
 - Creator upload is Public v1 required.
 - Creator-uploaded videos upload, save metadata/storage, show on Profile/Channel, and open the standalone premium Player through `/player/[id]?source=creator-video`.
 - Creator videos use the same premium Player shell as platform/admin titles.
-- Creator-upload Watch-Party linking is implemented in code/local schema, but Public v1 runtime proof still requires the remote Supabase source-model migration and Android proof.
+- Creator-upload Watch-Party linking is implemented in code/local schema, including focused local RLS tightening for anonymous room access and premium-room membership writes, but Public v1 runtime proof still requires the remote Supabase migration chain and Android proof.
 - Comment media upload is post-v1.
 - Native game/video streaming is later phase.
 - Paid/subscriber media, tips, coins, payouts, VIPs, and advanced creator studio are later phase.
 - Premium/access gate proof is required for Watch-Party Live.
 - Basic moderation/safety is required before public launch because creator uploads exist.
-- Supabase/RLS proof is required before public launch.
+- Supabase/RLS proof is required before public launch. Focused local proof now passes for the current creator media, premium/billing, moderation, creator-event, notification, reminder, and Watch-Party room policy lanes; live Supabase proof is still required.
 
 This plan does not create a code-level god system. Docs define ownership; routes, libs, backend policies, and proof artifacts enforce it.
 
@@ -986,7 +986,8 @@ Current truth:
 - Creator-uploaded videos open in standalone premium Player.
 - Creator-upload Watch-Party linking is implemented in code with `watch_party_rooms.source_type/source_id`, normal Party Waiting Room routing, Party Room handoff, and Player resolution for `/player/[id]?source=creator-video`.
 - Local Supabase migration proof passed for the source model and trigger behavior.
-- Live Android proof is pending because the remote Supabase project must apply `202604260003_creator_video_watch_party_linking.sql` before room creation can persist creator-video source truth.
+- Focused local RLS proof also tightened Watch-Party room policies in `202604260004_tighten_watch_party_room_rls.sql`: anonymous users can no longer read or create rooms, authenticated users can still join open rooms, locked rooms block non-host joins, and premium rooms require backend entitlement rows before membership insert.
+- Live Android proof is pending because the remote Supabase project must apply migrations through `202604260004_tighten_watch_party_room_rls.sql` before room creation can persist creator-video source truth and enforce the tightened room policies.
 
 ### A. System ownership
 
@@ -1111,7 +1112,7 @@ When built:
 
 ### I. Current v1 recommendation
 
-For Public v1, creator-upload Watch-Party may ship only after the remote migration and Android runtime proof pass. Until then, failures must remain honest, for example:
+For Public v1, creator-upload Watch-Party may ship only after the remote migration chain through the tightened room RLS migration and Android runtime proof pass. Until then, failures must remain honest, for example:
 
 `Watch-Party is unavailable for this video.`
 

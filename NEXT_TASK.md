@@ -3,7 +3,7 @@
 ## Exact Next Task
 Complete the remaining Creator Media public/draft and owner/non-owner runtime checks, then prove creator-upload Watch-Party linking after the remote Supabase migration is applied.
 
-Also apply/prove the new Public v1 hardening migrations in a live Supabase environment: `202604260001_billing_entitlement_foundation.sql`, `202604260002_creator_video_moderation_foundation.sql`, and `202604260003_creator_video_watch_party_linking.sql`. Local Supabase is now running; `supabase migration up --local` and a fresh `supabase db reset` passed, and local SQL proof confirmed `watch_party_rooms.source_type/source_id` normalize platform title rooms, allow public/clean creator-video rooms, and block invalid creator-video sources. Live schema proof is still blocked: the remote project currently reports `watch_party_rooms.source_type` missing, so Android creator-video Watch-Party runtime proof must wait for the remote migration chain to be applied.
+Also apply/prove the new Public v1 hardening migrations in a live Supabase environment: `202604260001_billing_entitlement_foundation.sql`, `202604260002_creator_video_moderation_foundation.sql`, `202604260003_creator_video_watch_party_linking.sql`, and `202604260004_tighten_watch_party_room_rls.sql`. Local Supabase is now running; `supabase migration up --local` and a fresh `supabase db reset` passed, local SQL proof confirmed `watch_party_rooms.source_type/source_id` normalize platform title rooms, allow public/clean creator-video rooms, and block invalid creator-video sources, and focused local RLS proof now passes for creator video metadata, storage read/write policy intent except Storage API delete, moderation/safety reports, premium/billing entitlements, creator events, notifications, reminders, and Watch-Party room access after anonymous room insert/read and non-premium premium-room membership writes were tightened. Live schema proof is still blocked: the remote project currently reports `watch_party_rooms.source_type` missing, so Android creator-video Watch-Party runtime proof must wait for the remote migration chain to be applied.
 
 The foundation is implemented in code and static validation passed. Android proof on device `R5CT30GM6NY` now confirms `/channel-settings` opens, the owner Content panel renders, the native Android file picker opens from `Choose Video File`, selected file name appears, Upload visibly enters an uploading state, and metadata/storage save succeeds for creator video `f6a5c96a-812a-4132-8a2b-e3ecab51c983` in the private `creator-videos` bucket path. Human device proof also confirmed tapping an uploaded video card opens the standalone Player for the creator video rather than the platform/admin title surface or bundled sample fallback. The follow-up Player proof confirmed `/player/5cf469eb-d375-436a-861a-e82ece5cc47d?source=creator-video` uses the same premium Player shell as `/player/t1`, resolves the uploaded creator-video source as `remote`, does not log signed URLs, and does not fall back to sample/platform media. Creator-upload Watch-Party linking code now exists, but runtime proof is explicitly pending live migration application.
 
@@ -15,7 +15,7 @@ The foundation is implemented in code and static validation passed. Android proo
 5. Publish the video and confirm it appears for public/non-owner viewers on Profile/Channel.
 6. Confirm creator can edit metadata, publish/unpublish, and delete.
 7. Confirm a non-owner cannot manage another creator's video.
-8. Apply/prove remote Supabase migrations through `202604260003_creator_video_watch_party_linking.sql`; do not stage `supabase/.temp/`.
+8. Apply/prove remote Supabase migrations through `202604260004_tighten_watch_party_room_rls.sql`; do not stage `supabase/.temp/`.
 9. Open a public uploaded creator video and tap Watch-Party Live.
 10. Confirm it enters the normal `/watch-party` waiting room with a room code, then `/watch-party/[partyId]`, then `/player/[id]?source=creator-video`.
 11. Confirm no `/watch-party/live-stage/[partyId]` route, no platform title fallback, and no bundled sample fallback.
@@ -23,6 +23,7 @@ The foundation is implemented in code and static validation passed. Android proo
 13. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
 14. As owner/operator, hide/remove a creator video from `/admin` and confirm it no longer appears publicly or plays publicly.
 15. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
+16. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
 
 ## Scope
 This proof lane should:
