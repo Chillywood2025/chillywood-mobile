@@ -2,7 +2,7 @@
 
 Date: 2026-04-27
 
-Purpose: track Public v1 launch readiness without treating static validation as runtime proof. Use this document with `CURRENT_STATE.md`, `NEXT_TASK.md`, `docs/FULL_APP_ROUTE_OWNER_BEHAVIOR_AUDIT.md`, `docs/PUBLIC_V1_AND_LATER_SYSTEMS_PLAN.md`, and `docs/EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST.md`.
+Purpose: track Public v1 launch readiness without treating static validation as runtime proof. Use this document with `CURRENT_STATE.md`, `NEXT_TASK.md`, `docs/FULL_APP_ROUTE_OWNER_BEHAVIOR_AUDIT.md`, `docs/PUBLIC_V1_AND_LATER_SYSTEMS_PLAN.md`, `docs/EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST.md`, and `docs/DASHBOARD_SETUP_COMMAND_CENTER.md`.
 
 Status key:
 
@@ -93,6 +93,7 @@ Category D, later phase by product decision:
 ## External Setup Pending
 
 - External setup details, dashboard/manual owners, proof requirements, and exact next actions now live in `docs/EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST.md`.
+- Dashboard-by-dashboard setup order, login/manual actions, secret placement, and proof gates now live in `docs/DASHBOARD_SETUP_COMMAND_CENTER.md`.
 - Play Store listing assets and content rating prep now lives in `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`; it is not Play Console proof.
 - RevenueCat products, offerings, public SDK keys, and store-side subscription setup.
 - Google Play listing metadata, policy declarations, screenshots, support URL, privacy URL, terms URL, and account-deletion URL.

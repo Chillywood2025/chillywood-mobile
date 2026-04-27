@@ -4,7 +4,9 @@ Date: 2026-04-27
 
 Purpose: track everything outside this repository that Chi'llywood needs before a Public v1 launch. This document does not prove that any dashboard, store, hosted policy URL, live secret, or release signing step is complete. It records current repo support, the manual setup still needed, the owner/responsible party, the proof required, and the next action.
 
-Use this checklist with `docs/PUBLIC_V1_READINESS_CHECKLIST.md`, `docs/PUBLIC_V1_AND_LATER_SYSTEMS_PLAN.md`, `docs/public-v1-release-checklist.md`, `CURRENT_STATE.md`, and `NEXT_TASK.md`.
+Use this checklist with `docs/DASHBOARD_SETUP_COMMAND_CENTER.md`, `docs/PUBLIC_V1_READINESS_CHECKLIST.md`, `docs/PUBLIC_V1_AND_LATER_SYSTEMS_PLAN.md`, `docs/public-v1-release-checklist.md`, `CURRENT_STATE.md`, and `NEXT_TASK.md`.
+
+For dashboard-by-dashboard ownership, login/manual actions, secret placement, proof gates, and the recommended dashboard completion order, start with `docs/DASHBOARD_SETUP_COMMAND_CENTER.md`. This checklist stays as the lane tracker; the command center is the operator map.
 
 ## Status Key
 
@@ -587,6 +589,7 @@ Stop and do not mark Done if:
 
 Already repo-backed:
 
+- Dashboard/manual setup now has a command-center map at `docs/DASHBOARD_SETUP_COMMAND_CENTER.md`; it lists Google Play Console, RevenueCat, Firebase, Supabase, LiveKit/server, Expo/EAS, DNS/hosting, legal/support, GitHub, secret placement, proof gates, and the highest-priority dashboard action.
 - Premium/Billing UX has real owners and does not grant local fake Premium.
 - Creator Media, creator-video Player, and creator-video Watch-Party source-model code exist.
 - Bundled legal/support/account-deletion routes exist.
@@ -611,17 +614,19 @@ External setup still required:
 
 ## Recommended External Setup Order
 
-1. Finalize hosted legal/support/account deletion URLs and support inbox ownership.
-2. Use the linked Supabase CLI, verify remote migration alignment, and run focused live RLS/storage proof.
-3. Verify Supabase `livekit-token` function deployment and secret configuration.
-4. Verify LiveKit server/domain/TURN/TLS from Wi-Fi and cellular networks.
-5. Configure RevenueCat/Google Play Premium subscription product and public SDK keys.
-6. Configure EAS production env and run strict runtime validation from `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`.
-7. Build internal Android release candidate with production runtime env.
-8. Prove Firebase Crashlytics/Performance in the internal build.
-9. Run final release candidate route smoke and log audit.
-10. Complete Play Console Data Safety, content rating, target audience, store listing, feature graphic, screenshots, support/legal links, and account deletion declaration using `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`.
-11. Submit to internal/closed testing before production rollout.
+Use `docs/DASHBOARD_SETUP_COMMAND_CENTER.md` as the master dashboard order. The current recommended sequence is:
+
+1. Confirm Google Play app record and package `com.chillywood.mobile`.
+2. Configure RevenueCat product, entitlement, and offering.
+3. Configure EAS env values.
+4. Build Android preview.
+5. Prove Firebase Crashlytics/Performance.
+6. Prove Supabase RLS/API/storage.
+7. Prove LiveKit production/two-device behavior.
+8. Complete Play Store listing, Data Safety, and content rating.
+9. Finalize legal/DMCA/account deletion approvals.
+10. Upload to Play internal testing.
+11. Run final release smoke.
 
 ## Do Not Mark Done Until
 
