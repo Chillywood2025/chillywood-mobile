@@ -733,11 +733,32 @@ export default function WatchPartyLiveStageScreen() {
   }, [buildStageParticipantsFromPresence, canUseBetaStage, myUserId, myUsername, participantStateById, partyId]);
 
   const updateStageMode = useCallback((nextMode: SharedRoomMode) => {
+    // Layout lock: mode switches must re-arm the same 10s overlay auto-hide without moving comments.
+    if (stageOverlayAutoHideTimeoutRef.current) {
+      clearTimeout(stageOverlayAutoHideTimeoutRef.current);
+      stageOverlayAutoHideTimeoutRef.current = null;
+    }
+    if (stageOverlayFinalizeHideTimeoutRef.current) {
+      clearTimeout(stageOverlayFinalizeHideTimeoutRef.current);
+      stageOverlayFinalizeHideTimeoutRef.current = null;
+    }
+    setStageMenuOpen(false);
+    setCommentsOpen(false);
+    setReactionPickerOpen(false);
+    setStageControlsOpen(false);
+    setFaceFilterSheetOpen(false);
+    setHybridCommentFocused(false);
+    hybridCommentInputRef.current?.blur();
+    stageOverlayLastInteractionAtRef.current = Date.now();
+    setStageOverlayVisible(true);
+    stageOverlayMotion.stopAnimation();
+    stageOverlayMotion.setValue(1);
+    setStageOverlayAutoHideArmed(true);
     setStageMode(nextMode);
     if (modeParamValue !== nextMode) {
       router.setParams({ mode: nextMode });
     }
-  }, [modeParamValue, router]);
+  }, [modeParamValue, router, stageOverlayMotion]);
 
   useEffect(() => {
     const normalizedRouteMode = normalizeSharedRoomMode(modeParamValue, "live");
@@ -2285,7 +2306,7 @@ export default function WatchPartyLiveStageScreen() {
     }
 
     closeStageOverlayPanels();
-    setStageOverlayAutoHideArmed(false);
+    setStageOverlayAutoHideArmed(true);
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
@@ -2448,7 +2469,7 @@ export default function WatchPartyLiveStageScreen() {
       return;
     }
 
-    revealStageOverlay({ armAutoHide: false });
+    revealStageOverlay();
   }, [isLiveRoomSurface, revealStageOverlay, stageOverlayMotion]);
 
   useEffect(() => {
@@ -2494,6 +2515,7 @@ export default function WatchPartyLiveStageScreen() {
     stageMenuOpen,
     stageOverlayAutoHideArmed,
     stageOverlayVisible,
+    stageMode,
   ]);
 
   useEffect(() => {

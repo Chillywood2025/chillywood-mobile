@@ -69,6 +69,10 @@ Locked structure:
 - The visible comments area stays in its current lower dock placement.
 - Comments must not be replaced by menu-only comments.
 - Comments must not be moved into a tap menu, drawer, modal, bottom sheet, overlay-only surface, or hidden secondary panel.
+- The overlay/comments dock auto-hide behavior is locked: entering Live Stage from the Live Room starts with the overlay visible and arms the 10-second auto-hide timer.
+- Switching between Live First and Live Watch-Party resets and re-arms the same 10-second auto-hide timer for both modes.
+- Lock Controls keeps the overlay/comments dock visible until unlocked.
+- Open comments, focused comment input, menus, reactions, studio controls, and effects panels may keep the overlay visible while active, but they must not move comments out of the current placement.
 - Controls may be refined only inside the approved structure and only by explicit user request.
 - Effects controls may be refined inside approved locations, but fake AR/camera processing is forbidden.
 
@@ -200,6 +204,9 @@ Manual proof items:
 - Visible comments remain visible in their current placement.
 - Comments are not moved into menu-only/tap-only behavior.
 - Comments are not moved into a drawer, modal, bottom sheet, overlay-only surface, or hidden secondary panel.
+- Entering Live Stage from the Live Room auto-hides the overlay/comments dock after 10 seconds unless controls are locked or an active panel/input is open.
+- Switching Live First to Live Watch-Party and back resets the same 10-second auto-hide behavior in both modes.
+- Lock Controls keeps the overlay/comments dock visible in both modes.
 - Watch-Party Live content remains at the top.
 - Watch-Party Live people/participants remain below the content.
 - Platform-title Watch-Party remains normal Party flow.
