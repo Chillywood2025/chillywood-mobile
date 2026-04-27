@@ -55,6 +55,8 @@ Watch-Party Live is content-first. The normal Party Room route should keep the s
 - Creator-video rooms keep `source_type=creator_video` and `source_id` equal to the creator video id.
 - Platform title rooms keep `source_type=platform_title`.
 - Participants appear below the shared screen/source area.
+- Host and viewer camera/feed bubbles are arranged below the shared screen in a compact social grid.
+- The first view should support five feed bubbles across and two visible rows before vertical scroll, with more feeds browsable without covering the shared content.
 - Room comments and room controls support shared viewing without pretending to be Live Stage.
 - Playback continues through the standalone Player route, preserving the existing Player watch surface.
 
@@ -62,6 +64,7 @@ Current implementation:
 
 - `app/watch-party/[partyId].tsx` renders a shared-screen card for non-live Party Rooms.
 - The card shows room code, source type, source id, and opens shared playback through existing Player navigation.
+- The normal Party Room feed area keeps host/viewer bubbles below the source card in a five-across, two-row-visible scroll grid instead of a competing Live Stage overlay.
 - Comments are backed by `watch_party_room_messages` through `sendPartyMessage(...)`.
 - The Party Room route does not navigate creator-video or platform-title watch parties into `/watch-party/live-stage/[partyId]`.
 
@@ -82,7 +85,8 @@ Watch-Party Live participant rules:
 
 - Participants appear below the shared source/screen.
 - Participant strip/grid supports host, viewer, muted, speaker, and reaction state.
-- The bottom participant strip can remain as a compact quick-access layer as long as the content-first screen remains readable.
+- The visible Party Room feed grid should show up to ten bubbles at a glance, five across and two rows high, then scroll for additional room members.
+- The bottom Live Stage participant strip must not compete with the content-first Party Room surface.
 
 ## 6. Host Tile Rules
 

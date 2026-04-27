@@ -171,6 +171,10 @@ type FloatingReaction = {
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
 const ROOM_HEARTBEAT_INTERVAL_MILLIS = 10_000;
+const WATCH_PARTY_LIVE_FEED_COLUMNS = 5;
+const WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS = 2;
+const WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT = 102;
+const WATCH_PARTY_LIVE_FEED_GAP = 8;
 
 const isAccessSheetReason = (reason: string | null | undefined): reason is AccessSheetReason => (
   reason === "premium_required" || reason === "party_pass_required"
@@ -1526,6 +1530,12 @@ export default function WatchPartyRoomScreen() {
     () => liveBubbleParticipants.filter((participant) => !hiddenParticipantIds[participant.userId]),
     [hiddenParticipantIds, liveBubbleParticipants],
   );
+  const watchPartyLiveFeedSpacerCount = visibleLiveBubbleParticipants.length > 0
+    ? (WATCH_PARTY_LIVE_FEED_COLUMNS - (visibleLiveBubbleParticipants.length % WATCH_PARTY_LIVE_FEED_COLUMNS)) % WATCH_PARTY_LIVE_FEED_COLUMNS
+    : 0;
+  const watchPartyLiveFeedCountLabel = visibleLiveBubbleParticipants.length > 0
+    ? `${visibleLiveBubbleParticipants.length} ${visibleLiveBubbleParticipants.length === 1 ? "feed" : "feeds"}`
+    : "Feeds syncing";
   const currentUserBubbleId = trackedUserId;
   const inviteableRoomParticipants = useMemo(
     () => liveBubbleParticipants
@@ -2300,39 +2310,41 @@ export default function WatchPartyRoomScreen() {
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
     <View style={styles.outerFlex}>
-      <LiveBottomStrip
-        participants={bottomStripEntries}
-        currentUserId={currentUserBubbleId}
-        dominantSpeakerId={dominantLiveSpeakerId}
-        speakingById={isSpeakingById}
-        myCameraPreviewUrl={myCameraPreviewUrlRef.current}
-        allowCameraPreview={isNativeCameraPlatform}
-        cameraPermissionGranted={!!cameraPermission?.granted}
-        tapPulseById={tapPulseById}
-        pointerEvents="box-none"
-        onParticipantPress={onBottomStripParticipantPress}
-        styles={{
-          overlay: styles.bottomLiveStripOverlay,
-          content: styles.bottomLiveStripContent,
-          touchable: styles.bottomLiveBubbleTouchable,
-          tapWrap: styles.liveBubbleTapWrap,
-          tapWrapPulsed: styles.liveBubbleTapWrapPulsed,
-          bubble: styles.bottomLiveBubble,
-          bubbleSpeaking: styles.bottomLiveBubbleSpeaking,
-          bubbleDominant: styles.bottomLiveBubbleDominant,
-          ring: styles.bottomLiveBubbleRing,
-          ringDominant: styles.bottomLiveBubbleRingDominant,
-          faceClip: styles.bottomLiveBubbleFaceClip,
-          cameraFill: styles.bottomLiveBubbleCameraFill,
-          cameraDominant: styles.bottomLiveBubbleCameraDominant,
-          image: styles.bottomLiveBubbleImage,
-          initialText: styles.bottomLiveBubbleInitial,
-          presenceDot: styles.bottomLiveBubblePresenceDot,
-          presenceDotLive: styles.bottomLiveBubblePresenceDotLive,
-          presenceDotIdle: styles.bottomLiveBubblePresenceDotIdle,
-          mutedIconText: styles.bottomLiveBubbleMutedIcon,
-        }}
-      />
+      {isLiveRoom ? (
+        <LiveBottomStrip
+          participants={bottomStripEntries}
+          currentUserId={currentUserBubbleId}
+          dominantSpeakerId={dominantLiveSpeakerId}
+          speakingById={isSpeakingById}
+          myCameraPreviewUrl={myCameraPreviewUrlRef.current}
+          allowCameraPreview={isNativeCameraPlatform}
+          cameraPermissionGranted={!!cameraPermission?.granted}
+          tapPulseById={tapPulseById}
+          pointerEvents="box-none"
+          onParticipantPress={onBottomStripParticipantPress}
+          styles={{
+            overlay: styles.bottomLiveStripOverlay,
+            content: styles.bottomLiveStripContent,
+            touchable: styles.bottomLiveBubbleTouchable,
+            tapWrap: styles.liveBubbleTapWrap,
+            tapWrapPulsed: styles.liveBubbleTapWrapPulsed,
+            bubble: styles.bottomLiveBubble,
+            bubbleSpeaking: styles.bottomLiveBubbleSpeaking,
+            bubbleDominant: styles.bottomLiveBubbleDominant,
+            ring: styles.bottomLiveBubbleRing,
+            ringDominant: styles.bottomLiveBubbleRingDominant,
+            faceClip: styles.bottomLiveBubbleFaceClip,
+            cameraFill: styles.bottomLiveBubbleCameraFill,
+            cameraDominant: styles.bottomLiveBubbleCameraDominant,
+            image: styles.bottomLiveBubbleImage,
+            initialText: styles.bottomLiveBubbleInitial,
+            presenceDot: styles.bottomLiveBubblePresenceDot,
+            presenceDotLive: styles.bottomLiveBubblePresenceDotLive,
+            presenceDotIdle: styles.bottomLiveBubblePresenceDotIdle,
+            mutedIconText: styles.bottomLiveBubbleMutedIcon,
+          }}
+        />
+      ) : null}
       {backgroundSource ? (
         <View style={styles.fullBackground} pointerEvents="none">
           <ImageBackground
@@ -2382,6 +2394,8 @@ export default function WatchPartyRoomScreen() {
           </View>
         </View>
 
+        {renderWatchPartyLiveDeck()}
+
         {!isLiveRoom && (
           <View style={styles.syncStatusCard}>
             <Text style={styles.syncStatusTitle}>{roleStatusTitle}</Text>
@@ -2397,14 +2411,19 @@ export default function WatchPartyRoomScreen() {
           <Text style={styles.liveRoomSubtext}>{roomCardSubtext}</Text>
         </View>
 
-        {renderWatchPartyLiveDeck()}
-
         <View style={styles.liveBubblesSection}>
-          <Text style={styles.sectionKicker}>IN THE ROOM</Text>
+          <View style={styles.liveBubblesHeader}>
+            <View style={styles.liveBubblesHeaderCopy}>
+              <Text style={styles.sectionKicker}>LIVE FEEDS</Text>
+              <Text style={styles.liveBubblesSubtitle}>Host and viewers stay below the screen.</Text>
+            </View>
+            <Text style={styles.liveBubblesCount}>{watchPartyLiveFeedCountLabel}</Text>
+          </View>
           <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.liveBubblesRow}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            style={styles.liveBubblesGridScroll}
+            contentContainerStyle={styles.liveBubblesGridWrap}
           >
             {visibleLiveBubbleParticipants.map((participant, index) => {
               const participantState = participantStateById[participant.userId] ?? {
@@ -2599,6 +2618,12 @@ export default function WatchPartyRoomScreen() {
                 </TouchableOpacity>
               );
             })}
+            {Array.from({ length: watchPartyLiveFeedSpacerCount }).map((_, spacerIndex) => (
+              <View
+                key={`watch-party-live-feed-spacer-${spacerIndex}`}
+                style={styles.liveBubbleGridSpacer}
+              />
+            ))}
           </ScrollView>
         </View>
 
@@ -2991,27 +3016,64 @@ const styles = StyleSheet.create({
 
   // Live participant bubbles
   liveBubblesSection: {
-    gap: 0,
-    borderRadius: 15,
+    gap: 11,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
-    backgroundColor: "rgba(8,10,16,0.66)",
-    paddingHorizontal: 11,
-    paddingVertical: 11,
+    borderColor: "rgba(141,176,255,0.28)",
+    backgroundColor: "rgba(7,10,18,0.84)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     shadowColor: "#000",
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
-  liveBubblesRow: {
-    alignItems: "stretch",
-    paddingVertical: 2,
-    paddingRight: 10,
+  liveBubblesHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     gap: 12,
   },
+  liveBubblesHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  liveBubblesSubtitle: {
+    color: "#B8C2D7",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  liveBubblesCount: {
+    color: "#DCE7FF",
+    fontSize: 11,
+    fontWeight: "900",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(184,212,255,0.28)",
+    backgroundColor: "rgba(103,139,212,0.18)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  liveBubblesGridScroll: {
+    maxHeight: (WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT * WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS)
+      + (WATCH_PARTY_LIVE_FEED_GAP * (WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS - 1))
+      + 4,
+  },
+  liveBubblesGridWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "stretch",
+    gap: WATCH_PARTY_LIVE_FEED_GAP,
+    paddingBottom: 2,
+  },
+  liveBubbleGridSpacer: {
+    width: "18%",
+    minHeight: WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT,
+  },
   liveBubbleItem: {
-    width: 76,
-    minHeight: 86,
+    width: "18%",
+    minHeight: WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
@@ -3028,13 +3090,11 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   liveBubbleItemExpanded: {
-    width: 84,
-    minHeight: 108,
+    minHeight: WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT,
     borderColor: "rgba(140,176,255,0.5)",
     backgroundColor: "rgba(40,54,88,0.52)",
   },
   liveBubbleItemActive: {
-    width: 88,
     borderColor: "rgba(178,210,255,0.86)",
     shadowColor: "rgba(120,162,255,0.82)",
     shadowOpacity: 0.28,
@@ -3042,9 +3102,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
   liveBubbleItemFeatured: {
-    width: 112,
-    minHeight: 124,
-    marginHorizontal: 4,
+    minHeight: WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT,
     borderColor: "rgba(228,238,255,0.58)",
     backgroundColor: "rgba(42,56,92,0.68)",
     shadowColor: "rgba(180,205,255,0.86)",
@@ -3056,9 +3114,9 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   liveBubble: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.22)",
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -3067,9 +3125,9 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   liveBubbleExpanded: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderColor: "rgba(140,176,255,0.58)",
     backgroundColor: "rgba(104,149,255,0.2)",
   },
@@ -3083,10 +3141,9 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.02 }],
   },
   liveBubbleFeatured: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    marginHorizontal: 5,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderColor: "rgba(234,241,255,0.62)",
     shadowColor: "rgba(180,205,255,0.9)",
     shadowOpacity: 0.36,
@@ -3094,9 +3151,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
   liveBubbleMe: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderColor: "rgba(104,149,255,0.75)",
     backgroundColor: "rgba(104,149,255,0.2)",
   },
@@ -3157,7 +3214,7 @@ const styles = StyleSheet.create({
   liveBubbleCameraDominant: {
     opacity: 0.99,
   },
-  liveBubbleInitials: { color: "#E7E7E7", fontSize: 14, fontWeight: "900", letterSpacing: 0.4 },
+  liveBubbleInitials: { color: "#E7E7E7", fontSize: 12, fontWeight: "900", letterSpacing: 0.4 },
   liveBubbleInitialsMe: { color: "#fff" },
   liveBubbleOnlineDot: {
     position: "absolute",
@@ -3194,21 +3251,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 1,
   },
-  liveBubbleHostBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
-  liveBubbleName: { color: "#BEBEBE", fontSize: 11, fontWeight: "700", maxWidth: 72, textAlign: "center" },
-  liveBubbleNameExpanded: { fontSize: 13, color: "#E5EBF8", fontWeight: "800" },
+  liveBubbleHostBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  liveBubbleName: { color: "#BEBEBE", fontSize: 9.5, fontWeight: "700", maxWidth: "100%", textAlign: "center" },
+  liveBubbleNameExpanded: { fontSize: 10.5, color: "#E5EBF8", fontWeight: "800" },
   liveBubbleNameFocused: { color: "#EDF3FF", fontWeight: "800" },
-  liveBubbleNameFeatured: { fontSize: 14, fontWeight: "900", color: "#F4F7FF" },
+  liveBubbleNameFeatured: { fontSize: 10.5, fontWeight: "900", color: "#F4F7FF" },
   liveBubbleRole: {
     marginTop: -1,
     color: "#97A1B5",
-    fontSize: 8.5,
+    fontSize: 7.5,
     fontWeight: "800",
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
   },
   liveBubbleRoleSpeaking: {
