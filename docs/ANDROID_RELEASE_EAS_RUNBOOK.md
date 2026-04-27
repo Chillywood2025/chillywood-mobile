@@ -27,7 +27,9 @@ This runbook is not proof that the current `main` commit has a passing release b
 | Expo owner | `chillywood2025` |
 | Expo project id | `c384ed57-5454-4e80-81ad-dcc218b8a3c8` |
 | Runtime version policy | `appVersion` |
+| EAS app version source | `remote` in `eas.json` |
 | App version | `1.0.0` |
+| Android versionCode strategy | EAS remote app version management; production builds use `autoIncrement: true` |
 | Android package id | `com.chillywood.mobile` |
 | URL scheme | `chillywoodmobile` |
 | Production update channel | `production` through the `production` EAS profile |
@@ -38,6 +40,7 @@ This runbook is not proof that the current `main` commit has a passing release b
 | Current HEAD at lane audit | `23168e49dc8342bb573dbb06695ff2ef2328922a` |
 | Build run in this lane | No |
 | Submit run in this lane | No |
+| Latest EAS version read check | `npx eas-cli build:version:get --platform android --profile production --json` returned `{}` after enabling remote source, so the remote Android version record still needs release-owner initialization/verification before any Play upload |
 
 ## Official Setup References
 
@@ -50,18 +53,20 @@ Current Expo docs say EAS Build is the hosted service that creates Android/iOS b
 
 ## EAS Config Status
 
-`eas.json` exists and defines three build profiles plus one submit profile.
+`eas.json` exists and defines three build profiles plus one submit profile. It now sets `cli.appVersionSource` to `remote`, which is the safer strategy for this repo because Google Play requires every uploaded Android artifact to use a strictly higher `versionCode`. The app-facing version name remains in repo config as Expo `version: 1.0.0`, while Android build numbers are managed by EAS server-side state.
 
 | Profile | Purpose | Current settings | Build artifact expectation | Status |
 | --- | --- | --- | --- | --- |
 | `development` | Dev client/internal testing | `developmentClient: true`, `distribution: internal`, `channel: development` | Android internal dev-client build | Implemented / Proof Pending |
 | `preview` | Internal release-like testing | `developmentClient: false`, `distribution: internal`, `channel: preview` | Android internal build, likely APK unless EAS default changes or an Android build type is added | Implemented / Proof Pending |
-| `production` | Play Store candidate | `distribution: store`, `channel: production`, Android `buildType: app-bundle` | Android App Bundle (`.aab`) | Implemented / Proof Pending |
+| `production` | Play Store candidate | `autoIncrement: true`, `distribution: store`, `channel: production`, Android `buildType: app-bundle` | Android App Bundle (`.aab`) with EAS-managed Android build number | Implemented / Proof Pending |
 | `submit.production` | Future Play submission | Empty submit profile exists | Requires Play service account / first manual upload requirements before use | External Setup Pending |
 
 What is ready:
 
 - Production profile already targets a store-distribution Android app bundle.
+- `cli.appVersionSource` is set to `remote`, removing the EAS warning about missing app version source.
+- Production builds are configured to auto-increment the EAS-managed Android build number.
 - EAS project id and Expo Updates URL are configured.
 - The package id is present, which is required for Google Play submission.
 - EAS CLI can read the project and the local Expo session is authenticated.
@@ -70,7 +75,7 @@ What is ready:
 What remains:
 
 - Current `main` has not been release-built in this lane.
-- `versionCode` is not explicitly configured in `app.json` / `app.config.ts`. Previous production builds showed version code `1`; the release owner must decide whether to set/increment `android.versionCode` manually or use EAS remote app version management before any next Play upload.
+- `android.versionCode` is intentionally not configured locally because `remote` app version source is the selected strategy. The latest read-only EAS version check returned `{}`, so before the next Play upload the release owner must initialize or sync the remote EAS Android build number with `npx eas-cli build:version:set --platform android --profile production` and verify it is greater than any `versionCode` already accepted by Google Play.
 - `eas.json` does not set an `environment` field on build profiles. Release env values must therefore be confirmed through EAS project environment variables, local shell for local commands, or explicit profile updates in a later approved config lane.
 - No `.easignore` exists. The project currently relies on `.gitignore` plus EAS defaults; this is acceptable for this prep lane, but release owner should review build upload contents before first production proof.
 
@@ -81,7 +86,7 @@ What remains:
 | Package / application id | `com.chillywood.mobile` in `app.json` | Correct target for Play/RevenueCat lane |
 | App name | `Chi'llywood` in `app.json` | Ready, subject to final listing review |
 | Version name | `1.0.0` from Expo `version` | Ready for first Public v1 candidate if product owner approves |
-| Version code | Not explicitly configured; older EAS builds reported version code `1` | Must be managed/incremented before each Play upload |
+| Version code | EAS remote app version source with production `autoIncrement: true`; latest remote read returned `{}` and older EAS builds reported version code `1` | Initialize/verify remote value before each Play upload |
 | Scheme / deep links | `chillywoodmobile` | Present; deep-link smoke remains proof-pending |
 | Runtime version | `{ "policy": "appVersion" }` | Ready; OTA updates must respect runtime compatibility |
 | Updates URL | Expo Updates URL matches the EAS project id | Ready by config, proof-pending in release build |
@@ -205,10 +210,17 @@ Check EAS account/project state without creating a build:
 ```bash
 npx eas-cli whoami
 npx eas-cli build:list --platform android --limit 3 --non-interactive
+npx eas-cli build:version:get --platform android --profile production --json
 npx eas-cli credentials --platform android
 ```
 
-Use `credentials` interactively only to verify or prepare signing. Do not paste credential details into docs or chat.
+Use `credentials` interactively only to verify or prepare signing. Use `build:version:set` interactively only after the release owner has confirmed the highest Android `versionCode` already uploaded to Play Console:
+
+```bash
+npx eas-cli build:version:set --platform android --profile production
+```
+
+Do not paste credential details, Play Console private information, or secrets into docs or chat.
 
 Create a release-like internal preview build when approved:
 
@@ -265,7 +277,7 @@ Before production AAB:
 5. Complete Supabase live RLS/storage proof.
 6. Complete LiveKit production network proof.
 7. Confirm EAS signing credentials.
-8. Confirm `versionCode` increment strategy.
+8. Verify or initialize EAS remote Android build number state and ensure the next production build number is higher than any Play-uploaded `versionCode`.
 9. Run static validation.
 10. Create the production AAB with the command above.
 
@@ -288,7 +300,7 @@ After production AAB:
 | EAS login | Proof Pending | Local session was authenticated during audit, but this is machine/user state | Release owner verifies before build |
 | Android signing credentials | External Setup Pending | Not inspected or generated in this lane | Run `npx eas-cli credentials --platform android` manually |
 | Play App Signing | External Setup Pending | Play Console state not inspected | Confirm in Play Console during first upload |
-| Version code strategy | External Setup Pending | No explicit `android.versionCode`; older builds used version code `1` | Set/increment before next Play upload or configure EAS version management |
+| Version code strategy | Implemented / Proof Pending | `cli.appVersionSource` is `remote` and production uses `autoIncrement: true`; latest remote read returned `{}` and older builds used version code `1` | Initialize/verify remote EAS Android build number before next Play upload |
 | Production env vars | External Setup Pending | Runtime owners exist; release dashboard values need confirmation | Configure EAS production env and run `npm run validate:runtime` |
 | Firebase Android config | Implemented / Proof Pending | `google-services.json` exists and package matches | Prove Crashlytics/Performance in internal build |
 | Native dependencies | Implemented / Proof Pending | Native packages/plugins are present | Fresh build required for current native stack |
@@ -298,4 +310,4 @@ After production AAB:
 
 ## Exact Next Action
 
-Release owner should verify EAS Android credentials for `com.chillywood.mobile`, decide the version-code management strategy, configure the EAS production environment values, then run a preview Android build after the current Creator Media and route proof lanes are green. Do not run the production AAB until signing, environment, legal/store, Supabase, LiveKit, Firebase, and Premium setup blockers are intentionally cleared or documented as launch-pending.
+Release owner should verify EAS Android credentials for `com.chillywood.mobile`, initialize/confirm the remote EAS Android build number, configure the EAS production environment values, then run a preview Android build after the current Creator Media and route proof lanes are green. Do not run the production AAB until signing, environment, legal/store, Supabase, LiveKit, Firebase, and Premium setup blockers are intentionally cleared or documented as launch-pending.
