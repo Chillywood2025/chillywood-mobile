@@ -1,5 +1,6 @@
 import "../../_lib/livekit/dom-exception-polyfill";
 
+import { CameraView } from "expo-camera";
 import { Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
@@ -206,12 +207,17 @@ function LiveKitStageMediaContent({
             return (
               <View key={trackKey} style={styles.bubbleGridItem} collapsable={false}>
                 <View style={styles.bubbleVideoWrap} collapsable={false}>
-                  <VideoTrack
-                    trackRef={trackRef}
-                    style={styles.bubbleVideo}
-                    objectFit="cover"
-                    mirror={isLocalParticipant}
-                  />
+                  {isLocalParticipant ? (
+                    <CameraView style={styles.bubbleVideo} facing="front" mute mirror />
+                  ) : (
+                    <VideoTrack
+                      trackRef={trackRef}
+                      style={styles.bubbleVideo}
+                      objectFit="cover"
+                      mirror={false}
+                      zOrder={0}
+                    />
+                  )}
                 </View>
                 <Text style={styles.bubbleLabel} numberOfLines={1}>
                   {getParticipantLabel(trackRef.participant.identity, localParticipant.identity)}
@@ -348,14 +354,14 @@ export function LiveKitStageMediaSurface({
   const publishLocalCamera = joinContract.participantRole !== "viewer";
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const room = useMemo(() => {
-    const nextRoom = new Room({ adaptiveStream: true, dynacast: false });
+    const nextRoom = new Room({ adaptiveStream: layout !== "bubble-grid", dynacast: false });
     patchLiveKitSignalReadingLoop(
       nextRoom,
       surfaceLabel,
       () => tearingDownRoomsRef.current.has(nextRoom),
     );
     return nextRoom;
-  }, [joinContract.participantToken, joinContract.roomName, surfaceLabel]);
+  }, [joinContract.participantToken, joinContract.roomName, layout, surfaceLabel]);
 
   const triggerFallback = useCallback(
     (reason: "connection_timeout" | "disconnected" | "room_error", error?: unknown) => {
@@ -513,19 +519,19 @@ const styles = StyleSheet.create({
   bubbleGridContent: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 8,
     alignItems: "flex-start",
     paddingBottom: 6,
   },
   bubbleGridItem: {
-    width: 66,
+    width: 82,
     alignItems: "center",
     gap: 4,
   },
   bubbleVideoWrap: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
@@ -534,6 +540,7 @@ const styles = StyleSheet.create({
   bubbleVideo: {
     width: "100%",
     height: "100%",
+    borderRadius: 39,
   },
   bubbleLabel: {
     width: "100%",
