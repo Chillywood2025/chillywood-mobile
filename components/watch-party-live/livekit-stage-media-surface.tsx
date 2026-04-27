@@ -197,39 +197,42 @@ function LiveKitStageMediaContent({
 
   if (layout === "bubble-grid") {
     if (bubbleGridTracks.length > 0) {
-      return (
-        <View style={styles.bubbleGridSurface}>
-          <ScrollView
-            style={styles.bubbleGridScroll}
-            contentContainerStyle={styles.bubbleGridContent}
-            showsVerticalScrollIndicator={bubbleGridTracks.length > 10}
-            nestedScrollEnabled
-          >
-            {bubbleGridTracks.map((trackRef) => {
-              const isLocalParticipant = trackRef.participant.identity === localParticipant.identity;
-              const trackKey = [
-                trackRef.participant.identity,
-                trackRef.source,
-                trackRef.publication.trackSid ?? "track",
-              ].join(":");
+      const bubbleGridContent = (
+        <View style={styles.bubbleGridContent} collapsable={false}>
+          {bubbleGridTracks.map((trackRef) => {
+            const isLocalParticipant = trackRef.participant.identity === localParticipant.identity;
+            const trackKey = `${trackRef.participant.identity}:${trackRef.source}`;
 
-              return (
-                <View key={trackKey} style={styles.bubbleGridItem}>
-                  <View style={styles.bubbleVideoWrap}>
-                    <VideoTrack
-                      trackRef={trackRef}
-                      style={styles.bubbleVideo}
-                      objectFit="cover"
-                      mirror={isLocalParticipant}
-                    />
-                  </View>
-                  <Text style={styles.bubbleLabel} numberOfLines={1}>
-                    {getParticipantLabel(trackRef.participant.identity, localParticipant.identity)}
-                  </Text>
+            return (
+              <View key={trackKey} style={styles.bubbleGridItem} collapsable={false}>
+                <View style={styles.bubbleVideoWrap} collapsable={false}>
+                  <VideoTrack
+                    trackRef={trackRef}
+                    style={styles.bubbleVideo}
+                    objectFit="cover"
+                    mirror={isLocalParticipant}
+                  />
                 </View>
-              );
-            })}
-          </ScrollView>
+                <Text style={styles.bubbleLabel} numberOfLines={1}>
+                  {getParticipantLabel(trackRef.participant.identity, localParticipant.identity)}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      );
+
+      return (
+        <View style={styles.bubbleGridSurface} collapsable={false}>
+          {bubbleGridTracks.length > 10 ? (
+            <ScrollView
+              style={styles.bubbleGridScroll}
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+            >
+              {bubbleGridContent}
+            </ScrollView>
+          ) : bubbleGridContent}
         </View>
       );
     }
