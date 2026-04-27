@@ -1,6 +1,6 @@
 # Play Store Listing And Content Rating Runbook
 
-Date: 2026-04-26
+Date: 2026-04-27
 
 Lane: Store listing assets / content rating checklist
 
@@ -40,7 +40,7 @@ Current official Google Play guidance says store listing preview assets include 
 | App version | `1.0.0` in `app.json` and `package.json` | Implemented / Proof Pending |
 | Expo slug | `chillywood-mobile` | Implemented |
 | Category posture | Social streaming / entertainment app with creator upload, Player, Watch-Party, Live, Chat, Premium, and safety surfaces | External Setup Pending |
-| Legal routes | `/privacy`, `/terms`, `/account-deletion`, `/community-guidelines`, `/copyright`, `/support` | Implemented / Proof Pending |
+| Legal routes | `/privacy`, `/terms`, `/account-deletion`, `/community-guidelines`, `/copyright`, `/support`; pages are expanded structured draft policies, not short placeholders | Implemented / Proof Pending |
 | Hosted legal URL fallbacks | Privacy, Terms, and Account Deletion fallback URLs exist in `app.config.ts` | External Setup Pending until final approval |
 | Data Safety prep | `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` maps data categories | External Setup Pending |
 | Android release prep | `docs/ANDROID_RELEASE_EAS_RUNBOOK.md` maps build/signing path | External Setup Pending |
@@ -397,13 +397,13 @@ Chi'llywood has UGC and user interaction. Store readiness must cover:
 
 | Requirement area | Current repo truth | Status | Next action |
 | --- | --- | --- | --- |
-| Terms/user policy | `/terms` and `/community-guidelines` exist | Implemented / Proof Pending | Legal approval and Play-visible public URL proof. |
-| UGC rules | Community Guidelines cover creator uploads, chat, rooms, Live Stage, and reporting | Implemented / Proof Pending | Confirm final policy copy and hosted URL. |
+| Terms/user policy | `/terms` and `/community-guidelines` exist with expanded Profile/Channel, UGC, creator upload, room, live, chat, Premium, moderation, and legal-review sections | Implemented / Proof Pending | Legal approval and Play-visible public URL proof. |
+| UGC rules | Community Guidelines cover creator uploads, live rooms, Watch-Party, chat/messages/comments/reactions, copyright/media rights, minor safety, reporting, enforcement, repeat violations, and manual review posture | Implemented / Proof Pending | Confirm final policy copy and hosted URL. |
 | Report abuse | Report sheet/moderation helper/player/admin foundation exists | Implemented / Proof Pending | Prove report writes and admin review on launch backend. |
 | Blocking users | Audience/blocking foundations exist in docs and `channel_audience_blocks`; direct 1:1 block UX/proof is not fully proven | Partial / Proof Pending | Evaluate whether Play's UGC/direct interaction policy requires a visible block action before launch. |
 | Admin moderation | `app/admin.tsx`, `safety_reports`, `videos.moderation_status` exist | Implemented / Proof Pending | Prove non-admin denial and admin hide/remove/restore. |
-| DMCA/copyright | `/copyright` exists, names support path, covers takedown notice info, counter-notice posture, repeat-infringer posture, and pending DMCA agent/legal approval | Implemented / Proof Pending | Legal review, final DMCA agent/contact decision, any required designated-agent registration, and public hosted page proof. |
-| Account deletion/data deletion | `/account-deletion` and support handoff exist | External Setup Pending | Final deletion process/SLA and Play Console acceptance. |
+| DMCA/copyright | `/copyright` exists, names support path, covers takedown notice info, required notice information, possible actions, counter-notice placeholder, repeat-infringer posture, false-notice warning, and pending DMCA agent/legal approval | Implemented / Proof Pending | Legal review, final DMCA agent/contact decision, any required designated-agent registration, and public hosted page proof. |
+| Account deletion/data deletion | `/account-deletion` and support handoff exist with request-based status, deletion/retention categories, uploaded-content handling, subscriptions, identity verification, and backend-approval caveats | External Setup Pending | Final deletion process/SLA and Play Console acceptance. |
 | Minor safety | Legal pages state 18+ | External Setup Pending | Confirm target audience, age restriction, and policy copy in Play Console. |
 | Terms acceptance at signup | Signup route now visibly says account creation agrees to Terms of Service, Privacy Policy, and Community Guidelines, with links to each bundled route | Implemented / Proof Pending | Attorney/legal approval and Android/release smoke that links open correctly. |
 
@@ -460,7 +460,7 @@ Important UGC legal readiness still pending before final store submission:
 | Data Safety consistency | External Setup Pending | Data Safety runbook exists, Play form not completed | Fill Play Console after SDK/legal review |
 | Content rating | External Setup Pending | Prep matrix exists, official questionnaire not completed | Complete Play content rating questionnaire |
 | Target audience | External Setup Pending | Legal copy says 18+, Play target decision not entered/proved | Select accurate target age and consider Restrict Minor Access |
-| UGC policy readiness | Implemented / Proof Pending | Guidelines/report/admin/copyright surfaces exist, and signup now includes explicit Terms/Privacy/Guidelines acceptance copy; legal approval and runtime proof remain | Prove signup links, report/admin, hosted URLs, and final legal approval |
+| UGC policy readiness | Implemented / Proof Pending | Expanded Guidelines/report/admin/copyright/support surfaces exist, and signup now includes explicit Terms/Privacy/Guidelines acceptance copy; legal approval and runtime proof remain | Prove signup links, report/admin, hosted URLs, and final legal approval |
 | Store upload/submission | External Setup Pending | No upload/submission run in this lane | Upload AAB only after release proof |
 
 ## Exact Next Action

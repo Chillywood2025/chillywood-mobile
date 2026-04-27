@@ -36,6 +36,15 @@ const CLOSED_BETA_FLOWS = [
   "Safety reports after sign-in is fully restored for beta accounts.",
 ];
 
+const SUPPORT_CATEGORIES = [
+  "Account help: sign-in, logout, account access, Settings, legal links, and account deletion requests.",
+  "Billing and Premium help: subscription status, restore purchase, Premium gating, and store-managed cancellation questions.",
+  "Creator upload help: Channel Settings upload, draft/public visibility, creator-video playback, and upload errors.",
+  "Report abuse and safety: creator videos, profiles/channels, rooms, live behavior, chat/message issues, harassment, impersonation, and unsafe content.",
+  "Copyright and DMCA: takedown notices, counter-notice questions, unauthorized media, and creator upload rights concerns.",
+  "Product reliability: playback, Watch-Party, Live Stage, Chi'lly Chat, crash, performance, and confusing route behavior.",
+];
+
 export function SupportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -82,7 +91,7 @@ export function SupportScreen() {
         : "Use this support surface if you need the current Terms of Use while the public legal URL is not configured in this build.";
     }
 
-    return "Open the current Privacy Policy, review the Terms of Use, check community and copyright policies, or request account deletion from the same support surface that already owns signed-in feedback and launch help.";
+    return "Open the current Privacy Policy, review the Terms of Use, check community and copyright policies, or request account deletion from the same support surface that already owns signed-in feedback and launch help. Final support response timing and legal wording remain pending launch-owner approval.";
   }, [legalConfig.accountDeletionUrl, legalConfig.privacyPolicyUrl, legalConfig.termsOfServiceUrl, topic]);
 
   const legalCardTitle = useMemo(() => {
@@ -362,6 +371,25 @@ export function SupportScreen() {
               <Text style={styles.metaText}>Support contact: {legalConfig.supportEmail}</Text>
             </TouchableOpacity>
           ) : null}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Support categories</Text>
+          <Text style={styles.cardBody}>
+            Use support for account and launch help, but use the in-app report path when you need to report abuse or unsafe content tied to a specific video, room, profile, or message.
+          </Text>
+          <View style={styles.list}>
+            {SUPPORT_CATEGORIES.map((item) => (
+              <Text key={item} style={styles.listItem}>• {item}</Text>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Safety and response expectations</Text>
+          <Text style={styles.cardBody}>
+            Chi&apos;llywood Support is not an emergency service. If there is immediate danger, contact local emergency services or the appropriate authority first. Public v1 support response timing, escalation ownership, and legal takedown workflows are launch-readiness items pending final owner approval.
+          </Text>
         </View>
 
         <View style={styles.card}>

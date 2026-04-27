@@ -1,6 +1,6 @@
 # Account, Legal, And Play Data Safety Runbook
 
-Date: 2026-04-26
+Date: 2026-04-27
 
 Lane: Account deletion / legal URLs / Play Data Safety
 
@@ -29,22 +29,25 @@ Use current official docs during final setup because requirements can change:
 | Surface | Route / config | Reachable from Settings | Reachable from Support | Current status | External URL/domain need |
 | --- | --- | --- | --- | --- | --- |
 | Signup acceptance | `app/(auth)/signup.tsx` | N/A | N/A | Signup now shows visible Terms of Service, Privacy Policy, and Community Guidelines acceptance copy with links before account creation; Android/release smoke still pending | Final wording needs attorney/legal approval before launch |
-| Privacy Policy | `app/privacy.tsx`; runtime env `EXPO_PUBLIC_PRIVACY_POLICY_URL`; fallback `https://live.chillywoodstream.com/privacy` | Yes; Settings opens configured external URL first, otherwise bundled `/privacy` | Yes | Route exists; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Privacy Policy URL must be approved and entered in Play Console |
-| Terms of Service | `app/terms.tsx`; runtime env `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`; fallback `https://live.chillywoodstream.com/terms` | Yes; Settings opens configured external URL first, otherwise bundled `/terms` | Yes | Route exists; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Terms URL must be approved and available without login |
-| Account Deletion | `app/account-deletion.tsx`; runtime env `EXPO_PUBLIC_ACCOUNT_DELETION_URL`; fallback `https://live.chillywoodstream.com/account-deletion` | Yes; Settings opens configured external URL first, otherwise bundled `/account-deletion` | Yes; signed-in support can start request/help | Request-based; no destructive deletion runs in app; configured fallback returned HTTP 200 during this audit; final backend/support process pending | Final public account deletion URL must be approved, reachable without login where Play requires it, and entered in Play Console |
-| Support | `app/support.tsx`, `components/system/support-screen.tsx`; runtime env `EXPO_PUBLIC_SUPPORT_EMAIL` | Settings links to support/account help surfaces indirectly through legal/account controls | Yes | Support route exists; signed-in feedback support is backed by current support queue owner; support email must be confirmed | Public support URL/email and support ownership/SLA must be confirmed |
-| Community Guidelines / Content Policy | `app/community-guidelines.tsx` | Yes | Yes | Bundled route exists; legal/content policy review pending | Public hosted URL is recommended before Play listing submission |
-| Copyright / DMCA | `app/copyright.tsx` | Yes | Yes | Bundled route exists; copyright contact path uses Chi'llywood Support; legal review pending | Public hosted URL and DMCA contact/process should be confirmed before store submission |
+| Privacy Policy | `app/privacy.tsx`; runtime env `EXPO_PUBLIC_PRIVACY_POLICY_URL`; fallback `https://live.chillywoodstream.com/privacy` | Yes; Settings opens configured external URL first, otherwise bundled `/privacy` | Yes | Expanded route exists with account/profile/channel, uploads, chat, room, billing, diagnostics, provider, retention, deletion, and safety/legal data categories; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Privacy Policy URL must be approved and entered in Play Console |
+| Terms of Service | `app/terms.tsx`; runtime env `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`; fallback `https://live.chillywoodstream.com/terms` | Yes; Settings opens configured external URL first, otherwise bundled `/terms` | Yes | Expanded route exists with acceptance, Profile/Channel, UGC, creator upload, Watch-Party/Live/Chat, Premium, moderation, liability/indemnification placeholders, and legal-review notices; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Terms URL must be approved and available without login |
+| Account Deletion | `app/account-deletion.tsx`; runtime env `EXPO_PUBLIC_ACCOUNT_DELETION_URL`; fallback `https://live.chillywoodstream.com/account-deletion` | Yes; Settings opens configured external URL first, otherwise bundled `/account-deletion` | Yes; signed-in support can start request/help | Expanded request-based page exists; no destructive deletion runs in app; configured fallback returned HTTP 200 during this audit; final backend/support process pending | Final public account deletion URL must be approved, reachable without login where Play requires it, and entered in Play Console |
+| Support | `app/support.tsx`, `components/system/support-screen.tsx`; runtime env `EXPO_PUBLIC_SUPPORT_EMAIL` | Settings links to support/account help surfaces indirectly through legal/account controls | Yes | Support route exists with support categories, account/billing/upload/safety/copyright/deletion guidance, emergency disclaimer, signed-in feedback handoff, and pending SLA language; support email must be confirmed | Public support URL/email and support ownership/SLA must be confirmed |
+| Community Guidelines / Content Policy | `app/community-guidelines.tsx` | Yes | Yes | Expanded bundled route covers creator uploads, live rooms, Watch-Party, chat/message/comment behavior, copyright/media rights, minor safety, reporting, enforcement, repeat violations, and manual review posture; legal/content policy review pending | Public hosted URL is recommended before Play listing submission |
+| Copyright / DMCA | `app/copyright.tsx` | Yes | Yes | Expanded bundled route covers takedown notices, required notice information, possible actions, counter-notice placeholder, repeat infringer policy, false-notice warning, and pending DMCA agent/legal approval | Public hosted URL and DMCA contact/process should be confirmed before store submission |
 | Report Abuse / Safety Contact | `components/safety/report-sheet.tsx`, `_lib/moderation.ts`, `app/player/[id].tsx`, `app/admin.tsx`, Support route | Contextual report actions, not one global Settings route | Support can collect help requests | Creator-video report/admin safety foundation exists; report/admin proof still pending | Play listing/support materials should explain report-abuse path and support contact |
 
 ## Legal And UGC Protection Language Status
 
-This section is not legal advice and does not say Chi'llywood cannot be sued. It records launch-readiness language that reduces avoidable platform-risk gaps and must be approved by an attorney/legal owner before public launch.
+This section is not legal advice and does not make legal guarantees. It records launch-readiness language that reduces avoidable platform-risk gaps and must be approved by an attorney/legal owner before public launch.
 
 Implemented in this lane:
 
 - Signup now states: "By creating an account, you agree to Chi'llywood's Terms of Service, Privacy Policy, and Community Guidelines." It links to the bundled Terms, Privacy, and Community Guidelines routes.
-- Terms now say users are responsible for what they upload, stream, post, message, share, or otherwise make available.
+- Terms now say users are responsible for what they upload, stream, post, message, share, or otherwise make available, and the page now includes detailed Profile/Channel, creator upload, Watch-Party, Live, Chat, Premium, moderation, suspension, and feature-availability sections.
+- Privacy now maps account/profile/channel, creator-uploaded media, file picker, camera/microphone, chat/messages, Watch-Party/Live participation, billing/entitlement, support/report/moderation, diagnostics/crash/performance, provider, sharing, retention, deletion, and minor-safety posture.
+- Community Guidelines now read as a full platform content policy covering creator uploads, live rooms, Watch-Party, chat/messages/comments/reactions, copyright/media rights, sexual exploitation/minor safety, harassment/hate/violence, fraud/spam/malware, reporting, enforcement, repeat violations, manual review, and creator responsibility.
+- Support now includes support categories, account/billing/upload/safety/copyright/deletion guidance, response-time pending copy, and an emergency disclaimer.
 - Terms and Community Guidelines now explicitly prohibit uploading or streaming content users do not own or have rights to use, including copyrighted movies, shows, music, clips, images, pirated media, illegal content, sexual exploitation/minor-safety content, harassment, threats, hate, dangerous/violent content, scams, spam, malware, impersonation, and misleading content.
 - Terms now state that users keep ownership of their content, and grant Chi'llywood a limited license to host, store, display, stream, process/transcode if later built, distribute within the app, and make content available according to selected visibility settings.
 - Terms and Guidelines now state that Chi'llywood may remove or hide content, restrict/suspend/terminate accounts, respond to reports, preserve records when legally required or needed for safety/enforcement, cooperate with lawful requests, and enforce community rules.
@@ -170,6 +173,7 @@ Done:
 
 - Signup acceptance copy now links Terms, Privacy Policy, and Community Guidelines before account creation.
 - Bundled legal routes exist for Privacy, Terms, Account Deletion, Community Guidelines, and Copyright/DMCA.
+- Privacy, Terms, Account Deletion, Community Guidelines, Copyright/DMCA, and Support are expanded beyond placeholder pages and now contain structured, launch-ready draft content.
 - Settings links to privacy, terms, community guidelines, copyright/DMCA, and account deletion.
 - Support route provides account-deletion help and signed-in feedback handoff.
 - Configured privacy, terms, and account-deletion fallback URLs returned HTTP 200 in this audit.
