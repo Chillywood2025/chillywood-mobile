@@ -510,19 +510,19 @@ const styles = StyleSheet.create({
   bubbleGridContent: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
     alignItems: "flex-start",
     paddingBottom: 6,
   },
   bubbleGridItem: {
-    width: 58,
+    width: 66,
     alignItems: "center",
     gap: 4,
   },
   bubbleVideoWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
   bubbleLabel: {
     width: "100%",
     color: "#F6F8FE",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
     textAlign: "center",
   },
