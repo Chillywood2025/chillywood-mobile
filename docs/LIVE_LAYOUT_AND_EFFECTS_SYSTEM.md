@@ -2,7 +2,7 @@
 
 Date: 2026-04-27
 
-Status: layout and Chi’llyfects foundation implemented in code, Android/two-device runtime proof pending. Chi’llyfects status is `UI Implemented / No Camera Processing`: the catalog and controls exist, but outgoing LiveKit camera tracks are not processed. The user-approved major layout structure is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
+Status: layout and Chi’llyfects foundation implemented in code, Android/two-device runtime proof pending. Chi’llyfects status is `UI Implemented / No Camera Processing`: the catalog and controls exist, but outgoing LiveKit camera tracks are not processed. The Snap Camera Kit audit is complete in `docs/CHILLYFECTS_SNAP_CAMERA_KIT_AUDIT.md`; it recommends an Android-only POC, not production adoption, until processed LiveKit output is proven. The user-approved major layout structure is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
 
 ## 1. System Purpose
 

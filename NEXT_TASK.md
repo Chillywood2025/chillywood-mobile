@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Task
-Complete the remaining Creator Media public/draft and owner/non-owner runtime checks, then run two-device creator-video Watch-Party join/rejoin proof if practical. The Live Layout and Chi’llyfects foundation is now implemented but not runtime-proved; include it in the later live/two-device proof rather than treating this static pass as proof. Follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`: preserve the approved major layout structure, keep comments in their current visible placement, and treat controls as flexible only when the user explicitly requests a control change.
+Complete the remaining Creator Media public/draft and owner/non-owner runtime checks, then run two-device creator-video Watch-Party join/rejoin proof if practical. The Live Layout and Chi’llyfects foundation is now implemented but not runtime-proved; include it in the later live/two-device proof rather than treating this static pass as proof. The Snap Camera Kit audit is complete in `docs/CHILLYFECTS_SNAP_CAMERA_KIT_AUDIT.md` and recommends a separate Android-only POC before production adoption; real Chi’llyfects AR processing is still not implemented unless processed LiveKit output is proven. Follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`: preserve the approved major layout structure, keep comments in their current visible placement, and treat controls as flexible only when the user explicitly requests a control change.
 
 Non-proof launch-readiness bookkeeping now lives in `docs/PUBLIC_V1_READINESS_CHECKLIST.md`, with external dashboard/manual setup tracked separately in `docs/EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST.md` and command-center ownership/order in `docs/DASHBOARD_SETUP_COMMAND_CENTER.md`. The tracker now uses exact launch statuses only, and this follow-up removed developer-facing discovery empty-state copy plus raw Player source/Watch-Party console logs. Keep the next hands-on proof lane focused on Creator Media public/draft, owner/non-owner, Premium blocked-state, and creator-video Watch-Party two-device proof rather than starting later-phase systems.
 
@@ -23,11 +23,12 @@ Route/owner audit hardening is now handled for the highest-priority findings: `a
 9. Run two-device creator-video Watch-Party join proof if two phones are available: host starts room, second device joins by code, both resolve `source_type=creator_video`, no Live Stage route, no sample/platform fallback.
 10. Confirm draft/private creator videos are blocked from public Watch-Party.
 11. In a later live-layout proof, follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md` and confirm Home Live Watch-Party routes to `/watch-party/live-stage/[partyId]`, Live First and Live Watch-Party share the same Chi'lly Party Members overlay behavior, the current user's own preview is not inside that grid, other live feeds render three across with two visible rows before scrolling, free/access-granted viewers can watch without becoming a camera tile, comments remain in their current visible placement, the overlay/comments dock auto-hides after 10 seconds on initial Live Room entry and after mode switches unless controls are locked or an active panel/input is open, and Chi’llyfects opens as foundation-only/no-camera-processing.
-12. In a later Party Room proof, follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md` and confirm platform and creator Watch-Party Live remain content-first in `/watch-party/[partyId]`, with the shared source card at the top, host/viewer feed bubbles below it in a five-across/two-visible-row scroll grid, comments remain in their current visible placement, and no Live Stage route.
-13. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
-14. As owner/operator, hide/remove a creator video from `/admin` and confirm it no longer appears publicly or plays publicly.
-15. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
-16. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
+12. If Snap Camera Kit is pulled into a later POC, follow `docs/CHILLYFECTS_SNAP_CAMERA_KIT_AUDIT.md`: Android-only, no production claim, keep layout/comments locked, and prove a second LiveKit device sees the processed feed before marking any Chi’llyfect as real.
+13. In a later Party Room proof, follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md` and confirm platform and creator Watch-Party Live remain content-first in `/watch-party/[partyId]`, with the shared source card at the top, host/viewer feed bubbles below it in a five-across/two-visible-row scroll grid, comments remain in their current visible placement, and no Live Stage route.
+14. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
+15. As owner/operator, hide/remove a creator video from `/admin` and confirm it no longer appears publicly or plays publicly.
+16. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
+17. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
 
 ## Scope
 This proof lane should:
