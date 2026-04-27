@@ -1161,13 +1161,13 @@ export async function sendPartyMessage(
   kind: WatchPartyMessage["kind"],
   body: string,
   options?: { username?: string },
-): Promise<void> {
+): Promise<boolean> {
   const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
   const writableUserId = await resolveWritableUserId(userId);
-  if (!normalizedPartyId || !writableUserId) return;
+  if (!normalizedPartyId || !writableUserId) return false;
 
   const safeBody = String(body ?? "").trim();
-  if (!safeBody) return;
+  if (!safeBody) return false;
 
   try {
     const payload: WatchPartyMessageInsert = {
@@ -1178,9 +1178,11 @@ export async function sendPartyMessage(
       created_at: new Date().toISOString(),
     };
 
-    await supabase.from(WATCH_PARTY_MESSAGES_TABLE).insert(payload);
+    const { error } = await supabase.from(WATCH_PARTY_MESSAGES_TABLE).insert(payload);
+    if (error) return false;
+    return true;
   } catch {
-    // noop
+    return false;
   }
 }
 

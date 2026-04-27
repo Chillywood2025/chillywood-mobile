@@ -5,7 +5,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
     ActivityIndicator,
     Animated,
     AppState,
@@ -83,9 +82,16 @@ import { RoomReactionPicker, pushRecentReaction } from "../../../components/room
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
+import { LiveEffectsPanel } from "../../../components/live/live-effects-sheet";
 import {
   patchLiveKitSignalReadingLoop,
 } from "../../../components/watch-party-live/livekit-stage-media-surface";
+import {
+  LIVE_EFFECT_OFF_ID,
+  getLiveEffectById,
+  getLiveEffectStatusCopy,
+  isLiveEffectAppliedToCamera,
+} from "../../../_lib/liveEffects";
 import {
     buildOrderedParticipantsWithSelf,
     buildParticipantProfileParams,
@@ -168,49 +174,6 @@ type StagePresenceEntry = {
   isLive?: boolean;
   isSpeaking?: boolean;
   isMuted?: boolean;
-};
-
-const LIVE_FACE_FILTER_OPTIONS = [
-  { id: "none", label: "Reset", subtitle: "Natural look" },
-  { id: "studio", label: "Studio Glow", subtitle: "Warm lift" },
-  { id: "cool", label: "City Cool", subtitle: "Blue clarity" },
-  { id: "midnight", label: "Midnight", subtitle: "Deep contrast" },
-] as const;
-
-type LiveFaceFilterId = (typeof LIVE_FACE_FILTER_OPTIONS)[number]["id"];
-
-const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
-  switch (filterId) {
-    case "studio":
-      return {
-        label: "Studio Glow",
-        subtitle: "Warm lift across your live camera feed.",
-        overlayColor: "rgba(255,189,122,0.16)",
-        borderColor: "rgba(255,214,168,0.52)",
-      };
-    case "cool":
-      return {
-        label: "City Cool",
-        subtitle: "Blue-edge clarity for night-stage energy.",
-        overlayColor: "rgba(108,166,255,0.18)",
-        borderColor: "rgba(168,203,255,0.52)",
-      };
-    case "midnight":
-      return {
-        label: "Midnight",
-        subtitle: "Deeper contrast with a cooler low-light finish.",
-        overlayColor: "rgba(96,112,255,0.16)",
-        borderColor: "rgba(149,164,255,0.5)",
-      };
-    case "none":
-    default:
-      return {
-        label: "Natural look",
-        subtitle: "No camera look on your live feed.",
-        overlayColor: "transparent",
-        borderColor: "rgba(255,255,255,0.1)",
-      };
-  }
 };
 
 const SIM_REACTIONS = ["👍", "🔥", "👏", "❤️", "✨", "😂"];
@@ -594,7 +557,7 @@ export default function WatchPartyLiveStageScreen() {
   const [hybridCommentDraft, setHybridCommentDraft] = useState("");
   const [hybridCommentError, setHybridCommentError] = useState("");
   const [hybridCommentSending, setHybridCommentSending] = useState(false);
-  const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
+  const [selectedStageEffectId, setSelectedStageEffectId] = useState(LIVE_EFFECT_OFF_ID);
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
   const [stageOverlayAutoHideArmed, setStageOverlayAutoHideArmed] = useState(false);
   const [controlsLocked, setControlsLocked] = useState(false);
@@ -1736,42 +1699,8 @@ export default function WatchPartyLiveStageScreen() {
   }, [currentUserParticipantId, isHybridMode, isLiveFirstMode, visibleStripParticipants]);
   const communityCardParticipants = useMemo(() => {
     const sourceParticipants = stripParticipants.filter((participant) => !participantStateById[participant.userId]?.isRemoved);
-    if (isLiveFirstMode) {
-      return sourceParticipants.filter((participant) => participant.role !== "host");
-    }
-    if (isHybridMode) {
-      return sourceParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
-    }
     return sourceParticipants;
-  }, [currentUserParticipantId, isHybridMode, isLiveFirstMode, participantStateById, stripParticipants]);
-  const lowerCommunityRows = useMemo(() => {
-    const rows: typeof lowerCommunityParticipants[] = [];
-    let pendingRow: typeof lowerCommunityParticipants = [];
-
-    lowerCommunityParticipants.forEach((participant) => {
-      const isFeatured = !!featuredParticipantById[participant.userId];
-      if (isFeatured) {
-        if (pendingRow.length > 0) {
-          rows.push(pendingRow);
-          pendingRow = [];
-        }
-        rows.push([participant]);
-        return;
-      }
-
-      pendingRow.push(participant);
-      if (pendingRow.length === 2) {
-        rows.push(pendingRow);
-        pendingRow = [];
-      }
-    });
-
-    if (pendingRow.length > 0) {
-      rows.push(pendingRow);
-    }
-
-    return rows;
-  }, [featuredParticipantById, lowerCommunityParticipants]);
+  }, [participantStateById, stripParticipants]);
   const communityCardRows = useMemo(() => {
     const rows: typeof communityCardParticipants[] = [];
     let pendingRow: typeof communityCardParticipants = [];
@@ -1807,9 +1736,26 @@ export default function WatchPartyLiveStageScreen() {
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
-  const communityCardCountLabel = isLiveFirstMode
-    ? (communityCardParticipants.length > 0 ? `${communityCardParticipants.length} in audience` : "Audience waiting")
-    : `${Math.max(1, communityCardParticipants.length + 1)} in room`;
+  const communityCardCountLabel = communityCardParticipants.length > 0
+    ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "member" : "members"}`
+    : "Members syncing";
+  const currentStageParticipantState = participantStateById[currentUserParticipantId] ?? createDefaultParticipantState({
+    role: isHost ? "host" : "viewer",
+    isSpeaking: false,
+    isMuted: !!(membershipMapRef.current[currentUserParticipantId]?.isMuted),
+  });
+  const currentStageSeatRequestPending = !!seatRequestsById[currentUserParticipantId]
+    && currentStageParticipantState.role === "listener"
+    && !currentStageParticipantState.isRemoved;
+  const stageSeatRequestHint = isHost
+    ? "Tap a member tile to focus it. Host controls appear on the active member."
+    : currentStageParticipantState.role === "speaker"
+      ? "Your camera seat is active for this live room."
+      : currentStageSeatRequestPending
+        ? "Camera request pending. The host can seat you from your member tile."
+        : canRequestSeat(currentStageParticipantState)
+          ? "Tap your tile to request a camera seat."
+          : "Camera requests are unavailable for your current room role.";
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
   const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
   const liveRoomJoinLabel = room?.joinPolicy === "locked"
@@ -1868,7 +1814,7 @@ export default function WatchPartyLiveStageScreen() {
     ?? membershipMapRef.current[trackedUserId]?.isMuted
   );
   const publishLocalStageAudio = liveKitParticipantRole !== "viewer" && !isCurrentStageParticipantMuted;
-  const canUseStageFaceFilters = liveKitParticipantRole !== "viewer";
+  const canUseStageEffects = liveKitParticipantRole !== "viewer";
   const stageModeTitle = isLiveFirstMode
     ? "Host-led live focus"
     : "Shared watch moment";
@@ -1890,9 +1836,6 @@ export default function WatchPartyLiveStageScreen() {
   const stageHelperCopy = isLiveFirstMode
     ? `${lowerCommunityCountLabel}. ${hostParticipant ? `${hostParticipant.userId === currentUserParticipantId ? "You lead the stage." : `${hostParticipant.displayName} leads the stage.`}` : "Host focus is syncing."}`
     : `${lowerCommunityCountLabel}. Keep the host and community readable while the shared watch moment leads.`;
-  const stageModeMeaning = isLiveFirstMode
-    ? "Host-led live presentation mode with audience energy at the front."
-    : `${branding.watchPartyLabel} keeps shared content inside the live presentation while comments, reactions, and audience presence stay active.`;
   const stageReactionQuickEmojis = useMemo(
     () => Array.from(new Set(recentReactionEmojis)).slice(0, 2),
     [recentReactionEmojis],
@@ -1932,20 +1875,18 @@ export default function WatchPartyLiveStageScreen() {
   const showHeroRemoteImage = !showHeroLocalRtcVideo && !showHeroRemoteVideo && !!heroParticipantPreviewUri;
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
   const heroFallbackInitial = String(heroParticipant?.displayName || "H").trim().slice(0, 1).toUpperCase();
-  const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
-  const activeStageLookLabel = canUseStageFaceFilters && liveFaceFilter !== "none"
-    ? activeLiveFaceFilter.label
+  const selectedStageEffect = getLiveEffectById(selectedStageEffectId);
+  const stageEffectAppliedToCamera = isLiveEffectAppliedToCamera(selectedStageEffect);
+  const activeStageLookLabel = canUseStageEffects && stageEffectAppliedToCamera
+    ? selectedStageEffect.label
     : "";
-  const inviteSheetAutolaunchedRef = useRef<string | null>(null);
   const hybridCommentCountLabel = hybridComments.length === 1 ? "1 comment" : `${hybridComments.length} comments`;
   const hybridCommentPlaceholder = isHost ? "Comment as host" : "Add a comment";
-  const stageFaceFilterTitle = canUseStageFaceFilters ? activeLiveFaceFilter.label : "Camera looks";
-  const stageFaceFilterBody = canUseStageFaceFilters
-    ? "Looks stay on your live camera feed only."
-    : "Looks turn on when you join the stage on camera.";
-  const stageFaceFilterHelper = canUseStageFaceFilters
-    ? activeLiveFaceFilter.subtitle
-    : "Viewers can watch, comment, and react here. Camera looks unlock once you're on camera.";
+  const stageEffectsTitle = canUseStageEffects ? "Camera effects" : "Effects catalog";
+  const stageEffectsBody = canUseStageEffects
+    ? "Effects are selectable as a foundation only. This build does not process the outgoing LiveKit camera track."
+    : "Viewers can browse the effects catalog. Camera effects require a speaker or host camera role.";
+  const stageEffectsHelper = getLiveEffectStatusCopy(selectedStageEffect);
   const stageTopChromeStatusLabel = `${lowerCommunityCountLabel} · ${liveStageProtectionStatus}${controlsLocked ? " · Controls locked" : ""}`;
 
   const mapLiveStageCommentRow = useCallback((row: LiveStageCommentRow): LiveStageComment | null => {
@@ -2368,14 +2309,14 @@ export default function WatchPartyLiveStageScreen() {
   }, [revealStageOverlay]);
 
   const onToggleFaceFilters = useCallback(() => {
-    if (!canUseStageFaceFilters) return;
+    if (!canUseStageEffects) return;
     revealStageOverlay();
     setStageMenuOpen(false);
     setCommentsOpen(false);
     setReactionPickerOpen(false);
     setStageControlsOpen(false);
     setFaceFilterSheetOpen((value) => !value);
-  }, [canUseStageFaceFilters, revealStageOverlay]);
+  }, [canUseStageEffects, revealStageOverlay]);
 
   const onToggleStageMenu = useCallback(() => {
     revealStageOverlay();
@@ -2475,9 +2416,9 @@ export default function WatchPartyLiveStageScreen() {
   }, [fetchHybridComments, hybridCommentDraft, hybridCommentSending, partyId, resolvedCurrentUsername, trackedUserId]);
 
   useEffect(() => {
-    if (canUseStageFaceFilters) return;
+    if (canUseStageEffects) return;
     setFaceFilterSheetOpen(false);
-  }, [canUseStageFaceFilters]);
+  }, [canUseStageEffects]);
 
   useEffect(() => {
     setControlsLocked(false);
@@ -2818,29 +2759,29 @@ export default function WatchPartyLiveStageScreen() {
         <TouchableOpacity
           style={[
             styles.stageTopMenuItem,
-            (faceFilterSheetOpen || liveFaceFilter !== "none") && styles.stageTopMenuItemActive,
-            !canUseStageFaceFilters && styles.stageTopMenuItemDisabled,
+            (faceFilterSheetOpen || selectedStageEffectId !== LIVE_EFFECT_OFF_ID) && styles.stageTopMenuItemActive,
+            !canUseStageEffects && styles.stageTopMenuItemDisabled,
           ]}
           activeOpacity={0.84}
           accessible
           focusable
           accessibilityRole="button"
-          accessibilityLabel="Open Live Stage Camera Looks"
+          accessibilityLabel="Open Live Stage Effects"
           hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-          disabled={!canUseStageFaceFilters}
+          disabled={!canUseStageEffects}
           onPress={onToggleFaceFilters}
           testID="live-stage-filters-button"
         >
-          <Text style={styles.stageTopMenuItemIcon}>🎭</Text>
+          <Text style={styles.stageTopMenuItemIcon}>FX</Text>
           <View style={styles.stageTopMenuItemCopy}>
-            <Text style={styles.stageTopMenuItemTitle}>Looks</Text>
+            <Text style={styles.stageTopMenuItemTitle}>Effects</Text>
             <Text
               style={[
                 styles.stageTopMenuItemBody,
-                !canUseStageFaceFilters && styles.stageTopMenuItemBodyDisabled,
+                !canUseStageEffects && styles.stageTopMenuItemBodyDisabled,
               ]}
             >
-              {canUseStageFaceFilters ? "Shape your camera look." : "Turns on once you're on camera."}
+              {canUseStageEffects ? "Browse real effects readiness." : "Turns on once you're on camera."}
             </Text>
           </View>
         </TouchableOpacity>
@@ -3020,8 +2961,8 @@ export default function WatchPartyLiveStageScreen() {
       <View pointerEvents="auto" style={styles.stageUtilitySheet}>
         <View style={styles.stageUtilityHeader}>
           <View style={styles.stageUtilityHeaderCopy}>
-            <Text style={styles.stageUtilityKicker}>CAMERA LOOKS</Text>
-            <Text style={styles.stageUtilityTitle}>{stageFaceFilterTitle}</Text>
+            <Text style={styles.stageUtilityKicker}>LIVE EFFECTS</Text>
+            <Text style={styles.stageUtilityTitle}>{stageEffectsTitle}</Text>
           </View>
           <TouchableOpacity
             style={styles.stageUtilityDismissBtn}
@@ -3031,30 +2972,15 @@ export default function WatchPartyLiveStageScreen() {
             <Text style={styles.stageUtilityDismissText}>Done</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.stageUtilityBody}>{stageFaceFilterBody}</Text>
-        <Text style={styles.stageUtilityHelper}>{stageFaceFilterHelper}</Text>
-        <View style={styles.stageFilterRow}>
-          {LIVE_FACE_FILTER_OPTIONS.map((option) => {
-            const active = liveFaceFilter === option.id;
-            return (
-              <TouchableOpacity
-                key={option.id}
-                style={[styles.stageFilterChip, active && styles.stageFilterChipActive]}
-                activeOpacity={0.84}
-                accessible
-                focusable
-                accessibilityRole="button"
-                accessibilityLabel={active ? `${option.label} camera look selected` : `Apply ${option.label} camera look`}
-                onPress={() => setLiveFaceFilter(option.id)}
-                testID={`live-stage-filter-chip-${option.id}`}
-              >
-                <Text style={[styles.stageFilterChipText, active && styles.stageFilterChipTextActive]}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <Text style={styles.stageUtilityBody}>{stageEffectsBody}</Text>
+        <Text style={styles.stageUtilityHelper}>{stageEffectsHelper}</Text>
+        <LiveEffectsPanel
+          selectedEffectId={selectedStageEffectId}
+          onSelectEffect={setSelectedStageEffectId}
+          cameraAvailable={canUseStageEffects}
+          surfaceLabel="Live Stage"
+          showHeader={false}
+        />
       </View>
     );
   };
@@ -3537,18 +3463,6 @@ export default function WatchPartyLiveStageScreen() {
               <Text style={styles.stageHeroFallbackInitial}>{heroFallbackInitial}</Text>
             </View>
           )}
-          {!isHybridMode && (showHeroLocalRtcVideo || showHeroRemoteImage) && liveFaceFilter !== "none" ? (
-            <View
-              pointerEvents="none"
-              style={[
-                styles.stageHeroFilterOverlay,
-                {
-                  backgroundColor: activeLiveFaceFilter.overlayColor,
-                  borderColor: activeLiveFaceFilter.borderColor,
-                },
-              ]}
-            />
-          ) : null}
           <View
             pointerEvents="none"
             style={[
@@ -3594,396 +3508,403 @@ export default function WatchPartyLiveStageScreen() {
           renderToHardwareTextureAndroid
         >
         {renderStageTopChrome()}
-        {isHybridMode ? (
-          <View style={[styles.stageHybridDeck, { top: hybridDeckTop }]} pointerEvents="box-none">
-            <View pointerEvents="auto" style={[styles.stageHybridCommunityCard, { maxHeight: hybridCommunityMaxHeight + 58 }]}>
-              <View style={styles.stageCommunityHeader}>
-                <View style={styles.stageCommunityHeaderLeft}>
-                  <View style={styles.stageCommunityDot} />
-                  <Text style={styles.stageCommunityLabelHybrid}>{"Chi'lly Party Members"}</Text>
-                </View>
-                <Text style={styles.stageCommunityCount}>{communityCardCountLabel}</Text>
+        <View style={[styles.stageHybridDeck, { top: hybridDeckTop }]} pointerEvents="box-none">
+          <View
+            pointerEvents="auto"
+            style={[
+              styles.stageHybridCommunityCard,
+              isLiveFirstMode && styles.stageLiveFirstCommunityCard,
+              { maxHeight: hybridCommunityMaxHeight + 82 },
+            ]}
+          >
+            <View style={styles.stageCommunityHeader}>
+              <View style={styles.stageCommunityHeaderLeft}>
+                <View style={styles.stageCommunityDot} />
+                <Text style={styles.stageCommunityLabelHybrid}>{"Chi'lly Party Members"}</Text>
               </View>
+              <Text style={styles.stageCommunityCount}>{communityCardCountLabel}</Text>
+            </View>
+            <Text style={styles.stageCommunityHint}>{stageSeatRequestHint}</Text>
 
-              {communityCardParticipants.length > 0 ? (
-                <FlatList
-                  data={communityCardRows}
-                  keyExtractor={(row, index) => row.map((participant) => participant.userId).join("|") || `community-row-${index}`}
-                  nestedScrollEnabled
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                  style={[styles.stageHybridCommunityScroll, { maxHeight: hybridCommunityMaxHeight }]}
-                  contentContainerStyle={styles.stageHybridCommunityGrid}
-                  removeClippedSubviews={Platform.OS === "android"}
-                  initialNumToRender={10}
-                  maxToRenderPerBatch={16}
-                  windowSize={7}
-                  extraData={{
-                    activeParticipantId,
-                    currentUserParticipantId,
-                    featuredParticipantById,
-                    participantPresentationById,
-                    participantStateById,
-                    seatRequestsById,
-                    stageMediaParticipantsByUserId,
-                    localStreamURL,
-                    liveFaceFilter,
-                    heroOwnsLocalFeed,
-                    isHost,
-                  }}
-                  renderItem={({ item: participantRow }) => (
-                    <View style={styles.stageHybridCommunityRow}>
-                      {participantRow.map((participant) => {
-                        const isCurrentUser = participant.userId === currentUserParticipantId;
-                        const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
-                        const participantState = participantStateById[participant.userId] ?? {
-                          isMuted: !!participant.isMuted,
-                          role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                          isRemoved: false,
-                        };
-                        const isHostBubble = participantState.role === "host";
-                        const isActiveParticipant = participant.userId === activeParticipantId;
-                        const isLiveParticipant = participant.isLive;
-                        const isMuted = participantState.isMuted;
-                        const isSpeakerRole = participantState.role === "speaker";
-                        const isRemoved = participantState.isRemoved;
-                        const isFeatured = !!featuredParticipantById[participant.userId];
-                        const isRequesting = !!seatRequestsById[participant.userId] && participantState.role === "listener" && !isRemoved;
-                        const presentation = participantPresentationById[participant.userId] ?? "compact";
-                        const isExpanded = presentation === "expanded";
-                        const canModerateParticipant = participantState.role !== "host";
-                        const roleLabel = getParticipantLayerLabel({
-                          state: participantState,
-                          isFeatured,
-                          isRequesting,
-                        });
-                        const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
-                        const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
-                        const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
-                        const shouldUseHybridLiveKitVideo = isHybridMode && shouldRenderLiveKitStage && !!liveKitJoinContract;
-                        const bubbleMediaUri = isCurrentUser
-                          ? (heroOwnsLocalFeed ? (participant.avatarUrl || "") : (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || ""))
-                          : (participant.cameraPreviewUrl || participant.avatarUrl || "");
+            {communityCardParticipants.length > 0 ? (
+              <FlatList
+                data={communityCardRows}
+                keyExtractor={(row, index) => row.map((participant) => participant.userId).join("|") || `community-row-${index}`}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                style={[styles.stageHybridCommunityScroll, { maxHeight: hybridCommunityMaxHeight }]}
+                contentContainerStyle={styles.stageHybridCommunityGrid}
+                removeClippedSubviews={Platform.OS === "android"}
+                initialNumToRender={10}
+                maxToRenderPerBatch={16}
+                windowSize={7}
+                extraData={{
+                  activeParticipantId,
+                  currentUserParticipantId,
+                  featuredParticipantById,
+                  participantPresentationById,
+                  participantStateById,
+                  seatRequestsById,
+                  stageMediaParticipantsByUserId,
+                  localStreamURL,
+                  selectedStageEffectId,
+                  heroOwnsLocalFeed,
+                  isHost,
+                }}
+                renderItem={({ item: participantRow }) => (
+                  <View style={styles.stageHybridCommunityRow}>
+                    {participantRow.map((participant) => {
+                      const isCurrentUser = participant.userId === currentUserParticipantId;
+                      const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
+                      const participantState = participantStateById[participant.userId] ?? {
+                        isMuted: !!participant.isMuted,
+                        role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                        isRemoved: false,
+                      };
+                      const isHostBubble = participantState.role === "host";
+                      const isActiveParticipant = participant.userId === activeParticipantId;
+                      const isLiveParticipant = participant.isLive;
+                      const isMuted = participantState.isMuted;
+                      const isSpeakerRole = participantState.role === "speaker";
+                      const isRemoved = participantState.isRemoved;
+                      const isFeatured = !!featuredParticipantById[participant.userId];
+                      const isRequesting = !!seatRequestsById[participant.userId] && participantState.role === "listener" && !isRemoved;
+                      const presentation = participantPresentationById[participant.userId] ?? "compact";
+                      const isExpanded = presentation === "expanded";
+                      const canModerateParticipant = participantState.role !== "host";
+                      const roleLabel = getParticipantLayerLabel({
+                        state: participantState,
+                        isFeatured,
+                        isRequesting,
+                      });
+                      const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
+                      const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
+                      const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
+                      const shouldUseHybridLiveKitVideo = shouldRenderLiveKitStage && !!liveKitJoinContract;
+                      const bubbleMediaUri = isCurrentUser
+                        ? (heroOwnsLocalFeed ? (participant.avatarUrl || "") : (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || ""))
+                        : (participant.cameraPreviewUrl || participant.avatarUrl || "");
+                      const soloTile = communityCardParticipants.length === 1;
 
-                        return (
-                          <TouchableOpacity
-                            key={`hybrid-presence-${participant.userId}`}
-                            activeOpacity={0.74}
-                            style={[
-                              styles.stageParticipantTile,
-                              styles.stageParticipantTileGrid,
-                              isExpanded && styles.stageParticipantTileExpandedGrid,
-                              isFeatured && styles.stageParticipantTileFeaturedGrid,
-                              isActiveParticipant && !isFeatured && styles.stageParticipantTileActive,
-                              isRemoved && styles.stageParticipantTileRemoved,
-                            ]}
-                            onPress={() => {
-                              if (isHost) {
-                                debugLog("live-stage", "host tap user", { userId: participant.userId });
-                              } else {
-                                debugLog("live-stage", "request mic", { userId: participant.userId });
-                                if (isCurrentUser && canRequestSeat(participantState) && !isRequesting) {
-                                  requestStageSeat(participant.userId).catch(() => {});
-                                }
+                      return (
+                        <TouchableOpacity
+                          key={`hybrid-presence-${participant.userId}`}
+                          activeOpacity={0.74}
+                          style={[
+                            styles.stageParticipantTile,
+                            styles.stageParticipantTileGrid,
+                            soloTile && styles.stageParticipantTileSoloGrid,
+                            isExpanded && styles.stageParticipantTileExpandedGrid,
+                            isFeatured && styles.stageParticipantTileFeaturedGrid,
+                            isActiveParticipant && !isFeatured && styles.stageParticipantTileActive,
+                            isRemoved && styles.stageParticipantTileRemoved,
+                          ]}
+                          onPress={() => {
+                            if (isHost) {
+                              debugLog("live-stage", "host tap user", { userId: participant.userId });
+                            } else {
+                              debugLog("live-stage", "request mic", { userId: participant.userId });
+                              if (isCurrentUser && canRequestSeat(participantState) && !isRequesting) {
+                                requestStageSeat(participant.userId).catch(() => {});
                               }
-                              setActiveSpeakerUserId(participant.userId);
-                              setActiveParticipantId(participant.userId);
-                              setParticipantPresentationById((prev) => ({
-                                ...prev,
-                                [participant.userId]: (prev[participant.userId] ?? "compact") === "expanded" ? "compact" : "expanded",
-                              }));
-                              setSelectedParticipantId(participant.userId);
-                            }}
-                            onLongPress={() => {
-                              setFeaturedParticipantById((prev) => ({
-                                ...prev,
-                                [participant.userId]: !prev[participant.userId],
-                              }));
-                            }}
-                            delayLongPress={220}
-                          >
-                            {isHost && isActiveParticipant && canModerateParticipant ? (
-                              <View style={[styles.stageParticipantActionMenu, styles.stageParticipantActionMenuGrid]}>
-                                {isRequesting ? (
-                                  <>
-                                    <TouchableOpacity
-                                      style={styles.stageParticipantActionBtn}
-                                      activeOpacity={0.82}
-                                      onPress={() => {
-                                        setParticipantStateById((prev) => ({
-                                          ...prev,
-                                          [participant.userId]: {
-                                            ...(prev[participant.userId] ?? participantState),
-                                            role: "speaker",
-                                          },
-                                        }));
-                                        setSeatRequestsById((prev) => {
-                                          if (!prev[participant.userId]) return prev;
-                                          const next = { ...prev };
-                                          delete next[participant.userId];
-                                          return next;
-                                        });
-                                        emitParticipantUpdate(participant.userId, { role: "speaker" });
-                                        broadcastSeatState(participant.userId, {
+                            }
+                            setActiveSpeakerUserId(participant.userId);
+                            setActiveParticipantId(participant.userId);
+                            setParticipantPresentationById((prev) => ({
+                              ...prev,
+                              [participant.userId]: (prev[participant.userId] ?? "compact") === "expanded" ? "compact" : "expanded",
+                            }));
+                            setSelectedParticipantId(participant.userId);
+                          }}
+                          onLongPress={() => {
+                            setFeaturedParticipantById((prev) => ({
+                              ...prev,
+                              [participant.userId]: !prev[participant.userId],
+                            }));
+                          }}
+                          delayLongPress={220}
+                        >
+                          {isHost && isActiveParticipant && canModerateParticipant ? (
+                            <View style={[styles.stageParticipantActionMenu, styles.stageParticipantActionMenuGrid]}>
+                              {isRequesting ? (
+                                <>
+                                  <TouchableOpacity
+                                    style={styles.stageParticipantActionBtn}
+                                    activeOpacity={0.82}
+                                    onPress={() => {
+                                      setParticipantStateById((prev) => ({
+                                        ...prev,
+                                        [participant.userId]: {
+                                          ...(prev[participant.userId] ?? participantState),
                                           role: "speaker",
-                                          isMuted,
-                                          pending: false,
-                                        });
-                                      }}
-                                    >
-                                      <Text style={styles.stageParticipantActionText}>Approve Seat</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                      style={styles.stageParticipantActionBtn}
-                                      activeOpacity={0.82}
-                                      onPress={() => {
-                                        setSeatRequestsById((prev) => {
-                                          if (!prev[participant.userId]) return prev;
-                                          const next = { ...prev };
-                                          delete next[participant.userId];
-                                          return next;
-                                        });
-                                        broadcastSeatRequest(participant.userId, false);
-                                      }}
-                                    >
-                                      <Text style={styles.stageParticipantActionText}>Deny</Text>
-                                    </TouchableOpacity>
-                                  </>
-                                ) : null}
-                                <TouchableOpacity
-                                  style={styles.stageParticipantActionBtn}
-                                  activeOpacity={0.82}
-                                  onPress={() => {
-                                    setParticipantStateById((prev) => {
-                                      const current = prev[participant.userId] ?? {
-                                        isMuted: !!participant.isMuted,
-                                        role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                        isRemoved: false,
-                                      };
-                                      return {
-                                        ...prev,
-                                        [participant.userId]: {
-                                          ...current,
-                                          isMuted: current.role === "host" ? current.isMuted : !current.isMuted,
                                         },
-                                      };
-                                    });
-                                    emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
-                                  }}
-                                >
-                                  <Text style={styles.stageParticipantActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.stageParticipantActionBtn}
-                                  activeOpacity={0.82}
-                                  onPress={() => {
-                                    setParticipantStateById((prev) => {
-                                      const current = prev[participant.userId] ?? {
-                                        isMuted: !!participant.isMuted,
-                                        role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                        isRemoved: false,
-                                      };
-                                      return {
-                                        ...prev,
-                                        [participant.userId]: {
-                                          ...current,
-                                          role: current.role === "host" ? "host" : current.role === "speaker" ? "listener" : "speaker",
-                                        },
-                                      };
-                                    });
-                                    emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
-                                    broadcastSeatState(participant.userId, {
-                                      role: isSpeakerRole ? "listener" : "speaker",
-                                      isMuted,
-                                      pending: false,
-                                    });
-                                    setSeatRequestsById((prev) => {
-                                      if (!prev[participant.userId]) return prev;
-                                      const next = { ...prev };
-                                      delete next[participant.userId];
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  <Text style={styles.stageParticipantActionText}>{isSpeakerRole ? "Move to Audience" : "Seat Participant"}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={[styles.stageParticipantActionBtn, styles.stageParticipantActionBtnDanger]}
-                                  activeOpacity={0.82}
-                                  onPress={() => {
-                                    setParticipantStateById((prev) => {
-                                      const current = prev[participant.userId] ?? {
-                                        isMuted: !!participant.isMuted,
-                                        role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                        isRemoved: false,
-                                      };
-                                      return {
-                                        ...prev,
-                                        [participant.userId]: {
-                                          ...current,
-                                          isRemoved: current.role === "host" ? current.isRemoved : !current.isRemoved,
-                                        },
-                                      };
-                                    });
-                                    emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
-                                    broadcastSeatState(participant.userId, {
-                                      role: participantState.role,
-                                      isMuted,
-                                      isRemoved: !isRemoved,
-                                      pending: false,
-                                    });
-                                    setSeatRequestsById((prev) => {
-                                      if (!prev[participant.userId]) return prev;
-                                      const next = { ...prev };
-                                      delete next[participant.userId];
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  <Text style={[styles.stageParticipantActionText, styles.stageParticipantActionTextDanger]}>
-                                    {isRemoved ? "Restore" : "Remove"}
-                                  </Text>
-                                </TouchableOpacity>
-                              </View>
-                            ) : null}
-                            <View style={[styles.stagePresenceTapWrap, styles.stagePresenceTapWrapGrid]}>
-                              <Animated.View
-                                style={[
-                                  styles.stagePresenceBubble,
-                                  styles.stagePresenceBubbleGrid,
-                                  isExpanded && styles.stagePresenceBubbleExpandedGrid,
-                                  isFeatured && styles.stagePresenceBubbleFeaturedGrid,
-                                ]}
+                                      }));
+                                      setSeatRequestsById((prev) => {
+                                        if (!prev[participant.userId]) return prev;
+                                        const next = { ...prev };
+                                        delete next[participant.userId];
+                                        return next;
+                                      });
+                                      emitParticipantUpdate(participant.userId, { role: "speaker" });
+                                      broadcastSeatState(participant.userId, {
+                                        role: "speaker",
+                                        isMuted,
+                                        pending: false,
+                                      });
+                                    }}
+                                  >
+                                    <Text style={styles.stageParticipantActionText}>Approve Seat</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.stageParticipantActionBtn}
+                                    activeOpacity={0.82}
+                                    onPress={() => {
+                                      setSeatRequestsById((prev) => {
+                                        if (!prev[participant.userId]) return prev;
+                                        const next = { ...prev };
+                                        delete next[participant.userId];
+                                        return next;
+                                      });
+                                      broadcastSeatRequest(participant.userId, false);
+                                    }}
+                                  >
+                                    <Text style={styles.stageParticipantActionText}>Deny</Text>
+                                  </TouchableOpacity>
+                                </>
+                              ) : null}
+                              <TouchableOpacity
+                                style={styles.stageParticipantActionBtn}
+                                activeOpacity={0.82}
+                                onPress={() => {
+                                  setParticipantStateById((prev) => {
+                                    const current = prev[participant.userId] ?? {
+                                      isMuted: !!participant.isMuted,
+                                      role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                                      isRemoved: false,
+                                    };
+                                    return {
+                                      ...prev,
+                                      [participant.userId]: {
+                                        ...current,
+                                        isMuted: current.role === "host" ? current.isMuted : !current.isMuted,
+                                      },
+                                    };
+                                  });
+                                  emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
+                                }}
                               >
-                                {isHostBubble ? <View style={styles.stagePresenceHostDot} /> : null}
-                                {(shouldUseHybridLiveKitVideo || showLocalRtcPreview || bubbleMediaUri) ? (
-                                  <View
-                                    style={[
-                                      styles.stagePresenceFaceClip,
-                                      styles.stagePresenceFaceClipGrid,
-                                      isExpanded && styles.stagePresenceFaceClipExpandedGrid,
-                                      isFeatured && styles.stagePresenceFaceClipFeaturedGrid,
-                                    ]}
-                                  >
-                                    {shouldUseHybridLiveKitVideo ? (
-                                      <LiveKitHybridParticipantVideo
-                                        participantId={participant.userId}
-                                        remoteTrackIndex={communityCardParticipantIndexById[participant.userId] ?? 0}
-                                        fallback={bubbleMediaUri ? (
-                                          <Image
-                                            source={{ uri: bubbleMediaUri }}
-                                            style={[
-                                              styles.stagePresenceImage,
-                                              styles.stagePresenceImageGrid,
-                                              isExpanded && styles.stagePresenceImageExpandedGrid,
-                                              isFeatured && styles.stagePresenceImageFeaturedGrid,
-                                            ]}
-                                          />
-                                        ) : (
-                                          <View style={styles.stagePresenceFallbackFill}>
-                                            <Text
-                                              style={[
-                                                styles.stagePresenceInitial,
-                                                styles.stagePresenceInitialGrid,
-                                                isExpanded && styles.stagePresenceInitialExpandedGrid,
-                                                isFeatured && styles.stagePresenceInitialFeaturedGrid,
-                                              ]}
-                                            >
-                                              {participantDisplayName.slice(0, 1).toUpperCase()}
-                                            </Text>
-                                          </View>
-                                        )}
-                                      />
-                                    ) : showLocalRtcPreview && RTCView ? (
-                                      <RTCView
-                                        streamURL={localStreamURL as string}
-                                        style={styles.stagePresenceCameraFill}
-                                        objectFit="cover"
-                                        mirror
-                                      />
-                                    ) : showRemoteLiveVideo && RTCView ? (
-                                      <RTCView
-                                        streamURL={mediaParticipant.streamURL as string}
-                                        style={styles.stagePresenceCameraFill}
-                                        objectFit="cover"
-                                        mirror={false}
-                                      />
-                                    ) : (
-                                      <Image
-                                        source={{ uri: bubbleMediaUri }}
-                                        style={[
-                                          styles.stagePresenceImage,
-                                          styles.stagePresenceImageGrid,
-                                          isExpanded && styles.stagePresenceImageExpandedGrid,
-                                          isFeatured && styles.stagePresenceImageFeaturedGrid,
-                                        ]}
-                                      />
-                                    )}
-                                    {isCurrentUser && liveFaceFilter !== "none" && (shouldUseHybridLiveKitVideo || showLocalRtcPreview || !!bubbleMediaUri) ? (
-                                      <View
-                                        pointerEvents="none"
-                                        style={[
-                                          styles.stagePresenceFilterOverlay,
-                                          {
-                                            backgroundColor: activeLiveFaceFilter.overlayColor,
-                                            borderColor: activeLiveFaceFilter.borderColor,
-                                          },
-                                        ]}
-                                      />
-                                    ) : null}
-                                  </View>
-                                ) : (
-                                  <Text
-                                    style={[
-                                      styles.stagePresenceInitial,
-                                      styles.stagePresenceInitialGrid,
-                                      isExpanded && styles.stagePresenceInitialExpandedGrid,
-                                      isFeatured && styles.stagePresenceInitialFeaturedGrid,
-                                    ]}
-                                  >
-                                    {participantDisplayName.slice(0, 1).toUpperCase()}
-                                  </Text>
-                                )}
-                                <View
-                                  style={[
-                                    styles.stagePresenceOnlineDot,
-                                    isLiveParticipant && !isMuted ? styles.stagePresenceOnlineDotLive : styles.stagePresenceOnlineDotIdle,
-                                  ]}
-                                />
-                                {isMuted ? <Text style={styles.stagePresenceMutedIcon}>🔇</Text> : null}
-                              </Animated.View>
+                                <Text style={styles.stageParticipantActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.stageParticipantActionBtn}
+                                activeOpacity={0.82}
+                                onPress={() => {
+                                  setParticipantStateById((prev) => {
+                                    const current = prev[participant.userId] ?? {
+                                      isMuted: !!participant.isMuted,
+                                      role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                                      isRemoved: false,
+                                    };
+                                    return {
+                                      ...prev,
+                                      [participant.userId]: {
+                                        ...current,
+                                        role: current.role === "host" ? "host" : current.role === "speaker" ? "listener" : "speaker",
+                                      },
+                                    };
+                                  });
+                                  emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
+                                  broadcastSeatState(participant.userId, {
+                                    role: isSpeakerRole ? "listener" : "speaker",
+                                    isMuted,
+                                    pending: false,
+                                  });
+                                  setSeatRequestsById((prev) => {
+                                    if (!prev[participant.userId]) return prev;
+                                    const next = { ...prev };
+                                    delete next[participant.userId];
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <Text style={styles.stageParticipantActionText}>{isSpeakerRole ? "Move to Audience" : "Seat Participant"}</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.stageParticipantActionBtn, styles.stageParticipantActionBtnDanger]}
+                                activeOpacity={0.82}
+                                onPress={() => {
+                                  setParticipantStateById((prev) => {
+                                    const current = prev[participant.userId] ?? {
+                                      isMuted: !!participant.isMuted,
+                                      role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                                      isRemoved: false,
+                                    };
+                                    return {
+                                      ...prev,
+                                      [participant.userId]: {
+                                        ...current,
+                                        isRemoved: current.role === "host" ? current.isRemoved : !current.isRemoved,
+                                      },
+                                    };
+                                  });
+                                  emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
+                                  broadcastSeatState(participant.userId, {
+                                    role: participantState.role,
+                                    isMuted,
+                                    isRemoved: !isRemoved,
+                                    pending: false,
+                                  });
+                                  setSeatRequestsById((prev) => {
+                                    if (!prev[participant.userId]) return prev;
+                                    const next = { ...prev };
+                                    delete next[participant.userId];
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <Text style={[styles.stageParticipantActionText, styles.stageParticipantActionTextDanger]}>
+                                  {isRemoved ? "Restore" : "Remove"}
+                                </Text>
+                              </TouchableOpacity>
                             </View>
-                            <Text
-                              numberOfLines={1}
+                          ) : null}
+                          <View style={[styles.stagePresenceTapWrap, styles.stagePresenceTapWrapGrid]}>
+                            <Animated.View
                               style={[
-                                styles.stageParticipantName,
-                                styles.stageParticipantNameGrid,
-                                isExpanded && styles.stageParticipantNameExpandedGrid,
-                                isFeatured && styles.stageParticipantNameFeaturedGrid,
+                                styles.stagePresenceBubble,
+                                styles.stagePresenceBubbleGrid,
+                                soloTile && styles.stagePresenceBubbleSoloGrid,
+                                isExpanded && styles.stagePresenceBubbleExpandedGrid,
+                                isFeatured && styles.stagePresenceBubbleFeaturedGrid,
                               ]}
                             >
-                              {participantDisplayName}
-                            </Text>
-                            <Text style={[styles.stageParticipantRole, styles.stageParticipantRoleGrid]}>
-                              {isMuted && !isRemoved ? `${roleLabel} · Muted` : roleLabel}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                      {participantRow.length === 1 && !featuredParticipantById[participantRow[0]?.userId] ? (
-                        <View style={styles.stageHybridCommunitySpacer} />
-                      ) : null}
-                    </View>
-                  )}
-                />
-              ) : (
-                <View style={styles.stageCommunityEmptyState}>
-                  <Text style={styles.stageCommunityEmptyText}>No party members in view yet.</Text>
-                </View>
-              )}
-            </View>
+                              {isHostBubble ? (
+                                <View style={styles.stagePresenceHostBadge}>
+                                  <Text style={styles.stagePresenceHostBadgeText}>Host</Text>
+                                </View>
+                              ) : null}
+                              {(shouldUseHybridLiveKitVideo || showLocalRtcPreview || bubbleMediaUri) ? (
+                                <View
+                                  style={[
+                                    styles.stagePresenceFaceClip,
+                                    styles.stagePresenceFaceClipGrid,
+                                    soloTile && styles.stagePresenceFaceClipSoloGrid,
+                                    isExpanded && styles.stagePresenceFaceClipExpandedGrid,
+                                    isFeatured && styles.stagePresenceFaceClipFeaturedGrid,
+                                  ]}
+                                >
+                                  {shouldUseHybridLiveKitVideo ? (
+                                    <LiveKitHybridParticipantVideo
+                                      participantId={participant.userId}
+                                      remoteTrackIndex={communityCardParticipantIndexById[participant.userId] ?? 0}
+                                      fallback={bubbleMediaUri ? (
+                                        <Image
+                                          source={{ uri: bubbleMediaUri }}
+                                          style={[
+                                            styles.stagePresenceImage,
+                                            styles.stagePresenceImageGrid,
+                                            soloTile && styles.stagePresenceImageSoloGrid,
+                                            isExpanded && styles.stagePresenceImageExpandedGrid,
+                                            isFeatured && styles.stagePresenceImageFeaturedGrid,
+                                          ]}
+                                        />
+                                      ) : (
+                                        <View style={styles.stagePresenceFallbackFill}>
+                                          <Text
+                                            style={[
+                                              styles.stagePresenceInitial,
+                                              styles.stagePresenceInitialGrid,
+                                              soloTile && styles.stagePresenceInitialSoloGrid,
+                                              isExpanded && styles.stagePresenceInitialExpandedGrid,
+                                              isFeatured && styles.stagePresenceInitialFeaturedGrid,
+                                            ]}
+                                          >
+                                            {participantDisplayName.slice(0, 1).toUpperCase()}
+                                          </Text>
+                                        </View>
+                                      )}
+                                    />
+                                  ) : showLocalRtcPreview && RTCView ? (
+                                    <RTCView
+                                      streamURL={localStreamURL as string}
+                                      style={styles.stagePresenceCameraFill}
+                                      objectFit="cover"
+                                      mirror
+                                    />
+                                  ) : showRemoteLiveVideo && RTCView ? (
+                                    <RTCView
+                                      streamURL={mediaParticipant.streamURL as string}
+                                      style={styles.stagePresenceCameraFill}
+                                      objectFit="cover"
+                                      mirror={false}
+                                    />
+                                  ) : (
+                                    <Image
+                                      source={{ uri: bubbleMediaUri }}
+                                      style={[
+                                        styles.stagePresenceImage,
+                                        styles.stagePresenceImageGrid,
+                                        soloTile && styles.stagePresenceImageSoloGrid,
+                                        isExpanded && styles.stagePresenceImageExpandedGrid,
+                                        isFeatured && styles.stagePresenceImageFeaturedGrid,
+                                      ]}
+                                    />
+                                  )}
+                                </View>
+                              ) : (
+                                <Text
+                                  style={[
+                                    styles.stagePresenceInitial,
+                                    styles.stagePresenceInitialGrid,
+                                    soloTile && styles.stagePresenceInitialSoloGrid,
+                                    isExpanded && styles.stagePresenceInitialExpandedGrid,
+                                    isFeatured && styles.stagePresenceInitialFeaturedGrid,
+                                  ]}
+                                >
+                                  {participantDisplayName.slice(0, 1).toUpperCase()}
+                                </Text>
+                              )}
+                              <View
+                                style={[
+                                  styles.stagePresenceOnlineDot,
+                                  isLiveParticipant && !isMuted ? styles.stagePresenceOnlineDotLive : styles.stagePresenceOnlineDotIdle,
+                                ]}
+                              />
+                              {isMuted ? <Text style={styles.stagePresenceMutedIcon}>Muted</Text> : null}
+                            </Animated.View>
+                          </View>
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.stageParticipantName,
+                              styles.stageParticipantNameGrid,
+                              soloTile && styles.stageParticipantNameSoloGrid,
+                              isExpanded && styles.stageParticipantNameExpandedGrid,
+                              isFeatured && styles.stageParticipantNameFeaturedGrid,
+                            ]}
+                          >
+                            {participantDisplayName}
+                          </Text>
+                          <Text style={[styles.stageParticipantRole, styles.stageParticipantRoleGrid]}>
+                            {isMuted && !isRemoved ? `${roleLabel} · Muted` : roleLabel}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {participantRow.length === 1 && communityCardParticipants.length > 1 && !featuredParticipantById[participantRow[0]?.userId] ? (
+                      <View style={styles.stageHybridCommunitySpacer} />
+                    ) : null}
+                  </View>
+                )}
+              />
+            ) : (
+              <View style={styles.stageCommunityEmptyState}>
+                <Text style={styles.stageCommunityEmptyText}>No party members in view yet.</Text>
+              </View>
+            )}
           </View>
-        ) : null}
+        </View>
         {renderStageOverlayUtilitySheets()}
         {renderStageLowerDock()}
         </Animated.View>
@@ -4882,6 +4803,10 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
   },
+  stageLiveFirstCommunityCard: {
+    width: 252,
+    backgroundColor: "rgba(6,10,18,0.66)",
+  },
   stageHybridCommunityScroll: {
     maxHeight: 388,
   },
@@ -5244,6 +5169,13 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     textAlign: "right",
   },
+  stageCommunityHint: {
+    color: "#AEB9CF",
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: "700",
+    marginTop: -4,
+  },
   stagePresenceScroll: { marginTop: 0, maxHeight: 112 },
   stagePresenceScrollContent: { flexDirection: "row", alignItems: "stretch", gap: 8, paddingRight: 8, paddingVertical: 2 },
   stageCommunityEmptyState: {
@@ -5427,6 +5359,10 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     justifyContent: "flex-start",
   },
+  stageParticipantTileSoloGrid: {
+    width: "100%",
+    minHeight: 186,
+  },
   stageParticipantTileExpanded: {
     width: 98,
     minHeight: 104,
@@ -5488,6 +5424,10 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 76,
     borderRadius: 14,
+  },
+  stagePresenceBubbleSoloGrid: {
+    height: 126,
+    borderRadius: 18,
   },
   stagePresenceBubbleExpanded: {
     width: 52,
@@ -5577,16 +5517,36 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.46)",
     backgroundColor: "#DC143C",
   },
+  stagePresenceHostBadge: {
+    position: "absolute",
+    left: 7,
+    top: 7,
+    zIndex: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(220,20,60,0.86)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  stagePresenceHostBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
   stagePresenceInitial: { color: "#ECECEC", fontSize: 13, fontWeight: "900" },
   stagePresenceInitialExpanded: { fontSize: 18 },
   stagePresenceInitialFeatured: { fontSize: 21 },
   stagePresenceInitialGrid: { fontSize: 12 },
+  stagePresenceInitialSoloGrid: { fontSize: 28 },
   stagePresenceInitialExpandedGrid: { fontSize: 14 },
   stagePresenceInitialFeaturedGrid: { fontSize: 16 },
   stagePresenceImage: { width: "100%", height: "100%", borderRadius: 12 },
   stagePresenceImageExpanded: { borderRadius: 18 },
   stagePresenceImageFeatured: { borderRadius: 22 },
   stagePresenceImageGrid: { borderRadius: 14 },
+  stagePresenceImageSoloGrid: { borderRadius: 18 },
   stagePresenceImageExpandedGrid: { borderRadius: 14 },
   stagePresenceImageFeaturedGrid: { borderRadius: 16 },
   stagePresenceFaceClip: {
@@ -5601,6 +5561,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stagePresenceFaceClipGrid: { borderRadius: 14 },
+  stagePresenceFaceClipSoloGrid: { borderRadius: 18 },
   stagePresenceFilterOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
@@ -5630,10 +5591,17 @@ const styles = StyleSheet.create({
   },
   stagePresenceMutedIcon: {
     position: "absolute",
-    left: -8,
-    bottom: -8,
+    left: 7,
+    bottom: 7,
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "rgba(6,10,18,0.78)",
+    color: "#F5F8FF",
     fontSize: 10,
     lineHeight: 10,
+    fontWeight: "900",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
   },
   stagePresenceOnlineDotLive: {
     backgroundColor: "#2ecc40",
@@ -5653,6 +5621,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 10,
     lineHeight: 12,
+  },
+  stageParticipantNameSoloGrid: {
+    fontSize: 14,
+    lineHeight: 18,
   },
   stageParticipantNameActive: {
     color: "#C6CEDC",

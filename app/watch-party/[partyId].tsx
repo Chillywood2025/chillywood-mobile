@@ -31,6 +31,7 @@ import {
     Share,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     UIManager,
     View
@@ -56,6 +57,11 @@ import {
     reportDebugQuery,
 } from "../../_lib/devDebug";
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
+import {
+  LIVE_EFFECT_OFF_ID,
+  getLiveEffectById,
+  getLiveEffectStatusCopy,
+} from "../../_lib/liveEffects";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
     getMonetizationAccessSheetPresentation,
@@ -70,6 +76,7 @@ import {
     getPartyRoomSnapshot,
     getSafePartyUserId,
     joinPartyRoomSession,
+    sendPartyMessage,
     setPartyRoomPolicies,
     setPartyParticipantState,
     touchPartyRoomSession,
@@ -86,6 +93,7 @@ import { AccessSheet, type AccessSheetReason } from "../../components/monetizati
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
+import { LiveEffectsPanel } from "../../components/live/live-effects-sheet";
 import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
@@ -238,7 +246,11 @@ export default function WatchPartyRoomScreen() {
   const [participants, setParticipants] = useState<PresenceParticipant[]>([]);
 
   // ── Chat ─────────────────────────────────────────────────────────────────────
-  const [, setMessages] = useState<LocalMsg[]>([]);
+  const [messages, setMessages] = useState<LocalMsg[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [chatError, setChatError] = useState("");
+  const [selectedPartyEffectId, setSelectedPartyEffectId] = useState(LIVE_EFFECT_OFF_ID);
   const isLive = true;
   const [, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [participantReactions, setParticipantReactions] = useState<Record<string, ParticipantReaction>>({});
@@ -1409,6 +1421,37 @@ export default function WatchPartyRoomScreen() {
     titleIdHint,
   ]);
 
+  const onSendPartyRoomComment = useCallback(async () => {
+    const safeBody = chatDraft.trim();
+    if (!safeBody || chatSending) return;
+
+    const currentUserId = String(myUserIdRef.current ?? "").trim();
+    if (!partyId || !currentUserId) {
+      setChatError("Sign in before sending room comments.");
+      return;
+    }
+
+    setChatSending(true);
+    setChatError("");
+    try {
+      const sent = await sendPartyMessage(partyId, currentUserId, "chat", safeBody, {
+        username: resolveIdentityName(myProfileUsernameRef.current, myUsernameRef.current, "Guest"),
+      });
+      if (!sent) {
+        setChatError("Comment could not be sent. Try again.");
+        return;
+      }
+      setChatDraft("");
+    } catch (error) {
+      reportRuntimeError("watch-party-room-comment-send", error, {
+        partyId,
+      });
+      setChatError("Comment could not be sent. Try again.");
+    } finally {
+      setChatSending(false);
+    }
+  }, [chatDraft, chatSending, partyId]);
+
   // ── Connection display helpers ───────────────────────────────────────────────
   const connLabel: Record<ConnState, string> = {
     loading: "Loading",
@@ -1841,6 +1884,12 @@ export default function WatchPartyRoomScreen() {
       })
     : null;
   const partyRoomTitleContext = getSafeRoomTitleLabel(titleName, room, "Selected Title");
+  const partyRoomSourceType = resolveWatchPartySourceType(room);
+  const partyRoomSourceId = resolveWatchPartySourceId(room);
+  const partyRoomSourceLabel = partyRoomSourceType === "creator_video" ? "creator_video" : "platform_title";
+  const latestRoomMessages = messages.slice(-4);
+  const selectedPartyEffect = getLiveEffectById(selectedPartyEffectId);
+  const selectedPartyEffectCopy = getLiveEffectStatusCopy(selectedPartyEffect);
   const roomLabels = buildSharedRoomLabels({
     isLiveRoom,
     branding: {
@@ -1974,6 +2023,135 @@ export default function WatchPartyRoomScreen() {
             </TouchableOpacity>
           </View>
         </View>
+      </View>
+    );
+  };
+
+  const renderWatchPartyLiveDeck = () => {
+    if (isLiveRoom) return null;
+
+    return (
+      <View style={styles.watchPartyLiveDeck}>
+        <View style={styles.watchPartyScreenCard}>
+          <View style={styles.watchPartyScreenHeader}>
+            <View style={styles.watchPartyScreenHeaderCopy}>
+              <Text style={styles.watchPartyScreenKicker}>SHARED SCREEN</Text>
+              <Text style={styles.watchPartyScreenTitle} numberOfLines={2}>{partyRoomTitleContext}</Text>
+            </View>
+            <View style={styles.watchPartySourcePill}>
+              <Text style={styles.watchPartySourceText}>{partyRoomSourceLabel}</Text>
+            </View>
+          </View>
+          <View style={styles.watchPartyScreenSurface}>
+            <Text style={styles.watchPartyScreenInitial}>
+              {partyRoomTitleContext.slice(0, 1).toUpperCase()}
+            </Text>
+            <View style={styles.watchPartyScreenScrim} />
+            <View style={styles.watchPartyScreenOverlay}>
+              <Text style={styles.watchPartyScreenOverlayTitle}>Watch-Party Live</Text>
+              <Text style={styles.watchPartyScreenOverlayBody}>
+                Shared playback opens in the standalone Player while this room keeps source, people, comments, and controls together.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.watchPartyScreenMetaRow}>
+            <View style={styles.watchPartyScreenMetaPill}>
+              <Text style={styles.watchPartyScreenMetaLabel}>Source</Text>
+              <Text numberOfLines={1} style={styles.watchPartyScreenMetaValue}>{partyRoomSourceId || "Resolving"}</Text>
+            </View>
+            <View style={styles.watchPartyScreenMetaPill}>
+              <Text style={styles.watchPartyScreenMetaLabel}>Room</Text>
+              <Text numberOfLines={1} style={styles.watchPartyScreenMetaValue}>{roomCodeCardValue}</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.watchCTA} onPress={onWatchTogether} activeOpacity={0.88}>
+            <Text style={styles.watchCTAText}>Open Shared Player</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderPartyRoomCommentsCard = () => {
+    if (isLiveRoom) return null;
+
+    return (
+      <View style={styles.partyCommentsCard}>
+        <View style={styles.partyCommentsHeader}>
+          <View>
+            <Text style={styles.partyCommentsKicker}>ROOM COMMENTS</Text>
+            <Text style={styles.partyCommentsTitle}>Shared viewing chat</Text>
+          </View>
+          <Text style={styles.partyCommentsCount}>{messages.length} total</Text>
+        </View>
+        <View style={styles.partyCommentsList}>
+          {latestRoomMessages.length > 0 ? (
+            latestRoomMessages.map((message) => (
+              <View
+                key={message.id}
+                style={[
+                  styles.partyCommentRow,
+                  message.isMe && styles.partyCommentRowMe,
+                  message.kind !== "chat" && styles.partyCommentRowSystem,
+                ]}
+              >
+                <Text style={styles.partyCommentAuthor}>{message.authorLabel}</Text>
+                <Text style={styles.partyCommentBody}>{message.body}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.partyCommentsEmpty}>
+              Comments will appear here once the room starts talking.
+            </Text>
+          )}
+        </View>
+        <View style={styles.partyCommentInputRow}>
+          <TextInput
+            value={chatDraft}
+            onChangeText={(value) => {
+              if (chatError) setChatError("");
+              setChatDraft(value);
+            }}
+            placeholder="Comment with the room"
+            placeholderTextColor="rgba(190,206,232,0.72)"
+            editable={!chatSending}
+            returnKeyType="send"
+            onSubmitEditing={() => {
+              void onSendPartyRoomComment();
+            }}
+            style={styles.partyCommentInput}
+          />
+          <TouchableOpacity
+            style={[
+              styles.partyCommentSendButton,
+              (!chatDraft.trim() || chatSending) && styles.partyCommentSendButtonDisabled,
+            ]}
+            disabled={!chatDraft.trim() || chatSending}
+            activeOpacity={0.84}
+            onPress={() => {
+              void onSendPartyRoomComment();
+            }}
+          >
+            <Text style={styles.partyCommentSendText}>{chatSending ? "Sending" : "Send"}</Text>
+          </TouchableOpacity>
+        </View>
+        {chatError ? <Text style={styles.partyCommentError}>{chatError}</Text> : null}
+      </View>
+    );
+  };
+
+  const renderPartyRoomEffectsCard = () => {
+    if (isLiveRoom) return null;
+
+    return (
+      <View style={styles.partyEffectsCard}>
+        <LiveEffectsPanel
+          selectedEffectId={selectedPartyEffectId}
+          onSelectEffect={setSelectedPartyEffectId}
+          cameraAvailable={false}
+          surfaceLabel="Watch-Party Live"
+        />
+        <Text style={styles.partyEffectsFootnote}>{selectedPartyEffectCopy}</Text>
       </View>
     );
   };
@@ -2115,10 +2293,6 @@ export default function WatchPartyRoomScreen() {
 
       {renderPartyRoomParticipantSummary()}
 
-      <TouchableOpacity style={styles.watchCTA} onPress={onWatchTogether} activeOpacity={0.88}>
-        <Text style={styles.watchCTAText}>Watch-Party Live</Text>
-      </TouchableOpacity>
-
       {renderPartyRoomHostControls()}
     </View>
   );
@@ -2222,6 +2396,8 @@ export default function WatchPartyRoomScreen() {
           <Text style={styles.cardTitle} numberOfLines={2}>{roomCardTitle}</Text>
           <Text style={styles.liveRoomSubtext}>{roomCardSubtext}</Text>
         </View>
+
+        {renderWatchPartyLiveDeck()}
 
         <View style={styles.liveBubblesSection}>
           <Text style={styles.sectionKicker}>IN THE ROOM</Text>
@@ -2427,6 +2603,8 @@ export default function WatchPartyRoomScreen() {
         </View>
 
         {!isLiveRoom ? renderPartyRoomSetupShell() : null}
+        {renderPartyRoomCommentsCard()}
+        {renderPartyRoomEffectsCard()}
 
         {/* ── Participant list ────────────────────────────────────────── */}
         {isLiveRoom && waitingRoomParticipantSummary.totalCount > 0 ? (
@@ -3422,6 +3600,128 @@ const styles = StyleSheet.create({
     lineHeight: 10,
   },
 
+  watchPartyLiveDeck: {
+    gap: 12,
+  },
+  watchPartyScreenCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(168,192,245,0.18)",
+    backgroundColor: "rgba(8,10,16,0.78)",
+    padding: 14,
+    gap: 12,
+    shadowColor: "#000000",
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  watchPartyScreenHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  watchPartyScreenHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  watchPartyScreenKicker: {
+    color: "#9DB8FF",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  watchPartyScreenTitle: {
+    color: "#F5F8FF",
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: "900",
+  },
+  watchPartySourcePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  watchPartySourceText: {
+    color: "#DCE6F7",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  watchPartyScreenSurface: {
+    height: 196,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(10,16,27,0.92)",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  watchPartyScreenInitial: {
+    color: "rgba(255,255,255,0.16)",
+    fontSize: 96,
+    fontWeight: "900",
+  },
+  watchPartyScreenScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.16)",
+  },
+  watchPartyScreenOverlay: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(4,8,18,0.72)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  watchPartyScreenOverlayTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  watchPartyScreenOverlayBody: {
+    color: "#C9D4E9",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
+  watchPartyScreenMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  watchPartyScreenMetaPill: {
+    flexGrow: 1,
+    minWidth: 120,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  watchPartyScreenMetaLabel: {
+    color: "#8E9DBA",
+    fontSize: 9.5,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  watchPartyScreenMetaValue: {
+    color: "#F4F7FF",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+
   // Watch CTA
   watchCTA: {
     backgroundColor: "#DC143C",
@@ -3501,6 +3801,133 @@ const styles = StyleSheet.create({
   },
   tailoredRoomActionTextGhost: {
     color: "#E6EAF5",
+  },
+
+  partyCommentsCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(168,192,245,0.14)",
+    backgroundColor: "rgba(8,10,16,0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 11,
+  },
+  partyCommentsHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  partyCommentsKicker: {
+    color: "#9DB8FF",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  partyCommentsTitle: {
+    color: "#F5F8FF",
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  partyCommentsCount: {
+    color: "#AFC0DE",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  partyCommentsList: {
+    gap: 8,
+  },
+  partyCommentRow: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    gap: 3,
+  },
+  partyCommentRowMe: {
+    borderColor: "rgba(138,178,255,0.22)",
+    backgroundColor: "rgba(72,92,132,0.2)",
+  },
+  partyCommentRowSystem: {
+    opacity: 0.78,
+  },
+  partyCommentAuthor: {
+    color: "#E5EDFC",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  partyCommentBody: {
+    color: "#C9D4E9",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  partyCommentsEmpty: {
+    color: "#AEB9CF",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  partyCommentInputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  partyCommentInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 88,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: "#F3F7FF",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 12.5,
+    fontWeight: "600",
+  },
+  partyCommentSendButton: {
+    minHeight: 44,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(186,208,255,0.22)",
+    backgroundColor: "rgba(56,80,126,0.78)",
+    paddingHorizontal: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  partyCommentSendButtonDisabled: {
+    opacity: 0.48,
+  },
+  partyCommentSendText: {
+    color: "#F7FAFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  partyCommentError: {
+    color: "#FFC9C9",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
+  },
+  partyEffectsCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(168,192,245,0.14)",
+    backgroundColor: "rgba(8,10,16,0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  partyEffectsFootnote: {
+    color: "#AEB9CF",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
   },
 
   // Reactions
