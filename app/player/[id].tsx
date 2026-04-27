@@ -618,8 +618,6 @@ export default function PlayerScreen() {
   if (typeof rawId !== "string") rawId = String(rawId ?? "");
   const cleanId = rawId.replace(/["']/g, "").trim();
 
-  debugLog("player", "route id resolved", { id: cleanId });
-
   const localExactIdMatch = titles.find((t: any) => String(t.id) === cleanId);
   const localSlugMatch = localExactIdMatch ? null : titles.find((t: any) => String(t.slug) === cleanId);
   const localTitleMatch =
@@ -659,6 +657,10 @@ export default function PlayerScreen() {
     && !watchPartyEntryError
     && !!watchPartyAccess?.isAllowed
   );
+
+  useEffect(() => {
+    debugLog("player", "route id resolved", { id: cleanId });
+  }, [cleanId]);
 
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -4601,6 +4603,7 @@ export default function PlayerScreen() {
               joinContract={watchPartyLiveKitJoinContract}
               onFallback={onWatchPartyLiveKitFallback}
               fillParent={false}
+              layout="bubble-grid"
               surfaceLabel="Watch-Party Live"
               publishLocalAudio={publishWatchPartyLiveKitAudio}
               containerStyle={styles.watchPartySocialMediaFrameInner}
@@ -6716,12 +6719,12 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   watchPartySocialMediaFrame: {
-    height: 152,
+    height: 154,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#05070E",
+    backgroundColor: "rgba(5,7,14,0.96)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.1)",
   },
   watchPartySocialMediaFrameInner: {
     flex: 1,

@@ -2,7 +2,7 @@ import "../../_lib/livekit/dom-exception-polyfill";
 
 import { Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import {
@@ -21,16 +21,24 @@ type LiveKitStageMediaSurfaceProps = {
   onFallback: (reason: "connection_timeout" | "disconnected" | "room_error") => void;
   containerStyle?: StyleProp<ViewStyle>;
   fillParent?: boolean;
+  layout?: "stage" | "bubble-grid";
   surfaceLabel?: string;
   publishLocalAudio?: boolean;
 };
 
 type LiveKitStageMediaContentProps = {
   joinContract: LiveKitTokenReady;
+  layout: "stage" | "bubble-grid";
   surfaceLabel: string;
   publishLocalAudio: boolean;
   mediaDeviceFailure: string | null;
 };
+
+type RenderableLiveKitTrackReference = NonNullable<React.ComponentProps<typeof VideoTrack>["trackRef"]>;
+
+const isRenderableTrackReference = (trackRef: unknown): trackRef is RenderableLiveKitTrackReference => (
+  isTrackReference(trackRef)
+);
 
 const LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
 
@@ -89,6 +97,7 @@ const getParticipantLabel = (identity: string, currentIdentity: string) => (
 
 function LiveKitStageMediaContent({
   joinContract,
+  layout,
   surfaceLabel,
   publishLocalAudio,
   mediaDeviceFailure,
@@ -111,19 +120,24 @@ function LiveKitStageMediaContent({
     { onlySubscribed: true },
   );
   const remoteTracks = useMemo(
-    () => tracks.filter((trackRef) => (
-      isTrackReference(trackRef) && trackRef.participant.identity !== localParticipant.identity
-    )),
+    () => tracks
+      .filter(isRenderableTrackReference)
+      .filter((trackRef) => trackRef.participant.identity !== localParticipant.identity),
     [localParticipant.identity, tracks],
   );
+  const remoteCameraTracks = useMemo(
+    () => remoteTracks.filter((trackRef) => trackRef.source === Track.Source.Camera),
+    [remoteTracks],
+  );
   const primaryRemoteTrack = remoteTracks[0] ?? null;
-  const localCameraTrackRef = useMemo(() => {
+  const localCameraTrackRef = useMemo<RenderableLiveKitTrackReference | null>(() => {
     if (!shouldPublishLocalCamera || !cameraTrack) return null;
-    return {
+    const trackRef = {
       participant: localParticipant,
       publication: cameraTrack,
       source: Track.Source.Camera,
     };
+    return isRenderableTrackReference(trackRef) ? trackRef : null;
   }, [cameraTrack, localParticipant, shouldPublishLocalCamera]);
   const primaryTrack = useMemo(
     () => primaryRemoteTrack ?? localCameraTrackRef,
@@ -137,6 +151,13 @@ function LiveKitStageMediaContent({
   const isShowingLocalPreview = !!primaryTrack && primaryTrack.participant.identity === localParticipant.identity;
   const isShowingSecondaryLocalPreview = !!secondaryTrack && secondaryTrack.participant.identity === localParticipant.identity;
   const visibleTrackCount = (primaryTrack ? 1 : 0) + (secondaryTrack ? 1 : 0);
+  const bubbleGridTracks = useMemo(() => {
+    const nextTracks = [
+      ...(localCameraTrackRef ? [localCameraTrackRef] : []),
+      ...remoteCameraTracks,
+    ];
+    return nextTracks.slice(0, 25);
+  }, [localCameraTrackRef, remoteCameraTracks]);
 
   useEffect(() => {
     debugLog("livekit", "stage media publish state", {
@@ -151,6 +172,7 @@ function LiveKitStageMediaContent({
       hasRemoteTrack: !!primaryRemoteTrack,
       remoteTrackCount: remoteTracks.length,
       visibleTrackCount,
+      bubbleGridTrackCount: bubbleGridTracks.length,
       connectionState: String(connectionState ?? ""),
       lastMicrophoneError: lastMicrophoneError?.message ?? null,
       mediaDeviceFailure,
@@ -166,11 +188,62 @@ function LiveKitStageMediaContent({
     mediaDeviceFailure,
     publishLocalAudio,
     primaryRemoteTrack,
+    bubbleGridTracks.length,
     remoteTracks.length,
     shouldPublishLocalCamera,
     surfaceLabel,
     visibleTrackCount,
   ]);
+
+  if (layout === "bubble-grid") {
+    if (bubbleGridTracks.length > 0) {
+      return (
+        <View style={styles.bubbleGridSurface}>
+          <ScrollView
+            style={styles.bubbleGridScroll}
+            contentContainerStyle={styles.bubbleGridContent}
+            showsVerticalScrollIndicator={bubbleGridTracks.length > 10}
+            nestedScrollEnabled
+          >
+            {bubbleGridTracks.map((trackRef) => {
+              const isLocalParticipant = trackRef.participant.identity === localParticipant.identity;
+              const trackKey = [
+                trackRef.participant.identity,
+                trackRef.source,
+                trackRef.publication.trackSid ?? "track",
+              ].join(":");
+
+              return (
+                <View key={trackKey} style={styles.bubbleGridItem}>
+                  <View style={styles.bubbleVideoWrap}>
+                    <VideoTrack
+                      trackRef={trackRef}
+                      style={styles.bubbleVideo}
+                      objectFit="cover"
+                      mirror={isLocalParticipant}
+                    />
+                  </View>
+                  <Text style={styles.bubbleLabel} numberOfLines={1}>
+                    {getParticipantLabel(trackRef.participant.identity, localParticipant.identity)}
+                  </Text>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.bubbleGridPlaceholder}>
+        {String(connectionState ?? "").toLowerCase() !== "connected" ? <ActivityIndicator color="#FFFFFF" /> : null}
+        <Text style={styles.bubbleGridPlaceholderTitle}>Camera bubbles preparing</Text>
+        <Text style={styles.bubbleGridPlaceholderBody}>
+          {toConnectionLabel(connectionState)}
+        </Text>
+      </View>
+    );
+  }
 
   if (primaryTrack && isTrackReference(primaryTrack)) {
     return (
@@ -261,6 +334,7 @@ export function LiveKitStageMediaSurface({
   onFallback,
   containerStyle,
   fillParent = true,
+  layout = "stage",
   surfaceLabel = "Live Stage",
   publishLocalAudio = joinContract.participantRole !== "viewer",
 }: LiveKitStageMediaSurfaceProps) {
@@ -402,6 +476,7 @@ export function LiveKitStageMediaSurface({
       >
         <LiveKitStageMediaContent
           joinContract={joinContract}
+          layout={layout}
           surfaceLabel={surfaceLabel}
           publishLocalAudio={publishLocalAudio}
           mediaDeviceFailure={mediaDeviceFailure}
@@ -422,6 +497,68 @@ const styles = StyleSheet.create({
   videoSurfaceStack: {
     flex: 1,
     backgroundColor: "#05070E",
+  },
+  bubbleGridSurface: {
+    flex: 1,
+    backgroundColor: "rgba(5,7,14,0.96)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  bubbleGridScroll: {
+    flex: 1,
+  },
+  bubbleGridContent: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "flex-start",
+    paddingBottom: 6,
+  },
+  bubbleGridItem: {
+    width: 58,
+    alignItems: "center",
+    gap: 4,
+  },
+  bubbleVideoWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  bubbleVideo: {
+    width: "100%",
+    height: "100%",
+  },
+  bubbleLabel: {
+    width: "100%",
+    color: "#F6F8FE",
+    fontSize: 9,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  bubbleGridPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(5,7,14,0.96)",
+    paddingHorizontal: 16,
+  },
+  bubbleGridPlaceholderTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  bubbleGridPlaceholderBody: {
+    color: "rgba(233,236,245,0.72)",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
   },
   videoOverlay: {
     position: "absolute",
