@@ -2,7 +2,7 @@
 
 Date: 2026-04-27
 
-Status: layout and effects foundation implemented in code, Android/two-device runtime proof pending.
+Status: layout and effects foundation implemented in code, Android/two-device runtime proof pending. The user-approved major layout structure is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
 
 ## 1. System Purpose
 
@@ -12,6 +12,8 @@ Chi'llywood has two live-feeling room families that must stay visually and logic
 2. Watch-Party Live is the Player/content shared-viewing experience. It is content-first.
 
 This system defines the layout contract, participant presentation rules, comments posture, and effects foundation for both. It prevents future work from routing content watch parties into Live Stage, from hiding live participants behind a single hero surface, or from presenting camera effects as real before outgoing video processing exists.
+
+The current comments placement is part of the locked structure. Comments must stay visible in their current placement unless the user explicitly asks for a comments redesign. Do not move comments into a tap menu, drawer, modal, bottom sheet, overlay-only surface, hidden secondary panel, or menu-only replacement.
 
 ## 2. Route Ownership
 
@@ -115,6 +117,8 @@ Live Watch-Party:
 
 - Live Stage owns live-room comments in its lower dock.
 - Comments are visible without covering the whole participant grid.
+- The current comments placement is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
+- Do not replace the visible comments placement with menu-only comments or move it into a tap menu, drawer, modal, bottom sheet, overlay-only surface, or hidden secondary panel.
 - Reactions stay separate from text comments.
 
 Watch-Party Live:
@@ -122,6 +126,8 @@ Watch-Party Live:
 - Party Room now has a shared viewing comments card.
 - It reads recent `watch_party_room_messages`.
 - It sends text comments through `_lib/watchParty.ts` `sendPartyMessage(...)`.
+- The current comments placement is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
+- Do not replace the visible comments placement with menu-only comments or move it into a tap menu, drawer, modal, bottom sheet, overlay-only surface, or hidden secondary panel.
 - Comments are text-only for Public v1. Comment media upload remains post-v1.
 
 ## 9. Effects System Purpose
@@ -233,6 +239,7 @@ Live Watch-Party:
 - Confirm other live feeds appear three across and two rows visible, with scroll for more live feeds.
 - Confirm remote host badge is visible when the host is another participant.
 - Confirm comments lane is visible and does not cover the grid.
+- Confirm comments remain in their current visible placement and are not replaced by a menu-only/tap-only surface.
 - Confirm viewer camera-seat request copy/action is honest.
 - Confirm viewers can watch free/access-granted rooms without being shown as a camera tile until seated.
 - Confirm host approve/deny behavior if supported.
@@ -249,6 +256,7 @@ Watch-Party Live:
 - Confirm shared playback opens the correct Player source and no sample/platform fallback happens.
 - Confirm Party Room does not route to Live Stage.
 - Confirm comments send/read for joined members.
+- Confirm comments remain in their current visible placement and are not moved into a drawer, modal, bottom sheet, overlay-only surface, hidden secondary panel, or menu-only replacement.
 
 Effects:
 

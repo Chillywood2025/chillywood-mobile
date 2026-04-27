@@ -2040,6 +2040,7 @@ export default function WatchPartyRoomScreen() {
   const renderWatchPartyLiveDeck = () => {
     if (isLiveRoom) return null;
 
+    // Layout lock: preserve content-top Watch-Party Live structure per docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md.
     return (
       <View style={styles.watchPartyLiveDeck}>
         <View style={styles.watchPartyScreenCard}>
@@ -2085,6 +2086,7 @@ export default function WatchPartyRoomScreen() {
   const renderPartyRoomCommentsCard = () => {
     if (isLiveRoom) return null;
 
+    // Layout lock: visible comments stay in this current placement; do not replace with menu-only comments.
     return (
       <View style={styles.partyCommentsCard}>
         <View style={styles.partyCommentsHeader}>

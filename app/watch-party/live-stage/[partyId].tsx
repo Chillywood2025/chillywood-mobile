@@ -3021,6 +3021,7 @@ export default function WatchPartyLiveStageScreen() {
         renderToHardwareTextureAndroid
         importantForAccessibility="yes"
       >
+        {/* Layout lock: visible Live Stage comments stay in this dock per docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md. */}
         <View style={[styles.modeRow, styles.modeRowHybrid]}>
           <TouchableOpacity
             style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
@@ -3522,6 +3523,7 @@ export default function WatchPartyLiveStageScreen() {
           renderToHardwareTextureAndroid
         >
         {renderStageTopChrome()}
+        {/* Layout lock: preserve the people-first Chi'lly Party Members grid structure. */}
         <View style={[styles.stageHybridDeck, { top: hybridDeckTop }]} pointerEvents="box-none">
           <View
             pointerEvents="auto"
