@@ -1,8 +1,8 @@
-# Live Layout And Effects System
+# Live Layout And Chi’llyfects System
 
 Date: 2026-04-27
 
-Status: layout and effects foundation implemented in code, Android/two-device runtime proof pending. The user-approved major layout structure is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
+Status: layout and Chi’llyfects foundation implemented in code, Android/two-device runtime proof pending. Chi’llyfects status is `UI Implemented / No Camera Processing`: the catalog and controls exist, but outgoing LiveKit camera tracks are not processed. The user-approved major layout structure is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
 
 ## 1. System Purpose
 
@@ -11,7 +11,7 @@ Chi'llywood has two live-feeling room families that must stay visually and logic
 1. Live Watch-Party is the Home live-first social room and camera-stage experience. It is people-first.
 2. Watch-Party Live is the Player/content shared-viewing experience. It is content-first.
 
-This system defines the layout contract, participant presentation rules, comments posture, and effects foundation for both. It prevents future work from routing content watch parties into Live Stage, from hiding live participants behind a single hero surface, or from presenting camera effects as real before outgoing video processing exists.
+This system defines the layout contract, participant presentation rules, comments posture, and Chi’llyfects foundation for both. It prevents future work from routing content watch parties into Live Stage, from hiding live participants behind a single hero surface, or from presenting Chi’llyfects/camera effects as real before outgoing video processing exists.
 
 The current comments placement is part of the locked structure. Comments must stay visible in their current placement unless the user explicitly asks for a comments redesign. Do not move comments into a tap menu, drawer, modal, bottom sheet, overlay-only surface, hidden secondary panel, or menu-only replacement.
 
@@ -22,7 +22,7 @@ The current comments placement is part of the locked structure. Comments must st
 | Live Watch-Party | Home -> `/watch-party?mode=live` -> `/watch-party/live-stage/[partyId]` | `app/watch-party/index.tsx`, `app/watch-party/live-stage/[partyId].tsx` | Live Stage / LiveKit | Platform title playback, creator-video party playback, Player route behavior |
 | Watch-Party Live | Player -> `/watch-party` -> `/watch-party/[partyId]` -> Player with `partyId` | `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx` | Watch-Party / Party Room | Live Stage camera routing, Home live-first room behavior |
 | LiveKit media rendering | Live Stage media surface | `components/watch-party-live/livekit-stage-media-surface.tsx` | LiveKit media surface | Room source ownership, upload management, billing |
-| Effects foundation | Live room UI + shared metadata | `_lib/liveEffects.ts`, `components/live/live-effects-sheet.tsx` | Live Effects System | Real AR processing until native/video processor is built |
+| Chi’llyfects foundation | Live room UI + shared metadata | `_lib/liveEffects.ts`, `components/live/live-effects-sheet.tsx` | Chi’llyfects System | Real AR processing until native/video processor is built |
 
 Buttons only trigger these owners. A button labeled Watch-Party Live from Player must enter the normal Party flow. A Home Live Watch-Party entry must enter Live Stage.
 
@@ -130,17 +130,19 @@ Watch-Party Live:
 - Do not replace the visible comments placement with menu-only comments or move it into a tap menu, drawer, modal, bottom sheet, overlay-only surface, or hidden secondary panel.
 - Comments are text-only for Public v1. Comment media upload remains post-v1.
 
-## 9. Effects System Purpose
+## 9. Chi’llyfects System Purpose
 
-The Effects System creates a reusable metadata/UI foundation for live camera effects without pretending real AR/video processing is already implemented.
+Chi’llyfects is the user-facing brand for Chi'llywood live camera looks and AR/effects. The internal code-safe name is `chillyfects`; existing low-risk owner files may remain named `liveEffects` until a dedicated refactor is approved.
+
+The Chi’llyfects System creates a reusable metadata/UI foundation for live camera effects without pretending real AR/video processing is already implemented.
 
 The foundation owns:
 
-- effect category definitions
-- effect item metadata
-- selected effect UI state
+- Chi’llyfect category definitions
+- Chi’llyfect item metadata
+- selected Chi’llyfect UI state
 - honest status labels
-- cross-route effects panel
+- cross-route Chi’llyfects panel
 - v1/later scope boundary
 
 It does not own:
@@ -149,10 +151,18 @@ It does not own:
 - outgoing camera track processing
 - AR SDK integration
 - face analysis
-- paid effects
+- paid Chi’llyfects
 - creator monetization
 
-## 10. Effects Categories
+Current implementation truth:
+
+- Live Stage opens a Chi’llyfects panel from the approved controls location.
+- Party Room / Watch-Party Live opens the shared Chi’llyfects panel inside the approved content-first structure.
+- Player-side live overlay copy is branded as Chi’llyfects preview-only.
+- `Off` is the only real active camera state.
+- No beauty, makeup, funny, glam, mirror, AI/aging, or face-card Chi’llyfect processes the outgoing LiveKit camera track in this build.
+
+## 10. Chi’llyfects Categories
 
 The current metadata model defines these categories:
 
@@ -165,7 +175,7 @@ The current metadata model defines these categories:
 - Mirror / Invert
 - Novelty / Face-card
 
-Each effect item includes:
+Each Chi’llyfect item includes:
 
 - `id`
 - `label`
@@ -176,19 +186,19 @@ Each effect item includes:
 - `requiresNativeProcessor`
 - optional `intensity`
 
-## 11. V1 Effects Scope
+## 11. V1 Chi’llyfects Scope
 
 V1 scope is foundation only:
 
 - `Off` is the only real active camera state.
-- Effects can be selected in UI as catalog/foundation state.
-- Non-Off effects are marked coming soon and are not applied to outgoing camera output.
+- Chi’llyfects can be selected in UI as catalog/foundation state.
+- Non-Off Chi’llyfects are marked coming soon or preview-only and are not applied to outgoing camera output.
 - No camera beautification, makeup, aging, face scan, or AI transformation is claimed as active.
 - No new native AR SDK or heavy camera-processing dependency was added in this pass.
 
-## 12. Later Effects Scope
+## 12. Later Chi’llyfects Scope
 
-Later effects may include:
+Later Chi’llyfects may include:
 
 - real local preview effects
 - outgoing LiveKit track processing
@@ -204,7 +214,7 @@ These need a separate implementation lane and runtime proof.
 
 ## 13. Technical Requirements For Real Processing
 
-Real effects require:
+Real Chi’llyfects require:
 
 - an approved native or JS video processing path
 - proof that the outgoing camera track is processed, not just overlaid in UI
@@ -219,8 +229,8 @@ Real effects require:
 
 ## 14. What Must Not Be Faked
 
-- Do not show skin smoothing, makeup, aging, glam, face-card, or AI filters as active unless the camera output is actually processed.
-- Do not use colored overlays on top of video and call them real camera effects.
+- Do not show skin smoothing, makeup, aging, glam, face-card, or AI Chi’llyfects as active unless the camera output is actually processed.
+- Do not use colored overlays on top of video and call them real camera processing.
 - Do not alter remote participant video without a real product/safety design.
 - Do not add fake participants.
 - Do not send Watch-Party Live from Player into Live Stage.
@@ -258,12 +268,12 @@ Watch-Party Live:
 - Confirm comments send/read for joined members.
 - Confirm comments remain in their current visible placement and are not moved into a drawer, modal, bottom sheet, overlay-only surface, hidden secondary panel, or menu-only replacement.
 
-Effects:
+Chi’llyfects:
 
-- Confirm Effects UI opens in Live Stage.
-- Confirm Effects UI opens in Watch-Party Live Party Room.
+- Confirm Chi’llyfects UI opens in Live Stage.
+- Confirm Chi’llyfects UI opens in Watch-Party Live Party Room.
 - Confirm `Off` is the only real active state.
-- Confirm coming-soon effects do not visually alter outgoing camera tracks.
+- Confirm coming-soon Chi’llyfects do not visually alter outgoing camera tracks.
 - Confirm no new native dependency or rebuild requirement was introduced in the foundation pass.
 
 Validation:

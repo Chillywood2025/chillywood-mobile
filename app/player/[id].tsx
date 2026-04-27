@@ -123,10 +123,10 @@ const PARTY_GUEST_SOFT_NUDGE_MILLIS = 450;
 const PARTY_LOCAL_MAX_REACTIONS = 8;
 const PARTY_LOCAL_REACTION_SET = ["❤️", "😂", "🔥", "👏"] as const;
 const LIVE_FACE_FILTER_OPTIONS = [
-  { id: "none", label: "Natural", subtitle: "No filter" },
-  { id: "studio", label: "Studio Glow", subtitle: "Warm lift" },
-  { id: "cool", label: "City Cool", subtitle: "Blue clarity" },
-  { id: "midnight", label: "Midnight", subtitle: "Deep contrast" },
+  { id: "none", label: "Natural", subtitle: "No Chi’llyfect preview" },
+  { id: "studio", label: "Studio Glow", subtitle: "Preview-only warmth" },
+  { id: "cool", label: "City Cool", subtitle: "Preview-only clarity" },
+  { id: "midnight", label: "Midnight", subtitle: "Preview-only contrast" },
 ] as const;
 const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
@@ -547,21 +547,21 @@ const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
     case "studio":
       return {
         label: "Studio Glow",
-        subtitle: "Warm lift across your live camera feed.",
+        subtitle: "Preview-only warmth. It does not change the outgoing LiveKit camera track.",
         overlayColor: "rgba(255,189,122,0.16)",
         borderColor: "rgba(255,214,168,0.52)",
       };
     case "cool":
       return {
         label: "City Cool",
-        subtitle: "Blue-edge clarity for night-stage energy.",
+        subtitle: "Preview-only clarity. It does not change the outgoing LiveKit camera track.",
         overlayColor: "rgba(108,166,255,0.18)",
         borderColor: "rgba(168,203,255,0.52)",
       };
     case "midnight":
       return {
         label: "Midnight",
-        subtitle: "Deeper contrast with a cooler low-light finish.",
+        subtitle: "Preview-only contrast. It does not change the outgoing LiveKit camera track.",
         overlayColor: "rgba(96,112,255,0.16)",
         borderColor: "rgba(149,164,255,0.5)",
       };
@@ -569,7 +569,7 @@ const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
     default:
       return {
         label: "Natural",
-        subtitle: "No filter on your live camera feed.",
+        subtitle: "No Chi’llyfect preview is active.",
         overlayColor: "transparent",
         borderColor: "rgba(255,255,255,0.1)",
       };
@@ -4771,7 +4771,7 @@ export default function PlayerScreen() {
     <View style={[styles.liveFilterSheet, sheetStyle]}>
       <View style={styles.liveFilterSheetHeader}>
         <View style={styles.liveFilterSheetHeaderCopy}>
-          <Text style={styles.liveFilterSheetKicker}>FACE FILTERS</Text>
+          <Text style={styles.liveFilterSheetKicker}>CHI’LLYFECTS PREVIEW</Text>
           <Text style={styles.liveFilterSheetTitle}>{activeLiveFaceFilter.label}</Text>
         </View>
         <TouchableOpacity
@@ -4783,7 +4783,7 @@ export default function PlayerScreen() {
         </TouchableOpacity>
       </View>
       <Text style={styles.liveFilterSheetBody}>
-        Filters only change your live camera view in this room.
+        Chi’llyfects here are preview-only looks. This build does not process the outgoing LiveKit camera track.
       </Text>
       <Text style={styles.liveFilterSheetHelper}>{activeLiveFaceFilter.subtitle}</Text>
       <View style={styles.liveFilterOptionRow}>
@@ -4846,7 +4846,7 @@ export default function PlayerScreen() {
                   (liveFilterSheetOpen || liveFaceFilter !== "none") && styles.watchPartyLiveFooterActiveLabel,
                 ]}
               >
-                🎭 Filters
+                🎭 Chi’llyfects
               </Text>
             </TouchableOpacity>
 
@@ -4949,7 +4949,7 @@ export default function PlayerScreen() {
           {
             id: "filters",
             icon: "🎭",
-            label: "Filters",
+            label: "Chi’llyfects",
             activeOpacity: 0.85,
             onPress: onToggleLiveFilters,
             buttonStyle: (liveFilterSheetOpen || liveFaceFilter !== "none") ? styles.watchPartyLiveFooterActiveBtn : undefined,

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import {
+  CHILLYFECTS_BRAND_NAME,
   LIVE_EFFECT_CATEGORIES,
   LIVE_EFFECT_ITEMS,
   LIVE_EFFECT_OFF_ID,
@@ -49,8 +50,8 @@ export function LiveEffectsPanel({
       {showHeader ? (
         <View style={styles.header}>
           <View style={styles.headerCopy}>
-            <Text style={styles.kicker}>EFFECTS FOUNDATION</Text>
-            <Text style={styles.title}>Camera effects</Text>
+            <Text style={styles.kicker}>CHI’LLYFECTS FOUNDATION</Text>
+            <Text style={styles.title}>{CHILLYFECTS_BRAND_NAME}</Text>
           </View>
           <View style={styles.activePill}>
             <Text style={styles.activePillText}>
@@ -62,8 +63,8 @@ export function LiveEffectsPanel({
 
       <Text style={styles.body}>
         {cameraAvailable
-          ? `${surfaceLabel} can show the effects catalog, but this build does not process the outgoing camera track.`
-          : `${surfaceLabel} effects turn on only when your camera role is active. Real processing is still a later lane.`}
+          ? `${surfaceLabel} can show the Chi’llyfects catalog, but this build does not process the outgoing camera track.`
+          : `${surfaceLabel} Chi’llyfects turn on only when your camera role is active. Real processing is still a later lane.`}
       </Text>
       <View style={styles.selectedCard}>
         <View style={styles.selectedHeader}>

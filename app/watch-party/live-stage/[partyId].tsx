@@ -87,6 +87,7 @@ import {
   patchLiveKitSignalReadingLoop,
 } from "../../../components/watch-party-live/livekit-stage-media-surface";
 import {
+  CHILLYFECTS_BRAND_NAME,
   LIVE_EFFECT_OFF_ID,
   getLiveEffectById,
   getLiveEffectStatusCopy,
@@ -1917,10 +1918,10 @@ export default function WatchPartyLiveStageScreen() {
     : "";
   const hybridCommentCountLabel = hybridComments.length === 1 ? "1 comment" : `${hybridComments.length} comments`;
   const hybridCommentPlaceholder = isHost ? "Comment as host" : "Add a comment";
-  const stageEffectsTitle = canUseStageEffects ? "Camera effects" : "Effects catalog";
+  const stageEffectsTitle = canUseStageEffects ? CHILLYFECTS_BRAND_NAME : "Chi’llyfects catalog";
   const stageEffectsBody = canUseStageEffects
-    ? "Effects are selectable as a foundation only. This build does not process the outgoing LiveKit camera track."
-    : "Viewers can browse the effects catalog. Camera effects require a speaker or host camera role.";
+    ? "Chi’llyfects are selectable as a foundation only. This build does not process the outgoing LiveKit camera track."
+    : "Viewers can browse the Chi’llyfects catalog. Camera Chi’llyfects require a speaker or host camera role.";
   const stageEffectsHelper = getLiveEffectStatusCopy(selectedStageEffect);
   const stageTopChromeStatusLabel = `${lowerCommunityCountLabel} · ${liveStageProtectionStatus}${controlsLocked ? " · Controls locked" : ""}`;
 
@@ -2802,7 +2803,7 @@ export default function WatchPartyLiveStageScreen() {
           accessible
           focusable
           accessibilityRole="button"
-          accessibilityLabel="Open Live Stage Effects"
+          accessibilityLabel="Open Live Stage Chi’llyfects"
           hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
           disabled={!canUseStageEffects}
           onPress={onToggleFaceFilters}
@@ -2810,14 +2811,14 @@ export default function WatchPartyLiveStageScreen() {
         >
           <Text style={styles.stageTopMenuItemIcon}>FX</Text>
           <View style={styles.stageTopMenuItemCopy}>
-            <Text style={styles.stageTopMenuItemTitle}>Effects</Text>
+            <Text style={styles.stageTopMenuItemTitle}>{CHILLYFECTS_BRAND_NAME}</Text>
             <Text
               style={[
                 styles.stageTopMenuItemBody,
                 !canUseStageEffects && styles.stageTopMenuItemBodyDisabled,
               ]}
             >
-              {canUseStageEffects ? "Browse real effects readiness." : "Turns on once you're on camera."}
+              {canUseStageEffects ? "Browse honest Chi’llyfect readiness." : "Turns on once you're on camera."}
             </Text>
           </View>
         </TouchableOpacity>
@@ -2997,7 +2998,7 @@ export default function WatchPartyLiveStageScreen() {
       <View pointerEvents="auto" style={styles.stageUtilitySheet}>
         <View style={styles.stageUtilityHeader}>
           <View style={styles.stageUtilityHeaderCopy}>
-            <Text style={styles.stageUtilityKicker}>LIVE EFFECTS</Text>
+            <Text style={styles.stageUtilityKicker}>LIVE CHI’LLYFECTS</Text>
             <Text style={styles.stageUtilityTitle}>{stageEffectsTitle}</Text>
           </View>
           <TouchableOpacity

@@ -37,7 +37,7 @@ The lock does not permanently freeze:
 - control labels
 - optional control removal
 - visual refinements
-- effects controls
+- Chi’llyfects controls
 
 Those flexible items are allowed only when the user explicitly requests them, and they must preserve the locked structure. Controls may move later by explicit request; comments may not move unless the user explicitly asks for a comments redesign.
 
@@ -53,7 +53,7 @@ System owners:
 - Live First and Live Watch-Party mode behavior
 - live participant media and stage state
 - visible Live Stage comments
-- stage controls and effects foundation
+- stage controls and Chi’llyfects foundation
 
 Locked structure:
 
@@ -72,9 +72,9 @@ Locked structure:
 - The overlay/comments dock auto-hide behavior is locked: entering Live Stage from the Live Room starts with the overlay visible and arms the 10-second auto-hide timer.
 - Switching between Live First and Live Watch-Party resets and re-arms the same 10-second auto-hide timer for both modes.
 - Lock Controls keeps the overlay/comments dock visible until unlocked.
-- Open comments, focused comment input, menus, reactions, studio controls, and effects panels may keep the overlay visible while active, but they must not move comments out of the current placement.
+- Open comments, focused comment input, menus, reactions, studio controls, and Chi’llyfects panels may keep the overlay visible while active, but they must not move comments out of the current placement.
 - Controls may be refined only inside the approved structure and only by explicit user request.
-- Effects controls may be refined inside approved locations, but fake AR/camera processing is forbidden.
+- Chi’llyfects controls may be refined inside approved locations, but fake AR/camera processing is forbidden.
 
 Must not happen:
 
@@ -148,7 +148,7 @@ Allowed only when explicitly requested by the user:
 - small spacing/padding/polish refinements
 - accessibility improvements
 - performance improvements
-- effects button/panel additions inside approved locations
+- Chi’llyfects button/panel additions inside approved locations
 - badges/status indicators
 - loading/error state improvements
 - telemetry/logging that does not expose secrets
@@ -175,7 +175,7 @@ Forbidden without explicit user approval:
 - making host feed darker or visually inconsistent
 - changing route ownership
 - breaking `creator_video` / `platform_title` source behavior
-- enabling fake effects
+- enabling fake Chi’llyfects or fake camera effects
 - rerouting creator-upload Watch-Party to Live Stage
 
 ## 7. Required Guardrail For Future Prompts
@@ -213,4 +213,4 @@ Manual proof items:
 - Creator-video Watch-Party remains normal Party flow.
 - Creator-video Watch-Party does not route to Live Stage.
 - No route drift occurs between Live Stage and Party Room.
-- No fake participant tiles or fake effects are used as proof.
+- No fake participant tiles or fake Chi’llyfects/effects are used as proof.

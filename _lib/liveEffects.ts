@@ -34,47 +34,49 @@ export type LiveEffectItem = {
 };
 
 export const LIVE_EFFECT_OFF_ID = "off";
+export const CHILLYFECTS_BRAND_NAME = "Chi’llyfects";
+export const CHILLYFECTS_INTERNAL_NAME = "chillyfects";
 
 export const LIVE_EFFECT_CATEGORIES: LiveEffectCategory[] = [
   {
     id: "off",
     label: "Off",
-    description: "No live camera effect is selected.",
+    description: "No Chi’llyfect is selected.",
   },
   {
     id: "beauty_retouch",
     label: "Beauty / Retouch",
-    description: "Skin, lighting, and retouch tools for a later real-time processor.",
+    description: "Skin, lighting, and retouch Chi’llyfects for a later real-time processor.",
   },
   {
     id: "appearance_makeup",
     label: "Appearance / Makeup",
-    description: "Makeup, color, and style looks for a later real-time processor.",
+    description: "Makeup, color, and appearance Chi’llyfects for a later real-time processor.",
   },
   {
     id: "distortion_funny",
     label: "Distortion / Funny",
-    description: "Playful camera transformations for a later real-time processor.",
+    description: "Playful Chi’llyfect transformations for a later real-time processor.",
   },
   {
     id: "ai_aging",
     label: "AI / Aging",
-    description: "AI or age-style transformations that require approved processing.",
+    description: "AI or age-style Chi’llyfects that require approved processing.",
   },
   {
     id: "glam_signature",
     label: "Glam / Signature",
-    description: "Branded Chi'llywood looks for a later approved effects lane.",
+    description: "Branded Chi'llywood signature Chi’llyfects for a later approved effects lane.",
   },
   {
     id: "mirror_invert",
     label: "Mirror / Invert",
-    description: "Mirror-style tools that must be real preview or outgoing-track changes.",
+    description: "Mirror-style Chi’llyfect tools that must be real preview or outgoing-track changes.",
   },
   {
     id: "novelty_face_card",
     label: "Novelty / Face-card",
-    description: "Scan-style novelty tools that must avoid rating people or sensitive traits.",
+    description: "Scan-style novelty Chi’llyfects that must avoid rating people or sensitive traits.",
   },
 ];
 
@@ -85,7 +87,7 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "off",
     status: "available",
     phase: "v1_foundation",
-    description: "Natural camera with no live effect. This is the only active v1 effect state.",
+    description: "Natural camera with no Chi’llyfect. This is the only active v1 Chi’llyfect state.",
     requiresNativeProcessor: false,
   },
   {
@@ -94,7 +96,7 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "beauty_retouch",
     status: "coming_soon",
     phase: "later_native_processor",
-    description: "Retouch controls are planned, but no outgoing camera processing is active in this build.",
+    description: "Retouch Chi’llyfects are planned, but no outgoing camera processing is active in this build.",
     requiresNativeProcessor: true,
     intensity: { min: 0, max: 100, defaultValue: 35 },
   },
@@ -104,7 +106,7 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "appearance_makeup",
     status: "coming_soon",
     phase: "later_native_processor",
-    description: "Makeup looks require a real camera processor before they can affect live video.",
+    description: "Makeup Chi’llyfects require a real camera processor before they can affect live video.",
     requiresNativeProcessor: true,
     intensity: { min: 0, max: 100, defaultValue: 30 },
   },
@@ -114,7 +116,7 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "distortion_funny",
     status: "coming_soon",
     phase: "later_native_processor",
-    description: "Funny distortion effects are reserved for a later effects engine.",
+    description: "Funny distortion Chi’llyfects are reserved for a later effects engine.",
     requiresNativeProcessor: true,
     intensity: { min: 0, max: 100, defaultValue: 45 },
   },
@@ -124,7 +126,7 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "ai_aging",
     status: "coming_soon",
     phase: "later_native_processor",
-    description: "AI age-style effects need an approved model, consent rules, and processing path.",
+    description: "AI age-style Chi’llyfects need an approved model, consent rules, and processing path.",
     requiresNativeProcessor: true,
   },
   {
@@ -133,7 +135,7 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "glam_signature",
     status: "coming_soon",
     phase: "later_native_processor",
-    description: "Signature looks are designed here, but not applied to camera output yet.",
+    description: "Signature Chi’llyfects are designed here, but not applied to camera output yet.",
     requiresNativeProcessor: true,
     intensity: { min: 0, max: 100, defaultValue: 40 },
   },
@@ -143,7 +145,7 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "mirror_invert",
     status: "coming_soon",
     phase: "later_native_processor",
-    description: "Mirror and invert tools must be wired to the local preview or outgoing track before launch.",
+    description: "Mirror and invert Chi’llyfects must be wired to the local preview or outgoing track before launch.",
     requiresNativeProcessor: true,
   },
   {
@@ -152,7 +154,7 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "novelty_face_card",
     status: "coming_soon",
     phase: "later_native_processor",
-    description: "Novelty scan-style framing is planned without ratings or sensitive-trait claims.",
+    description: "Novelty scan-style Chi’llyfect framing is planned without ratings or sensitive-trait claims.",
     requiresNativeProcessor: true,
   },
 ];
@@ -178,16 +180,16 @@ export const getLiveEffectStatusLabel = (effect: LiveEffectItem) => {
 
 export const getLiveEffectStatusCopy = (effect: LiveEffectItem) => {
   if (effect.id === LIVE_EFFECT_OFF_ID) {
-    return "No camera effect is active.";
+    return "No Chi’llyfect is active.";
   }
   if (effect.status === "available") {
-    return "This effect can be applied only after its real processor is wired.";
+    return "This Chi’llyfect can be applied only after its real processor is wired.";
   }
   if (effect.status === "preview_only") {
-    return "Preview-only effects do not change the outgoing LiveKit camera track.";
+    return "Preview-only Chi’llyfects do not change the outgoing LiveKit camera track.";
   }
   if (effect.status === "disabled") {
-    return "This effect is disabled for this room or device.";
+    return "This Chi’llyfect is disabled for this room or device.";
   }
-  return "This effect is planned and is not applied to live camera output in this build.";
+  return "This Chi’llyfect is planned and is not applied to live camera output in this build.";
 };
