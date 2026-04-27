@@ -183,6 +183,10 @@ const STAGE_HEARTBEAT_INTERVAL_MILLIS = 10_000;
 const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 10_000;
 const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as const;
 const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
+const LIVE_STAGE_REMOTE_GRID_COLUMNS = 3;
+const LIVE_STAGE_REMOTE_GRID_VISIBLE_ROWS = 2;
+const LIVE_STAGE_REMOTE_GRID_GAP = 8;
+const LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT = 112;
 type CommunicationRTCViewComponent = React.ComponentType<{
   streamURL: string;
   style?: object;
@@ -523,7 +527,7 @@ function LiveKitHybridCommunityRoomHost({
 
 export default function WatchPartyLiveStageScreen() {
   const safeAreaInsets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const isFocused = useIsFocused();
   const { isLoading: authLoading, isSignedIn } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
@@ -1664,6 +1668,10 @@ export default function WatchPartyLiveStageScreen() {
     requestCameraPermission().catch(() => {});
   }, [myUserId, cameraPermission, requestCameraPermission]);
 
+  const stageMediaParticipantsByUserId = useMemo(
+    () => Object.fromEntries(stageMediaParticipants.map((participant) => [participant.userId, participant])),
+    [stageMediaParticipants],
+  );
   const viewerCount = Math.max(1, displayParticipants.length);
   const timeLabel = `${Math.floor(sessionSeconds / 60).toString().padStart(2, "0")}:${(sessionSeconds % 60).toString().padStart(2, "0")}`;
   const motionOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.46] });
@@ -1684,40 +1692,42 @@ export default function WatchPartyLiveStageScreen() {
   const usesSharedStageCommentLane = isLiveFirstMode || isHybridMode;
   const stageReactionsEnabled = room?.reactionsPolicy !== "muted";
   const commentsLaneBottomOffset = liveDockBottomInset + (usesSharedStageCommentLane ? 292 : 172);
+  const liveStageCommunityCardWidth = Math.min(Math.max(windowWidth - 24, 318), 440);
+  const liveStageRemoteGridVisibleHeight =
+    (LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT * LIVE_STAGE_REMOTE_GRID_VISIBLE_ROWS)
+    + (LIVE_STAGE_REMOTE_GRID_GAP * (LIVE_STAGE_REMOTE_GRID_VISIBLE_ROWS - 1));
   const hybridCommunityMaxHeight = Math.max(
-    170,
-    Math.min(300, windowHeight - hybridDeckTop - (safeAreaInsets.bottom + 360)),
+    liveStageRemoteGridVisibleHeight,
+    Math.min(liveStageRemoteGridVisibleHeight + 34, windowHeight - hybridDeckTop - (safeAreaInsets.bottom + 340)),
   );
   const lowerCommunityParticipants = useMemo(() => {
-    if (isLiveFirstMode) {
-      return visibleStripParticipants.filter((participant) => participant.role !== "host");
-    }
-    if (isHybridMode) {
-      return visibleStripParticipants.filter((participant) => participant.userId !== currentUserParticipantId);
-    }
-    return visibleStripParticipants;
-  }, [currentUserParticipantId, isHybridMode, isLiveFirstMode, visibleStripParticipants]);
+    return visibleStripParticipants.filter((participant) => {
+      if (!participant.userId || participant.userId === currentUserParticipantId) return false;
+      if (participantStateById[participant.userId]?.isRemoved) return false;
+      return true;
+    });
+  }, [currentUserParticipantId, participantStateById, visibleStripParticipants]);
   const communityCardParticipants = useMemo(() => {
-    const sourceParticipants = stripParticipants.filter((participant) => !participantStateById[participant.userId]?.isRemoved);
-    return sourceParticipants;
-  }, [participantStateById, stripParticipants]);
+    return visibleStripParticipants.filter((participant) => {
+      if (!participant.userId || participant.userId === currentUserParticipantId) return false;
+      const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
+        role: participant.role,
+        isSpeaking: participant.isSpeaking,
+        isMuted: participant.isMuted,
+      });
+      if (participantState.isRemoved) return false;
+      const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
+      const hasRemoteCameraFeed = !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
+      return hasRemoteCameraFeed || participantState.role === "host" || participantState.role === "speaker";
+    });
+  }, [currentUserParticipantId, participantStateById, stageMediaParticipantsByUserId, visibleStripParticipants]);
   const communityCardRows = useMemo(() => {
     const rows: typeof communityCardParticipants[] = [];
     let pendingRow: typeof communityCardParticipants = [];
 
     communityCardParticipants.forEach((participant) => {
-      const isFeatured = !!featuredParticipantById[participant.userId];
-      if (isFeatured) {
-        if (pendingRow.length > 0) {
-          rows.push(pendingRow);
-          pendingRow = [];
-        }
-        rows.push([participant]);
-        return;
-      }
-
       pendingRow.push(participant);
-      if (pendingRow.length === 2) {
+      if (pendingRow.length === LIVE_STAGE_REMOTE_GRID_COLUMNS) {
         rows.push(pendingRow);
         pendingRow = [];
       }
@@ -1728,7 +1738,7 @@ export default function WatchPartyLiveStageScreen() {
     }
 
     return rows;
-  }, [communityCardParticipants, featuredParticipantById]);
+  }, [communityCardParticipants]);
   const communityCardParticipantIndexById = useMemo(
     () => Object.fromEntries(communityCardParticipants.map((participant, index) => [participant.userId, index])),
     [communityCardParticipants],
@@ -1737,8 +1747,8 @@ export default function WatchPartyLiveStageScreen() {
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
   const communityCardCountLabel = communityCardParticipants.length > 0
-    ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "member" : "members"}`
-    : "Members syncing";
+    ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "live feed" : "live feeds"}`
+    : "Feeds syncing";
   const currentStageParticipantState = participantStateById[currentUserParticipantId] ?? createDefaultParticipantState({
     role: isHost ? "host" : "viewer",
     isSpeaking: false,
@@ -1748,14 +1758,22 @@ export default function WatchPartyLiveStageScreen() {
     && currentStageParticipantState.role === "listener"
     && !currentStageParticipantState.isRemoved;
   const stageSeatRequestHint = isHost
-    ? "Tap a member tile to focus it. Host controls appear on the active member."
+    ? "Remote live feeds appear here. Tap a feed to focus it; host controls appear on the active member."
     : currentStageParticipantState.role === "speaker"
-      ? "Your camera seat is active for this live room."
+      ? "Your camera seat is active. Your own preview stays out of this remote-feed grid."
       : currentStageSeatRequestPending
-        ? "Camera request pending. The host can seat you from your member tile."
+        ? "Camera request pending. The host can seat you when they review requests."
         : canRequestSeat(currentStageParticipantState)
-          ? "Tap your tile to request a camera seat."
-          : "Camera requests are unavailable for your current room role.";
+          ? "Watching is allowed here when the room is free or your account has the required access. Request camera when you want to join the visible feeds."
+          : "Watching is allowed here when the room is free or your account has the required access. Camera requests are unavailable for your current role.";
+  const stageSeatRequestButtonLabel = currentStageParticipantState.role === "speaker"
+    ? "Camera active"
+    : currentStageSeatRequestPending
+      ? "Request pending"
+      : "Request camera";
+  const stageSeatRequestButtonDisabled = currentStageParticipantState.role === "speaker"
+    || currentStageSeatRequestPending
+    || !canRequestSeat(currentStageParticipantState);
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
   const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
   const liveRoomJoinLabel = room?.joinPolicy === "locked"
@@ -1859,10 +1877,6 @@ export default function WatchPartyLiveStageScreen() {
     : "Capture protection stays best-effort on supported devices.";
   const liveRoomLayoutIsDefault = !tailoredFocusParticipant || tailoredFocusParticipant.userId === hostParticipant?.userId;
   const heroParticipant = stageFocusTarget ?? hostParticipant ?? selfFallbackParticipant;
-  const stageMediaParticipantsByUserId = useMemo(
-    () => Object.fromEntries(stageMediaParticipants.map((participant) => [participant.userId, participant])),
-    [stageMediaParticipants],
-  );
   const heroMediaParticipant = heroParticipant ? stageMediaParticipantsByUserId[heroParticipant.userId] as CommunicationParticipantView | undefined : undefined;
   const heroParticipantIsCurrentUser = heroParticipant?.userId === currentUserParticipantId;
   const showHeroLocalRtcVideo = heroParticipantIsCurrentUser && !!RTCView && !!localStreamURL;
@@ -3514,7 +3528,10 @@ export default function WatchPartyLiveStageScreen() {
             style={[
               styles.stageHybridCommunityCard,
               isLiveFirstMode && styles.stageLiveFirstCommunityCard,
-              { maxHeight: hybridCommunityMaxHeight + 82 },
+              {
+                maxHeight: hybridCommunityMaxHeight + 112,
+                width: liveStageCommunityCardWidth,
+              },
             ]}
           >
             <View style={styles.stageCommunityHeader}>
@@ -3525,6 +3542,28 @@ export default function WatchPartyLiveStageScreen() {
               <Text style={styles.stageCommunityCount}>{communityCardCountLabel}</Text>
             </View>
             <Text style={styles.stageCommunityHint}>{stageSeatRequestHint}</Text>
+            {!isHost ? (
+              <TouchableOpacity
+                style={[
+                  styles.stageCommunityRequestButton,
+                  stageSeatRequestButtonDisabled && styles.stageCommunityRequestButtonDisabled,
+                ]}
+                activeOpacity={0.84}
+                disabled={stageSeatRequestButtonDisabled}
+                onPress={() => {
+                  requestStageSeat(currentUserParticipantId).catch(() => {});
+                }}
+              >
+                <Text
+                  style={[
+                    styles.stageCommunityRequestButtonText,
+                    stageSeatRequestButtonDisabled && styles.stageCommunityRequestButtonTextDisabled,
+                  ]}
+                >
+                  {stageSeatRequestButtonLabel}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
 
             {communityCardParticipants.length > 0 ? (
               <FlatList
@@ -3892,15 +3931,15 @@ export default function WatchPartyLiveStageScreen() {
                         </TouchableOpacity>
                       );
                     })}
-                    {participantRow.length === 1 && communityCardParticipants.length > 1 && !featuredParticipantById[participantRow[0]?.userId] ? (
-                      <View style={styles.stageHybridCommunitySpacer} />
-                    ) : null}
+                    {Array.from({ length: LIVE_STAGE_REMOTE_GRID_COLUMNS - participantRow.length }).map((_, spacerIndex) => (
+                      <View key={`community-spacer-${spacerIndex}`} style={styles.stageHybridCommunitySpacer} />
+                    ))}
                   </View>
                 )}
               />
             ) : (
               <View style={styles.stageCommunityEmptyState}>
-                <Text style={styles.stageCommunityEmptyText}>No party members in view yet.</Text>
+                <Text style={styles.stageCommunityEmptyText}>No other live feeds in view yet.</Text>
               </View>
             )}
           </View>
@@ -4790,7 +4829,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   stageHybridCommunityCard: {
-    width: 228,
+    width: 318,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: "rgba(168,192,245,0.2)",
@@ -4804,7 +4843,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
   },
   stageLiveFirstCommunityCard: {
-    width: 252,
     backgroundColor: "rgba(6,10,18,0.66)",
   },
   stageHybridCommunityScroll: {
@@ -4818,10 +4856,11 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 9,
+    gap: LIVE_STAGE_REMOTE_GRID_GAP,
   },
   stageHybridCommunitySpacer: {
-    width: "47.5%",
+    width: "31.5%",
+    minHeight: LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT,
   },
   stageHeroTagRow: {
     alignSelf: "flex-start",
@@ -5176,6 +5215,28 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: -4,
   },
+  stageCommunityRequestButton: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(142,178,255,0.38)",
+    backgroundColor: "rgba(106,146,255,0.16)",
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    marginTop: -1,
+  },
+  stageCommunityRequestButtonDisabled: {
+    borderColor: "rgba(170,184,210,0.18)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  stageCommunityRequestButtonText: {
+    color: "#EEF4FF",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  stageCommunityRequestButtonTextDisabled: {
+    color: "#9DA8BD",
+  },
   stagePresenceScroll: { marginTop: 0, maxHeight: 112 },
   stagePresenceScrollContent: { flexDirection: "row", alignItems: "stretch", gap: 8, paddingRight: 8, paddingVertical: 2 },
   stageCommunityEmptyState: {
@@ -5351,17 +5412,17 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   stageParticipantTileGrid: {
-    width: "47.5%",
-    minHeight: 132,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    width: "31.5%",
+    minHeight: LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT,
+    paddingHorizontal: 6,
+    paddingVertical: 7,
     borderRadius: 16,
     alignItems: "stretch",
     justifyContent: "flex-start",
   },
   stageParticipantTileSoloGrid: {
-    width: "100%",
-    minHeight: 186,
+    width: "31.5%",
+    minHeight: LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT,
   },
   stageParticipantTileExpanded: {
     width: 98,
@@ -5375,9 +5436,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
   },
   stageParticipantTileExpandedGrid: {
-    width: "47.5%",
-    minHeight: 90,
-    paddingHorizontal: 7,
+    width: "31.5%",
+    minHeight: LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT,
+    paddingHorizontal: 6,
     paddingVertical: 8,
     borderRadius: 18,
   },
@@ -5395,8 +5456,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
   },
   stageParticipantTileFeaturedGrid: {
-    width: "100%",
-    minHeight: 92,
+    width: "31.5%",
+    minHeight: LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT,
     marginHorizontal: 0,
     borderRadius: 18,
   },
@@ -5422,12 +5483,12 @@ const styles = StyleSheet.create({
   },
   stagePresenceBubbleGrid: {
     width: "100%",
-    height: 76,
+    height: 58,
     borderRadius: 14,
   },
   stagePresenceBubbleSoloGrid: {
-    height: 126,
-    borderRadius: 18,
+    height: 58,
+    borderRadius: 14,
   },
   stagePresenceBubbleExpanded: {
     width: 52,
@@ -5435,9 +5496,9 @@ const styles = StyleSheet.create({
     borderRadius: 26,
   },
   stagePresenceBubbleExpandedGrid: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: "100%",
+    height: 58,
+    borderRadius: 14,
   },
   stagePresenceBubbleFeatured: {
     width: 60,
@@ -5446,9 +5507,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   stagePresenceBubbleFeaturedGrid: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: "100%",
+    height: 58,
+    borderRadius: 14,
     marginHorizontal: 0,
   },
   stagePresenceBubbleActive: {
@@ -5539,7 +5600,7 @@ const styles = StyleSheet.create({
   stagePresenceInitialExpanded: { fontSize: 18 },
   stagePresenceInitialFeatured: { fontSize: 21 },
   stagePresenceInitialGrid: { fontSize: 12 },
-  stagePresenceInitialSoloGrid: { fontSize: 28 },
+  stagePresenceInitialSoloGrid: { fontSize: 12 },
   stagePresenceInitialExpandedGrid: { fontSize: 14 },
   stagePresenceInitialFeaturedGrid: { fontSize: 16 },
   stagePresenceImage: { width: "100%", height: "100%", borderRadius: 12 },
@@ -5623,8 +5684,8 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
   stageParticipantNameSoloGrid: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 10,
+    lineHeight: 12,
   },
   stageParticipantNameActive: {
     color: "#C6CEDC",

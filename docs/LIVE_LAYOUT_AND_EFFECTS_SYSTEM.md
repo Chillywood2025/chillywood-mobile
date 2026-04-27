@@ -28,18 +28,21 @@ Buttons only trigger these owners. A button labeled Watch-Party Live from Player
 
 Live Watch-Party is people-first. The Live Stage route should make the room feel like a live multi-person space:
 
-- The host and participants are visible together in the Chi'lly Party Members grid.
+- Other live camera feeds are visible together in the Chi'lly Party Members grid.
+- The current user's own camera preview must not appear inside that grid; the local user remains represented by the hero/local preview and controls.
 - The host tile has a clear Host badge.
 - The selected/focused participant can still be shown in the hero/live media surface, but the grid remains the visible home for people.
 - Room comments and reactions stay visible in the lower dock.
 - Host controls stay attached to live-stage moderation/focus behavior.
 - Live First and Live Watch-Party mode toggles remain inside Live Stage only.
+- Viewers can watch free rooms or rooms their account can access through Premium/party-pass monetization rules without being promoted into the visible camera grid.
 - Live Stage must not become the shared video Party Room for creator or platform titles.
 
 Current implementation:
 
-- `app/watch-party/live-stage/[partyId].tsx` renders the Chi'lly Party Members card in the stage overlay for Live First and hybrid Watch-Party mode.
-- The grid uses real room participants, membership state, and LiveKit/RTC track fallbacks where available.
+- `app/watch-party/live-stage/[partyId].tsx` renders the same Chi'lly Party Members overlay behavior for Live First and hybrid Watch-Party mode.
+- The grid uses real remote live feeds, membership state, and LiveKit/RTC track fallbacks where available.
+- The grid excludes the current user and lays out remote feeds three across by two visible rows before vertical scroll.
 - Viewer camera-seat request copy is visible and honest.
 - Host moderation/focus controls remain attached to active member tiles.
 
@@ -66,10 +69,10 @@ Current implementation:
 
 Live Watch-Party grid rules:
 
-- 1 participant: show a stronger solo tile.
-- 2 participants: use a balanced split.
-- 3-4 participants: use an even grid.
-- More than 4 participants: use the scrollable grid and preserve host/focus priority.
+- Exclude the current user's own local feed from the Chi'lly Party Members grid.
+- Show only other visible live feeds in the grid.
+- Use three columns and two visible rows, so six remote feeds are visible before scrolling.
+- Support scrolling through at least 25 live feeds without adding fake tiles.
 - Muted states must be visible.
 - Camera-off states show initials or profile media, not fake camera.
 - LiveKit track rendering should use real subscribed/local tracks only.
@@ -221,10 +224,13 @@ Live Watch-Party:
 
 - Open Home Live Watch-Party.
 - Confirm waiting room routes to `/watch-party/live-stage/[partyId]`.
-- Confirm Live Stage shows host and participant tiles together in Chi'lly Party Members.
-- Confirm host badge is visible.
+- Confirm Live First and Live Watch-Party use the same Chi'lly Party Members overlay behavior.
+- Confirm the current user's own tile is not inside the Chi'lly Party Members grid.
+- Confirm other live feeds appear three across and two rows visible, with scroll for more live feeds.
+- Confirm remote host badge is visible when the host is another participant.
 - Confirm comments lane is visible and does not cover the grid.
 - Confirm viewer camera-seat request copy/action is honest.
+- Confirm viewers can watch free/access-granted rooms without being shown as a camera tile until seated.
 - Confirm host approve/deny behavior if supported.
 - Confirm no normal Party Room route is used for Home live flow.
 
