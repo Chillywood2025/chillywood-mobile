@@ -40,9 +40,10 @@ Route/owner audit hardening is now handled for the highest-priority findings: `a
 16. Do not pull Snap Camera Kit into Public v1. If Snap Camera Kit is revisited post-v1, follow `docs/CHILLYFECTS_SNAP_CAMERA_KIT_AUDIT.md`: Android-only, no production claim, keep layout/comments locked, and prove a second LiveKit device sees the processed feed before marking any Chi’llyfect as real.
 17. In a later Party Room proof, follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md` and confirm platform and creator Watch-Party Live remain content-first in `/watch-party/[partyId]`, with the shared source card at the top, host/viewer feed bubbles below it in a five-across/two-visible-row scroll grid, comments remain in their current visible placement, and no Live Stage route.
 18. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
-19. As owner/operator, hide/remove a creator video from `/admin` and confirm it no longer appears publicly or plays publicly.
-20. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
-21. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
+19. Keep the Admin role-alignment fix in route smoke: signed-out users and local-helper/non-operator accounts must stay denied with no `Admin Access Enabled` and no Hide/Remove/Restore controls.
+20. As a real backend owner/operator, hide/remove a creator video from `/admin` and confirm it no longer appears publicly or plays publicly. This remains `ADMIN ACCOUNT NEEDED`.
+21. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
+22. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
 
 ## Scope
 This proof lane should:
@@ -65,6 +66,12 @@ This proof lane should:
 - Folder: `/tmp/chillywood-one-device-non-live-v1-proof-20260428-120224`
 - Device: `R5CR120QCBF`
 - Result: one-device Android dev-client plus Metro proof passed for Home, Explore, My List, Settings, Subscribe, Chat inbox, bundled legal pages, Support, non-admin Admin denial, owner Profile/Channel no-platform-filler truth, Channel Settings Content visibility, modern owner creator-video cards with branded fallback preview, route-safe creator-video Share, creator-video Report sheet opening, valid/invalid platform Player source behavior, explicit creator-video source ownership, and bare creator-video id denial through platform `Title unavailable`. Existing video `677650c2-4790-4298-8ddb-03ba7df5b424` is still a zero-byte Storage object, so playable creator-video proof remains failed until repair/re-upload; the Player now shows an honest storage repair/re-upload message instead of a blank 0:00 surface.
+
+## Latest Admin Role Alignment Proof Artifact
+
+- Folder: `/tmp/chillywood-admin-role-alignment-proof-20260428-170949`
+- Device: `R5CR120QCBF`
+- Result: signed-out Admin denial still shows the sign-in handoff. The same redacted local-helper test account with no matching `platform_role_memberships` owner/operator/moderator role is denied, does not see `Admin Access Enabled`, and has no Hide/Remove/Restore creator-video controls to tap. Backend proof shows the target creator video stayed `clean` with no moderator fields. Positive owner/operator moderation action proof remains `ADMIN ACCOUNT NEEDED`.
 
 ## Earlier Upload Proof Artifact
 
@@ -95,6 +102,7 @@ The lane is successful when:
 - uploaded videos open and play in Player with `source=creator-video`
 - future uploads reject empty Storage objects instead of silently saving zero-byte media
 - creator-video reports create real safety report rows
+- local/dev Admin helper state never exposes destructive controls without a backend platform role
 - premium/protected access uses backend entitlement or RevenueCat truth, not local-only cache
 - creator management actions work for owner and are denied for non-owner
 - creator-upload Watch-Party uses the normal party flow with the remote source-model migration now applied and proved

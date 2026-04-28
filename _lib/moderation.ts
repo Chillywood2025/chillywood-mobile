@@ -9,7 +9,7 @@ export const PLATFORM_ROLE_MEMBERSHIPS_TABLE = "platform_role_memberships";
 
 export type SafetyReportTargetType = "participant" | "room" | "title" | "creator_video";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
-export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner";
+export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner" | "moderator";
 export type PlatformRole = "owner" | "operator" | "moderator";
 
 export type ModerationAccess = {
@@ -18,6 +18,7 @@ export type ModerationAccess = {
   canReviewSafetyReports: boolean;
   auditOwnerKey: string | null;
   isPlatformOwned: boolean;
+  isLocalTestHelper: boolean;
 };
 
 export type SafetyReportInput = {
@@ -229,7 +230,7 @@ const readContextText = (value: unknown) => normalizeText(value) || null;
 
 const normalizeModerationActorRole = (value: unknown): ModerationActorRole => {
   const normalized = normalizeText(value).toLowerCase();
-  if (normalized === "official_platform" || normalized === "operator" || normalized === "owner") {
+  if (normalized === "official_platform" || normalized === "operator" || normalized === "owner" || normalized === "moderator") {
     return normalized;
   }
   return "member";
@@ -274,20 +275,22 @@ export function getModerationAccess(identity?: {
   if (officialAccount) {
     return {
       actorRole: "official_platform",
-      canAccessAdmin: isOperator,
-      canReviewSafetyReports: isOperator,
+      canAccessAdmin: false,
+      canReviewSafetyReports: false,
       auditOwnerKey: officialAccount.auditOwnerKey,
       isPlatformOwned: true,
+      isLocalTestHelper: isOperator,
     };
   }
 
   if (isOperator) {
     return {
-      actorRole: "operator",
-      canAccessAdmin: true,
-      canReviewSafetyReports: true,
-      auditOwnerKey: userId ? `operator:${userId}` : email ? `operator:${email}` : "operator:allowlist",
+      actorRole: "member",
+      canAccessAdmin: false,
+      canReviewSafetyReports: false,
+      auditOwnerKey: userId ? `dev-helper:${userId}` : email ? `dev-helper:${email}` : "dev-helper:allowlist",
       isPlatformOwned: false,
+      isLocalTestHelper: true,
     };
   }
 
@@ -297,6 +300,7 @@ export function getModerationAccess(identity?: {
     canReviewSafetyReports: false,
     auditOwnerKey: null,
     isPlatformOwned: false,
+    isLocalTestHelper: false,
   };
 }
 
@@ -369,40 +373,58 @@ export function resolvePlatformActorRole(
   moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ): ModerationActorRole {
-  if (moderationAccess.actorRole === "official_platform") {
-    return "official_platform";
-  }
   if (hasPlatformRoleMembership(memberships, ["owner"])) {
     return "owner";
   }
-  if (moderationAccess.actorRole === "operator" || hasPlatformRoleMembership(memberships, ["operator"])) {
+  if (hasPlatformRoleMembership(memberships, ["operator"])) {
     return "operator";
+  }
+  if (hasPlatformRoleMembership(memberships, ["moderator"])) {
+    return "moderator";
+  }
+  if (moderationAccess.actorRole === "official_platform") {
+    return "official_platform";
   }
   return "member";
 }
 
 export function canAccessAdminConsole(
-  moderationAccess: ModerationAccess,
+  _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return moderationAccess.canAccessAdmin || hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"]);
+  return hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"]);
 }
 
 export function canReviewSafetyQueue(
-  moderationAccess: ModerationAccess,
+  _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return moderationAccess.canReviewSafetyReports || hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"]);
+  return hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"]);
 }
 
 export function canManagePrivilegedAdminWrites(
-  moderationAccess: ModerationAccess,
+  _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return moderationAccess.canAccessAdmin || hasPlatformRoleMembership(memberships, ["owner", "operator"]);
+  return hasPlatformRoleMembership(memberships, ["owner", "operator"]);
 }
 
+const platformMembershipMatchesIdentity = (
+  entry: { user_id?: unknown; email?: unknown },
+  identity: { userId: string; email: string },
+) => {
+  const rowUserId = normalizeText(entry.user_id);
+  const rowEmail = normalizeText(entry.email).toLowerCase();
+  return (!!identity.userId && rowUserId === identity.userId) || (!!identity.email && rowEmail === identity.email);
+};
+
 export async function readMyPlatformRoleMemberships() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = normalizeText(sessionData.session?.user?.id);
+  const email = normalizeText(sessionData.session?.user?.email).toLowerCase();
+
+  if (!userId && !email) return [];
+
   const { data, error } = await supabase
     .from(PLATFORM_ROLE_MEMBERSHIPS_TABLE)
     .select("id,role,user_id,email,status,granted_at")
@@ -412,6 +434,7 @@ export async function readMyPlatformRoleMemberships() {
   if (error) throw error;
 
   return (data ?? [])
+    .filter((entry) => platformMembershipMatchesIdentity(entry, { userId, email }))
     .map((entry) => {
       const role = normalizePlatformRole(entry.role);
       if (!role) return null;

@@ -398,6 +398,34 @@ const formatModerationTimestamp = (value: string | null) => {
   return date.toLocaleString();
 };
 
+const formatCreatorVideoModerationFailure = (error: any) => {
+  const message = String(error?.message ?? "");
+  const code = String(error?.code ?? "");
+  const searchable = `${code} ${message}`.toLowerCase();
+
+  if (
+    searchable.includes("permission")
+    || searchable.includes("row-level security")
+    || searchable.includes("owner/operator")
+    || searchable.includes("not authorized")
+    || code === "42501"
+  ) {
+    return "Admin action denied. This account does not have operator permissions.";
+  }
+
+  if (
+    searchable.includes("single json object")
+    || searchable.includes("0 rows")
+    || searchable.includes("no rows")
+    || searchable.includes("not found")
+    || code === "PGRST116"
+  ) {
+    return "Content not found or no longer available.";
+  }
+
+  return "Unable to update creator video moderation status. Try again after confirming this content still exists.";
+};
+
 const formatRelease = (releaseAt?: string | null) => {
   const raw = (releaseAt ?? "").trim();
   if (!raw) return "—";
@@ -446,6 +474,7 @@ export default function AdminStudioScreen() {
   const [creatorGrantForm, setCreatorGrantForm] = useState<CreatorPermissionSet>(normalizeCreatorPermissionSet(null));
   const [platformRoles, setPlatformRoles] = useState<PlatformRoleMembership[]>([]);
   const [platformRolesLoading, setPlatformRolesLoading] = useState(false);
+  const [platformRolesChecked, setPlatformRolesChecked] = useState(false);
   const [platformRoleRoster, setPlatformRoleRoster] = useState<PlatformRoleRosterEntry[]>([]);
   const [platformRoleRosterSummary, setPlatformRoleRosterSummary] =
     useState<PlatformRoleRosterReadModel["summary"] | null>(null);
@@ -490,9 +519,10 @@ export default function AdminStudioScreen() {
     email: user?.email ?? null,
   });
   const resolvedActorRole = resolvePlatformActorRole(moderationAccess, platformRoles);
-  const canAccessAdmin = isSignedIn && isActive && canAccessAdminConsole(moderationAccess, platformRoles);
-  const canReviewSafetyReports = isSignedIn && isActive && canReviewSafetyQueue(moderationAccess, platformRoles);
-  const canManagePrivilegedWrites = isSignedIn && isActive && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
+  const platformRoleCheckPending = isSignedIn && isActive && (!platformRolesChecked || platformRolesLoading);
+  const canAccessAdmin = isSignedIn && isActive && platformRolesChecked && canAccessAdminConsole(moderationAccess, platformRoles);
+  const canReviewSafetyReports = isSignedIn && isActive && platformRolesChecked && canReviewSafetyQueue(moderationAccess, platformRoles);
+  const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin tools");
 
   useEffect(() => {
@@ -501,6 +531,7 @@ export default function AdminStudioScreen() {
       setConfigLoading(false);
       setPlatformRoles([]);
       setPlatformRolesLoading(false);
+      setPlatformRolesChecked(false);
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
       setPlatformRoleRosterLoading(false);
@@ -1052,14 +1083,16 @@ export default function AdminStudioScreen() {
   const loadPlatformRoles = useCallback(async () => {
     try {
       setPlatformRolesLoading(true);
+      setPlatformRolesChecked(false);
       setModerationNotice(null);
       const memberships = await readMyPlatformRoleMemberships();
       setPlatformRoles(memberships);
-    } catch (err: any) {
+    } catch {
       setPlatformRoles([]);
-      setModerationNotice(err?.message ?? "Failed to load platform moderation roles.");
+      setModerationNotice("Unable to verify platform moderation roles.");
     } finally {
       setPlatformRolesLoading(false);
+      setPlatformRolesChecked(true);
     }
   }, []);
 
@@ -1081,7 +1114,12 @@ export default function AdminStudioScreen() {
 
   const applyCreatorVideoModeration = useCallback(async (status: CreatorVideoModerationStatus) => {
     const videoId = creatorVideoModerationId.trim();
-    if (!videoId || creatorVideoModerationBusy || !canManagePrivilegedWrites) return;
+    if (!videoId || creatorVideoModerationBusy) return;
+
+    if (!canManagePrivilegedWrites) {
+      setModerationNotice("Admin action denied. This account does not have operator permissions.");
+      return;
+    }
 
     try {
       setCreatorVideoModerationBusy(status);
@@ -1097,7 +1135,7 @@ export default function AdminStudioScreen() {
         void loadSafetyReports();
       }
     } catch (err: any) {
-      setModerationNotice(err?.message ?? "Unable to update creator video moderation status.");
+      setModerationNotice(formatCreatorVideoModerationFailure(err));
     } finally {
       setCreatorVideoModerationBusy(null);
     }
@@ -1661,10 +1699,11 @@ export default function AdminStudioScreen() {
     );
   }
 
-  if (!moderationAccess.canAccessAdmin && platformRolesLoading && !platformRoles.length) {
+  if (platformRoleCheckPending) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color="#fff" />
+        <Text style={styles.loadingText}>Checking platform admin role…</Text>
       </View>
     );
   }
@@ -1673,7 +1712,11 @@ export default function AdminStudioScreen() {
     return (
       <BetaAccessScreen
         title="This account does not have an active admin role"
-        body="Admin access stays behind the bounded allowlist or an active owner, operator, or moderator platform role."
+        body={
+          moderationAccess.isLocalTestHelper
+            ? "This account is recognized by the local test helper, but Admin access requires an active owner, operator, or moderator platform role."
+            : "Admin access requires an active owner, operator, or moderator platform role."
+        }
         operatorOnly
       />
     );
@@ -3617,6 +3660,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#06070B",
+  },
+  loadingText: {
+    color: "#D6DCE8",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 12,
   },
   headerBlock: {
     gap: 12,

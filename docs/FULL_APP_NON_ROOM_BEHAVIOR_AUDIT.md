@@ -62,7 +62,7 @@ Recommendation: keep the fixes, run the next route smoke on Android, and keep th
 | Legal | `/terms`, `/privacy`, `/community-guidelines`, `/copyright` | Legal route files | Legal/policy | Public policy pages | Runtime policy enforcement | Public legal paths | Correct / legal review pending |
 | Support | `/support`, `/beta-support` | `app/support.tsx`, `components/system/support-screen.tsx` | Support | Support categories and signed-in feedback handoff | Legal adjudication, destructive account actions | Public with richer signed-in feedback | Fixed copy / proof pending |
 | Account Deletion | `/account-deletion` | `app/account-deletion.tsx` | Legal/support | Request-based deletion instructions | Destructive automated deletion | Public legal path | Correct / external setup pending |
-| Admin | `/admin` | `app/admin.tsx` | Admin/operator | Platform title admin, config, creator grants, reports, creator-video moderation | Public controls, hidden-button-only security | Signed-in/beta/admin role gate | Correct / proof pending |
+| Admin | `/admin` | `app/admin.tsx` | Admin/operator | Platform title admin, config, creator grants, reports, creator-video moderation | Public controls, hidden-button-only security | Signed-in plus backend platform-role gate; local helper does not grant destructive controls | Fixed / positive admin proof pending |
 | Notifications/reminders | No dedicated route | `_lib/notifications.ts`, Profile/Channel event surfaces | Notifications/reminders | Event reminder rows and readiness copy where surfaced | Push notification claims | Helper-backed only | Honest foundation / later route |
 | Search | No dedicated route | Explore/Home surfaces | Discovery | Browse platform titles | Full global search | Not implemented as route | Later phase |
 | Legacy/helper | `/communication`, `/communication/[roomId]`, `app/modal.tsx` | Compatibility route files | Compatibility | Redirect or guarded compatibility | New non-room product ownership | Legacy only | Correct from prior audit |
@@ -95,7 +95,7 @@ Recommendation: keep the fixes, run the next route smoke on Android, and keep th
 | Legal links | Settings/Signup/Support | Open bundled policy pages | Links exist | Real / legal review pending |
 | Account deletion request | Account deletion/Support | Request-based support path | Honest request flow; no destructive delete | Real / external setup pending |
 | Admin title actions | Admin | Admin-gated create/edit/publish where present | Admin route gates role and writes through helpers | Real / proof pending |
-| Admin moderation actions | Admin | Hide/remove/restore creator videos | Helper-backed UI present | Real / proof pending |
+| Admin moderation actions | Admin | Hide/remove/restore creator videos | Hidden unless backend platform role is present; non-operator denial proof passed | Real / positive admin proof pending |
 | Home cards | Home | Route platform titles/player/live entry correctly | Title/player/live handoffs exist | Real / proof pending |
 | Explore cards | Explore | Route to title detail | Routes `/title/[id]` | Real / proof pending |
 | My List cards | My List | Route saved platform titles | Routes `/title/[id]` | Real / proof pending |
@@ -205,9 +205,9 @@ External setup pending: attorney/legal approval, final public URLs, DMCA/contact
 
 Status: Implemented / Proof Pending.
 
-Admin is protected by signed-in/beta/admin role gates. The route owns platform title programming, app config, creator grants, reports, and creator-video moderation controls. Admin actions were not exposed to public viewers during static audit.
+Admin is protected by signed-in plus backend `platform_role_memberships` truth. A 2026-04-28 proof found the previous frontend mismatch: local beta operator helper status exposed `Admin Access Enabled` and creator-video moderation controls to a backend non-operator even though Supabase RLS refused the write. The frontend now waits for backend role checks, treats local helper status as denial context only, and shows no destructive controls without an active owner/operator/moderator membership.
 
-Proof pending: non-admin deep-link denial, admin write proof, report queue proof, and creator-video hide/remove/restore behavior against live backend truth.
+Proof passed: signed-out Admin denial and backend non-operator/local-helper denial with no `Admin Access Enabled` and no Hide/Remove/Restore controls. Proof pending: positive owner/operator write proof, report queue proof, and creator-video hide/remove/restore behavior against live backend truth.
 
 ## 13. Notifications/Reminders Findings
 
@@ -225,11 +225,11 @@ Recommendation: keep push delivery and a notification inbox as later-phase unles
 | Channel audience | `channel_followers`, `channel_subscribers`, `channel_audience_requests`, `channel_audience_blocks` | Backed summaries/actions exist; full roster/VIP/mod roles later. |
 | Creator videos | `videos`, `creator-videos` storage, creator-video migrations/RLS | App integration exists; live public/draft/storage delete proof pending. |
 | Platform titles | `titles`, media-source helpers, content engagement tables | Title Detail/Player/Home/Explore use platform title owner; invalid platform fallback already hardened in prior room pass and Player source hardening completed here. |
-| Reports/moderation | `safety_reports`, `videos.moderation_status`, platform role tables | UI/helper foundation exists; admin/report runtime proof pending. |
+| Reports/moderation | `safety_reports`, `videos.moderation_status`, platform role tables | UI/helper foundation exists; signed-out and backend non-operator Admin denial proof passed; report row and positive admin action proof pending. |
 | Premium/access | `user_entitlements`, `billing_events`, RevenueCat helpers | Backend truth exists; store setup and proof pending. |
 | Chat | `chat_threads`, `chat_thread_members`, `chat_messages` | Inbox/thread helpers exist; send/access proof pending. |
 | Notifications/reminders | `notifications`, `creator_events`, `event_reminders` | Helper-backed foundation; push/inbox later. |
-| Admin/operator | `platform_role_memberships`, admin helper reads/writes | Route gate exists; backend denial proof pending. |
+| Admin/operator | `platform_role_memberships`, admin helper reads/writes | Route gate now aligns frontend controls with backend role truth; local helper cannot grant destructive controls. Positive backend owner/operator write proof pending. |
 | Legal/support | Support/beta feedback helpers and configured URLs | Bundled pages exist; external URL/legal proof pending. |
 
 No destructive SQL, migration push, storage mutation, or production backend command was run in this pass.
@@ -267,7 +267,7 @@ No new routes were added.
 - Android smoke for Home, Explore, My List, Title Detail, Player, Profile, Channel Settings, Chat, Settings, Support, Subscribe, Admin denied state, and Account Deletion.
 - Creator Media public/draft owner/non-owner proof.
 - Creator-video edit, publish/unpublish, delete/storage remove proof.
-- Creator-video report row and admin moderation proof.
+- Creator-video report row and positive owner/operator admin moderation proof.
 - Player valid/invalid platform and creator-video source proof.
 - Premium/access signed-out, missing entitlement, active entitlement, restore, expired/revoked proof.
 - Legal/support/account-deletion public URL and external review proof.
@@ -278,7 +278,7 @@ No new routes were added.
 1. Keep this non-room fix set scoped and validated.
 2. Run final Android route smoke for auth, discovery, profile/channel, player/title, chat, settings, legal/support, subscribe, admin denied state, and account deletion.
 3. Finish Creator Media public/draft and owner/non-owner proof.
-4. Prove report/admin moderation and Storage API delete/remove behavior.
+4. Prove report row creation, positive owner/operator admin moderation, and Storage API delete/remove behavior.
 5. Prove Premium/access gates and RevenueCat/store setup only after external dashboard configuration is ready.
 6. Continue release readiness: production env validation, Play Store assets, legal URLs, support process, Firebase proof, and final release-route smoke.
 7. Keep native game streaming, real Chi'llyfects AR processing, paid creator media, tips/coins/payouts, ads, global search, push notification delivery, and advanced creator studio in later phases.
