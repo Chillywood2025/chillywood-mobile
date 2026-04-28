@@ -35,6 +35,7 @@ import {
   readCreatorVideos,
   type CreatorVideo,
 } from "../../_lib/creatorVideos";
+import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
@@ -42,6 +43,7 @@ import {
     Image,
     ImageBackground,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -57,6 +59,7 @@ import {
   type UserProfile,
 } from "../../_lib/userData";
 import type { Tables } from "../../supabase/database.types";
+import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { supabase } from "../../_lib/supabase";
@@ -546,6 +549,23 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [isOfficialProfile, isSelfProfile, userId]);
+
+  const shareCreatorVideo = async (video: CreatorVideo) => {
+    if (!isCreatorVideoPubliclyShareable(video)) {
+      Alert.alert("Share unavailable", "Only public creator videos can be shared outside this channel.");
+      return;
+    }
+
+    const link = buildCreatorVideoDeepLink(video.id);
+    try {
+      await Share.share({
+        message: `Watch ${video.title} on Chi'llywood: ${link}`,
+      });
+    } catch {
+      Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
+    }
+  };
+
   useEffect(() => {
     let active = true;
 
@@ -1913,11 +1933,11 @@ export default function ProfileScreen() {
               ) : creatorVideos.length ? (
                 <View style={styles.creatorVideoGrid}>
                   {creatorVideos.map((video) => (
-                    <TouchableOpacity
+                    <CreatorVideoCard
                       key={video.id}
-                      style={styles.creatorVideoCard}
-                      activeOpacity={0.86}
-                      onPress={() => {
+                      video={video}
+                      mode={isSelfProfile ? "owner" : "public"}
+                      onOpen={() => {
                         router.push({
                           pathname: "/player/[id]",
                           params: {
@@ -1926,30 +1946,10 @@ export default function ProfileScreen() {
                           },
                         });
                       }}
-                    >
-                      <View style={styles.creatorVideoThumb}>
-                        {video.thumbnailUrl ? (
-                          <Image source={{ uri: video.thumbnailUrl }} style={styles.creatorVideoThumbImage} />
-                        ) : (
-                          <Text style={styles.creatorVideoThumbText}>VIDEO</Text>
-                        )}
-                        {isSelfProfile ? (
-                          <View style={styles.creatorVideoVisibilityBadge}>
-                            <Text style={styles.creatorVideoVisibilityText}>
-                              {video.moderationStatus === "hidden"
-                                || video.moderationStatus === "removed"
-                                || video.moderationStatus === "banned"
-                                ? video.moderationStatus.toUpperCase()
-                                : video.visibility === "public" ? "PUBLIC" : "DRAFT"}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Text style={styles.creatorVideoTitle}>{video.title}</Text>
-                      <Text style={styles.creatorVideoBody} numberOfLines={2}>
-                        {video.description || "Open this creator video in Player."}
-                      </Text>
-                    </TouchableOpacity>
+                      onShare={!isSelfProfile && isCreatorVideoPubliclyShareable(video) ? () => {
+                        void shareCreatorVideo(video);
+                      } : undefined}
+                    />
                   ))}
                 </View>
               ) : isSelfProfile ? (
@@ -2381,8 +2381,6 @@ const styles = StyleSheet.create({
   },
   quickActionChipText: { color: "#E0E7FF", fontSize: 12, fontWeight: "800" },
   creatorVideoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: 10,
   },
   creatorVideoCard: {

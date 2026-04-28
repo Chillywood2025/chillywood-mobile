@@ -74,6 +74,7 @@ import {
 } from "../_lib/notifications";
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
 import { normalizeUserProfile, readUserProfile, saveUserProfile } from "../_lib/userData";
+import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 
 const SKYLINE_SOURCE = require("../assets/images/chicago-skyline.jpg");
@@ -1792,7 +1793,7 @@ export default function ChannelSettingsScreen() {
                 </View>
               </View>
 
-              <Text style={styles.sectionLabel}>Current Videos</Text>
+              <Text style={styles.sectionLabel}>Creator Library</Text>
               {videosLoading ? (
                 <View style={styles.loadingCard}>
                   <ActivityIndicator color="#fff" />
@@ -1814,83 +1815,28 @@ export default function ChannelSettingsScreen() {
                 </View>
               ) : creatorVideos.length ? (
                 <View style={styles.eventList}>
-                  {creatorVideos.map((video) => {
-                    const moderationBlocked = video.moderationStatus === "hidden"
-                      || video.moderationStatus === "removed"
-                      || video.moderationStatus === "banned";
-                    const moderationLabel = video.moderationStatus === "clean"
-                      ? null
-                      : video.moderationStatus.replace("_", " ");
-
-                    return (
-                      <View key={video.id} style={styles.eventCard}>
-                        <View style={styles.eventCardHeader}>
-                          <View style={styles.eventCardCopy}>
-                            <Text style={styles.eventCardTitle}>{video.title}</Text>
-                            <Text style={styles.eventCardMeta}>
-                              {[
-                                video.visibility === "public" ? "Public" : "Draft",
-                                moderationLabel ? `Moderation: ${moderationLabel}` : null,
-                              ].filter(Boolean).join(" · ")}
-                            </Text>
-                          </View>
-                          <TouchableOpacity
-                            style={styles.eventActionButton}
-                            onPress={() => onEditVideo(video)}
-                            activeOpacity={0.86}
-                          >
-                            <Text style={styles.eventActionButtonText}>Edit</Text>
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={styles.eventCardBody}>
-                          {video.description || "No description yet."}
-                          {video.fileSizeBytes ? `\nFile size: ${Math.round(video.fileSizeBytes / 1024 / 1024)} MB` : ""}
-                        </Text>
-                        <View style={styles.eventActionRow}>
-                          <TouchableOpacity
-                            style={styles.eventSecondaryButton}
-                            activeOpacity={0.86}
-                            onPress={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
-                          >
-                            <Text style={styles.eventSecondaryButtonText}>Open Player</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.eventSecondaryButton, moderationBlocked && styles.eventPrimaryButtonDisabled]}
-                            activeOpacity={0.86}
-                            disabled={videoSaving || moderationBlocked}
-                            onPress={() => {
-                              void updateCreatorVideoMetadata(video.id, {
-                                visibility: video.visibility === "public" ? "draft" : "public",
-                              })
-                                .then(() => loadCreatorVideos())
-                                .then(() => setVideoNotice(video.visibility === "public" ? "Video moved to draft." : "Video published."))
-                                .catch((error) => setVideoNotice(formatCreatorVideoUiError(
-                                  error,
-                                  "Unable to update video visibility right now.",
-                                )));
-                            }}
-                          >
-                            <Text style={styles.eventSecondaryButtonText}>
-                              {video.visibility === "public" ? "Unpublish" : "Publish"}
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.eventSecondaryButton}
-                            activeOpacity={0.86}
-                            disabled={videoSaving}
-                            onPress={() => onDeleteVideo(video)}
-                          >
-                            <Text style={styles.eventSecondaryButtonText}>Delete</Text>
-                          </TouchableOpacity>
-                        </View>
-                        {moderationBlocked ? (
-                          <Text style={styles.videoRequirementText}>
-                            {"This video is unavailable until Chi'llywood moderation restores it."}
-                          </Text>
-                        ) : null}
-                      </View>
-                    );
-                  })}
+                  {creatorVideos.map((video) => (
+                    <CreatorVideoCard
+                      key={video.id}
+                      video={video}
+                      mode="owner"
+                      busy={videoSaving}
+                      onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
+                      onEdit={() => onEditVideo(video)}
+                      onToggleVisibility={() => {
+                        void updateCreatorVideoMetadata(video.id, {
+                          visibility: video.visibility === "public" ? "draft" : "public",
+                        })
+                          .then(() => loadCreatorVideos())
+                          .then(() => setVideoNotice(video.visibility === "public" ? "Video moved to draft." : "Video published."))
+                          .catch((error) => setVideoNotice(formatCreatorVideoUiError(
+                            error,
+                            "Unable to update video visibility right now.",
+                          )));
+                      }}
+                      onDelete={() => onDeleteVideo(video)}
+                    />
+                  ))}
                 </View>
               ) : (
                 <View style={styles.eventEmptyCard}>

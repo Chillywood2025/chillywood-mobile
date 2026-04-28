@@ -3,6 +3,7 @@
 Date: 2026-04-24
 Updated: 2026-04-25 for creator upload foundation and comment media scope
 Updated: 2026-04-28 for non-room Player source ownership hardening
+Updated: 2026-04-28 for creator video card presentation and engagement truth
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -132,7 +133,7 @@ Channel settings now supports a first creator video upload/manage foundation:
 - video file picker through `expo-document-picker`
 - title, description, optional thumbnail URL, and draft/public visibility
 - upload/save state and error/notice state
-- current creator video list with edit, publish/unpublish, delete, and open Player actions
+- modern creator video cards with thumbnail/fallback preview, status badges, edit, publish/unpublish, delete, and open Player actions
 
 Channel settings does not yet support:
 
@@ -141,6 +142,7 @@ Channel settings does not yet support:
 - avatar or hero image upload
 - public/private/subscriber content access on uploaded creator content
 - native game/video streaming source management
+- native thumbnail generation, duration extraction, creator-video likes, creator-video comments, engagement counts, or creator-video saves/My List
 
 ## Profile <-> Channel Integration
 
@@ -158,6 +160,8 @@ Updated working connections:
 
 - Profile Content can render creator-owned videos from `videos`.
 - Owner Profile view links to Channel Settings for upload.
+- Profile/Channel creator-video cards now show thumbnails when `thumb_url` or `thumb_storage_path` resolves, otherwise a branded Chi'llywood fallback preview.
+- Public Profile/Channel cards can share a route-safe app deep link for public clean/reported creator videos only.
 - Uploaded videos open in `/player/[id]?source=creator-video`.
 - Draft videos are intended to stay owner-only through query shape and RLS policy intent.
 
@@ -188,12 +192,15 @@ What now exists for normal creators:
 - Player support for uploaded videos through `source=creator-video`
 - edit, publish/unpublish, delete, and open Player controls for the owner
 - creator-video report intake from Player, admin hide/remove/restore status, and public playback/list filtering for moderated videos
+- route-safe native sharing for public creator videos using the app Player route, not raw Supabase media URLs
 
 What still does not exist for normal creators:
 
 - no channel shelf picker using creator-owned media
 - no creator content category/genre visibility workflow outside internal/admin `titles`
 - no thumbnail file upload yet; the foundation supports optional thumbnail URL
+- no automatic thumbnail generation or duration extraction
+- no creator-video likes, comments, saves/My List, or engagement counts
 - no automatic transcoding or moderation queue automation
 
 Where content goes today:
@@ -220,14 +227,50 @@ Current upload truth after foundation:
 - `/admin` can create platform `titles` by URL. That is internal programming, not creator upload.
 - `app/player/[id].tsx` supports uploaded creator videos through `/player/[id]?source=creator-video`; creator videos no longer open through bare `/player/[id]` fallback.
 - `_lib/creatorVideos.ts` is the creator-video read/write/upload owner.
+- `components/creator-media/creator-video-card.tsx` is the shared presentation owner for uploaded-video cards in Channel Settings and Profile/Channel.
+- `_lib/creatorVideoLinks.ts` builds route-safe creator-video app deep links and centralizes the public-share eligibility check.
 - Android upload/player proof exists for the initial upload and standalone Player path; focused local Supabase/RLS proof now passes for creator video metadata visibility, moderation/report rows, premium/billing entitlement writes, and tightened Watch-Party room policies. Public/draft, non-owner, Storage API delete, report/admin moderation runtime, and live Supabase/RLS proof remain pending.
 
 `videos` table readiness:
 
 - Implemented foundation: `visibility`, `storage_path`, `thumb_storage_path`, `mime_type`, `file_size_bytes`, `updated_at`, and `moderation_status` with admin moderation metadata.
+- Present but not fully productized: `thumb_url` can supply a thumbnail URL, and `thumb_storage_path` can resolve a signed thumbnail when populated.
 - RLS policy proof now distinguishes public clean/reported videos from owner drafts and hidden/removed/banned videos in local Supabase.
 - `creator-videos` private storage bucket and owner/public storage policy intent are in the repo migrations.
-- Still missing: category/genre, thumbnail file upload, transcoding, and live Supabase/RLS proof.
+- Still missing: category/genre, thumbnail file upload/generation, duration metadata in generated app types, creator-video like/comment/share counts, transcoding, and live Supabase/RLS proof.
+
+## Creator Video Presentation And Engagement Truth
+
+Current visual behavior:
+
+- Channel Settings owner library shows every owner video returned by `readCreatorVideos(..., { includeDrafts: true })`.
+- Owner cards show thumbnail/fallback preview, Play overlay, Draft/Public badge, moderation badge when applicable, description preview, file size when present, updated date when parseable, mime type, and owner controls.
+- Profile/Channel shows creator-video cards in the Content tab. Owner view may include drafts with badges; public viewer reads only public clean/reported videos through `_lib/creatorVideos.ts` and RLS.
+- Cards route to `/player/[id]?source=creator-video`.
+- Home, Explore, and My List remain platform-title surfaces and do not list creator videos.
+
+Thumbnail/preview truth:
+
+- `thumb_url` exists on `videos`.
+- `thumb_storage_path` exists and can resolve a signed thumbnail URL through `_lib/creatorVideos.ts`.
+- No native thumbnail generation package or thumbnail file picker was added in this pass.
+- If no thumbnail exists, the shared card shows a branded Chi'llywood fallback preview.
+
+Engagement truth:
+
+- Creator-video Report is backed in Player through `safety_reports` with `target_type = 'creator_video'`.
+- Route-safe native Share is available for public clean/reported creator videos and shares the app route/deep link, not signed media URLs.
+- Creator-video likes are not backed; `_lib/contentEngagement.ts` is title-only through `user_content_relationships.title_id`.
+- Creator-video comments are not backed; current comments in Player are room comments, not standalone creator-video comments.
+- Creator-video saves/My List are not backed; `user_list` is title-only.
+- Like/comment/share counts are not backed for creator videos.
+
+Smallest next implementation lane if comments are required before launch:
+
+1. Add `creator_video_comments` and optional `creator_video_comment_reactions` tables with RLS for public clean/reported video reads, signed-in text-comment inserts, owner/admin moderation, and hidden/removed filtering.
+2. Add generated Supabase types and helper functions.
+3. Add a text-only comments drawer/action in Player for creator-video playback.
+4. Prove public/draft/hidden/removed visibility, signed-out behavior, report/delete moderation, and release logging.
 
 Smallest safe Public v1 upload requirements:
 

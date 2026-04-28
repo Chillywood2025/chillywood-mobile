@@ -130,9 +130,13 @@ Status: Implemented / Proof Pending.
 
 Channel Settings owns creator upload/manage. The current lane has file selection, selected file state, title requirement, optional description/thumbnail URL, draft/public state, upload loading state, notices/errors, edit metadata, publish/unpublish, delete confirmation, and moderated-status blocking copy.
 
+Presentation update: creator videos now use a shared media-first card in Channel Settings and Profile/Channel. The card shows real thumbnails from `thumb_url` / `thumb_storage_path` when available, a branded fallback preview when not, Play overlay, visibility and moderation badges, file size/date metadata where present, and owner controls only in owner surfaces.
+
 No fake paid/subscriber media, transcoding, payout, or advanced creator studio controls were added.
 
-Proof pending: public/draft visibility, edit, publish/unpublish, delete/storage remove, report row creation, admin hide/remove/restore, and non-owner denial.
+Engagement truth: creator-video Report is backed in Player, public creator-video Share uses the app route/deep link, and creator-video likes/comments/saves/counts are not backed or shown. Title-only engagement remains title-only.
+
+Proof pending: public/draft visibility, thumbnail/fallback visual smoke, edit, publish/unpublish, delete/storage remove, report row creation, admin hide/remove/restore, and non-owner denial.
 
 ## 7. Player/Title Findings
 
@@ -149,6 +153,7 @@ Expected behavior now:
 - Valid creator video requires `/player/[id]?source=creator-video`.
 - Invalid creator-video source shows Creator video unavailable.
 - Creator-video source does not fall back to platform/sample media.
+- Creator-video Player hides title-only save/like/share relationship controls, keeps backed Report, and exposes only route-safe native Share for public shareable creator videos.
 
 Proof pending: Android smoke for all valid/invalid source cases and release log audit for signed URL exposure.
 

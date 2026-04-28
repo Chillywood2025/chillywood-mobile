@@ -129,14 +129,18 @@ Fixed:
 - Selected file cancel/unsupported states are clearer.
 - Creator video library load failure has retry.
 - Upload/manage failure notices avoid raw storage/RLS messages.
+- Creator video cards now lead with thumbnail or branded fallback preview instead of developer-looking text records.
+- Owner/public cards show clear visibility and moderation badges, and public cards only expose route-safe Share when the video is public and shareable.
 
 Still pending:
 
 - Publish/unpublish proof.
 - Edit/delete proof.
 - Public/draft and owner/non-owner proof.
+- Thumbnail-present and no-thumbnail fallback visual proof on Android.
 - Storage API delete/remove proof.
 - Moderation-hidden public/player blocking proof.
+- Creator-video comments, likes, saves/My List, generated thumbnails, duration, and engagement counts remain unimplemented rather than faked.
 
 ## Moderation And Report Polish
 

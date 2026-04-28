@@ -19,6 +19,7 @@ import {
     Platform,
     SafeAreaView,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TextInput,
@@ -51,6 +52,7 @@ import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { readCreatorVideoForPlayer, type CreatorVideo } from "../../_lib/creatorVideos";
+import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
     getCreatorVideoWatchPartyBlockCopy,
     getCreatorVideoWatchPartyBlockReason,
@@ -393,17 +395,21 @@ type StandalonePlayerTopChromeProps = {
   overlayTranslateY: Animated.Value;
   myListBusy: boolean;
   inMyList: boolean;
+  canSaveToList: boolean;
   onToggleMyList: () => void;
   playbackRate: number;
   onToggleSpeedMenu: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  canLike: boolean;
   engagementState: TitleEngagementState | null;
   engagementLoading: boolean;
   engagementBusy: "like" | "share" | null;
   onToggleLike: () => void;
   canMarkShared: boolean;
   onToggleShare: () => void;
+  canShareCreatorVideo: boolean;
+  onShareCreatorVideo: () => void;
   onWatchParty: () => void;
   canReport: boolean;
   reportBusy: boolean;
@@ -419,17 +425,21 @@ function StandalonePlayerTopChrome({
   overlayTranslateY,
   myListBusy,
   inMyList,
+  canSaveToList,
   onToggleMyList,
   playbackRate,
   onToggleSpeedMenu,
   isFullscreen,
   onToggleFullscreen,
+  canLike,
   engagementState,
   engagementLoading,
   engagementBusy,
   onToggleLike,
   canMarkShared,
   onToggleShare,
+  canShareCreatorVideo,
+  onShareCreatorVideo,
   onWatchParty,
   canReport,
   reportBusy,
@@ -453,14 +463,16 @@ function StandalonePlayerTopChrome({
             ]}
           >
             <View style={styles.standaloneUtilityRow}>
-              <TouchableOpacity
-                style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
-                onPress={onToggleMyList}
-                disabled={myListBusy}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
-              </TouchableOpacity>
+              {canSaveToList ? (
+                <TouchableOpacity
+                  style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
+                  onPress={onToggleMyList}
+                  disabled={myListBusy}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
                 onPress={onToggleSpeedMenu}
@@ -477,16 +489,18 @@ function StandalonePlayerTopChrome({
               </TouchableOpacity>
             </View>
             <View style={styles.standaloneEngagementRow}>
-              <TouchableOpacity
-                style={[styles.compactChip, engagementState?.liked && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
-                onPress={onToggleLike}
-                disabled={engagementLoading || engagementBusy !== null}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.compactChipText, engagementState?.liked && styles.compactChipTextAccent]}>
-                  {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
-                </Text>
-              </TouchableOpacity>
+              {canLike ? (
+                <TouchableOpacity
+                  style={[styles.compactChip, engagementState?.liked && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
+                  onPress={onToggleLike}
+                  disabled={engagementLoading || engagementBusy !== null}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.compactChipText, engagementState?.liked && styles.compactChipTextAccent]}>
+                    {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
               {canMarkShared ? (
                 <TouchableOpacity
                   style={[styles.compactChip, engagementState?.shared && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
@@ -497,6 +511,15 @@ function StandalonePlayerTopChrome({
                   <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
                     {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
                   </Text>
+                </TouchableOpacity>
+              ) : null}
+              {canShareCreatorVideo ? (
+                <TouchableOpacity
+                  style={styles.compactChip}
+                  onPress={onShareCreatorVideo}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.compactChipText}>Share</Text>
                 </TouchableOpacity>
               ) : null}
               {canReport ? (
@@ -973,7 +996,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     let active = true;
 
-    if (inWatchParty || isLiveModeFlag || !titleId) {
+    if (inWatchParty || isLiveModeFlag || !titleId || expectsCreatorVideo || playbackSourceKind === "creator-video") {
       setEngagementState(null);
       setEngagementLoading(false);
       return () => {
@@ -996,7 +1019,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [inWatchParty, isLiveModeFlag, titleId]);
+  }, [expectsCreatorVideo, inWatchParty, isLiveModeFlag, playbackSourceKind, titleId]);
 
   useEffect(() => {
     let active = true;
@@ -2724,6 +2747,23 @@ export default function PlayerScreen() {
     }
   }, [engagementBusy, engagementState?.shared, isSignedIn, resetAutoHideTimer, titleId]);
 
+  const onShareCreatorVideo = useCallback(async () => {
+    resetAutoHideTimer();
+
+    if (!creatorVideo || !isCreatorVideoPubliclyShareable(creatorVideo)) {
+      Alert.alert("Share unavailable", "Only public creator videos can be shared outside the Player.");
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: `Watch ${creatorVideo.title} on Chi'llywood: ${buildCreatorVideoDeepLink(creatorVideo.id)}`,
+      });
+    } catch {
+      Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
+    }
+  }, [creatorVideo, resetAutoHideTimer]);
+
   const onWatchParty = useCallback(async () => {
     if (playbackSourceKind === "creator-video") {
       if (!isSignedIn) {
@@ -3999,7 +4039,10 @@ export default function PlayerScreen() {
     standalonePlaybackUnknown,
   ]);
   const showStandaloneAccessOverlay = isStandalonePlayer && standalonePlaybackGateActive && !!standaloneAccessPresentation;
-  const canMarkStandaloneShared = isStandalonePlayer && !standaloneAccessLoading && !!standaloneAccess?.isAllowed;
+  const canSaveStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback;
+  const canLikeStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback;
+  const canMarkStandaloneShared = isStandalonePlayer && !isCreatorVideoPlayback && !standaloneAccessLoading && !!standaloneAccess?.isAllowed;
+  const canShareStandaloneCreatorVideo = isStandalonePlayer && isCreatorVideoPubliclyShareable(creatorVideo);
   useEffect(() => {
     if (!inWatchParty) return;
 
@@ -5567,17 +5610,21 @@ export default function PlayerScreen() {
                 overlayTranslateY={compactControlsTranslateY}
                 myListBusy={myListBusy}
                 inMyList={inMyList}
+                canSaveToList={canSaveStandaloneTitle}
                 onToggleMyList={onToggleMyList}
                 playbackRate={playbackRate}
                 onToggleSpeedMenu={() => setSpeedMenuOpen((value) => !value)}
                 isFullscreen={isStandaloneFullscreen}
                 onToggleFullscreen={() => setIsStandaloneFullscreen((value) => !value)}
+                canLike={canLikeStandaloneTitle}
                 engagementState={engagementState}
                 engagementLoading={engagementLoading}
                 engagementBusy={engagementBusy}
                 onToggleLike={onToggleStandaloneLike}
                 canMarkShared={canMarkStandaloneShared}
                 onToggleShare={onToggleStandaloneShare}
+                canShareCreatorVideo={canShareStandaloneCreatorVideo}
+                onShareCreatorVideo={onShareCreatorVideo}
                 onWatchParty={onWatchParty}
                 canReport={isCreatorVideoPlayback}
                 reportBusy={creatorVideoReportBusy}
