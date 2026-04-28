@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../../_lib/analytics";
@@ -144,6 +145,13 @@ export default function Signup() {
             {loading ? "Creating..." : "Sign Up"}
           </Text>
         </Pressable>
+
+        <View style={styles.row}>
+          <Text style={styles.muted}>Already have an account?</Text>
+          <Link href={{ pathname: "/(auth)/login", params: { redirectTo } }} style={styles.link}>
+            Sign in
+          </Link>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -203,5 +211,22 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
     fontSize: 16,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 18,
+  },
+  muted: {
+    color: "#8B94A6",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  link: {
+    color: "#FF5A76",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });

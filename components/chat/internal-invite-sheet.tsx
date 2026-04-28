@@ -262,7 +262,7 @@ export function InternalInviteSheet({
                       <Text style={styles.avatarText}>{initials}</Text>
                     </View>
                     <View style={styles.resultCopy}>
-                      <Text style={styles.resultTitle}>{person.displayName ?? "Chi&apos;llywood member"}</Text>
+                      <Text style={styles.resultTitle}>{person.displayName ?? "Chi'llywood member"}</Text>
                       {person.username ? <Text style={styles.resultMeta}>@{person.username}</Text> : null}
                       {person.tagline ? <Text style={styles.resultBody} numberOfLines={2}>{person.tagline}</Text> : null}
                     </View>

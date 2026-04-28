@@ -901,16 +901,6 @@ export default function PlayerScreen() {
           return;
         }
 
-        const video = await readCreatorVideoForPlayer(routeId);
-        if (video && active) {
-          debugLog("player", "match source resolved", { source: "creator-video:fallback" });
-          setPlaybackSourceKind("creator-video");
-          setCreatorVideo(video);
-          setItem(buildCreatorPlayerTitle(video));
-          setTitleLoading(false);
-          return;
-        }
-
         if (localTitle && active) {
           const chosen = localTitle as any;
           debugLog("player", "match source resolved", { source: localMatchSource });

@@ -127,6 +127,19 @@ No new route is required for this pass. Keep Channel Settings as the v1 Creator 
 - Draft/private, hidden/removed, signed-out, non-premium, and premium/access blocked-state proof.
 - Live layout, comments placement, Chi’llyfects foundation, and overlay auto-hide runtime proof.
 
+## 1B. 2026-04-28 Non-Room Behavior Addendum
+
+The full non-room app behavior audit now lives in `docs/FULL_APP_NON_ROOM_BEHAVIOR_AUDIT.md`. That pass covered Auth, Home, Explore, My List, Profile/Channel, Channel Settings, Creator Media, standalone Player, Title Detail, Chat, Settings, Subscribe, Legal, Support, Account Deletion, Admin, notifications/reminders, search/discovery, and non-room report/moderation surfaces.
+
+Proved non-room hardening from that pass:
+
+- Bare `/player/[id]` no longer resolves creator videos by fallback; creator-video playback requires explicit `/player/[id]?source=creator-video`.
+- Signup now has an existing-account Sign In handoff.
+- Signed-out Chat inbox/thread states now have Sign In handoffs with redirect context.
+- JS string literals no longer render `&apos;` in Chat, Support, or internal invite fallback copy.
+
+No room/live layout changes, monetization implementation, native AR, native game streaming, database migration, Android proof, or long live proof were performed. Android non-room route smoke remains pending.
+
 ## 2. Route Owner Map
 
 ### Root, Auth, Legal, and Support

@@ -2,6 +2,7 @@
 
 Date: 2026-04-24
 Updated: 2026-04-25 for creator upload foundation and comment media scope
+Updated: 2026-04-28 for non-room Player source ownership hardening
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -217,7 +218,7 @@ Current upload truth after foundation:
 - `/channel-settings` has creator-event management plus a creator video upload/manage panel.
 - `/profile/[userId]` displays creator-owned videos from `videos` alongside existing platform-programming cues from `titles`.
 - `/admin` can create platform `titles` by URL. That is internal programming, not creator upload.
-- `app/player/[id].tsx` supports uploaded creator videos through `/player/[id]?source=creator-video`.
+- `app/player/[id].tsx` supports uploaded creator videos through `/player/[id]?source=creator-video`; creator videos no longer open through bare `/player/[id]` fallback.
 - `_lib/creatorVideos.ts` is the creator-video read/write/upload owner.
 - Android upload/player proof exists for the initial upload and standalone Player path; focused local Supabase/RLS proof now passes for creator video metadata visibility, moderation/report rows, premium/billing entitlement writes, and tightened Watch-Party room policies. Public/draft, non-owner, Storage API delete, report/admin moderation runtime, and live Supabase/RLS proof remain pending.
 
@@ -254,6 +255,7 @@ Already working or partly working:
 - Profile Content tab shows real programming cues and can jump to `/title/[id]`.
 - Title Detail supports Play, Favorites, Like, Mark Shared, Report, and Watch-Party Live entry when active rooms exist.
 - Player opens title video sources from `video_url` or local fallback.
+- Player opens creator videos only when the route explicitly includes `source=creator-video`, which keeps platform title ids and creator-video ids from silently crossing owners.
 - Watch-party routes connect titles to room/live experiences.
 - Profile Live tab shows backed creator events and reminder enrollment state where available.
 
@@ -316,7 +318,7 @@ Creator permissions and monetization flags:
 Content/player:
 
 - `titles`: platform title programming table used by Home, Profile Content, Title Detail, Player, Watch Party, and Admin.
-- `videos`: owner-owned video table exists, with public read and owner insert/update/delete policies, but no current app route integration was found.
+- `videos`: owner-owned creator video table integrated with Channel Settings upload/manage, Profile/Channel display, Player playback through `source=creator-video`, creator-video reports, and moderation status.
 - `user_list`: favorites/my-list.
 - `watch_history`: continue watching.
 - `user_content_relationships`: like/share relationship markers.

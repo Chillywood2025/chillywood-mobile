@@ -426,7 +426,7 @@ export default function ChillyChatInboxScreen() {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <ActivityIndicator size="small" color="#F34B74" />
-        <Text style={styles.stateText}>{authLoading ? "Checking Chi&apos;lly Chat access..." : "Loading Chi&apos;lly Chat..."}</Text>
+        <Text style={styles.stateText}>{authLoading ? "Checking Chi'lly Chat access..." : "Loading Chi'lly Chat..."}</Text>
       </View>
     );
   }
@@ -439,6 +439,13 @@ export default function ChillyChatInboxScreen() {
           <Text style={styles.emptyBody}>
             Chi&apos;lly Chat inbox, direct threads, and official support threads only open on a signed-in Chi&apos;llywood identity.
           </Text>
+          <TouchableOpacity
+            style={[styles.quickActionButton, styles.quickActionAccentButton]}
+            activeOpacity={0.86}
+            onPress={() => router.push({ pathname: "/(auth)/login", params: { redirectTo: "/chat" } })}
+          >
+            <Text style={styles.quickActionAccentButtonText}>Sign In</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -458,11 +465,11 @@ export default function ChillyChatInboxScreen() {
         ListHeaderComponent={listHeader}
         ListEmptyComponent={(
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>{searchQuery.trim() ? "No matching threads" : "No Chi&apos;lly Chat threads yet"}</Text>
+            <Text style={styles.emptyTitle}>{searchQuery.trim() ? "No matching threads" : "No Chi'lly Chat threads yet"}</Text>
             <Text style={styles.emptyBody}>
               {searchQuery.trim()
                 ? "Try another name or clear your search."
-                : "Open Chi&apos;lly Chat from a profile to start your first direct thread."}
+                : "Open Chi'lly Chat from a profile to start your first direct thread."}
             </Text>
             {error ? <Text style={styles.errorText}>{error.message}</Text> : null}
           </View>

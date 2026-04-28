@@ -269,7 +269,7 @@ export function SupportScreen() {
             <Text style={styles.cardBody}>
               {closedBeta
                 ? "Support, room access, and structured feedback all depend on a real signed-in tester identity."
-                : "Support feedback, room access, and safety reports all depend on a real signed-in Chi&apos;llywood account."}
+                : "Support feedback, room access, and safety reports all depend on a real signed-in Chi'llywood account."}
             </Text>
             <TouchableOpacity
               style={styles.primaryButton}

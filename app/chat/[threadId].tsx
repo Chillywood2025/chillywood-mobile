@@ -818,7 +818,7 @@ export default function ChillyChatThreadScreen() {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <ActivityIndicator size="small" color="#F34B74" />
-        <Text style={styles.stateText}>{authLoading ? "Checking Chi&apos;lly Chat access..." : "Loading thread…"}</Text>
+        <Text style={styles.stateText}>{authLoading ? "Checking Chi'lly Chat access..." : "Loading thread…"}</Text>
       </View>
     );
   }
@@ -827,6 +827,18 @@ export default function ChillyChatThreadScreen() {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <Text style={styles.stateText}>Sign in to open Chi&apos;lly Chat.</Text>
+        <TouchableOpacity
+          style={[styles.secondaryBtn, styles.signInBtn]}
+          activeOpacity={0.85}
+          onPress={() => {
+            router.push({
+              pathname: "/(auth)/login",
+              params: { redirectTo: threadId ? `/chat/${threadId}` : "/chat" },
+            });
+          }}
+        >
+          <Text style={styles.secondaryBtnText}>Sign In</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
           <Text style={styles.secondaryBtnText}>Back</Text>
         </TouchableOpacity>
@@ -1946,6 +1958,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
     paddingHorizontal: 14,
     paddingVertical: 10,
+  },
+  signInBtn: {
+    backgroundColor: "#F34B74",
+    borderColor: "rgba(243,75,116,0.7)",
   },
   secondaryBtnText: {
     color: "#EFF4FF",
