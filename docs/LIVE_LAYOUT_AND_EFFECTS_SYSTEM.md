@@ -2,7 +2,7 @@
 
 Date: 2026-04-27
 
-Status: layout and Chi’llyfects foundation implemented in code, Android/two-device runtime proof pending. Chi’llyfects status is `UI Implemented / No Camera Processing`: the catalog and controls exist, but outgoing LiveKit camera tracks are not processed. The Snap Camera Kit audit is complete in `docs/CHILLYFECTS_SNAP_CAMERA_KIT_AUDIT.md`; it recommends an Android-only POC, not production adoption, until processed LiveKit output is proven. The user-approved major layout structure is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
+Status: layout and Chi’llyfects foundation implemented in code, Android/two-device runtime proof pending. Chi’llyfects status is `UI Implemented / No Camera Processing`: the catalog and controls exist, but outgoing LiveKit camera tracks are not processed. Real Chi’llyfects AR processing is post-v1. The Snap Camera Kit audit is complete in `docs/CHILLYFECTS_SNAP_CAMERA_KIT_AUDIT.md` as planning input only; Public v1 must not add Snap Camera Kit, DeepAR, MediaPipe processing, custom WebRTC frame processors, or any native AR SDK. The user-approved major layout structure is locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`.
 
 ## 1. System Purpose
 
@@ -22,9 +22,19 @@ The current comments placement is part of the locked structure. Comments must st
 | Live Watch-Party | Home -> `/watch-party?mode=live` -> `/watch-party/live-stage/[partyId]` | `app/watch-party/index.tsx`, `app/watch-party/live-stage/[partyId].tsx` | Live Stage / LiveKit | Platform title playback, creator-video party playback, Player route behavior |
 | Watch-Party Live | Player -> `/watch-party` -> `/watch-party/[partyId]` -> Player with `partyId` | `app/player/[id].tsx`, `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx` | Watch-Party / Party Room | Live Stage camera routing, Home live-first room behavior |
 | LiveKit media rendering | Live Stage media surface | `components/watch-party-live/livekit-stage-media-surface.tsx` | LiveKit media surface | Room source ownership, upload management, billing |
-| Chi’llyfects foundation | Live room UI + shared metadata | `_lib/liveEffects.ts`, `components/live/live-effects-sheet.tsx` | Chi’llyfects System | Real AR processing until native/video processor is built |
+| Chi’llyfects foundation | Live room UI + shared metadata | `_lib/liveEffects.ts`, `components/live/live-effects-sheet.tsx` | Chi’llyfects System | Real AR processing before the post-v1 native/video processor lane |
 
 Buttons only trigger these owners. A button labeled Watch-Party Live from Player must enter the normal Party flow. A Home Live Watch-Party entry must enter Live Stage.
+
+2026-04-28 route hardening:
+
+- Party waiting room create/code paths now refuse no-source Party Room creation instead of silently creating live rooms.
+- Invalid platform title ids do not fall back to the first title.
+- Direct Live Stage opens reject non-live Party Room ids with honest copy.
+- Player Watch-Party Live rejects live room ids and preserves platform source context when falling back to the waiting room.
+- The LiveKit token edge function rejects Live Stage / Watch-Party Live surface mismatches.
+
+These are route/source guards only. They did not move comments, compact the approved structure, change LiveKit ownership, add monetization, or add real Chi’llyfects processing.
 
 ## 3. Live Watch-Party Behavior
 
@@ -194,11 +204,11 @@ V1 scope is foundation only:
 - Chi’llyfects can be selected in UI as catalog/foundation state.
 - Non-Off Chi’llyfects are marked coming soon or preview-only and are not applied to outgoing camera output.
 - No camera beautification, makeup, aging, face scan, or AI transformation is claimed as active.
-- No new native AR SDK or heavy camera-processing dependency was added in this pass.
+- Do not add Snap Camera Kit, DeepAR, MediaPipe processing, custom WebRTC frame processors, native AR SDKs, or heavy camera-processing dependencies before Public v1.
 
-## 12. Later Chi’llyfects Scope
+## 12. Post-v1 Chi’llyfects Scope
 
-Later Chi’llyfects may include:
+Post-v1 Chi’llyfects may include:
 
 - real local preview effects
 - outgoing LiveKit track processing
@@ -210,11 +220,11 @@ Later Chi’llyfects may include:
 - AI or aging effects after privacy, consent, safety, and model review
 - novelty face-card style frames that do not rate attractiveness or sensitive traits
 
-These need a separate implementation lane and runtime proof.
+These need a separate post-v1 implementation lane and runtime proof.
 
-## 13. Technical Requirements For Real Processing
+## 13. Post-v1 Technical Requirements For Real Processing
 
-Real Chi’llyfects require:
+Post-v1 real Chi’llyfects require:
 
 - an approved native or JS video processing path
 - proof that the outgoing camera track is processed, not just overlaid in UI
@@ -226,6 +236,7 @@ Real Chi’llyfects require:
 - no sensitive trait classification
 - no secret/token logging
 - accessibility and safety copy for unsupported devices
+- explicit product approval that the Public v1 stability lane is complete enough to start native AR work
 
 ## 14. What Must Not Be Faked
 
@@ -265,6 +276,11 @@ Watch-Party Live:
 - Confirm source type is `creator_video`.
 - Confirm shared playback opens the correct Player source and no sample/platform fallback happens.
 - Confirm Party Room does not route to Live Stage.
+- Confirm no-source Party waiting room create/code actions block honestly instead of creating live rooms.
+- Confirm invalid platform title ids show unavailable state instead of falling back to another title.
+- Confirm direct Live Stage opens reject non-live Party Room ids.
+- Confirm Player Watch-Party Live rejects live room ids.
+- Confirm LiveKit token surface mismatch denial after the edge function is deployed.
 - Confirm comments send/read for joined members.
 - Confirm comments remain in their current visible placement and are not moved into a drawer, modal, bottom sheet, overlay-only surface, hidden secondary panel, or menu-only replacement.
 
@@ -274,7 +290,7 @@ Chi’llyfects:
 - Confirm Chi’llyfects UI opens in Watch-Party Live Party Room.
 - Confirm `Off` is the only real active state.
 - Confirm coming-soon Chi’llyfects do not visually alter outgoing camera tracks.
-- Confirm no new native dependency or rebuild requirement was introduced in the foundation pass.
+- Confirm no Snap Camera Kit, DeepAR, MediaPipe processing, custom WebRTC frame processor, native AR SDK, or new native rebuild requirement was introduced before Public v1.
 
 Validation:
 

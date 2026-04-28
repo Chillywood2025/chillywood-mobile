@@ -303,6 +303,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (room.kind === "watch-party") {
+      const roomType = sanitizeText(room.roomType).toLowerCase();
+      if (surface === "live-stage" && roomType !== "live") {
+        return json(409, {
+          error: "room_surface_mismatch",
+          message: "Live Stage tokens can only be issued for Live Watch-Party rooms.",
+        });
+      }
+
+      if (surface === "watch-party-live" && roomType === "live") {
+        return json(409, {
+          error: "room_surface_mismatch",
+          message: "Watch-Party Live tokens can only be issued for Party Room sources.",
+        });
+      }
+    }
+
     const userId = sanitizeText(authResult.user.id);
     const tokenMetadata = sanitizeMetadata(payload.metadata);
     const canJoinRequestedRole = await userCanJoinAsRequestedRole(

@@ -54,6 +54,79 @@ The biggest audit findings are not broad architecture failures. They are launch-
 
 This audit recommends documentation and targeted follow-up fixes. It does not recommend a route redesign.
 
+## 1A. 2026-04-28 Room Behavior Hardening Addendum
+
+### Runtime / Build Truth
+
+- Repo root: `/Users/loverslane/chillywood-mobile`
+- Branch: `main`
+- Local HEAD at pass start: `5ae5833eba335733a44662de761fe664f19134f8`
+- `origin/main` at pass start: `5ae5833eba335733a44662de761fe664f19134f8`
+- Initial local dirt: `CURRENT_STATE.md`, `NEXT_TASK.md`, `docs/LIVE_LAYOUT_AND_EFFECTS_SYSTEM.md`, `docs/PUBLIC_V1_READINESS_CHECKLIST.md`, plus untracked `supabase/.temp/`
+- Android device visible: `R5CR120QCBF`
+- Detectable Metro/Expo server: none
+- Installed Android app: `com.chillywood.mobile`, `versionName=1.0.0`, `versionCode=1`, debuggable, last updated 2026-04-26
+- Runtime implication: the installed app may be stale relative to this repo. This pass did not run Android/live proof, production build, or long two-device proof.
+
+### Room Map Summary
+
+| Screen / room | Route | Owner | System owner | Current status |
+| --- | --- | --- | --- | --- |
+| Home Live Watch-Party entry | `/(tabs)` Home -> `/watch-party?mode=live` | `app/(tabs)/index.tsx` | Home / Live Watch-Party entry | Correct |
+| Live Waiting Room | `/watch-party?mode=live` | `app/watch-party/index.tsx` | Live Waiting Room | Correct |
+| Live Stage / Live Watch-Party | `/watch-party/live-stage/[partyId]` | `app/watch-party/live-stage/[partyId].tsx`, `components/watch-party-live/livekit-stage-media-surface.tsx` | Live Stage / LiveKit | Hardened; runtime proof pending |
+| Player Watch-Party Live entry | `/player/[id]` | `app/player/[id].tsx` | Player / content Watch-Party entry | Hardened; smoke pending |
+| Party Waiting Room | `/watch-party` with title/source params | `app/watch-party/index.tsx` | Party Waiting Room | Hardened; smoke pending |
+| Party Room / Watch-Party Live | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Shared content Party Room | Correct; proof pending |
+| Platform-title Party Room | `/watch-party/[partyId]`, source `platform_title` | Player, Waiting Room, Party Room, `_lib/watchParty.ts` | Platform title Watch-Party | Hardened against missing-title fallback |
+| Creator-video Party Room | `/watch-party/[partyId]`, source `creator_video` | Creator Player, Waiting Room, Party Room, source helpers | Creator-video Watch-Party | Correct; two-device and blocked-state proof pending |
+| Direct rejoin routes | `/watch-party/[partyId]`, `/watch-party/live-stage/[partyId]` | Route-specific bootstrap owners | Party Room / Live Stage | Hardened against cross-surface room ids |
+| Chat inbox/thread | `/chat`, `/chat/[threadId]` | `app/chat/*` | Chi'lly Chat | Correct foundation |
+| Legacy communication | `/communication`, `/communication/[roomId]` | `app/communication/*` | Compatibility only | `/communication` redirect resolved; room route guarded |
+| Admin room/moderation areas | `/admin` | `app/admin.tsx` | Admin / Safety | Correct foundation; proof pending |
+
+### Buttons / Taps Audited
+
+- Home Live Watch-Party CTA routes only to `/watch-party?mode=live`.
+- Live waiting room create/join/code/continue actions preserve live lane ownership.
+- Party waiting room create/join/code/continue actions now require a title/source for Party Room creation instead of silently becoming live rooms.
+- Wrong-code guards keep live codes out of Party Room flow and Party codes out of live flow.
+- Live Stage Live First / Live Watch-Party toggle, camera, mic, leave, rejoin, Chi’llyfects, comments, invite/report, and route-gate actions stayed in the approved Live Stage structure.
+- Player Watch-Party Live CTA keeps platform and creator-video source context and routes only to the normal Party flow.
+- Party Room shared playback, leave/rejoin, comments input/send, Chi’llyfects, source card, and participant controls stayed in the approved content-first structure.
+- Title Watch-Party CTA and creator-video Watch-Party CTA use normal Party flow, not Live Stage.
+- Chat inbox/thread buttons remain native Chat owners; `/communication` is compatibility.
+- Admin safety actions remain in Admin and were not expanded into new monetization scope.
+- Premium/access buttons remain access-gate/premium-surface concerns; no paid creator content, payouts, tips, coins, ads, VIPs, or subscriber-only media were added.
+
+### Route / Behavior Mismatches Fixed
+
+1. Generic Party waiting room create/code paths could create a live room when no source/title was present. The waiting room now blocks that path with honest copy and requires Player/title/source context for Party Room creation.
+2. `_lib/watchParty.ts` could resolve an invalid platform title id by falling back to the first title. It now returns no title for unresolved platform ids instead of creating a fake source fallback.
+3. Direct `/watch-party/live-stage/[partyId]` could continue bootstrap for a non-live Party Room id. Live Stage now rejects non-live rooms with an honest route-gate message.
+4. Player Watch-Party bootstrap now rejects live room ids instead of treating them as Watch-Party Live entries.
+5. Player Watch-Party creation now forces platform Watch-Party rooms to `roomType: "title"` and preserves source params when falling back to the waiting room.
+6. The LiveKit token edge function now rejects surface mismatches: `live-stage` tokens require live rooms, and `watch-party-live` tokens reject live rooms.
+
+### Layout Lock Status
+
+No layout redesign was made in this pass. The approved Live Stage and Party Room structures remain locked by `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md`. Comments remain in their current visible placements and were not moved into a menu, drawer, modal, bottom sheet, overlay-only surface, hidden secondary panel, or tap-only surface.
+
+### Missing Route Recommendations
+
+No new route is required for this pass. Keep Channel Settings as the v1 Creator Media management owner; keep `/subscribe` as the Premium account/status owner; keep contextual report sheets and Admin moderation in their current owners; keep native game streaming, friends/social routes, full audience roster, payout/earnings routes, and Chi’llyfects native processor settings post-v1.
+
+### Proof Still Pending
+
+- Android route smoke for the new no-source Party waiting room guard.
+- Valid and invalid platform title Watch-Party smoke.
+- Valid and invalid creator-video Watch-Party smoke.
+- Direct cross-surface rejoin smoke: live room in Party surface and Party room in Live Stage.
+- LiveKit token surface mismatch proof after edge-function deployment.
+- Two-device creator-video Watch-Party join/rejoin.
+- Draft/private, hidden/removed, signed-out, non-premium, and premium/access blocked-state proof.
+- Live layout, comments placement, Chi’llyfects foundation, and overlay auto-hide runtime proof.
+
 ## 2. Route Owner Map
 
 ### Root, Auth, Legal, and Support

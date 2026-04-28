@@ -663,6 +663,7 @@ export default function WatchPartyLiveStageScreen() {
   const refreshStageSnapshot = useCallback(async (trackedUserId?: string) => {
     const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
     if (!snapshot) return null;
+    if (snapshot.room.roomType !== "live") return null;
     syncStageSnapshot(snapshot, String(trackedUserId ?? myUserId ?? "").trim());
     return snapshot;
   }, [myUserId, partyId, syncStageSnapshot]);
@@ -846,6 +847,12 @@ export default function WatchPartyLiveStageScreen() {
 
         if (!snapshot) {
           setRoomMissing(true);
+          setLoading(false);
+          return;
+        }
+
+        if (snapshot.room.roomType !== "live") {
+          setRoomEntryError("This room belongs to Watch-Party Live, not Live Stage. Open Party Room to continue.");
           setLoading(false);
           return;
         }
@@ -3394,9 +3401,7 @@ export default function WatchPartyLiveStageScreen() {
                 });
               }}
             >
-              <Text style={styles.routeGatePrimaryText}>
-                {blockedRoomAccess ? "Open Party Room" : "Retry in Party Room"}
-              </Text>
+              <Text style={styles.routeGatePrimaryText}>Open Party Room</Text>
             </TouchableOpacity>
           </View>
         </View>

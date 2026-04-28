@@ -561,9 +561,6 @@ async function resolvePartyTitleId(inputTitleId: string): Promise<string | null>
   try {
     const direct = await supabase.from("titles").select("id").eq("id", raw).maybeSingle();
     if (!direct.error && direct.data?.id) return String(direct.data.id);
-
-    const fallbackAny = await supabase.from("titles").select("id").limit(1).maybeSingle();
-    if (!fallbackAny.error && fallbackAny.data?.id) return String(fallbackAny.data.id);
   } catch {
     // noop
   }

@@ -1230,18 +1230,22 @@ export default function PlayerScreen() {
 
       const roomSourceType = resolveWatchPartySourceType(snapshot.room);
       const roomSourceId = resolveWatchPartySourceId(snapshot.room);
-      if (snapshot.room.roomType === "title") {
-        if (roomSourceType === "creator_video" && (!expectsCreatorVideo || String(roomSourceId ?? "") !== cleanId)) {
-          setWatchPartyEntryError("This watch party is linked to a different creator video source.");
-          setWatchPartyEntryLoading(false);
-          return;
-        }
+      if (snapshot.room.roomType !== "title") {
+        setWatchPartyEntryError("This room belongs to Live Watch-Party, not Watch-Party Live.");
+        setWatchPartyEntryLoading(false);
+        return;
+      }
 
-        if (roomSourceType === "platform_title" && (expectsCreatorVideo || String(roomSourceId ?? snapshot.room.titleId ?? "") !== cleanId)) {
-          setWatchPartyEntryError("This watch party is linked to a different title source.");
-          setWatchPartyEntryLoading(false);
-          return;
-        }
+      if (roomSourceType === "creator_video" && (!expectsCreatorVideo || String(roomSourceId ?? "") !== cleanId)) {
+        setWatchPartyEntryError("This watch party is linked to a different creator video source.");
+        setWatchPartyEntryLoading(false);
+        return;
+      }
+
+      if (roomSourceType === "platform_title" && (expectsCreatorVideo || String(roomSourceId ?? snapshot.room.titleId ?? "") !== cleanId)) {
+        setWatchPartyEntryError("This watch party is linked to a different title source.");
+        setWatchPartyEntryLoading(false);
+        return;
       }
 
       updatePartyMembershipMap(snapshot.memberships);
@@ -2830,9 +2834,8 @@ export default function PlayerScreen() {
         playbackState: isPlaying ? "playing" : "paused",
       });
 
-      const roomType = createTitleId ? "title" : "live";
       const room = await createPartyRoom(createTitleId || null, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused", {
-        roomType,
+        roomType: "title",
         sourceType: createTitleId ? "platform_title" : null,
         sourceId: createTitleId || null,
       });
@@ -2869,7 +2872,18 @@ export default function PlayerScreen() {
     }
 
     debugLog("watch-party", "room creation failed, using waiting room fallback");
-    router.push("/watch-party");
+    const fallbackTitleId = String(item?.id ?? titleId ?? "").trim();
+    router.push({
+      pathname: "/watch-party",
+      params: {
+        source: PLAYER_WATCH_PARTY_SOURCE,
+        ...(fallbackTitleId ? {
+          titleId: fallbackTitleId,
+          sourceType: "platform_title",
+          sourceId: fallbackTitleId,
+        } : {}),
+      },
+    });
   }, [creatorVideo, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
 
   const onSubmitCreatorVideoReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {

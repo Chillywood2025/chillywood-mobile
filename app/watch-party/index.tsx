@@ -713,6 +713,11 @@ export default function WatchPartyIndexScreen() {
 
     if (creating || shouldGuardCreateDuringInitialPrep) return;
 
+    if (activeWaitingRoomType !== "live" && !effectiveTitleId && !effectiveSourceId && !preparedTargetPartyId) {
+      setCreateError("Open Watch-Party Live from a Player, or enter a linked title id before creating a Party Room.");
+      return;
+    }
+
     setCreateError(null);
     setCreating(true);
 
@@ -824,7 +829,13 @@ export default function WatchPartyIndexScreen() {
       const requestedTitleId = String(preparedRoom?.room.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim() || null;
       const requestedSourceType = preparedRoom?.room.sourceType ?? incomingHandoff?.sourceType ?? initialRouteSourceType ?? (requestedTitleId ? "platform_title" : null);
       const requestedSourceId = String(preparedRoom?.room.sourceId ?? incomingHandoff?.sourceId ?? initialRouteSourceId ?? requestedTitleId ?? "").trim() || null;
-      const roomType: WatchPartyRoomType = preparedRoom?.room.roomType ?? (requestedTitleId || requestedSourceId ? "title" : "live");
+      const roomType: WatchPartyRoomType = preparedRoom?.room.roomType ?? activeRoomType;
+
+      if (roomType !== "live" && !requestedTitleId && !requestedSourceId) {
+        setCreateError("Open Watch-Party Live from a Player before generating a party-room code.");
+        return;
+      }
+
       const nextPreparedRoom = await createPreparedWaitingRoom(requestedTitleId, roomType, {
         sourceType: requestedSourceType,
         sourceId: requestedSourceId,
@@ -1127,7 +1138,7 @@ export default function WatchPartyIndexScreen() {
                   setCreateTitleId(t.trim());
                   setCreateError(null);
                 }}
-                placeholder="Linked title (optional)"
+                placeholder="Linked title id required"
                 placeholderTextColor="#5A5A5A"
                 style={styles.input}
                 autoCapitalize="none"
