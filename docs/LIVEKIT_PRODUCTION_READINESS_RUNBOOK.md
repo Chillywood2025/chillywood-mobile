@@ -49,7 +49,8 @@ Owner files:
 
 Current status:
 
-- `docs/SUPABASE_REMOTE_PUBLIC_V1_RUNBOOK.md` records `livekit-token` as remote ACTIVE version 7 from `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly`.
+- `livekit-token` is remote ACTIVE version 8 from `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly` after the 2026-04-28 guardrail deployment.
+- The 2026-04-28 redacted remote function proof passed these four token-shape checks without printing Authorization headers or participant tokens: valid `live-stage` with a live room succeeded, `live-stage` with a title Party Room returned `409 room_surface_mismatch`, valid `watch-party-live` with a title Party Room succeeded, and `watch-party-live` with a live room returned `409 room_surface_mismatch`.
 - `supabase/config.toml` sets `verify_jwt = false` for this function because the function validates the Bearer session internally.
 - The function validates a Supabase authenticated user before minting a token.
 - The function reads these server-side environment values:
@@ -80,7 +81,7 @@ Role truth:
 
 Proof still required:
 
-1. Authenticated signed-in request returns a `participantToken` and `serverUrl`.
+1. Android app-route proof that Live Stage and Watch-Party Live still request and consume deployed tokens successfully without false blocking.
 2. Signed-out request returns `401` or equivalent blocked result.
 3. Malformed request returns `400`.
 4. Existing room with unauthorized role request returns `403`.
