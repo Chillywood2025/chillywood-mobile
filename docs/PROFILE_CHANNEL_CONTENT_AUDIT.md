@@ -5,12 +5,14 @@ Updated: 2026-04-25 for creator upload foundation and comment media scope
 Updated: 2026-04-28 for non-room Player source ownership hardening
 Updated: 2026-04-28 for creator video card presentation and engagement truth
 Updated: 2026-04-28 for Profile/Channel versus Chi'llywood Originals ownership correction
+Updated: 2026-04-28 for one-device non-live Profile/Channel and creator-video card proof
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
 HEAD audited: `8d6f62fa8e73288d6ed7347076dd5002ad9bb15a`
 HEAD at upload/comment scope update: `2ad56268e3abfb2aa2c322f5943a4a43615790c7`
 HEAD at creator media foundation closeout: pending commit after static validation
+HEAD at one-device non-live proof: `9f94af3df0519e5a973429be451738a1833f7d7e`
 
 Unrelated dirty files at audit start:
 
@@ -19,7 +21,7 @@ Unrelated dirty files at audit start:
 - `docs/LIVE_STAGE_TWO_DEVICE_PROOF.md`
 - `scripts/proof-live-stage-video-check.sh`
 
-This audit began as documentation only. The follow-up creator media foundation now implements the first Public v1 creator-upload path, with Android/runtime proof still deferred because no Android devices were attached during closeout.
+This audit began as documentation only. The follow-up creator media foundation now implements the first Public v1 creator-upload path. Later Android proof on `R5CR120QCBF` confirmed the owner Profile/Channel and Channel Settings presentation lanes, while public/non-owner proof and playable creator-video proof still remain pending because the current stored media object is zero bytes.
 
 ## Files Read
 
@@ -214,7 +216,7 @@ Where content goes today:
 - Creator events go into `creator_events` and can appear on Profile Live tab.
 - The `videos` table now carries owner upload metadata and is read by Profile/Channel and Player.
 
-Ease assessment: improved but not runtime-proved. A creator now has a concrete upload/manage lane in Channel Settings and a Profile/Channel display path, but Android picker/upload/player proof is still pending.
+Ease assessment: improved and partly runtime-proved. A creator now has a concrete upload/manage lane in Channel Settings and a Profile/Channel display path, and one-device proof confirms the owner can see the modern no-thumbnail fallback card in both places without Chi'llywood Originals/platform title filler. Android picker/upload proof, public/non-owner proof, and playable creator-video proof are still pending for the remaining lane.
 
 ## Public V1 Creator Upload Decision
 
@@ -231,7 +233,7 @@ Current upload truth after foundation:
 - `_lib/creatorVideos.ts` is the creator-video read/write/upload owner.
 - `components/creator-media/creator-video-card.tsx` is the shared presentation owner for uploaded-video cards in Channel Settings and Profile/Channel.
 - `_lib/creatorVideoLinks.ts` builds route-safe creator-video app deep links and centralizes the public-share eligibility check.
-- Android upload/player proof exists for the initial upload and standalone Player path; focused local Supabase/RLS proof now passes for creator video metadata visibility, moderation/report rows, premium/billing entitlement writes, and tightened Watch-Party room policies. Public/draft, non-owner, Storage API delete, report/admin moderation runtime, and live Supabase/RLS proof remain pending.
+- Android upload/player proof exists for the initial upload and standalone Player path; one-device non-live proof on `R5CR120QCBF` now also confirms owner Profile/Channel and Channel Settings card presentation, no Chi'llywood Originals/platform filler in creator Channels, route-safe Share, backed Report sheet opening, invalid/bare Player route ownership, and a repair/re-upload Player error state for the current zero-byte object. Focused local Supabase/RLS proof passes for creator video metadata visibility, moderation/report rows, premium/billing entitlement writes, and tightened Watch-Party room policies. Public/draft, non-owner, Storage API delete, report-row/admin moderation runtime, playable repaired-upload proof, and live Supabase/RLS proof remain pending.
 
 `videos` table readiness:
 
@@ -250,6 +252,7 @@ Current visual behavior:
 - Profile/Channel shows creator-video cards in the Content tab. Owner view may include drafts with badges; public viewer reads only public clean/reported videos through `_lib/creatorVideos.ts` and RLS.
 - Cards route to `/player/[id]?source=creator-video`.
 - Home, Explore, and My List remain platform-title surfaces and do not list creator videos.
+- One-device proof on `R5CR120QCBF` confirmed the owner no-thumbnail fallback card in Channel Settings and Profile/Channel, including the `Open Player`, `Edit`, `Unpublish`, and `Delete` owner controls in Channel Settings and no platform-title filler inside the creator Channel.
 
 Thumbnail/preview truth:
 

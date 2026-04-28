@@ -14,6 +14,8 @@ Initial local dirt: known untracked `supabase/.temp/` only.
 
 Runtime truth: no Android device was attached, no Metro/Expo server was detected, no production build was run, and no Android/live/two-device proof was run. This was a repo static audit plus small Public v1 polish hardening pass.
 
+Post-audit runtime update: one-device Android dev-client proof on `R5CR120QCBF` later confirmed the creator-video zero-byte failure now lands in an honest Player unavailable state with repair/re-upload guidance instead of a blank 0:00 source surface. The proof is saved at `/tmp/chillywood-one-device-non-live-v1-proof-20260428-120224`.
+
 ## Executive Summary
 
 Public v1 smoothness is mostly in place: major routes have loading, empty, access, and unavailable states, and the earlier room/non-room audits already fixed the highest-risk route ownership issues.
@@ -27,6 +29,7 @@ This pass made only scoped launch-readiness fixes:
 - Creator video save/publish/delete failures now use safer user-facing copy.
 - Subscribe and Settings Premium copy is more public-facing while staying honest that store/setup can block access.
 - Runtime error reporting and Crashlytics logging now redact common token, signed URL, API key, bearer, and JWT patterns before logs/analytics.
+- Player now treats standalone video source load failures as unavailable states, so a broken creator-video storage object can show repair/re-upload guidance instead of looking like a playable blank video.
 
 No new major system, monetization implementation, native AR SDK, later-phase feature, room layout redesign, or comments movement was introduced.
 
@@ -42,7 +45,7 @@ Recommendation: keep these changes, then run the final Android route smoke and r
 | Profile/Channel | Present | Present | Existing unavailable and owner/public states | Owner/non-owner proof pending. |
 | Channel Settings | Present | Present | Creator video retry added | Upload/manage proof still pending for final lane. |
 | Creator Media | Present | Present | Picker/save/publish/delete copy hardened | Storage API delete proof pending. |
-| Player | Present | Present | Honest unavailable states from prior pass | Source smoke pending. |
+| Player | Present | Present | Honest unavailable states plus source-load failure guidance | Platform and broken creator-video source smoke partly proved; repaired playable creator-video proof pending. |
 | Title Detail | Present | Present | Honest title unavailable state | Route smoke pending. |
 | Watch-Party waiting room | Present | Present | Prior no-source and invalid-source hardening | Two-device proof pending. |
 | Party Room | Present | Present | Existing route/source guardrails | Layout proof pending; comments not moved. |
@@ -84,6 +87,7 @@ Fixed:
 - My List shows a retry card if saved remote titles cannot refresh and no local fallback is available.
 - Channel Settings creator video load failures now show an owner-visible retry card.
 - Creator video upload/manage errors now map common network, permission/RLS, storage, and unsupported-file failures to safer copy.
+- Standalone Player source-load errors now switch to an unavailable state; for creator videos, the copy tells the owner/viewer the upload could not be loaded from storage and should be repaired or re-uploaded.
 
 Still pending:
 

@@ -699,6 +699,7 @@ export default function PlayerScreen() {
   const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
   const [creatorVideoReportVisible, setCreatorVideoReportVisible] = useState(false);
   const [creatorVideoReportBusy, setCreatorVideoReportBusy] = useState(false);
+  const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
@@ -2530,10 +2531,15 @@ export default function PlayerScreen() {
   const onPlaybackStatusUpdate = useCallback(
     (status: AVPlaybackStatus) => {
       if (!status.isLoaded) {
+        const errorMessage = "error" in status ? String(status.error ?? "").trim() : "";
+        if (errorMessage) {
+          setPlaybackLoadError(errorMessage);
+        }
         setIsPlaying(false);
         return;
       }
 
+      setPlaybackLoadError(null);
       const duration = status.durationMillis ?? 0;
       const position = status.positionMillis ?? 0;
       durationRef.current = duration;
@@ -2637,6 +2643,7 @@ export default function PlayerScreen() {
     async (status: AVPlaybackStatus) => {
       if (!status.isLoaded) return;
 
+      setPlaybackLoadError(null);
       setIsVideoReady(true);
       setIsPlaying(status.isPlaying);
 
@@ -2664,6 +2671,13 @@ export default function PlayerScreen() {
     },
     [playbackRate],
   );
+
+  const onVideoError = useCallback((error: string) => {
+    const message = String(error || "").trim() || "Playback source error";
+    setPlaybackLoadError(message);
+    setIsVideoReady(false);
+    setIsPlaying(false);
+  }, []);
 
   const replayFromStart = async () => {
     if (standalonePlaybackBlocked) {
@@ -3727,6 +3741,10 @@ export default function PlayerScreen() {
     if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo, isCreatorVideoPlayback]);
+  useEffect(() => {
+    setPlaybackLoadError(null);
+    setIsVideoReady(false);
+  }, [cleanId, displayItem?.id, displayItem?.video_url, expectsCreatorVideo]);
   const sharedPartyResolvedSource = useMemo(() => {
     if (!inWatchParty) return source;
     if (displayItem?.video_url && displayItem.video_url.trim()) {
@@ -3777,8 +3795,9 @@ export default function PlayerScreen() {
       cancelled = true;
     };
   }, [sharedPartyResolvedSource]);
-  const isCreatorVideoPlaybackUnavailable = isCreatorVideoPlayback && !titleLoading && !source;
-  const isPlatformVideoUnavailable = !isCreatorVideoPlayback && !titleLoading && !!displayItem && !source;
+  const standalonePlaybackSourceFailed = !inWatchParty && !isLiveModeFlag && !titleLoading && !!playbackLoadError;
+  const isCreatorVideoPlaybackUnavailable = isCreatorVideoPlayback && !titleLoading && (!source || standalonePlaybackSourceFailed);
+  const isPlatformVideoUnavailable = !isCreatorVideoPlayback && !titleLoading && !!displayItem && (!source || standalonePlaybackSourceFailed);
   const isPlatformTitleUnavailable = !expectsCreatorVideo && !titleLoading && !displayItem;
   const frameworkBackgroundSource = useMemo<ImageSourcePropType | null>(() => {
     const poster = String((displayItem as any)?.poster_url ?? "").trim();
@@ -5395,7 +5414,7 @@ export default function PlayerScreen() {
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
             <Animated.View style={[styles.videoAnimatedWrap, { transform: [{ scale: zoomScale }] }]}>
-              {playbackSource ? (
+              {playbackSource && !standalonePlaybackSourceFailed ? (
                 shouldUseSharedAndroidVideoSurface ? (
                   <SharedAndroidVideoSurface
                     ref={videoRef}
@@ -5420,6 +5439,7 @@ export default function PlayerScreen() {
                     useNativeControls={false}
                     onPlaybackStatusUpdate={onPlaybackStatusUpdate}
                     onLoad={onVideoLoad}
+                    onError={onVideoError}
                   />
                 )
               ) : (
@@ -5433,10 +5453,18 @@ export default function PlayerScreen() {
                         : "Preparing video..."}
                   </Text>
                   {isCreatorVideoPlaybackUnavailable ? (
-                    <Text style={styles.videoLoadingSubtext}>This upload does not have a playable source yet.</Text>
+                    <Text style={styles.videoLoadingSubtext}>
+                      {playbackLoadError
+                        ? "This upload could not be loaded from storage. Re-upload or repair the video file."
+                        : "This upload does not have a playable source yet."}
+                    </Text>
                   ) : null}
                   {isPlatformVideoUnavailable ? (
-                    <Text style={styles.videoLoadingSubtext}>This title does not have a playable source yet.</Text>
+                    <Text style={styles.videoLoadingSubtext}>
+                      {playbackLoadError
+                        ? "This title's video source could not be loaded right now."
+                        : "This title does not have a playable source yet."}
+                    </Text>
                   ) : null}
                 </View>
               )}
