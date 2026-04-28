@@ -30,6 +30,8 @@ Current Public v1 truth:
 - Every account has Profile + Channel.
 - Profile is the person/social identity.
 - Channel is the creator's mini streaming platform inside Profile/Channel, not a separate public route today.
+- User/creator Channels show creator-owned uploads, videos, events, live/watch-party content, and backed creator shelves only.
+- Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
 - `/profile/[userId]` is the public Profile/Channel surface.
 - `/channel-settings` is the owner control surface.
 - Creator Media System foundation exists.
@@ -100,6 +102,7 @@ Must not own:
 
 - raw payment validation
 - platform/admin title programming
+- Chi'llywood Originals/platform-title filler for user/creator Channels
 - LiveKit media rendering
 - Player playback internals
 

@@ -118,7 +118,7 @@ Proof pending: final Android route smoke for signup, login, signed-out protected
 
 Status: Implemented / Proof Pending.
 
-Profile acts as the person/social identity and public channel surface. Channel Settings acts as the owner management/control center. Owner controls are not shown to public viewers in the audited code path. Public creator-video reads use `_lib/creatorVideos.ts`, which filters by visibility and moderation status; owner reads can include drafts.
+Profile acts as the person/social identity and public channel surface. Channel is the creator's own mini streaming platform, not a Chi'llywood Originals shelf. Channel Settings acts as the owner management/control center. Owner controls are not shown to public viewers in the audited code path. Public creator-video reads use `_lib/creatorVideos.ts`, which filters by visibility and moderation status; owner reads can include drafts. User/creator Channels no longer read `titles`, show jump-to-title platform filler, use platform title artwork as background, or use saved/resume title counts as channel stats.
 
 No separate public `/channel/[id]` route is required for v1. A later channel alias can be considered only if product navigation needs it.
 
@@ -161,7 +161,7 @@ Proof pending: Android smoke for all valid/invalid source cases and release log 
 
 Status: Implemented / Proof Pending.
 
-Home, Explore, and My List are modern enough for the current v1 scope and route platform titles to Title Detail or Player as intended. Creator-video global discovery is not currently a v1 route owner; Profile/Channel is the creator-video discovery surface.
+Home, Explore, and My List are modern enough for the current v1 scope and route platform titles to Title Detail or Player as intended. Creator-video global discovery is not currently a v1 route owner; Profile/Channel is the creator-video discovery surface. Chi'llywood Originals/platform titles stay in platform surfaces and must not fill user/creator Channels.
 
 No fake full-search engine or global creator-video recommendation surface was added.
 

@@ -70,7 +70,7 @@ Fixed:
 
 Still pending:
 
-- Public Profile/Channel empty states need owner/non-owner proof.
+- Public Profile/Channel empty states need owner/non-owner proof, including the corrected rule that user/creator Channels show premium creator-owned empty states instead of Chi'llywood Originals/platform-title filler.
 - Admin/report empty states need operator proof.
 - Full notification center/search empty states are later-phase because those routes are not v1 owners.
 

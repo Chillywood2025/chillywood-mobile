@@ -188,10 +188,11 @@ Profiles are not simple account pages.
 
 Locked product direction:
 - profiles are Chi'llywood social identity hubs
+- channels are creator-owned mini streaming platforms, not platform-title shelves
 - cross-cutting profile/channel-platform doctrine lives in `PRODUCT_DOCTRINE.md`
 - the authenticated user's own profile opens their own channel/profile surface
 - viewing another user's profile should support opening or creating a direct Chi'lly Chat thread
-- photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction must extend the same profile/channel system over time
+- photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction must extend the same profile/channel system over time, but Chi'llywood Originals/platform `titles` must stay in platform surfaces and must not be used as creator-channel filler
 
 ## Billing / Payout Separation Rule
 - app-store subscriptions and in-app billing are not the creator payout system

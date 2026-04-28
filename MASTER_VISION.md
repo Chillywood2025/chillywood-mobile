@@ -120,6 +120,8 @@ MVP truth:
 - the authenticated user's own profile opens their own channel/profile surface
 - viewing another user's profile should support opening or creating a direct Chi'lly Chat thread
 - profile surfaces should naturally connect with Chi'lly Chat, watch-party coordination, live communication, and broader social identity
+- Profile is personal/social identity; Channel is the creator's own mini streaming platform for that creator's uploads, videos, events, live/watch-party content, and backed shelves
+- Chi'llywood Originals/platform titles must stay on Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not as filler inside user/creator Channels
 - the base profile experience must remain meaningful even when a user never builds out a fuller creator platform layer
 - photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction are approved profile/channel depth
 - future profile/channel depth must extend the same native Chi'llywood profile system instead of inventing a disconnected second app or parallel creator identity

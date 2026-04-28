@@ -43,7 +43,7 @@ Do not create route proliferation in this chapter.
 ### 2.3 Current Design/Layout Boundary
 Current doctrine is intentionally narrow:
 - global theme and home presentation truth already exist
-- current profile/channel presentation already uses real title-programming and live/community blocks
+- current user/creator profile/channel presentation uses creator-owned videos, creator events, and live/community blocks; platform title-programming stays in Home/Explore/title/admin surfaces
 - creator-facing design/layout control on `/channel-settings` is still mostly doctrinal/placeholder
 
 That means:

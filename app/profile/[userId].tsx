@@ -8,7 +8,6 @@ import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveFeatureConfig,
-    resolveHomeConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
 import { getOrCreateDirectThread } from "../../_lib/chat";
@@ -41,7 +40,6 @@ import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
     Alert,
     Image,
-    ImageBackground,
     ScrollView,
     Share,
     StyleSheet,
@@ -49,20 +47,15 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { titles as localTitles } from "../../_data/titles";
 import {
   buildUserChannelProfile,
-  readMergedWatchProgress,
-  readMyListIds,
   readUserProfile,
   readUserProfileByUserId,
   type UserProfile,
 } from "../../_lib/userData";
-import type { Tables } from "../../supabase/database.types";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
-import { supabase } from "../../_lib/supabase";
 
 type PublicProfileTabKey = "home" | "content" | "live" | "community" | "about";
 
@@ -98,47 +91,6 @@ type ProfileAccessDetail = {
   label: string;
   value: string;
   body: string;
-};
-
-type ContentProgrammingTitle = Pick<
-  Tables<"titles">,
-  "id" | "title" | "category" | "year" | "created_at" | "featured" | "is_hero" | "is_trending" | "pin_to_top_row" | "sort_order"
->;
-
-const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
-
-const toTimestamp = (value?: string | null) => {
-  const parsed = Date.parse(String(value ?? "").trim());
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const toProgramSortOrder = (value?: number | null) => (
-  typeof value === "number" && Number.isFinite(value) ? value : MAX_PROGRAM_SORT_ORDER
-);
-
-const sortTitlesByProgramTruth = (items: ContentProgrammingTitle[]) => {
-  return [...items].sort((a, b) => {
-    const sortDelta = toProgramSortOrder(a.sort_order) - toProgramSortOrder(b.sort_order);
-    if (sortDelta !== 0) return sortDelta;
-    return toTimestamp(b.created_at) - toTimestamp(a.created_at);
-  });
-};
-
-const pluralize = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-
-const formatTitlePreview = (items: ContentProgrammingTitle[], fallback: string) => {
-  const names = items
-    .map((item) => String(item.title ?? "").trim())
-    .filter(Boolean)
-    .slice(0, 3);
-
-  if (!names.length) return fallback;
-  return names.join(", ");
-};
-
-const getTitleLabel = (item?: Pick<ContentProgrammingTitle, "title"> | null, fallback = "Untitled") => {
-  const normalized = String(item?.title ?? "").trim();
-  return normalized || fallback;
 };
 
 const resolveChannelLayoutPreset = (value?: UserProfile["channelLayoutPreset"] | null) => {
@@ -331,18 +283,12 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState("");
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
-  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
   const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
-  const [savedTitleCount, setSavedTitleCount] = useState(0);
-  const [continueWatchingCount, setContinueWatchingCount] = useState(0);
-  const [channelSignalsReady, setChannelSignalsReady] = useState(false);
-  const [contentProgrammingTitles, setContentProgrammingTitles] = useState<ContentProgrammingTitle[]>([]);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
   const [creatorVideosReady, setCreatorVideosReady] = useState(false);
-  const [contentProgrammingReady, setContentProgrammingReady] = useState(false);
   const [channelAccessProfile, setChannelAccessProfile] = useState<UserProfile | null>(null);
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
   const [channelAccessReady, setChannelAccessReady] = useState(false);
@@ -437,42 +383,12 @@ export default function ProfileScreen() {
     readAppConfig()
       .then((config) => {
         if (!active) return;
-        setAppConfig(config);
         setCreatorSettingsEnabled(resolveFeatureConfig(config).creatorSettingsEnabled);
       })
       .catch(() => {
         if (!active) return;
-        setAppConfig(DEFAULT_APP_CONFIG);
         setCreatorSettingsEnabled(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
       });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    setContentProgrammingReady(false);
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("titles")
-          .select("id, title, category, year, created_at, featured, is_hero, is_trending, pin_to_top_row, sort_order")
-          .order("created_at", { ascending: false })
-          .returns<ContentProgrammingTitle[]>();
-
-        if (!active) return;
-        setContentProgrammingTitles(error ? [] : (data ?? []));
-        setContentProgrammingReady(true);
-      } catch {
-        if (!active) return;
-        setContentProgrammingTitles([]);
-        setContentProgrammingReady(true);
-      }
-    })();
 
     return () => {
       active = false;
@@ -485,40 +401,6 @@ export default function ProfileScreen() {
   const isSelfProfile = !profile.isProtectedFromClaim
     && hasVerifiedSelfIdentity
     && (!requestedSelfProfile || hasVerifiedSelfIdentity);
-  useEffect(() => {
-    let active = true;
-
-    if (!isSelfProfile) {
-      setSavedTitleCount(0);
-      setContinueWatchingCount(0);
-      setChannelSignalsReady(true);
-      return () => {
-        active = false;
-      };
-    }
-
-    setChannelSignalsReady(false);
-
-    Promise.all([readMyListIds(), readMergedWatchProgress()])
-      .then(([savedIds, progressMap]) => {
-        if (!active) return;
-        setSavedTitleCount(savedIds.length);
-        setContinueWatchingCount(
-          Object.values(progressMap).filter((entry) => (entry?.positionMillis ?? 0) > 0).length,
-        );
-        setChannelSignalsReady(true);
-      })
-      .catch(() => {
-        if (!active) return;
-        setSavedTitleCount(0);
-        setContinueWatchingCount(0);
-        setChannelSignalsReady(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [isSelfProfile]);
 
   useEffect(() => {
     let active = true;
@@ -666,7 +548,6 @@ export default function ProfileScreen() {
     };
   }, [currentUserId, isOfficialProfile, isSelfProfile, userId]);
   const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
-  const homeConfig = resolveHomeConfig(appConfig);
   const liveNowEvent = useMemo(
     () => publicEvents.find((event) => event.isLiveNow) ?? null,
     [publicEvents],
@@ -729,8 +610,8 @@ export default function ProfileScreen() {
     ? officialAccount?.trustSummary
       ?? "Chi'llywood's official channel for trusted help, updates, and auditable follow-up."
     : isSelfProfile
-      ? "Your public channel home for the lineup, live presence, and next follow-up you want people to see first."
-      : "A public creator channel where identity, live presence, and the next real follow-up stay easy to read.";
+      ? "Your public channel home for your uploaded videos, creator events, live presence, and next follow-up."
+      : "A public creator channel where identity, creator videos, live presence, and real follow-up stay easy to read.";
   const liveStatusTitle = isOfficialProfile
     ? "Official concierge is ready"
     : profile.isLive
@@ -750,7 +631,7 @@ export default function ProfileScreen() {
     : hasLiveRouteContext
       ? `${liveActionLabel} and Watch Party stay tied to this room context.`
       : canOpenWatchPartyEntry
-        ? "This channel can hand off into a backed Watch-Party Live title."
+        ? "This channel can hand off into a backed Watch-Party Live event."
         : hasLiveTabEntry
           ? "Live status stays visible here even without direct room re-entry."
           : "This channel stays public-first until room context is attached.";
@@ -761,10 +642,6 @@ export default function ProfileScreen() {
       : "";
   const showFriendshipHint = !!friendState?.isFriend && !isOfficialProfile && !isSelfProfile;
 
-  const backgroundSource = (() => {
-    const first = localTitles[0] as any;
-    return first?.image || first?.poster || undefined;
-  })();
   const onPressManageChannel = () => {
     if (!creatorSettingsEnabled) {
       Alert.alert("Manage Channel", "Creator channel settings are currently hidden by app configuration.");
@@ -925,167 +802,107 @@ export default function ProfileScreen() {
       setReportBusy(false);
     }
   };
+  const publicCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
+  const draftCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
+  const hasCreatorVideoTruth = creatorVideos.length > 0;
+  const publicEventCount = publicEvents.length;
+  const liveEventCount = publicEvents.filter((event) => event.isLiveNow).length;
   const channelSignals = [
     {
-      label: isOfficialProfile ? "Identity" : isSelfProfile ? "Saved" : "Role",
+      label: isOfficialProfile ? "Identity" : isSelfProfile ? "Videos" : "Role",
       value: isOfficialProfile
         ? "Official"
         : isSelfProfile
-          ? (channelSignalsReady ? String(savedTitleCount) : "...")
+          ? (creatorVideosReady ? String(creatorVideos.length) : "...")
           : roleLabel,
       body: isOfficialProfile
         ? "platform-backed identity"
         : isSelfProfile
-          ? "titles ready to feature"
+          ? "uploaded creator videos"
           : "creator-led public surface",
       tone: isOfficialProfile ? "official" : "default",
     },
     {
-      label: isOfficialProfile ? "Chat" : isSelfProfile ? "Resume" : "Chat",
+      label: isOfficialProfile ? "Chat" : isSelfProfile ? "Public" : "Chat",
       value: isOfficialProfile
         ? "Starter"
         : isSelfProfile
-          ? (channelSignalsReady ? String(continueWatchingCount) : "...")
+          ? (creatorVideosReady ? String(publicCreatorVideoCount) : "...")
           : "Ready",
       body: isOfficialProfile
         ? "trusted thread open"
         : isSelfProfile
-          ? "pick up where you left off"
+          ? "published videos visitors can watch"
           : "direct thread ready",
       tone: "linked",
     },
     {
-      label: "Room",
+      label: isOfficialProfile ? "Trust" : "Events",
       value: isOfficialProfile
         ? "Audited"
-        : hasLiveRouteContext ? "Linked" : (profile.isLive ? "Live" : "No Link"),
+        : publicEventsReady ? String(publicEventCount) : "...",
       body: isOfficialProfile
-        ? "protected room continuity"
-        : hasLiveRouteContext
-          ? "linked room handoff ready"
-          : profile.isLive
-            ? "live presence is visible"
-            : "no linked room is active yet",
-      tone: isOfficialProfile ? "official" : hasLiveRouteContext ? "linked" : (profile.isLive ? "live" : "default"),
+        ? "protected official continuity"
+        : liveEventCount
+          ? "live creator event active now"
+          : "creator live/watch-party schedule",
+      tone: isOfficialProfile ? "official" : liveEventCount ? "live" : "default",
     },
   ] as const;
   const channelHelper = isOfficialProfile
     ? {
         kicker: "CHANNEL FLOW",
         title: "Verified help starts here",
-        body: "Use the official thread for trusted help, then return here for the verified channel surface and programming cues.",
+        body: "Use the official thread for trusted help, then return here for the verified account surface.",
       }
     : isSelfProfile
       ? {
           kicker: "CHANNEL FLOW",
-          title: "Lead with what people can watch next",
-          body: channelSignalsReady
-            ? `You already have ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"} ready to shape the public read.`
-            : "Loading the saved and resume signals that can anchor your public channel."
+          title: "Lead with your own channel content",
+          body: creatorVideosReady
+            ? hasCreatorVideoTruth
+              ? `Your channel has ${creatorVideos.length} uploaded video${creatorVideos.length === 1 ? "" : "s"}; public videos appear here for visitors and drafts stay owner-only.`
+              : "Upload your first video when you are ready for this Channel to become watchable."
+            : "Loading your creator-video library."
         }
       : {
           kicker: "CHANNEL FLOW",
-          title: "Start with the channel, then go deeper",
+          title: "Start with the creator channel, then go deeper",
           body: hasLiveRouteContext
             ? "This visit carries real room context, so live and watch-party handoff stays clean from here."
-            : "Start here for the channel story, then move into Chi'lly Chat or a backed room when one exists."
+            : "Start here for the creator's videos, events, and public identity, then move into Chi'lly Chat or a backed room when one exists."
         };
-  const latestProgrammingTitles = useMemo(() => {
-    return [...contentProgrammingTitles].sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at));
-  }, [contentProgrammingTitles]);
-  const orderedProgrammingTitles = useMemo(() => sortTitlesByProgramTruth(contentProgrammingTitles), [contentProgrammingTitles]);
-  const heroProgrammingTitle = useMemo(() => {
-    const manualHeroTitleId = String(homeConfig.manualHeroTitleId ?? "").trim();
-    const manualHeroItem = manualHeroTitleId
-      ? orderedProgrammingTitles.find((item) => String(item.id ?? "").trim() === manualHeroTitleId) ?? null
-      : null;
-    const heroFlagItem = orderedProgrammingTitles.find((item) => item.is_hero === true) ?? null;
-
-    if (homeConfig.heroMode === "manual_title") {
-      return manualHeroItem ?? heroFlagItem ?? latestProgrammingTitles[0] ?? null;
-    }
-
-    if (homeConfig.heroMode === "hero_flag") {
-      return heroFlagItem ?? latestProgrammingTitles[0] ?? null;
-    }
-
-    return latestProgrammingTitles[0] ?? null;
-  }, [homeConfig.heroMode, homeConfig.manualHeroTitleId, latestProgrammingTitles, orderedProgrammingTitles]);
-  const featuredProgrammingTitles = useMemo(
-    () => orderedProgrammingTitles.filter((item) => item.featured === true),
-    [orderedProgrammingTitles],
-  );
-  const trendingProgrammingTitles = useMemo(
-    () => orderedProgrammingTitles.filter((item) => item.is_trending === true),
-    [orderedProgrammingTitles],
-  );
-  const topRowProgrammingTitles = useMemo(
-    () => orderedProgrammingTitles.filter((item) => item.pin_to_top_row === true),
-    [orderedProgrammingTitles],
-  );
-  const hasProgrammingTruth = !!(
-    heroProgrammingTitle
-    || featuredProgrammingTitles.length
-    || trendingProgrammingTitles.length
-    || topRowProgrammingTitles.length
-  );
-  const publicCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
-  const draftCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
-  const hasCreatorVideoTruth = creatorVideos.length > 0;
-  const heroProgrammingLabel = getTitleLabel(heroProgrammingTitle);
-  const programmingSignalsSummary = [
-    heroProgrammingTitle ? `hero lead ${heroProgrammingLabel}` : null,
-    featuredProgrammingTitles.length ? pluralize(featuredProgrammingTitles.length, "featured title") : null,
-    trendingProgrammingTitles.length ? pluralize(trendingProgrammingTitles.length, "trending title") : null,
-    topRowProgrammingTitles.length ? pluralize(topRowProgrammingTitles.length, "top-row title") : null,
-  ].filter(Boolean).join(", ");
-  const programmingGroupsSummary = [
-    heroProgrammingTitle ? `Hero: ${heroProgrammingLabel}` : null,
-    topRowProgrammingTitles.length ? `Top Row: ${formatTitlePreview(topRowProgrammingTitles, "current top-row titles")}` : null,
-    featuredProgrammingTitles.length ? `Featured: ${formatTitlePreview(featuredProgrammingTitles, "current featured titles")}` : null,
-    trendingProgrammingTitles.length ? `Trending: ${formatTitlePreview(trendingProgrammingTitles, "current trending titles")}` : null,
-  ].filter(Boolean).join(" · ");
   const contentHomeBody = isSelfProfile
-    ? channelSignalsReady
+    ? creatorVideosReady
       ? hasCreatorVideoTruth
-        ? `Your channel has ${publicCreatorVideoCount} public video${publicCreatorVideoCount === 1 ? "" : "s"} and ${draftCreatorVideoCount} draft${draftCreatorVideoCount === 1 ? "" : "s"}, plus saved and resume cues.`
-        : hasProgrammingTruth
-        ? `Your channel already points into ${programmingSignalsSummary}, plus ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
-        : `Your channel can grow from ${savedTitleCount} saved title${savedTitleCount === 1 ? "" : "s"} and ${continueWatchingCount} resume cue${continueWatchingCount === 1 ? "" : "s"}.`
-      : "Loading the titles that can anchor your first channel shelves."
-    : contentProgrammingReady
+        ? `Your channel has ${publicCreatorVideoCount} public video${publicCreatorVideoCount === 1 ? "" : "s"} and ${draftCreatorVideoCount} draft${draftCreatorVideoCount === 1 ? "" : "s"}.`
+        : "Upload your first video when you are ready to make this channel watchable."
+      : "Loading your channel library."
+    : isOfficialProfile
+      ? "Official account updates and trusted help stay here; Chi'llywood Originals stay in Home, Explore, and title pages."
+    : creatorVideosReady
       ? hasCreatorVideoTruth
         ? `${publicCreatorVideoCount} creator video${publicCreatorVideoCount === 1 ? "" : "s"} already give this channel a real library.`
-        : hasProgrammingTruth
-        ? `${programmingSignalsSummary} already gives this channel a real lineup.`
-        : "This channel can stay lean until real shelves or creator programming are ready."
-      : "Loading the lineup this channel can point people into.";
-  const contentProgrammingSurfaceBody = isSelfProfile
-    ? channelSignalsReady
+        : "This channel is getting ready."
+      : "Loading this channel's creator videos.";
+  const contentCreatorVideosBody = isSelfProfile
+    ? creatorVideosReady
       ? hasCreatorVideoTruth
-        ? `Manage uploaded videos in Channel Settings. Public videos appear here for visitors while drafts stay owner-only.`
-        : hasProgrammingTruth
-        ? `Build the public lineup from ${programmingSignalsSummary}, then let saved titles and resume cues support it.`
-        : "Build the first public lineup from saved titles and resume cues."
-      : "Loading the signals that can anchor your first content shelves."
+        ? "Manage uploaded videos in Channel Settings. Public videos appear here for visitors while drafts stay owner-only."
+        : "Upload your first video from Manage Channel."
+      : "Loading your creator-video library."
     : isOfficialProfile
-      ? contentProgrammingReady
-        ? hasProgrammingTruth
-          ? `Official programming already lives here: ${programmingSignalsSummary}.`
-          : "This official channel stays lean until real platform programming is ready."
-        : "Loading the official programming signals for this channel surface."
+      ? "This official account does not host Chi'llywood Originals inside Profile/Channel."
       : creatorVideosReady && hasCreatorVideoTruth
         ? `${publicCreatorVideoCount} creator-uploaded video${publicCreatorVideoCount === 1 ? "" : "s"} are ready to watch.`
-      : contentProgrammingReady
-        ? hasProgrammingTruth
-          ? `${programmingSignalsSummary} already anchors this channel lineup.`
-          : "This tab should stay lean until real shelves or creator programming are ready."
-        : "Loading the programming signals that can anchor this channel library.";
-  const contentProgrammingGroupsBody = contentProgrammingReady
-    ? hasProgrammingTruth
-      ? programmingGroupsSummary
-      : "Keep this tab focused on real shelves and real titles."
-    : "Loading the hero, featured, trending, and top-row groupings for this surface.";
+        : "This channel is getting ready.";
+  const contentCreatorEventsBody = isOfficialProfile
+    ? "Official platform programming stays in Home, Explore, dedicated Originals surfaces, title pages, and admin-managed title routes."
+    : publicEventsReady
+      ? publicEventCount
+        ? `${publicEventCount} public creator event${publicEventCount === 1 ? "" : "s"} can appear here when scheduled or live.`
+        : "No public creator live or watch-party events are scheduled yet."
+      : "Loading this channel's creator events.";
   const quickActions = isOfficialProfile
     ? [
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
@@ -1102,27 +919,6 @@ export default function ProfileScreen() {
         { label: "Video Call", onPress: () => { void onPressCommunication("video"); } },
         ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
       ];
-  const contentActionTitles = useMemo(() => {
-    const orderedItems = [
-      heroProgrammingTitle,
-      ...topRowProgrammingTitles,
-      ...featuredProgrammingTitles,
-      ...trendingProgrammingTitles,
-    ].filter((item): item is ContentProgrammingTitle => !!item);
-
-    const seen = new Set<string>();
-    return orderedItems.filter((item) => {
-      const key = String(item.id ?? "").trim();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).slice(0, 4);
-  }, [
-    featuredProgrammingTitles,
-    heroProgrammingTitle,
-    topRowProgrammingTitles,
-    trendingProgrammingTitles,
-  ]);
   const communityActions = isSelfProfile
     ? [
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
@@ -1151,10 +947,10 @@ export default function ProfileScreen() {
       ? "Your Channel Spotlight"
       : `${profile.displayName}'s Spotlight`;
   const featuredSpotlightBody = isOfficialProfile
-    ? "Verified updates, programming, and trusted follow-up start here."
+    ? "Verified updates and trusted follow-up start here; platform titles stay in platform surfaces."
     : isSelfProfile
-      ? "Lead with the title, live moment, or cue that best defines your channel right now."
-      : "Start here for the creator spotlight, live pulse, and next real watch or chat move.";
+      ? "Lead with your uploaded videos, live events, or the creator cue that best defines your channel right now."
+      : "Start here for the creator spotlight, live pulse, and next real creator-video or chat move.";
   const channelLayoutPreset = resolveChannelLayoutPreset(channelAccessProfile?.channelLayoutPreset);
   const homeSectionMap = {
     featured: {
@@ -1170,8 +966,8 @@ export default function ProfileScreen() {
       accent: profile.isLive ? "live" : "default",
     },
     content: {
-      title: isSelfProfile ? "Your Lineup" : "Channel Lineup",
-      kicker: "LINEUP",
+      title: isSelfProfile ? "Your Creator Content" : "Creator Content",
+      kicker: "CHANNEL CONTENT",
       body: contentHomeBody,
     },
     community: {
@@ -1184,7 +980,7 @@ export default function ProfileScreen() {
     about: {
       title: "Channel Identity",
       kicker: "ABOUT",
-      body: `${profile.displayName} should feel like a coherent public channel even before deeper programming arrives.`,
+      body: `${profile.displayName} should feel like a coherent public channel even before deeper creator shelves arrive.`,
     },
   } satisfies Record<"featured" | "live" | "content" | "community" | "about", ProfileSurfaceCard>;
   const homeSectionOrder = channelLayoutPreset === "live_first"
@@ -1196,27 +992,27 @@ export default function ProfileScreen() {
   const contentTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
     ? [
         {
-          title: hasProgrammingTruth ? "Official Lineup" : "Official Channel",
+          title: "Official Channel",
           kicker: profile.officialBadgeLabel ?? "OFFICIAL",
-          body: contentProgrammingSurfaceBody,
+          body: contentCreatorVideosBody,
           accent: "official",
         },
         {
-          title: hasProgrammingTruth ? "Current Shelves" : "Channel Shelves",
-          kicker: "PROGRAMMING",
-          body: contentProgrammingGroupsBody,
+          title: "Platform Surface Boundary",
+          kicker: "PLATFORM SURFACES",
+          body: contentCreatorEventsBody,
         },
       ]
     : [
         {
-          title: isSelfProfile ? "Your Lineup" : "Channel Lineup",
+          title: isSelfProfile ? "Your Creator Videos" : "Creator Videos",
           kicker: isSelfProfile ? "YOUR CHANNEL" : "PUBLIC CHANNEL",
-          body: contentProgrammingSurfaceBody,
+          body: contentCreatorVideosBody,
         },
         {
-          title: hasProgrammingTruth ? "Current Shelves" : "Channel Shelves",
-          kicker: "PROGRAMMING",
-          body: contentProgrammingGroupsBody,
+          title: "Creator Events",
+          kicker: "LIVE / WATCH-PARTY",
+          body: contentCreatorEventsBody,
         },
       ];
   const liveNowEvents = useMemo(
@@ -1266,7 +1062,7 @@ export default function ProfileScreen() {
       kicker: "WATCH TOGETHER",
       body: scheduledWatchPartyEvent
         ? `${scheduledWatchPartyEvent.eventTitle} is scheduled for ${formatEventDate(scheduledWatchPartyEvent.startsAt)} and links out to the canonical Watch-Party Live entry.`
-        : "Watch-Party Live stays the title/player-driven watch-together path.",
+        : "Watch-Party Live stays on the canonical watch-together path.",
     },
     {
       title: hasLiveRouteContext ? "Linked Room Context" : "Room Continuity",
@@ -1447,9 +1243,9 @@ export default function ProfileScreen() {
     },
   ];
   const tabIntro = activeTab === "home"
-    ? "Spotlight, live pulse, lineup, and community cues in one channel home."
+    ? "Spotlight, live pulse, creator content, and community cues in one channel home."
     : activeTab === "content"
-      ? "Real titles and shelves that define this channel."
+      ? "Creator uploads and events that belong to this channel."
       : activeTab === "live"
         ? "Live keeps schedule, current status, and watch-together continuity distinct."
         : activeTab === "community"
@@ -1523,21 +1319,21 @@ export default function ProfileScreen() {
   ];
   const ownerStatsRibbon: readonly OwnerStatCard[] = isSelfProfile ? [
     {
-      label: "Shelves",
+      label: "Videos",
       value: creatorVideosReady ? String(creatorVideos.length) : "...",
       body: "uploaded videos in your channel library",
     },
     {
-      label: "Resume",
-      value: channelSignalsReady ? String(continueWatchingCount) : "...",
-      body: "private resume cues only you can see",
+      label: "Public",
+      value: creatorVideosReady ? String(publicCreatorVideoCount) : "...",
+      body: "published videos visitors can watch",
       tone: "linked",
     },
     {
-      label: "Live Link",
-      value: profile.isLive ? "On" : "Off",
-      body: hasLiveRouteContext ? "room context attached" : "linked visits bring room context here later",
-      tone: profile.isLive ? "live" : "default",
+      label: "Events",
+      value: publicEventsReady ? String(publicEventCount) : "...",
+      body: "backed creator live/watch-party events",
+      tone: publicEventCount ? "live" : "default",
     },
   ] : [];
   const ownerQuickActions: readonly OwnerQuickAction[] = isSelfProfile ? [
@@ -1667,15 +1463,7 @@ export default function ProfileScreen() {
       testID="profile-screen"
       accessibilityLabel="Chi'llywood profile channel screen"
     >
-      {backgroundSource ? (
-        <ImageBackground
-          source={backgroundSource}
-          style={styles.fullBackground}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={styles.fullBackgroundFallback} pointerEvents="none" />
-      )}
+      <View style={styles.fullBackgroundFallback} pointerEvents="none" />
       <View style={styles.fullBackgroundOverlay} pointerEvents="none" />
 
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -1971,30 +1759,6 @@ export default function ProfileScreen() {
                   This channel has not published creator videos yet.
                 </Text>
               )}
-            </View>
-          ) : null}
-          {activeTab === "content" && contentActionTitles.length ? (
-            <View style={styles.quickActionsCard}>
-              <Text style={styles.quickActionsTitle}>Jump Into The Lineup</Text>
-              <View style={styles.quickActionsRow}>
-                {contentActionTitles.map((item) => (
-                  <TouchableOpacity
-                    key={String(item.id)}
-                    style={styles.quickActionChip}
-                    activeOpacity={0.84}
-                    onPress={() => {
-                      router.push({
-                        pathname: "/title/[id]",
-                        params: {
-                          id: String(item.id),
-                        },
-                      });
-                    }}
-                  >
-                    <Text style={styles.quickActionChipText}>{getTitleLabel(item)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
             </View>
           ) : null}
           {activeTab === "community" && communityActions.length ? (

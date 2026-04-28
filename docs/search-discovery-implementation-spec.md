@@ -9,7 +9,7 @@ It exists to:
 - preserve current route truth while Chi'llywood deepens discovery
 - define MVP discovery only
 - separate current public discovery truth from missing or later recommendation systems
-- define how discovery truth should relate to Home, public profile/channel, title/player, and public live/event surfaces
+- define how discovery truth should relate to Home, creator-owned public profile/channel discovery, title/player, and public live/event surfaces
 - define the phased implementation order for this chapter
 
 This spec does not:
@@ -84,7 +84,7 @@ Current doctrine:
 - not yet a broad marketplace or ranking engine
 
 ### 3.3 Content Discovery
-Content discovery means title and programming visibility across Home, profile/channel, and title entry points.
+Content discovery means title and programming visibility across platform surfaces such as Home, Explore, dedicated Chi'llywood Originals surfaces, and title entry points.
 
 Examples:
 - featured titles
@@ -97,6 +97,7 @@ Current doctrine:
 - partly backed
 - curated emphasis is real
 - creator-facing performance or recommendation ranking is not
+- user/creator Channels are not platform title shelves and must not use Chi'llywood Originals as filler; Profile/Channel discovery for creators is creator-owned videos, creator events, live/watch-party context, and backed creator shelves only
 
 ### 3.4 Live / Event Discovery
 Live discovery means finding live-now, upcoming, and replay-ready public event truth.

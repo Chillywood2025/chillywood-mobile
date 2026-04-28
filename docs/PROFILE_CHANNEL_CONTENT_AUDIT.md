@@ -4,6 +4,7 @@ Date: 2026-04-24
 Updated: 2026-04-25 for creator upload foundation and comment media scope
 Updated: 2026-04-28 for non-room Player source ownership hardening
 Updated: 2026-04-28 for creator video card presentation and engagement truth
+Updated: 2026-04-28 for Profile/Channel versus Chi'llywood Originals ownership correction
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -87,7 +88,7 @@ There is no separate public `/channel/[id]` route. Doctrine and current code int
 | --- | --- |
 | Profile/channel presentation | `app/profile/[userId].tsx`, `_lib/userData.ts`, `_lib/accessEntitlements.ts`, `_lib/officialAccounts.ts`, `_lib/friendGraph.ts`, `_lib/liveEvents.ts`, `_lib/notifications.ts`, `_lib/moderation.ts` |
 | Channel settings/control | `app/channel-settings.tsx`, `_lib/userData.ts`, `_lib/channelReadModels.ts`, `_lib/channelAudience.ts`, `_lib/monetization.ts`, `_lib/liveEvents.ts`, `_lib/notifications.ts` |
-| Public content discovery | `app/(tabs)/index.tsx`, `app/profile/[userId].tsx`, `app/title/[id].tsx`, `_data/titles`, `_lib/mediaSources.ts` |
+| Platform content discovery | `app/(tabs)/index.tsx`, `app/(tabs)/explore.tsx`, `app/title/[id].tsx`, `_data/titles`, `_lib/mediaSources.ts` |
 | Platform/admin programming | `app/admin.tsx`, `_lib/appConfig.ts`, `_lib/monetization.ts`, `_lib/moderation.ts` |
 | Viewer engagement | `app/title/[id].tsx`, `app/player/[id].tsx`, `_lib/contentEngagement.ts`, `_lib/userData.ts` |
 | Live/watch-party links | `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, `app/watch-party/live-stage/[partyId].tsx`, `_lib/watchParty.ts`, `_lib/communication.ts` |
@@ -102,7 +103,7 @@ There is no separate public `/channel/[id]` route. Doctrine and current code int
 - primary actions: Chi'lly Chat, Live Events or Join Live when real context exists, Watch Party or Watch-Party Live when backed context exists
 - channel access posture: browse, Watch Party, and Chi'lly Chat access cards backed by user profile defaults and creator permissions
 - channel tabs: Home, Content, Live, Community, About
-- public content/programming cues from real `titles` rows, including hero, featured, trending, and top-row programming
+- creator-owned video cards from `videos`; user/creator Channels do not show Chi'llywood Originals or platform `titles` as filler
 - public live/event summaries from backed `creator_events` and reminder summaries
 - owner mode on the same route when the signed-in user matches the route user id
 - owner-only handoff card and quick actions to `Manage Channel` and Chi'lly Chat
@@ -205,8 +206,9 @@ What still does not exist for normal creators:
 
 Where content goes today:
 
-- Admin-created titles go into `titles`.
-- Home, Profile Content tab, Title Detail, Player, and Watch-Party Live all read from `titles`.
+- Admin-created Chi'llywood Originals/platform titles go into `titles`.
+- Home, Explore, Title Detail, platform Player, and platform Watch-Party Live read from `titles`.
+- Profile/Channel does not list platform titles or Chi'llywood Originals inside user/creator Channels.
 - User favorites go into `user_list` and AsyncStorage fallback.
 - Likes/share markers go into `user_content_relationships`.
 - Creator events go into `creator_events` and can appear on Profile Live tab.
@@ -223,7 +225,7 @@ This is separate from advanced creator studio, paid media, subscriber-only media
 Current upload truth after foundation:
 
 - `/channel-settings` has creator-event management plus a creator video upload/manage panel.
-- `/profile/[userId]` displays creator-owned videos from `videos` alongside existing platform-programming cues from `titles`.
+- `/profile/[userId]` displays creator-owned videos from `videos`; it does not use Chi'llywood Originals/platform `titles` as Channel filler.
 - `/admin` can create platform `titles` by URL. That is internal programming, not creator upload.
 - `app/player/[id].tsx` supports uploaded creator videos through `/player/[id]?source=creator-video`; creator videos no longer open through bare `/player/[id]` fallback.
 - `_lib/creatorVideos.ts` is the creator-video read/write/upload owner.
@@ -294,8 +296,8 @@ Recommended remaining implementation order:
 
 Already working or partly working:
 
-- Home renders programmed title rails and opens `/title/[id]` or `/player/[id]`.
-- Profile Content tab shows real programming cues and can jump to `/title/[id]`.
+- Home and Explore render programmed platform title rails and open `/title/[id]` or platform Player routes.
+- Profile Content tab shows creator-owned videos and creator events only; no jump-to-title filler is used in user/creator Channels.
 - Title Detail supports Play, Favorites, Like, Mark Shared, Report, and Watch-Party Live entry when active rooms exist.
 - Player opens title video sources from `video_url` or local fallback.
 - Player opens creator videos only when the route explicitly includes `source=creator-video`, which keeps platform title ids and creator-video ids from silently crossing owners.
@@ -304,7 +306,7 @@ Already working or partly working:
 
 Gaps:
 
-- Profile/channel content cards are not a creator-owned library. They are platform title programming cues.
+- Full creator shelf/section curation is not implemented beyond the current creator-video cards and event summaries.
 - There is no public creator video detail route separate from title detail.
 - Title detail remote art handling is limited: current visible hero uses local poster when available and otherwise a fallback, while `poster_url` is part of the title data model.
 - No universal comments on Profile/Title outside room/live contexts.
@@ -360,7 +362,7 @@ Creator permissions and monetization flags:
 
 Content/player:
 
-- `titles`: platform title programming table used by Home, Profile Content, Title Detail, Player, Watch Party, and Admin.
+- `titles`: platform title programming table used by Home, Explore, Title Detail, platform Player, platform Watch Party, and Admin, not as user/creator Channel filler.
 - `videos`: owner-owned creator video table integrated with Channel Settings upload/manage, Profile/Channel display, Player playback through `source=creator-video`, creator-video reports, and moderation status.
 - `user_list`: favorites/my-list.
 - `watch_history`: continue watching.

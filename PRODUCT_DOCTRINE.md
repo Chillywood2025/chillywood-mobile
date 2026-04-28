@@ -57,7 +57,11 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 
 ## Profile / Channel Platform Direction
 - profiles remain Chi'llywood's social identity hubs
+- Profile and Channel are connected but different product layers: Profile is personal/social identity, while Channel is the creator's own mini streaming platform
 - every user can have the option to build their own mini streaming platform or channel inside Chi'llywood, but platform-building is optional
+- a user/creator Channel must show that creator's own channel content only: creator uploads, creator videos, creator events, creator live/watch-party content, and creator shelves/sections when those are backed
+- Chi'llywood Originals and platform/admin `titles` belong to platform surfaces such as Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces
+- Chi'llywood Originals must not be used as filler inside user/creator Channels
 - users who do not want to build a full channel or platform should still have meaningful profile customization
 - customizable branding, layout, featured rows, sections, and channel identity are approved direction inside the canonical profile/channel system
 - platform-inspired creator surfaces are approved; direct copies of third-party streaming services are not

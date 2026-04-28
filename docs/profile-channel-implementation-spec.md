@@ -105,8 +105,8 @@ Preferred real-signal order:
 3. real content/community signal available in the route context
 
 Examples of acceptable current-surface signals:
-- saved titles
-- continue-watching cues
+- creator video counts
+- public creator event counts
 - official/trusted markers
 - room-linked readiness
 - public content counts when real
