@@ -107,7 +107,7 @@ Admin System:
 - Admin uses platform roles for owner/operator/moderator access.
 - Platform roles are not channel audience roles.
 - Channel/content ownership does not create platform Admin access.
-- Rachi is an official platform concierge/presence, not a channel audience role and not a platform Admin role.
+- Rachi is an official platform concierge/presence, not a channel audience role and not a platform Admin role; Admin may still include a backend-protected Rachi / Official Account management section where backed.
 - Admin may later inspect channel-role audit logs, but current admin audit visibility is limited to platform role records and safety reports.
 
 Monetization Later:
@@ -245,7 +245,7 @@ Admin:
 
 - Keep platform roles separate from channel audience roles.
 - Current admin can show platform role and safety-review posture.
-- Admin UI should remain a private Operator Center and must not be treated as a Channel Settings or Rachi surface.
+- Admin UI should remain a private Operator Center and must not be treated as Channel Settings or as Rachi itself; a bounded Rachi / Official Account section is allowed for backend-protected official presence management.
 - Future admin can inspect channel role audit logs, bans, and sensitive role changes after schema exists.
 
 ## Backend And RLS Behavior

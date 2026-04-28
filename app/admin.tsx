@@ -23,6 +23,7 @@ import {
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
+import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
 import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
@@ -99,7 +100,7 @@ type FilterKey =
   | "top-row";
 
 type EditorMode = "create" | "edit";
-type OperatorTabKey = "reports" | "content" | "roles" | "audit";
+type OperatorTabKey = "reports" | "content" | "roles" | "audit" | "rachi";
 
 type EditorForm = {
   id?: TitleId;
@@ -160,6 +161,7 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "content", label: "Content" },
   { key: "roles", label: "Roles" },
   { key: "audit", label: "Audit" },
+  { key: "rachi", label: "Rachi" },
 ];
 const railLabels: Record<HomeRailKey, string> = {
   top_picks: "Top Picks",
@@ -902,6 +904,11 @@ export default function AdminStudioScreen() {
         body: "This surface requires backend platform-role membership. Local helper state never unlocks operator controls.",
       },
       {
+        label: "Rachi Presence",
+        value: RACHI_OFFICIAL_ACCOUNT.officialBadgeLabel,
+        body: "Rachi is managed here as Chi'llywood's official public presence, not as an admin authority.",
+      },
+      {
         label: "Audit Visibility",
         value: auditValue,
         body: "Audit context stays visible without becoming a raw database console.",
@@ -939,7 +946,35 @@ export default function AdminStudioScreen() {
       value: "Backend Role",
       body: "This route does not grant authority from profile ownership, channel ownership, or local test-helper status.",
     },
+    {
+      label: "Rachi boundary",
+      value: "Official Presence",
+      body: "Rachi can be operator-managed where backed, but Rachi does not grant platform roles or moderation powers.",
+    },
   ], [canManagePrivilegedWrites, canReviewSafetyReports]);
+
+  const rachiManagementCards = useMemo<readonly AdminDashboardCard[]>(() => [
+    {
+      label: "Official Account",
+      value: RACHI_OFFICIAL_ACCOUNT.displayName,
+      body: `${RACHI_OFFICIAL_ACCOUNT.handle} carries the ${RACHI_OFFICIAL_ACCOUNT.officialBadgeLabel} marker and platform-owned identity.`,
+    },
+    {
+      label: "Profile Status",
+      value: "Canonical",
+      body: `Public profile uses /profile/${RACHI_OFFICIAL_ACCOUNT.userId} with protected official-account semantics.`,
+    },
+    {
+      label: "Chat Starter",
+      value: "Backed",
+      body: "Chi'lly Chat exposes Rachi as the official starter presence on canonical inbox and thread paths.",
+    },
+    {
+      label: "Support / Onboarding",
+      value: "Bounded",
+      body: "Rachi may appear as the official concierge where backed; editable support automation is not faked here.",
+    },
+  ], []);
 
   const staffAndAuditCards = useMemo<readonly AdminDashboardCard[]>(() => {
     const canViewStaffRoles = canManagePrivilegedWrites;
@@ -2249,6 +2284,90 @@ export default function AdminStudioScreen() {
                 </View>
               </View>
             ) : null}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "rachi" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>RACHI / OFFICIAL ACCOUNT</Text>
+              <Text style={styles.configTitle}>Official platform presence</Text>
+              <Text style={styles.configBody}>
+                Manage backed Rachi visibility from the Operator Center without turning Rachi into Admin. Backend platform roles control this surface.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.badgesRow}>
+            <View style={[styles.badge, styles.badgePublished]}>
+              <Text style={styles.badgeText}>Backend Protected</Text>
+            </View>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{RACHI_OFFICIAL_ACCOUNT.platformOwnershipLabel}</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeScheduled]}>
+              <Text style={styles.badgeText}>{RACHI_OFFICIAL_ACCOUNT.platformRoleLabel}</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Not Admin Authority</Text>
+            </View>
+          </View>
+
+          <View style={styles.dashboardGrid}>
+            {rachiManagementCards.map((card) => (
+              <View key={card.label} style={styles.dashboardMetricCard}>
+                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Operator boundary</Text>
+                <Text style={styles.configListBody}>
+                  {"Rachi is Chi'llywood's official concierge account. Rachi does not grant operator permissions, self-authorize moderation, or replace backend platform roles."}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Public-facing presence</Text>
+                <Text style={styles.configListBody}>{RACHI_OFFICIAL_ACCOUNT.conciergeHeadline}</Text>
+                <Text style={styles.configListBody}>{RACHI_OFFICIAL_ACCOUNT.trustSummary}</Text>
+                <Text style={styles.configListBody}>
+                  {`Audit owner ${RACHI_OFFICIAL_ACCOUNT.auditOwnerKey} · User ${formatCompactIdentifier(RACHI_OFFICIAL_ACCOUNT.userId)}`}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Backed guidance topics</Text>
+                <Text style={styles.configListBody}>{RACHI_OFFICIAL_ACCOUNT.guidanceTopics.join(" · ")}</Text>
+              </View>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/profile/[userId]",
+                      params: { userId: RACHI_OFFICIAL_ACCOUNT.userId },
+                    })
+                  }
+                >
+                  <Text style={styles.actionText}>Open Profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/chat")}>
+                  <Text style={styles.actionText}>Open Chat</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
         ) : null}

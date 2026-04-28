@@ -630,7 +630,7 @@ Admin/operator:
 
 - Admin/operator platform roles may access admin surfaces where backed.
 - Channel/content ownership is separate from platform owner/operator/moderator authority; owning a Profile, Channel, or upload does not grant Admin access.
-- Rachi is the official public platform concierge/presence on backed Profile/Chat/Support/onboarding surfaces, not Admin and not an operator role.
+- Rachi is the official public platform concierge/presence on backed Profile/Chat/Support/onboarding surfaces, not Admin and not an operator role; backend-protected Admin may still manage or inspect Rachi official-account presence where backed.
 - Admin/operator role is not a universal Premium bypass for consumer feature proof unless explicitly documented and backend-enforced.
 - Operator test bypasses, if added later, must be visible in docs and impossible for ordinary users.
 
@@ -793,7 +793,7 @@ Relationship to Admin:
 - Admin access must be backend enforced through platform roles/RLS.
 - Admin must not show fake workflow states.
 - Admin UI should present a private Operator Center, not a public creator/channel owner surface.
-- Admin UI must not be branded as Rachi or imply Rachi can self-authorize platform actions.
+- Admin UI may include a dedicated Rachi / Official Account section, but the Admin system itself must not be branded as Rachi or imply Rachi can self-authorize platform actions.
 
 Relationship to Comments:
 
@@ -1694,7 +1694,7 @@ Recommendation:
 - Admin access must be backend enforced.
 - Admin UI must not expose fake authority.
 - Admin is the private Operator Center for backend platform roles; Channel Settings is the creator/content-owner surface.
-- Rachi is not Admin and must not imply operator authority.
+- Rachi can have a backend-protected official-account management section inside Admin, but Rachi is not Admin and must not imply operator authority.
 - Admin actions should gain audit records before sensitive mutation launch.
 
 ## SECTION 10 - Public V1 Required vs Post-v1
