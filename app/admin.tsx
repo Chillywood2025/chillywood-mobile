@@ -23,7 +23,6 @@ import {
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
-import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
 import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
@@ -100,6 +99,7 @@ type FilterKey =
   | "top-row";
 
 type EditorMode = "create" | "edit";
+type OperatorTabKey = "reports" | "content" | "roles" | "audit";
 
 type EditorForm = {
   id?: TitleId;
@@ -148,7 +148,19 @@ type AdminDashboardCard = {
   tone?: "default" | "unavailable";
 };
 
+type PendingCreatorVideoModerationAction = {
+  status: CreatorVideoModerationStatus;
+  videoId: string;
+  reason: string;
+};
+
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
+const operatorTabs: { key: OperatorTabKey; label: string }[] = [
+  { key: "reports", label: "Reports" },
+  { key: "content", label: "Content" },
+  { key: "roles", label: "Roles" },
+  { key: "audit", label: "Audit" },
+];
 const railLabels: Record<HomeRailKey, string> = {
   top_picks: "Top Picks",
   browse: "Browse",
@@ -398,6 +410,67 @@ const formatModerationTimestamp = (value: string | null) => {
   return date.toLocaleString();
 };
 
+const formatCompactIdentifier = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "not set";
+  if (text.length <= 12) return text;
+  return `${text.slice(0, 6)}...${text.slice(-4)}`;
+};
+
+const maskOperatorIdentity = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "Unknown identity";
+  if (text.includes("@")) {
+    const [localPart, domain] = text.split("@");
+    const safeLocal = localPart.length <= 2 ? localPart : `${localPart.slice(0, 2)}...`;
+    return `${safeLocal}@${domain}`;
+  }
+  if (text.toUpperCase().startsWith("USER ")) {
+    return `User ${formatCompactIdentifier(text.slice(5))}`;
+  }
+  return formatCompactIdentifier(text);
+};
+
+const formatAuditDisplayText = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return text
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, (match) => maskOperatorIdentity(match))
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, (match) => formatCompactIdentifier(match));
+};
+
+const formatAdminOperationFailure = (error: any, fallback: string) => {
+  const message = String(error?.message ?? "");
+  const code = String(error?.code ?? "");
+  const searchable = `${code} ${message}`.toLowerCase();
+
+  if (
+    searchable.includes("permission")
+    || searchable.includes("row-level security")
+    || searchable.includes("not authorized")
+    || searchable.includes("policy")
+    || code === "42501"
+  ) {
+    return "This operator action is not allowed for the current backend role.";
+  }
+
+  if (
+    searchable.includes("single json object")
+    || searchable.includes("0 rows")
+    || searchable.includes("no rows")
+    || searchable.includes("not found")
+    || code === "PGRST116"
+  ) {
+    return "Content not found or no longer available.";
+  }
+
+  if (searchable.includes("network") || searchable.includes("fetch")) {
+    return "Network trouble interrupted the operator action. Check the connection and try again.";
+  }
+
+  return fallback;
+};
+
 const formatCreatorVideoModerationFailure = (error: any) => {
   const message = String(error?.message ?? "");
   const code = String(error?.code ?? "");
@@ -424,6 +497,23 @@ const formatCreatorVideoModerationFailure = (error: any) => {
   }
 
   return "Unable to update creator video moderation status. Try again after confirming this content still exists.";
+};
+
+const getCreatorVideoModerationActionLabel = (status: CreatorVideoModerationStatus) => {
+  if (status === "hidden") return "Hide From Public";
+  if (status === "removed") return "Remove From Public";
+  if (status === "clean") return "Restore Clean";
+  return formatModerationToken(status);
+};
+
+const getCreatorVideoModerationConfirmCopy = (status: CreatorVideoModerationStatus) => {
+  if (status === "hidden") {
+    return "This hides the creator video from public Channel and Player access while keeping the record available for review.";
+  }
+  if (status === "removed") {
+    return "This marks the creator video removed from public access. Use only for safe test content or reviewed policy action.";
+  }
+  return "This clears the active moderation block and lets the video follow its normal visibility rules again.";
 };
 
 const formatRelease = (releaseAt?: string | null) => {
@@ -460,6 +550,7 @@ export default function AdminStudioScreen() {
   const [query, setQuery] = useState("");
   const [manualHeroQuery, setManualHeroQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [operatorTab, setOperatorTab] = useState<OperatorTabKey>("reports");
   const [saving, setSaving] = useState(false);
   const [editorVisible, setEditorVisible] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
@@ -490,6 +581,8 @@ export default function AdminStudioScreen() {
   const [creatorVideoModerationId, setCreatorVideoModerationId] = useState("");
   const [creatorVideoModerationReason, setCreatorVideoModerationReason] = useState("");
   const [creatorVideoModerationBusy, setCreatorVideoModerationBusy] = useState<CreatorVideoModerationStatus | null>(null);
+  const [pendingCreatorVideoModeration, setPendingCreatorVideoModeration] =
+    useState<PendingCreatorVideoModerationAction | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
   const [form, setForm] = useState<EditorForm>({
     title: "",
@@ -523,7 +616,7 @@ export default function AdminStudioScreen() {
   const canAccessAdmin = isSignedIn && isActive && platformRolesChecked && canAccessAdminConsole(moderationAccess, platformRoles);
   const canReviewSafetyReports = isSignedIn && isActive && platformRolesChecked && canReviewSafetyQueue(moderationAccess, platformRoles);
   const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
-  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin tools");
+  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Operator Center");
 
   useEffect(() => {
     if (!isSignedIn || !isActive) {
@@ -544,6 +637,7 @@ export default function AdminStudioScreen() {
       setCreatorVideoModerationId("");
       setCreatorVideoModerationReason("");
       setCreatorVideoModerationBusy(null);
+      setPendingCreatorVideoModeration(null);
       setAdminOpsNotice(null);
       return;
     }
@@ -775,158 +869,77 @@ export default function AdminStudioScreen() {
     const activeRoleLabels = platformRoles.length
       ? platformRoles.map((membership) => formatModerationToken(membership.role)).join(" · ")
       : formatModerationToken(resolvedActorRole);
-    const safetyQueueValue = canReviewSafetyReports
+    const openReportValue = canReviewSafetyReports
       ? String(safetyReportQueueSummary?.totalReports ?? safetyReports.length)
-      : "Unavailable";
-    const nextScheduledValue = upcomingScheduledSnapshot.totalUpcoming
-      ? `${upcomingScheduledSnapshot.totalUpcoming} scheduled`
-      : "None";
-    const creatorToolsValue = canManagePrivilegedWrites
-      ? creatorGrantUserId.trim() || "Ready"
-      : "Read only";
-    const auditValue = safetyReportQueueSummary
-      ? `${safetyReportQueueSummary.platformOwnedTargetCount} platform-owned`
-      : canReviewSafetyReports
-        ? "Queue ready"
-        : "Unavailable";
+      : "Locked";
+    const creatorVideoValue = canManagePrivilegedWrites ? "Ready" : "Locked";
+    const auditValue = adminAuditLogSummary
+      ? `${adminAuditLogSummary.totalItems} recent`
+      : canManagePrivilegedWrites || canReviewSafetyReports
+        ? "Ready"
+        : "Locked";
 
     return [
       {
-        label: "Users",
-        value: activeRoleLabels,
-        body: "Current admin identity and active platform-role truth only. A broader user directory is not backed yet.",
+        label: "Open Reports",
+        value: openReportValue,
+        body: canReviewSafetyReports
+          ? "Recent reports are available to review from backend safety-report truth."
+          : "Report review requires active platform role membership.",
+        tone: canReviewSafetyReports ? "default" : "unavailable",
       },
       {
-        label: "Creators",
-        value: creatorToolsValue,
+        label: "Creator Videos",
+        value: creatorVideoValue,
         body: canManagePrivilegedWrites
-          ? "Creator grant tools are live through the current monetization permission foundation."
-          : "Creator grant tools stay locked until current owner/operator write truth is present.",
+          ? "Hide, remove, and restore actions are available with confirmation and audit reason."
+          : "Manual creator-video safety writes require backend owner/operator role truth.",
         tone: canManagePrivilegedWrites ? "default" : "unavailable",
       },
       {
-        label: "Content",
-        value: `${stats.total} titles`,
-        body: `${stats.published} published · ${stats.scheduled} scheduled · ${stats.draft} draft in the current programming owner.`,
+        label: "Operator Status",
+        value: activeRoleLabels,
+        body: "This surface requires backend platform-role membership. Local helper state never unlocks operator controls.",
       },
       {
-        label: "Live & Rooms",
-        value: nextScheduledValue,
-        body: upcomingScheduledSnapshot.nextItem
-          ? `${upcomingScheduledSnapshot.nextItem.title} is the next scheduled queue item, while room defaults stay in the current config owner.`
-          : "Live/room visibility is currently bounded to scheduled queue and room-default truth already on this route.",
-      },
-      {
-        label: "Reports",
-        value: safetyQueueValue,
-        body: canReviewSafetyReports
-          ? "Recent safety queue visibility is backed by the current moderation foundation."
-          : "Safety review stays unavailable until the signed-in identity has an active review-capable platform role.",
-        tone: canReviewSafetyReports ? "default" : "unavailable",
-      },
-      {
-        label: "Audit Log",
+        label: "Audit Visibility",
         value: auditValue,
-        body: canReviewSafetyReports
-          ? "Current audit visibility comes from preserved report route/source/audit-owner context, not a deeper system audit log yet."
-          : "Deeper audit logs remain later; current audit context appears only inside the real report-review slice.",
-        tone: canReviewSafetyReports ? "default" : "unavailable",
+        body: "Audit context stays visible without becoming a raw database console.",
+        tone: canManagePrivilegedWrites || canReviewSafetyReports ? "default" : "unavailable",
       },
     ];
   }, [
+    adminAuditLogSummary,
     canManagePrivilegedWrites,
     canReviewSafetyReports,
-    creatorGrantUserId,
     platformRoles,
     resolvedActorRole,
     safetyReportQueueSummary,
     safetyReports.length,
-    stats.draft,
-    stats.published,
-    stats.scheduled,
-    stats.total,
-    upcomingScheduledSnapshot.nextItem,
-    upcomingScheduledSnapshot.totalUpcoming,
   ]);
 
   const adminSectionRows = useMemo<readonly AdminDashboardCard[]>(() => [
     {
-      label: "Current coverage",
-      value: canManagePrivilegedWrites ? "Programming · Grants" : "Programming live",
+      label: "Owner / Operator split",
+      value: "Separate",
       body: canManagePrivilegedWrites
-        ? "Programming, creator grants, room defaults, and bounded admin visibility are the real current operating slice on this route."
-        : "Programming and room-default visibility are live here, while creator grant writes stay locked until active owner/operator write truth is present.",
+        ? "Channel owners manage their own uploads in Channel Settings. Platform operators review reports and apply safety actions here."
+        : "Channel ownership alone never opens this private operator surface.",
     },
     {
       label: "Review posture",
-      value: canReviewSafetyReports ? "Queue live" : "Locked",
+      value: canReviewSafetyReports ? "Queue Ready" : "Locked",
       body: canReviewSafetyReports
-        ? "Recent safety reports and audit-read context are visible through the current moderation foundation."
-        : "The review queue stays hidden until this identity has an active owner, operator, or moderator role.",
+        ? "Reports are visible through the current moderation foundation and backend role truth."
+        : "The review queue stays hidden until this identity has an active platform moderation role.",
       tone: canReviewSafetyReports ? "default" : "unavailable",
     },
     {
       label: "Authority boundary",
-      value: "Owner above Rachi",
-      body: "This route stays bounded: no full user-management suite, no emergency panel, and no live Rachi automation plane are implied here.",
+      value: "Backend Role",
+      body: "This route does not grant authority from profile ownership, channel ownership, or local test-helper status.",
     },
   ], [canManagePrivilegedWrites, canReviewSafetyReports]);
-
-  const rachiControlCards = useMemo<readonly AdminDashboardCard[]>(() => [
-    {
-      label: "Official account",
-      value: RACHI_OFFICIAL_ACCOUNT.displayName,
-      body: `${RACHI_OFFICIAL_ACCOUNT.handle} stays the canonical official-platform identity across profile and Chi'lly Chat continuity.`,
-    },
-    {
-      label: "Authority",
-      value: "Owner gated",
-      body: "Rachi can assist as an official-platform layer, but it cannot outrank owner/admin decisions or self-authorize important actions.",
-    },
-    {
-      label: "Automation",
-      value: "Not live",
-      body: "No Rachi queue processor, domain state, or automation control plane is backed in this build yet.",
-      tone: "unavailable",
-    },
-    {
-      label: "Escalation",
-      value: "Later",
-      body: "Pause/resume, reversal, and emergency controls remain later until they are backed by true owner-only state.",
-      tone: "unavailable",
-    },
-  ], []);
-
-  const rachiDomainRows = useMemo<readonly AdminDashboardCard[]>(() => [
-    {
-      label: "Moderation",
-      value: "Identity-backed",
-      body: "Rachi is already a protected official-platform moderation actor with an audit owner key, but not a live enforcement queue.",
-    },
-    {
-      label: "Support",
-      value: "Profile + chat",
-      body: "Current truth is canonical official presence on profile and Chi'lly Chat, not a support-operations console.",
-    },
-    {
-      label: "Monetization Review",
-      value: "Later",
-      body: "No real Rachi monetization-review automation or approval flow is backed yet.",
-      tone: "unavailable",
-    },
-    {
-      label: "Creator Review",
-      value: "Later",
-      body: "No real creator-review automation queue or owner approval surface is backed yet.",
-      tone: "unavailable",
-    },
-    {
-      label: "Live Room Risk",
-      value: "Later",
-      body: "Live room risk automation, pause, and emergency controls remain unbacked in current repo truth.",
-      tone: "unavailable",
-    },
-  ], []);
 
   const staffAndAuditCards = useMemo<readonly AdminDashboardCard[]>(() => {
     const canViewStaffRoles = canManagePrivilegedWrites;
@@ -1074,7 +1087,7 @@ export default function AdminStudioScreen() {
       setExperienceConfig(config);
     } catch (err: any) {
       setExperienceConfig(DEFAULT_APP_CONFIG);
-      setNotice({ type: "error", text: err?.message ?? "Failed to load experience config." });
+      setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to load experience config.") });
     } finally {
       setConfigLoading(false);
     }
@@ -1106,14 +1119,15 @@ export default function AdminStudioScreen() {
     } catch (err: any) {
       setSafetyReports([]);
       setSafetyReportQueueSummary(null);
-      setModerationNotice(err?.message ?? "Failed to load the safety review queue.");
+      setModerationNotice(formatAdminOperationFailure(err, "Failed to load the safety review queue."));
     } finally {
       setSafetyReportsLoading(false);
     }
   }, []);
 
-  const applyCreatorVideoModeration = useCallback(async (status: CreatorVideoModerationStatus) => {
+  const queueCreatorVideoModeration = useCallback((status: CreatorVideoModerationStatus) => {
     const videoId = creatorVideoModerationId.trim();
+    const reason = creatorVideoModerationReason.trim();
     if (!videoId || creatorVideoModerationBusy) return;
 
     if (!canManagePrivilegedWrites) {
@@ -1121,16 +1135,41 @@ export default function AdminStudioScreen() {
       return;
     }
 
+    if ((status === "hidden" || status === "removed") && !reason) {
+      setModerationNotice("Add a short safety reason before hiding or removing creator video content.");
+      return;
+    }
+
+    setPendingCreatorVideoModeration({ status, videoId, reason });
+  }, [
+    canManagePrivilegedWrites,
+    creatorVideoModerationBusy,
+    creatorVideoModerationId,
+    creatorVideoModerationReason,
+  ]);
+
+  const applyCreatorVideoModeration = useCallback(async () => {
+    const action = pendingCreatorVideoModeration;
+    if (!action || creatorVideoModerationBusy) return;
+
+    if (!canManagePrivilegedWrites) {
+      setPendingCreatorVideoModeration(null);
+      setModerationNotice("Admin action denied. This account does not have operator permissions.");
+      return;
+    }
+
     try {
-      setCreatorVideoModerationBusy(status);
+      setCreatorVideoModerationBusy(action.status);
       setModerationNotice(null);
       await moderateCreatorVideo({
-        videoId,
-        moderationStatus: status,
-        reason: creatorVideoModerationReason,
+        videoId: action.videoId,
+        moderationStatus: action.status,
+        reason: action.reason,
       });
       setCreatorVideoModerationReason("");
-      setModerationNotice(`Creator video ${videoId} is now ${status.replace("_", " ")}.`);
+      setModerationNotice(
+        `Creator video ${formatCompactIdentifier(action.videoId)} is now ${formatModerationToken(action.status).toLowerCase()}.`,
+      );
       if (canReviewSafetyReports) {
         void loadSafetyReports();
       }
@@ -1138,14 +1177,14 @@ export default function AdminStudioScreen() {
       setModerationNotice(formatCreatorVideoModerationFailure(err));
     } finally {
       setCreatorVideoModerationBusy(null);
+      setPendingCreatorVideoModeration(null);
     }
   }, [
     canManagePrivilegedWrites,
     canReviewSafetyReports,
     creatorVideoModerationBusy,
-    creatorVideoModerationId,
-    creatorVideoModerationReason,
     loadSafetyReports,
+    pendingCreatorVideoModeration,
   ]);
 
   const loadStaffAndAuditVisibility = useCallback(async () => {
@@ -1191,7 +1230,7 @@ export default function AdminStudioScreen() {
       }
       setAdminAuditLog([]);
       setAdminAuditLogSummary(null);
-      setAdminOpsNotice(err?.message ?? "Failed to load staff-role or audit visibility.");
+      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to load staff-role or audit visibility."));
     } finally {
       if (canViewStaffRoles) {
         setPlatformRoleRosterLoading(false);
@@ -1285,7 +1324,7 @@ export default function AdminStudioScreen() {
       const rows = ((query.data as Record<string, any>[] | null) ?? []).map(canonicalizeRow);
       setTitles(normalizeRows(rows));
     } catch (err: any) {
-      setNotice({ type: "error", text: err?.message ?? "Failed to load titles." });
+      setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to load titles.") });
     } finally {
       setLoading(false);
     }
@@ -1314,7 +1353,7 @@ export default function AdminStudioScreen() {
       setNotice({ type: "success", text: `Loaded creator grants for ${targetUserId}.` });
     } catch (err: any) {
       setCreatorGrantForm(normalizeCreatorPermissionSet(null, targetUserId));
-      setNotice({ type: "error", text: err?.message ?? "Unable to load creator grants." });
+      setNotice({ type: "error", text: formatAdminOperationFailure(err, "Unable to load creator grants.") });
     } finally {
       setCreatorGrantLoading(false);
     }
@@ -1338,7 +1377,7 @@ export default function AdminStudioScreen() {
       setCreatorGrantForm(saved);
       setNotice({ type: "success", text: `Creator grants saved for ${targetUserId}.` });
     } catch (err: any) {
-      setNotice({ type: "error", text: err?.message ?? "Unable to save creator grants." });
+      setNotice({ type: "error", text: formatAdminOperationFailure(err, "Unable to save creator grants.") });
     } finally {
       setCreatorGrantSaving(false);
     }
@@ -1381,13 +1420,17 @@ export default function AdminStudioScreen() {
           : "Experience config saved.",
       });
     } catch (err: any) {
-      setNotice({ type: "error", text: err?.message ?? "Failed to save experience config." });
+      setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to save experience config.") });
     } finally {
       setConfigSaving(false);
     }
   }, [canManagePrivilegedWrites, experienceConfig, titles]);
 
   const openCreate = useCallback(() => {
+    if (!canManagePrivilegedWrites) {
+      setNotice({ type: "error", text: "Active owner or operator role required to create platform titles." });
+      return;
+    }
     const nextSort = titles.reduce((acc, item) => Math.max(acc, item.sort_order ?? 0), 0) + 1;
     setEditorMode("create");
     setForm({
@@ -1413,7 +1456,7 @@ export default function AdminStudioScreen() {
       sponsor_label: "",
     });
     setEditorVisible(true);
-  }, [titles]);
+  }, [canManagePrivilegedWrites, titles]);
 
   const openEdit = useCallback((item: TitleRow) => {
     const publicationState = normalizePublicationState({
@@ -1452,6 +1495,11 @@ export default function AdminStudioScreen() {
 
   const patchTitle = useCallback(
     async (id: TitleId, patch: Partial<TitleRow>, successText: string) => {
+      if (!canManagePrivilegedWrites) {
+        setNotice({ type: "error", text: "Active owner or operator role required to update platform titles." });
+        return;
+      }
+
       try {
         const currentItem = titles.find((item) => toIdString(item.id) === toIdString(id)) ?? null;
         const touchesPublicationState =
@@ -1502,14 +1550,19 @@ export default function AdminStudioScreen() {
             : successText,
         });
       } catch (err: any) {
-        setNotice({ type: "error", text: err?.message ?? "Update failed." });
+        setNotice({ type: "error", text: formatAdminOperationFailure(err, "Update failed.") });
       }
     },
-    [hasReleaseControl, hasStatusControl, titles, toDbPatch],
+    [canManagePrivilegedWrites, hasReleaseControl, hasStatusControl, titles, toDbPatch],
   );
 
   const setHeroExclusive = useCallback(
     async (item: TitleRow) => {
+      if (!canManagePrivilegedWrites) {
+        setNotice({ type: "error", text: "Active owner or operator role required to update platform title programming." });
+        return;
+      }
+
       if (!capabilities.heroCol) {
         setNotice({ type: "error", text: "Hero control is unavailable for this schema." });
         return;
@@ -1538,15 +1591,20 @@ export default function AdminStudioScreen() {
 
         setNotice({ type: "success", text: `${item.title} is now Home Hero.` });
       } catch (err: any) {
-        setNotice({ type: "error", text: err?.message ?? "Failed to set hero." });
+        setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to set hero.") });
       } finally {
         setSaving(false);
       }
     },
-    [capabilities.heroCol],
+    [canManagePrivilegedWrites, capabilities.heroCol],
   );
 
   const saveEditor = useCallback(async () => {
+    if (!canManagePrivilegedWrites) {
+      setNotice({ type: "error", text: "Active owner or operator role required to save platform titles." });
+      return;
+    }
+
     if (!form.title.trim()) {
       Alert.alert("Title required", "Please enter a title before saving.");
       return;
@@ -1655,11 +1713,11 @@ export default function AdminStudioScreen() {
       setEditorVisible(false);
       await loadTitles();
     } catch (err: any) {
-      setNotice({ type: "error", text: err?.message ?? "Save failed." });
+      setNotice({ type: "error", text: formatAdminOperationFailure(err, "Save failed.") });
     } finally {
       setSaving(false);
     }
-  }, [capabilities.heroCol, editorMode, form, hasReleaseControl, hasStatusControl, loadTitles, toDbPatch]);
+  }, [canManagePrivilegedWrites, capabilities.heroCol, editorMode, form, hasReleaseControl, hasStatusControl, loadTitles, toDbPatch]);
 
   const renderSkeleton = () => (
     <View style={{ gap: 12 }}>
@@ -1672,8 +1730,8 @@ export default function AdminStudioScreen() {
   if (authLoading || betaLoading) {
     return (
       <BetaAccessScreen
-        title="Loading admin access"
-        body="Checking whether your signed-in account can access studio controls."
+        title="Loading operator access"
+        body="Checking whether your signed-in account has backend platform-role membership."
         operatorOnly
         loadingOverride
       />
@@ -1683,8 +1741,8 @@ export default function AdminStudioScreen() {
   if (!isSignedIn) {
     return (
       <BetaAccessScreen
-        title="Sign in to access Chi'llywood studio controls"
-        body="The admin studio is limited to signed-in owner, operator, or moderator accounts."
+        title="Sign in to access the Operator Center"
+        body="This private surface is limited to signed-in backend owner, operator, or moderator platform roles."
       />
     );
   }
@@ -1733,14 +1791,18 @@ export default function AdminStudioScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerBlock}>
           <View>
-            <Text style={styles.kicker}>{experienceConfig.branding.appDisplayName.toUpperCase()} • ADMIN</Text>
-            <Text style={styles.title}>{experienceConfig.branding.adminTitle}</Text>
-            <Text style={styles.subtitle}>{experienceConfig.branding.adminSubtitle}</Text>
+            <Text style={styles.kicker}>PRIVATE PLATFORM SURFACE</Text>
+            <Text style={styles.title}>{"Chi'llywood Operator Center"}</Text>
+            <Text style={styles.subtitle}>
+              Safety reports, creator-video moderation, role visibility, and platform programming stay behind backend platform-role membership.
+            </Text>
           </View>
 
-          <TouchableOpacity style={[styles.newBtn, { backgroundColor: themePalette.accent }]} onPress={openCreate}>
-            <Text style={styles.newBtnText}>+ New Title</Text>
-          </TouchableOpacity>
+          {canManagePrivilegedWrites ? (
+            <TouchableOpacity style={[styles.newBtn, { backgroundColor: themePalette.accent }]} onPress={openCreate}>
+              <Text style={styles.newBtnText}>New Title</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {notice && (
@@ -1749,72 +1811,72 @@ export default function AdminStudioScreen() {
           </View>
         )}
 
-        <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>ADMIN DASHBOARD</Text>
-              <Text style={styles.configTitle}>Current platform operations</Text>
-              <Text style={styles.configBody}>
-                This route stays limited to the admin truth that already exists: programming, creator grants, moderation review, room defaults, and bounded audit visibility.
-              </Text>
+        <View style={styles.operatorSummaryGrid}>
+          {adminDashboardCards.map((card) => (
+            <View
+              key={card.label}
+              style={[
+                styles.dashboardMetricCard,
+                card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
+              ]}
+            >
+              <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+              <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+              <Text style={styles.dashboardMetricBody}>{card.body}</Text>
             </View>
-          </View>
-
-          <View style={styles.dashboardGrid}>
-            {adminDashboardCards.map((card) => (
-              <View
-                key={card.label}
-                style={[
-                  styles.dashboardMetricCard,
-                  card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
-                ]}
-              >
-                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
-                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
-                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.configList}>
-            {adminSectionRows.map((row) => (
-              <View key={row.label} style={styles.configListRow}>
-                <View style={styles.configListCopy}>
-                  <Text style={styles.configListTitle}>{row.label}</Text>
-                  <Text style={styles.configListBody}>{row.body}</Text>
-                </View>
-                <View style={styles.badgesRow}>
-                  <View
-                    style={[
-                      styles.badge,
-                      row.tone === "unavailable" ? styles.badgeOff : styles.badgeScheduled,
-                    ]}
-                  >
-                    <Text style={styles.badgeText}>{row.value}</Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
+          ))}
         </View>
 
+        <View style={styles.tabBar}>
+          {operatorTabs.map((tab) => {
+            const active = operatorTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.tabButton, active && styles.tabButtonActive]}
+                onPress={() => setOperatorTab(tab.key)}
+              >
+                <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>{tab.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={styles.roleBoundaryPanel}>
+          {adminSectionRows.map((row) => (
+            <View key={row.label} style={styles.boundaryRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>{row.label}</Text>
+                <Text style={styles.configListBody}>{row.body}</Text>
+              </View>
+              <View style={[
+                styles.badge,
+                row.tone === "unavailable" ? styles.badgeOff : styles.badgeScheduled,
+              ]}>
+                <Text style={styles.badgeText}>{row.value}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {operatorTab === "reports" ? (
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>MODERATION</Text>
-              <Text style={styles.configTitle}>Safety reports and role-aware review</Text>
+              <Text style={styles.configKicker}>REPORTS</Text>
+              <Text style={styles.configTitle}>Safety review queue</Text>
               <Text style={styles.configBody}>
-                Report flows now preserve route, target, and audit context across title, profile, chat, and room surfaces while review stays behind active platform moderation roles.
+                Platform operators review safety reports and apply creator-video actions here. Channel owners manage their own uploads in Channel Settings.
               </Text>
             </View>
           </View>
 
           <View style={styles.badgesRow}>
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{`Actor ${formatModerationToken(resolvedActorRole)}`}</Text>
+              <Text style={styles.badgeText}>{`Role ${formatModerationToken(resolvedActorRole)}`}</Text>
             </View>
             <View style={[styles.badge, styles.badgePublished]}>
-              <Text style={styles.badgeText}>Admin Access Enabled</Text>
+              <Text style={styles.badgeText}>Operator Verified</Text>
             </View>
             <View style={[styles.badge, canReviewSafetyReports ? styles.badgeOn : styles.badgeOff]}>
               <Text style={styles.badgeText}>{canReviewSafetyReports ? "Review Queue Enabled" : "Review Queue Locked"}</Text>
@@ -1842,13 +1904,13 @@ export default function AdminStudioScreen() {
           {canManagePrivilegedWrites ? (
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Creator video safety action</Text>
-                <Text style={styles.configListBody}>
-                  Hide, remove, or restore an uploaded creator video by id. This is backed by `videos.moderation_status`, not a fake review control.
-                </Text>
+	                <Text style={styles.configListTitle}>Creator video safety action</Text>
+	                <Text style={styles.configListBody}>
+	                  Enter a creator-video id, add audit context, then confirm the safety action. These writes use backend moderation fields and owner/operator role truth.
+	                </Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Creator video id"
+	                  placeholder="Creator video id"
                   placeholderTextColor="#8d8d8d"
                   value={creatorVideoModerationId}
                   onChangeText={setCreatorVideoModerationId}
@@ -1856,7 +1918,7 @@ export default function AdminStudioScreen() {
                 />
                 <TextInput
                   style={[styles.input, styles.multiline]}
-                  placeholder="Reason for audit context"
+	                  placeholder="Safety reason for audit context"
                   placeholderTextColor="#8d8d8d"
                   value={creatorVideoModerationReason}
                   onChangeText={setCreatorVideoModerationReason}
@@ -1869,16 +1931,19 @@ export default function AdminStudioScreen() {
                     return (
                       <TouchableOpacity
                         key={status}
-                        style={[status === "clean" ? styles.actionBtn : styles.actionBtnPrimary, disabled && styles.configSaveBtnDisabled]}
-                        onPress={() => void applyCreatorVideoModeration(status)}
-                        disabled={disabled}
-                      >
+	                        style={[
+	                          status === "clean" ? styles.actionBtn : styles.actionBtnDanger,
+	                          disabled && styles.configSaveBtnDisabled,
+	                        ]}
+	                        onPress={() => queueCreatorVideoModeration(status)}
+	                        disabled={disabled}
+	                      >
                         {busy ? (
                           <ActivityIndicator color="#fff" size="small" />
                         ) : (
-                          <Text style={status === "clean" ? styles.actionText : styles.actionTextPrimary}>
-                            {status === "clean" ? "Restore Clean" : status === "hidden" ? "Hide" : "Remove"}
-                          </Text>
+	                          <Text style={status === "clean" ? styles.actionText : styles.actionTextDanger}>
+	                            {getCreatorVideoModerationActionLabel(status)}
+	                          </Text>
                         )}
                       </TouchableOpacity>
                     );
@@ -1891,7 +1956,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Creator video safety actions locked</Text>
                 <Text style={styles.configListBody}>
-                  Reports can be reviewed by moderation roles, but creator-video hide/remove writes require owner or operator truth.
+	                  Reports can be reviewed by moderation roles, but creator-video hide/remove/restore writes require backend owner or operator truth.
                 </Text>
               </View>
             </View>
@@ -1902,7 +1967,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>No active review role on this account yet</Text>
                 <Text style={styles.configListBody}>
-                  Content studio access can stay bounded while safety-report review remains locked until this signed-in identity is granted an active `owner`, `operator`, or `moderator` platform role membership.
+	                  Operator Center access stays locked until this signed-in identity is granted an active owner, operator, or moderator platform role membership.
                 </Text>
               </View>
             </View>
@@ -1929,42 +1994,58 @@ export default function AdminStudioScreen() {
                     </View>
                   </View>
                 ) : null}
-                <View style={styles.configList}>
-                  {safetyReports.map((report) => (
-                    <View key={report.id} style={styles.configListRow}>
-                      <View style={styles.configListCopy}>
-                        <Text style={styles.configListTitle}>{report.targetLabel}</Text>
-                        <Text style={styles.configListBody}>{formatModerationTimestamp(report.createdAt)}</Text>
-                        <Text style={styles.configListBody}>
-                          {`${formatModerationToken(report.sourceSurface)} · Reporter ${formatModerationToken(report.reporterRole)}`}
-                        </Text>
-                        {report.targetAuditOwnerKey ? (
-                          <Text style={styles.configListBody}>{`Audit owner ${report.targetAuditOwnerKey}`}</Text>
-                        ) : null}
-                        {report.note ? (
-                          <Text style={styles.configListBody}>{report.note}</Text>
-                        ) : null}
-                      </View>
+	                <View style={styles.configList}>
+	                  {safetyReports.map((report) => (
+	                    <View key={report.id} style={styles.reportCard}>
+	                      <View style={styles.reportHeaderRow}>
+	                        <View style={{ flex: 1 }}>
+	                          <Text style={styles.reportKicker}>
+	                            {`${formatModerationToken(report.targetType)} · Report ${formatCompactIdentifier(report.id)}`}
+	                          </Text>
+	                          <Text style={styles.reportTitle}>{formatAuditDisplayText(report.targetLabel)}</Text>
+	                          <Text style={styles.reportMeta}>{formatModerationTimestamp(report.createdAt)}</Text>
+	                        </View>
+	                        {report.targetType === "creator_video" && canManagePrivilegedWrites ? (
+	                          <TouchableOpacity
+	                            style={styles.orderBtn}
+	                            onPress={() => setCreatorVideoModerationId(report.targetId)}
+	                          >
+	                            <Text style={styles.orderBtnText}>Use Target</Text>
+	                          </TouchableOpacity>
+	                        ) : null}
+	                      </View>
 
-                      <View style={styles.badgesRow}>
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeText}>{formatModerationToken(report.category)}</Text>
-                        </View>
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeText}>{formatModerationToken(report.targetType)}</Text>
-                        </View>
-                        <View style={[styles.badge, report.reviewState === "operator_visible" ? styles.badgeScheduled : styles.badgeDraft]}>
-                          <Text style={styles.badgeText}>{formatModerationToken(report.reviewState)}</Text>
-                        </View>
-                        {report.platformOwnedTarget ? (
-                          <View style={[styles.badge, styles.badgeOn]}>
-                            <Text style={styles.badgeText}>Platform Target</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                  ))}
-                </View>
+	                      <View style={styles.badgesRow}>
+	                        <View style={styles.badge}>
+	                          <Text style={styles.badgeText}>{formatModerationToken(report.category)}</Text>
+	                        </View>
+	                        <View style={[styles.badge, report.reviewState === "operator_visible" ? styles.badgeScheduled : styles.badgeDraft]}>
+	                          <Text style={styles.badgeText}>{formatModerationToken(report.reviewState)}</Text>
+	                        </View>
+	                        <View style={styles.badge}>
+	                          <Text style={styles.badgeText}>{formatModerationToken(report.sourceSurface)}</Text>
+	                        </View>
+	                        {report.platformOwnedTarget ? (
+	                          <View style={[styles.badge, styles.badgeOn]}>
+	                            <Text style={styles.badgeText}>Platform Target</Text>
+	                          </View>
+	                        ) : null}
+	                      </View>
+
+	                      <Text style={styles.reportMeta}>
+	                        {`Reporter ${formatModerationToken(report.reporterRole)} · Target ${formatCompactIdentifier(report.targetId)}`}
+	                      </Text>
+	                      {report.targetAuditOwnerKey ? (
+	                        <Text style={styles.reportMeta}>
+	                          {`Audit owner ${formatCompactIdentifier(report.targetAuditOwnerKey)}`}
+	                        </Text>
+	                      ) : null}
+	                      {report.note ? (
+	                        <Text style={styles.reportBody}>{formatAuditDisplayText(report.note)}</Text>
+	                      ) : null}
+	                    </View>
+	                  ))}
+	                </View>
               </>
             ) : (
               <View style={styles.configListRow}>
@@ -1978,20 +2059,28 @@ export default function AdminStudioScreen() {
             )
           ) : null}
         </View>
+        ) : null}
 
+        {operatorTab === "roles" || operatorTab === "audit" ? (
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>STAFF & AUDIT VISIBILITY</Text>
-              <Text style={styles.configTitle}>Current roster and audit read</Text>
+              <Text style={styles.configKicker}>{operatorTab === "roles" ? "ROLES" : "AUDIT"}</Text>
+              <Text style={styles.configTitle}>
+                {operatorTab === "roles" ? "Platform role visibility" : "Bounded audit visibility"}
+              </Text>
               <Text style={styles.configBody}>
-                This surface shows only current role records and recent report-context audit visibility. It does not imply a broader staffing workflow or cross-domain audit suite.
+                {operatorTab === "roles"
+                  ? "Platform role records are backend operator truth. Channel ownership and audience roles are separate."
+                  : "Audit context stays available for platform role and report-review records without becoming a raw database console."}
               </Text>
             </View>
           </View>
 
           <View style={styles.dashboardGrid}>
-            {staffAndAuditCards.map((card) => (
+            {staffAndAuditCards
+              .filter((card) => operatorTab === "roles" ? card.label === "Staff & Roles" : card.label === "Audit Visibility")
+              .map((card) => (
               <View
                 key={card.label}
                 style={[
@@ -2007,19 +2096,22 @@ export default function AdminStudioScreen() {
           </View>
 
           <View style={styles.badgesRow}>
-            <View style={[styles.badge, canManagePrivilegedWrites ? styles.badgeOn : styles.badgeOff]}>
-              <Text style={styles.badgeText}>{canManagePrivilegedWrites ? "Staff Visibility Enabled" : "Staff Visibility Locked"}</Text>
-            </View>
-            <View
-              style={[
-                styles.badge,
-                canManagePrivilegedWrites || canReviewSafetyReports ? styles.badgeScheduled : styles.badgeOff,
-              ]}
-            >
-              <Text style={styles.badgeText}>
-                {canManagePrivilegedWrites || canReviewSafetyReports ? "Audit Visibility Enabled" : "Audit Visibility Locked"}
-              </Text>
-            </View>
+            {operatorTab === "roles" ? (
+              <View style={[styles.badge, canManagePrivilegedWrites ? styles.badgeOn : styles.badgeOff]}>
+                <Text style={styles.badgeText}>{canManagePrivilegedWrites ? "Role Roster Visible" : "Role Roster Locked"}</Text>
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.badge,
+                  canManagePrivilegedWrites || canReviewSafetyReports ? styles.badgeScheduled : styles.badgeOff,
+                ]}
+              >
+                <Text style={styles.badgeText}>
+                  {canManagePrivilegedWrites || canReviewSafetyReports ? "Audit Context Visible" : "Audit Context Locked"}
+                </Text>
+              </View>
+            )}
           </View>
 
           {adminOpsNotice ? (
@@ -2029,35 +2121,37 @@ export default function AdminStudioScreen() {
           ) : null}
 
           <View style={styles.configList}>
+            {operatorTab === "roles" ? (
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Staff & Roles</Text>
                 <Text style={styles.configListBody}>
-                  Staff-role visibility is limited to current `platform_role_memberships` truth. No role-assignment workflow or fake staff console has been added.
+                  Staff-role visibility is limited to current backend platform role truth. No role-assignment workflow or fake staff console has been added.
                 </Text>
               </View>
             </View>
+            ) : null}
 
-            {canManagePrivilegedWrites ? (
+            {operatorTab === "roles" && canManagePrivilegedWrites ? (
               platformRoleRosterLoading ? (
                 <View style={styles.configLoadingRow}>
                   <ActivityIndicator color="#fff" />
                   <Text style={styles.configLoadingText}>Loading platform role roster…</Text>
                 </View>
               ) : platformRoleRoster.length ? (
-                platformRoleRoster.map((entry) => (
-                  <View key={`staff-role-${entry.id}`} style={styles.configListRow}>
-                    <View style={styles.configListCopy}>
-                      <Text style={styles.configListTitle}>{entry.identityLabel}</Text>
-                      <Text style={styles.configListBody}>
-                        {entry.grantedAt ? formatModerationTimestamp(entry.grantedAt) : "Grant timestamp unavailable"}
-                      </Text>
-                      {entry.grantedBy ? (
-                        <Text style={styles.configListBody}>{`Granted by ${entry.grantedBy}`}</Text>
-                      ) : null}
-                      {entry.notes ? (
-                        <Text style={styles.configListBody}>{entry.notes}</Text>
-                      ) : null}
+	                platformRoleRoster.map((entry) => (
+	                  <View key={`staff-role-${entry.id}`} style={styles.configListRow}>
+	                    <View style={styles.configListCopy}>
+	                      <Text style={styles.configListTitle}>{maskOperatorIdentity(entry.identityLabel)}</Text>
+	                      <Text style={styles.configListBody}>
+	                        {entry.grantedAt ? formatModerationTimestamp(entry.grantedAt) : "Grant timestamp unavailable"}
+	                      </Text>
+	                      {entry.grantedBy ? (
+	                        <Text style={styles.configListBody}>{`Granted by ${formatAuditDisplayText(entry.grantedBy)}`}</Text>
+	                      ) : null}
+	                      {entry.notes ? (
+	                        <Text style={styles.configListBody}>{formatAuditDisplayText(entry.notes)}</Text>
+	                      ) : null}
                     </View>
 
                     <View style={styles.badgesRow}>
@@ -2080,7 +2174,7 @@ export default function AdminStudioScreen() {
                   </View>
                 </View>
               )
-            ) : (
+            ) : operatorTab === "roles" ? (
               <View style={styles.configListRow}>
                 <View style={styles.configListCopy}>
                   <Text style={styles.configListTitle}>Staff-role visibility stays owner/operator only</Text>
@@ -2089,8 +2183,9 @@ export default function AdminStudioScreen() {
                   </Text>
                 </View>
               </View>
-            )}
+            ) : null}
 
+            {operatorTab === "audit" ? (
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Audit Visibility</Text>
@@ -2099,28 +2194,29 @@ export default function AdminStudioScreen() {
                 </Text>
               </View>
             </View>
+            ) : null}
 
-            {canManagePrivilegedWrites || canReviewSafetyReports ? (
+            {operatorTab === "audit" && (canManagePrivilegedWrites || canReviewSafetyReports) ? (
               adminAuditLogLoading ? (
                 <View style={styles.configLoadingRow}>
                   <ActivityIndicator color="#fff" />
                   <Text style={styles.configLoadingText}>Loading recent admin audit visibility…</Text>
                 </View>
               ) : adminAuditLog.length ? (
-                adminAuditLog.map((entry) => (
-                  <View key={entry.id} style={styles.configListRow}>
-                    <View style={styles.configListCopy}>
-                      <Text style={styles.configListTitle}>{entry.title}</Text>
+	                adminAuditLog.map((entry) => (
+	                  <View key={entry.id} style={styles.configListRow}>
+	                    <View style={styles.configListCopy}>
+	                      <Text style={styles.configListTitle}>{entry.title}</Text>
                       <Text style={styles.configListBody}>
                         {entry.occurredAt ? formatModerationTimestamp(entry.occurredAt) : "Audit timestamp unavailable"}
                       </Text>
-                      <Text style={styles.configListBody}>{entry.detail}</Text>
-                      {entry.actorLabel ? (
-                        <Text style={styles.configListBody}>{`Actor ${entry.actorLabel}`}</Text>
-                      ) : null}
-                      {entry.auditOwnerKey ? (
-                        <Text style={styles.configListBody}>{`Audit owner ${entry.auditOwnerKey}`}</Text>
-                      ) : null}
+	                      <Text style={styles.configListBody}>{formatAuditDisplayText(entry.detail)}</Text>
+	                      {entry.actorLabel ? (
+	                        <Text style={styles.configListBody}>{`Actor ${formatAuditDisplayText(entry.actorLabel)}`}</Text>
+	                      ) : null}
+	                      {entry.auditOwnerKey ? (
+	                        <Text style={styles.configListBody}>{`Audit owner ${formatCompactIdentifier(entry.auditOwnerKey)}`}</Text>
+	                      ) : null}
                     </View>
 
                     <View style={styles.badgesRow}>
@@ -2143,7 +2239,7 @@ export default function AdminStudioScreen() {
                   </View>
                 </View>
               )
-            ) : (
+            ) : operatorTab === "audit" ? (
               <View style={styles.configListRow}>
                 <View style={styles.configListCopy}>
                   <Text style={styles.configListTitle}>Audit visibility stays permission-bound</Text>
@@ -2152,76 +2248,13 @@ export default function AdminStudioScreen() {
                   </Text>
                 </View>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
+        ) : null}
 
-        <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>RACHI CONTROL</Text>
-              <Text style={styles.configTitle}>Official-platform authority boundary</Text>
-              <Text style={styles.configBody}>
-                This section shows only current official-account and authority-boundary truth. It does not pretend queue processing, automation, or emergency controls already exist.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.dashboardGrid}>
-            {rachiControlCards.map((card) => (
-              <View
-                key={card.label}
-                style={[
-                  styles.dashboardMetricCard,
-                  card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
-                ]}
-              >
-                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
-                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
-                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.configList}>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Authority boundary</Text>
-                <Text style={styles.configListBody}>
-                  Owner / Super Admin remains above Rachi. Current repo truth does not allow Rachi to self-authorize important actions, pause domains, or overrule owner/admin decisions.
-                </Text>
-              </View>
-              <View style={styles.badgesRow}>
-                <View style={[styles.badge, styles.badgeOn]}>
-                  <Text style={styles.badgeText}>OWNER ABOVE RACHI</Text>
-                </View>
-                <View style={[styles.badge, styles.badgeScheduled]}>
-                  <Text style={styles.badgeText}>{RACHI_OFFICIAL_ACCOUNT.auditOwnerKey}</Text>
-                </View>
-              </View>
-            </View>
-
-            {rachiDomainRows.map((row) => (
-              <View key={row.label} style={styles.configListRow}>
-                <View style={styles.configListCopy}>
-                  <Text style={styles.configListTitle}>{row.label}</Text>
-                  <Text style={styles.configListBody}>{row.body}</Text>
-                </View>
-                <View style={styles.badgesRow}>
-                  <View
-                    style={[
-                      styles.badge,
-                      row.tone === "unavailable" ? styles.badgeOff : styles.badgeScheduled,
-                    ]}
-                  >
-                    <Text style={styles.badgeText}>{row.value}</Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-
+        {operatorTab === "content" ? (
+        <>
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
@@ -2766,7 +2799,7 @@ export default function AdminStudioScreen() {
                 />
                 <TextInput
                   style={[styles.input, styles.inputHalf]}
-                  placeholder="Admin title"
+                  placeholder="Operator center label"
                   placeholderTextColor="#8d8d8d"
                   value={experienceConfig.branding.adminTitle}
                   onChangeText={(text) =>
@@ -2818,7 +2851,7 @@ export default function AdminStudioScreen() {
               </View>
               <TextInput
                 style={[styles.input, styles.multiline]}
-                placeholder="Admin subtitle"
+                placeholder="Operator center helper copy"
                 placeholderTextColor="#8d8d8d"
                 multiline
                 value={experienceConfig.branding.adminSubtitle}
@@ -3241,13 +3274,14 @@ export default function AdminStudioScreen() {
                       ) : null}
                     </View>
 
-                    <View style={styles.actionsRow}>
-                      <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => patchTitle(item.id, { featured: !(item.featured === true) }, "Featured updated.")}
-                      >
-                        <Text style={styles.actionText}>{item.featured ? "Unfeature" : "Feature"}</Text>
-                      </TouchableOpacity>
+	                    {canManagePrivilegedWrites ? (
+	                    <View style={styles.actionsRow}>
+	                      <TouchableOpacity
+	                        style={styles.actionBtn}
+	                        onPress={() => patchTitle(item.id, { featured: !(item.featured === true) }, "Featured updated.")}
+	                      >
+	                        <Text style={styles.actionText}>{item.featured ? "Unfeature" : "Feature"}</Text>
+	                      </TouchableOpacity>
 
                       {hasTopRowControl ? (
                         <TouchableOpacity
@@ -3332,14 +3366,81 @@ export default function AdminStudioScreen() {
                           {item.is_published ? "Unpublish" : "Publish"}
                         </Text>
                       </TouchableOpacity>
-                    </View>
+	                    </View>
+	                    ) : (
+	                      <View style={styles.configListRowSubtle}>
+	                        <Text style={styles.configListBody}>
+	                          Platform title programming is read-only for review-only roles.
+	                        </Text>
+	                      </View>
+	                    )}
                   </View>
                 </View>
               );
             })}
           </View>
         )}
+        </>
+        ) : null}
       </ScrollView>
+
+      <Modal
+        visible={pendingCreatorVideoModeration !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setPendingCreatorVideoModeration(null)}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmSheet}>
+            <Text style={styles.confirmKicker}>Creator Video Safety</Text>
+            <Text style={styles.confirmTitle}>
+              {pendingCreatorVideoModeration
+                ? getCreatorVideoModerationActionLabel(pendingCreatorVideoModeration.status)
+                : "Confirm action"}
+            </Text>
+            <Text style={styles.confirmBody}>
+              {pendingCreatorVideoModeration
+                ? getCreatorVideoModerationConfirmCopy(pendingCreatorVideoModeration.status)
+                : "Confirm this operator action before continuing."}
+            </Text>
+            {pendingCreatorVideoModeration ? (
+              <View style={styles.confirmMetaBox}>
+                <Text style={styles.confirmMetaText}>
+                  {`Target ${formatCompactIdentifier(pendingCreatorVideoModeration.videoId)}`}
+                </Text>
+                <Text style={styles.confirmMetaText}>
+                  {pendingCreatorVideoModeration.reason
+                    ? `Reason: ${pendingCreatorVideoModeration.reason}`
+                    : "Reason: restore without additional note"}
+                </Text>
+              </View>
+            ) : null}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setPendingCreatorVideoModeration(null)}
+                disabled={creatorVideoModerationBusy !== null}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  pendingCreatorVideoModeration?.status === "clean" ? styles.saveBtn : styles.dangerConfirmBtn,
+                  creatorVideoModerationBusy !== null && styles.configSaveBtnDisabled,
+                ]}
+                onPress={() => void applyCreatorVideoModeration()}
+                disabled={creatorVideoModerationBusy !== null}
+              >
+                {creatorVideoModerationBusy !== null ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={editorVisible} animationType="slide" transparent onRequestClose={() => setEditorVisible(false)}>
         <View style={styles.modalBackdrop}>
@@ -3674,14 +3775,14 @@ const styles = StyleSheet.create({
     color: "#9a9a9a",
     fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 1.25,
+    letterSpacing: 0,
     marginBottom: 5,
   },
   title: {
     color: "#fff",
     fontSize: 34,
     fontWeight: "900",
-    letterSpacing: 0.35,
+    letterSpacing: 0,
   },
   subtitle: {
     color: "#b7b7b7",
@@ -3702,7 +3803,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "800",
     fontSize: 12,
-    letterSpacing: 0.25,
+    letterSpacing: 0,
   },
   notice: {
     borderRadius: 12,
@@ -3744,7 +3845,7 @@ const styles = StyleSheet.create({
     color: "#9AA4B9",
     fontSize: 11,
     fontWeight: "800",
-    letterSpacing: 1,
+    letterSpacing: 0,
   },
   configTitle: {
     color: "#fff",
@@ -3797,6 +3898,52 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 10,
   },
+  operatorSummaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  tabBar: {
+    flexDirection: "row",
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(5,8,12,0.72)",
+    padding: 5,
+  },
+  tabButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  tabButtonActive: {
+    backgroundColor: "rgba(220,20,60,0.24)",
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.46)",
+  },
+  tabButtonText: {
+    color: "#B7C1D4",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  tabButtonTextActive: {
+    color: "#FFFFFF",
+  },
+  roleBoundaryPanel: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(7,9,14,0.78)",
+    padding: 10,
+    gap: 8,
+  },
+  boundaryRow: {
+    gap: 8,
+  },
   dashboardGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -3821,7 +3968,7 @@ const styles = StyleSheet.create({
     color: "#9AA4B9",
     fontSize: 11,
     fontWeight: "800",
-    letterSpacing: 0.8,
+    letterSpacing: 0,
   },
   dashboardMetricValue: {
     color: "#FFFFFF",
@@ -3840,6 +3987,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.04)",
     padding: 10,
     gap: 10,
+  },
+  configListRowSubtle: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    padding: 10,
   },
   configListCopy: {
     gap: 2,
@@ -3871,6 +4025,42 @@ const styles = StyleSheet.create({
     color: "#ECECEC",
     fontSize: 11,
     fontWeight: "700",
+  },
+  reportCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 12,
+    gap: 8,
+  },
+  reportHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  reportKicker: {
+    color: "#9AA4B9",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  reportTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  reportMeta: {
+    color: "#B5C0D2",
+    fontSize: 11.5,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  reportBody: {
+    color: "#E2E7F2",
+    fontSize: 12.5,
+    fontWeight: "600",
+    lineHeight: 18,
   },
   statsGrid: {
     flexDirection: "row",
@@ -4064,7 +4254,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
+  actionBtnDanger: {
+    borderRadius: 999,
+    backgroundColor: "rgba(220,20,60,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.5)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
   actionTextPrimary: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionTextDanger: {
     color: "#fff",
     fontSize: 11,
     fontWeight: "800",
@@ -4098,6 +4301,53 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.6)",
+  },
+  confirmBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.64)",
+    paddingHorizontal: 18,
+  },
+  confirmSheet: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "#10131A",
+    padding: 16,
+    gap: 10,
+  },
+  confirmKicker: {
+    color: "#9AA4B9",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  confirmTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  confirmBody: {
+    color: "#C7D0DF",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 19,
+  },
+  confirmMetaBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10,
+    gap: 4,
+  },
+  confirmMetaText: {
+    color: "#DCE3EF",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
   },
   modalSheet: {
     maxHeight: "90%",
@@ -4162,7 +4412,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "800",
-    letterSpacing: 0.4,
+    letterSpacing: 0,
     marginBottom: 8,
     marginTop: 2,
   },
@@ -4238,6 +4488,14 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     backgroundColor: "#DC143C",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+  },
+  dangerConfirmBtn: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: "#B91C32",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 12,

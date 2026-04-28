@@ -131,8 +131,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     partyWaitingRoomTitle: "Party Waiting Room",
     liveRoomTitle: "Live Room",
     partyRoomTitle: "Party Room",
-    adminTitle: "Content Studio",
-    adminSubtitle: "Control hero, release windows, rows, and metadata from one premium panel.",
+    adminTitle: "Chi'llywood Operator Center",
+    adminSubtitle: "Private platform surface for reports, moderation, roles, and launch operations.",
   },
   features: APP_RUNTIME_FEATURE_DEFAULTS,
   monetization: {

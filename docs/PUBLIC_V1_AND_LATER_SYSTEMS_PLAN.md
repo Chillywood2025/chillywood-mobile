@@ -629,6 +629,8 @@ Expired/canceled premium user:
 Admin/operator:
 
 - Admin/operator platform roles may access admin surfaces where backed.
+- Channel/content ownership is separate from platform owner/operator/moderator authority; owning a Profile, Channel, or upload does not grant Admin access.
+- Rachi is the official public platform concierge/presence on backed Profile/Chat/Support/onboarding surfaces, not Admin and not an operator role.
 - Admin/operator role is not a universal Premium bypass for consumer feature proof unless explicitly documented and backend-enforced.
 - Operator test bypasses, if added later, must be visible in docs and impossible for ordinary users.
 
@@ -790,6 +792,8 @@ Relationship to Admin:
 - Admin owns review visibility and future enforcement actions.
 - Admin access must be backend enforced through platform roles/RLS.
 - Admin must not show fake workflow states.
+- Admin UI should present a private Operator Center, not a public creator/channel owner surface.
+- Admin UI must not be branded as Rachi or imply Rachi can self-authorize platform actions.
 
 Relationship to Comments:
 
@@ -928,6 +932,7 @@ Future implementation should map richer product reasons into the backed category
 - Admin/operator can restore content if policy allows and action schema supports it.
 - Admin/operator can ban/block users if backed.
 - Admin/operator must provide reason where appropriate.
+- Destructive moderation actions should use confirmation copy and avoid raw backend/PostgREST errors in user-facing UI.
 - Admin actions should be audited.
 - Non-admin must be blocked by backend, not just hidden UI.
 
@@ -1688,6 +1693,8 @@ Recommendation:
 - Admin controls platform titles, reports, takedowns, configs, and later monetization support.
 - Admin access must be backend enforced.
 - Admin UI must not expose fake authority.
+- Admin is the private Operator Center for backend platform roles; Channel Settings is the creator/content-owner surface.
+- Rachi is not Admin and must not imply operator authority.
 - Admin actions should gain audit records before sensitive mutation launch.
 
 ## SECTION 10 - Public V1 Required vs Post-v1
