@@ -108,6 +108,47 @@ async function createSignedUrl(path: string) {
   return data.signedUrl;
 }
 
+const shouldVerifyUploadBytes = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
+};
+
+async function uploadedObjectHasReadableBytes(input: {
+  storagePath: string;
+  expectedSize?: number | null;
+}) {
+  if (!shouldVerifyUploadBytes(input.expectedSize)) return true;
+
+  const signedUrl = await createSignedUrl(input.storagePath);
+  if (!signedUrl) return true;
+
+  try {
+    const head = await fetch(signedUrl, { method: "HEAD" });
+    const contentLength = Number(head.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > 0) return true;
+
+    const rangeProbe = await fetch(signedUrl, { headers: { Range: "bytes=0-0" } });
+    if (rangeProbe.status === 416) return false;
+    if (!rangeProbe.ok) return true;
+
+    const body = await rangeProbe.arrayBuffer();
+    return body.byteLength > 0;
+  } catch {
+    return true;
+  }
+}
+
+async function assertUploadedObjectReadable(input: {
+  storagePath: string;
+  expectedSize?: number | null;
+}) {
+  const hasBytes = await uploadedObjectHasReadableBytes(input);
+  if (hasBytes) return;
+
+  await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([input.storagePath]).catch(() => undefined);
+  throw new Error("Uploaded video object was empty after upload.");
+}
+
 const encodeStoragePath = (path: string) => path
   .split("/")
   .map((part) => encodeURIComponent(part))
@@ -118,6 +159,7 @@ async function uploadLocalFileToStorage(input: {
   storagePath: string;
   mimeType: string;
   fileName?: string | null;
+  expectedSize?: number | null;
 }) {
   const { data, error } = await supabase.auth.getSession();
   const accessToken = data.session?.access_token;
@@ -153,6 +195,10 @@ async function uploadLocalFileToStorage(input: {
       });
 
     if (error) throw error;
+    await assertUploadedObjectReadable({
+      storagePath: input.storagePath,
+      expectedSize: input.expectedSize,
+    });
     return;
   } catch (error) {
     logCreatorVideoUpload("file_object_upload_failed", {
@@ -174,6 +220,10 @@ async function uploadLocalFileToStorage(input: {
     if (result.status < 200 || result.status >= 300) {
       throw new Error(parseStorageError(result.body));
     }
+    await assertUploadedObjectReadable({
+      storagePath: input.storagePath,
+      expectedSize: input.expectedSize,
+    });
     return;
   } catch (error) {
     logCreatorVideoUpload("native_upload_failed", {
@@ -199,6 +249,11 @@ async function uploadLocalFileToStorage(input: {
     const body = await response.text().catch(() => "");
     throw new Error(parseStorageError(body));
   }
+
+  await assertUploadedObjectReadable({
+    storagePath: input.storagePath,
+    expectedSize: input.expectedSize,
+  });
 }
 
 async function parseCreatorVideo(row: CreatorVideoRow): Promise<CreatorVideo> {
@@ -308,6 +363,7 @@ export async function uploadCreatorVideo(input: {
       storagePath,
       mimeType,
       fileName: input.file.name,
+      expectedSize: input.file.size,
     });
   } catch (error) {
     logCreatorVideoUpload("storage_upload_failed", {

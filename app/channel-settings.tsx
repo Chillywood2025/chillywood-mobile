@@ -1405,7 +1405,7 @@ export default function ChannelSettingsScreen() {
     <ImageBackground source={SKYLINE_SOURCE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay} />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
@@ -2659,6 +2659,9 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(6,8,14,0.8)",
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     paddingTop: 54,

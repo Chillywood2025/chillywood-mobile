@@ -164,6 +164,8 @@ function RootNavigator() {
         <Stack.Screen name="watch-party/live-stage/[partyId]" />
         <Stack.Screen name="communication/index" />
         <Stack.Screen name="communication/[roomId]" />
+        <Stack.Screen name="chat/index" />
+        <Stack.Screen name="chat/[threadId]" />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="subscribe" />
@@ -274,9 +276,13 @@ function BetaWelcomeController() {
 
 function PublicLegalNavigator() {
   return (
-    <RootErrorBoundary>
-      <Stack screenOptions={{ headerShown: false }} />
-    </RootErrorBoundary>
+    <SessionProvider>
+      <BetaProgramProvider>
+        <RootErrorBoundary>
+          <Stack screenOptions={{ headerShown: false }} />
+        </RootErrorBoundary>
+      </BetaProgramProvider>
+    </SessionProvider>
   );
 }
 
