@@ -35,6 +35,8 @@ The audit found a few proven non-room issues and fixed only those:
 - Signed-out Chat inbox/thread states now offer a direct Sign In handoff with redirect context.
 - JS string literals no longer render `&apos;` literally in Chat, Support, or the internal invite sheet.
 
+Follow-up smoothness note: `docs/PUBLIC_V1_SMOOTHNESS_HARDENING_AUDIT.md` now records the Public v1 polish pass for loading, empty, error, picker, Premium-copy, and logging/privacy states. That pass kept non-room route ownership unchanged and only tightened Home/Explore/My List copy, Channel Settings creator-video states, Settings/Subscribe Premium copy, and runtime/Crashlytics redaction.
+
 No monetization implementation, paid creator content, payout/tip/coin/ads work, native AR, native game streaming, major redesign, destructive account deletion, database migration, Android proof, or long live proof was performed.
 
 Recommendation: keep the fixes, run the next route smoke on Android, and keep the remaining Public v1 work focused on Creator Media public/draft proof, Premium/access proof, moderation proof, and release readiness.

@@ -27,6 +27,7 @@ export default function MyListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<TitleRow[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const getImageSource = useCallback((item?: TitleRow | null): ImageSourcePropType | null => {
     if (!item) return null;
@@ -43,6 +44,7 @@ export default function MyListScreen() {
 
   const loadMyList = useCallback(async () => {
     const ids = await readMyListIds().catch(() => [] as string[]);
+    setErrorMsg(null);
 
     if (!ids.length) {
       setItems([]);
@@ -62,10 +64,8 @@ export default function MyListScreen() {
           .map((id) => byId.get(id))
           .filter((item): item is TitleRow => !!item);
 
-        if (ordered.length > 0) {
-          setItems(ordered);
-          return;
-        }
+        setItems(ordered);
+        return;
       }
     } catch {
       // fallback below
@@ -89,6 +89,9 @@ export default function MyListScreen() {
       .filter((item): item is TitleRow => !!item);
 
     setItems(fallbackLocal);
+    if (!fallbackLocal.length) {
+      setErrorMsg("Unable to refresh My List right now. Check your connection and try again.");
+    }
   }, []);
 
   const bootstrap = useCallback(async () => {
@@ -137,7 +140,31 @@ export default function MyListScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
         ListHeaderComponent={<Text style={styles.header}>My List</Text>}
-        ListEmptyComponent={<Text style={styles.emptyText}>Your saved titles will land here.</Text>}
+        ListEmptyComponent={
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>
+              {errorMsg ? "My List couldn’t refresh" : "Your list is ready when you are"}
+            </Text>
+            <Text style={styles.emptyText}>
+              {errorMsg
+                ? errorMsg
+                : "Save a title from Home or Explore and it will appear here for quick access."}
+            </Text>
+            {errorMsg ? (
+              <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={onRefresh}>
+                <Text style={styles.emptyButtonText}>Retry</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.emptyButton}
+                activeOpacity={0.86}
+                onPress={() => router.push("/(tabs)/explore")}
+              >
+                <Text style={styles.emptyButtonText}>Browse Titles</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        }
         renderItem={({ item }) => {
           const source = getImageSource(item);
           return (
@@ -184,10 +211,40 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 14,
   },
+  emptyCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 18,
+    marginTop: 6,
+    gap: 10,
+  },
+  emptyTitle: {
+    color: "#fff",
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: "900",
+  },
   emptyText: {
-    color: "#9b9b9b",
-    fontSize: 14,
-    marginTop: 8,
+    color: "#bfc6d4",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
+  emptyButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    backgroundColor: "#E50914",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    marginTop: 2,
+  },
+  emptyButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "900",
   },
   gridRow: {
     justifyContent: "space-between",

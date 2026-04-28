@@ -150,6 +150,48 @@ const logCreatorVideoUploadUi = (event: string, details?: Record<string, unknown
   console.log("[creator-video-upload-ui]", event, details ?? {});
 };
 
+const SUPPORTED_CREATOR_VIDEO_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-m4v",
+]);
+
+const SUPPORTED_CREATOR_VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "m4v"]);
+
+const isSupportedCreatorVideoFile = (file: CreatorVideoFile) => {
+  const mimeType = String(file.mimeType ?? "").trim().toLowerCase();
+  const extension = String(file.name ?? "").trim().toLowerCase().split(".").pop() ?? "";
+  const hasSupportedMimeType = SUPPORTED_CREATOR_VIDEO_MIME_TYPES.has(mimeType) || mimeType.startsWith("video/");
+  const hasSupportedExtension = SUPPORTED_CREATOR_VIDEO_EXTENSIONS.has(extension);
+
+  if (hasSupportedMimeType || hasSupportedExtension) return !!file.uri;
+  if (!mimeType && !extension) return !!file.uri;
+
+  return false;
+};
+
+const formatCreatorVideoUiError = (error: unknown, fallback: string) => {
+  const rawMessage = error instanceof Error ? error.message : String(error ?? "");
+  const message = rawMessage.trim().toLowerCase();
+
+  if (!message) return fallback;
+  if (message.includes("network") || message.includes("fetch")) {
+    return "Network trouble interrupted creator videos. Check your connection and try again.";
+  }
+  if (message.includes("permission") || message.includes("denied") || message.includes("policy") || message.includes("rls")) {
+    return "This account cannot complete that creator video action right now.";
+  }
+  if (message.includes("storage") || message.includes("bucket") || message.includes("upload")) {
+    return "The video could not be saved to creator storage right now. Try again in a moment.";
+  }
+  if (message.includes("file") || message.includes("mime") || message.includes("unsupported")) {
+    return "Choose an MP4, MOV, WebM, or M4V video file.";
+  }
+
+  return fallback;
+};
+
 const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
   if (value === "party_pass") return "Party Pass";
   if (value === "premium") return "Premium";
@@ -397,6 +439,7 @@ export default function ChannelSettingsScreen() {
   const [eventNotice, setEventNotice] = useState<string | null>(null);
   const [eventEditor, setEventEditor] = useState<ChannelEventEditorState>(createEmptyEventEditorState);
   const [videosLoading, setVideosLoading] = useState(false);
+  const [videosLoadError, setVideosLoadError] = useState<string | null>(null);
   const [videoSaving, setVideoSaving] = useState(false);
   const [videoNotice, setVideoNotice] = useState<string | null>(null);
   const [videoEditor, setVideoEditor] = useState<ChannelVideoEditorState>(createEmptyVideoEditorState);
@@ -531,6 +574,7 @@ export default function ChannelSettingsScreen() {
 
     if (!canUseChannelSettings || !user?.id) {
       setCreatorVideos([]);
+      setVideosLoadError(null);
       setVideosLoading(false);
       return () => {
         active = false;
@@ -538,6 +582,7 @@ export default function ChannelSettingsScreen() {
     }
 
     setVideosLoading(true);
+    setVideosLoadError(null);
     void readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 })
       .then((videos) => {
         if (!active) return;
@@ -547,6 +592,7 @@ export default function ChannelSettingsScreen() {
       .catch(() => {
         if (!active) return;
         setCreatorVideos([]);
+        setVideosLoadError("Unable to load creator videos right now. Check your connection and retry.");
         setVideosLoading(false);
       });
 
@@ -643,13 +689,21 @@ export default function ChannelSettingsScreen() {
   const loadCreatorVideos = async () => {
     if (!user?.id) {
       setCreatorVideos([]);
+      setVideosLoadError(null);
       return;
     }
 
     setVideosLoading(true);
+    setVideosLoadError(null);
     try {
       const videos = await readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 });
       setCreatorVideos(videos);
+    } catch (error) {
+      setCreatorVideos([]);
+      setVideosLoadError(formatCreatorVideoUiError(
+        error,
+        "Unable to load creator videos right now. Check your connection and retry.",
+      ));
     } finally {
       setVideosLoading(false);
     }
@@ -672,6 +726,7 @@ export default function ChannelSettingsScreen() {
 
       if (result.canceled) {
         logCreatorVideoUploadUi("picker_canceled");
+        setVideoNotice("No video selected. Choose Video File when you're ready to upload.");
         return;
       }
       const asset = result.assets[0];
@@ -687,6 +742,16 @@ export default function ChannelSettingsScreen() {
         mimeType: asset.mimeType,
         size: asset.size,
       };
+
+      if (!isSupportedCreatorVideoFile(pickedFile)) {
+        logCreatorVideoUploadUi("picker_unsupported", {
+          name: pickedFile.name ?? "unnamed",
+          mimeType: pickedFile.mimeType ?? null,
+        });
+        setSelectedVideoFile(null);
+        setVideoNotice("Choose an MP4, MOV, WebM, or M4V video file.");
+        return;
+      }
 
       setSelectedVideoFile(pickedFile);
       logCreatorVideoUploadUi("picker_selected", {
@@ -768,7 +833,7 @@ export default function ChannelSettingsScreen() {
       logCreatorVideoUploadUi("submit_failed", {
         message: error instanceof Error ? error.message : "unknown",
       });
-      setVideoNotice(error instanceof Error ? error.message : "Unable to save creator video right now.");
+      setVideoNotice(formatCreatorVideoUiError(error, "Unable to save creator video right now. Try again in a moment."));
     } finally {
       setVideoSaving(false);
     }
@@ -792,8 +857,8 @@ export default function ChannelSettingsScreen() {
                 await loadCreatorVideos();
                 if (videoEditor.editingVideoId === video.id) resetVideoEditor();
                 setVideoNotice("Creator video deleted.");
-              } catch {
-                setVideoNotice("Unable to delete creator video right now.");
+              } catch (error) {
+                setVideoNotice(formatCreatorVideoUiError(error, "Unable to delete creator video right now."));
               } finally {
                 setVideoSaving(false);
               }
@@ -1733,6 +1798,20 @@ export default function ChannelSettingsScreen() {
                   <ActivityIndicator color="#fff" />
                   <Text style={styles.loadingText}>Loading creator videos...</Text>
                 </View>
+              ) : videosLoadError ? (
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Creator videos couldn&apos;t refresh</Text>
+                  <Text style={styles.eventEmptyBody}>{videosLoadError}</Text>
+                  <TouchableOpacity
+                    style={styles.eventSecondaryButton}
+                    activeOpacity={0.86}
+                    onPress={() => {
+                      void loadCreatorVideos();
+                    }}
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
               ) : creatorVideos.length ? (
                 <View style={styles.eventList}>
                   {creatorVideos.map((video) => {
@@ -1785,7 +1864,10 @@ export default function ChannelSettingsScreen() {
                               })
                                 .then(() => loadCreatorVideos())
                                 .then(() => setVideoNotice(video.visibility === "public" ? "Video moved to draft." : "Video published."))
-                                .catch(() => setVideoNotice("Unable to update video visibility right now."));
+                                .catch((error) => setVideoNotice(formatCreatorVideoUiError(
+                                  error,
+                                  "Unable to update video visibility right now.",
+                                )));
                             }}
                           >
                             <Text style={styles.eventSecondaryButtonText}>

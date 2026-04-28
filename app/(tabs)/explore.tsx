@@ -182,7 +182,7 @@ export default function ExploreScreen() {
       .returns<TitleRow[]>();
 
     if (error) {
-      setErrorMsg(error.message || "Couldn’t load titles.");
+      setErrorMsg("Unable to load titles right now. Check your connection and try again.");
       setTitles([]);
       setTitleLiveMetadataById({});
       setLoading(false);
@@ -331,7 +331,7 @@ export default function ExploreScreen() {
                 <Text style={styles.exploreTitle}>Explore</Text>
                 <Text style={styles.count}>Titles: {titlesCount}</Text>
                 <Text style={styles.headerBody}>
-                  Explore now follows current programming truth first, then falls back to recency. No fake recommendations, just backed featured, trending, top-row, and live-now cues.
+                  Browse the current Chi&apos;llywood lineup, with featured, trending, top-row, and live-now cues surfaced first.
                 </Text>
 
                 <View style={styles.chipRow}>

@@ -224,7 +224,7 @@ export default function HomeScreen() {
     if (error) {
       setTitles([]);
       setTitleLiveMetadataById({});
-      setError(error.message);
+      setError("Unable to refresh Home right now. Check your connection and try again.");
       return;
     }
 
@@ -612,8 +612,8 @@ export default function HomeScreen() {
         </View>
       ) : !titles.length ? (
         <View style={styles.center}>
-          <Text style={styles.muted}>Home is waiting on titles.</Text>
-          <Text style={styles.mutedSmall}>Program the first lineup and it will light up here automatically.</Text>
+          <Text style={styles.muted}>Home is getting the lineup ready.</Text>
+          <Text style={styles.mutedSmall}>Featured titles will appear here as soon as Chi&apos;llywood programming is available.</Text>
         </View>
       ) : (
         <ScrollView

@@ -317,7 +317,7 @@ export default function SettingsScreen() {
         <Text style={styles.cardKicker}>PREMIUM ACCOUNT</Text>
         <Text style={styles.secondaryTitle}>Premium access on this account</Text>
         <Text style={styles.body}>
-          Settings shows the current Premium posture for this signed-in account. Manage Premium opens the dedicated account-owned surface for restore, purchase, and subscription-management handoff.
+          Settings shows the Premium status Chi&apos;llywood can verify for this signed-in account. Manage Premium opens restore, purchase, and subscription-management options when they are available.
         </Text>
 
         <View style={styles.identityBlock}>
@@ -325,11 +325,11 @@ export default function SettingsScreen() {
           <Text style={styles.identityValue}>{planLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Current purchase posture</Text>
+          <Text style={styles.identityLabel}>Purchase readiness</Text>
           <Text style={styles.identityValue}>{monetizationStatusLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Premium route access</Text>
+          <Text style={styles.identityLabel}>Protected access</Text>
           <Text style={styles.identityValue}>{entitlementsLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
@@ -337,7 +337,7 @@ export default function SettingsScreen() {
           <Text style={styles.identityValue}>{offeringsLabel}</Text>
         </View>
         <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Purchase entry</Text>
+          <Text style={styles.identityLabel}>Next step</Text>
           <Text style={styles.statusNote}>{issueLabel}</Text>
         </View>
 

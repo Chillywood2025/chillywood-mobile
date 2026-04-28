@@ -7,8 +7,26 @@ const canUseFirebaseCrashlytics = () => Platform.OS !== "web";
 
 let cachedCrashlyticsModule: typeof import("@react-native-firebase/crashlytics").default | null = null;
 
+const SENSITIVE_TEXT_PATTERNS: Array<[RegExp, string]> = [
+  [/(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, "$1[redacted]"],
+  [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted-jwt]"],
+  [/([?&](?:access_token|refresh_token|token|apikey|key|signature|expires|expires_in)=)[^&\s]+/gi, "$1[redacted]"],
+  [/((?:participantToken|signedUrl|authorization|apiKey|secret|jwt)\s*[:=]\s*)[^\s,}]+/gi, "$1[redacted]"],
+];
+
+const redactSensitiveText = (value: string) => (
+  SENSITIVE_TEXT_PATTERNS.reduce((nextValue, [pattern, replacement]) => (
+    nextValue.replace(pattern, replacement)
+  ), value)
+);
+
 const normalizeError = (error: unknown) => {
-  if (error instanceof Error) return error;
+  if (error instanceof Error) {
+    const nextError = new Error(redactSensitiveText(error.message));
+    nextError.name = redactSensitiveText(error.name);
+    if (error.stack) nextError.stack = redactSensitiveText(error.stack);
+    return nextError;
+  }
 
   if (error && typeof error === "object") {
     const record = error as Record<string, unknown>;
@@ -18,20 +36,20 @@ const normalizeError = (error: unknown) => {
       typeof record.hint === "string" ? record.hint.trim() : "",
     ].filter(Boolean).join(" ");
 
-    const nextError = new Error(message || String(record.code ?? "Unknown error"));
+    const nextError = new Error(redactSensitiveText(message || String(record.code ?? "Unknown error")));
     if (typeof record.name === "string" && record.name.trim()) {
-      nextError.name = record.name.trim();
+      nextError.name = redactSensitiveText(record.name.trim());
     }
     if (typeof record.stack === "string" && record.stack.trim()) {
-      nextError.stack = record.stack.trim();
+      nextError.stack = redactSensitiveText(record.stack.trim());
     }
     return nextError;
   }
 
-  return new Error(String(error ?? "Unknown error"));
+  return new Error(redactSensitiveText(String(error ?? "Unknown error")));
 };
 
-const sanitizeLogLine = (value: unknown) => String(value ?? "").trim().slice(0, 1000);
+const sanitizeLogLine = (value: unknown) => redactSensitiveText(String(value ?? "").trim()).slice(0, 1000);
 
 const serializeMeta = (meta: CrashlyticsMeta) => {
   if (!meta) return "";
@@ -39,8 +57,9 @@ const serializeMeta = (meta: CrashlyticsMeta) => {
   try {
     return JSON.stringify(meta, (_key, value) => {
       if (value == null) return value;
-      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
-      return String(value);
+      if (typeof value === "string") return redactSensitiveText(value);
+      if (typeof value === "number" || typeof value === "boolean") return value;
+      return redactSensitiveText(String(value));
     }).slice(0, 1000);
   } catch {
     return "";

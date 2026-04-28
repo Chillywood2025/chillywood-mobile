@@ -196,9 +196,9 @@ export default function SubscribeScreen() {
 
       <View style={styles.heroCard}>
         <Text style={styles.heroKicker}>CHI&apos;LLYWOOD PREMIUM</Text>
-        <Text style={styles.heroTitle}>Premium access should feel real before it unlocks anything.</Text>
+        <Text style={styles.heroTitle}>Premium keeps protected rooms and playback tied to your account.</Text>
         <Text style={styles.heroBody}>
-          Premium can unlock protected Watch-Party and playback surfaces only after the configured billing owner and backend entitlement truth say this account is active.
+          Chi&apos;llywood checks your signed-in account before unlocking Premium-only Watch-Party or playback surfaces. If store setup is unavailable, access stays locked.
         </Text>
       </View>
 
@@ -212,7 +212,7 @@ export default function SubscribeScreen() {
           <Text style={styles.cardKicker}>SIGN IN REQUIRED</Text>
           <Text style={styles.cardTitle}>Sign in before Premium can be checked.</Text>
           <Text style={styles.body}>
-            Premium is account-owned. Chi&apos;llywood will not grant protected route access from a local-only or anonymous purchase state.
+            Premium is account-owned. Sign in so Chi&apos;llywood can check your subscription or restore purchases safely.
           </Text>
           <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88} onPress={onSignIn}>
             <Text style={styles.primaryButtonText}>Sign In</Text>
@@ -262,7 +262,7 @@ export default function SubscribeScreen() {
             <Text style={styles.cardKicker}>ACTIONS</Text>
             <Text style={styles.cardTitle}>Purchase and restore</Text>
             <Text style={styles.body}>
-              These actions call the existing RevenueCat and entitlement owners. If the store or offer is not configured, the action stays blocked and no Premium access is granted.
+              Purchase and restore stay disabled until the store and offer are ready. Chi&apos;llywood will not unlock Premium from a local-only state.
             </Text>
             <TouchableOpacity
               style={[styles.primaryButton, (!canPurchase || busy) && styles.primaryButtonDisabled]}
