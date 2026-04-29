@@ -1767,19 +1767,14 @@ export default function ProfileScreen() {
         ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
       ]
     : isSelfProfile
-    ? [
-        { label: "Edit Profile", onPress: onPressManageChannel },
-        { label: "Manage Channel", onPress: onPressManageChannel },
-        { label: "Upload Video", onPress: onPressUploadVideo },
-        { label: "Settings", onPress: onPressSettings },
-      ]
-    : [
-        ...(canShowFollowAction ? [{ label: followActionLabel, onPress: onToggleFollowChannel }] : []),
-        { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
-        { label: "View Channel", onPress: onPressViewChannel },
-        { label: "Share Profile", onPress: () => { void onShareProfile(); } },
-        ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
-      ];
+      ? []
+      : [
+          ...(canShowFollowAction ? [{ label: followActionLabel, onPress: onToggleFollowChannel }] : []),
+          { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+          { label: "View Channel", onPress: onPressViewChannel },
+          { label: "Share Profile", onPress: () => { void onShareProfile(); } },
+          ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
+        ];
   const communityActions = isSelfProfile
     ? [
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
@@ -2378,28 +2373,9 @@ export default function ProfileScreen() {
                   </Text>
                 </View>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.feedComposerManageButton}
-                activeOpacity={0.86}
-                disabled={profileComposerBusy}
-                onPress={onPressManageChannel}
-              >
-                <Text style={styles.feedComposerManageText}>Manage</Text>
-              </TouchableOpacity>
             </View>
           </View>
-        ) : (
-          <View style={styles.feedComposerToolRow}>
-            <TouchableOpacity style={styles.feedComposerTool} activeOpacity={0.86} onPress={onPressUploadVideo}>
-              <MaterialIcons name="videocam" size={18} color="#DDE5F7" />
-              <Text style={styles.feedComposerToolText}>Upload</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.feedComposerTool} activeOpacity={0.86} onPress={onPressManageChannel}>
-              <MaterialIcons name="settings" size={18} color="#DDE5F7" />
-              <Text style={styles.feedComposerToolText}>Manage</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        ) : null}
       </View>
     );
   };
@@ -2907,7 +2883,7 @@ export default function ProfileScreen() {
               </View>
             ))}
           </View>
-          {avatarQuickActionsOpen ? (
+          {avatarQuickActionsOpen && quickActions.length > 0 ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>
                 {isOfficialProfile ? "Official Quick Actions" : isSelfProfile ? "Your Channel Quick Actions" : "Channel Quick Actions"}
@@ -2938,30 +2914,14 @@ export default function ProfileScreen() {
                     activeOpacity={0.86}
                     onPress={onPressManageChannel}
                   >
-                    <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Edit Profile</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.actionBtnConnected]}
-                    activeOpacity={0.86}
-                    onPress={onPressManageChannel}
-                  >
                     <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Manage Channel</Text>
                   </TouchableOpacity>
-                </View>
-                <View style={styles.secondaryActionRow}>
                   <TouchableOpacity
-                    style={[styles.actionChip, styles.actionChipConnected]}
-                    activeOpacity={0.82}
-                    onPress={onPressUploadVideo}
-                  >
-                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Upload Video</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionChip, styles.actionChipConnected]}
-                    activeOpacity={0.82}
+                    style={[styles.actionBtn, styles.actionBtnSecondary]}
+                    activeOpacity={0.86}
                     onPress={onPressSettings}
                   >
-                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Settings</Text>
+                    <Text style={styles.actionBtnText}>Settings</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -3688,24 +3648,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  feedComposerToolRow: {
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.08)",
-    paddingTop: 11,
-    flexDirection: "row",
-    gap: 10,
-  },
-  feedComposerTool: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 13,
-    backgroundColor: "rgba(255,255,255,0.055)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-  },
-  feedComposerToolText: { color: "#DDE5F7", fontSize: 12.5, fontWeight: "900" },
   feedComposerExpanded: { gap: 10 },
   feedComposerTextArea: { minHeight: 72 },
   feedComposerAttachButton: {
@@ -3749,17 +3691,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   feedComposerPostText: { color: "#fff", fontSize: 13, fontWeight: "900" },
-  feedComposerManageButton: {
-    flex: 0.8,
-    minHeight: 44,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.055)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  feedComposerManageText: { color: "#E9EEFB", fontSize: 13, fontWeight: "900" },
   profilePostComposerCard: {
     borderRadius: 16,
     borderWidth: 1,

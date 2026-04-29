@@ -130,7 +130,7 @@ export function CreatorVideoCard({
           <Image source={{ uri: video.thumbnailUrl }} style={styles.thumbnail} />
         ) : (
           <View style={styles.fallbackPreview}>
-            <Text style={styles.fallbackKicker}>{"CHI'LLYWOOD"}</Text>
+            <Text style={styles.fallbackKicker}>{"CHI'LLYWOOD CREATOR"}</Text>
             <Text style={styles.fallbackTitle} numberOfLines={2}>{displayTitle}</Text>
           </View>
         )}
