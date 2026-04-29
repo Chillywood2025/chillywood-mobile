@@ -22,7 +22,6 @@ import {
   readAppConfig,
   resolveBrandingConfig,
   resolveFeatureConfig,
-  resolveMonetizationConfig,
 } from "../_lib/appConfig";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import {
@@ -425,7 +424,6 @@ export default function ChannelSettingsScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsEnabled, setSettingsEnabled] = useState(true);
   const [appDisplayName, setAppDisplayName] = useState(DEFAULT_APP_CONFIG.branding.appDisplayName);
-  const [monetizationConfig, setMonetizationConfig] = useState(DEFAULT_APP_CONFIG.monetization);
   const [creatorPermissions, setCreatorPermissions] = useState<CreatorPermissionSet | null>(null);
   const [audienceSummary, setAudienceSummary] = useState<ChannelAudienceReadModel | null>(null);
   const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
@@ -493,7 +491,6 @@ export default function ChannelSettingsScreen() {
         setProfile(normalizeUserProfile(resolvedProfile));
         setSettingsEnabled(resolveFeatureConfig(resolvedConfig).creatorSettingsEnabled);
         setAppDisplayName(resolveBrandingConfig(resolvedConfig).appDisplayName);
-        setMonetizationConfig(resolveMonetizationConfig(resolvedConfig));
         setCreatorPermissions(resolvedPermissions);
         setAudienceSummary(resolvedAudienceSummary);
         setSafetyAdminSummary(resolvedSafetyAdminSummary);
@@ -503,7 +500,6 @@ export default function ChannelSettingsScreen() {
       .catch(() => {
         if (!active) return;
         setProfile(normalizeUserProfile({ username: "", avatarIndex: 0 }));
-        setMonetizationConfig(DEFAULT_APP_CONFIG.monetization);
         setAudienceSummary(null);
         setSafetyAdminSummary(null);
         setCreatorAnalyticsSummary(null);
@@ -1002,9 +998,9 @@ export default function ChannelSettingsScreen() {
       body: "Home emphasis and layout preset.",
     },
     {
-      title: "Access & Monetization",
+      title: "Access Defaults",
       status: "current",
-      body: "Room defaults and creator grants.",
+      body: "Room defaults and backed creator grants.",
     },
     {
       title: "Live Events",
@@ -1051,13 +1047,6 @@ export default function ChannelSettingsScreen() {
     body: getChannelAccessSummaryBody(channelAccessResolution),
   };
   const resolvedCreatorPermissions = channelAccessResolution?.creatorPermissions ?? creatorPermissions;
-  const adRuntimeEnabled =
-    monetizationConfig.sponsorPlacementsEnabled
-    || monetizationConfig.playerBannerEnabled
-    || monetizationConfig.playerMidRollEnabled;
-  const adGrantEnabled =
-    !!resolvedCreatorPermissions?.canUseSponsorPlacements
-    || !!resolvedCreatorPermissions?.canUsePlayerAds;
   const accessSummaryDetails: readonly ChannelAccessSummaryDetail[] = [
     {
       label: "Watch Party",
@@ -1096,28 +1085,6 @@ export default function ChannelSettingsScreen() {
         : resolvedCreatorPermissions.canUsePremiumRooms
           ? "Premium room defaults can stay active on this route"
           : "Premium room defaults stay hidden until the creator grant is enabled",
-    },
-    {
-      label: "Ad Readiness",
-      value: !resolvedCreatorPermissions
-        ? "Loading"
-        : adGrantEnabled
-          ? (adRuntimeEnabled ? "Prepared" : "Foundation Only")
-          : "Later",
-      body: !resolvedCreatorPermissions
-        ? "checking sponsor and player-ad groundwork"
-        : adGrantEnabled
-          ? (
-              adRuntimeEnabled
-                ? "Sponsor groundwork is granted here, but public rollout still needs a later route-owned chapter"
-                : "Sponsor or player-ad groundwork can be granted here, but public placements still stay off in this build"
-            )
-          : "Sponsor placements and player ads are still later for this creator and are not live on public routes",
-    },
-    {
-      label: "Premium Playback",
-      value: "Ad-Free",
-      body: `${appDisplayName} Premium stays ad-free even when creator-side sponsorship deepens later`,
     },
   ];
   const audienceSummaryCards: readonly SummaryMetricCard[] = [
@@ -1453,7 +1420,7 @@ export default function ChannelSettingsScreen() {
         </View>
       ) : videosLoadError ? (
         <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>Creator videos couldn&apos;t refresh</Text>
+          <Text style={styles.eventEmptyTitle}>{"Creator videos couldn't refresh"}</Text>
           <Text style={styles.eventEmptyBody}>{videosLoadError}</Text>
           <TouchableOpacity
             style={styles.eventSecondaryButton}
@@ -1808,11 +1775,11 @@ export default function ChannelSettingsScreen() {
 
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Access &amp; Monetization</Text>
+                <Text style={styles.panelTitle}>Access Defaults</Text>
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Lead with what is live now: room defaults are active here today, creator grants decide which paid defaults can stay on, and ad readiness still stays preparation-only.
+                Lead with what is live now: room defaults are active here today, and backed creator grants decide which access defaults can stay on.
               </Text>
               <View style={styles.accessSummaryCard}>
                 <Text style={styles.accessSummaryKicker}>CURRENT ACCESS POSTURE</Text>
@@ -1929,7 +1896,7 @@ export default function ChannelSettingsScreen() {
                 <Text style={styles.panelStatus}>ACTIVE DEFAULTS</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Use the same grant-backed access posture for Chi&apos;lly Chat-linked entry without promising broader monetization or live ads yet.
+                {"Use the same grant-backed access posture for Chi'lly Chat-linked entry without promising unsupported paid creator features."}
               </Text>
 
               <Text style={styles.sectionLabel}>Content Access</Text>

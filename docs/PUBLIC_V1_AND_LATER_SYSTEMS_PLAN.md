@@ -33,8 +33,8 @@ Current Public v1 truth:
 - User/creator Channels show creator-owned uploads, videos, events, live/watch-party content, and backed creator shelves only.
 - Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
 - `/profile/[userId]` is the public Profile/Channel surface.
-- `/profile/[userId]` can include an owner-only fast-post composer for adding a creator video without leaving the Profile.
-- Profile's current mobile shape is feed-first: compact identity header, inline creator-video composer, Posts-first creator-video feed, and a separate Videos/library tab. It may reference modern social profile patterns without copying third-party branding or showing unbacked engagement.
+- `/profile/[userId]` can include an owner-only creator-video upload composer without leaving the Profile.
+- Profile's current mobile shape is identity-first and mobile-social: compact identity header, honest Posts placeholder until personal updates are backed, Channel tab for creator uploads, and clear owner/public quick actions. It may reference modern social profile patterns without copying third-party branding or showing unbacked engagement.
 - `/channel-settings` is the deeper owner control and management surface.
 - Creator Media System foundation exists.
 - Creator upload is Public v1 required.
@@ -61,8 +61,8 @@ Owns:
 - public Profile/Channel discovery surface
 - self vs public viewer distinction
 - public/owner visibility presentation
-- owner-only fast-post creator-video composer that uses the Creator Media helper path
-- Posts-first feed presentation for backed creator-video uploads
+- owner-only creator-video upload composer that uses the Creator Media helper path
+- honest Posts placeholder until personal posts/status updates are backed
 - Chi'lly Chat handoff from profile
 - links into backed content, live, and channel surfaces
 
@@ -158,7 +158,7 @@ Future Codex should avoid:
 - showing unsupported VIP/mod/co-host/subscriber mutation as real
 - making a button appear before its backend owner exists
 
-Example: the Profile Upload Video button is allowed to open an owner-only fast-post composer that calls `_lib/creatorVideos.ts` and refreshes the Profile list. `/channel-settings` still owns deeper management such as edit, publish/unpublish, delete, thumbnail URL, channel settings, and library review. `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
+Example: the Profile Upload Video button is allowed to open an owner-only creator-video composer that calls `_lib/creatorVideos.ts` and refreshes the Channel tab. The Posts tab must remain an honest personal-updates placeholder until a profile-post backend exists. `/channel-settings` still owns deeper management such as edit, publish/unpublish, delete, thumbnail URL, channel settings, and library review. `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
 
 Creator Channels are allowed to carry movie-sized uploads, not only short clips. The Public v1 standard upload lane targets files larger than 50 MB and currently sets app/bucket intent to 5 GiB; Supabase's project Storage global file-size limit must be configured to match. If the product requires uploads beyond the standard upload path or needs stronger long-network reliability, add a backed resumable/TUS or S3 multipart lane before claiming full-size movie proof.
 

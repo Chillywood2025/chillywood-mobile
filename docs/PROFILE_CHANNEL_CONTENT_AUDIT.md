@@ -6,6 +6,7 @@ Updated: 2026-04-28 for non-room Player source ownership hardening
 Updated: 2026-04-28 for creator video card presentation and engagement truth
 Updated: 2026-04-28 for Profile/Channel versus Chi'llywood Originals ownership correction
 Updated: 2026-04-28 for one-device non-live Profile/Channel and creator-video card proof
+Updated: 2026-04-29 for Profile/Channel Public v1 product-contract clarity
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -22,6 +23,36 @@ Unrelated dirty files at audit start:
 - `scripts/proof-live-stage-video-check.sh`
 
 This audit began as documentation only. The follow-up creator media foundation now implements the first Public v1 creator-upload path. Later Android proof on `R5CR120QCBF` confirmed the owner Profile/Channel and Channel Settings presentation lanes, while public/non-owner proof and playable creator-video proof still remain pending because the current stored media object is zero bytes.
+
+## 2026-04-29 Profile / Channel Contract Addendum
+
+Current governing truth:
+
+- Profile is personal/social identity.
+- Channel is the creator's mini streaming platform.
+- Profile and Channel stay connected on `/profile/[userId]`, but they must not collapse into one vague feed.
+- Personal Profile posts/status updates are desired, but they are not backed for Public v1 unless implemented separately.
+- Creator uploaded videos belong to the Channel/creator content area, not the personal Posts lane.
+- Chi'llywood Originals/platform `titles` stay on Home, Explore, platform title/player routes, dedicated Originals/platform surfaces, and admin-managed title surfaces.
+
+Active code truth after this pass:
+
+- The Profile header shows identity, handle, avatar, tagline/bio when present, official/platform badges where backed, and backed live/role signals.
+- Owner top actions are Edit Profile, Manage Channel, Upload Video, and Settings.
+- Public top actions are backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, and Report where supported.
+- The Posts tab now shows an honest personal-updates placeholder instead of rendering creator videos as fake social posts.
+- The Channel tab owns creator uploaded videos, uses `CreatorVideoCard`, and opens `/player/[id]?source=creator-video`.
+- The owner Profile composer remains available, but it is explicitly a creator-video upload into Channel.
+- `/channel-settings` labels current access controls as Access Defaults and no longer presents ad/sponsorship/Premium-playback cards as Channel owner controls.
+
+Public v1 status:
+
+- Profile 1-6 is present for identity, quick actions, Channel entry, backed social/community posture, and honest activity/empty states.
+- Personal posts/status updates are pending because no profile-post backend exists.
+- Follow is backed by `channel_followers` and `_lib/channelAudience.ts`; public counts remain hidden unless backed/readable for that viewer.
+- Full Friends, likes/comments on creator videos, personal post comments/reactions, paid creator content, payouts, tips, coins, ads, native game streaming, and real Chi'llyfects AR remain out of scope.
+
+Runtime proof status: static/code/docs pass only. No Android runtime proof, production build, or database mutation was run.
 
 ## Files Read
 
@@ -102,16 +133,18 @@ There is no separate public `/channel/[id]` route. Doctrine and current code int
 
 - public identity: display name, handle, avatar, tagline, role, official account badges, live/off-air state, and room context state
 - public channel framing: "Your Channel", "Creator Channel", "Host Channel", or official concierge copy
-- primary actions: Chi'lly Chat, Live Events or Join Live when real context exists, Watch Party or Watch-Party Live when backed context exists
+- primary public actions: backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, Report, and live/watch-party handoffs when real context exists
+- primary owner actions: Edit Profile, Manage Channel, Upload Video, and Settings
 - channel access posture: browse, Watch Party, and Chi'lly Chat access cards backed by user profile defaults and creator permissions
-- channel tabs: Home, Content, Live, Community, About
-- creator-owned video cards from `videos`; user/creator Channels do not show Chi'llywood Originals or platform `titles` as filler
+- tabs: Posts, Channel, Live, Community, About
+- Posts tab: honest personal-updates placeholder because text/status Profile posts are not backed yet
+- Channel tab: creator-owned video cards from `videos`; user/creator Channels do not show Chi'llywood Originals or platform `titles` as filler
 - public live/event summaries from backed `creator_events` and reminder summaries
 - owner mode on the same route when the signed-in user matches the route user id
-- owner-only handoff card and quick actions to `Manage Channel` and Chi'lly Chat
+- owner-only handoff card and quick actions to `Manage Channel`, creator-video upload, Settings, and Chi'lly Chat
 - report/safety path for non-self profiles
 
-The self vs public viewer experience is different enough at the control level: self-view gets owner stats, owner prompts, and Manage Channel; visitors get chat/call/report style actions and public channel copy. The distinction is still visually subtle because both modes share one public route by design.
+The self vs public viewer experience is different at the control level: self-view gets owner stats, owner prompts, edit/manage/upload/settings actions, and drafts; visitors get backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, Report, and public channel copy. The distinction still shares one canonical route by design.
 
 ## Current Channel Truth
 
@@ -161,7 +194,7 @@ Working connections:
 
 Updated working connections:
 
-- Profile Content can render creator-owned videos from `videos`.
+- Profile Channel can render creator-owned videos from `videos`.
 - Owner Profile view links to Channel Settings for upload.
 - Profile/Channel creator-video cards now show thumbnails when `thumb_url` or `thumb_storage_path` resolves, otherwise a branded Chi'llywood fallback preview.
 - Public Profile/Channel cards can share a route-safe app deep link for public clean/reported creator videos only.
@@ -171,7 +204,7 @@ Updated working connections:
 Confusing or missing connections:
 
 - "Channel" is real in the UI but has no standalone public URL, so a user expecting a separate Channel destination may not know that Profile is the Channel home.
-- The Content tab now has a creator-video section, but shelf curation beyond the simple uploaded-video grid is still later.
+- The Channel tab now has a creator-video section, but shelf curation beyond the simple uploaded-video grid is still later.
 - Channel settings has a current upload/manage lane, but not a full shelf builder or advanced creator studio.
 - The app still has both `titles` and `videos`: `titles` remain platform/admin programming and `videos` now cover creator-owned uploads.
 
@@ -249,7 +282,7 @@ Current visual behavior:
 
 - Channel Settings owner library shows every owner video returned by `readCreatorVideos(..., { includeDrafts: true })`.
 - Owner cards show thumbnail/fallback preview, Play overlay, Draft/Public badge, moderation badge when applicable, description preview, file size when present, updated date when parseable, mime type, and owner controls.
-- Profile/Channel shows creator-video cards in the Content tab. Owner view may include drafts with badges; public viewer reads only public clean/reported videos through `_lib/creatorVideos.ts` and RLS.
+- Profile/Channel shows creator-video cards in the Channel tab. Owner view may include drafts with badges; public viewer reads only public clean/reported videos through `_lib/creatorVideos.ts` and RLS.
 - Cards route to `/player/[id]?source=creator-video`.
 - Home, Explore, and My List remain platform-title surfaces and do not list creator videos.
 - One-device proof on `R5CR120QCBF` confirmed the owner no-thumbnail fallback card in Channel Settings and Profile/Channel, including the `Open Player`, `Edit`, `Unpublish`, and `Delete` owner controls in Channel Settings and no platform-title filler inside the creator Channel.
@@ -300,7 +333,7 @@ Recommended remaining implementation order:
 Already working or partly working:
 
 - Home and Explore render programmed platform title rails and open `/title/[id]` or platform Player routes.
-- Profile Content tab shows creator-owned videos and creator events only; no jump-to-title filler is used in user/creator Channels.
+- Profile Channel tab shows creator-owned videos and creator events only; no jump-to-title filler is used in user/creator Channels.
 - Title Detail supports Play, Favorites, Like, Mark Shared, Report, and Watch-Party Live entry when active rooms exist.
 - Player opens title video sources from `video_url` or local fallback.
 - Player opens creator videos only when the route explicitly includes `source=creator-video`, which keeps platform title ids and creator-video ids from silently crossing owners.
@@ -460,7 +493,7 @@ Later implementation order:
 
 ### C. Should Improve Before Public V1 If Easy
 
-- Polish the owner-only Profile Content empty-state CTA after Android proof.
+- Polish the owner-only Profile Channel empty-state CTA after Android proof.
 - Add remote `poster_url` display support on Title Detail hero so remote-programmed titles look premium without requiring local assets.
 - Add thumbnail file upload and category/genre metadata if the runtime proof is clean.
 - Add a visible public follow/unfollow action only if the existing `channelAudience` helpers are intentionally ready for viewer use.

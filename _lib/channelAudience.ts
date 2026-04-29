@@ -71,6 +71,13 @@ export type ChannelSubscriberRelationshipActionSupport = {
   message: string;
 };
 
+export type ChannelViewerFollowState =
+  | "signed_out"
+  | "self"
+  | "following"
+  | "not_following"
+  | "unavailable";
+
 type ChannelFollowerRow = Tables<"channel_followers">;
 type ChannelAudienceRequestRow = Tables<"channel_audience_requests">;
 type ChannelAudienceBlockRow = Tables<"channel_audience_blocks">;
@@ -333,6 +340,16 @@ export async function followChannel(channelUserId: string): Promise<ChannelAudie
     viewerUserId: context.viewerUserId,
     targetUserId: context.viewerUserId,
   });
+}
+
+export async function readMyChannelFollowState(channelUserId: string): Promise<ChannelViewerFollowState> {
+  const context = await readAudienceActorContext(channelUserId);
+  if (!context.channelUserId) return "unavailable";
+  if (!context.viewerUserId) return "signed_out";
+  if (context.viewerUserId === context.channelUserId) return "self";
+
+  const existing = await readFollowerRow(context.channelUserId, context.viewerUserId);
+  return existing ? "following" : "not_following";
 }
 
 export async function unfollowChannel(channelUserId: string): Promise<ChannelAudienceActionResult> {

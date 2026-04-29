@@ -18,6 +18,12 @@ import {
   type FriendRelationshipState,
 } from "../../_lib/friendGraph";
 import {
+  followChannel,
+  readMyChannelFollowState,
+  unfollowChannel,
+  type ChannelViewerFollowState,
+} from "../../_lib/channelAudience";
+import {
   type CreatorEventSummary,
   type CreatorEventType,
 } from "../../_lib/liveEvents";
@@ -102,6 +108,15 @@ type ProfileAccessDetail = {
   label: string;
   value: string;
   body: string;
+};
+
+type ProfileViewerFollowState = ChannelViewerFollowState | "loading";
+
+const PROFILE_DEEP_LINK_SCHEME = "chillywoodmobile";
+
+const buildProfileDeepLink = (profileUserId: string) => {
+  const normalizedId = encodeURIComponent(String(profileUserId ?? "").trim());
+  return `${PROFILE_DEEP_LINK_SCHEME}://profile/${normalizedId}`;
 };
 
 const resolveChannelLayoutPreset = (value?: UserProfile["channelLayoutPreset"] | null) => {
@@ -310,15 +325,6 @@ const getProfileVideoTitleFromName = (value?: string | null) => (
 
 const formatProfileFileSize = formatCreatorVideoFileSize;
 
-const formatFeedPostTimestamp = (value?: string | null) => {
-  const timestamp = Date.parse(String(value ?? ""));
-  if (!Number.isFinite(timestamp)) return "Just now";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(timestamp));
-};
-
 const isSupportedProfileVideoFile = (file: CreatorVideoFile) => {
   const mimeType = String(file.mimeType ?? "").trim().toLowerCase();
   const extension = String(file.name ?? "").trim().toLowerCase().split(".").pop() ?? "";
@@ -367,6 +373,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState("");
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
+  const [viewerFollowState, setViewerFollowState] = useState<ProfileViewerFollowState>("unavailable");
+  const [followActionBusy, setFollowActionBusy] = useState(false);
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
   const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -638,6 +646,36 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [currentUserId, isOfficialProfile, isSelfProfile, userId]);
+  useEffect(() => {
+    let active = true;
+
+    if (isSelfProfile) {
+      setViewerFollowState("self");
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!userId || isOfficialProfile || !currentUserId) {
+      setViewerFollowState("unavailable");
+      return () => {
+        active = false;
+      };
+    }
+
+    setViewerFollowState("loading");
+    void readMyChannelFollowState(userId)
+      .then((state) => {
+        if (active) setViewerFollowState(state);
+      })
+      .catch(() => {
+        if (active) setViewerFollowState("unavailable");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, isOfficialProfile, isSelfProfile, userId]);
   const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
   const liveNowEvent = useMemo(
     () => publicEvents.find((event) => event.isLiveNow) ?? null,
@@ -740,7 +778,7 @@ export default function ProfileScreen() {
     }
     setProfileComposerOpen(true);
     setProfileComposerNotice(null);
-    setActiveTab("home");
+    setActiveTab("content");
   };
   const refreshProfileCreatorVideos = async () => {
     if (isOfficialProfile || !userId) {
@@ -773,7 +811,7 @@ export default function ProfileScreen() {
       const asset = result.assets[0];
       if (!asset?.uri) {
         logProfileComposer("picker_missing_asset");
-        setProfileComposerNotice("Choose a video file before posting.");
+        setProfileComposerNotice("Choose a video file before uploading.");
         return;
       }
 
@@ -825,12 +863,12 @@ export default function ProfileScreen() {
     if (!isSelfProfile) return;
 
     if (!profileComposerFile) {
-      setProfileComposerNotice("Attach a video before posting to your Profile.");
+      setProfileComposerNotice("Attach a video before uploading to your Channel.");
       return;
     }
 
     if (typeof profileComposerFile.size === "number" && profileComposerFile.size <= 0) {
-      setProfileComposerNotice("Choose a non-empty video file before posting.");
+      setProfileComposerNotice("Choose a non-empty video file before uploading.");
       return;
     }
 
@@ -840,13 +878,13 @@ export default function ProfileScreen() {
     }
 
     if (!profileComposerTitle.trim()) {
-      setProfileComposerNotice("Add a title before posting this video.");
+      setProfileComposerNotice("Add a title before uploading this video.");
       return;
     }
 
     try {
       setProfileComposerBusy(true);
-      setProfileComposerNotice("Uploading to your Profile...");
+      setProfileComposerNotice("Uploading to your Channel...");
       logProfileComposer("submit_start", {
         fileName: profileComposerFile.name ?? null,
         fileSize: profileComposerFile.size ?? null,
@@ -866,15 +904,15 @@ export default function ProfileScreen() {
         setCreatorVideosReady(true);
       }
 
-      setActiveTab("home");
+      setActiveTab("content");
       setProfileComposerFile(null);
       setProfileComposerTitle("");
       setProfileComposerText("");
       setProfileComposerVisibility("public");
       setProfileComposerNotice(
         profileComposerVisibility === "public"
-          ? "Posted to your Profile and public Channel."
-          : "Saved as a draft on your Profile.",
+          ? "Uploaded to your public Channel."
+          : "Saved as a draft in your Channel.",
       );
       logProfileComposer("submit_succeeded", {
         id: uploadedVideo.id,
@@ -887,7 +925,7 @@ export default function ProfileScreen() {
       setProfileComposerNotice(
         formatProfileComposerError(
           error,
-          "Unable to post this video right now. Try again in a moment.",
+          "Unable to upload this video right now. Try again in a moment.",
           profileComposerFile.size,
         ),
       );
@@ -1021,6 +1059,52 @@ export default function ProfileScreen() {
     });
     setReportVisible(true);
   };
+  const onPressViewChannel = () => {
+    setActiveTab("content");
+  };
+  const onPressSettings = () => {
+    router.push("/settings");
+  };
+  const onShareProfile = async () => {
+    if (!userId) {
+      Alert.alert("Share unavailable", "This profile is missing the identity needed to share it.");
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: `View ${profile.displayName} on Chi'llywood: ${buildProfileDeepLink(userId)}`,
+      });
+    } catch {
+      Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
+    }
+  };
+  const onToggleFollowChannel = async () => {
+    if (!userId || isSelfProfile || isOfficialProfile || followActionBusy) return;
+
+    try {
+      setFollowActionBusy(true);
+      const result = viewerFollowState === "following"
+        ? await unfollowChannel(userId)
+        : await followChannel(userId);
+
+      if (result.status === "completed" || result.status === "noop") {
+        setViewerFollowState(result.action === "follow" ? "following" : "not_following");
+        return;
+      }
+
+      if (result.reason === "signed_out") {
+        Alert.alert("Follow channel", "Sign in to follow this creator channel.");
+        return;
+      }
+
+      Alert.alert("Follow channel", "Unable to update this follow relationship right now.");
+    } catch {
+      Alert.alert("Follow channel", "Unable to update this follow relationship right now.");
+    } finally {
+      setFollowActionBusy(false);
+    }
+  };
   const onSubmitProfileReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
     if (!canReportProfile) return;
     setReportBusy(true);
@@ -1051,6 +1135,14 @@ export default function ProfileScreen() {
   const publicCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
   const draftCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
   const hasCreatorVideoTruth = creatorVideos.length > 0;
+  const canShowFollowAction = !isOfficialProfile
+    && !isSelfProfile
+    && (viewerFollowState === "following" || viewerFollowState === "not_following" || viewerFollowState === "loading");
+  const followActionLabel = followActionBusy || viewerFollowState === "loading"
+    ? "Checking"
+    : viewerFollowState === "following"
+      ? "Following"
+      : "Follow";
   const publicEventCount = publicEvents.length;
   const liveEventCount = publicEvents.filter((event) => event.isLiveNow).length;
   const channelSignals = [
@@ -1134,8 +1226,8 @@ export default function ProfileScreen() {
   const contentCreatorVideosBody = isSelfProfile
     ? creatorVideosReady
       ? hasCreatorVideoTruth
-        ? "Post videos from this Profile. Public videos appear here for visitors while drafts stay owner-only; deeper edits stay in Channel Settings."
-        : "Post your first video from this Profile when you are ready to make the channel watchable."
+        ? "Upload videos for this Channel. Public videos appear here for visitors while drafts stay owner-only; deeper edits stay in Channel Settings."
+        : "Upload your first creator video when you are ready to make the channel watchable."
       : "Loading your creator-video library."
     : isOfficialProfile
       ? "This official account does not host Chi'llywood Originals inside Profile/Channel."
@@ -1152,17 +1244,21 @@ export default function ProfileScreen() {
   const quickActions = isOfficialProfile
     ? [
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+        { label: "Share Profile", onPress: () => { void onShareProfile(); } },
         ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
       ]
     : isSelfProfile
     ? [
+        { label: "Edit Profile", onPress: onPressManageChannel },
         { label: "Manage Channel", onPress: onPressManageChannel },
-        { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+        { label: "Upload Video", onPress: onPressUploadVideo },
+        { label: "Settings", onPress: onPressSettings },
       ]
     : [
+        ...(canShowFollowAction ? [{ label: followActionLabel, onPress: onToggleFollowChannel }] : []),
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
-        { label: "Voice Call", onPress: () => { void onPressCommunication("voice"); } },
-        { label: "Video Call", onPress: () => { void onPressCommunication("video"); } },
+        { label: "View Channel", onPress: onPressViewChannel },
+        { label: "Share Profile", onPress: () => { void onShareProfile(); } },
         ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
       ];
   const communityActions = isSelfProfile
@@ -1182,7 +1278,7 @@ export default function ProfileScreen() {
         ];
   const publicProfileTabs = [
     { key: "home", label: "Posts" },
-    { key: "content", label: "Videos" },
+    { key: "content", label: "Channel" },
     { key: "live", label: "Live" },
     { key: "community", label: "Community" },
     { key: "about", label: "About" },
@@ -1579,7 +1675,7 @@ export default function ProfileScreen() {
       onPress: onPressManageChannel,
     },
     {
-      label: "Post Video",
+      label: "Upload Video",
       onPress: onPressUploadVideo,
       emphasis: "primary",
     },
@@ -1610,12 +1706,12 @@ export default function ProfileScreen() {
             : "Build the first visible shelf"
       ),
       body: ownerNextSteps.length > 1
-        ? "Start by adding a sharper channel line and posting the first playable channel video."
+        ? "Start by adding a sharper channel line and uploading the first playable channel video."
         : ownerNextSteps[0] === "add a sharper channel line"
           ? "Give visitors a clearer first read on your lane with a short tagline."
-          : "Post a real video from this Profile so your Channel starts feeling like a mini streaming platform.",
+          : "Upload a real video from this Profile so your Channel starts feeling like a mini streaming platform.",
       actionLabel: ownerNextSteps.length === 1 && ownerNextSteps[0] === "upload your first video"
-        ? "Post Video"
+        ? "Upload Video"
         : "Open Manage Channel",
       onPress: ownerNextSteps.length === 1 && ownerNextSteps[0] === "upload your first video"
         ? onPressUploadVideo
@@ -1652,7 +1748,7 @@ export default function ProfileScreen() {
             activeOpacity={0.86}
             onPress={onPressUploadVideo}
           >
-            <Text style={styles.feedComposerPromptText}>What do you want to share?</Text>
+            <Text style={styles.feedComposerPromptText}>Upload a creator video</Text>
           </TouchableOpacity>
           {profileComposerOpen ? (
             <TouchableOpacity
@@ -1670,7 +1766,7 @@ export default function ProfileScreen() {
           <View style={styles.feedComposerExpanded}>
             <TextInput
               style={[styles.profileComposerInput, styles.profileComposerTextArea, styles.feedComposerTextArea]}
-              placeholder="Say something about this upload."
+              placeholder="Add a description for this channel video."
               placeholderTextColor="#8A93A8"
               value={profileComposerText}
               onChangeText={setProfileComposerText}
@@ -1759,7 +1855,7 @@ export default function ProfileScreen() {
                 <View style={styles.profileComposerSubmitContent}>
                   {profileComposerBusy ? <ActivityIndicator size="small" color="#fff" /> : null}
                   <Text style={styles.feedComposerPostText}>
-                    {profileComposerBusy ? "Posting..." : "Post"}
+                    {profileComposerBusy ? "Uploading..." : "Upload"}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1777,7 +1873,7 @@ export default function ProfileScreen() {
           <View style={styles.feedComposerToolRow}>
             <TouchableOpacity style={styles.feedComposerTool} activeOpacity={0.86} onPress={onPressUploadVideo}>
               <MaterialIcons name="videocam" size={18} color="#DDE5F7" />
-              <Text style={styles.feedComposerToolText}>Video</Text>
+              <Text style={styles.feedComposerToolText}>Upload</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.feedComposerTool} activeOpacity={0.86} onPress={onPressManageChannel}>
               <MaterialIcons name="settings" size={18} color="#DDE5F7" />
@@ -1788,107 +1884,20 @@ export default function ProfileScreen() {
       </View>
     );
   };
-  const renderCreatorVideoFeedPost = (video: CreatorVideo) => {
-    const playable = !!(video.playbackUrl || video.storagePath);
-    const caption = String(video.description ?? "").trim();
-    const visibilityLabel = video.visibility === "public" ? "Public" : "Draft";
-    const postMeta = [formatFeedPostTimestamp(video.createdAt || video.updatedAt)];
-    if (isSelfProfile || video.visibility !== "public") postMeta.push(visibilityLabel);
-    const shareable = !isSelfProfile && isCreatorVideoPubliclyShareable(video);
-
-    return (
-      <View key={video.id} style={styles.feedPostCard}>
-        <View style={styles.feedPostHeader}>
-          {renderComposerAvatar("medium")}
-          <View style={styles.feedPostIdentity}>
-            <Text style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</Text>
-            <Text style={styles.feedPostMeta} numberOfLines={1}>{postMeta.join(" · ")}</Text>
-          </View>
-          {isSelfProfile && video.visibility === "draft" ? (
-            <View style={styles.feedDraftBadge}>
-              <Text style={styles.feedDraftBadgeText}>Draft</Text>
-            </View>
-          ) : null}
-        </View>
-        {caption ? (
-          <Text style={styles.feedPostCaption}>{caption}</Text>
-        ) : null}
-        <TouchableOpacity
-          style={[styles.feedVideoPreview, !playable && styles.feedVideoPreviewUnavailable]}
-          activeOpacity={0.9}
-          disabled={!playable}
-          onPress={() => openCreatorVideo(video)}
-        >
-          {video.thumbnailUrl ? (
-            <Image source={{ uri: video.thumbnailUrl }} style={styles.feedVideoThumbnail} />
-          ) : (
-            <View style={styles.feedVideoFallback}>
-              <Text style={styles.feedVideoFallbackKicker}>{"CHI'LLYWOOD"}</Text>
-              <Text style={styles.feedVideoFallbackTitle} numberOfLines={2}>{video.title}</Text>
-            </View>
-          )}
-          <View style={styles.feedVideoOverlay} />
-          <View style={styles.feedPlayBadge}>
-            <MaterialIcons name={playable ? "play-arrow" : "error-outline"} size={19} color="#fff" />
-          </View>
-          <Text style={styles.feedVideoTitle} numberOfLines={2}>{video.title}</Text>
-        </TouchableOpacity>
-        <View style={styles.feedPostActionRow}>
-          <TouchableOpacity
-            style={[styles.feedPostAction, !playable && styles.feedPostActionDisabled]}
-            activeOpacity={0.84}
-            disabled={!playable}
-            onPress={() => openCreatorVideo(video)}
-          >
-            <MaterialIcons name="play-arrow" size={17} color="#E6ECFA" />
-            <Text style={styles.feedPostActionText}>Watch</Text>
-          </TouchableOpacity>
-          {isSelfProfile ? (
-            <TouchableOpacity style={styles.feedPostAction} activeOpacity={0.84} onPress={onPressManageChannel}>
-              <MaterialIcons name="tune" size={17} color="#E6ECFA" />
-              <Text style={styles.feedPostActionText}>Manage</Text>
-            </TouchableOpacity>
-          ) : shareable ? (
-            <TouchableOpacity
-              style={styles.feedPostAction}
-              activeOpacity={0.84}
-              onPress={() => {
-                void shareCreatorVideo(video);
-              }}
-            >
-              <MaterialIcons name="share" size={17} color="#E6ECFA" />
-              <Text style={styles.feedPostActionText}>Share</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-    );
-  };
   const renderPostsFeed = () => (
     <View style={styles.feedStack}>
-      {!creatorVideosReady ? (
-        <View style={styles.feedEmptyCard}>
-          <ActivityIndicator size="small" color="#E7ECFF" />
-          <Text style={styles.feedEmptyText}>Loading posts...</Text>
-        </View>
-      ) : creatorVideos.length ? (
-        creatorVideos.map(renderCreatorVideoFeedPost)
-      ) : (
-        <View style={styles.feedEmptyCard}>
-          <Text style={styles.feedEmptyTitle}>{isSelfProfile ? "Start your first post" : "No posts yet"}</Text>
-          <Text style={styles.feedEmptyText}>
-            {isSelfProfile
-              ? "Add a video update from this profile when you are ready."
-              : "This profile has not published creator videos yet."}
-          </Text>
-          {isSelfProfile ? (
-            <TouchableOpacity style={styles.feedEmptyButton} activeOpacity={0.86} onPress={onPressUploadVideo}>
-              <MaterialIcons name="videocam" size={17} color="#fff" />
-              <Text style={styles.feedEmptyButtonText}>Add Video</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      )}
+      <View style={styles.feedEmptyCard}>
+        <Text style={styles.feedEmptyTitle}>
+          {isSelfProfile ? "Personal updates are not live yet" : "No personal updates yet"}
+        </Text>
+        <Text style={styles.feedEmptyText}>
+          {"Personal Profile posts and status updates are desired for Chi'llywood, but they are not backed in Public v1 yet. Creator uploads live in the Channel tab so video shelves do not pretend to be personal posts."}
+        </Text>
+        <TouchableOpacity style={styles.feedEmptyButton} activeOpacity={0.86} onPress={onPressViewChannel}>
+          <MaterialIcons name="video-library" size={17} color="#fff" />
+          <Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "View Your Channel" : "View Channel"}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
   const renderOwnerHandoffCard = () => {
@@ -1980,7 +1989,7 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>CHI&apos;LLYWOOD · PROFILE</Text>
+          <Text style={styles.kicker}>{"CHI'LLYWOOD · PROFILE"}</Text>
           <View style={{ width: 18 }} />
         </View>
 
@@ -2084,71 +2093,150 @@ export default function ProfileScreen() {
             </View>
           ) : null}
           <View style={styles.actionCluster}>
-            <View style={styles.primaryActionRow}>
-              <TouchableOpacity
-                testID="profile-chilly-chat-button"
-                accessibilityLabel="Open Chi'lly Chat"
-                style={[styles.actionBtn, styles.actionBtnConnected]}
-                activeOpacity={0.86}
-                onPress={() => {
-                  void onPressCommunication("message");
-                }}
-              >
-                <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
-                  Chi&apos;lly Chat
-                </Text>
-              </TouchableOpacity>
-              {hasLiveRouteContext || hasLiveTabEntry ? (
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    hasLiveRouteContext && profile.isLive ? styles.actionBtnLive : styles.actionBtnConnected,
-                  ]}
-                  activeOpacity={0.86}
-                  onPress={onPressLive}
-                >
-                  <Text
-                    style={[
-                      styles.actionBtnText,
-                      hasLiveRouteContext && profile.isLive ? styles.actionBtnTextLive : styles.actionBtnTextConnected,
-                    ]}
+            {isSelfProfile ? (
+              <>
+                <View style={styles.primaryActionRow}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionBtnConnected]}
+                    activeOpacity={0.86}
+                    onPress={onPressManageChannel}
                   >
-                    {liveActionTitle}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {canOpenWatchPartyEntry ? (
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnConnected]}
-                  activeOpacity={0.86}
-                  onPress={onPressWatchParty}
-                >
-                  <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
-                    {hasLiveRouteContext ? "Watch Party" : "Watch-Party Live"}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-            {showFriendshipHint || canReportProfile ? (
-              <View style={styles.secondaryActionRow}>
-                {showFriendshipHint ? (
-                  <View style={[styles.actionChip, styles.actionChipConnected]}>
-                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
-                      Friends
+                    <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Edit Profile</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionBtnConnected]}
+                    activeOpacity={0.86}
+                    onPress={onPressManageChannel}
+                  >
+                    <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Manage Channel</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.secondaryActionRow}>
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.82}
+                    onPress={onPressUploadVideo}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Upload Video</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.82}
+                    onPress={onPressSettings}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Settings</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.primaryActionRow}>
+                  {canShowFollowAction ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionBtn,
+                        viewerFollowState === "following" ? styles.actionBtnSecondary : styles.actionBtnConnected,
+                        (followActionBusy || viewerFollowState === "loading") && styles.actionBtnPlaceholder,
+                      ]}
+                      activeOpacity={0.86}
+                      disabled={followActionBusy || viewerFollowState === "loading"}
+                      onPress={onToggleFollowChannel}
+                    >
+                      <Text
+                        style={[
+                          styles.actionBtnText,
+                          viewerFollowState === "following" ? styles.actionBtnText : styles.actionBtnTextConnected,
+                          (followActionBusy || viewerFollowState === "loading") && styles.actionBtnTextPlaceholder,
+                        ]}
+                      >
+                        {followActionLabel}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity
+                    testID="profile-chilly-chat-button"
+                    accessibilityLabel="Open Chi'lly Chat"
+                    style={[styles.actionBtn, styles.actionBtnConnected]}
+                    activeOpacity={0.86}
+                    onPress={() => {
+                      void onPressCommunication("message");
+                    }}
+                  >
+                    <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
+                      {"Chi'lly Chat"}
                     </Text>
-                  </View>
-                ) : null}
-                <TouchableOpacity
-                  style={[styles.actionChip, styles.actionChipReport]}
-                  activeOpacity={0.82}
-                  onPress={onPressReportProfile}
-                >
-                  <Text style={[styles.actionChipText, styles.actionChipTextReport]}>
-                    Report
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.secondaryActionRow}>
+                  {!isOfficialProfile ? (
+                    <TouchableOpacity
+                      style={[styles.actionChip, styles.actionChipConnected]}
+                      activeOpacity={0.82}
+                      onPress={onPressViewChannel}
+                    >
+                      <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>View Channel</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.82}
+                    onPress={() => {
+                      void onShareProfile();
+                    }}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Share Profile</Text>
+                  </TouchableOpacity>
+                  {hasLiveRouteContext || hasLiveTabEntry ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionChip,
+                        hasLiveRouteContext && profile.isLive ? styles.actionChipReport : styles.actionChipConnected,
+                      ]}
+                      activeOpacity={0.86}
+                      onPress={onPressLive}
+                    >
+                      <Text
+                        style={[
+                          styles.actionChipText,
+                          hasLiveRouteContext && profile.isLive ? styles.actionChipTextReport : styles.actionChipTextConnected,
+                        ]}
+                      >
+                        {liveActionTitle}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {canOpenWatchPartyEntry ? (
+                    <TouchableOpacity
+                      style={[styles.actionChip, styles.actionChipConnected]}
+                      activeOpacity={0.86}
+                      onPress={onPressWatchParty}
+                    >
+                      <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                        {hasLiveRouteContext ? "Watch Party" : "Watch-Party Live"}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {showFriendshipHint ? (
+                    <View style={[styles.actionChip, styles.actionChipConnected]}>
+                      <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                        Friends
+                      </Text>
+                    </View>
+                  ) : null}
+                  {canReportProfile ? (
+                    <TouchableOpacity
+                      style={[styles.actionChip, styles.actionChipReport]}
+                      activeOpacity={0.82}
+                      onPress={onPressReportProfile}
+                    >
+                      <Text style={[styles.actionChipText, styles.actionChipTextReport]}>
+                        Report
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -2245,15 +2333,7 @@ export default function ProfileScreen() {
                       key={video.id}
                       video={video}
                       mode={isSelfProfile ? "owner" : "public"}
-                      onOpen={() => {
-                        router.push({
-                          pathname: "/player/[id]",
-                          params: {
-                            id: video.id,
-                            source: "creator-video",
-                          },
-                        });
-                      }}
+                      onOpen={() => openCreatorVideo(video)}
                       onShare={!isSelfProfile && isCreatorVideoPubliclyShareable(video) ? () => {
                         void shareCreatorVideo(video);
                       } : undefined}
@@ -2262,7 +2342,7 @@ export default function ProfileScreen() {
                 </View>
               ) : isSelfProfile ? (
                 <View style={styles.creatorVideoEmptyCard}>
-                  <Text style={styles.creatorVideoTitle}>Post your first video</Text>
+                  <Text style={styles.creatorVideoTitle}>Upload your first video</Text>
                   <Text style={styles.creatorVideoBody}>
                     Add a playable video right from this Profile so your Channel becomes watchable immediately.
                   </Text>
@@ -2271,7 +2351,7 @@ export default function ProfileScreen() {
                     activeOpacity={0.84}
                     onPress={onPressUploadVideo}
                   >
-                    <Text style={styles.ownerPromptActionText}>Post Video</Text>
+                    <Text style={styles.ownerPromptActionText}>Upload Video</Text>
                   </TouchableOpacity>
                 </View>
               ) : (

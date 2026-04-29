@@ -16,6 +16,8 @@ Runtime truth: no Android device was attached, no Metro/Expo server was detected
 
 Post-audit runtime update: one-device Android dev-client proof on `R5CR120QCBF` later confirmed the creator-video zero-byte failure now lands in an honest Player unavailable state with repair/re-upload guidance instead of a blank 0:00 source surface. The proof is saved at `/tmp/chillywood-one-device-non-live-v1-proof-20260428-120224`.
 
+Post-audit product update on 2026-04-29: Profile Posts now shows an honest personal-updates placeholder until text/status posts are backed, while creator uploaded videos live in the Channel tab/section. Public actions are clearer near the top, and Channel Settings now labels current access controls as Access Defaults instead of presenting monetization/ad readiness as a channel owner surface. No Android proof was run for this update.
+
 ## Executive Summary
 
 Public v1 smoothness is mostly in place: major routes have loading, empty, access, and unavailable states, and the earlier room/non-room audits already fixed the highest-risk route ownership issues.

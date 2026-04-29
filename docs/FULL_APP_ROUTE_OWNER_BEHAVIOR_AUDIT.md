@@ -141,6 +141,18 @@ Proved non-room hardening from that pass:
 
 No room/live layout changes, monetization implementation, native AR, native game streaming, database migration, Android proof, or long live proof were performed. Android non-room route smoke remains pending.
 
+## 1C. 2026-04-29 Profile / Channel Contract Addendum
+
+Profile/Channel route ownership is unchanged, but the active Profile behavior is now clearer:
+
+- `/profile/[userId]` owns personal identity, owner/public action visibility, honest personal-posts placeholder, Channel tab/section entry, backed public Follow/Following, Chi'lly Chat handoff, Share Profile, Report, and owner handoffs.
+- `/profile/[userId]` does not own fake personal posts/status updates. Until a profile-post backend exists, Posts stays an honest placeholder.
+- Creator uploaded videos now belong in the Profile Channel tab/section and Channel Settings Content panel, not the personal Posts lane.
+- `/channel-settings` owns deeper creator video management and current Access Defaults. It should not present ad/sponsorship/Premium-playback cards as Channel owner controls.
+- No platform titles, Chi'llywood Originals, title artwork, title counts, or platform jump chips belong inside user/creator Channels.
+
+This addendum was static/code/docs only. Android route smoke remains pending.
+
 ## 2. Route Owner Map
 
 ### Root, Auth, Legal, and Support
