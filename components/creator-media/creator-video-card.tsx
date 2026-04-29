@@ -59,6 +59,39 @@ const formatDate = (value: string) => {
 
 const hasPlayableSource = (video: CreatorVideo) => !!(video.playbackUrl || video.storagePath);
 
+const FILE_EXTENSION_REGEX = /\.[a-z0-9]{2,5}$/i;
+const TIMESTAMP_TITLE_REGEXES = [
+  /^\d{8}[\s_.-]?\d{6}(?:\d{1,3})?$/i,
+  /^\d{4}[\s_.-]?\d{2}[\s_.-]?\d{2}[\s_.-]?\d{2}[\s_.-]?\d{2}(?:[\s_.-]?\d{2})?$/i,
+  /^(?:img|vid|video|mov|dsc|dscn|pxl|screenrecording|screen_recording|rp(?:replay)?_final)[\s_.-]*\d+/i,
+];
+
+const formatCreatorVideoDisplayTitle = (value: string) => {
+  const originalTitle = String(value ?? "").trim();
+  const withoutExtension = originalTitle.replace(FILE_EXTENSION_REGEX, "").trim();
+  const cleanedTitle = withoutExtension
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const titleForChecks = withoutExtension.replace(/\s+/g, "");
+  const looksRaw = FILE_EXTENSION_REGEX.test(originalTitle)
+    || TIMESTAMP_TITLE_REGEXES.some((regex) => regex.test(titleForChecks))
+    || (/^[\d\s_.-]{6,}$/.test(withoutExtension) && /\d{6,}/.test(withoutExtension));
+
+  if (!originalTitle) {
+    return { displayTitle: "Creator Upload", rawTitleDetected: false };
+  }
+
+  if (looksRaw && (!cleanedTitle || /^[\d\s.-]+$/.test(cleanedTitle))) {
+    return { displayTitle: "Creator Upload", rawTitleDetected: true };
+  }
+
+  return {
+    displayTitle: cleanedTitle || "Creator Upload",
+    rawTitleDetected: looksRaw,
+  };
+};
+
 export function CreatorVideoCard({
   video,
   mode,
@@ -75,6 +108,7 @@ export function CreatorVideoCard({
   const playable = hasPlayableSource(video);
   const shareable = isCreatorVideoPubliclyShareable(video);
   const ownerMode = mode === "owner";
+  const { displayTitle, rawTitleDetected } = formatCreatorVideoDisplayTitle(video.title);
   const moderationBlocked = video.moderationStatus === "hidden"
     || video.moderationStatus === "removed"
     || video.moderationStatus === "banned";
@@ -97,7 +131,7 @@ export function CreatorVideoCard({
         ) : (
           <View style={styles.fallbackPreview}>
             <Text style={styles.fallbackKicker}>{"CHI'LLYWOOD"}</Text>
-            <Text style={styles.fallbackTitle} numberOfLines={2}>{video.title}</Text>
+            <Text style={styles.fallbackTitle} numberOfLines={2}>{displayTitle}</Text>
           </View>
         )}
         <View style={styles.previewShade} />
@@ -117,7 +151,7 @@ export function CreatorVideoCard({
       </TouchableOpacity>
 
       <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={2}>{video.title}</Text>
+        <Text style={styles.title} numberOfLines={2}>{displayTitle}</Text>
         <Text style={styles.description} numberOfLines={2}>
           {video.description || "Open this creator video in the Chi'llywood Player."}
         </Text>
@@ -129,6 +163,11 @@ export function CreatorVideoCard({
         ) : null}
         {moderationBlocked ? (
           <Text style={styles.warning}>This video is unavailable publicly until moderation restores it.</Text>
+        ) : null}
+        {ownerMode && rawTitleDetected ? (
+          <Text style={styles.ownerGuidance}>
+            This title still looks like a file name. Tap Edit to rename it for viewers.
+          </Text>
         ) : null}
 
         {ownerMode ? (
@@ -204,6 +243,7 @@ const styles = StyleSheet.create({
   fallbackPreview: {
     minHeight: 168,
     padding: 18,
+    paddingBottom: 72,
     justifyContent: "flex-end",
     backgroundColor: "#10141E",
   },
@@ -294,6 +334,12 @@ const styles = StyleSheet.create({
   },
   warning: {
     color: "#FFD8A8",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "800",
+  },
+  ownerGuidance: {
+    color: "#B7C2D8",
     fontSize: 11.5,
     lineHeight: 16,
     fontWeight: "800",
