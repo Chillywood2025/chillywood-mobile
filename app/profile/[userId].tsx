@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -308,6 +309,15 @@ const getProfileVideoTitleFromName = (value?: string | null) => (
 );
 
 const formatProfileFileSize = formatCreatorVideoFileSize;
+
+const formatFeedPostTimestamp = (value?: string | null) => {
+  const timestamp = Date.parse(String(value ?? ""));
+  if (!Number.isFinite(timestamp)) return "Just now";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(timestamp));
+};
 
 const isSupportedProfileVideoFile = (file: CreatorVideoFile) => {
   const mimeType = String(file.mimeType ?? "").trim().toLowerCase();
@@ -691,8 +701,8 @@ export default function ProfileScreen() {
     ? officialAccount?.trustSummary
       ?? "Chi'llywood's official channel for trusted help, updates, and auditable follow-up."
     : isSelfProfile
-      ? "Your public channel home for your uploaded videos, creator events, live presence, and next follow-up."
-      : "A public creator channel where identity, creator videos, live presence, and real follow-up stay easy to read.";
+      ? "Uploaded videos, live moments, and public follow-up live here."
+      : "Creator videos, live presence, and public follow-up live here.";
   const liveStatusTitle = isOfficialProfile
     ? "Official concierge is ready"
     : profile.isLive
@@ -707,20 +717,6 @@ export default function ProfileScreen() {
       : hasLiveTabEntry
         ? "Use the Live tab for the current schedule and backed events."
         : "No room context is attached yet, but this channel's live posture still stays visible.";
-  const actionFootnote = isOfficialProfile
-    ? "Trusted help stays on the canonical profile and Chi'lly Chat paths."
-    : hasLiveRouteContext
-      ? `${liveActionLabel} and Watch Party stay tied to this room context.`
-      : canOpenWatchPartyEntry
-        ? "This channel can hand off into a backed Watch-Party Live event."
-        : hasLiveTabEntry
-          ? "Live status stays visible here even without direct room re-entry."
-          : "This channel stays public-first until room context is attached.";
-  const communicationFootnote = isSelfProfile
-    ? "Chi'lly Chat opens your inbox and direct threads."
-    : isOfficialProfile
-      ? "Chi'lly Chat opens Rachi's official starter thread."
-      : "";
   const showFriendshipHint = !!friendState?.isFriend && !isOfficialProfile && !isSelfProfile;
 
   const openChannelSettings = (params?: { focus?: "content"; action?: "upload" }) => {
@@ -744,7 +740,7 @@ export default function ProfileScreen() {
     }
     setProfileComposerOpen(true);
     setProfileComposerNotice(null);
-    setActiveTab("content");
+    setActiveTab("home");
   };
   const refreshProfileCreatorVideos = async () => {
     if (isOfficialProfile || !userId) {
@@ -870,7 +866,7 @@ export default function ProfileScreen() {
         setCreatorVideosReady(true);
       }
 
-      setActiveTab("content");
+      setActiveTab("home");
       setProfileComposerFile(null);
       setProfileComposerTitle("");
       setProfileComposerText("");
@@ -1185,8 +1181,8 @@ export default function ProfileScreen() {
           ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
         ];
   const publicProfileTabs = [
-    { key: "home", label: "Home" },
-    { key: "content", label: "Content" },
+    { key: "home", label: "Posts" },
+    { key: "content", label: "Videos" },
     { key: "live", label: "Live" },
     { key: "community", label: "Community" },
     { key: "about", label: "About" },
@@ -1492,15 +1488,6 @@ export default function ProfileScreen() {
       tone: reminderReadyEvents.length ? "linked" : "default",
     },
   ];
-  const tabIntro = activeTab === "home"
-    ? "Spotlight, live pulse, creator content, and community cues in one channel home."
-    : activeTab === "content"
-      ? "Creator uploads and events that belong to this channel."
-      : activeTab === "live"
-        ? "Live keeps schedule, current status, and watch-together continuity distinct."
-        : activeTab === "community"
-          ? "Audience posture, follow-up, and trust signals without turning this route into the inbox."
-          : "Identity, access posture, and trust at a glance.";
   const loadPublicReminderEvents = async () => {
     if (!userId) {
       setPublicEvents([]);
@@ -1635,6 +1622,275 @@ export default function ProfileScreen() {
         : onPressManageChannel,
     }] : []),
   ] : [];
+  const openCreatorVideo = (video: CreatorVideo) => {
+    router.push({
+      pathname: "/player/[id]",
+      params: {
+        id: video.id,
+        source: "creator-video",
+      },
+    });
+  };
+  const renderComposerAvatar = (size: "small" | "medium" = "small") => (
+    <View style={size === "small" ? styles.composerAvatar : styles.feedAvatar}>
+      {profile.avatarUrl ? (
+        <Image source={{ uri: profile.avatarUrl }} style={styles.composerAvatarImage} />
+      ) : (
+        <Text style={styles.composerAvatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
+      )}
+    </View>
+  );
+  const renderProfileComposerCard = () => {
+    if (!isSelfProfile) return null;
+
+    return (
+      <View style={styles.feedComposerCard}>
+        <View style={styles.feedComposerPromptRow}>
+          {renderComposerAvatar("small")}
+          <TouchableOpacity
+            style={styles.feedComposerPrompt}
+            activeOpacity={0.86}
+            onPress={onPressUploadVideo}
+          >
+            <Text style={styles.feedComposerPromptText}>What do you want to share?</Text>
+          </TouchableOpacity>
+          {profileComposerOpen ? (
+            <TouchableOpacity
+              style={styles.feedComposerClose}
+              activeOpacity={0.84}
+              disabled={profileComposerBusy}
+              onPress={() => setProfileComposerOpen(false)}
+            >
+              <MaterialIcons name="close" size={18} color="#DDE5F7" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {profileComposerOpen ? (
+          <View style={styles.feedComposerExpanded}>
+            <TextInput
+              style={[styles.profileComposerInput, styles.profileComposerTextArea, styles.feedComposerTextArea]}
+              placeholder="Say something about this upload."
+              placeholderTextColor="#8A93A8"
+              value={profileComposerText}
+              onChangeText={setProfileComposerText}
+              multiline
+            />
+            <TouchableOpacity
+              style={styles.feedComposerAttachButton}
+              activeOpacity={0.86}
+              onPress={() => {
+                void onPickProfileComposerFile();
+              }}
+              disabled={profileComposerBusy}
+            >
+              <MaterialIcons name="videocam" size={18} color="#EAF0FF" />
+              <Text style={styles.feedComposerAttachText}>
+                {profileComposerFile ? "Change Video" : "Add Video"}
+              </Text>
+            </TouchableOpacity>
+            {profileComposerFile ? (
+              <View style={styles.feedComposerFileCard}>
+                <View style={styles.feedComposerFileIcon}>
+                  <MaterialIcons name="movie" size={20} color="#fff" />
+                </View>
+                <View style={styles.feedComposerFileText}>
+                  <Text style={styles.profileComposerFileName} numberOfLines={2}>
+                    {getReadableProfileFileName(profileComposerFile.name)}
+                  </Text>
+                  {formatProfileFileSize(profileComposerFile.size) ? (
+                    <Text style={styles.profileComposerFileMeta}>{formatProfileFileSize(profileComposerFile.size)}</Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+            <TextInput
+              style={styles.profileComposerInput}
+              placeholder="Title this video"
+              placeholderTextColor="#8A93A8"
+              value={profileComposerTitle}
+              onChangeText={setProfileComposerTitle}
+            />
+            <View style={styles.profileComposerVisibilityRow}>
+              {(["public", "draft"] as const).map((visibility) => (
+                <TouchableOpacity
+                  key={visibility}
+                  style={[
+                    styles.profileComposerVisibilityChip,
+                    profileComposerVisibility === visibility && styles.profileComposerVisibilityChipActive,
+                  ]}
+                  activeOpacity={0.84}
+                  disabled={profileComposerBusy}
+                  onPress={() => setProfileComposerVisibility(visibility)}
+                >
+                  <MaterialIcons
+                    name={visibility === "public" ? "public" : "lock"}
+                    size={15}
+                    color={profileComposerVisibility === visibility ? "#FFF6F8" : "#BAC3D6"}
+                  />
+                  <Text
+                    style={[
+                      styles.profileComposerVisibilityText,
+                      profileComposerVisibility === visibility && styles.profileComposerVisibilityTextActive,
+                    ]}
+                  >
+                    {visibility === "public" ? "Public" : "Draft"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {profileComposerNotice ? (
+              <View style={styles.profileComposerNotice}>
+                <Text style={styles.profileComposerNoticeText}>{profileComposerNotice}</Text>
+              </View>
+            ) : null}
+            <View style={styles.feedComposerActionRow}>
+              <TouchableOpacity
+                style={[
+                  styles.feedComposerPostButton,
+                  (!profileComposerFile || profileComposerBusy) && styles.ownerHeroToolsButtonDisabled,
+                ]}
+                activeOpacity={0.86}
+                disabled={!profileComposerFile || profileComposerBusy}
+                onPress={() => {
+                  void onSubmitProfileComposer();
+                }}
+              >
+                <View style={styles.profileComposerSubmitContent}>
+                  {profileComposerBusy ? <ActivityIndicator size="small" color="#fff" /> : null}
+                  <Text style={styles.feedComposerPostText}>
+                    {profileComposerBusy ? "Posting..." : "Post"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.feedComposerManageButton}
+                activeOpacity={0.86}
+                disabled={profileComposerBusy}
+                onPress={onPressManageChannel}
+              >
+                <Text style={styles.feedComposerManageText}>Manage</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.feedComposerToolRow}>
+            <TouchableOpacity style={styles.feedComposerTool} activeOpacity={0.86} onPress={onPressUploadVideo}>
+              <MaterialIcons name="videocam" size={18} color="#DDE5F7" />
+              <Text style={styles.feedComposerToolText}>Video</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.feedComposerTool} activeOpacity={0.86} onPress={onPressManageChannel}>
+              <MaterialIcons name="settings" size={18} color="#DDE5F7" />
+              <Text style={styles.feedComposerToolText}>Manage</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
+  const renderCreatorVideoFeedPost = (video: CreatorVideo) => {
+    const playable = !!(video.playbackUrl || video.storagePath);
+    const caption = String(video.description ?? "").trim();
+    const visibilityLabel = video.visibility === "public" ? "Public" : "Draft";
+    const postMeta = [formatFeedPostTimestamp(video.createdAt || video.updatedAt)];
+    if (isSelfProfile || video.visibility !== "public") postMeta.push(visibilityLabel);
+    const shareable = !isSelfProfile && isCreatorVideoPubliclyShareable(video);
+
+    return (
+      <View key={video.id} style={styles.feedPostCard}>
+        <View style={styles.feedPostHeader}>
+          {renderComposerAvatar("medium")}
+          <View style={styles.feedPostIdentity}>
+            <Text style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</Text>
+            <Text style={styles.feedPostMeta} numberOfLines={1}>{postMeta.join(" · ")}</Text>
+          </View>
+          {isSelfProfile && video.visibility === "draft" ? (
+            <View style={styles.feedDraftBadge}>
+              <Text style={styles.feedDraftBadgeText}>Draft</Text>
+            </View>
+          ) : null}
+        </View>
+        {caption ? (
+          <Text style={styles.feedPostCaption}>{caption}</Text>
+        ) : null}
+        <TouchableOpacity
+          style={[styles.feedVideoPreview, !playable && styles.feedVideoPreviewUnavailable]}
+          activeOpacity={0.9}
+          disabled={!playable}
+          onPress={() => openCreatorVideo(video)}
+        >
+          {video.thumbnailUrl ? (
+            <Image source={{ uri: video.thumbnailUrl }} style={styles.feedVideoThumbnail} />
+          ) : (
+            <View style={styles.feedVideoFallback}>
+              <Text style={styles.feedVideoFallbackKicker}>{"CHI'LLYWOOD"}</Text>
+              <Text style={styles.feedVideoFallbackTitle} numberOfLines={2}>{video.title}</Text>
+            </View>
+          )}
+          <View style={styles.feedVideoOverlay} />
+          <View style={styles.feedPlayBadge}>
+            <MaterialIcons name={playable ? "play-arrow" : "error-outline"} size={19} color="#fff" />
+          </View>
+          <Text style={styles.feedVideoTitle} numberOfLines={2}>{video.title}</Text>
+        </TouchableOpacity>
+        <View style={styles.feedPostActionRow}>
+          <TouchableOpacity
+            style={[styles.feedPostAction, !playable && styles.feedPostActionDisabled]}
+            activeOpacity={0.84}
+            disabled={!playable}
+            onPress={() => openCreatorVideo(video)}
+          >
+            <MaterialIcons name="play-arrow" size={17} color="#E6ECFA" />
+            <Text style={styles.feedPostActionText}>Watch</Text>
+          </TouchableOpacity>
+          {isSelfProfile ? (
+            <TouchableOpacity style={styles.feedPostAction} activeOpacity={0.84} onPress={onPressManageChannel}>
+              <MaterialIcons name="tune" size={17} color="#E6ECFA" />
+              <Text style={styles.feedPostActionText}>Manage</Text>
+            </TouchableOpacity>
+          ) : shareable ? (
+            <TouchableOpacity
+              style={styles.feedPostAction}
+              activeOpacity={0.84}
+              onPress={() => {
+                void shareCreatorVideo(video);
+              }}
+            >
+              <MaterialIcons name="share" size={17} color="#E6ECFA" />
+              <Text style={styles.feedPostActionText}>Share</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+  const renderPostsFeed = () => (
+    <View style={styles.feedStack}>
+      {!creatorVideosReady ? (
+        <View style={styles.feedEmptyCard}>
+          <ActivityIndicator size="small" color="#E7ECFF" />
+          <Text style={styles.feedEmptyText}>Loading posts...</Text>
+        </View>
+      ) : creatorVideos.length ? (
+        creatorVideos.map(renderCreatorVideoFeedPost)
+      ) : (
+        <View style={styles.feedEmptyCard}>
+          <Text style={styles.feedEmptyTitle}>{isSelfProfile ? "Start your first post" : "No posts yet"}</Text>
+          <Text style={styles.feedEmptyText}>
+            {isSelfProfile
+              ? "Add a video update from this profile when you are ready."
+              : "This profile has not published creator videos yet."}
+          </Text>
+          {isSelfProfile ? (
+            <TouchableOpacity style={styles.feedEmptyButton} activeOpacity={0.86} onPress={onPressUploadVideo}>
+              <MaterialIcons name="videocam" size={17} color="#fff" />
+              <Text style={styles.feedEmptyButtonText}>Add Video</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      )}
+    </View>
+  );
   const renderOwnerHandoffCard = () => {
     if (!isSelfProfile) return null;
 
@@ -1724,187 +1980,87 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>CHI&apos;LLYWOOD · CHANNEL</Text>
+          <Text style={styles.kicker}>CHI&apos;LLYWOOD · PROFILE</Text>
           <View style={{ width: 18 }} />
         </View>
 
         <View style={styles.profileCard}>
-          <Text style={styles.profileEyebrow}>{profileEyebrow}</Text>
-          <View style={styles.heroBadgeRow}>
-            {isOfficialProfile ? (
-              <View style={[styles.heroBadge, styles.heroBadgeOfficial]}>
-                <Text style={[styles.heroBadgeText, styles.heroBadgeTextOfficial]}>
-                  {profile.officialBadgeLabel ?? officialAccount?.officialBadgeLabel ?? "OFFICIAL"}
-                </Text>
+          <View style={styles.profileCover}>
+            <View style={styles.profileCoverTopRow}>
+              <Text style={styles.profileEyebrow}>{profileEyebrow}</Text>
+              <View style={styles.profileCoverBadgeRow}>
+                {isOfficialProfile ? (
+                  <View style={[styles.heroBadge, styles.heroBadgeOfficial]}>
+                    <Text style={[styles.heroBadgeText, styles.heroBadgeTextOfficial]}>
+                      {profile.officialBadgeLabel ?? officialAccount?.officialBadgeLabel ?? "OFFICIAL"}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={[styles.heroBadge, profile.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
+                  <Text style={[styles.heroBadgeText, profile.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
+                </View>
               </View>
-            ) : null}
-            <View style={[styles.heroBadge, profile.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
-              <Text style={[styles.heroBadgeText, profile.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
-            </View>
-            <View style={[styles.heroBadge, hasLiveRouteContext ? styles.heroBadgeLinked : styles.heroBadgeDefault]}>
-              <Text style={[styles.heroBadgeText, hasLiveRouteContext && styles.heroBadgeTextLinked]}>{routeContextLabel}</Text>
             </View>
           </View>
-          <View style={styles.avatarWrap}>
+          <View style={styles.profileIdentityRow}>
             <TouchableOpacity
               activeOpacity={0.88}
               onPress={() => setAvatarQuickActionsOpen((current) => !current)}
               onLongPress={() => setAvatarQuickActionsOpen((current) => !current)}
               delayLongPress={220}
             >
-              <View style={styles.avatarCircle}>
-                {profile.avatarUrl ? (
-                  <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
-                ) : (
-                  <Text style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
-                )}
+              <View style={styles.avatarWrap}>
+                <View style={styles.avatarCircle}>
+                  {profile.avatarUrl ? (
+                    <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+                  ) : (
+                    <Text style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
+                  )}
+                </View>
+                {profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
               </View>
-              {profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
             </TouchableOpacity>
-          </View>
-          <Text style={styles.avatarHint}>Tap the avatar for quick actions.</Text>
-          <Text style={styles.channelLabel}>{channelLabel}</Text>
-          <Text style={styles.username}>{profile.displayName}</Text>
-          <Text style={styles.userIdLabel}>{channelHandle}</Text>
-          {profile.tagline ? <Text style={styles.profileTagline}>{profile.tagline}</Text> : null}
-          <View style={styles.metaRow}>
-            <View style={styles.metaPill}>
-              <Text style={styles.metaPillText}>{roleLabel}</Text>
-            </View>
-            {isOfficialProfile ? (
-              <View style={[styles.metaPill, styles.metaPillOfficial]}>
-                <Text style={[styles.metaPillText, styles.metaPillTextOfficial]}>
-                  {profile.platformOwnershipLabel ?? officialAccount?.platformOwnershipLabel ?? "PLATFORM OWNED"}
-                </Text>
+            <View style={styles.profileIdentityCopy}>
+              <Text style={styles.channelLabel}>{channelLabel}</Text>
+              <Text style={styles.username} numberOfLines={2}>{profile.displayName}</Text>
+              <Text style={styles.userIdLabel} numberOfLines={1}>{channelHandle}</Text>
+              {profile.tagline ? <Text style={styles.profileTagline}>{profile.tagline}</Text> : null}
+              <View style={styles.metaRow}>
+                <View style={styles.metaPill}>
+                  <Text style={styles.metaPillText}>{roleLabel}</Text>
+                </View>
+                {hasLiveRouteContext ? (
+                  <View style={[styles.metaPill, styles.metaPillLinked]}>
+                    <Text style={styles.metaPillText}>{routeContextLabel}</Text>
+                  </View>
+                ) : null}
+                {isOfficialProfile ? (
+                  <View style={[styles.metaPill, styles.metaPillOfficial]}>
+                    <Text style={[styles.metaPillText, styles.metaPillTextOfficial]}>
+                      {profile.platformOwnershipLabel ?? officialAccount?.platformOwnershipLabel ?? "PLATFORM OWNED"}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
+            </View>
           </View>
           <Text style={styles.channelSupportText}>{channelHomeBody}</Text>
-          {isSelfProfile ? (
-            <View style={styles.ownerHeroToolsCard}>
-              <Text style={styles.ownerHeroToolsKicker}>PROFILE COMPOSER</Text>
-              <Text style={styles.ownerHeroToolsTitle}>Share from your Profile.</Text>
-              <Text style={styles.ownerHeroToolsBody}>
-                Attach a video, add the update around it, and publish it straight into your Profile/Channel.
-              </Text>
-              {profileComposerOpen ? (
-                <View style={styles.profileComposerStack}>
-                  <TextInput
-                    style={[styles.profileComposerInput, styles.profileComposerTextArea]}
-                    placeholder="What do you want people to know?"
-                    placeholderTextColor="#8A93A8"
-                    value={profileComposerText}
-                    onChangeText={setProfileComposerText}
-                    multiline
-                  />
-                  <TouchableOpacity
-                    style={styles.profileComposerAttachButton}
-                    activeOpacity={0.86}
-                    onPress={() => {
-                      void onPickProfileComposerFile();
-                    }}
-                    disabled={profileComposerBusy}
-                  >
-                    <Text style={styles.profileComposerAttachText}>
-                      {profileComposerFile ? "Change Video" : "Attach Video"}
-                    </Text>
-                  </TouchableOpacity>
-                  {profileComposerFile ? (
-                    <View style={styles.profileComposerFileCard}>
-                      <Text style={styles.profileComposerFileKicker}>ATTACHED VIDEO</Text>
-                      <Text style={styles.profileComposerFileName} numberOfLines={2}>
-                        {getReadableProfileFileName(profileComposerFile.name)}
-                      </Text>
-                      {formatProfileFileSize(profileComposerFile.size) ? (
-                        <Text style={styles.profileComposerFileMeta}>{formatProfileFileSize(profileComposerFile.size)}</Text>
-                      ) : null}
-                    </View>
-                  ) : null}
-                  <TextInput
-                    style={styles.profileComposerInput}
-                    placeholder="Video title"
-                    placeholderTextColor="#8A93A8"
-                    value={profileComposerTitle}
-                    onChangeText={setProfileComposerTitle}
-                  />
-                  <View style={styles.profileComposerVisibilityRow}>
-                    {(["public", "draft"] as const).map((visibility) => (
-                      <TouchableOpacity
-                        key={visibility}
-                        style={[
-                          styles.profileComposerVisibilityChip,
-                          profileComposerVisibility === visibility && styles.profileComposerVisibilityChipActive,
-                        ]}
-                        activeOpacity={0.84}
-                        disabled={profileComposerBusy}
-                        onPress={() => setProfileComposerVisibility(visibility)}
-                      >
-                        <Text
-                          style={[
-                            styles.profileComposerVisibilityText,
-                            profileComposerVisibility === visibility && styles.profileComposerVisibilityTextActive,
-                          ]}
-                        >
-                          {visibility === "public" ? "Public" : "Draft"}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  {profileComposerNotice ? (
-                    <View style={styles.profileComposerNotice}>
-                      <Text style={styles.profileComposerNoticeText}>{profileComposerNotice}</Text>
-                    </View>
-                  ) : null}
-                  <View style={styles.ownerHeroToolsRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.ownerHeroToolsButton,
-                        styles.ownerHeroToolsButtonPrimary,
-                        (!profileComposerFile || profileComposerBusy) && styles.ownerHeroToolsButtonDisabled,
-                      ]}
-                      activeOpacity={0.86}
-                      disabled={!profileComposerFile || profileComposerBusy}
-                      onPress={() => {
-                        void onSubmitProfileComposer();
-                      }}
-                    >
-                      <View style={styles.profileComposerSubmitContent}>
-                        {profileComposerBusy ? <ActivityIndicator size="small" color="#fff" /> : null}
-                        <Text style={styles.ownerHeroToolsButtonTextPrimary}>
-                          {profileComposerBusy ? "Posting..." : "Post To Profile"}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.ownerHeroToolsButton}
-                      activeOpacity={0.86}
-                      disabled={profileComposerBusy}
-                      onPress={onPressManageChannel}
-                    >
-                      <Text style={styles.ownerHeroToolsButtonText}>Manage</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.ownerHeroToolsRow}>
-                  <TouchableOpacity
-                    style={[styles.ownerHeroToolsButton, styles.ownerHeroToolsButtonPrimary]}
-                    activeOpacity={0.86}
-                    onPress={onPressUploadVideo}
-                  >
-                    <Text style={styles.ownerHeroToolsButtonTextPrimary}>Upload Video</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.ownerHeroToolsButton}
-                    activeOpacity={0.86}
-                    onPress={onPressManageChannel}
-                  >
-                    <Text style={styles.ownerHeroToolsButtonText}>Manage</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          ) : null}
+          <View style={styles.channelSignalGrid}>
+            {channelSignals.map((signal) => (
+              <View
+                key={signal.label}
+                style={[
+                  styles.channelSignalCard,
+                  signal.tone === "live" && styles.channelSignalCardLive,
+                  signal.tone === "linked" && styles.channelSignalCardLinked,
+                  signal.tone === "official" && styles.channelSignalCardOfficial,
+                ]}
+              >
+                <Text style={styles.channelSignalLabel}>{signal.label}</Text>
+                <Text style={styles.channelSignalValue}>{signal.value}</Text>
+              </View>
+            ))}
+          </View>
           {avatarQuickActionsOpen ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>
@@ -1993,64 +2149,18 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
             ) : null}
-            <Text style={styles.actionFootnote}>{communicationFootnote ? `${communicationFootnote} ${actionFootnote}` : actionFootnote}</Text>
-          </View>
-          <View style={[styles.statusPanel, profile.isLive && styles.statusPanelLive]}>
-            <Text style={styles.statusPanelKicker}>{isOfficialProfile ? "OFFICIAL STATUS" : profile.isLive ? "LIVE STATUS" : "CHANNEL STATUS"}</Text>
-            <Text style={styles.statusPanelTitle}>{liveStatusTitle}</Text>
-            <Text style={styles.statusPanelBody}>{liveStatusBody}</Text>
-          </View>
-          <View style={styles.channelSignalGrid}>
-            {channelSignals.map((signal) => (
-              <View
-                key={signal.label}
-                style={[
-                  styles.channelSignalCard,
-                  signal.tone === "live" && styles.channelSignalCardLive,
-                  signal.tone === "linked" && styles.channelSignalCardLinked,
-                  signal.tone === "official" && styles.channelSignalCardOfficial,
-                ]}
-              >
-                <Text style={styles.channelSignalLabel}>{signal.label}</Text>
-                <Text style={styles.channelSignalValue}>{signal.value}</Text>
-                <Text style={styles.channelSignalBody}>{signal.body}</Text>
-              </View>
-            ))}
-          </View>
-          <View style={styles.channelGuideCard}>
-            <Text style={styles.channelGuideKicker}>{channelHelper.kicker}</Text>
-            <Text style={styles.channelGuideTitle}>{channelHelper.title}</Text>
-            <Text style={styles.channelGuideBody}>{channelHelper.body}</Text>
-            {isOfficialProfile && officialGuidanceTopics.length ? (
-              <View style={styles.officialTopicRow}>
-                {officialGuidanceTopics.map((topic) => (
-                  <View key={topic} style={styles.officialTopicChip}>
-                    <Text style={styles.officialTopicChipText}>{topic}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.accessCard}>
-            <Text style={styles.accessKicker}>CHANNEL ACCESS</Text>
-            <Text style={styles.accessTitle}>{accessPosture.title}</Text>
-            <Text style={styles.accessBody}>{accessPosture.body}</Text>
-            <View style={styles.accessDetailRow}>
-              {accessDetails.map((detail) => (
-                <View key={detail.label} style={styles.accessDetailCard}>
-                  <Text style={styles.accessDetailLabel}>{detail.label}</Text>
-                  <Text style={styles.accessDetailValue}>{detail.value}</Text>
-                  <Text style={styles.accessDetailBody}>{detail.body}</Text>
-                </View>
-              ))}
-            </View>
           </View>
         </View>
 
+        {renderProfileComposerCard()}
+
         <View style={styles.sectionStack}>
           <View style={styles.tabStripCard}>
-            <Text style={styles.tabStripKicker}>CHANNEL NAVIGATION</Text>
-            <View style={styles.tabStripRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tabStripRow}
+            >
               {publicProfileTabs.map((tab) => (
                 <TouchableOpacity
                   key={tab.key}
@@ -2071,11 +2181,11 @@ export default function ProfileScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-            <Text style={styles.tabIntro}>{tabIntro}</Text>
+            </ScrollView>
           </View>
-          {renderOwnerHandoffCard()}
-          {activeTabSections.map((section) => (
+          {activeTab === "home" ? renderPostsFeed() : null}
+          {activeTab === "about" ? renderOwnerHandoffCard() : null}
+          {activeTab !== "home" ? activeTabSections.map((section) => (
             <View
               key={section.title}
               style={[
@@ -2088,7 +2198,39 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>{section.title}</Text>
               <Text style={styles.sectionBody}>{section.body}</Text>
             </View>
-          ))}
+          )) : null}
+          {activeTab === "about" ? (
+            <>
+              <View style={styles.channelGuideCard}>
+                <Text style={styles.channelGuideKicker}>{channelHelper.kicker}</Text>
+                <Text style={styles.channelGuideTitle}>{channelHelper.title}</Text>
+                <Text style={styles.channelGuideBody}>{channelHelper.body}</Text>
+                {isOfficialProfile && officialGuidanceTopics.length ? (
+                  <View style={styles.officialTopicRow}>
+                    {officialGuidanceTopics.map((topic) => (
+                      <View key={topic} style={styles.officialTopicChip}>
+                        <Text style={styles.officialTopicChipText}>{topic}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.accessCard}>
+                <Text style={styles.accessKicker}>CHANNEL ACCESS</Text>
+                <Text style={styles.accessTitle}>{accessPosture.title}</Text>
+                <Text style={styles.accessBody}>{accessPosture.body}</Text>
+                <View style={styles.accessDetailRow}>
+                  {accessDetails.map((detail) => (
+                    <View key={detail.label} style={styles.accessDetailCard}>
+                      <Text style={styles.accessDetailLabel}>{detail.label}</Text>
+                      <Text style={styles.accessDetailValue}>{detail.value}</Text>
+                      <Text style={styles.accessDetailBody}>{detail.body}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </>
+          ) : null}
           {activeTab === "content" ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>
@@ -2310,11 +2452,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(18,18,18,0.96)",
-    padding: 18,
-    alignItems: "center",
-    gap: 8,
+    overflow: "hidden",
+    alignItems: "stretch",
+    gap: 0,
   },
-  profileEyebrow: { color: "#7B7B7B", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.5 },
+  profileCover: {
+    minHeight: 98,
+    padding: 16,
+    justifyContent: "flex-start",
+    backgroundColor: "#171A22",
+  },
+  profileCoverTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  profileCoverBadgeRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 7, flexShrink: 1 },
+  profileIdentityRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 13,
+    paddingHorizontal: 16,
+    marginTop: -36,
+  },
+  profileIdentityCopy: {
+    flex: 1,
+    paddingTop: 38,
+    paddingBottom: 4,
+    gap: 4,
+  },
+  profileEyebrow: { color: "#A9B3C7", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.5 },
   heroBadgeRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: -2 },
   heroBadge: {
     borderRadius: 999,
@@ -2342,13 +2510,13 @@ const styles = StyleSheet.create({
   heroBadgeTextLive: { color: "#FFD5DD" },
   heroBadgeTextOfficial: { color: "#FFE6A6" },
   heroBadgeTextLinked: { color: "#D7DDFF" },
-  avatarWrap: { position: "relative", marginTop: 2 },
+  avatarWrap: { position: "relative" },
   avatarCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    borderWidth: 3,
+    borderColor: "rgba(18,18,18,0.96)",
     backgroundColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
@@ -2366,13 +2534,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#DC143C",
   },
   avatarImage: { width: "100%", height: "100%" },
-  avatarInitial: { color: "#fff", fontSize: 38, fontWeight: "900" },
+  avatarInitial: { color: "#fff", fontSize: 32, fontWeight: "900" },
   avatarHint: { color: "#7C879C", fontSize: 11, fontWeight: "700" },
-  channelLabel: { color: "#A7B2C9", fontSize: 12, fontWeight: "800", letterSpacing: 0.8 },
-  username: { color: "#fff", fontSize: 29, fontWeight: "900", letterSpacing: 0.2 },
+  channelLabel: { color: "#A7B2C9", fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
+  username: { color: "#fff", fontSize: 24, lineHeight: 28, fontWeight: "900", letterSpacing: 0 },
   userIdLabel: { color: "#A0A0A0", fontSize: 13, fontWeight: "700" },
-  profileTagline: { color: "#B8C1D6", fontSize: 13, lineHeight: 18, fontWeight: "600", textAlign: "center" },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 2 },
+  profileTagline: { color: "#B8C1D6", fontSize: 13, lineHeight: 18, fontWeight: "600", textAlign: "left" },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", gap: 8, marginTop: 2 },
   metaPill: {
     borderRadius: 999,
     borderWidth: 1,
@@ -2386,6 +2554,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(242,194,91,0.34)",
     backgroundColor: "rgba(242,194,91,0.12)",
   },
+  metaPillLinked: {
+    borderColor: "rgba(115,134,255,0.26)",
+    backgroundColor: "rgba(115,134,255,0.12)",
+  },
   metaPillTextOfficial: {
     color: "#FFE6A6",
   },
@@ -2394,7 +2566,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(220,20,60,0.12)",
   },
   livePillText: { color: "#F2C1CC" },
-  channelSupportText: { color: "#727C91", fontSize: 12.5, lineHeight: 18, fontWeight: "600", textAlign: "center", marginTop: 2 },
+  channelSupportText: {
+    color: "#9FA8BA",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+    textAlign: "left",
+    paddingHorizontal: 16,
+    paddingTop: 6,
+  },
   statusPanel: {
     width: "100%",
     borderRadius: 16,
@@ -2412,18 +2592,18 @@ const styles = StyleSheet.create({
   statusPanelKicker: { color: "#7A859A", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   statusPanelTitle: { color: "#F3F5FA", fontSize: 16, fontWeight: "900" },
   statusPanelBody: { color: "#9CA5B8", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
-  channelSignalGrid: { width: "100%", flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  channelSignalGrid: { width: "100%", flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 },
   channelSignalCard: {
     flexBasis: "31%",
     flexGrow: 1,
-    minWidth: 92,
-    borderRadius: 14,
+    minWidth: 86,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(255,255,255,0.04)",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 2,
   },
   channelSignalCardLive: {
     borderColor: "rgba(220,20,60,0.2)",
@@ -2437,8 +2617,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(242,194,91,0.28)",
     backgroundColor: "rgba(46,34,18,0.78)",
   },
-  channelSignalLabel: { color: "#7E889D", fontSize: 10, fontWeight: "900", letterSpacing: 0.9 },
-  channelSignalValue: { color: "#F3F5FA", fontSize: 17, fontWeight: "900" },
+  channelSignalLabel: { color: "#7E889D", fontSize: 9.5, fontWeight: "900", letterSpacing: 0.9 },
+  channelSignalValue: { color: "#F3F5FA", fontSize: 15, fontWeight: "900" },
   channelSignalBody: { color: "#9FA8BA", fontSize: 11, lineHeight: 15, fontWeight: "600" },
   channelGuideCard: {
     width: "100%",
@@ -2522,6 +2702,251 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   quickActionChipText: { color: "#E0E7FF", fontSize: 12, fontWeight: "800" },
+  feedComposerCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(18,18,18,0.96)",
+    padding: 13,
+    gap: 12,
+  },
+  feedComposerPromptRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  composerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.09)",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255,255,255,0.09)",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  composerAvatarImage: { width: "100%", height: "100%" },
+  composerAvatarInitial: { color: "#fff", fontSize: 16, fontWeight: "900" },
+  feedComposerPrompt: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  feedComposerPromptText: { color: "#C6CEDD", fontSize: 13, fontWeight: "700" },
+  feedComposerClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedComposerToolRow: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 11,
+    flexDirection: "row",
+    gap: 10,
+  },
+  feedComposerTool: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  feedComposerToolText: { color: "#DDE5F7", fontSize: 12.5, fontWeight: "900" },
+  feedComposerExpanded: { gap: 10 },
+  feedComposerTextArea: { minHeight: 72 },
+  feedComposerAttachButton: {
+    minHeight: 44,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.25)",
+    backgroundColor: "rgba(115,134,255,0.15)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  feedComposerAttachText: { color: "#EAF0FF", fontSize: 13, fontWeight: "900" },
+  feedComposerFileCard: {
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  feedComposerFileIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: "rgba(220,20,60,0.86)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedComposerFileText: { flex: 1, gap: 2 },
+  feedComposerActionRow: { flexDirection: "row", gap: 10 },
+  feedComposerPostButton: {
+    flex: 1.2,
+    minHeight: 44,
+    borderRadius: 13,
+    backgroundColor: "#DC143C",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedComposerPostText: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  feedComposerManageButton: {
+    flex: 0.8,
+    minHeight: 44,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedComposerManageText: { color: "#E9EEFB", fontSize: 13, fontWeight: "900" },
+  feedStack: { gap: 12 },
+  feedPostCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(18,18,18,0.96)",
+    overflow: "hidden",
+  },
+  feedPostHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 13,
+    paddingTop: 13,
+    paddingBottom: 9,
+  },
+  feedPostIdentity: { flex: 1, gap: 2 },
+  feedPostName: { color: "#F4F7FF", fontSize: 14, fontWeight: "900" },
+  feedPostMeta: { color: "#8D97AA", fontSize: 11.5, fontWeight: "700" },
+  feedDraftBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.26)",
+    backgroundColor: "rgba(115,134,255,0.12)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  feedDraftBadgeText: { color: "#DDE4FF", fontSize: 10.5, fontWeight: "900" },
+  feedPostCaption: {
+    color: "#DDE3F0",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+    paddingHorizontal: 13,
+    paddingBottom: 11,
+  },
+  feedVideoPreview: {
+    minHeight: 204,
+    backgroundColor: "#0A0D14",
+    justifyContent: "flex-end",
+  },
+  feedVideoPreviewUnavailable: { opacity: 0.82 },
+  feedVideoThumbnail: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  feedVideoFallback: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 16,
+    justifyContent: "center",
+    backgroundColor: "#121723",
+  },
+  feedVideoFallbackKicker: { color: "#8792A7", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  feedVideoFallbackTitle: { color: "#F6F8FF", fontSize: 22, lineHeight: 27, fontWeight: "900", marginTop: 5 },
+  feedVideoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  feedPlayBadge: {
+    position: "absolute",
+    left: 14,
+    top: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(220,20,60,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedVideoTitle: {
+    color: "#FFFFFF",
+    fontSize: 19,
+    lineHeight: 23,
+    fontWeight: "900",
+    padding: 14,
+  },
+  feedPostActionRow: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    padding: 8,
+    gap: 8,
+  },
+  feedPostAction: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.055)",
+  },
+  feedPostActionDisabled: { opacity: 0.5 },
+  feedPostActionText: { color: "#E6ECFA", fontSize: 12.5, fontWeight: "900" },
+  feedEmptyCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(18,18,18,0.96)",
+    padding: 16,
+    gap: 8,
+    alignItems: "flex-start",
+  },
+  feedEmptyTitle: { color: "#F4F7FF", fontSize: 16, fontWeight: "900" },
+  feedEmptyText: { color: "#A8B1C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  feedEmptyButton: {
+    marginTop: 4,
+    borderRadius: 13,
+    backgroundColor: "#DC143C",
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  feedEmptyButtonText: { color: "#fff", fontSize: 12.5, fontWeight: "900" },
   creatorVideoGrid: {
     gap: 10,
   },
@@ -2594,11 +3019,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(18,18,18,0.96)",
-    padding: 16,
-    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
   },
   tabStripKicker: { color: "#727C91", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
-  tabStripRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  tabStripRow: { flexDirection: "row", gap: 8, paddingRight: 4 },
   tabChip: {
     borderRadius: 999,
     borderWidth: 1,
@@ -2635,8 +3060,8 @@ const styles = StyleSheet.create({
   secondaryActionRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10 },
   actionBtn: {
     flex: 1,
-    minHeight: 44,
-    borderRadius: 14,
+    minHeight: 40,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -2796,7 +3221,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 14,
     paddingVertical: 10,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
   },
   profileComposerVisibilityChipActive: {
     borderColor: "rgba(255,255,255,0.18)",

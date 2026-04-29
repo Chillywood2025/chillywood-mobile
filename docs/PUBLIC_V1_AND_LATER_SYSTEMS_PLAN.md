@@ -34,6 +34,7 @@ Current Public v1 truth:
 - Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
 - `/profile/[userId]` is the public Profile/Channel surface.
 - `/profile/[userId]` can include an owner-only fast-post composer for adding a creator video without leaving the Profile.
+- Profile's current mobile shape is feed-first: compact identity header, inline creator-video composer, Posts-first creator-video feed, and a separate Videos/library tab. It may reference modern social profile patterns without copying third-party branding or showing unbacked engagement.
 - `/channel-settings` is the deeper owner control and management surface.
 - Creator Media System foundation exists.
 - Creator upload is Public v1 required.
@@ -61,6 +62,7 @@ Owns:
 - self vs public viewer distinction
 - public/owner visibility presentation
 - owner-only fast-post creator-video composer that uses the Creator Media helper path
+- Posts-first feed presentation for backed creator-video uploads
 - Chi'lly Chat handoff from profile
 - links into backed content, live, and channel surfaces
 
