@@ -158,6 +158,8 @@ Future Codex should avoid:
 
 Example: the Profile Upload Video button is allowed to open an owner-only fast-post composer that calls `_lib/creatorVideos.ts` and refreshes the Profile list. `/channel-settings` still owns deeper management such as edit, publish/unpublish, delete, thumbnail URL, channel settings, and library review. `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
 
+Creator Channels are allowed to carry movie-sized uploads, not only short clips. The Public v1 standard upload lane targets files larger than 50 MB and currently sets app/bucket intent to 5 GiB; Supabase's project Storage global file-size limit must be configured to match. If the product requires uploads beyond the standard upload path or needs stronger long-network reliability, add a backed resumable/TUS or S3 multipart lane before claiming full-size movie proof.
+
 ### Creator Media System
 
 Owns:

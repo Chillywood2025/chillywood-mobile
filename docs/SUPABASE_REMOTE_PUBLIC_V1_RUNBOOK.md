@@ -73,13 +73,15 @@ Result: the CLI reached the remote database host but failed authentication for t
 | `202604260002` | Present | Present | Creator video moderation foundation |
 | `202604260003` | Present | Present | Creator video Watch-Party linking |
 | `202604260004` | Present | Present | Tighten Watch-Party room RLS |
+| `202604270001` | Present | Present | Open Chicago Streets title |
+| `202604280001` | Present | Present | Raise creator-video movie upload limit |
 
 Status: Partial / Proof Pending.
 
 What this proves:
 
-- The remote migration history is aligned with the repo migration history through `202604260004`.
-- There are no pending local migrations in `supabase/migrations` that are absent remotely.
+- The remote migration history is aligned with the repo migration history through `202604280001`.
+- Linked remote bucket proof shows `creator-videos.file_size_limit = 5368709120` with the expected video MIME allowlist.
 - There are no remote-applied migration versions in the displayed history that are absent locally.
 
 What this does not prove:
@@ -123,10 +125,10 @@ Unknown / proof-pending:
 
 | Area | Expected remote status | Migration owner | App owner | Proof status |
 | --- | --- | --- | --- | --- |
-| `creator-videos` bucket | Expected present because `202604250001` is applied remotely | `202604250001` | `_lib/creatorVideos.ts` | Proof Pending |
-| Bucket public flag | Expected private (`public=false`) | `202604250001` | `_lib/creatorVideos.ts` | Proof Pending |
-| File size limit | Expected `524288000` bytes | `202604250001` | `_lib/creatorVideos.ts` | Proof Pending |
-| Allowed MIME types | Expected `video/mp4`, `video/quicktime`, `video/webm`, `video/x-m4v` | `202604250001` | `_lib/creatorVideos.ts` | Proof Pending |
+| `creator-videos` bucket | Present remotely | `202604250001`, `202604280001` | `_lib/creatorVideos.ts` | Bucket row proof passed |
+| Bucket public flag | Private (`public=false`) | `202604250001` | `_lib/creatorVideos.ts` | Bucket row proof passed |
+| File size limit | `5368709120` bytes on the bucket; separate project Storage global limit still needs dashboard/runtime proof | `202604280001` | `_lib/creatorVideos.ts` | Bucket row proof passed / Global proof pending |
+| Allowed MIME types | `video/mp4`, `video/quicktime`, `video/webm`, `video/x-m4v` | `202604250001` | `_lib/creatorVideos.ts` | Bucket row proof passed |
 | Owner insert/update/delete policies | Expected by migration | `202604250001` | `_lib/creatorVideos.ts` | Proof Pending through Storage API |
 | Public-or-owner read policy | Expected by migration and moderation tightening | `202604250001`, `202604260002` | `_lib/creatorVideos.ts`, Player/Profile | Proof Pending through Storage API |
 
@@ -179,9 +181,9 @@ Do not commit `.env`, service-role secrets, database passwords, or Edge Function
 
 1. Confirm Supabase project ref is `bmkkhihfbmsnnmcqkoly`.
 2. Confirm the project is the intended production/Public v1 project.
-3. Confirm migration history in the Supabase dashboard matches `supabase migration list` through `202604260004`.
+3. Confirm migration history in the Supabase dashboard matches `supabase migration list` through `202604280001`.
 4. Confirm no pending migrations exist before any future `db push`.
-5. Confirm `creator-videos` bucket exists, is private, and has the expected file size and MIME limits.
+5. Confirm `creator-videos` bucket exists, is private, has `file_size_limit = 5368709120`, and the Supabase Storage global file-size limit is at least that high.
 6. Confirm RLS is enabled on v1 tables:
    - `videos`
    - `safety_reports`
@@ -239,9 +241,9 @@ Proof should separate:
 | Area | Status | Reason | Next action |
 | --- | --- | --- | --- |
 | Project link | Partial | Link now points to `bmkkhihfbmsnnmcqkoly`, but local `supabase/.temp/` metadata is uncommitted and should stay that way | Leave `.temp` uncommitted; relink if a future clean checkout needs it |
-| Migration alignment | Done for migration history / Proof Pending for schema behavior | `migration list` shows local and remote aligned through `202604260004` | Do not push migrations unless a future pending list is audited |
+| Migration alignment | Done for migration history / Proof Pending for full schema behavior | `supabase migration list` shows local and remote aligned through `202604280001` | Do not push migrations unless a future pending list is audited |
 | Remote schema readiness | Partial | Applied migrations and generated types show required tables/columns, but remote lint/schema dump was blocked by DB login auth | Run linked lint/schema inspection with approved credentials |
-| Storage readiness | Proof Pending | Bucket/policies are expected by applied migrations, but Storage API proof was not run | Prove bucket settings and Storage API owner/non-owner behavior |
+| Storage readiness | Partial / Proof Pending | Remote bucket row is proved private with 5 GiB limit and expected MIME allowlist, but project global file-size setting and Storage API owner/non-owner proof are not complete | Prove global file-size limit and Storage API owner/non-owner behavior |
 | RLS/security readiness | Proof Pending | Migration intent and prior local/remote focused proof exist; full live RLS proof is still required | Run live anon/owner/non-owner/operator proof |
 | Edge Function readiness | Partial / Proof Pending | `livekit-token` is deployed ACTIVE version 7; secrets and token request behavior not proved here | Verify secrets and run token request/denial proof |
 | Production env readiness | External Setup Pending | Runtime owners exist; release env values must be configured/proved without printing secrets | Verify EAS/release env and run runtime validation |
@@ -252,7 +254,7 @@ Run the next Supabase proof lane only after the backend/release owner provides a
 
 1. Confirm `supabase migration list` still aligns through the latest local migration.
 2. Run `supabase db lint --linked --schema public --fail-on none` without exposing the database password.
-3. Verify dashboard bucket settings for `creator-videos`.
+3. Verify dashboard bucket settings for `creator-videos`, including `file_size_limit = 5368709120` and matching project Storage global file-size limit.
 4. Run focused live API/RLS proof for creator video public/draft/non-owner behavior.
 5. Run focused Storage API proof for owner upload/remove and non-owner denial.
 6. Run focused safety report/admin moderation proof.

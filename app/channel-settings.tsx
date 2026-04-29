@@ -61,6 +61,9 @@ import {
 } from "../_lib/liveEvents";
 import {
   deleteCreatorVideo,
+  getCreatorVideoStorageLimitMessage,
+  getCreatorVideoTooLargeMessage,
+  isCreatorVideoFileOverChannelMovieLimit,
   readCreatorVideos,
   updateCreatorVideoMetadata,
   uploadCreatorVideo,
@@ -172,11 +175,14 @@ const isSupportedCreatorVideoFile = (file: CreatorVideoFile) => {
   return false;
 };
 
-const formatCreatorVideoUiError = (error: unknown, fallback: string) => {
+const formatCreatorVideoUiError = (error: unknown, fallback: string, fileSize?: number | null) => {
   const rawMessage = error instanceof Error ? error.message : String(error ?? "");
   const message = rawMessage.trim().toLowerCase();
 
   if (!message) return fallback;
+  if (message.includes("too large") || message.includes("maximum") || message.includes("exceeded")) {
+    return getCreatorVideoStorageLimitMessage(fileSize);
+  }
   if (message.includes("network") || message.includes("fetch")) {
     return "Network trouble interrupted creator videos. Check your connection and try again.";
   }
@@ -754,6 +760,16 @@ export default function ChannelSettingsScreen() {
         return;
       }
 
+      if (isCreatorVideoFileOverChannelMovieLimit(pickedFile)) {
+        logCreatorVideoUploadUi("picker_too_large", {
+          name: pickedFile.name ?? "unnamed",
+          size: pickedFile.size ?? null,
+        });
+        setSelectedVideoFile(null);
+        setVideoNotice(getCreatorVideoTooLargeMessage(pickedFile.size));
+        return;
+      }
+
       setSelectedVideoFile(pickedFile);
       logCreatorVideoUploadUi("picker_selected", {
         name: pickedFile.name ?? "unnamed",
@@ -797,6 +813,15 @@ export default function ChannelSettingsScreen() {
       return;
     }
 
+    if (!videoEditor.editingVideoId && selectedVideoFile && isCreatorVideoFileOverChannelMovieLimit(selectedVideoFile)) {
+      logCreatorVideoUploadUi("submit_blocked", {
+        reason: "file_too_large",
+        fileSize: selectedVideoFile.size ?? null,
+      });
+      setVideoNotice(getCreatorVideoTooLargeMessage(selectedVideoFile.size));
+      return;
+    }
+
     const fileToUpload = selectedVideoFile;
 
     try {
@@ -834,7 +859,13 @@ export default function ChannelSettingsScreen() {
       logCreatorVideoUploadUi("submit_failed", {
         message: error instanceof Error ? error.message : "unknown",
       });
-      setVideoNotice(formatCreatorVideoUiError(error, "Unable to save creator video right now. Try again in a moment."));
+      setVideoNotice(
+        formatCreatorVideoUiError(
+          error,
+          "Unable to save creator video right now. Try again in a moment.",
+          fileToUpload?.size,
+        ),
+      );
     } finally {
       setVideoSaving(false);
     }

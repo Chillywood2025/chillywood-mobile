@@ -6,6 +6,7 @@ import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.ty
 
 export const CREATOR_VIDEO_BUCKET = "creator-videos";
 export const CREATOR_VIDEO_SIGNED_URL_SECONDS = 60 * 60;
+export const CREATOR_VIDEO_CHANNEL_MOVIE_UPLOAD_LIMIT_BYTES = 5 * 1024 * 1024 * 1024;
 
 export type CreatorVideoVisibility = "draft" | "public";
 export type CreatorVideoModerationStatus =
@@ -55,6 +56,37 @@ const toText = (value: unknown) => String(value ?? "").trim();
 const logCreatorVideoUpload = (event: string, details?: Record<string, unknown>) => {
   if (!__DEV__) return;
   console.log("[creator-video-upload]", event, details ?? {});
+};
+
+export const formatCreatorVideoFileSize = (size?: number | null) => {
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) return "";
+  if (size >= 1024 * 1024 * 1024) return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
+};
+
+export const getCreatorVideoUploadLimitLabel = () =>
+  formatCreatorVideoFileSize(CREATOR_VIDEO_CHANNEL_MOVIE_UPLOAD_LIMIT_BYTES) || "5 GB";
+
+export const isCreatorVideoFileOverChannelMovieLimit = (file: CreatorVideoFile) =>
+  typeof file.size === "number"
+    && Number.isFinite(file.size)
+    && file.size > CREATOR_VIDEO_CHANNEL_MOVIE_UPLOAD_LIMIT_BYTES;
+
+export const getCreatorVideoTooLargeMessage = (size?: number | null) => {
+  const fileSize = formatCreatorVideoFileSize(size);
+  const limit = getCreatorVideoUploadLimitLabel();
+  return fileSize
+    ? `This video is ${fileSize}. Channel uploads support movies up to ${limit}.`
+    : `Channel uploads support movies up to ${limit}.`;
+};
+
+export const getCreatorVideoStorageLimitMessage = (size?: number | null) => {
+  const fileSize = formatCreatorVideoFileSize(size);
+  return fileSize
+    ? `Creator storage rejected this ${fileSize} movie. Raise the creator-videos Storage global and bucket limits, then try again.`
+    : "Creator storage rejected this movie size. Raise the creator-videos Storage global and bucket limits, then try again.";
 };
 
 const normalizeVisibility = (value: unknown): CreatorVideoVisibility => (
@@ -345,6 +377,9 @@ export async function uploadCreatorVideo(input: {
   const fileUri = toText(input.file.uri);
   if (!title) throw new Error("Video title is required.");
   if (!fileUri) throw new Error("Choose a video file before uploading.");
+  if (isCreatorVideoFileOverChannelMovieLimit(input.file)) {
+    throw new Error(getCreatorVideoTooLargeMessage(input.file.size));
+  }
 
   const id = createClientId();
   const mimeType = toText(input.file.mimeType) || "video/mp4";

@@ -32,6 +32,10 @@ import {
   type CreatorPermissionSet,
 } from "../../_lib/monetization";
 import {
+  formatCreatorVideoFileSize,
+  getCreatorVideoStorageLimitMessage,
+  getCreatorVideoTooLargeMessage,
+  isCreatorVideoFileOverChannelMovieLimit,
   readCreatorVideos,
   uploadCreatorVideo,
   type CreatorVideo,
@@ -303,12 +307,7 @@ const getProfileVideoTitleFromName = (value?: string | null) => (
     .trim()
 );
 
-const formatProfileFileSize = (size?: number | null) => {
-  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) return "";
-  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
-  return `${size} B`;
-};
+const formatProfileFileSize = formatCreatorVideoFileSize;
 
 const isSupportedProfileVideoFile = (file: CreatorVideoFile) => {
   const mimeType = String(file.mimeType ?? "").trim().toLowerCase();
@@ -322,11 +321,14 @@ const isSupportedProfileVideoFile = (file: CreatorVideoFile) => {
   return false;
 };
 
-const formatProfileComposerError = (error: unknown, fallback: string) => {
+const formatProfileComposerError = (error: unknown, fallback: string, fileSize?: number | null) => {
   const rawMessage = error instanceof Error ? error.message : String(error ?? "");
   const message = rawMessage.trim().toLowerCase();
 
   if (!message) return fallback;
+  if (message.includes("too large") || message.includes("maximum") || message.includes("exceeded")) {
+    return getCreatorVideoStorageLimitMessage(fileSize);
+  }
   if (message.includes("network") || message.includes("fetch")) {
     return "Network trouble interrupted your profile upload. Check your connection and try again.";
   }
@@ -796,6 +798,16 @@ export default function ProfileScreen() {
         return;
       }
 
+      if (isCreatorVideoFileOverChannelMovieLimit(pickedFile)) {
+        logProfileComposer("picker_too_large", {
+          name: pickedFile.name ?? "unnamed",
+          size: pickedFile.size ?? null,
+        });
+        setProfileComposerFile(null);
+        setProfileComposerNotice(getCreatorVideoTooLargeMessage(pickedFile.size));
+        return;
+      }
+
       setProfileComposerFile(pickedFile);
       if (!profileComposerTitle.trim()) {
         setProfileComposerTitle(getProfileVideoTitleFromName(pickedFile.name));
@@ -823,6 +835,11 @@ export default function ProfileScreen() {
 
     if (typeof profileComposerFile.size === "number" && profileComposerFile.size <= 0) {
       setProfileComposerNotice("Choose a non-empty video file before posting.");
+      return;
+    }
+
+    if (isCreatorVideoFileOverChannelMovieLimit(profileComposerFile)) {
+      setProfileComposerNotice(getCreatorVideoTooLargeMessage(profileComposerFile.size));
       return;
     }
 
@@ -871,7 +888,13 @@ export default function ProfileScreen() {
       logProfileComposer("submit_failed", {
         message: error instanceof Error ? error.message : "unknown",
       });
-      setProfileComposerNotice(formatProfileComposerError(error, "Unable to post this video right now. Try again in a moment."));
+      setProfileComposerNotice(
+        formatProfileComposerError(
+          error,
+          "Unable to post this video right now. Try again in a moment.",
+          profileComposerFile.size,
+        ),
+      );
     } finally {
       setProfileComposerBusy(false);
     }
