@@ -895,31 +895,23 @@ export default function ProfileScreen() {
   );
   const roleLabel = isOfficialProfile
     ? profile.platformRoleLabel ?? "Official"
-    : profile.role === "creator"
-      ? "Creator"
-      : profile.role === "host"
-        ? "Host"
-        : "Viewer";
+    : isSelfProfile
+      ? "Owner"
+      : profile.role === "creator"
+        ? "Creator"
+        : profile.role === "host"
+          ? "Host"
+          : "Viewer";
   const channelLabel = isOfficialProfile
-    ? "Official Concierge"
+    ? "Official Profile"
     : isSelfProfile
-      ? "Your Channel"
-      : profile.role === "creator"
-        ? "Creator Channel"
-        : profile.role === "host"
-          ? "Host Channel"
-          : "Channel";
+      ? "Your Profile"
+      : "Profile";
   const profileEyebrow = isOfficialProfile
-    ? "OFFICIAL CHANNEL"
+    ? "OFFICIAL PROFILE"
     : isSelfProfile
-      ? profile.role === "host"
-        ? "YOUR HOST CHANNEL"
-        : "YOUR CREATOR CHANNEL"
-      : profile.role === "creator"
-        ? "CREATOR CHANNEL"
-        : profile.role === "host"
-          ? "HOST CHANNEL"
-          : "PUBLIC CHANNEL";
+      ? "YOUR PROFILE"
+      : "PUBLIC PROFILE";
   const channelHandle = useMemo(() => {
     if (profile.handle) return profile.handle;
     const normalizedHandle = profile.displayName
@@ -943,8 +935,8 @@ export default function ProfileScreen() {
     ? officialAccount?.trustSummary
       ?? "Chi'llywood's official channel for trusted help, updates, and auditable follow-up."
     : isSelfProfile
-      ? "Uploaded videos, live moments, and public follow-up live here."
-      : "Creator videos, live presence, and public follow-up live here.";
+      ? "Share updates, connect with people, and guide fans to your Channel."
+      : "Read public updates, connect through Chi'lly Chat, and visit the Channel for creator videos.";
   const liveStatusTitle = isOfficialProfile
     ? "Official concierge is ready"
     : profile.isLive
@@ -1652,7 +1644,6 @@ export default function ProfileScreen() {
     }
   };
   const publicCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
-  const draftCreatorVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
   const hasCreatorVideoTruth = creatorVideos.length > 0;
   const canShowFollowAction = !isOfficialProfile
     && !isSelfProfile
@@ -1666,31 +1657,23 @@ export default function ProfileScreen() {
   const liveEventCount = publicEvents.filter((event) => event.isLiveNow).length;
   const channelSignals = [
     {
-      label: isOfficialProfile ? "Identity" : isSelfProfile ? "Videos" : "Role",
+      label: isOfficialProfile ? "Identity" : "Posts",
       value: isOfficialProfile
         ? "Official"
-        : isSelfProfile
-          ? (creatorVideosReady ? String(creatorVideos.length) : "...")
-          : roleLabel,
+        : profilePostsReady ? String(profilePosts.length) : "...",
       body: isOfficialProfile
         ? "platform-backed identity"
-        : isSelfProfile
-          ? "uploaded creator videos"
-          : "creator-led public surface",
+        : "text updates on this Profile",
       tone: isOfficialProfile ? "official" : "default",
     },
     {
-      label: isOfficialProfile ? "Chat" : isSelfProfile ? "Public" : "Chat",
+      label: isOfficialProfile ? "Chat" : "Channel",
       value: isOfficialProfile
         ? "Starter"
-        : isSelfProfile
-          ? (creatorVideosReady ? String(publicCreatorVideoCount) : "...")
-          : "Ready",
+        : creatorVideosReady ? String(publicCreatorVideoCount) : "...",
       body: isOfficialProfile
         ? "trusted thread open"
-        : isSelfProfile
-          ? "published videos visitors can watch"
-          : "direct thread ready",
+        : "public creator videos",
       tone: "linked",
     },
     {
@@ -1714,25 +1697,25 @@ export default function ProfileScreen() {
       }
     : isSelfProfile
       ? {
-          kicker: "CHANNEL FLOW",
-          title: "Lead with your own channel content",
+          kicker: "CHANNEL",
+          title: "Your uploads live in Channel",
           body: creatorVideosReady
             ? hasCreatorVideoTruth
-              ? `Your channel has ${creatorVideos.length} uploaded video${creatorVideos.length === 1 ? "" : "s"}; public videos appear here for visitors and drafts stay owner-only.`
+              ? "Your uploads, live moments, and creator events live here."
               : "Upload your first video when you are ready for this Channel to become watchable."
             : "Loading your creator-video library."
         }
       : {
-          kicker: "CHANNEL FLOW",
-          title: "Start with the creator channel, then go deeper",
+          kicker: "CHANNEL",
+          title: "Creator uploads live here",
           body: hasLiveRouteContext
             ? "This visit carries real room context, so live and watch-party handoff stays clean from here."
-            : "Start here for the creator's videos, events, and public identity, then move into Chi'lly Chat or a backed room when one exists."
+            : "Uploads, live moments, and creator events live here while personal updates stay in Posts."
         };
   const contentHomeBody = isSelfProfile
     ? creatorVideosReady
       ? hasCreatorVideoTruth
-        ? `Your channel has ${publicCreatorVideoCount} public video${publicCreatorVideoCount === 1 ? "" : "s"} and ${draftCreatorVideoCount} draft${draftCreatorVideoCount === 1 ? "" : "s"}.`
+        ? "Your uploads, live moments, and creator events live here."
         : "Upload your first video when you are ready to make this channel watchable."
       : "Loading your channel library."
     : isOfficialProfile
@@ -1745,7 +1728,7 @@ export default function ProfileScreen() {
   const contentCreatorVideosBody = isSelfProfile
     ? creatorVideosReady
       ? hasCreatorVideoTruth
-        ? "Upload videos for this Channel. Public videos appear here for visitors while drafts stay owner-only; deeper edits stay in Channel Settings."
+        ? "Your uploads, live moments, and creator events live here. Public videos appear for visitors while drafts stay owner-only."
         : "Upload your first creator video when you are ready to make the channel watchable."
       : "Loading your creator-video library."
     : isOfficialProfile
@@ -1800,13 +1783,13 @@ export default function ProfileScreen() {
   const featuredSpotlightTitle = isOfficialProfile
     ? "Official Spotlight"
     : isSelfProfile
-      ? "Your Channel Spotlight"
+      ? "Your Profile"
       : `${profile.displayName}'s Spotlight`;
   const featuredSpotlightBody = isOfficialProfile
     ? "Verified updates and trusted follow-up start here; platform titles stay in platform surfaces."
     : isSelfProfile
-      ? "Lead with your uploaded videos, live events, or the creator cue that best defines your channel right now."
-      : "Start here for the creator spotlight, live pulse, and next real creator-video or chat move.";
+      ? "Share updates, connect with people, and guide fans to your Channel."
+      : "Start here for personal updates, public identity, and the next backed creator or chat move.";
   const channelLayoutPreset = resolveChannelLayoutPreset(channelAccessProfile?.channelLayoutPreset);
   const homeSectionMap = {
     featured: {
@@ -1822,8 +1805,8 @@ export default function ProfileScreen() {
       accent: profile.isLive ? "live" : "default",
     },
     content: {
-      title: isSelfProfile ? "Your Creator Content" : "Creator Content",
-      kicker: "CHANNEL CONTENT",
+      title: isSelfProfile ? "Your Channel" : "Channel",
+      kicker: "CREATOR CONTENT",
       body: contentHomeBody,
     },
     community: {
@@ -1834,9 +1817,9 @@ export default function ProfileScreen() {
         : "Public follow-up stays visible here while direct conversation stays in Chi'lly Chat.",
     },
     about: {
-      title: "Channel Identity",
+      title: "Profile Identity",
       kicker: "ABOUT",
-      body: `${profile.displayName} should feel like a coherent public channel even before deeper creator shelves arrive.`,
+      body: `${profile.displayName} should feel like a clear public profile even before deeper creator shelves arrive.`,
     },
   } satisfies Record<"featured" | "live" | "content" | "community" | "about", ProfileSurfaceCard>;
   const homeSectionOrder = channelLayoutPreset === "live_first"
@@ -2396,7 +2379,7 @@ export default function ProfileScreen() {
           {renderComposerAvatar("small")}
           <View style={styles.profilePostComposerCopy}>
             <Text style={styles.profilePostComposerTitle}>Post</Text>
-            <Text style={styles.profilePostComposerMeta}>Text only. Channel videos stay in the Channel tab.</Text>
+            <Text style={styles.profilePostComposerMeta}>Text only. Creator videos stay in Channel.</Text>
           </View>
         </View>
         <TextInput
@@ -2844,7 +2827,15 @@ export default function ProfileScreen() {
             </TouchableOpacity>
             <View style={styles.profileIdentityCopy}>
               <Text style={styles.channelLabel}>{channelLabel}</Text>
-              <Text style={styles.username} numberOfLines={2}>{profile.displayName}</Text>
+              <Text
+                style={styles.username}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+              >
+                {profile.displayName}
+              </Text>
               <Text style={styles.userIdLabel} numberOfLines={1}>{channelHandle}</Text>
               {profile.tagline ? <Text style={styles.profileTagline}>{profile.tagline}</Text> : null}
               <View style={styles.metaRow}>
@@ -2919,9 +2910,18 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.actionBtnSecondary]}
                     activeOpacity={0.86}
+                    onPress={onPressUploadVideo}
+                  >
+                    <Text style={styles.actionBtnText}>Upload</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.secondaryActionRow}>
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.86}
                     onPress={onPressSettings}
                   >
-                    <Text style={styles.actionBtnText}>Settings</Text>
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Settings</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -3045,6 +3045,7 @@ export default function ProfileScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.tabStripRow}
+              keyboardShouldPersistTaps="handled"
             >
               {publicProfileTabs.map((tab) => (
                 <TouchableOpacity
@@ -3349,7 +3350,7 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   profileCover: {
-    minHeight: 98,
+    minHeight: 88,
     padding: 16,
     justifyContent: "flex-start",
     backgroundColor: "#171A22",
@@ -3366,13 +3367,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 13,
     paddingHorizontal: 16,
-    marginTop: -36,
+    marginTop: -34,
   },
   profileIdentityCopy: {
     flex: 1,
-    paddingTop: 38,
+    minWidth: 0,
+    paddingTop: 34,
     paddingBottom: 4,
-    gap: 4,
+    gap: 3,
   },
   profileEyebrow: { color: "#A9B3C7", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.5 },
   heroBadgeRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: -2 },
@@ -3428,8 +3430,16 @@ const styles = StyleSheet.create({
   avatarImage: { width: "100%", height: "100%" },
   avatarInitial: { color: "#fff", fontSize: 32, fontWeight: "900" },
   avatarHint: { color: "#7C879C", fontSize: 11, fontWeight: "700" },
-  channelLabel: { color: "#A7B2C9", fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
-  username: { color: "#fff", fontSize: 24, lineHeight: 28, fontWeight: "900", letterSpacing: 0 },
+  channelLabel: { color: "#A7B2C9", fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
+  username: {
+    color: "#fff",
+    fontSize: 23,
+    lineHeight: 27,
+    fontWeight: "900",
+    letterSpacing: 0,
+    flexShrink: 1,
+    includeFontPadding: false,
+  },
   userIdLabel: { color: "#A0A0A0", fontSize: 13, fontWeight: "700" },
   profileTagline: { color: "#B8C1D6", fontSize: 13, lineHeight: 18, fontWeight: "600", textAlign: "left" },
   metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", gap: 8, marginTop: 2 },
@@ -3696,8 +3706,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(115,134,255,0.16)",
     backgroundColor: "rgba(13,18,32,0.88)",
-    padding: 13,
-    gap: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
   },
   profilePostComposerCopy: {
     flex: 1,
@@ -3711,6 +3722,7 @@ const styles = StyleSheet.create({
   profilePostComposerMeta: {
     color: "#95A0B6",
     fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: "700",
   },
   profilePostComposerFooter: {
@@ -4047,24 +4059,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(18,18,18,0.96)",
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
   },
   tabStripKicker: { color: "#727C91", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
-  tabStripRow: { flexDirection: "row", gap: 8, paddingRight: 4 },
+  tabStripRow: { flexDirection: "row", gap: 7, paddingRight: 14 },
   tabChip: {
+    minHeight: 38,
+    minWidth: 68,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabChipActive: {
     borderColor: "rgba(115,134,255,0.28)",
     backgroundColor: "rgba(115,134,255,0.14)",
   },
-  tabChipText: { color: "#B5BED1", fontSize: 12.5, fontWeight: "800" },
+  tabChipText: { color: "#B5BED1", fontSize: 12, fontWeight: "800" },
   tabChipTextActive: { color: "#E4E9FF" },
   tabIntro: { color: "#9FA8BA", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
   viewSwitchRow: { flexDirection: "row", gap: 10, width: "100%" },
@@ -4088,6 +4104,7 @@ const styles = StyleSheet.create({
   secondaryActionRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10 },
   actionBtn: {
     flex: 1,
+    minWidth: 0,
     minHeight: 40,
     borderRadius: 12,
     borderWidth: 1,
