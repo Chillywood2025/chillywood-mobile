@@ -352,6 +352,43 @@ export async function readMyChannelFollowState(channelUserId: string): Promise<C
   return existing ? "following" : "not_following";
 }
 
+export async function readFollowedChannelUserIds(options?: { limit?: number }): Promise<string[]> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const viewerUserId = normalizeText(sessionData.session?.user?.id);
+  if (!viewerUserId) return [];
+
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(options?.limit ?? 50))));
+  const { data, error } = await supabase
+    .from(CHANNEL_FOLLOWERS_TABLE)
+    .select("channel_user_id,followed_at")
+    .eq("follower_user_id", viewerUserId)
+    .order("followed_at", { ascending: false })
+    .limit(limit)
+    .returns<Pick<ChannelFollowerRow, "channel_user_id" | "followed_at">[]>();
+
+  if (error || !data) return [];
+
+  const followedIds = Array.from(
+    new Set(data.map((row) => normalizeText(row.channel_user_id)).filter((id) => id && id !== viewerUserId)),
+  );
+  if (!followedIds.length) return [];
+
+  const blockResult = await supabase
+    .from(CHANNEL_AUDIENCE_BLOCKS_TABLE)
+    .select("channel_user_id")
+    .eq("blocked_user_id", viewerUserId)
+    .in("channel_user_id", followedIds)
+    .returns<Pick<ChannelAudienceBlockRow, "channel_user_id">[]>();
+
+  if (blockResult.error) return [];
+
+  const blockedChannelIds = new Set(
+    (blockResult.data ?? []).map((row) => normalizeText(row.channel_user_id)).filter(Boolean),
+  );
+
+  return followedIds.filter((channelUserId) => !blockedChannelIds.has(channelUserId));
+}
+
 export async function unfollowChannel(channelUserId: string): Promise<ChannelAudienceActionResult> {
   const context = await readAudienceActorContext(channelUserId);
   if (!context.channelUserId) {

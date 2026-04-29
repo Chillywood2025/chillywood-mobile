@@ -50,7 +50,7 @@ Recommendation: keep the fixes, run the next route smoke on Android, and keep th
 | Home | `/(tabs)` index | `app/(tabs)/index.tsx` | Home/discovery | Premium home rails, title cards, live entry, shortcuts | Room ownership, upload management | Protected tab route | Correct / proof pending |
 | Explore | `/(tabs)/explore` | `app/(tabs)/explore.tsx` | Discovery | Platform-title browse | Creator upload management, fake search | Protected tab route | Correct / proof pending |
 | My List | `/(tabs)/my-list` | `app/(tabs)/my-list.tsx` | Saved content | Saved platform titles | Creator upload management | Protected tab route | Correct / proof pending |
-| Profile / Channel | `/profile/[userId]` | `app/profile/[userId].tsx` | Profile + public channel | Identity, honest personal Posts placeholder, public creator videos in Channel, owner/public channel state, profile actions, owner-only creator-video upload composer | Deep creator-video edit/delete management, Player playback, admin moderation writes, platform title discovery, fake personal posts | Protected route; owner and public viewer controls differ | Correct / proof pending |
+| Profile / Channel | `/profile/[userId]` | `app/profile/[userId].tsx` | Profile + public channel | Identity, backed text-only personal Posts, public creator videos in Channel, owner/public channel state, profile actions, owner-only creator-video upload composer | Deep creator-video edit/delete management, Player playback, admin moderation writes, platform title discovery, fake engagement or Friends | Protected route; owner and public viewer controls differ | Correct / proof pending |
 | Channel Settings | `/channel-settings` | `app/channel-settings.tsx` | Channel owner controls | Channel fields, creator upload/manage, creator events, audience summaries | Public channel display, Player playback | Signed-in/beta route, owner-side controls | Correct / proof pending |
 | Creator Media management | `/channel-settings` Content panel | `app/channel-settings.tsx`, `_lib/creatorVideos.ts` | Creator Media | Choose file, metadata, draft/public, edit, publish/unpublish, delete | Paid media, transcoding, fake upload success | Owner-only UI; backend/RLS proof still required | Correct / proof pending |
 | Standalone Player | `/player/[id]` | `app/player/[id].tsx` | Player | Platform-title playback, creator-video playback when source is explicit, report, Watch-Party entry | Upload management, source guessing | Protected route plus access gate | Fixed / proof pending |
@@ -119,7 +119,7 @@ Proof pending: final Android route smoke for signup, login, signed-out protected
 
 Status: Implemented / Proof Pending.
 
-Profile acts as the person/social identity and public channel surface. Channel is the creator's own mini streaming platform, not a Chi'llywood Originals shelf. The Profile route now keeps a compact identity header, owner-only creator-video upload composer, clear top actions, and a horizontal Posts/Channel/Live/Community/About tab strip. Posts is an honest personal-updates placeholder because text/status Profile posts are not backed yet; creator uploaded videos live in the Channel tab and use `CreatorVideoCard`. The composer attaches a local video, accepts description/title/visibility, uploads through the backed creator-video path, and refreshes Channel content after save. Channel Settings remains the owner management/control center for deeper channel settings, edit, publish/unpublish, delete, and advanced controls. Owner controls are not shown to public viewers in the audited code path. Public creator-video reads use `_lib/creatorVideos.ts`, which filters by visibility and moderation status; owner reads can include drafts. User/creator Channels no longer read `titles`, show jump-to-title platform filler, use platform title artwork as background, or use saved/resume title counts as channel stats.
+Profile acts as the person/social identity and public channel surface. Channel is the creator's own mini streaming platform, not a Chi'llywood Originals shelf. The Profile route now keeps a compact identity header, owner-only creator-video upload composer, clear top actions, and a horizontal Posts/Channel/Live/Community/About tab strip. Posts is backed for text-only personal updates/status posts through `profile_posts`; creator uploaded videos still live in the Channel tab and use `CreatorVideoCard`. The composer attaches a local video, accepts description/title/visibility, uploads through the backed creator-video path, and refreshes Channel content after save. Channel Settings remains the owner management/control center for deeper channel settings, edit, publish/unpublish, delete, and advanced controls. Owner controls are not shown to public viewers in the audited code path. Public creator-video reads use `_lib/creatorVideos.ts`, which filters by visibility and moderation status; owner reads can include drafts. User/creator Channels no longer read `titles`, show jump-to-title platform filler, use platform title artwork as background, or use saved/resume title counts as channel stats.
 
 No separate public `/channel/[id]` route is required for v1. A later channel alias can be considered only if product navigation needs it.
 
@@ -135,7 +135,7 @@ Presentation update: creator videos now use a shared media-first card in Channel
 
 No fake paid/subscriber media, transcoding, payout, or advanced creator studio controls were added.
 
-Engagement truth: creator-video Report is backed in Player, public creator-video Share uses the app route/deep link, and creator-video likes/comments/saves/counts, text-only profile updates, profile feed comments, and comment media are not backed or shown. Title-only engagement remains title-only.
+Engagement truth: creator-video Report is backed in Player, public creator-video Share uses the app route/deep link, standalone creator-video text comments are backed through `creator_video_comments`, and text-only Profile updates are backed through `profile_posts`. Creator-video likes/saves/counts, Profile post comments/reactions, media posts/comments, nested replies, and full Friends are not backed or shown. Title-only engagement remains title-only.
 
 Runtime proof update: one-device owner proof confirms Channel Settings Content visibility, scrollability, modern fallback creator-video card presentation, owner controls, upload form visibility, route-safe Share, and creator-video Report sheet opening without submitting. Public/draft visibility, thumbnail-present visual smoke, edit, publish/unpublish, delete/storage remove, report row creation, admin hide/remove/restore, and non-owner denial remain pending.
 
@@ -224,11 +224,11 @@ Recommendation: keep push delivery and a notification inbox as later-phase unles
 
 | Feature | Backend/storage dependencies | Audit finding |
 | --- | --- | --- |
-| Profiles/channel | `user_profiles`, profile helpers, channel read models | Route code uses profile/channel helpers; runtime owner/public proof pending. |
+| Profiles/channel | `user_profiles`, `profile_posts`, profile helpers, channel read models | Route code uses profile/channel helpers plus text-only Profile posts; runtime owner/public proof pending. |
 | Channel audience | `channel_followers`, `channel_subscribers`, `channel_audience_requests`, `channel_audience_blocks` | Backed summaries/actions exist; full roster/VIP/mod roles later. |
 | Creator videos | `videos`, `creator-videos` storage, creator-video migrations/RLS | App integration exists; live public/draft/storage delete proof pending. |
 | Platform titles | `titles`, media-source helpers, content engagement tables | Title Detail/Player/Home/Explore use platform title owner; invalid platform fallback already hardened in prior room pass and Player source hardening completed here. |
-| Reports/moderation | `safety_reports`, `videos.moderation_status`, platform role tables | UI/helper foundation exists; signed-out and backend non-operator Admin denial proof passed; temporary backend operator hide/restore proof passed; report row and hidden/removed public Profile/Channel proof pending. |
+| Reports/moderation | `safety_reports`, `videos.moderation_status`, profile post/comment moderation status, platform role tables | UI/helper foundation exists; signed-out and backend non-operator Admin denial proof passed; temporary backend operator hide/restore proof passed; creator_video/profile_post/creator_video_comment report row and hidden/removed public Profile/Channel/comment proof pending. |
 | Premium/access | `user_entitlements`, `billing_events`, RevenueCat helpers | Backend truth exists; store setup and proof pending. |
 | Chat | `chat_threads`, `chat_thread_members`, `chat_messages` | Inbox/thread helpers exist; send/access proof pending. |
 | Notifications/reminders | `notifications`, `creator_events`, `event_reminders` | Helper-backed foundation; push/inbox later. |
@@ -250,7 +250,7 @@ No destructive SQL, migration push, storage mutation, or production backend comm
 | Search route | Later | Post-v1 | Explore handles platform browse; global search needs source design. |
 | Notification center | Later | Post-v1 | Helpers/tables exist, but no push/inbox proof. |
 | Premium manage subscription route | Later | After store setup | `/subscribe` is enough until live billing proof exists. |
-| Friends/social graph route | Later | Post-v1 | Chat/profile handoffs are enough for current scope. |
+| Friends/social graph route | Later | Post-v1 | Following is backed as audience relationship; full Friends, friend requests, close friends, and friend-only privacy stay post-v1. |
 | Creator dashboard | Later | Post-v1 | Channel Settings is the current owner control center. |
 
 No new routes were added.

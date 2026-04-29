@@ -52,6 +52,13 @@ import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { readCreatorVideoForPlayer, type CreatorVideo } from "../../_lib/creatorVideos";
+import {
+    createCreatorVideoComment,
+    deleteCreatorVideoComment,
+    readCreatorVideoComments,
+    CREATOR_VIDEO_COMMENT_BODY_LIMIT,
+    type CreatorVideoComment,
+} from "../../_lib/creatorVideoComments";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
     getCreatorVideoWatchPartyBlockCopy,
@@ -118,6 +125,17 @@ const CONTROLS_AUTO_HIDE_MILLIS = 3_000;
 const NEXT_AUTOPLAY_DELAY_MILLIS = 1_500;
 const UP_NEXT_TRIGGER_MILLIS = 12_000;
 const UP_NEXT_COUNTDOWN_SECONDS = 5;
+
+const formatCreatorCommentTime = (value?: string | null) => {
+  const parsed = Date.parse(String(value ?? "").trim());
+  if (!Number.isFinite(parsed)) return "Recently";
+  return new Date(parsed).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 const PARTY_HOST_SYNC_WRITE_INTERVAL_MILLIS = 600;
 const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
@@ -699,6 +717,15 @@ export default function PlayerScreen() {
   const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
   const [creatorVideoReportVisible, setCreatorVideoReportVisible] = useState(false);
   const [creatorVideoReportBusy, setCreatorVideoReportBusy] = useState(false);
+  const [creatorVideoComments, setCreatorVideoComments] = useState<CreatorVideoComment[]>([]);
+  const [creatorVideoCommentsLoading, setCreatorVideoCommentsLoading] = useState(false);
+  const [creatorVideoCommentsError, setCreatorVideoCommentsError] = useState<string | null>(null);
+  const [creatorVideoCommentDraft, setCreatorVideoCommentDraft] = useState("");
+  const [creatorVideoCommentBusy, setCreatorVideoCommentBusy] = useState(false);
+  const [creatorVideoCommentDeletingId, setCreatorVideoCommentDeletingId] = useState<string | null>(null);
+  const [creatorVideoCommentReportTarget, setCreatorVideoCommentReportTarget] = useState<CreatorVideoComment | null>(null);
+  const [creatorVideoCommentReportBusy, setCreatorVideoCommentReportBusy] = useState(false);
+  const [creatorVideoCommentUserId, setCreatorVideoCommentUserId] = useState("");
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -975,6 +1002,30 @@ export default function PlayerScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!isSignedIn) {
+      setCreatorVideoCommentUserId("");
+      return () => {
+        active = false;
+      };
+    }
+
+    void supabase.auth.getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        setCreatorVideoCommentUserId(String(data.session?.user?.id ?? "").trim());
+      })
+      .catch(() => {
+        if (active) setCreatorVideoCommentUserId("");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isSignedIn]);
 
   useEffect(() => {
     let active = true;
@@ -2969,6 +3020,135 @@ export default function PlayerScreen() {
     }
   }, [creatorVideoReportBusy, isSignedIn, item?.title, playbackSourceKind, titleId]);
 
+  const loadCreatorVideoComments = useCallback(async () => {
+    const creatorVideoId = String(creatorVideo?.id ?? titleId ?? "").trim();
+    if (!creatorVideoId || playbackSourceKind !== "creator-video" || inWatchParty || isLiveModeFlag) {
+      setCreatorVideoComments([]);
+      setCreatorVideoCommentsLoading(false);
+      setCreatorVideoCommentsError(null);
+      return;
+    }
+
+    setCreatorVideoCommentsLoading(true);
+    setCreatorVideoCommentsError(null);
+    try {
+      const comments = await readCreatorVideoComments(creatorVideoId, { limit: 30 });
+      setCreatorVideoComments(comments);
+    } catch {
+      setCreatorVideoComments([]);
+      setCreatorVideoCommentsError("Unable to load discussion right now.");
+    } finally {
+      setCreatorVideoCommentsLoading(false);
+    }
+  }, [creatorVideo?.id, inWatchParty, isLiveModeFlag, playbackSourceKind, titleId]);
+
+  const onSubmitCreatorVideoComment = useCallback(async () => {
+    const creatorVideoId = String(creatorVideo?.id ?? titleId ?? "").trim();
+    const body = creatorVideoCommentDraft.trim();
+    if (!creatorVideoId || playbackSourceKind !== "creator-video" || creatorVideoCommentBusy) return;
+
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in before commenting on creator videos.");
+      return;
+    }
+    if (!body) {
+      setCreatorVideoCommentsError("Write a comment before posting.");
+      return;
+    }
+    if (body.length > CREATOR_VIDEO_COMMENT_BODY_LIMIT) {
+      setCreatorVideoCommentsError(`Comments can be ${CREATOR_VIDEO_COMMENT_BODY_LIMIT} characters or fewer.`);
+      return;
+    }
+
+    setCreatorVideoCommentBusy(true);
+    setCreatorVideoCommentsError(null);
+    try {
+      const comment = await createCreatorVideoComment({ videoId: creatorVideoId, body });
+      setCreatorVideoComments((current) => [...current.filter((entry) => entry.id !== comment.id), comment]);
+      setCreatorVideoCommentDraft("");
+    } catch {
+      setCreatorVideoCommentsError("Unable to post this comment right now.");
+    } finally {
+      setCreatorVideoCommentBusy(false);
+    }
+  }, [creatorVideo?.id, creatorVideoCommentBusy, creatorVideoCommentDraft, isSignedIn, playbackSourceKind, titleId]);
+
+  const onDeleteCreatorVideoComment = useCallback((comment: CreatorVideoComment) => {
+    if (!comment.id || creatorVideoCommentDeletingId) return;
+
+    Alert.alert(
+      "Delete comment?",
+      "This removes your comment from the creator-video discussion.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                setCreatorVideoCommentDeletingId(comment.id);
+                setCreatorVideoCommentsError(null);
+                await deleteCreatorVideoComment(comment.id);
+                setCreatorVideoComments((current) => current.filter((entry) => entry.id !== comment.id));
+              } catch {
+                setCreatorVideoCommentsError("Unable to delete this comment right now.");
+              } finally {
+                setCreatorVideoCommentDeletingId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [creatorVideoCommentDeletingId]);
+
+  const onSubmitCreatorVideoCommentReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
+    const target = creatorVideoCommentReportTarget;
+    const creatorVideoId = String(creatorVideo?.id ?? titleId ?? "").trim();
+    if (!target || creatorVideoCommentReportBusy) return;
+
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in before reporting a creator-video comment.");
+      return;
+    }
+
+    setCreatorVideoCommentReportBusy(true);
+    try {
+      await submitSafetyReport({
+        targetType: "creator_video_comment",
+        targetId: target.id,
+        category: input.category,
+        note: input.note,
+        titleId: null,
+        context: buildSafetyReportContext({
+          sourceSurface: "player",
+          sourceRoute: `/player/${creatorVideoId}?source=creator-video`,
+          targetLabel: `${target.authorName} comment`,
+          targetRoleLabel: "Creator-video comment",
+          platformOwnedTarget: false,
+          context: {
+            creatorVideoId,
+            commentPreview: target.body.slice(0, 140),
+            sourceKind: "creator-video",
+          },
+        }),
+      });
+      setCreatorVideoCommentReportTarget(null);
+      Alert.alert("Report sent", "Thanks. Chi'llywood moderation can review this comment.");
+    } catch {
+      Alert.alert("Report unavailable", "Unable to send this report right now.");
+    } finally {
+      setCreatorVideoCommentReportBusy(false);
+    }
+  }, [
+    creatorVideo?.id,
+    creatorVideoCommentReportBusy,
+    creatorVideoCommentReportTarget,
+    isSignedIn,
+    titleId,
+  ]);
+
   const onReturnToPartyRoom = useCallback(() => {
     if (!partyId) {
       router.back();
@@ -4063,6 +4243,17 @@ export default function PlayerScreen() {
   const canMarkStandaloneShared = isStandalonePlayer && !isCreatorVideoPlayback && !standaloneAccessLoading && !!standaloneAccess?.isAllowed;
   const canShareStandaloneCreatorVideo = isStandalonePlayer && isCreatorVideoPubliclyShareable(creatorVideo);
   useEffect(() => {
+    if (!isStandalonePlayer || !isCreatorVideoPlayback) {
+      setCreatorVideoComments([]);
+      setCreatorVideoCommentsLoading(false);
+      setCreatorVideoCommentsError(null);
+      return;
+    }
+
+    void loadCreatorVideoComments();
+  }, [isCreatorVideoPlayback, isStandalonePlayer, loadCreatorVideoComments]);
+
+  useEffect(() => {
     if (!inWatchParty) return;
 
     const previous = previousParticipantsRef.current;
@@ -4777,6 +4968,122 @@ export default function PlayerScreen() {
       </Animated.View>
     </View>
   );
+
+  const renderCreatorVideoCommentsPanel = () => {
+    if (!isStandalonePlayer || !isCreatorVideoPlayback || standalonePlaybackGateActive) return null;
+
+    const draftLength = creatorVideoCommentDraft.trim().length;
+    const commentDisabled = creatorVideoCommentBusy || draftLength === 0 || draftLength > CREATOR_VIDEO_COMMENT_BODY_LIMIT;
+
+    return (
+      <View style={styles.creatorCommentsPanel}>
+        <View style={styles.creatorCommentsHeader}>
+          <View style={styles.creatorCommentsHeaderCopy}>
+            <Text style={styles.creatorCommentsKicker}>CREATOR VIDEO</Text>
+            <Text style={styles.creatorCommentsTitle}>Discussion</Text>
+          </View>
+          {creatorVideoCommentsLoading ? <ActivityIndicator color={ACCENT} /> : null}
+        </View>
+
+        <ScrollView
+          style={styles.creatorCommentsList}
+          contentContainerStyle={styles.creatorCommentsListContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {creatorVideoCommentsError ? (
+            <Text style={styles.creatorCommentsEmpty}>{creatorVideoCommentsError}</Text>
+          ) : creatorVideoComments.length ? (
+            creatorVideoComments.map((comment) => {
+              const isOwnComment = !!creatorVideoCommentUserId && comment.userId === creatorVideoCommentUserId;
+
+              return (
+                <View key={comment.id} style={styles.creatorCommentCard}>
+                  <View style={styles.creatorCommentAvatar}>
+                    {comment.authorAvatarUrl ? (
+                      <Image source={{ uri: comment.authorAvatarUrl }} style={styles.creatorCommentAvatarImage} />
+                    ) : (
+                      <Text style={styles.creatorCommentAvatarText}>{getInitials(comment.authorName)}</Text>
+                    )}
+                  </View>
+                  <View style={styles.creatorCommentBodyWrap}>
+                    <View style={styles.creatorCommentMetaRow}>
+                      <Text style={styles.creatorCommentAuthor} numberOfLines={1}>{comment.authorName}</Text>
+                      <Text style={styles.creatorCommentTime}>{formatCreatorCommentTime(comment.createdAt)}</Text>
+                    </View>
+                    <Text style={styles.creatorCommentBody}>{comment.body}</Text>
+                    {isOwnComment || isSignedIn ? (
+                      <View style={styles.creatorCommentActionRow}>
+                        {isOwnComment ? (
+                          <TouchableOpacity
+                            style={styles.creatorCommentAction}
+                            activeOpacity={0.84}
+                            disabled={creatorVideoCommentDeletingId === comment.id}
+                            onPress={() => onDeleteCreatorVideoComment(comment)}
+                          >
+                            <Text style={styles.creatorCommentActionText}>
+                              {creatorVideoCommentDeletingId === comment.id ? "Deleting" : "Delete"}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {isSignedIn && !isOwnComment ? (
+                          <TouchableOpacity
+                            style={styles.creatorCommentAction}
+                            activeOpacity={0.84}
+                            onPress={() => setCreatorVideoCommentReportTarget(comment)}
+                          >
+                            <Text style={styles.creatorCommentActionText}>Report</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.creatorCommentsEmpty}>No comments yet.</Text>
+          )}
+        </ScrollView>
+
+        {isSignedIn ? (
+          <View style={styles.creatorCommentsInputRow}>
+            <TextInput
+              value={creatorVideoCommentDraft}
+              onChangeText={(value) => {
+                setCreatorVideoCommentDraft(value);
+                if (creatorVideoCommentsError) setCreatorVideoCommentsError(null);
+              }}
+              onFocus={() => {
+                setControlsVisible(true);
+                resetAutoHideTimer();
+              }}
+              onSubmitEditing={() => {
+                void onSubmitCreatorVideoComment();
+              }}
+              style={styles.creatorCommentsInput}
+              placeholder="Add a text comment"
+              placeholderTextColor="rgba(212,216,226,0.68)"
+              editable={!creatorVideoCommentBusy}
+              maxLength={CREATOR_VIDEO_COMMENT_BODY_LIMIT}
+              returnKeyType="send"
+            />
+            <TouchableOpacity
+              style={[styles.creatorCommentsSendBtn, commentDisabled && styles.secondaryBtnDisabled]}
+              activeOpacity={0.85}
+              disabled={commentDisabled}
+              onPress={() => {
+                void onSubmitCreatorVideoComment();
+              }}
+            >
+              <Text style={styles.creatorCommentsSendText}>{creatorVideoCommentBusy ? "..." : "Post"}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={styles.creatorCommentsSigninText}>Sign in to comment.</Text>
+        )}
+      </View>
+    );
+  };
 
   const renderPartyCommentsContent = () => (
     <>
@@ -5548,6 +5855,17 @@ export default function PlayerScreen() {
               }}
             />
 
+            <ReportSheet
+              visible={!!creatorVideoCommentReportTarget}
+              title="Report creator-video comment"
+              description="Send this text comment to Chi'llywood moderation review."
+              busy={creatorVideoCommentReportBusy}
+              onSubmit={onSubmitCreatorVideoCommentReport}
+              onClose={() => {
+                if (!creatorVideoCommentReportBusy) setCreatorVideoCommentReportTarget(null);
+              }}
+            />
+
             {seekFeedback ? (
               <Animated.View style={[styles.seekFeedback, { opacity: seekFeedbackOpacity }]}> 
                 <Text style={styles.seekFeedbackText}>{seekFeedback}</Text>
@@ -5682,6 +6000,8 @@ export default function PlayerScreen() {
                   </View>
                 </View>
               ) : null}
+
+              {renderCreatorVideoCommentsPanel()}
 
               {inWatchParty && !isLiveMode && livePresenceEvent ? (
                 <View style={styles.livePresenceEventToast}>
@@ -6383,6 +6703,146 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 13,
     marginBottom: 6,
+  },
+  creatorCommentsPanel: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.18)",
+    backgroundColor: "rgba(8,10,18,0.82)",
+    paddingHorizontal: 10,
+    paddingTop: 9,
+    paddingBottom: 10,
+    gap: 8,
+    maxHeight: 238,
+  },
+  creatorCommentsHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  creatorCommentsHeaderCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  creatorCommentsKicker: {
+    color: "#9AA6C0",
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  creatorCommentsTitle: {
+    color: "#F2F5FF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  creatorCommentsList: {
+    maxHeight: 126,
+  },
+  creatorCommentsListContent: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  creatorCommentsEmpty: {
+    color: "#AAB3C7",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  creatorCommentCard: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  creatorCommentAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  creatorCommentAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  creatorCommentAvatarText: {
+    color: "#fff",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  creatorCommentBodyWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  creatorCommentMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  creatorCommentAuthor: {
+    flexShrink: 1,
+    color: "#F4F7FF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  creatorCommentTime: {
+    color: "#8792A8",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  creatorCommentBody: {
+    color: "#DCE3F2",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
+  creatorCommentActionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  creatorCommentAction: {
+    alignSelf: "flex-start",
+  },
+  creatorCommentActionText: {
+    color: "#BFC8DC",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  creatorCommentsInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  creatorCommentsInput: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    color: "#EEF1F8",
+    fontSize: 12,
+    fontWeight: "700",
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  creatorCommentsSendBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.7)",
+    backgroundColor: "rgba(220,20,60,0.28)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  creatorCommentsSendText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  creatorCommentsSigninText: {
+    color: "#AAB3C7",
+    fontSize: 11.5,
+    fontWeight: "700",
   },
   partyCommentsDrawer: {
     position: "absolute",

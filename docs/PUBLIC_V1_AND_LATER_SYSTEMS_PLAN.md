@@ -34,13 +34,16 @@ Current Public v1 truth:
 - Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
 - `/profile/[userId]` is the public Profile/Channel surface.
 - `/profile/[userId]` can include an owner-only creator-video upload composer without leaving the Profile.
-- Profile's current mobile shape is identity-first and mobile-social: compact identity header, honest Posts placeholder until personal updates are backed, Channel tab for creator uploads, and clear owner/public quick actions. It may reference modern social profile patterns without copying third-party branding or showing unbacked engagement.
+- Profile's current mobile shape is identity-first and mobile-social: compact identity header, backed text-only personal Posts/status updates, Channel tab for creator uploads, and clear owner/public quick actions. It may reference modern social profile patterns without copying third-party branding or showing unbacked engagement.
 - `/channel-settings` is the deeper owner control and management surface.
 - Creator Media System foundation exists.
 - Creator upload is Public v1 required.
 - Creator-uploaded videos upload, save metadata/storage, show on Profile/Channel, and open the standalone premium Player through `/player/[id]?source=creator-video`.
 - Creator videos use the same premium Player shell as platform/admin titles.
+- Following-based Home discovery now uses real `channel_followers` to show public clean creator uploads from followed creators.
+- Creator-video text comments are backed for standalone creator-video Player only.
 - Creator-upload Watch-Party linking is implemented in code/local schema, including focused local RLS tightening for anonymous room access and premium-room membership writes, but Public v1 runtime proof still requires the remote Supabase migration chain and Android proof.
+- Profile post media, Profile post comments/reactions, media comments, nested replies, reposts, polls, full Friends, close friends, and friend-only privacy are post-v1.
 - Comment media upload is post-v1.
 - Native game/video streaming is later phase.
 - Paid/subscriber media, tips, coins, payouts, VIPs, and advanced creator studio are later phase.
@@ -61,8 +64,8 @@ Owns:
 - public Profile/Channel discovery surface
 - self vs public viewer distinction
 - public/owner visibility presentation
+- text-only Profile posts/status updates through backed `profile_posts`
 - owner-only creator-video upload composer that uses the Creator Media helper path
-- honest Posts placeholder until personal posts/status updates are backed
 - Chi'lly Chat handoff from profile
 - links into backed content, live, and channel surfaces
 
@@ -71,7 +74,7 @@ Must not own:
 - creator video storage
 - creator video editing/deletion logic
 - deep creator-video management
-- text-only profile posts/comments unless backed by profile feed/comment tables
+- Profile post comments/reactions/media unless backed by a separate profile feed/comment system
 - billing validation
 - payout rules
 - LiveKit token rules
@@ -158,7 +161,7 @@ Future Codex should avoid:
 - showing unsupported VIP/mod/co-host/subscriber mutation as real
 - making a button appear before its backend owner exists
 
-Example: the Profile Upload Video button is allowed to open an owner-only creator-video composer that calls `_lib/creatorVideos.ts` and refreshes the Channel tab. The Posts tab must remain an honest personal-updates placeholder until a profile-post backend exists. `/channel-settings` still owns deeper management such as edit, publish/unpublish, delete, thumbnail URL, channel settings, and library review. `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
+Example: the Profile Upload Video button is allowed to open an owner-only creator-video composer that calls `_lib/creatorVideos.ts` and refreshes the Channel tab. The Posts tab owns text-only `profile_posts` updates/status posts, while Channel owns creator uploaded videos. `/channel-settings` still owns deeper management such as edit, publish/unpublish, delete, thumbnail URL, channel settings, and library review. `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
 
 Creator Channels are allowed to carry movie-sized uploads, not only short clips. The Public v1 standard upload lane targets files larger than 50 MB and currently sets app/bucket intent to 5 GiB; Supabase's project Storage global file-size limit must be configured to match. If the product requires uploads beyond the standard upload path or needs stronger long-network reliability, add a backed resumable/TUS or S3 multipart lane before claiming full-size movie proof.
 
@@ -806,6 +809,8 @@ Relationship to Admin:
 Relationship to Comments:
 
 - Text comments/reactions stay fast and safe.
+- Standalone creator-video text comments may ship in v1 only through `creator_video_comments` and clean public creator-video reads.
+- Profile posts may ship in v1 only as text-only `profile_posts`.
 - Comment media upload is post-v1.
 - Future comment moderation should reuse reporting/safety primitives.
 

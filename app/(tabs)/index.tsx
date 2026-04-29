@@ -27,6 +27,7 @@ import {
     Pressable,
     RefreshControl,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -36,6 +37,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
 import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../../_lib/supabase";
+import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
+import { readCreatorVideosForOwners, type CreatorVideo } from "../../_lib/creatorVideos";
+import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 
 type TitleRow = Omit<
   Pick<
@@ -124,6 +129,10 @@ export default function HomeScreen() {
   const [myListLoading, setMyListLoading] = useState(true);
   const [watchProgress, setWatchProgress] = useState<WatchProgressMap>({});
   const [titleLiveMetadataById, setTitleLiveMetadataById] = useState<Record<string, TitleLiveMetadata>>({});
+  const [followedChannelCount, setFollowedChannelCount] = useState(0);
+  const [followingVideos, setFollowingVideos] = useState<CreatorVideo[]>([]);
+  const [followingFeedLoading, setFollowingFeedLoading] = useState(true);
+  const [followingFeedError, setFollowingFeedError] = useState<string | null>(null);
   const homeConfig = resolveHomeConfig(appConfig);
   const brandingConfig = resolveBrandingConfig(appConfig);
   const featureConfig = resolveFeatureConfig(appConfig);
@@ -321,23 +330,67 @@ export default function HomeScreen() {
     setCurrentChannel(nextChannel);
   }
 
+  async function fetchFollowingFeed() {
+    setFollowingFeedLoading(true);
+    setFollowingFeedError(null);
+
+    try {
+      const followedChannelIds = await readFollowedChannelUserIds({ limit: 50 });
+      setFollowedChannelCount(followedChannelIds.length);
+
+      if (!followedChannelIds.length) {
+        setFollowingVideos([]);
+        return;
+      }
+
+      const videos = await readCreatorVideosForOwners(followedChannelIds, { limit: 12 });
+      setFollowingVideos(videos);
+    } catch {
+      setFollowedChannelCount(0);
+      setFollowingVideos([]);
+      setFollowingFeedError("Unable to load followed creator uploads right now.");
+    } finally {
+      setFollowingFeedLoading(false);
+    }
+  }
+
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([fetchHomeConfig(), fetchTitles(), fetchMyList(), fetchCurrentChannelProfile(), fetchWatchProgress()]);
+      await Promise.all([
+        fetchHomeConfig(),
+        fetchTitles(),
+        fetchMyList(),
+        fetchCurrentChannelProfile(),
+        fetchWatchProgress(),
+        fetchFollowingFeed(),
+      ]);
       setLoading(false);
     })();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      Promise.all([fetchHomeConfig(), fetchMyList(), fetchCurrentChannelProfile(), fetchWatchProgress()]).catch(() => {});
+      Promise.all([
+        fetchHomeConfig(),
+        fetchMyList(),
+        fetchCurrentChannelProfile(),
+        fetchWatchProgress(),
+        fetchFollowingFeed(),
+      ]).catch(() => {});
     }, []),
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([fetchHomeConfig(), fetchTitles(), fetchMyList(), fetchCurrentChannelProfile(), fetchWatchProgress()]);
+    await Promise.all([
+      fetchHomeConfig(),
+      fetchTitles(),
+      fetchMyList(),
+      fetchCurrentChannelProfile(),
+      fetchWatchProgress(),
+      fetchFollowingFeed(),
+    ]);
     setRefreshing(false);
   }
 
@@ -365,6 +418,28 @@ export default function HomeScreen() {
   function openPlayer(item: TitleRow) {
     const safeId = String(item.id || item.slug || item.title);
     router.push(`/player/${safeId}`);
+  }
+
+  function openCreatorVideo(video: CreatorVideo) {
+    router.push({
+      pathname: "/player/[id]",
+      params: {
+        id: video.id,
+        source: "creator-video",
+      },
+    });
+  }
+
+  async function shareCreatorVideo(video: CreatorVideo) {
+    if (!isCreatorVideoPubliclyShareable(video)) return;
+
+    try {
+      await Share.share({
+        message: `Watch ${video.title} on Chi'llywood: ${buildCreatorVideoDeepLink(video.id)}`,
+      });
+    } catch {
+      // The Home feed stays quiet if the native share sheet is unavailable.
+    }
   }
 
   function openTitleDetails(item: TitleRow) {
@@ -589,6 +664,72 @@ export default function HomeScreen() {
     );
   };
 
+  const renderFollowingFeed = () => (
+    <View style={styles.section}>
+      <View style={styles.followingHeaderRow}>
+        <View style={styles.followingHeaderCopy}>
+          <Text style={styles.sectionTitle}>From People You Follow</Text>
+          <Text style={styles.followingSubtitle}>
+            {followedChannelCount
+              ? "Latest public creator uploads from channels you follow."
+              : "Follow creators to see their latest uploads here."}
+          </Text>
+        </View>
+        {followingFeedLoading ? <ActivityIndicator color="#E50914" /> : null}
+      </View>
+
+      {followingFeedError ? (
+        <View style={styles.followingEmptyCard}>
+          <Text style={styles.followingEmptyTitle}>Followed uploads unavailable</Text>
+          <Text style={styles.followingEmptyText}>{followingFeedError}</Text>
+        </View>
+      ) : followingFeedLoading ? (
+        <View style={styles.followingEmptyCard}>
+          <Text style={styles.followingEmptyTitle}>Checking followed creators</Text>
+          <Text style={styles.followingEmptyText}>Only real public creator uploads appear here.</Text>
+        </View>
+      ) : followingVideos.length ? (
+        <FlatList
+          horizontal
+          data={followingVideos}
+          keyExtractor={(item) => `following-video-${item.id}`}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.followingVideoRow}
+          renderItem={({ item }) => (
+            <View style={styles.followingVideoCardWrap}>
+              <CreatorVideoCard
+                video={item}
+                mode="public"
+                onOpen={() => openCreatorVideo(item)}
+                onShare={isCreatorVideoPubliclyShareable(item) ? () => {
+                  void shareCreatorVideo(item);
+                } : undefined}
+              />
+            </View>
+          )}
+        />
+      ) : (
+        <View style={styles.followingEmptyCard}>
+          <Text style={styles.followingEmptyTitle}>
+            {followedChannelCount ? "No new followed uploads yet" : "Follow creators to see their latest uploads here."}
+          </Text>
+          <Text style={styles.followingEmptyText}>
+            {followedChannelCount
+              ? "The channels you follow have no public clean creator videos ready for Home."
+              : "Following is a creator/audience relationship, not a Friends system."}
+          </Text>
+          <TouchableOpacity
+            style={styles.followingEmptyButton}
+            activeOpacity={0.86}
+            onPress={() => router.push("/(tabs)/explore")}
+          >
+            <Text style={styles.followingEmptyButtonText}>Explore</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <ImageBackground
       source={spotlightImageSource || undefined}
@@ -610,7 +751,7 @@ export default function HomeScreen() {
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         </View>
-      ) : !titles.length ? (
+      ) : !titles.length && !followingVideos.length ? (
         <View style={styles.center}>
           <Text style={styles.muted}>Home is getting the lineup ready.</Text>
           <Text style={styles.mutedSmall}>Featured titles will appear here as soon as Chi&apos;llywood programming is available.</Text>
@@ -720,6 +861,8 @@ export default function HomeScreen() {
               </View>
             </View>
           ) : null}
+
+          {renderFollowingFeed()}
 
           {homeConfig.railOrder.map((railKey) => {
             if (!homeConfig.enabledRails[railKey]) return null;
@@ -1107,6 +1250,65 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
     marginBottom: 10,
+  },
+  followingHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  followingHeaderCopy: {
+    flex: 1,
+  },
+  followingSubtitle: {
+    color: "#AAB4C8",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+    marginTop: -4,
+    marginBottom: 10,
+  },
+  followingVideoRow: {
+    paddingRight: 10,
+  },
+  followingVideoCardWrap: {
+    width: 284,
+    marginRight: 12,
+  },
+  followingEmptyCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(10,12,18,0.72)",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 7,
+  },
+  followingEmptyTitle: {
+    color: "#F2F5FC",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  followingEmptyText: {
+    color: "#97A3B8",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  followingEmptyButton: {
+    alignSelf: "flex-start",
+    marginTop: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.22)",
+    backgroundColor: "rgba(115,134,255,0.12)",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  followingEmptyButtonText: {
+    color: "#E5EAFF",
+    fontSize: 12.5,
+    fontWeight: "900",
   },
 
   continueCard: {

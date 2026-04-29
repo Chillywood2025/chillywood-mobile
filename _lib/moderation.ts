@@ -7,7 +7,13 @@ import { supabase } from "./supabase";
 export const SAFETY_REPORTS_TABLE = "safety_reports";
 export const PLATFORM_ROLE_MEMBERSHIPS_TABLE = "platform_role_memberships";
 
-export type SafetyReportTargetType = "participant" | "room" | "title" | "creator_video";
+export type SafetyReportTargetType =
+  | "participant"
+  | "room"
+  | "title"
+  | "creator_video"
+  | "profile_post"
+  | "creator_video_comment";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
 export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner" | "moderator";
 export type PlatformRole = "owner" | "operator" | "moderator";
@@ -206,7 +212,13 @@ const buildRoleIdentityLabel = (entry: {
 
 const normalizeSafetyReportTargetType = (value: unknown): SafetyReportTargetType => {
   const normalized = normalizeText(value).toLowerCase();
-  if (normalized === "room" || normalized === "title" || normalized === "creator_video") {
+  if (
+    normalized === "room"
+    || normalized === "title"
+    || normalized === "creator_video"
+    || normalized === "profile_post"
+    || normalized === "creator_video_comment"
+  ) {
     return normalized;
   }
   return "participant";

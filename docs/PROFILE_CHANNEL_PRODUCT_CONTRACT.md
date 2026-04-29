@@ -22,7 +22,7 @@ Public v1 keeps Channel on the canonical `/profile/[userId]` route as a distinct
 
 1. Identity header: avatar, cover/header treatment, display name, handle, tagline/bio, official/platform badges where backed, and no fake counts.
 2. Quick actions: public viewers get backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, and Report where supported; owners get Edit Profile, Manage Channel, Upload Video, and Settings.
-3. Personal posts / updates: desired but not backed for Public v1. The Posts tab must show an honest placeholder until text/status Profile posts exist.
+3. Personal posts / updates: Public v1 now supports backed text-only Profile posts/status updates. They are Profile content, not Channel creator videos.
 4. Channel preview / entry: creator videos and events appear in the Channel area, not as personal posts.
 5. Social proof / community: only backed follower/audience/subscriber or official/creator signals may appear; followers are not friends.
 6. Activity highlights: recent upload, live event, watch-party, or latest personal post may appear only when backed.
@@ -40,6 +40,8 @@ Owners may see edit/profile/channel controls, upload/manage video actions, draft
 Public viewers may see identity, backed Follow/Following, Chi'lly Chat, public creator videos only, clean public event context, Share Profile, and Report.
 
 Public viewers must not see owner controls, drafts, private/hidden/removed videos, or admin controls.
+
+Profile post owners may create and delete their own text-only posts. Public viewers may read public clean Profile posts and report them where backed. Public viewers must not edit/delete posts or see draft/hidden/removed posts.
 
 ## 6. Where Creator Uploads Appear
 
@@ -60,14 +62,16 @@ They must not appear as filler inside user/creator Channels, profile posts, crea
 
 ## 8. What Is V1
 
-Public v1 includes a clear Profile/Channel split, owner/public Profile behavior, backed creator video upload/manage, public creator-video Channel display, explicit creator-video Player routing, backed report/share where implemented, honest event/live context, and premium mobile empty states.
+Public v1 includes a clear Profile/Channel split, owner/public Profile behavior, backed text-only Profile posts/status updates, backed following-based creator upload discovery, backed text-only creator-video comments, backed creator video upload/manage, public creator-video Channel display, explicit creator-video Player routing, backed report/share where implemented, honest event/live context, and premium mobile empty states.
 
 ## 9. What Is Post-V1
 
-Post-v1 includes personal text/status posts, photos in Profile posts, reposts, full comments/reactions on Profile posts, generated thumbnails, advanced channel shelves, a richer creator dashboard, full search, push notifications, full Friends system, paid creator content, subscriber-only creator media, tips/coins, payouts, ads, and native game streaming.
+Post-v1 includes photos/videos in Profile posts, media comments, nested replies, reposts, polls, full comments/reactions on Profile posts, generated thumbnails, advanced channel shelves, a richer creator dashboard, full search, push notifications, full Friends system, close friends, friend-only privacy, paid creator content, subscriber-only creator media, tips/coins, payouts, ads, and native game streaming.
 
 ## 10. What Must Not Be Faked
 
 Do not fake personal posts, likes, comments, shares, followers, engagement counts, VIP/subscriber-only media, friends, paid creator content, payouts, tips, coins, ads, native game streaming, or real Chi'llyfects AR.
 
 Do not show unsupported public Follow, Message, Share, Report, upload, edit, draft, moderation, billing, or owner controls.
+
+Followers are not Friends. Chat contacts and room participants are not automatically Friends.

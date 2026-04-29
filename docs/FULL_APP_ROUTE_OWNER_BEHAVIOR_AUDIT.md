@@ -145,8 +145,8 @@ No room/live layout changes, monetization implementation, native AR, native game
 
 Profile/Channel route ownership is unchanged, but the active Profile behavior is now clearer:
 
-- `/profile/[userId]` owns personal identity, owner/public action visibility, honest personal-posts placeholder, Channel tab/section entry, backed public Follow/Following, Chi'lly Chat handoff, Share Profile, Report, and owner handoffs.
-- `/profile/[userId]` does not own fake personal posts/status updates. Until a profile-post backend exists, Posts stays an honest placeholder.
+- `/profile/[userId]` owns personal identity, owner/public action visibility, backed text-only Profile posts/status updates, Channel tab/section entry, backed public Follow/Following, Chi'lly Chat handoff, Share Profile, Report, and owner handoffs.
+- `/profile/[userId]` does not own fake feed engagement, media profile posts, profile post comments/reactions, friend-only posts, or Friends-system controls.
 - Creator uploaded videos now belong in the Profile Channel tab/section and Channel Settings Content panel, not the personal Posts lane.
 - `/channel-settings` owns deeper creator video management and current Access Defaults. It should not present ad/sponsorship/Premium-playback cards as Channel owner controls.
 - No platform titles, Chi'llywood Originals, title artwork, title counts, or platform jump chips belong inside user/creator Channels.

@@ -7,6 +7,7 @@ Updated: 2026-04-28 for creator video card presentation and engagement truth
 Updated: 2026-04-28 for Profile/Channel versus Chi'llywood Originals ownership correction
 Updated: 2026-04-28 for one-device non-live Profile/Channel and creator-video card proof
 Updated: 2026-04-29 for Profile/Channel Public v1 product-contract clarity
+Updated: 2026-04-29 for Public v1 social basics backing
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -31,7 +32,7 @@ Current governing truth:
 - Profile is personal/social identity.
 - Channel is the creator's mini streaming platform.
 - Profile and Channel stay connected on `/profile/[userId]`, but they must not collapse into one vague feed.
-- Personal Profile posts/status updates are desired, but they are not backed for Public v1 unless implemented separately.
+- Personal Profile posts/status updates are now backed for Public v1 as text-only `profile_posts`.
 - Creator uploaded videos belong to the Channel/creator content area, not the personal Posts lane.
 - Chi'llywood Originals/platform `titles` stay on Home, Explore, platform title/player routes, dedicated Originals/platform surfaces, and admin-managed title surfaces.
 
@@ -40,19 +41,32 @@ Active code truth after this pass:
 - The Profile header shows identity, handle, avatar, tagline/bio when present, official/platform badges where backed, and backed live/role signals.
 - Owner top actions are Edit Profile, Manage Channel, Upload Video, and Settings.
 - Public top actions are backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, and Report where supported.
-- The Posts tab now shows an honest personal-updates placeholder instead of rendering creator videos as fake social posts.
+- The Posts tab now shows real text-only Profile posts/status updates when backed rows exist, with owner composer/delete and public clean reads.
 - The Channel tab owns creator uploaded videos, uses `CreatorVideoCard`, and opens `/player/[id]?source=creator-video`.
 - The owner Profile composer remains available, but it is explicitly a creator-video upload into Channel.
 - `/channel-settings` labels current access controls as Access Defaults and no longer presents ad/sponsorship/Premium-playback cards as Channel owner controls.
+- Home has a backed "From People You Follow" section that reads `channel_followers` and shows public clean creator uploads from followed creators only.
+- Standalone creator-video Player has backed text-only comments through `creator_video_comments`; Live Stage and Watch-Party comments are unchanged.
 
 Public v1 status:
 
 - Profile 1-6 is present for identity, quick actions, Channel entry, backed social/community posture, and honest activity/empty states.
-- Personal posts/status updates are pending because no profile-post backend exists.
+- Personal posts/status updates are implemented as text-only v1 Profile content; profile post comments/reactions/media remain pending.
 - Follow is backed by `channel_followers` and `_lib/channelAudience.ts`; public counts remain hidden unless backed/readable for that viewer.
-- Full Friends, likes/comments on creator videos, personal post comments/reactions, paid creator content, payouts, tips, coins, ads, native game streaming, and real Chi'llyfects AR remain out of scope.
+- Creator-video text comments are implemented in standalone Player only; media comments, nested replies, fake counts, and Live/Watch-Party comment layout changes remain out of scope.
+- Full Friends, likes/saves/counts on creator videos, personal post comments/reactions, paid creator content, payouts, tips, coins, ads, native game streaming, and real Chi'llyfects AR remain out of scope.
 
 Runtime proof status: static/code/docs pass only. No Android runtime proof, production build, or database mutation was run.
+
+## 2026-04-29 Public V1 Social Basics Audit
+
+Backing truth after this pass:
+
+- Backed now: `channel_followers`, `channel_audience_blocks`, `safety_reports`, creator-video public/draft/moderation status, new `profile_posts`, and new `creator_video_comments`.
+- UI-only/fake removed/avoided: no fake personal post feed, no fake creator-video comments/counts, no fake likes/saves/shares, no fake Friends, and no fake platform title filler in Channels.
+- Missing or post-v1: full Friends graph UI, friend requests/accept/decline, close friends, friend-only privacy, media Profile posts, media comments, nested replies, reposts, polls, comment counts, reactions, advanced notifications, full VIP/audience roster, paid creator media, tips/coins/payouts/ads, native game streaming, and real Chi'llyfects AR.
+- Safe v1 build: text-only Profile posts, following-based creator-video discovery, and text-only standalone creator-video comments because each now has table/RLS/helper/UI/report backing.
+- Report/moderation status: profile posts and creator-video comments can be reported through `safety_reports`; public reads filter to clean/reported and exclude deleted/hidden/removed content. Admin UI review/moderation for the new target types still needs runtime/admin workflow proof.
 
 ## Files Read
 
@@ -74,7 +88,10 @@ Runtime proof status: static/code/docs pass only. No Android runtime proof, prod
 - `app/title/[id].tsx`
 - `app/player/[id].tsx`
 - `_lib/creatorVideos.ts`
+- `_lib/profilePosts.ts`
+- `_lib/creatorVideoComments.ts`
 - `supabase/migrations/202604250001_creator_video_upload_foundation.sql`
+- `supabase/migrations/202604290001_public_v1_social_basics.sql`
 - `app/chat/[threadId].tsx`
 - `app/watch-party/[partyId].tsx`
 - `app/watch-party/live-stage/[partyId].tsx`
@@ -137,7 +154,7 @@ There is no separate public `/channel/[id]` route. Doctrine and current code int
 - primary owner actions: Edit Profile, Manage Channel, Upload Video, and Settings
 - channel access posture: browse, Watch Party, and Chi'lly Chat access cards backed by user profile defaults and creator permissions
 - tabs: Posts, Channel, Live, Community, About
-- Posts tab: honest personal-updates placeholder because text/status Profile posts are not backed yet
+- Posts tab: backed text-only Profile posts/status updates, owner composer/delete, public clean reads, and no fake likes/comments/counts
 - Channel tab: creator-owned video cards from `videos`; user/creator Channels do not show Chi'llywood Originals or platform `titles` as filler
 - public live/event summaries from backed `creator_events` and reminder summaries
 - owner mode on the same route when the signed-in user matches the route user id
@@ -178,7 +195,7 @@ Channel settings does not yet support:
 - avatar or hero image upload
 - public/private/subscriber content access on uploaded creator content
 - native game/video streaming source management
-- native thumbnail generation, duration extraction, creator-video likes, creator-video comments, engagement counts, or creator-video saves/My List
+- native thumbnail generation, duration extraction, creator-video likes, engagement counts, creator-video saves/My List, media comments, or nested replies
 
 ## Profile <-> Channel Integration
 
@@ -236,7 +253,7 @@ What still does not exist for normal creators:
 - no creator content category/genre visibility workflow outside internal/admin `titles`
 - no thumbnail file upload yet; the foundation supports optional thumbnail URL
 - no automatic thumbnail generation or duration extraction
-- no creator-video likes, comments, saves/My List, or engagement counts
+- no creator-video likes, saves/My List, engagement counts, media comments, or nested replies
 - no automatic transcoding or moderation queue automation
 
 Where content goes today:
@@ -246,6 +263,8 @@ Where content goes today:
 - Profile/Channel does not list platform titles or Chi'llywood Originals inside user/creator Channels.
 - User favorites go into `user_list` and AsyncStorage fallback.
 - Likes/share markers go into `user_content_relationships`.
+- Text-only Profile posts go into `profile_posts`.
+- Text-only standalone creator-video comments go into `creator_video_comments`.
 - Creator events go into `creator_events` and can appear on Profile Live tab.
 - The `videos` table now carries owner upload metadata and is read by Profile/Channel and Player.
 
@@ -299,16 +318,17 @@ Engagement truth:
 - Creator-video Report is backed in Player through `safety_reports` with `target_type = 'creator_video'`.
 - Route-safe native Share is available for public clean/reported creator videos and shares the app route/deep link, not signed media URLs.
 - Creator-video likes are not backed; `_lib/contentEngagement.ts` is title-only through `user_content_relationships.title_id`.
-- Creator-video comments are not backed; current comments in Player are room comments, not standalone creator-video comments.
+- Creator-video text comments are backed for standalone creator-video Player through `creator_video_comments`.
+- Creator-video comment reports are backed through `safety_reports` with `target_type = 'creator_video_comment'`.
 - Creator-video saves/My List are not backed; `user_list` is title-only.
 - Like/comment/share counts are not backed for creator videos.
 
-Smallest next implementation lane if comments are required before launch:
+Creator-video comment proof still needed:
 
-1. Add `creator_video_comments` and optional `creator_video_comment_reactions` tables with RLS for public clean/reported video reads, signed-in text-comment inserts, owner/admin moderation, and hidden/removed filtering.
-2. Add generated Supabase types and helper functions.
-3. Add a text-only comments drawer/action in Player for creator-video playback.
-4. Prove public/draft/hidden/removed visibility, signed-out behavior, report/delete moderation, and release logging.
+1. Apply/review the migration in the target Supabase environment.
+2. Prove public clean comment reads on public clean creator videos.
+3. Prove signed-in text-comment insert, own-comment delete, signed-out prompt, and comment report rows.
+4. Prove hidden/removed comments and hidden/removed videos do not surface publicly.
 
 Smallest safe Public v1 upload requirements:
 
@@ -439,15 +459,16 @@ Current comment truth:
 - Watch-party room comments use `watch_party_room_messages` with `party_id`, `user_id`, `username`, `text`, and `created_at`.
 - Live Stage comments use the same `watch_party_room_messages` table through `_lib/watchParty.ts` and `app/watch-party/live-stage/[partyId].tsx`.
 - Player room comments use `sendPartyMessage(...)` and `fetchPartyMessages(...)`; they are text-only room messages.
+- Standalone creator-video comments now use `creator_video_comments`; they are text-only and scoped to creator-video Player, not Live Stage or Watch-Party room comments.
 - Chi'lly Chat direct messages use `chat_messages` with a `message_type = 'text'` check. `_lib/chat.ts` inserts only text, and `app/chat/[threadId].tsx` explicitly says media and reactions are not live yet.
 - Reactions exist as emoji/floating room reactions and content relationship markers, not as comment attachments.
-- There is no comment/reply table for universal Profile, Channel, Title, or VOD comments outside room/live/chat contexts.
+- There is no comment/reply table for Profile post comments, platform Title comments, media comments, nested replies, or universal comments outside the scoped room/live/chat/creator-video-comment contexts.
 - There is no attachment table, comment media bucket, storage policy, media picker, upload helper, thumbnail path, moderation queue, or RLS path for comment media.
-- `safety_reports` exists for `participant`, `room`, and `title`, but not for `comment`, `message`, or `attachment` targets in the checked-in baseline constraint.
+- `safety_reports` now supports `profile_post` and `creator_video_comment` target types in addition to participant/room/title/creator_video.
 
 Public v1 recommendation:
 
-- Keep text comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, player room comments, Chi'lly Chat text, and existing reactions.
+- Keep text comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, Player room comments, standalone creator-video text comments, Chi'lly Chat text, and existing reactions.
 - Prioritize creator video upload to Channel/Profile before comment media.
 - Do not allow full video uploads in live comments for Public v1.
 - Do not add comment media UI until schema, storage, rate limits, moderation, deletion, and report targets exist.

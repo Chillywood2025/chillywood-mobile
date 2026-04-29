@@ -53,6 +53,13 @@ import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../.
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
+  createProfilePost,
+  deleteProfilePost,
+  readProfilePosts,
+  PROFILE_POST_BODY_LIMIT,
+  type ProfilePost,
+} from "../../_lib/profilePosts";
+import {
     ActivityIndicator,
     Alert,
     Image,
@@ -187,6 +194,19 @@ const formatEventDate = (value?: string | null) => {
   if (!normalized) return "TBD";
   const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime()) ? normalized : parsed.toLocaleString();
+};
+
+const formatProfilePostDate = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "Just now";
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return "Recently";
+  return parsed.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 };
 
 const formatEventTypeLabel = (value: CreatorEventType) => {
@@ -379,6 +399,13 @@ export default function ProfileScreen() {
   const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+  const [profilePostReportTarget, setProfilePostReportTarget] = useState<ProfilePost | null>(null);
+  const [profilePosts, setProfilePosts] = useState<ProfilePost[]>([]);
+  const [profilePostsReady, setProfilePostsReady] = useState(false);
+  const [profilePostsNotice, setProfilePostsNotice] = useState<string | null>(null);
+  const [profilePostDraft, setProfilePostDraft] = useState("");
+  const [profilePostBusy, setProfilePostBusy] = useState(false);
+  const [profilePostDeletingId, setProfilePostDeletingId] = useState<string | null>(null);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
   const [creatorVideosReady, setCreatorVideosReady] = useState(false);
   const [profileComposerOpen, setProfileComposerOpen] = useState(false);
@@ -530,6 +557,38 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [isOfficialProfile, isSelfProfile, userId]);
+
+  useEffect(() => {
+    let active = true;
+
+    setProfilePostsReady(false);
+    setProfilePostsNotice(null);
+
+    if (!userId) {
+      setProfilePosts([]);
+      setProfilePostsReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    void readProfilePosts(userId, { includeDrafts: isSelfProfile, limit: 24 })
+      .then((posts) => {
+        if (!active) return;
+        setProfilePosts(posts);
+        setProfilePostsReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setProfilePosts([]);
+        setProfilePostsReady(true);
+        setProfilePostsNotice("Unable to load profile updates right now.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isSelfProfile, userId]);
 
   const shareCreatorVideo = async (video: CreatorVideo) => {
     if (!isCreatorVideoPubliclyShareable(video)) {
@@ -1057,6 +1116,7 @@ export default function ProfileScreen() {
       targetAuditOwnerKey: profile.auditOwnerKey ?? null,
       platformOwnedTarget: isOfficialProfile,
     });
+    setProfilePostReportTarget(null);
     setReportVisible(true);
   };
   const onPressViewChannel = () => {
@@ -1105,28 +1165,120 @@ export default function ProfileScreen() {
       setFollowActionBusy(false);
     }
   };
+  const onSubmitProfilePost = async () => {
+    if (!isSelfProfile || profilePostBusy) return;
+
+    const body = profilePostDraft.trim();
+    if (!body) {
+      setProfilePostsNotice("Write an update before posting.");
+      return;
+    }
+    if (body.length > PROFILE_POST_BODY_LIMIT) {
+      setProfilePostsNotice(`Profile updates can be ${PROFILE_POST_BODY_LIMIT} characters or fewer.`);
+      return;
+    }
+
+    try {
+      setProfilePostBusy(true);
+      setProfilePostsNotice(null);
+      const post = await createProfilePost({ body, visibility: "public" });
+      setProfilePosts((current) => [post, ...current.filter((entry) => entry.id !== post.id)]);
+      setProfilePostDraft("");
+      setProfilePostsReady(true);
+    } catch {
+      setProfilePostsNotice("Unable to post this update right now.");
+    } finally {
+      setProfilePostBusy(false);
+    }
+  };
+  const onDeleteProfilePost = (post: ProfilePost) => {
+    if (!isSelfProfile || profilePostDeletingId) return;
+
+    Alert.alert(
+      "Delete update?",
+      "This removes the profile update from your public Profile.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                setProfilePostDeletingId(post.id);
+                setProfilePostsNotice(null);
+                await deleteProfilePost(post.id);
+                setProfilePosts((current) => current.filter((entry) => entry.id !== post.id));
+              } catch {
+                setProfilePostsNotice("Unable to delete this update right now.");
+              } finally {
+                setProfilePostDeletingId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+  const onPressReportProfilePost = (post: ProfilePost) => {
+    if (isSelfProfile || !post.id) return;
+    trackModerationActionUsed({
+      surface: "profile",
+      action: "open_safety_report",
+      targetType: "profile_post",
+      targetId: post.id,
+      sourceRoute: `/profile/${userId}`,
+      targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+      platformOwnedTarget: isOfficialProfile,
+    });
+    setProfilePostReportTarget(post);
+    setReportVisible(true);
+  };
   const onSubmitProfileReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
-    if (!canReportProfile) return;
+    const postTarget = profilePostReportTarget;
+    if (!canReportProfile && !postTarget) return;
     setReportBusy(true);
     try {
-      await submitSafetyReport({
-        targetType: "participant",
-        targetId: userId,
-        category: input.category,
-        note: input.note,
-        context: buildSafetyReportContext({
-          sourceSurface: "profile",
-          sourceRoute: `/profile/${userId}`,
-          targetLabel: profile.displayName,
-          targetRoleLabel: roleLabel,
-          targetAuditOwnerKey: profile.auditOwnerKey ?? null,
-          platformOwnedTarget: isOfficialProfile,
-          context: {
-            identityKind: profile.identityKind,
-            channelHandle,
-          },
-        }),
-      });
+      if (postTarget) {
+        await submitSafetyReport({
+          targetType: "profile_post",
+          targetId: postTarget.id,
+          category: input.category,
+          note: input.note,
+          context: buildSafetyReportContext({
+            sourceSurface: "profile",
+            sourceRoute: `/profile/${userId}`,
+            targetLabel: `${profile.displayName} profile update`,
+            targetRoleLabel: "Profile update",
+            targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+            platformOwnedTarget: isOfficialProfile,
+            context: {
+              profileUserId: userId,
+              postPreview: postTarget.body.slice(0, 140),
+            },
+          }),
+        });
+        setProfilePostReportTarget(null);
+      } else {
+        await submitSafetyReport({
+          targetType: "participant",
+          targetId: userId,
+          category: input.category,
+          note: input.note,
+          context: buildSafetyReportContext({
+            sourceSurface: "profile",
+            sourceRoute: `/profile/${userId}`,
+            targetLabel: profile.displayName,
+            targetRoleLabel: roleLabel,
+            targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+            platformOwnedTarget: isOfficialProfile,
+            context: {
+              identityKind: profile.identityKind,
+              channelHandle,
+            },
+          }),
+        });
+      }
       setReportVisible(false);
     } finally {
       setReportBusy(false);
@@ -1884,20 +2036,148 @@ export default function ProfileScreen() {
       </View>
     );
   };
+  const renderProfilePostComposer = () => {
+    if (!isSelfProfile) return null;
+
+    const draftLength = profilePostDraft.trim().length;
+    const composerDisabled = profilePostBusy || draftLength === 0 || draftLength > PROFILE_POST_BODY_LIMIT;
+
+    return (
+      <View style={styles.profilePostComposerCard}>
+        <View style={styles.feedComposerPromptRow}>
+          {renderComposerAvatar("small")}
+          <View style={styles.profilePostComposerCopy}>
+            <Text style={styles.profilePostComposerTitle}>Share a profile update</Text>
+            <Text style={styles.profilePostComposerMeta}>Text only. Channel videos stay in the Channel tab.</Text>
+          </View>
+        </View>
+        <TextInput
+          style={[styles.profileComposerInput, styles.profileComposerTextArea]}
+          placeholder="How are you feeling?"
+          placeholderTextColor="#8A93A8"
+          value={profilePostDraft}
+          onChangeText={(value) => {
+            setProfilePostDraft(value);
+            if (profilePostsNotice) setProfilePostsNotice(null);
+          }}
+          multiline
+          editable={!profilePostBusy}
+          maxLength={PROFILE_POST_BODY_LIMIT}
+        />
+        <View style={styles.profilePostComposerFooter}>
+          <Text style={styles.profilePostComposerCount}>
+            {draftLength}/{PROFILE_POST_BODY_LIMIT}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.feedComposerPostButton,
+              styles.profilePostComposerButton,
+              composerDisabled && styles.ownerHeroToolsButtonDisabled,
+            ]}
+            activeOpacity={0.86}
+            disabled={composerDisabled}
+            onPress={() => {
+              void onSubmitProfilePost();
+            }}
+          >
+            <View style={styles.profileComposerSubmitContent}>
+              {profilePostBusy ? <ActivityIndicator size="small" color="#fff" /> : null}
+              <Text style={styles.feedComposerPostText}>{profilePostBusy ? "Posting..." : "Post"}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+  const renderProfilePostCard = (post: ProfilePost) => {
+    const canDeletePost = isSelfProfile && post.userId === currentUserId;
+    const canReportPost = !isSelfProfile && !!currentUserId && post.visibility === "public";
+
+    return (
+      <View key={post.id} style={styles.feedPostCard}>
+        <View style={styles.feedPostHeader}>
+          {renderComposerAvatar("medium")}
+          <View style={styles.feedPostIdentity}>
+            <Text style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</Text>
+            <Text style={styles.feedPostMeta}>{formatProfilePostDate(post.createdAt)}</Text>
+          </View>
+          {post.visibility === "draft" ? (
+            <View style={styles.feedDraftBadge}>
+              <Text style={styles.feedDraftBadgeText}>DRAFT</Text>
+            </View>
+          ) : null}
+          {post.moderationStatus === "reported" ? (
+            <View style={styles.feedDraftBadge}>
+              <Text style={styles.feedDraftBadgeText}>REPORTED</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={styles.feedPostCaption}>{post.body}</Text>
+        {canDeletePost || canReportPost ? (
+          <View style={styles.feedPostActionRow}>
+            {canDeletePost ? (
+              <TouchableOpacity
+                style={[
+                  styles.feedPostAction,
+                  profilePostDeletingId === post.id && styles.feedPostActionDisabled,
+                ]}
+                activeOpacity={0.84}
+                disabled={profilePostDeletingId === post.id}
+                onPress={() => onDeleteProfilePost(post)}
+              >
+                <MaterialIcons name="delete-outline" size={17} color="#E6ECFA" />
+                <Text style={styles.feedPostActionText}>
+                  {profilePostDeletingId === post.id ? "Deleting" : "Delete"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            {canReportPost ? (
+              <TouchableOpacity
+                style={styles.feedPostAction}
+                activeOpacity={0.84}
+                onPress={() => onPressReportProfilePost(post)}
+              >
+                <MaterialIcons name="outlined-flag" size={17} color="#E6ECFA" />
+                <Text style={styles.feedPostActionText}>Report</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
   const renderPostsFeed = () => (
     <View style={styles.feedStack}>
-      <View style={styles.feedEmptyCard}>
-        <Text style={styles.feedEmptyTitle}>
-          {isSelfProfile ? "Personal updates are not live yet" : "No personal updates yet"}
-        </Text>
-        <Text style={styles.feedEmptyText}>
-          {"Personal Profile posts and status updates are desired for Chi'llywood, but they are not backed in Public v1 yet. Creator uploads live in the Channel tab so video shelves do not pretend to be personal posts."}
-        </Text>
-        <TouchableOpacity style={styles.feedEmptyButton} activeOpacity={0.86} onPress={onPressViewChannel}>
-          <MaterialIcons name="video-library" size={17} color="#fff" />
-          <Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "View Your Channel" : "View Channel"}</Text>
-        </TouchableOpacity>
-      </View>
+      {renderProfilePostComposer()}
+      {profilePostsNotice ? (
+        <View style={styles.profileComposerNotice}>
+          <Text style={styles.profileComposerNoticeText}>{profilePostsNotice}</Text>
+        </View>
+      ) : null}
+      {!profilePostsReady ? (
+        <View style={styles.feedEmptyCard}>
+          <ActivityIndicator color="#DC143C" />
+          <Text style={styles.feedEmptyTitle}>Loading profile updates</Text>
+          <Text style={styles.feedEmptyText}>Checking real public updates before showing this Profile feed.</Text>
+        </View>
+      ) : profilePosts.length ? (
+        profilePosts.map(renderProfilePostCard)
+      ) : (
+        <View style={styles.feedEmptyCard}>
+          <Text style={styles.feedEmptyTitle}>
+            {isSelfProfile ? "Share your first update." : "No posts yet."}
+          </Text>
+          <Text style={styles.feedEmptyText}>
+            {isSelfProfile
+              ? "Post a short thought or how-you-feel update here. Creator videos still belong to your Channel."
+              : "This Profile has not shared a public personal update yet."}
+          </Text>
+          <TouchableOpacity style={styles.feedEmptyButton} activeOpacity={0.86} onPress={onPressViewChannel}>
+            <MaterialIcons name="video-library" size={17} color="#fff" />
+            <Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "View Your Channel" : "View Channel"}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
   const renderOwnerHandoffCard = () => {
@@ -2494,13 +2774,21 @@ export default function ProfileScreen() {
         </View>
         <ReportSheet
           visible={reportVisible}
-          title={isOfficialProfile ? "Report official account concern" : "Report profile or participant"}
-          description={isOfficialProfile
-            ? `Send a safety report for ${profile.displayName} if an official platform interaction feels unsafe, misleading, or compromised.`
-            : `Send a safety report for ${profile.displayName} if this identity feels abusive, unsafe, or misrepresented.`}
+          title={profilePostReportTarget
+            ? "Report profile update"
+            : isOfficialProfile ? "Report official account concern" : "Report profile or participant"}
+          description={profilePostReportTarget
+            ? `Send a safety report for this public update from ${profile.displayName}.`
+            : isOfficialProfile
+              ? `Send a safety report for ${profile.displayName} if an official platform interaction feels unsafe, misleading, or compromised.`
+              : `Send a safety report for ${profile.displayName} if this identity feels abusive, unsafe, or misrepresented.`}
           busy={reportBusy}
           onSubmit={onSubmitProfileReport}
-          onClose={() => setReportVisible(false)}
+          onClose={() => {
+            if (reportBusy) return;
+            setProfilePostReportTarget(null);
+            setReportVisible(false);
+          }}
         />
       </ScrollView>
     </View>
@@ -2908,6 +3196,44 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   feedComposerManageText: { color: "#E9EEFB", fontSize: 13, fontWeight: "900" },
+  profilePostComposerCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.16)",
+    backgroundColor: "rgba(13,18,32,0.88)",
+    padding: 13,
+    gap: 11,
+  },
+  profilePostComposerCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  profilePostComposerTitle: {
+    color: "#F4F7FF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  profilePostComposerMeta: {
+    color: "#95A0B6",
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  profilePostComposerFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  profilePostComposerCount: {
+    color: "#8E98AE",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  profilePostComposerButton: {
+    flex: 0,
+    minWidth: 96,
+    paddingHorizontal: 16,
+  },
   feedStack: { gap: 12 },
   feedPostCard: {
     borderRadius: 16,

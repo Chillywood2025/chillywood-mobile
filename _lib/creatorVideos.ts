@@ -349,6 +349,30 @@ export async function readCreatorVideos(
   return Promise.all(data.map(parseCreatorVideo));
 }
 
+export async function readCreatorVideosForOwners(
+  ownerIds: string[],
+  options?: { limit?: number },
+): Promise<CreatorVideo[]> {
+  const normalizedOwnerIds = Array.from(
+    new Set(ownerIds.map(toText).filter(Boolean)),
+  ).slice(0, 100);
+  if (!normalizedOwnerIds.length) return [];
+
+  const limit = Math.max(1, Math.min(50, Math.floor(Number(options?.limit ?? 12))));
+  const { data, error } = await supabase
+    .from("videos")
+    .select(CREATOR_VIDEO_SELECT)
+    .in("owner_id", normalizedOwnerIds)
+    .eq("visibility", "public")
+    .in("moderation_status", ["clean", "reported"])
+    .order("created_at", { ascending: false })
+    .limit(limit)
+    .returns<CreatorVideoRow[]>();
+
+  if (error || !data) return [];
+  return Promise.all(data.map(parseCreatorVideo));
+}
+
 export async function readCreatorVideoForPlayer(videoId: string): Promise<CreatorVideo | null> {
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) return null;
