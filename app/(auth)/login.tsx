@@ -1,5 +1,5 @@
 import { Link, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Alert,
   ImageBackground,
@@ -23,6 +23,7 @@ const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg
 export default function Login() {
   const params = useLocalSearchParams<{ redirectTo?: string }>();
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView | null>(null);
   const redirectTo = String(params.redirectTo ?? "").trim() || "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -72,17 +73,19 @@ export default function Login() {
 
       <KeyboardAvoidingView
         style={styles.keyboardShell}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.container,
             {
               paddingTop: Math.max(insets.top + 32, 72),
-              paddingBottom: Math.max(insets.bottom + 24, 24),
+              paddingBottom: Math.max(insets.bottom + 96, 120),
             },
           ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
@@ -105,6 +108,9 @@ export default function Login() {
               returnKeyType="next"
               value={email}
               onChangeText={setEmail}
+              onFocus={() => {
+                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+              }}
             />
 
             <TextInput
@@ -115,6 +121,9 @@ export default function Login() {
               returnKeyType="done"
               value={password}
               onChangeText={setPassword}
+              onFocus={() => {
+                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+              }}
               onSubmitEditing={() => {
                 void signIn();
               }}

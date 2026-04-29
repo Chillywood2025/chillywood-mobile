@@ -25,6 +25,10 @@ import {
   type RoomAccessDecision,
   type RoomMembershipState,
 } from "./roomRules";
+import {
+  readSocialAttachmentsForSurfaces,
+  type SocialAttachment,
+} from "./socialAttachments";
 import { supabase } from "./supabase";
 import { readUserProfile } from "./userData";
 
@@ -100,6 +104,7 @@ export type WatchPartyMessage = {
   kind: "chat" | "reaction" | "system";
   body: string;
   createdAt: string;
+  attachments: SocialAttachment[];
 };
 
 export type WatchPartyHostAction =
@@ -1159,12 +1164,22 @@ export async function sendPartyMessage(
   body: string,
   options?: { username?: string },
 ): Promise<boolean> {
+  return !!(await sendPartyMessageRecord(partyId, userId, kind, body, options));
+}
+
+export async function sendPartyMessageRecord(
+  partyId: string,
+  userId: string,
+  kind: WatchPartyMessage["kind"],
+  body: string,
+  options?: { username?: string },
+): Promise<WatchPartyMessage | null> {
   const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
   const writableUserId = await resolveWritableUserId(userId);
-  if (!normalizedPartyId || !writableUserId) return false;
+  if (!normalizedPartyId || !writableUserId) return null;
 
   const safeBody = String(body ?? "").trim();
-  if (!safeBody) return false;
+  if (!safeBody) return null;
 
   try {
     const payload: WatchPartyMessageInsert = {
@@ -1175,12 +1190,38 @@ export async function sendPartyMessage(
       created_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from(WATCH_PARTY_MESSAGES_TABLE).insert(payload);
-    if (error) return false;
-    return true;
+    const { data, error } = await supabase
+      .from(WATCH_PARTY_MESSAGES_TABLE)
+      .insert(payload)
+      .select("id,party_id,user_id,username,text,created_at")
+      .single();
+    const created = data as unknown as WatchPartyMessageRow | null;
+    if (error || !created) return null;
+
+    return {
+      id: String(created.id ?? ""),
+      partyId: String(created.party_id ?? normalizedPartyId),
+      userId: String(created.user_id ?? writableUserId),
+      kind,
+      body: String(created.text ?? safeBody),
+      createdAt: String(created.created_at ?? new Date().toISOString()),
+      attachments: [],
+    };
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function deletePartyMessage(messageId: string): Promise<void> {
+  const normalizedMessageId = String(messageId ?? "").trim();
+  if (!normalizedMessageId) return;
+
+  const { error } = await supabase
+    .from(WATCH_PARTY_MESSAGES_TABLE)
+    .delete()
+    .eq("id", normalizedMessageId);
+
+  if (error) throw error;
 }
 
 export async function fetchPartyMessages(
@@ -1201,6 +1242,11 @@ export async function fetchPartyMessages(
 
     if (error || !data) return [];
 
+    const attachmentsByMessageId = await readSocialAttachmentsForSurfaces(
+      "watch_party_room_message",
+      data.map((row) => String(row.id ?? "")),
+    );
+
     return data.map((row) => ({
       id: String(row.id ?? ""),
       partyId: String(row.party_id ?? normalizedPartyId),
@@ -1208,6 +1254,7 @@ export async function fetchPartyMessages(
       kind: "chat",
       body: String(row.text ?? ""),
       createdAt: String(row.created_at ?? new Date().toISOString()),
+      attachments: attachmentsByMessageId.get(String(row.id ?? "")) ?? [],
     }));
   } catch {
     return [];

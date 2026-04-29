@@ -1,4 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import * as DocumentPicker from "expo-document-picker";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -71,18 +73,27 @@ import { supabase } from "../../_lib/supabase";
 import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
 import {
     applyHostAction,
+    deletePartyMessage,
     getActivePartyMemberships,
     getPartyRoom,
     getPartyRoomSnapshot,
     getSafePartyUserId,
     joinPartyRoomSession,
-    sendPartyMessage,
+    sendPartyMessageRecord,
     setPartyRoomPolicies,
     setPartyParticipantState,
     touchPartyRoomSession,
     type WatchPartyRoomMembership,
     type WatchPartyState,
 } from "../../_lib/watchParty";
+import {
+    createSocialAttachmentForSurface,
+    getSocialAttachmentValidationMessage,
+    readSocialAttachmentsForSurfaces,
+    SOCIAL_ATTACHMENT_PICKER_TYPES,
+    type SocialAttachment,
+    type SocialAttachmentFile,
+} from "../../_lib/socialAttachments";
 import {
   resolveWatchPartyContentSource,
   resolveWatchPartySourceId,
@@ -98,6 +109,7 @@ import { ParticipantDetailSheet } from "../../components/room/participant-detail
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
+import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import {
     buildOrderedParticipantsWithSelf,
     buildPartyRoomParticipantEntries,
@@ -134,6 +146,7 @@ type LocalMsg = {
   authorLabel: string;
   isMe: boolean;
   ts: number;
+  attachments: SocialAttachment[];
 };
 
 type RoomChatMessageRow = {
@@ -175,6 +188,13 @@ const WATCH_PARTY_LIVE_FEED_COLUMNS = 5;
 const WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS = 2;
 const WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT = 102;
 const WATCH_PARTY_LIVE_FEED_GAP = 8;
+
+const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
+  uri: asset.uri,
+  name: asset.name,
+  mimeType: asset.mimeType ?? null,
+  size: typeof asset.size === "number" ? asset.size : null,
+});
 
 const isAccessSheetReason = (reason: string | null | undefined): reason is AccessSheetReason => (
   reason === "premium_required" || reason === "party_pass_required"
@@ -254,6 +274,7 @@ export default function WatchPartyRoomScreen() {
   const [chatDraft, setChatDraft] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState("");
+  const [chatAttachmentFile, setChatAttachmentFile] = useState<SocialAttachmentFile | null>(null);
   const [selectedPartyEffectId, setSelectedPartyEffectId] = useState(LIVE_EFFECT_OFF_ID);
   const isLive = true;
   const [, setFloatingReactions] = useState<FloatingReaction[]>([]);
@@ -276,6 +297,7 @@ export default function WatchPartyRoomScreen() {
   const [reportTarget, setReportTarget] = useState<{ type: "room" | "participant"; targetId: string; label: string } | null>(null);
   const [joinRetryToken, setJoinRetryToken] = useState(0);
   const chatScrollRef = useRef<ScrollView>(null);
+  const roomScrollRef = useRef<ScrollView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   // ── Host controls (broadcast-driven) ────────────────────────────────────────
@@ -360,6 +382,19 @@ export default function WatchPartyRoomScreen() {
       return [...prev.slice(-199), msg];
     });
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 60);
+  }, []);
+
+  const loadRoomMessageAttachments = useCallback(async (messageIds: string[]) => {
+    const normalizedIds = Array.from(new Set(messageIds.map((id) => String(id ?? "").trim()).filter(Boolean)));
+    if (!normalizedIds.length) return;
+
+    const attachmentsByMessageId = await readSocialAttachmentsForSurfaces("watch_party_room_message", normalizedIds);
+    if (attachmentsByMessageId.size === 0) return;
+
+    setMessages((prev) => prev.map((message) => {
+      const attachments = attachmentsByMessageId.get(message.id);
+      return attachments ? { ...message, attachments } : message;
+    }));
   }, []);
 
   const flashReaction = useCallback((emoji: string) => {
@@ -634,8 +669,12 @@ export default function WatchPartyRoomScreen() {
           .returns<RoomChatMessageRow[]>();
 
         if (!cancelled && recentRows?.length) {
-          const loaded: LocalMsg[] = [...recentRows]
-            .reverse()
+          const orderedRows = [...recentRows].reverse();
+          const attachmentsByMessageId = await readSocialAttachmentsForSurfaces(
+            "watch_party_room_message",
+            orderedRows.map((row) => String(row.id ?? "")),
+          );
+          const loaded: LocalMsg[] = orderedRows
             .map((row) => ({
               id: String(row.id),
               kind: "chat",
@@ -643,6 +682,7 @@ export default function WatchPartyRoomScreen() {
               authorLabel: String(row.user_id) === String(userId) ? "You" : resolveIdentityName(row.username, "Guest"),
               isMe: String(row.user_id) === String(userId),
               ts: new Date(String(row.created_at ?? new Date().toISOString())).getTime(),
+              attachments: attachmentsByMessageId.get(String(row.id ?? "")) ?? [],
             }));
           setMessages(loaded);
         }
@@ -752,6 +792,7 @@ export default function WatchPartyRoomScreen() {
           authorLabel: "System",
           isMe: false,
           ts: Date.now(),
+          attachments: [],
         });
       });
 
@@ -767,6 +808,7 @@ export default function WatchPartyRoomScreen() {
           authorLabel: "System",
           isMe: false,
           ts: Date.now(),
+          attachments: [],
         });
       });
 
@@ -785,6 +827,7 @@ export default function WatchPartyRoomScreen() {
           authorLabel: String(payload.authorLabel ?? "?"),
           isMe: payload.userId === myUserIdRef.current,
           ts: Date.now(),
+          attachments: [],
         });
         // Broadcast for floating overlay on player
         if (chatChannelRef.current) {
@@ -873,13 +916,17 @@ export default function WatchPartyRoomScreen() {
             authorLabel: rowUserId === String(myUserIdRef.current ?? "").trim() ? "You" : rowUsername,
             isMe: rowUserId === String(myUserIdRef.current ?? "").trim(),
             ts: new Date(String(row.created_at ?? new Date().toISOString())).getTime(),
+            attachments: [],
           });
+          setTimeout(() => {
+            void loadRoomMessageAttachments([rowId]);
+          }, 800);
         },
       )
       .subscribe();
 
     roomChatRealtimeChannelRef.current = channel;
-  }, [partyId, addMsg]);
+  }, [partyId, addMsg, loadRoomMessageAttachments]);
 
   const myUserId = String(myUserIdRef.current ?? "").trim();
   const isNativeCameraPlatform = Platform.OS !== "web";
@@ -1425,9 +1472,34 @@ export default function WatchPartyRoomScreen() {
     titleIdHint,
   ]);
 
+  const onPickPartyRoomCommentAttachment = useCallback(async () => {
+    try {
+      setChatError("");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: SOCIAL_ATTACHMENT_PICKER_TYPES as unknown as string[],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets?.length) return;
+
+      const file = buildSocialAttachmentFileFromAsset(result.assets[0]);
+      const validationMessage = getSocialAttachmentValidationMessage(file);
+      if (validationMessage) {
+        setChatAttachmentFile(null);
+        setChatError(validationMessage);
+        return;
+      }
+
+      setChatAttachmentFile(file);
+    } catch {
+      setChatError("Unable to choose this attachment right now.");
+    }
+  }, []);
+
   const onSendPartyRoomComment = useCallback(async () => {
     const safeBody = chatDraft.trim();
-    if (!safeBody || chatSending) return;
+    const hasAttachment = !!chatAttachmentFile;
+    if ((!safeBody && !hasAttachment) || chatSending) return;
 
     const currentUserId = String(myUserIdRef.current ?? "").trim();
     if (!partyId || !currentUserId) {
@@ -1438,23 +1510,46 @@ export default function WatchPartyRoomScreen() {
     setChatSending(true);
     setChatError("");
     try {
-      const sent = await sendPartyMessage(partyId, currentUserId, "chat", safeBody, {
+      const bodyToSend = safeBody || String(chatAttachmentFile?.name ?? "Attachment").trim() || "Attachment";
+      const sent = await sendPartyMessageRecord(partyId, currentUserId, "chat", bodyToSend, {
         username: resolveIdentityName(myProfileUsernameRef.current, myUsernameRef.current, "Guest"),
       });
       if (!sent) {
         setChatError("Comment could not be sent. Try again.");
         return;
       }
+
+      if (chatAttachmentFile) {
+        try {
+          const attachment = await createSocialAttachmentForSurface({
+            surfaceType: "watch_party_room_message",
+            surfaceId: sent.id,
+            file: chatAttachmentFile,
+          });
+          setMessages((prev) => prev.map((message) => (
+            message.id === sent.id ? { ...message, attachments: [attachment] } : message
+          )));
+        } catch (attachmentError) {
+          await deletePartyMessage(sent.id).catch(() => undefined);
+          setMessages((prev) => prev.filter((message) => message.id !== sent.id));
+          throw attachmentError;
+        }
+      }
+
       setChatDraft("");
+      setChatAttachmentFile(null);
+      setTimeout(() => roomScrollRef.current?.scrollToEnd({ animated: true }), 80);
     } catch (error) {
       reportRuntimeError("watch-party-room-comment-send", error, {
         partyId,
       });
-      setChatError("Comment could not be sent. Try again.");
+      setChatError(error instanceof Error && error.message
+        ? error.message
+        : "Comment could not be sent. Try again.");
     } finally {
       setChatSending(false);
     }
-  }, [chatDraft, chatSending, partyId]);
+  }, [chatAttachmentFile, chatDraft, chatSending, partyId]);
 
   // ── Connection display helpers ───────────────────────────────────────────────
   const connLabel: Record<ConnState, string> = {
@@ -2086,6 +2181,8 @@ export default function WatchPartyRoomScreen() {
   const renderPartyRoomCommentsCard = () => {
     if (isLiveRoom) return null;
 
+    const commentDisabled = (!chatDraft.trim() && !chatAttachmentFile) || chatSending;
+
     // Layout lock: visible comments stay in this current placement; do not replace with menu-only comments.
     return (
       <View style={styles.partyCommentsCard}>
@@ -2109,6 +2206,13 @@ export default function WatchPartyRoomScreen() {
               >
                 <Text style={styles.partyCommentAuthor}>{message.authorLabel}</Text>
                 <Text style={styles.partyCommentBody}>{message.body}</Text>
+                {message.attachments.length ? (
+                  <View style={styles.partyCommentAttachmentStack}>
+                    {message.attachments.map((attachment) => (
+                      <SocialAttachmentCard key={attachment.id} attachment={attachment} compact />
+                    ))}
+                  </View>
+                ) : null}
               </View>
             ))
           ) : (
@@ -2117,7 +2221,25 @@ export default function WatchPartyRoomScreen() {
             </Text>
           )}
         </View>
+        {chatAttachmentFile ? (
+          <SocialAttachmentCard
+            file={chatAttachmentFile}
+            compact
+            onRemove={() => setChatAttachmentFile(null)}
+          />
+        ) : null}
         <View style={styles.partyCommentInputRow}>
+          <TouchableOpacity
+            style={[styles.partyCommentAttachButton, chatSending && styles.partyCommentSendButtonDisabled]}
+            disabled={chatSending}
+            activeOpacity={0.84}
+            accessibilityLabel="Attach to room comment"
+            onPress={() => {
+              void onPickPartyRoomCommentAttachment();
+            }}
+          >
+            <MaterialIcons name="attach-file" size={19} color="#F3F7FF" />
+          </TouchableOpacity>
           <TextInput
             value={chatDraft}
             onChangeText={(value) => {
@@ -2127,6 +2249,7 @@ export default function WatchPartyRoomScreen() {
             placeholder="Comment with the room"
             placeholderTextColor="rgba(190,206,232,0.72)"
             editable={!chatSending}
+            multiline
             returnKeyType="send"
             onSubmitEditing={() => {
               void onSendPartyRoomComment();
@@ -2136,9 +2259,9 @@ export default function WatchPartyRoomScreen() {
           <TouchableOpacity
             style={[
               styles.partyCommentSendButton,
-              (!chatDraft.trim() || chatSending) && styles.partyCommentSendButtonDisabled,
+              commentDisabled && styles.partyCommentSendButtonDisabled,
             ]}
-            disabled={!chatDraft.trim() || chatSending}
+            disabled={commentDisabled}
             activeOpacity={0.84}
             onPress={() => {
               void onSendPartyRoomComment();
@@ -2362,11 +2485,15 @@ export default function WatchPartyRoomScreen() {
 
       <KeyboardAvoidingView
         style={styles.screen}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
+          ref={roomScrollRef}
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: Math.max(safeAreaInsets.bottom + 34, 72) },
+          ]}
           keyboardShouldPersistTaps="handled"
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
@@ -3924,6 +4051,10 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: "600",
   },
+  partyCommentAttachmentStack: {
+    gap: 7,
+    marginTop: 5,
+  },
   partyCommentsEmpty: {
     color: "#AEB9CF",
     fontSize: 12,
@@ -3934,6 +4065,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 10,
+  },
+  partyCommentAttachButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   partyCommentInput: {
     flex: 1,

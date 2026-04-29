@@ -1,4 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import * as DocumentPicker from "expo-document-picker";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -11,6 +13,7 @@ import {
     FlatList,
     Image,
     ImageBackground,
+    Keyboard,
     LayoutAnimation,
     Platform,
     Pressable,
@@ -62,13 +65,22 @@ import {
     getPartyRoomSnapshot,
     getWritablePartyUserId,
     joinPartyRoomSession,
-    sendPartyMessage,
+    deletePartyMessage,
+    sendPartyMessageRecord,
     setPartyRoomPolicies,
     setPartyParticipantState,
     touchPartyRoomSession,
     type WatchPartyRoomMembership,
     type WatchPartyState,
 } from "../../../_lib/watchParty";
+import {
+    createSocialAttachmentForSurface,
+    getSocialAttachmentValidationMessage,
+    readSocialAttachmentsForSurfaces,
+    SOCIAL_ATTACHMENT_PICKER_TYPES,
+    type SocialAttachment,
+    type SocialAttachmentFile,
+} from "../../../_lib/socialAttachments";
 import {
     getCommunicationRTCModule,
     getLinkedCommunicationRoom,
@@ -83,6 +95,7 @@ import { getProtectedSessionCopy } from "../../../components/prototype/protected
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
 import { LiveEffectsPanel } from "../../../components/live/live-effects-sheet";
+import { SocialAttachmentCard } from "../../../components/social/social-attachment-card";
 import {
   patchLiveKitSignalReadingLoop,
 } from "../../../components/watch-party-live/livekit-stage-media-surface";
@@ -131,6 +144,7 @@ type LiveStageComment = {
   body: string;
   createdAt: string;
   isMe: boolean;
+  attachments: SocialAttachment[];
 };
 
 type LiveStageCommentRow = {
@@ -140,6 +154,13 @@ type LiveStageCommentRow = {
   text?: string | null;
   created_at?: string | null;
 };
+
+const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
+  uri: asset.uri,
+  name: asset.name,
+  mimeType: asset.mimeType ?? null,
+  size: typeof asset.size === "number" ? asset.size : null,
+});
 
 const getLiveStageAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | null | undefined) => {
   if (access?.reason === "room_locked") return "Live room locked";
@@ -562,6 +583,8 @@ export default function WatchPartyLiveStageScreen() {
   const [hybridCommentDraft, setHybridCommentDraft] = useState("");
   const [hybridCommentError, setHybridCommentError] = useState("");
   const [hybridCommentSending, setHybridCommentSending] = useState(false);
+  const [hybridCommentAttachmentFile, setHybridCommentAttachmentFile] = useState<SocialAttachmentFile | null>(null);
+  const [stageKeyboardHeight, setStageKeyboardHeight] = useState(0);
   const [selectedStageEffectId, setSelectedStageEffectId] = useState(LIVE_EFFECT_OFF_ID);
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
   const [stageOverlayAutoHideArmed, setStageOverlayAutoHideArmed] = useState(false);
@@ -776,6 +799,22 @@ export default function WatchPartyLiveStageScreen() {
     if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
+  }, []);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (event) => setStageKeyboardHeight(Math.max(0, event.endCoordinates?.height ?? 0)),
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setStageKeyboardHeight(0),
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
   }, []);
 
   const backgroundSource: ImageSourcePropType | null = (() => {
@@ -1721,6 +1760,9 @@ export default function WatchPartyLiveStageScreen() {
   const usesSharedStageCommentLane = isLiveFirstMode || isHybridMode;
   const stageReactionsEnabled = room?.reactionsPolicy !== "muted";
   const commentsLaneBottomOffset = liveDockBottomInset + (usesSharedStageCommentLane ? 292 : 172);
+  const stageDockKeyboardLift = hybridCommentFocused
+    ? Math.max(0, stageKeyboardHeight - safeAreaInsets.bottom)
+    : 0;
   const liveStageCommunityCardWidth = Math.min(Math.max(windowWidth - 24, 318), 440);
   const liveStageRemoteGridVisibleHeight =
     (LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT * LIVE_STAGE_REMOTE_GRID_VISIBLE_ROWS)
@@ -1925,6 +1967,7 @@ export default function WatchPartyLiveStageScreen() {
     : "";
   const hybridCommentCountLabel = hybridComments.length === 1 ? "1 comment" : `${hybridComments.length} comments`;
   const hybridCommentPlaceholder = isHost ? "Comment as host" : "Add a comment";
+  const hybridCommentDisabled = (!hybridCommentDraft.trim() && !hybridCommentAttachmentFile) || hybridCommentSending;
   const stageEffectsTitle = canUseStageEffects ? CHILLYFECTS_BRAND_NAME : "Chi’llyfects catalog";
   const stageEffectsBody = canUseStageEffects
     ? "Chi’llyfects are selectable as a foundation only. This build does not process the outgoing LiveKit camera track."
@@ -1954,6 +1997,7 @@ export default function WatchPartyLiveStageScreen() {
       body,
       createdAt: String(row.created_at ?? new Date().toISOString()),
       isMe: userId === trackedUserId,
+      attachments: [],
     };
   }, [resolvedCurrentUsername, trackedUserId]);
 
@@ -1966,7 +2010,8 @@ export default function WatchPartyLiveStageScreen() {
           return !!nextComment
             && comment.id === nextComment.id
             && comment.body === nextComment.body
-            && comment.createdAt === nextComment.createdAt;
+            && comment.createdAt === nextComment.createdAt
+            && comment.attachments.map((attachment) => attachment.id).join(",") === nextComment.attachments.map((attachment) => attachment.id).join(",");
         })
       ) {
         return prev;
@@ -1989,9 +2034,18 @@ export default function WatchPartyLiveStageScreen() {
 
       if (error || !data) return [] as LiveStageComment[];
 
-      return (data as LiveStageCommentRow[])
+      const comments = (data as LiveStageCommentRow[])
         .map((row) => mapLiveStageCommentRow(row))
         .filter(Boolean) as LiveStageComment[];
+      const attachmentsByCommentId = await readSocialAttachmentsForSurfaces(
+        "watch_party_room_message",
+        comments.map((comment) => comment.id),
+      );
+
+      return comments.map((comment) => ({
+        ...comment,
+        attachments: attachmentsByCommentId.get(comment.id) ?? [],
+      }));
     } catch {
       return [] as LiveStageComment[];
     }
@@ -2411,25 +2465,71 @@ export default function WatchPartyLiveStageScreen() {
     setCommentsOpen((value) => !value);
   }, [revealStageOverlay, usesSharedStageCommentLane]);
 
+  const onPickHybridCommentAttachment = useCallback(async () => {
+    try {
+      setHybridCommentError("");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: SOCIAL_ATTACHMENT_PICKER_TYPES as unknown as string[],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets?.length) return;
+
+      const file = buildSocialAttachmentFileFromAsset(result.assets[0]);
+      const validationMessage = getSocialAttachmentValidationMessage(file);
+      if (validationMessage) {
+        setHybridCommentAttachmentFile(null);
+        setHybridCommentError(validationMessage);
+        return;
+      }
+
+      setHybridCommentAttachmentFile(file);
+      setCommentsOpen(true);
+      revealStageOverlay();
+    } catch {
+      setHybridCommentError("Unable to choose this attachment right now.");
+    }
+  }, [revealStageOverlay]);
+
   const onSendHybridComment = useCallback(async () => {
     const safeBody = hybridCommentDraft.trim();
-    if (!safeBody || !partyId || hybridCommentSending) return;
+    const hasAttachment = !!hybridCommentAttachmentFile;
+    if ((!safeBody && !hasAttachment) || !partyId || hybridCommentSending) return;
 
     setHybridCommentSending(true);
     setHybridCommentError("");
     try {
-      const startedAt = Date.now();
-      await sendPartyMessage(partyId, trackedUserId, "chat", safeBody, {
+      const bodyToSend = safeBody || String(hybridCommentAttachmentFile?.name ?? "Attachment").trim() || "Attachment";
+      const sent = await sendPartyMessageRecord(partyId, trackedUserId, "chat", bodyToSend, {
         username: resolvedCurrentUsername,
       });
+      if (!sent) {
+        setHybridCommentError("Comment did not appear in the room yet. Try sending it again.");
+        return;
+      }
+
+      if (hybridCommentAttachmentFile) {
+        try {
+          const attachment = await createSocialAttachmentForSurface({
+            surfaceType: "watch_party_room_message",
+            surfaceId: sent.id,
+            file: hybridCommentAttachmentFile,
+          });
+          setHybridComments((prev) => prev.map((comment) => (
+            comment.id === sent.id ? { ...comment, attachments: [attachment] } : comment
+          )));
+        } catch (attachmentError) {
+          await deletePartyMessage(sent.id).catch(() => undefined);
+          setHybridComments((prev) => prev.filter((comment) => comment.id !== sent.id));
+          throw attachmentError;
+        }
+      }
 
       let landedComments: LiveStageComment[] | null = null;
       for (let attempt = 0; attempt < 4; attempt += 1) {
         const candidateComments = await fetchHybridComments();
         const commentLanded = candidateComments.some((comment) => (
-          comment.userId === trackedUserId
-          && comment.body === safeBody
-          && Date.parse(comment.createdAt) >= startedAt - 2_000
+          comment.id === sent.id
         ));
 
         if (commentLanded) {
@@ -2449,14 +2549,27 @@ export default function WatchPartyLiveStageScreen() {
 
       setHybridComments(landedComments);
       setHybridCommentDraft("");
+      setHybridCommentAttachmentFile(null);
       setCommentsOpen(true);
       setTimeout(() => {
         hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
       }, 40);
+    } catch (error) {
+      setHybridCommentError(error instanceof Error && error.message
+        ? error.message
+        : "Comment did not appear in the room yet. Try sending it again.");
     } finally {
       setHybridCommentSending(false);
     }
-  }, [fetchHybridComments, hybridCommentDraft, hybridCommentSending, partyId, resolvedCurrentUsername, trackedUserId]);
+  }, [
+    fetchHybridComments,
+    hybridCommentAttachmentFile,
+    hybridCommentDraft,
+    hybridCommentSending,
+    partyId,
+    resolvedCurrentUsername,
+    trackedUserId,
+  ]);
 
   useEffect(() => {
     if (canUseStageEffects) return;
@@ -3038,7 +3151,10 @@ export default function WatchPartyLiveStageScreen() {
 
   const renderStageLowerDock = () => (
     <View
-      style={styles.stageDockOverlay}
+      style={[
+        styles.stageDockOverlay,
+        stageDockKeyboardLift > 0 && { bottom: stageDockKeyboardLift + 8 },
+      ]}
       pointerEvents="box-none"
       collapsable={false}
       renderToHardwareTextureAndroid
@@ -3116,6 +3232,13 @@ export default function WatchPartyLiveStageScreen() {
                     </Text>
                   </View>
                   <Text style={styles.stageHybridCommentBody}>{comment.body}</Text>
+                  {comment.attachments.length ? (
+                    <View style={styles.stageHybridCommentAttachmentStack}>
+                      {comment.attachments.map((attachment) => (
+                        <SocialAttachmentCard key={attachment.id} attachment={attachment} compact />
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
               ))
             ) : (
@@ -3125,7 +3248,33 @@ export default function WatchPartyLiveStageScreen() {
             )}
           </ScrollView>
 
+          {hybridCommentAttachmentFile ? (
+            <SocialAttachmentCard
+              file={hybridCommentAttachmentFile}
+              compact
+              onRemove={() => setHybridCommentAttachmentFile(null)}
+            />
+          ) : null}
           <View style={styles.stageHybridCommentInputRow}>
+            <TouchableOpacity
+              style={[
+                styles.stageHybridCommentAttachButton,
+                hybridCommentSending && styles.stageHybridCommentSendButtonDisabled,
+              ]}
+              activeOpacity={0.84}
+              accessible
+              focusable
+              accessibilityRole="button"
+              accessibilityLabel="Attach to Live Stage comment"
+              hitSlop={STAGE_CONTROL_HIT_SLOP}
+              disabled={hybridCommentSending}
+              onPress={() => {
+                void onPickHybridCommentAttachment();
+              }}
+              testID="live-stage-comment-attach"
+            >
+              <MaterialIcons name="attach-file" size={19} color="#F3F7FF" />
+            </TouchableOpacity>
             <TextInput
               ref={hybridCommentInputRef}
               value={hybridCommentDraft}
@@ -3147,6 +3296,7 @@ export default function WatchPartyLiveStageScreen() {
               placeholderTextColor="rgba(190,206,232,0.72)"
               returnKeyType="send"
               blurOnSubmit={false}
+              multiline
               editable={!hybridCommentSending}
               accessible
               focusable
@@ -3160,7 +3310,7 @@ export default function WatchPartyLiveStageScreen() {
             <TouchableOpacity
               style={[
                 styles.stageHybridCommentSendButton,
-                (!hybridCommentDraft.trim() || hybridCommentSending) && styles.stageHybridCommentSendButtonDisabled,
+                hybridCommentDisabled && styles.stageHybridCommentSendButtonDisabled,
               ]}
               activeOpacity={0.84}
               accessible
@@ -3168,7 +3318,7 @@ export default function WatchPartyLiveStageScreen() {
               accessibilityRole="button"
               accessibilityLabel={hybridCommentSending ? "Sending Live Stage comment" : "Send Live Stage comment"}
               hitSlop={STAGE_CONTROL_HIT_SLOP}
-              disabled={!hybridCommentDraft.trim() || hybridCommentSending}
+              disabled={hybridCommentDisabled}
               onPress={() => {
                 void onSendHybridComment();
               }}
@@ -5358,6 +5508,10 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: "600",
   },
+  stageHybridCommentAttachmentStack: {
+    gap: 7,
+    marginTop: 5,
+  },
   stageHybridCommentEmpty: {
     color: "#AEB9CF",
     fontSize: 11,
@@ -5369,6 +5523,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 10,
+  },
+  stageHybridCommentAttachButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   stageHybridCommentInput: {
     flex: 1,

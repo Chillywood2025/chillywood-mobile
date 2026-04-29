@@ -16,6 +16,8 @@ import {
     FlatList,
     Image,
     ImageBackground,
+    Keyboard,
+    KeyboardAvoidingView,
     LayoutAnimation,
     PanResponder,
     Platform,
@@ -131,7 +133,7 @@ const SWIPE_PIXELS_PER_STEP = 30;
 const MAX_ZOOM = 2.5;
 const MIN_ZOOM = 1;
 const PROGRESS_WRITE_INTERVAL = 4_000;
-const CONTROLS_AUTO_HIDE_MILLIS = 3_000;
+const CONTROLS_AUTO_HIDE_MILLIS = 5_000;
 const NEXT_AUTOPLAY_DELAY_MILLIS = 1_500;
 const UP_NEXT_TRIGGER_MILLIS = 12_000;
 const UP_NEXT_COUNTDOWN_SECONDS = 5;
@@ -433,8 +435,6 @@ type StandalonePlayerTopChromeProps = {
   onToggleMyList: () => void;
   playbackRate: number;
   onToggleSpeedMenu: () => void;
-  isFullscreen: boolean;
-  onToggleFullscreen: () => void;
   canLike: boolean;
   engagementState: TitleEngagementState | null;
   engagementLoading: boolean;
@@ -463,8 +463,6 @@ function StandalonePlayerTopChrome({
   onToggleMyList,
   playbackRate,
   onToggleSpeedMenu,
-  isFullscreen,
-  onToggleFullscreen,
   canLike,
   engagementState,
   engagementLoading,
@@ -484,7 +482,6 @@ function StandalonePlayerTopChrome({
   return (
     <>
       <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
-        <View style={styles.partyOverlaySpacer} />
         {!playbackGateActive ? (
           <Animated.View
             pointerEvents={controlsVisible ? "auto" : "none"}
@@ -496,31 +493,54 @@ function StandalonePlayerTopChrome({
               },
             ]}
           >
-            <View style={styles.standaloneUtilityRow}>
-              {canSaveToList ? (
+            <View style={styles.standaloneTopLeftActions}>
+              {canShareCreatorVideo ? (
                 <TouchableOpacity
-                  style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
-                  onPress={onToggleMyList}
-                  disabled={myListBusy}
+                  style={styles.compactChip}
+                  onPress={onShareCreatorVideo}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
+                  <Text style={styles.compactChipText}>Share</Text>
                 </TouchableOpacity>
               ) : null}
+              {canReport ? (
+                <TouchableOpacity
+                  style={[styles.compactChip, reportBusy && styles.secondaryBtnDisabled]}
+                  onPress={onReport}
+                  disabled={reportBusy}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.compactChipText}>{reportBusy ? "Sending..." : "Report"}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <View style={styles.standaloneTopRightActions}>
               <TouchableOpacity
-                style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                onPress={onToggleSpeedMenu}
+                style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, styles.standaloneSocialHandoffBtn]}
+                onPress={onWatchParty}
                 activeOpacity={0.85}
               >
-                <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
+                <Text style={styles.partyOverlayChipText}>Watch-Party Live</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                onPress={onToggleFullscreen}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.partyOverlayChipText}>{isFullscreen ? "Exit Full" : "Full"}</Text>
-              </TouchableOpacity>
+              <View style={styles.standaloneUtilityRow}>
+                {canSaveToList ? (
+                  <TouchableOpacity
+                    style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
+                    onPress={onToggleMyList}
+                    disabled={myListBusy}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
+                  onPress={onToggleSpeedMenu}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.standaloneEngagementRow}>
               {canLike ? (
@@ -547,33 +567,7 @@ function StandalonePlayerTopChrome({
                   </Text>
                 </TouchableOpacity>
               ) : null}
-              {canShareCreatorVideo ? (
-                <TouchableOpacity
-                  style={styles.compactChip}
-                  onPress={onShareCreatorVideo}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.compactChipText}>Share</Text>
-                </TouchableOpacity>
-              ) : null}
-              {canReport ? (
-                <TouchableOpacity
-                  style={[styles.compactChip, reportBusy && styles.secondaryBtnDisabled]}
-                  onPress={onReport}
-                  disabled={reportBusy}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.compactChipText}>{reportBusy ? "Sending..." : "Report"}</Text>
-                </TouchableOpacity>
-              ) : null}
             </View>
-            <TouchableOpacity
-              style={[styles.compactChip, styles.compactChipAccent, styles.standaloneSocialHandoffBtn]}
-              onPress={onWatchParty}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.compactChipText, styles.compactChipTextAccent]}>Watch-Party Live</Text>
-            </TouchableOpacity>
           </Animated.View>
         ) : null}
       </View>
@@ -744,6 +738,7 @@ export default function PlayerScreen() {
   const [creatorVideoCommentReportTarget, setCreatorVideoCommentReportTarget] = useState<CreatorVideoComment | null>(null);
   const [creatorVideoCommentReportBusy, setCreatorVideoCommentReportBusy] = useState(false);
   const [creatorVideoCommentUserId, setCreatorVideoCommentUserId] = useState("");
+  const [creatorVideoCommentKeyboardOpen, setCreatorVideoCommentKeyboardOpen] = useState(false);
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -1044,6 +1039,31 @@ export default function PlayerScreen() {
       active = false;
     };
   }, [isSignedIn]);
+
+  useEffect(() => {
+    const isStandaloneCreatorVideoPlayer = !inWatchParty
+      && !isLiveModeFlag
+      && (playbackSourceKind === "creator-video" || expectsCreatorVideo);
+
+    if (!isStandaloneCreatorVideoPlayer) {
+      setCreatorVideoCommentKeyboardOpen(false);
+      return undefined;
+    }
+
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setCreatorVideoCommentKeyboardOpen(true),
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setCreatorVideoCommentKeyboardOpen(false),
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [expectsCreatorVideo, inWatchParty, isLiveModeFlag, playbackSourceKind]);
 
   useEffect(() => {
     let active = true;
@@ -2007,11 +2027,6 @@ export default function PlayerScreen() {
       hideControlsTimeoutRef.current = null;
     }
 
-    if (!isPlaying) {
-      setControlsVisible(true);
-      return;
-    }
-
     if (!controlsVisible) return;
 
     hideControlsTimeoutRef.current = setTimeout(() => {
@@ -2025,7 +2040,7 @@ export default function PlayerScreen() {
         hideControlsTimeoutRef.current = null;
       }
     };
-  }, [controlsVisible, isPlaying]);
+  }, [controlsVisible]);
 
   useEffect(() => {
     if (!inWatchParty) {
@@ -2171,13 +2186,13 @@ export default function PlayerScreen() {
       hideControlsTimeoutRef.current = null;
     }
 
-    if (isPlaying && controlsVisible) {
+    if (controlsVisible) {
       hideControlsTimeoutRef.current = setTimeout(() => {
         setControlsVisible(false);
         hideControlsTimeoutRef.current = null;
       }, CONTROLS_AUTO_HIDE_MILLIS);
     }
-  }, [controlsVisible, isPlaying]);
+  }, [controlsVisible]);
 
   const onSendPartyComment = useCallback(async () => {
     if (!inWatchParty || !partyId || partyCommentSending) return;
@@ -2292,6 +2307,11 @@ export default function PlayerScreen() {
     }
     if (standalonePlaybackUnknown) {
       retryStandaloneAccessCheck();
+      return;
+    }
+
+    if (!controlsVisible) {
+      setControlsVisible(true);
       return;
     }
 
@@ -5123,7 +5143,12 @@ export default function PlayerScreen() {
     };
 
     return (
-      <View style={styles.creatorCommentsPanel}>
+      <View
+        style={[
+          styles.creatorCommentsPanel,
+          creatorVideoCommentKeyboardOpen && styles.creatorCommentsPanelKeyboard,
+        ]}
+      >
         <View style={styles.creatorCommentsHeader}>
           <View style={styles.creatorCommentsHeaderCopy}>
             <Text style={styles.creatorCommentsKicker}>CREATOR VIDEO</Text>
@@ -5133,7 +5158,10 @@ export default function PlayerScreen() {
         </View>
 
         <ScrollView
-          style={styles.creatorCommentsList}
+          style={[
+            styles.creatorCommentsList,
+            creatorVideoCommentKeyboardOpen && styles.creatorCommentsListKeyboard,
+          ]}
           contentContainerStyle={styles.creatorCommentsListContent}
           keyboardShouldPersistTaps="handled"
         >
@@ -5642,6 +5670,11 @@ export default function PlayerScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView
+        style={styles.playerKeyboardAvoider}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        enabled={isStandalonePlayer && isCreatorVideoPlayback}
+      >
       <View style={styles.playerFrameworkRoot}>
         {isSharedPartyPlayback ? (
           <>
@@ -5691,6 +5724,7 @@ export default function PlayerScreen() {
               styles.videoWrapFramework,
               inWatchParty && styles.videoWrapWatchPartyTitle,
               !inWatchParty && !isLiveMode && isStandaloneFullscreen && styles.videoWrapStandaloneFullscreen,
+              !inWatchParty && !isLiveMode && isCreatorVideoPlayback && creatorVideoCommentKeyboardOpen && styles.videoWrapCreatorDiscussionKeyboard,
               isLiveMode && styles.liveRoomWrap,
             ]}
             {...(!isLiveMode ? panResponder.panHandlers : {})}
@@ -6101,8 +6135,6 @@ export default function PlayerScreen() {
                 onToggleMyList={onToggleMyList}
                 playbackRate={playbackRate}
                 onToggleSpeedMenu={() => setSpeedMenuOpen((value) => !value)}
-                isFullscreen={isStandaloneFullscreen}
-                onToggleFullscreen={() => setIsStandaloneFullscreen((value) => !value)}
                 canLike={canLikeStandaloneTitle}
                 engagementState={engagementState}
                 engagementLoading={engagementLoading}
@@ -6125,10 +6157,37 @@ export default function PlayerScreen() {
 
             <View style={[styles.playerFrameworkBottomStack, inWatchParty && styles.playerFrameworkBottomStackWatchParty]}>
               {!isLiveMode && (!isStandalonePlayer || !standalonePlaybackGateActive) ? (
-                <View style={[styles.progressCard, inWatchParty && styles.progressCardWatchPartyTitle]}>
+                <View
+                  pointerEvents={controlsVisible ? "auto" : "none"}
+                  style={[
+                    styles.progressCard,
+                    inWatchParty && styles.progressCardWatchPartyTitle,
+                    !controlsVisible && styles.playerControlHidden,
+                  ]}
+                >
                   <View style={styles.progressMetaRow}>
                     <Text style={styles.progressTime}>{formatTime(positionMillis)}</Text>
-                    <Text style={styles.progressTime}>{formatTime(durationMillis)}</Text>
+                    <View style={styles.progressRightCluster}>
+                      <Text style={styles.progressTime}>{formatTime(durationMillis)}</Text>
+                      {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
+                        <TouchableOpacity
+                          style={styles.progressFullscreenButton}
+                          activeOpacity={0.84}
+                          accessibilityLabel={isStandaloneFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                          onPress={() => {
+                            setIsStandaloneFullscreen((value) => !value);
+                            setControlsVisible(true);
+                            resetAutoHideTimer();
+                          }}
+                        >
+                          <MaterialIcons
+                            name={isStandaloneFullscreen ? "fullscreen-exit" : "fullscreen"}
+                            size={18}
+                            color="#F4F7FF"
+                          />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
                   </View>
                   <View
                     style={styles.progressTrack}
@@ -6141,8 +6200,6 @@ export default function PlayerScreen() {
                   </View>
                 </View>
               ) : null}
-
-              {renderCreatorVideoCommentsPanel()}
 
               {inWatchParty && !isLiveMode && livePresenceEvent ? (
                 <View style={styles.livePresenceEventToast}>
@@ -6184,6 +6241,8 @@ export default function PlayerScreen() {
             </View>
           </View>
 
+          {renderCreatorVideoCommentsPanel()}
+
           {isSharedPartyPlayback && source ? (
             <View style={[styles.titleParticipantFeedDock, hasActiveRailParticipants && styles.titleWatchPartyRailDockActive]}>
               {renderTitleParticipantExpandedPanel()}
@@ -6196,12 +6255,14 @@ export default function PlayerScreen() {
         )}
       </View>
       </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
+  playerKeyboardAvoider: { flex: 1 },
   playerFrameworkRoot: { flex: 1 },
   playerFrameworkBackground: { ...StyleSheet.absoluteFillObject },
   watchPartyFrameworkPosterWash: {
@@ -6379,6 +6440,9 @@ const styles = StyleSheet.create({
   videoWrapStandaloneFullscreen: {
     height: "92%",
     marginBottom: 0,
+  },
+  videoWrapCreatorDiscussionKeyboard: {
+    height: 210,
   },
   liveRoomWrap: {
     alignItems: "center",
@@ -6693,6 +6757,22 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   standaloneOverlayActions: {
+    width: "100%",
+    minHeight: 74,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    position: "relative",
+    gap: 8,
+  },
+  standaloneTopLeftActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: "48%",
+  },
+  standaloneTopRightActions: {
     alignItems: "flex-end",
     gap: 6,
   },
@@ -6701,6 +6781,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   standaloneEngagementRow: {
+    position: "absolute",
+    right: 0,
+    top: 40,
     flexDirection: "row",
     gap: 6,
   },
@@ -6852,9 +6935,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(8,10,18,0.96)",
     paddingHorizontal: 10,
     paddingTop: 9,
-    paddingBottom: 10,
+    paddingBottom: Platform.OS === "android" ? 14 : 10,
     gap: 8,
-    maxHeight: 238,
+    maxHeight: 258,
+    marginTop: 8,
+    marginBottom: Platform.OS === "android" ? 12 : 8,
+  },
+  creatorCommentsPanelKeyboard: {
+    maxHeight: 218,
+    paddingBottom: Platform.OS === "android" ? 10 : 8,
   },
   creatorCommentsHeader: {
     flexDirection: "row",
@@ -6878,7 +6967,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   creatorCommentsList: {
-    maxHeight: 126,
+    maxHeight: 130,
+  },
+  creatorCommentsListKeyboard: {
+    maxHeight: 78,
   },
   creatorCommentsListContent: {
     gap: 8,
@@ -7014,8 +7106,8 @@ const styles = StyleSheet.create({
   creatorCommentsSendBtn: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.7)",
-    backgroundColor: "rgba(220,20,60,0.28)",
+    borderColor: "rgba(186,208,255,0.22)",
+    backgroundColor: "rgba(56,80,126,0.78)",
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -7213,11 +7305,30 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+  },
+  progressRightCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  progressFullscreenButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(0,0,0,0.34)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   progressTime: {
     color: "#C5C9D3",
     fontSize: 11.5,
     fontWeight: "800",
+  },
+  playerControlHidden: {
+    opacity: 0,
   },
   progressTrack: {
     height: 6,

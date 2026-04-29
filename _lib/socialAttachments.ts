@@ -37,7 +37,8 @@ export type SocialAttachmentSurfaceType =
   | "profile_post"
   | "profile_post_comment"
   | "creator_video_comment"
-  | "chat_message";
+  | "chat_message"
+  | "watch_party_room_message";
 
 export type SocialAttachmentKind = "image" | "video" | "audio" | "document" | "file";
 
