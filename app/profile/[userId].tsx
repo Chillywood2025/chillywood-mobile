@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as DocumentPicker from "expo-document-picker";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   resolveChannelAccess,
   type ChannelAccessResolution,
@@ -54,15 +54,25 @@ import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
   createProfilePost,
+  createProfilePostComment,
+  deleteProfilePostComment,
   deleteProfilePost,
+  readProfilePostComments,
+  readProfilePostEngagementState,
   readProfilePosts,
+  setProfilePostLike,
   PROFILE_POST_BODY_LIMIT,
+  PROFILE_POST_COMMENT_BODY_LIMIT,
   type ProfilePost,
+  type ProfilePostComment,
+  type ProfilePostEngagementState,
 } from "../../_lib/profilePosts";
 import {
     ActivityIndicator,
     Alert,
     Image,
+    KeyboardAvoidingView,
+    Platform,
     ScrollView,
     Share,
     StyleSheet,
@@ -118,6 +128,19 @@ type ProfileAccessDetail = {
 };
 
 type ProfileViewerFollowState = ChannelViewerFollowState | "loading";
+
+type ProfilePostUiState = {
+  engagement?: ProfilePostEngagementState;
+  engagementReady?: boolean;
+  commentsOpen?: boolean;
+  commentsReady?: boolean;
+  comments?: ProfilePostComment[];
+  commentDraft?: string;
+  commentBusy?: boolean;
+  commentNotice?: string | null;
+  likeBusy?: boolean;
+  deletingCommentId?: string | null;
+};
 
 const PROFILE_DEEP_LINK_SCHEME = "chillywoodmobile";
 
@@ -207,6 +230,22 @@ const formatProfilePostDate = (value?: string | null) => {
     hour: "numeric",
     minute: "2-digit",
   });
+};
+
+const isProfilePostPubliclyShareable = (post: ProfilePost) => (
+  post.visibility === "public"
+  && (post.moderationStatus === "clean" || post.moderationStatus === "reported")
+);
+
+const isProfilePostEngageable = (post: ProfilePost) => (
+  post.visibility === "public"
+  && post.moderationStatus === "clean"
+);
+
+const formatEngagementCount = (count: number, singular: string, plural: string) => {
+  const normalizedCount = Math.max(0, Math.floor(Number(count) || 0));
+  if (normalizedCount <= 0) return "";
+  return `${normalizedCount} ${normalizedCount === 1 ? singular : plural}`;
 };
 
 const formatEventTypeLabel = (value: CreatorEventType) => {
@@ -391,6 +430,8 @@ const logProfileComposer = (event: string, details?: Record<string, unknown>) =>
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView | null>(null);
+  const profilePostComposerYRef = useRef(0);
   const [currentUserId, setCurrentUserId] = useState("");
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
   const [viewerFollowState, setViewerFollowState] = useState<ProfileViewerFollowState>("unavailable");
@@ -406,6 +447,11 @@ export default function ProfileScreen() {
   const [profilePostDraft, setProfilePostDraft] = useState("");
   const [profilePostBusy, setProfilePostBusy] = useState(false);
   const [profilePostDeletingId, setProfilePostDeletingId] = useState<string | null>(null);
+  const [profilePostUiById, setProfilePostUiById] = useState<Record<string, ProfilePostUiState>>({});
+  const [profilePostCommentReportTarget, setProfilePostCommentReportTarget] = useState<{
+    post: ProfilePost;
+    comment: ProfilePostComment;
+  } | null>(null);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
   const [creatorVideosReady, setCreatorVideosReady] = useState(false);
   const [profileComposerOpen, setProfileComposerOpen] = useState(false);
@@ -589,6 +635,105 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [isSelfProfile, userId]);
+
+  const profilePostIdsKey = useMemo(
+    () => profilePosts.map((post) => post.id).join("|"),
+    [profilePosts],
+  );
+
+  useEffect(() => {
+    let active = true;
+    const postIds = profilePosts.map((post) => post.id).filter(Boolean);
+
+    if (!postIds.length) {
+      setProfilePostUiById({});
+      return () => {
+        active = false;
+      };
+    }
+
+    setProfilePostUiById((current) => {
+      const next: Record<string, ProfilePostUiState> = {};
+      for (const post of profilePosts) {
+        next[post.id] = current[post.id] ?? {};
+      }
+      return next;
+    });
+
+    void Promise.all(
+      postIds.map((postId) => readProfilePostEngagementState(postId).catch(() => null)),
+    ).then((states) => {
+      if (!active) return;
+      setProfilePostUiById((current) => {
+        const next = { ...current };
+        states.forEach((state, index) => {
+          const postId = postIds[index];
+          next[postId] = {
+            ...(next[postId] ?? {}),
+            engagement: state ?? next[postId]?.engagement,
+            engagementReady: !!state,
+          };
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, profilePostIdsKey, profilePosts]);
+
+  const updateProfilePostUiState = (
+    postId: string,
+    updater: (current: ProfilePostUiState) => ProfilePostUiState,
+  ) => {
+    setProfilePostUiById((current) => ({
+      ...current,
+      [postId]: updater(current[postId] ?? {}),
+    }));
+  };
+
+  const scrollProfilePostComposerIntoView = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({
+        y: Math.max(profilePostComposerYRef.current - 22, 0),
+        animated: true,
+      });
+    }, 120);
+  };
+
+  const refreshProfilePostEngagement = async (postId: string) => {
+    const engagement = await readProfilePostEngagementState(postId);
+    updateProfilePostUiState(postId, (current) => ({
+      ...current,
+      engagement,
+      engagementReady: true,
+    }));
+    return engagement;
+  };
+
+  const loadProfilePostComments = async (postId: string) => {
+    updateProfilePostUiState(postId, (current) => ({
+      ...current,
+      commentsReady: false,
+      commentNotice: null,
+    }));
+    try {
+      const comments = await readProfilePostComments(postId, { limit: 24 });
+      updateProfilePostUiState(postId, (current) => ({
+        ...current,
+        comments,
+        commentsReady: true,
+      }));
+    } catch {
+      updateProfilePostUiState(postId, (current) => ({
+        ...current,
+        comments: [],
+        commentsReady: true,
+        commentNotice: "Unable to load comments right now.",
+      }));
+    }
+  };
 
   const shareCreatorVideo = async (video: CreatorVideo) => {
     if (!isCreatorVideoPubliclyShareable(video)) {
@@ -1117,6 +1262,7 @@ export default function ProfileScreen() {
       platformOwnedTarget: isOfficialProfile,
     });
     setProfilePostReportTarget(null);
+    setProfilePostCommentReportTarget(null);
     setReportVisible(true);
   };
   const onPressViewChannel = () => {
@@ -1134,6 +1280,20 @@ export default function ProfileScreen() {
     try {
       await Share.share({
         message: `View ${profile.displayName} on Chi'llywood: ${buildProfileDeepLink(userId)}`,
+      });
+    } catch {
+      Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
+    }
+  };
+  const onShareProfilePost = async (post: ProfilePost) => {
+    if (!userId || !isProfilePostPubliclyShareable(post)) {
+      Alert.alert("Share unavailable", "Only public profile posts can be shared.");
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: `Check out this Chi'llwood post from ${profile.displayName}: ${buildProfileDeepLink(userId)}`,
       });
     } catch {
       Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
@@ -1183,6 +1343,23 @@ export default function ProfileScreen() {
       setProfilePostsNotice(null);
       const post = await createProfilePost({ body, visibility: "public" });
       setProfilePosts((current) => [post, ...current.filter((entry) => entry.id !== post.id)]);
+      setProfilePostUiById((current) => ({
+        ...current,
+        [post.id]: {
+          engagement: {
+            postId: post.id,
+            viewerUserId: currentUserId || null,
+            likeCount: 0,
+            commentCount: 0,
+            likedByViewer: false,
+            canLike: !!currentUserId,
+            canComment: !!currentUserId,
+          },
+          engagementReady: true,
+          comments: [],
+          commentsReady: true,
+        },
+      }));
       setProfilePostDraft("");
       setProfilePostsReady(true);
     } catch {
@@ -1209,10 +1386,162 @@ export default function ProfileScreen() {
                 setProfilePostsNotice(null);
                 await deleteProfilePost(post.id);
                 setProfilePosts((current) => current.filter((entry) => entry.id !== post.id));
+                setProfilePostUiById((current) => {
+                  const next = { ...current };
+                  delete next[post.id];
+                  return next;
+                });
               } catch {
                 setProfilePostsNotice("Unable to delete this update right now.");
               } finally {
                 setProfilePostDeletingId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+  const onToggleProfilePostLike = async (post: ProfilePost) => {
+    if (!currentUserId) {
+      Alert.alert("Like post", "Sign in to like this post.");
+      return;
+    }
+    if (!isProfilePostEngageable(post)) {
+      Alert.alert("Like unavailable", "This post cannot receive likes right now.");
+      return;
+    }
+
+    const currentState = profilePostUiById[post.id];
+    const nextLiked = !(currentState?.engagement?.likedByViewer ?? false);
+    updateProfilePostUiState(post.id, (current) => ({
+      ...current,
+      likeBusy: true,
+      commentNotice: null,
+    }));
+
+    try {
+      const engagement = await setProfilePostLike(post.id, nextLiked);
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        engagement,
+        engagementReady: true,
+      }));
+    } catch {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentNotice: "Unable to update this like right now.",
+      }));
+    } finally {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        likeBusy: false,
+      }));
+    }
+  };
+  const onToggleProfilePostComments = (post: ProfilePost) => {
+    const currentState = profilePostUiById[post.id] ?? {};
+    const nextOpen = !currentState.commentsOpen;
+    updateProfilePostUiState(post.id, (current) => ({
+      ...current,
+      commentsOpen: nextOpen,
+      commentNotice: null,
+    }));
+    if (nextOpen && !currentState.commentsReady) {
+      void loadProfilePostComments(post.id);
+    }
+  };
+  const onSubmitProfilePostComment = async (post: ProfilePost) => {
+    if (!currentUserId) {
+      Alert.alert("Comment", "Sign in to comment on this post.");
+      return;
+    }
+    if (!isProfilePostEngageable(post)) {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentNotice: "Comments are unavailable for this post right now.",
+      }));
+      return;
+    }
+
+    const body = String(profilePostUiById[post.id]?.commentDraft ?? "").trim();
+    if (!body) {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentNotice: "Write a comment before posting.",
+      }));
+      return;
+    }
+    if (body.length > PROFILE_POST_COMMENT_BODY_LIMIT) {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentNotice: `Comments can be ${PROFILE_POST_COMMENT_BODY_LIMIT} characters or fewer.`,
+      }));
+      return;
+    }
+
+    updateProfilePostUiState(post.id, (current) => ({
+      ...current,
+      commentBusy: true,
+      commentNotice: null,
+    }));
+    try {
+      const comment = await createProfilePostComment({ postId: post.id, body });
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        comments: [...(current.comments ?? []), comment],
+        commentsReady: true,
+        commentsOpen: true,
+        commentDraft: "",
+      }));
+      await refreshProfilePostEngagement(post.id);
+    } catch {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentNotice: "Unable to post this comment right now.",
+      }));
+    } finally {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentBusy: false,
+      }));
+    }
+  };
+  const onDeleteProfilePostCommentPress = (post: ProfilePost, comment: ProfilePostComment) => {
+    if (!currentUserId) return;
+
+    Alert.alert(
+      "Delete comment?",
+      "This removes the comment from this Profile post.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              updateProfilePostUiState(post.id, (current) => ({
+                ...current,
+                deletingCommentId: comment.id,
+                commentNotice: null,
+              }));
+              try {
+                await deleteProfilePostComment(comment.id);
+                updateProfilePostUiState(post.id, (current) => ({
+                  ...current,
+                  comments: (current.comments ?? []).filter((entry) => entry.id !== comment.id),
+                }));
+                await refreshProfilePostEngagement(post.id);
+              } catch {
+                updateProfilePostUiState(post.id, (current) => ({
+                  ...current,
+                  commentNotice: "Unable to delete this comment right now.",
+                }));
+              } finally {
+                updateProfilePostUiState(post.id, (current) => ({
+                  ...current,
+                  deletingCommentId: null,
+                }));
               }
             })();
           },
@@ -1232,14 +1561,52 @@ export default function ProfileScreen() {
       platformOwnedTarget: isOfficialProfile,
     });
     setProfilePostReportTarget(post);
+    setProfilePostCommentReportTarget(null);
+    setReportVisible(true);
+  };
+  const onPressReportProfilePostComment = (post: ProfilePost, comment: ProfilePostComment) => {
+    if (!currentUserId || comment.userId === currentUserId) return;
+    trackModerationActionUsed({
+      surface: "profile",
+      action: "open_safety_report",
+      targetType: "profile_post_comment",
+      targetId: comment.id,
+      sourceRoute: `/profile/${userId}`,
+      targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+      platformOwnedTarget: isOfficialProfile,
+    });
+    setProfilePostReportTarget(null);
+    setProfilePostCommentReportTarget({ post, comment });
     setReportVisible(true);
   };
   const onSubmitProfileReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
+    const commentTarget = profilePostCommentReportTarget;
     const postTarget = profilePostReportTarget;
-    if (!canReportProfile && !postTarget) return;
+    if (!canReportProfile && !postTarget && !commentTarget) return;
     setReportBusy(true);
     try {
-      if (postTarget) {
+      if (commentTarget) {
+        await submitSafetyReport({
+          targetType: "profile_post_comment",
+          targetId: commentTarget.comment.id,
+          category: input.category,
+          note: input.note,
+          context: buildSafetyReportContext({
+            sourceSurface: "profile",
+            sourceRoute: `/profile/${userId}`,
+            targetLabel: `${profile.displayName} profile post comment`,
+            targetRoleLabel: "Profile post comment",
+            targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+            platformOwnedTarget: isOfficialProfile,
+            context: {
+              profileUserId: userId,
+              postId: commentTarget.post.id,
+              commentPreview: commentTarget.comment.body.slice(0, 140),
+            },
+          }),
+        });
+        setProfilePostCommentReportTarget(null);
+      } else if (postTarget) {
         await submitSafetyReport({
           targetType: "profile_post",
           targetId: postTarget.id,
@@ -2043,11 +2410,16 @@ export default function ProfileScreen() {
     const composerDisabled = profilePostBusy || draftLength === 0 || draftLength > PROFILE_POST_BODY_LIMIT;
 
     return (
-      <View style={styles.profilePostComposerCard}>
+      <View
+        style={styles.profilePostComposerCard}
+        onLayout={(event) => {
+          profilePostComposerYRef.current = event.nativeEvent.layout.y;
+        }}
+      >
         <View style={styles.feedComposerPromptRow}>
           {renderComposerAvatar("small")}
           <View style={styles.profilePostComposerCopy}>
-            <Text style={styles.profilePostComposerTitle}>Share a profile update</Text>
+            <Text style={styles.profilePostComposerTitle}>Post</Text>
             <Text style={styles.profilePostComposerMeta}>Text only. Channel videos stay in the Channel tab.</Text>
           </View>
         </View>
@@ -2063,6 +2435,7 @@ export default function ProfileScreen() {
           multiline
           editable={!profilePostBusy}
           maxLength={PROFILE_POST_BODY_LIMIT}
+          onFocus={scrollProfilePostComposerIntoView}
         />
         <View style={styles.profilePostComposerFooter}>
           <Text style={styles.profilePostComposerCount}>
@@ -2092,6 +2465,25 @@ export default function ProfileScreen() {
   const renderProfilePostCard = (post: ProfilePost) => {
     const canDeletePost = isSelfProfile && post.userId === currentUserId;
     const canReportPost = !isSelfProfile && !!currentUserId && post.visibility === "public";
+    const canSharePost = isProfilePostPubliclyShareable(post);
+    const canEngageWithPost = isProfilePostEngageable(post);
+    const uiState = profilePostUiById[post.id] ?? {};
+    const engagement = uiState.engagement;
+    const likeCountLabel = uiState.engagementReady
+      ? formatEngagementCount(engagement?.likeCount ?? 0, "like", "likes")
+      : "";
+    const commentCountLabel = uiState.engagementReady
+      ? formatEngagementCount(engagement?.commentCount ?? 0, "comment", "comments")
+      : "";
+    const likeButtonLabel = engagement?.likedByViewer ? "Liked" : "Like";
+    const comments = uiState.comments ?? [];
+    const commentDraft = uiState.commentDraft ?? "";
+    const commentDraftLength = commentDraft.trim().length;
+    const commentSubmitDisabled = !!uiState.commentBusy
+      || !canEngageWithPost
+      || !currentUserId
+      || commentDraftLength === 0
+      || commentDraftLength > PROFILE_POST_COMMENT_BODY_LIMIT;
 
     return (
       <View key={post.id} style={styles.feedPostCard}>
@@ -2113,34 +2505,188 @@ export default function ProfileScreen() {
           ) : null}
         </View>
         <Text style={styles.feedPostCaption}>{post.body}</Text>
-        {canDeletePost || canReportPost ? (
-          <View style={styles.feedPostActionRow}>
-            {canDeletePost ? (
-              <TouchableOpacity
-                style={[
-                  styles.feedPostAction,
-                  profilePostDeletingId === post.id && styles.feedPostActionDisabled,
-                ]}
-                activeOpacity={0.84}
-                disabled={profilePostDeletingId === post.id}
-                onPress={() => onDeleteProfilePost(post)}
-              >
-                <MaterialIcons name="delete-outline" size={17} color="#E6ECFA" />
-                <Text style={styles.feedPostActionText}>
-                  {profilePostDeletingId === post.id ? "Deleting" : "Delete"}
-                </Text>
-              </TouchableOpacity>
+        <View style={styles.feedPostActionRow}>
+          {canSharePost ? (
+            <TouchableOpacity
+              style={[styles.feedPostAction, uiState.likeBusy && styles.feedPostActionDisabled]}
+              activeOpacity={0.84}
+              disabled={!!uiState.likeBusy}
+              onPress={() => {
+                void onToggleProfilePostLike(post);
+              }}
+            >
+              <MaterialIcons
+                name={engagement?.likedByViewer ? "favorite" : "favorite-border"}
+                size={17}
+                color={engagement?.likedByViewer ? "#FF7A9B" : "#E6ECFA"}
+              />
+              <Text style={styles.feedPostActionText}>
+                {likeCountLabel ? `${likeButtonLabel} · ${likeCountLabel}` : likeButtonLabel}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {canSharePost ? (
+            <TouchableOpacity
+              style={styles.feedPostAction}
+              activeOpacity={0.84}
+              onPress={() => onToggleProfilePostComments(post)}
+            >
+              <MaterialIcons name="chat-bubble-outline" size={17} color="#E6ECFA" />
+              <Text style={styles.feedPostActionText}>
+                {commentCountLabel || "Comment"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {canSharePost ? (
+            <TouchableOpacity
+              style={styles.feedPostAction}
+              activeOpacity={0.84}
+              onPress={() => {
+                void onShareProfilePost(post);
+              }}
+            >
+              <MaterialIcons name="ios-share" size={17} color="#E6ECFA" />
+              <Text style={styles.feedPostActionText}>Share</Text>
+            </TouchableOpacity>
+          ) : null}
+          {canDeletePost ? (
+            <TouchableOpacity
+              style={[
+                styles.feedPostAction,
+                profilePostDeletingId === post.id && styles.feedPostActionDisabled,
+              ]}
+              activeOpacity={0.84}
+              disabled={profilePostDeletingId === post.id}
+              onPress={() => onDeleteProfilePost(post)}
+            >
+              <MaterialIcons name="delete-outline" size={17} color="#E6ECFA" />
+              <Text style={styles.feedPostActionText}>
+                {profilePostDeletingId === post.id ? "Deleting" : "Delete"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {canReportPost ? (
+            <TouchableOpacity
+              style={styles.feedPostAction}
+              activeOpacity={0.84}
+              onPress={() => onPressReportProfilePost(post)}
+            >
+              <MaterialIcons name="outlined-flag" size={17} color="#E6ECFA" />
+              <Text style={styles.feedPostActionText}>Report</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {uiState.commentsOpen ? (
+          <View style={styles.profilePostCommentsPanel}>
+            {uiState.commentNotice ? (
+              <View style={styles.profilePostCommentNotice}>
+                <Text style={styles.profilePostCommentNoticeText}>{uiState.commentNotice}</Text>
+              </View>
             ) : null}
-            {canReportPost ? (
-              <TouchableOpacity
-                style={styles.feedPostAction}
-                activeOpacity={0.84}
-                onPress={() => onPressReportProfilePost(post)}
-              >
-                <MaterialIcons name="outlined-flag" size={17} color="#E6ECFA" />
-                <Text style={styles.feedPostActionText}>Report</Text>
-              </TouchableOpacity>
-            ) : null}
+            {!uiState.commentsReady ? (
+              <View style={styles.profilePostCommentsLoading}>
+                <ActivityIndicator color="#DC143C" />
+                <Text style={styles.profilePostCommentMeta}>Loading comments</Text>
+              </View>
+            ) : comments.length ? (
+              <View style={styles.profilePostCommentList}>
+                {comments.map((comment) => {
+                  const canDeleteComment = !!currentUserId
+                    && (comment.userId === currentUserId || (isSelfProfile && post.userId === currentUserId));
+                  const canReportComment = !!currentUserId && comment.userId !== currentUserId;
+                  const commentAuthorLabel = comment.userId === currentUserId
+                    ? "You"
+                    : comment.userId === post.userId
+                      ? profile.displayName
+                      : "Member";
+
+                  return (
+                    <View key={comment.id} style={styles.profilePostCommentCard}>
+                      <View style={styles.profilePostCommentHeader}>
+                        <Text style={styles.profilePostCommentAuthor} numberOfLines={1}>
+                          {commentAuthorLabel}
+                        </Text>
+                        <Text style={styles.profilePostCommentMeta}>{formatProfilePostDate(comment.createdAt)}</Text>
+                      </View>
+                      <Text style={styles.profilePostCommentBody}>{comment.body}</Text>
+                      {canDeleteComment || canReportComment ? (
+                        <View style={styles.profilePostCommentActionRow}>
+                          {canDeleteComment ? (
+                            <TouchableOpacity
+                              style={[
+                                styles.profilePostCommentAction,
+                                uiState.deletingCommentId === comment.id && styles.feedPostActionDisabled,
+                              ]}
+                              activeOpacity={0.84}
+                              disabled={uiState.deletingCommentId === comment.id}
+                              onPress={() => onDeleteProfilePostCommentPress(post, comment)}
+                            >
+                              <Text style={styles.profilePostCommentActionText}>
+                                {uiState.deletingCommentId === comment.id ? "Deleting" : "Delete"}
+                              </Text>
+                            </TouchableOpacity>
+                          ) : null}
+                          {canReportComment ? (
+                            <TouchableOpacity
+                              style={styles.profilePostCommentAction}
+                              activeOpacity={0.84}
+                              onPress={() => onPressReportProfilePostComment(post, comment)}
+                            >
+                              <Text style={styles.profilePostCommentActionText}>Report</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={styles.profilePostCommentEmpty}>No comments yet.</Text>
+            )}
+            {canEngageWithPost ? (
+              currentUserId ? (
+                <View style={styles.profilePostCommentComposer}>
+                  <TextInput
+                    style={styles.profilePostCommentInput}
+                    placeholder="Write a comment"
+                    placeholderTextColor="#8A93A8"
+                    value={commentDraft}
+                    onChangeText={(value) => updateProfilePostUiState(post.id, (current) => ({
+                      ...current,
+                      commentDraft: value,
+                      commentNotice: null,
+                    }))}
+                    multiline
+                    editable={!uiState.commentBusy}
+                    maxLength={PROFILE_POST_COMMENT_BODY_LIMIT}
+                  />
+                  <View style={styles.profilePostCommentComposerFooter}>
+                    <Text style={styles.profilePostComposerCount}>
+                      {commentDraftLength}/{PROFILE_POST_COMMENT_BODY_LIMIT}
+                    </Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.profilePostCommentSubmit,
+                        commentSubmitDisabled && styles.ownerHeroToolsButtonDisabled,
+                      ]}
+                      activeOpacity={0.86}
+                      disabled={commentSubmitDisabled}
+                      onPress={() => {
+                        void onSubmitProfilePostComment(post);
+                      }}
+                    >
+                      {uiState.commentBusy ? <ActivityIndicator size="small" color="#fff" /> : null}
+                      <Text style={styles.feedComposerPostText}>Post</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.profilePostCommentEmpty}>Sign in to comment.</Text>
+              )
+            ) : (
+              <Text style={styles.profilePostCommentEmpty}>Comments are closed for this post.</Text>
+            )}
           </View>
         ) : null}
       </View>
@@ -2165,7 +2711,7 @@ export default function ProfileScreen() {
       ) : (
         <View style={styles.feedEmptyCard}>
           <Text style={styles.feedEmptyTitle}>
-            {isSelfProfile ? "Share your first update." : "No posts yet."}
+            {isSelfProfile ? "Post your first update." : "No posts yet."}
           </Text>
           <Text style={styles.feedEmptyText}>
             {isSelfProfile
@@ -2264,7 +2810,18 @@ export default function ProfileScreen() {
       <View style={styles.fullBackgroundFallback} pointerEvents="none" />
       <View style={styles.fullBackgroundOverlay} pointerEvents="none" />
 
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <KeyboardAvoidingView
+        style={styles.outerFlex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+      >
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.screen}
+        contentContainerStyle={[styles.content, styles.contentKeyboardInset]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "none"}
+      >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
@@ -2774,10 +3331,14 @@ export default function ProfileScreen() {
         </View>
         <ReportSheet
           visible={reportVisible}
-          title={profilePostReportTarget
+          title={profilePostCommentReportTarget
+            ? "Report comment"
+            : profilePostReportTarget
             ? "Report profile update"
             : isOfficialProfile ? "Report official account concern" : "Report profile or participant"}
-          description={profilePostReportTarget
+          description={profilePostCommentReportTarget
+            ? `Send a safety report for this comment under ${profile.displayName}'s post.`
+            : profilePostReportTarget
             ? `Send a safety report for this public update from ${profile.displayName}.`
             : isOfficialProfile
               ? `Send a safety report for ${profile.displayName} if an official platform interaction feels unsafe, misleading, or compromised.`
@@ -2787,10 +3348,12 @@ export default function ProfileScreen() {
           onClose={() => {
             if (reportBusy) return;
             setProfilePostReportTarget(null);
+            setProfilePostCommentReportTarget(null);
             setReportVisible(false);
           }}
         />
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -2810,6 +3373,7 @@ const styles = StyleSheet.create({
   },
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { paddingTop: 56, paddingBottom: 48, paddingHorizontal: 18, gap: 14 },
+  contentKeyboardInset: { paddingBottom: 128 },
 
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   backArrow: { color: "#aaa", fontSize: 20, fontWeight: "700", paddingRight: 8 },
@@ -3314,13 +3878,16 @@ const styles = StyleSheet.create({
   },
   feedPostActionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.08)",
     padding: 8,
     gap: 8,
   },
   feedPostAction: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "30%",
+    minWidth: 104,
     minHeight: 38,
     borderRadius: 12,
     flexDirection: "row",
@@ -3331,6 +3898,130 @@ const styles = StyleSheet.create({
   },
   feedPostActionDisabled: { opacity: 0.5 },
   feedPostActionText: { color: "#E6ECFA", fontSize: 12.5, fontWeight: "900" },
+  profilePostCommentsPanel: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    padding: 11,
+    gap: 10,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  profilePostCommentsLoading: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  profilePostCommentList: { gap: 8 },
+  profilePostCommentCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 10,
+    gap: 6,
+  },
+  profilePostCommentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  profilePostCommentAuthor: {
+    flex: 1,
+    color: "#F3F6FF",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  profilePostCommentMeta: {
+    color: "#8994A9",
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  profilePostCommentBody: {
+    color: "#DDE3F0",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  profilePostCommentActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  profilePostCommentAction: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  profilePostCommentActionText: {
+    color: "#DDE5F7",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  profilePostCommentEmpty: {
+    color: "#AAB3C7",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  profilePostCommentNotice: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.24)",
+    backgroundColor: "rgba(220,20,60,0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  profilePostCommentNoticeText: {
+    color: "#FFD7DF",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "800",
+  },
+  profilePostCommentComposer: {
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.16)",
+    backgroundColor: "rgba(13,18,32,0.72)",
+    padding: 10,
+    gap: 8,
+  },
+  profilePostCommentInput: {
+    width: "100%",
+    minHeight: 58,
+    maxHeight: 132,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    color: "#F7F9FF",
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "700",
+    textAlignVertical: "top",
+  },
+  profilePostCommentComposerFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  profilePostCommentSubmit: {
+    minHeight: 36,
+    minWidth: 82,
+    borderRadius: 12,
+    backgroundColor: "#DC143C",
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
   feedEmptyCard: {
     borderRadius: 16,
     borderWidth: 1,

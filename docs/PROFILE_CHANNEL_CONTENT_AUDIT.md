@@ -9,6 +9,7 @@ Updated: 2026-04-28 for one-device non-live Profile/Channel and creator-video ca
 Updated: 2026-04-29 for Profile/Channel Public v1 product-contract clarity
 Updated: 2026-04-29 for Public v1 social basics backing
 Updated: 2026-04-29 for remote social-basics schema/RLS proof
+Updated: 2026-04-29 for Profile post engagement backing
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -42,7 +43,7 @@ Active code truth after this pass:
 - The Profile header shows identity, handle, avatar, tagline/bio when present, official/platform badges where backed, and backed live/role signals.
 - Owner top actions are Edit Profile, Manage Channel, Upload Video, and Settings.
 - Public top actions are backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, and Report where supported.
-- The Posts tab now shows real text-only Profile posts/status updates when backed rows exist, with owner composer/delete and public clean reads.
+- The Posts tab now shows real text-only Profile posts/status updates when backed rows exist, with owner composer/delete, public clean reads, "Post" composer/action copy, backed text comments, backed likes/counts, route-safe share, and backed report actions.
 - The Channel tab owns creator uploaded videos, uses `CreatorVideoCard`, and opens `/player/[id]?source=creator-video`.
 - The owner Profile composer remains available, but it is explicitly a creator-video upload into Channel.
 - `/channel-settings` labels current access controls as Access Defaults and no longer presents ad/sponsorship/Premium-playback cards as Channel owner controls.
@@ -52,22 +53,22 @@ Active code truth after this pass:
 Public v1 status:
 
 - Profile 1-6 is present for identity, quick actions, Channel entry, backed social/community posture, and honest activity/empty states.
-- Personal posts/status updates are implemented as text-only v1 Profile content; profile post comments/reactions/media remain pending.
+- Personal posts/status updates are implemented as text-only v1 Profile content; Profile post text comments and single likes are implemented locally with a pending remote migration. Profile post media, nested replies, reposts, polls, and richer reactions remain post-v1.
 - Follow is backed by `channel_followers` and `_lib/channelAudience.ts`; public counts remain hidden unless backed/readable for that viewer.
 - Creator-video text comments are implemented in standalone Player only; media comments, nested replies, fake counts, and Live/Watch-Party comment layout changes remain out of scope.
-- Full Friends, likes/saves/counts on creator videos, personal post comments/reactions, paid creator content, payouts, tips, coins, ads, native game streaming, and real Chi'llyfects AR remain out of scope.
+- Full Friends, likes/saves/counts on creator videos, paid creator content, payouts, tips, coins, ads, native game streaming, and real Chi'llyfects AR remain out of scope.
 
-Runtime proof status: remote Supabase migration/schema/RLS proof now passed for the social-basics tables and report target types; Android runtime proof and production build proof remain pending.
+Runtime proof status: remote Supabase migration/schema/RLS proof passed for the original social-basics tables and report target types through `202604290001`. New local migration `202604290002_profile_post_engagement.sql` still needs remote application/proof; Android runtime proof for Profile post comments, likes, share, reports, and keyboard visibility remains pending.
 
 ## 2026-04-29 Public V1 Social Basics Audit
 
 Backing truth after this pass:
 
-- Backed now: `channel_followers`, `channel_audience_blocks`, `safety_reports`, creator-video public/draft/moderation status, new `profile_posts`, and new `creator_video_comments`.
-- UI-only/fake removed/avoided: no fake personal post feed, no fake creator-video comments/counts, no fake likes/saves/shares, no fake Friends, and no fake platform title filler in Channels.
-- Missing or post-v1: full Friends graph UI, friend requests/accept/decline, close friends, friend-only privacy, media Profile posts, media comments, nested replies, reposts, polls, comment counts, reactions, advanced notifications, full VIP/audience roster, paid creator media, tips/coins/payouts/ads, native game streaming, and real Chi'llyfects AR.
-- Safe v1 build: text-only Profile posts, following-based creator-video discovery, and text-only standalone creator-video comments because each now has table/RLS/helper/UI/report backing.
-- Report/moderation status: profile posts and creator-video comments can be reported through `safety_reports`; public reads filter to clean/reported and exclude deleted/hidden/removed content. Admin UI review/moderation for the new target types still needs runtime/admin workflow proof.
+- Backed now: `channel_followers`, `channel_audience_blocks`, `safety_reports`, creator-video public/draft/moderation status, `profile_posts`, `creator_video_comments`, and local/pending-remote `profile_post_comments` / `profile_post_likes`.
+- UI-only/fake removed/avoided: no fake personal post feed, no fake creator-video comments/counts, no fake creator-video likes/saves/shares, no fake Friends, and no fake platform title filler in Channels. Profile post counts now come only from backed comment/like queries.
+- Missing or post-v1: full Friends graph UI, friend requests/accept/decline, close friends, friend-only privacy, media Profile posts, media comments, nested replies, reposts, polls, richer reactions, advanced notifications, full VIP/audience roster, paid creator media, tips/coins/payouts/ads, native game streaming, and real Chi'llyfects AR.
+- Safe v1 build: text-only Profile posts, text-only Profile post comments/likes once the migration is applied, following-based creator-video discovery, and text-only standalone creator-video comments because each has table/RLS/helper/UI/report backing.
+- Report/moderation status: profile posts, profile-post comments, and creator-video comments can be reported through `safety_reports` when the relevant migration is applied; public reads filter to clean/reported and exclude deleted/hidden/removed content. Admin UI review/moderation for the new target types still needs runtime/admin workflow proof.
 
 ## Files Read
 
@@ -155,7 +156,7 @@ There is no separate public `/channel/[id]` route. Doctrine and current code int
 - primary owner actions: Edit Profile, Manage Channel, Upload Video, and Settings
 - channel access posture: browse, Watch Party, and Chi'lly Chat access cards backed by user profile defaults and creator permissions
 - tabs: Posts, Channel, Live, Community, About
-- Posts tab: backed text-only Profile posts/status updates, owner composer/delete, public clean reads, and no fake likes/comments/counts
+- Posts tab: backed text-only Profile posts/status updates, owner composer/delete, public clean reads, backed text comments, backed single likes/counts, and route-safe share
 - Channel tab: creator-owned video cards from `videos`; user/creator Channels do not show Chi'llywood Originals or platform `titles` as filler
 - public live/event summaries from backed `creator_events` and reminder summaries
 - owner mode on the same route when the signed-in user matches the route user id
@@ -463,13 +464,13 @@ Current comment truth:
 - Standalone creator-video comments now use `creator_video_comments`; they are text-only and scoped to creator-video Player, not Live Stage or Watch-Party room comments.
 - Chi'lly Chat direct messages use `chat_messages` with a `message_type = 'text'` check. `_lib/chat.ts` inserts only text, and `app/chat/[threadId].tsx` explicitly says media and reactions are not live yet.
 - Reactions exist as emoji/floating room reactions and content relationship markers, not as comment attachments.
-- There is no comment/reply table for Profile post comments, platform Title comments, media comments, nested replies, or universal comments outside the scoped room/live/chat/creator-video-comment contexts.
+- `profile_post_comments` is the scoped text-only Profile post comment table once `202604290002_profile_post_engagement.sql` is applied. There is no comment/reply table for platform Title comments, media comments, nested replies, or universal comments outside the scoped room/live/chat/profile-post/creator-video-comment contexts.
 - There is no attachment table, comment media bucket, storage policy, media picker, upload helper, thumbnail path, moderation queue, or RLS path for comment media.
 - `safety_reports` now supports `profile_post` and `creator_video_comment` target types in addition to participant/room/title/creator_video.
 
 Public v1 recommendation:
 
-- Keep text comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, Player room comments, standalone creator-video text comments, Chi'lly Chat text, and existing reactions.
+- Keep text comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, Player room comments, Profile post text comments/likes, standalone creator-video text comments, Chi'lly Chat text, and existing reactions.
 - Prioritize creator video upload to Channel/Profile before comment media.
 - Do not allow full video uploads in live comments for Public v1.
 - Do not add comment media UI until schema, storage, rate limits, moderation, deletion, and report targets exist.

@@ -13,6 +13,7 @@ export type SafetyReportTargetType =
   | "title"
   | "creator_video"
   | "profile_post"
+  | "profile_post_comment"
   | "creator_video_comment";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
 export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner" | "moderator";
@@ -217,6 +218,7 @@ const normalizeSafetyReportTargetType = (value: unknown): SafetyReportTargetType
     || normalized === "title"
     || normalized === "creator_video"
     || normalized === "profile_post"
+    || normalized === "profile_post_comment"
     || normalized === "creator_video_comment"
   ) {
     return normalized;

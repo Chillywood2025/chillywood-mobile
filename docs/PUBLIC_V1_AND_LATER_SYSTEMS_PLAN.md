@@ -34,7 +34,7 @@ Current Public v1 truth:
 - Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
 - `/profile/[userId]` is the public Profile/Channel surface.
 - `/profile/[userId]` can include an owner-only creator-video upload composer without leaving the Profile.
-- Profile's current mobile shape is identity-first and mobile-social: compact identity header, backed text-only personal Posts/status updates, Channel tab for creator uploads, and clear owner/public quick actions. It may reference modern social profile patterns without copying third-party branding or showing unbacked engagement.
+- Profile's current mobile shape is identity-first and mobile-social: compact identity header, backed text-only personal Posts/status updates, backed text-only comments/likes once the engagement migration is applied, Channel tab for creator uploads, and clear owner/public quick actions. It may reference modern social profile patterns without copying third-party branding or showing unbacked engagement.
 - `/channel-settings` is the deeper owner control and management surface.
 - Creator Media System foundation exists.
 - Creator upload is Public v1 required.
@@ -42,8 +42,9 @@ Current Public v1 truth:
 - Creator videos use the same premium Player shell as platform/admin titles.
 - Following-based Home discovery now uses real `channel_followers` to show public clean creator uploads from followed creators.
 - Creator-video text comments are backed for standalone creator-video Player only.
+- Profile post comments, likes/counts, `Post` UX copy, keyboard-aware composer visibility, and route-safe share are implemented locally through the Profile post engagement lane; remote migration application and Android proof remain pending.
 - Creator-upload Watch-Party linking is implemented in code/local schema, including focused local RLS tightening for anonymous room access and premium-room membership writes, but Public v1 runtime proof still requires the remote Supabase migration chain and Android proof.
-- Profile post media, Profile post comments/reactions, media comments, nested replies, reposts, polls, full Friends, close friends, and friend-only privacy are post-v1.
+- Profile post media, richer reactions beyond a single backed like, media comments, nested replies, reposts, polls, full Friends, close friends, and friend-only privacy are post-v1.
 - Comment media upload is post-v1.
 - Native game/video streaming is later phase.
 - Paid/subscriber media, tips, coins, payouts, VIPs, and advanced creator studio are later phase.
@@ -65,6 +66,9 @@ Owns:
 - self vs public viewer distinction
 - public/owner visibility presentation
 - text-only Profile posts/status updates through backed `profile_posts`
+- text-only Profile post comments through backed `profile_post_comments` once applied remotely
+- single Profile post likes/counts through backed `profile_post_likes` once applied remotely
+- route-safe Profile post share that points at the profile route with post context
 - owner-only creator-video upload composer that uses the Creator Media helper path
 - Chi'lly Chat handoff from profile
 - links into backed content, live, and channel surfaces
@@ -74,7 +78,7 @@ Must not own:
 - creator video storage
 - creator video editing/deletion logic
 - deep creator-video management
-- Profile post comments/reactions/media unless backed by a separate profile feed/comment system
+- Profile post media, nested replies, reposts, polls, or richer reactions beyond the backed like lane
 - billing validation
 - payout rules
 - LiveKit token rules
@@ -810,7 +814,7 @@ Relationship to Comments:
 
 - Text comments/reactions stay fast and safe.
 - Standalone creator-video text comments may ship in v1 only through `creator_video_comments` and clean public creator-video reads.
-- Profile posts may ship in v1 only as text-only `profile_posts`.
+- Profile posts may ship in v1 only as text-only `profile_posts`; Profile post comments/likes may ship only through `profile_post_comments` and `profile_post_likes` with RLS and Android proof.
 - Comment media upload is post-v1.
 - Future comment moderation should reuse reporting/safety primitives.
 
