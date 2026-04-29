@@ -65,10 +65,12 @@ Owns:
 - public Profile/Channel discovery surface
 - self vs public viewer distinction
 - public/owner visibility presentation
-- text-only Profile posts/status updates through backed `profile_posts`
-- text-only Profile post comments through backed `profile_post_comments` once applied remotely
+- Profile posts/status updates through backed `profile_posts`
+- Profile post comments/replies through backed `profile_post_comments` once applied remotely
 - single Profile post likes/counts through backed `profile_post_likes` once applied remotely
 - route-safe Profile post share that points at the profile route with post context
+- clickable social links rendered client-side without automatic previews
+- bounded 250 MB social attachments through backed `social_attachments` once applied remotely
 - owner-only creator-video upload composer that uses the Creator Media helper path
 - Chi'lly Chat handoff from profile
 - links into backed content, live, and channel surfaces
@@ -814,8 +816,9 @@ Relationship to Comments:
 
 - Text comments/reactions stay fast and safe.
 - Standalone creator-video text comments may ship in v1 only through `creator_video_comments` and clean public creator-video reads.
-- Profile posts may ship in v1 only as text-only `profile_posts`; Profile post comments/likes may ship only through `profile_post_comments` and `profile_post_likes` with RLS and Android proof.
-- Comment media upload is post-v1.
+- Profile posts may ship in v1 through `profile_posts`; Profile post comments/replies/likes may ship only through `profile_post_comments` and `profile_post_likes` with RLS and Android proof.
+- Bounded social/chat attachments may ship in v1 only through `social_attachments`, the private `social-attachments` bucket, the 250 MB cap, RLS, and Android proof.
+- Live/Watch-Party media comments, movie-size comment/chat uploads, automatic link previews, and malware-scanning claims are post-v1.
 - Future comment moderation should reuse reporting/safety primitives.
 
 Relationship to Live/Watch-Party:

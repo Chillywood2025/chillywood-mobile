@@ -68,6 +68,12 @@ import {
   type ProfilePostEngagementState,
 } from "../../_lib/profilePosts";
 import {
+  getSocialAttachmentValidationMessage,
+  SOCIAL_ATTACHMENT_PICKER_TYPES,
+  SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
+  type SocialAttachmentFile,
+} from "../../_lib/socialAttachments";
+import {
     ActivityIndicator,
     Alert,
     Image,
@@ -88,6 +94,8 @@ import {
   type UserProfile,
 } from "../../_lib/userData";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
+import { LinkedText } from "../../components/social/linked-text";
+import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 
@@ -136,6 +144,8 @@ type ProfilePostUiState = {
   commentsReady?: boolean;
   comments?: ProfilePostComment[];
   commentDraft?: string;
+  commentAttachmentFile?: SocialAttachmentFile | null;
+  replyTargetCommentId?: string | null;
   commentBusy?: boolean;
   commentNotice?: string | null;
   likeBusy?: boolean;
@@ -428,6 +438,13 @@ const logProfileComposer = (event: string, details?: Record<string, unknown>) =>
   console.log("[profile-composer]", event, details ?? {});
 };
 
+const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
+  uri: asset.uri,
+  name: asset.name,
+  mimeType: asset.mimeType,
+  size: asset.size,
+});
+
 export default function ProfileScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView | null>(null);
@@ -445,6 +462,7 @@ export default function ProfileScreen() {
   const [profilePostsReady, setProfilePostsReady] = useState(false);
   const [profilePostsNotice, setProfilePostsNotice] = useState<string | null>(null);
   const [profilePostDraft, setProfilePostDraft] = useState("");
+  const [profilePostAttachmentFile, setProfilePostAttachmentFile] = useState<SocialAttachmentFile | null>(null);
   const [profilePostBusy, setProfilePostBusy] = useState(false);
   const [profilePostDeletingId, setProfilePostDeletingId] = useState<string | null>(null);
   const [profilePostUiById, setProfilePostUiById] = useState<Record<string, ProfilePostUiState>>({});
@@ -690,6 +708,64 @@ export default function ProfileScreen() {
     setProfilePostUiById((current) => ({
       ...current,
       [postId]: updater(current[postId] ?? {}),
+    }));
+  };
+
+  const pickSocialAttachmentFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: [...SOCIAL_ATTACHMENT_PICKER_TYPES],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (result.canceled) return null;
+    const asset = result.assets[0];
+    if (!asset?.uri) throw new Error("Choose an attachment before posting.");
+
+    const file = buildSocialAttachmentFileFromAsset(asset);
+    const validationMessage = getSocialAttachmentValidationMessage(file);
+    if (validationMessage) throw new Error(validationMessage);
+    return file;
+  };
+
+  const onPickProfilePostAttachment = async () => {
+    try {
+      setProfilePostsNotice(null);
+      const file = await pickSocialAttachmentFile();
+      if (!file) return;
+      setProfilePostAttachmentFile(file);
+    } catch (error) {
+      setProfilePostAttachmentFile(null);
+      setProfilePostsNotice(error instanceof Error ? error.message : "Unable to attach that file right now.");
+    }
+  };
+
+  const onPickProfilePostCommentAttachment = async (post: ProfilePost) => {
+    try {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentNotice: null,
+      }));
+      const file = await pickSocialAttachmentFile();
+      if (!file) return;
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentAttachmentFile: file,
+      }));
+    } catch (error) {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentAttachmentFile: null,
+        commentNotice: error instanceof Error ? error.message : "Unable to attach that file right now.",
+      }));
+    }
+  };
+
+  const clearProfilePostCommentReply = (postId: string) => {
+    updateProfilePostUiState(postId, (current) => ({
+      ...current,
+      replyTargetCommentId: null,
+      commentNotice: null,
     }));
   };
 
@@ -1333,7 +1409,11 @@ export default function ProfileScreen() {
     try {
       setProfilePostBusy(true);
       setProfilePostsNotice(null);
-      const post = await createProfilePost({ body, visibility: "public" });
+      const post = await createProfilePost({
+        body,
+        visibility: "public",
+        attachmentFile: profilePostAttachmentFile,
+      });
       setProfilePosts((current) => [post, ...current.filter((entry) => entry.id !== post.id)]);
       setProfilePostUiById((current) => ({
         ...current,
@@ -1353,9 +1433,13 @@ export default function ProfileScreen() {
         },
       }));
       setProfilePostDraft("");
+      setProfilePostAttachmentFile(null);
       setProfilePostsReady(true);
-    } catch {
-      setProfilePostsNotice("Unable to post this update right now.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setProfilePostsNotice(message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
+        ? SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
+        : "Unable to post this update right now.");
     } finally {
       setProfilePostBusy(false);
     }
@@ -1456,7 +1540,8 @@ export default function ProfileScreen() {
       return;
     }
 
-    const body = String(profilePostUiById[post.id]?.commentDraft ?? "").trim();
+    const uiState = profilePostUiById[post.id] ?? {};
+    const body = String(uiState.commentDraft ?? "").trim();
     if (!body) {
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
@@ -1478,19 +1563,31 @@ export default function ProfileScreen() {
       commentNotice: null,
     }));
     try {
-      const comment = await createProfilePostComment({ postId: post.id, body });
+      const replyTarget = (uiState.comments ?? []).find((comment) => comment.id === uiState.replyTargetCommentId) ?? null;
+      const parentCommentId = replyTarget?.parentCommentId || replyTarget?.id || null;
+      const comment = await createProfilePostComment({
+        postId: post.id,
+        body,
+        parentCommentId,
+        attachmentFile: uiState.commentAttachmentFile,
+      });
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
         comments: [...(current.comments ?? []), comment],
         commentsReady: true,
         commentsOpen: true,
         commentDraft: "",
+        commentAttachmentFile: null,
+        replyTargetCommentId: null,
       }));
       await refreshProfilePostEngagement(post.id);
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
-        commentNotice: "Unable to post this comment right now.",
+        commentNotice: message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
+          ? SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
+          : "Unable to post this comment right now.",
       }));
     } finally {
       updateProfilePostUiState(post.id, (current) => ({
@@ -1521,7 +1618,12 @@ export default function ProfileScreen() {
                 await deleteProfilePostComment(comment.id);
                 updateProfilePostUiState(post.id, (current) => ({
                   ...current,
-                  comments: (current.comments ?? []).filter((entry) => entry.id !== comment.id),
+                  comments: (current.comments ?? []).filter((entry) => (
+                    entry.id !== comment.id && entry.parentCommentId !== comment.id
+                  )),
+                  replyTargetCommentId: current.replyTargetCommentId === comment.id
+                    ? null
+                    : current.replyTargetCommentId,
                 }));
                 await refreshProfilePostEngagement(post.id);
               } catch {
@@ -2379,7 +2481,7 @@ export default function ProfileScreen() {
           {renderComposerAvatar("small")}
           <View style={styles.profilePostComposerCopy}>
             <Text style={styles.profilePostComposerTitle}>Post</Text>
-            <Text style={styles.profilePostComposerMeta}>Text only. Creator videos stay in Channel.</Text>
+            <Text style={styles.profilePostComposerMeta}>Attach a photo or file. Creator videos stay in Channel.</Text>
           </View>
         </View>
         <TextInput
@@ -2396,10 +2498,31 @@ export default function ProfileScreen() {
           maxLength={PROFILE_POST_BODY_LIMIT}
           onFocus={scrollProfilePostComposerIntoView}
         />
+        {profilePostAttachmentFile ? (
+          <SocialAttachmentCard
+            file={profilePostAttachmentFile}
+            compact
+            onRemove={() => setProfilePostAttachmentFile(null)}
+          />
+        ) : null}
         <View style={styles.profilePostComposerFooter}>
-          <Text style={styles.profilePostComposerCount}>
-            {draftLength}/{PROFILE_POST_BODY_LIMIT}
-          </Text>
+          <View style={styles.profilePostComposerTools}>
+            <TouchableOpacity
+              style={[styles.profilePostAttachButton, profilePostBusy && styles.ownerHeroToolsButtonDisabled]}
+              activeOpacity={0.84}
+              disabled={profilePostBusy}
+              onPress={() => {
+                void onPickProfilePostAttachment();
+              }}
+              accessibilityLabel="Attach to profile post"
+            >
+              <MaterialIcons name="attach-file" size={16} color="#E6ECFA" />
+              <Text style={styles.profilePostAttachButtonText}>Attach</Text>
+            </TouchableOpacity>
+            <Text style={styles.profilePostComposerCount}>
+              {draftLength}/{PROFILE_POST_BODY_LIMIT}
+            </Text>
+          </View>
           <TouchableOpacity
             style={[
               styles.feedComposerPostButton,
@@ -2443,6 +2566,88 @@ export default function ProfileScreen() {
       || !currentUserId
       || commentDraftLength === 0
       || commentDraftLength > PROFILE_POST_COMMENT_BODY_LIMIT;
+    const getProfilePostCommentAuthorLabel = (comment: ProfilePostComment) => {
+      if (comment.userId === currentUserId) return "You";
+      if (comment.userId === post.userId) return profile.displayName;
+      return comment.authorName || "Member";
+    };
+    const replyTarget = comments.find((comment) => comment.id === uiState.replyTargetCommentId) ?? null;
+    const topLevelComments = comments.filter((comment) => !comment.parentCommentId);
+    const repliesByParentId = comments.reduce((map, comment) => {
+      if (!comment.parentCommentId) return map;
+      const current = map.get(comment.parentCommentId) ?? [];
+      current.push(comment);
+      map.set(comment.parentCommentId, current);
+      return map;
+    }, new Map<string, ProfilePostComment[]>());
+    const renderProfilePostCommentItem = (comment: ProfilePostComment, nested = false) => {
+      const canDeleteComment = !!currentUserId
+        && (comment.userId === currentUserId || (isSelfProfile && post.userId === currentUserId));
+      const canReportComment = !!currentUserId && comment.userId !== currentUserId;
+      const canReply = !!currentUserId && canEngageWithPost;
+      const commentAuthorLabel = getProfilePostCommentAuthorLabel(comment);
+
+      return (
+        <View key={comment.id} style={[styles.profilePostCommentCard, nested && styles.profilePostReplyCard]}>
+          <View style={styles.profilePostCommentHeader}>
+            <Text style={styles.profilePostCommentAuthor} numberOfLines={1}>
+              {commentAuthorLabel}
+            </Text>
+            <Text style={styles.profilePostCommentMeta}>{formatProfilePostDate(comment.createdAt)}</Text>
+          </View>
+          <LinkedText text={comment.body} style={styles.profilePostCommentBody} />
+          {comment.attachments.length ? (
+            <View style={styles.profilePostCommentAttachmentStack}>
+              {comment.attachments.map((attachment) => (
+                <SocialAttachmentCard key={attachment.id} attachment={attachment} compact />
+              ))}
+            </View>
+          ) : null}
+          {canReply || canDeleteComment || canReportComment ? (
+            <View style={styles.profilePostCommentActionRow}>
+              {canReply ? (
+                <TouchableOpacity
+                  style={styles.profilePostCommentAction}
+                  activeOpacity={0.84}
+                  onPress={() => updateProfilePostUiState(post.id, (current) => ({
+                    ...current,
+                    commentsOpen: true,
+                    replyTargetCommentId: comment.id,
+                    commentNotice: null,
+                  }))}
+                >
+                  <Text style={styles.profilePostCommentActionText}>Reply</Text>
+                </TouchableOpacity>
+              ) : null}
+              {canDeleteComment ? (
+                <TouchableOpacity
+                  style={[
+                    styles.profilePostCommentAction,
+                    uiState.deletingCommentId === comment.id && styles.feedPostActionDisabled,
+                  ]}
+                  activeOpacity={0.84}
+                  disabled={uiState.deletingCommentId === comment.id}
+                  onPress={() => onDeleteProfilePostCommentPress(post, comment)}
+                >
+                  <Text style={styles.profilePostCommentActionText}>
+                    {uiState.deletingCommentId === comment.id ? "Deleting" : "Delete"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              {canReportComment ? (
+                <TouchableOpacity
+                  style={styles.profilePostCommentAction}
+                  activeOpacity={0.84}
+                  onPress={() => onPressReportProfilePostComment(post, comment)}
+                >
+                  <Text style={styles.profilePostCommentActionText}>Report</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      );
+    };
 
     return (
       <View key={post.id} style={styles.feedPostCard}>
@@ -2463,7 +2668,14 @@ export default function ProfileScreen() {
             </View>
           ) : null}
         </View>
-        <Text style={styles.feedPostCaption}>{post.body}</Text>
+        <LinkedText text={post.body} style={styles.feedPostCaption} />
+        {post.attachments.length ? (
+          <View style={styles.feedPostAttachmentStack}>
+            {post.attachments.map((attachment) => (
+              <SocialAttachmentCard key={attachment.id} attachment={attachment} compact />
+            ))}
+          </View>
+        ) : null}
         <View style={styles.feedPostActionRow}>
           {canSharePost ? (
             <TouchableOpacity
@@ -2549,56 +2761,14 @@ export default function ProfileScreen() {
               </View>
             ) : comments.length ? (
               <View style={styles.profilePostCommentList}>
-                {comments.map((comment) => {
-                  const canDeleteComment = !!currentUserId
-                    && (comment.userId === currentUserId || (isSelfProfile && post.userId === currentUserId));
-                  const canReportComment = !!currentUserId && comment.userId !== currentUserId;
-                  const commentAuthorLabel = comment.userId === currentUserId
-                    ? "You"
-                    : comment.userId === post.userId
-                      ? profile.displayName
-                      : "Member";
-
-                  return (
-                    <View key={comment.id} style={styles.profilePostCommentCard}>
-                      <View style={styles.profilePostCommentHeader}>
-                        <Text style={styles.profilePostCommentAuthor} numberOfLines={1}>
-                          {commentAuthorLabel}
-                        </Text>
-                        <Text style={styles.profilePostCommentMeta}>{formatProfilePostDate(comment.createdAt)}</Text>
-                      </View>
-                      <Text style={styles.profilePostCommentBody}>{comment.body}</Text>
-                      {canDeleteComment || canReportComment ? (
-                        <View style={styles.profilePostCommentActionRow}>
-                          {canDeleteComment ? (
-                            <TouchableOpacity
-                              style={[
-                                styles.profilePostCommentAction,
-                                uiState.deletingCommentId === comment.id && styles.feedPostActionDisabled,
-                              ]}
-                              activeOpacity={0.84}
-                              disabled={uiState.deletingCommentId === comment.id}
-                              onPress={() => onDeleteProfilePostCommentPress(post, comment)}
-                            >
-                              <Text style={styles.profilePostCommentActionText}>
-                                {uiState.deletingCommentId === comment.id ? "Deleting" : "Delete"}
-                              </Text>
-                            </TouchableOpacity>
-                          ) : null}
-                          {canReportComment ? (
-                            <TouchableOpacity
-                              style={styles.profilePostCommentAction}
-                              activeOpacity={0.84}
-                              onPress={() => onPressReportProfilePostComment(post, comment)}
-                            >
-                              <Text style={styles.profilePostCommentActionText}>Report</Text>
-                            </TouchableOpacity>
-                          ) : null}
-                        </View>
-                      ) : null}
-                    </View>
-                  );
-                })}
+                {topLevelComments.map((comment) => (
+                  <View key={comment.id} style={styles.profilePostCommentThread}>
+                    {renderProfilePostCommentItem(comment)}
+                    {(repliesByParentId.get(comment.id) ?? []).map((reply) => (
+                      renderProfilePostCommentItem(reply, true)
+                    ))}
+                  </View>
+                ))}
               </View>
             ) : (
               <Text style={styles.profilePostCommentEmpty}>No comments yet.</Text>
@@ -2606,9 +2776,22 @@ export default function ProfileScreen() {
             {canEngageWithPost ? (
               currentUserId ? (
                 <View style={styles.profilePostCommentComposer}>
+                  {replyTarget ? (
+                    <View style={styles.profilePostReplyNotice}>
+                      <Text style={styles.profilePostReplyNoticeText} numberOfLines={1}>
+                        Replying to {getProfilePostCommentAuthorLabel(replyTarget)}
+                      </Text>
+                      <TouchableOpacity
+                        activeOpacity={0.82}
+                        onPress={() => clearProfilePostCommentReply(post.id)}
+                      >
+                        <Text style={styles.profilePostReplyCancelText}>Cancel Reply</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
                   <TextInput
                     style={styles.profilePostCommentInput}
-                    placeholder="Write a comment"
+                    placeholder={replyTarget ? "Write a reply" : "Write a comment"}
                     placeholderTextColor="#8A93A8"
                     value={commentDraft}
                     onChangeText={(value) => updateProfilePostUiState(post.id, (current) => ({
@@ -2620,10 +2803,34 @@ export default function ProfileScreen() {
                     editable={!uiState.commentBusy}
                     maxLength={PROFILE_POST_COMMENT_BODY_LIMIT}
                   />
+                  {uiState.commentAttachmentFile ? (
+                    <SocialAttachmentCard
+                      file={uiState.commentAttachmentFile}
+                      compact
+                      onRemove={() => updateProfilePostUiState(post.id, (current) => ({
+                        ...current,
+                        commentAttachmentFile: null,
+                      }))}
+                    />
+                  ) : null}
                   <View style={styles.profilePostCommentComposerFooter}>
-                    <Text style={styles.profilePostComposerCount}>
-                      {commentDraftLength}/{PROFILE_POST_COMMENT_BODY_LIMIT}
-                    </Text>
+                    <View style={styles.profilePostComposerTools}>
+                      <TouchableOpacity
+                        style={[styles.profilePostAttachButton, uiState.commentBusy && styles.ownerHeroToolsButtonDisabled]}
+                        activeOpacity={0.84}
+                        disabled={!!uiState.commentBusy}
+                        onPress={() => {
+                          void onPickProfilePostCommentAttachment(post);
+                        }}
+                        accessibilityLabel="Attach to profile post comment"
+                      >
+                        <MaterialIcons name="attach-file" size={16} color="#E6ECFA" />
+                        <Text style={styles.profilePostAttachButtonText}>Attach</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.profilePostComposerCount}>
+                        {commentDraftLength}/{PROFILE_POST_COMMENT_BODY_LIMIT}
+                      </Text>
+                    </View>
                     <TouchableOpacity
                       style={[
                         styles.profilePostCommentSubmit,
@@ -2636,7 +2843,7 @@ export default function ProfileScreen() {
                       }}
                     >
                       {uiState.commentBusy ? <ActivityIndicator size="small" color="#fff" /> : null}
-                      <Text style={styles.feedComposerPostText}>Post</Text>
+                      <Text style={styles.feedComposerPostText}>{replyTarget ? "Reply" : "Post"}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -3731,6 +3938,29 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
+  profilePostComposerTools: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  profilePostAttachButton: {
+    minHeight: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    paddingHorizontal: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  profilePostAttachButtonText: {
+    color: "#E6ECFA",
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
   profilePostComposerCount: {
     color: "#8E98AE",
     fontSize: 11.5,
@@ -3776,6 +4006,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     paddingHorizontal: 13,
     paddingBottom: 11,
+  },
+  feedPostAttachmentStack: {
+    paddingHorizontal: 13,
+    paddingBottom: 12,
+    gap: 8,
   },
   feedVideoPreview: {
     minHeight: 204,
@@ -3855,6 +4090,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profilePostCommentList: { gap: 8 },
+  profilePostCommentThread: {
+    gap: 7,
+  },
   profilePostCommentCard: {
     borderRadius: 12,
     borderWidth: 1,
@@ -3862,6 +4100,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.045)",
     padding: 10,
     gap: 6,
+  },
+  profilePostReplyCard: {
+    marginLeft: 22,
+    borderColor: "rgba(115,134,255,0.18)",
+    backgroundColor: "rgba(115,134,255,0.07)",
   },
   profilePostCommentHeader: {
     flexDirection: "row",
@@ -3885,6 +4128,9 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
     fontWeight: "600",
+  },
+  profilePostCommentAttachmentStack: {
+    gap: 7,
   },
   profilePostCommentActionRow: {
     flexDirection: "row",
@@ -3931,6 +4177,25 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(13,18,32,0.72)",
     padding: 10,
     gap: 8,
+  },
+  profilePostReplyNotice: {
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.2)",
+    backgroundColor: "rgba(115,134,255,0.09)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 5,
+  },
+  profilePostReplyNoticeText: {
+    color: "#E7ECFF",
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
+  profilePostReplyCancelText: {
+    color: "#AFC0FF",
+    fontSize: 11,
+    fontWeight: "900",
   },
   profilePostCommentInput: {
     width: "100%",

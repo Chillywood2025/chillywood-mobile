@@ -1,4 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import * as DocumentPicker from "expo-document-picker";
 import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
@@ -59,6 +61,12 @@ import {
     CREATOR_VIDEO_COMMENT_BODY_LIMIT,
     type CreatorVideoComment,
 } from "../../_lib/creatorVideoComments";
+import {
+    getSocialAttachmentValidationMessage,
+    SOCIAL_ATTACHMENT_PICKER_TYPES,
+    SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
+    type SocialAttachmentFile,
+} from "../../_lib/socialAttachments";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
     getCreatorVideoWatchPartyBlockCopy,
@@ -103,6 +111,8 @@ import {
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { LinkedText } from "../../components/social/linked-text";
+import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
@@ -136,6 +146,12 @@ const formatCreatorCommentTime = (value?: string | null) => {
     minute: "2-digit",
   });
 };
+const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
+  uri: asset.uri,
+  name: asset.name,
+  mimeType: asset.mimeType,
+  size: asset.size,
+});
 const PARTY_HOST_SYNC_WRITE_INTERVAL_MILLIS = 600;
 const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
@@ -721,6 +737,8 @@ export default function PlayerScreen() {
   const [creatorVideoCommentsLoading, setCreatorVideoCommentsLoading] = useState(false);
   const [creatorVideoCommentsError, setCreatorVideoCommentsError] = useState<string | null>(null);
   const [creatorVideoCommentDraft, setCreatorVideoCommentDraft] = useState("");
+  const [creatorVideoCommentAttachmentFile, setCreatorVideoCommentAttachmentFile] = useState<SocialAttachmentFile | null>(null);
+  const [creatorVideoCommentReplyTargetId, setCreatorVideoCommentReplyTargetId] = useState<string | null>(null);
   const [creatorVideoCommentBusy, setCreatorVideoCommentBusy] = useState(false);
   const [creatorVideoCommentDeletingId, setCreatorVideoCommentDeletingId] = useState<string | null>(null);
   const [creatorVideoCommentReportTarget, setCreatorVideoCommentReportTarget] = useState<CreatorVideoComment | null>(null);
@@ -3042,6 +3060,35 @@ export default function PlayerScreen() {
     }
   }, [creatorVideo?.id, inWatchParty, isLiveModeFlag, playbackSourceKind, titleId]);
 
+  const onPickCreatorVideoCommentAttachment = useCallback(async () => {
+    try {
+      setCreatorVideoCommentsError(null);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [...SOCIAL_ATTACHMENT_PICKER_TYPES],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        setCreatorVideoCommentsError("Choose an attachment before posting.");
+        return;
+      }
+
+      const file = buildSocialAttachmentFileFromAsset(asset);
+      const validationMessage = getSocialAttachmentValidationMessage(file);
+      if (validationMessage) {
+        setCreatorVideoCommentAttachmentFile(null);
+        setCreatorVideoCommentsError(validationMessage);
+        return;
+      }
+      setCreatorVideoCommentAttachmentFile(file);
+    } catch {
+      setCreatorVideoCommentsError("Unable to attach that file right now.");
+    }
+  }, []);
+
   const onSubmitCreatorVideoComment = useCallback(async () => {
     const creatorVideoId = String(creatorVideo?.id ?? titleId ?? "").trim();
     const body = creatorVideoCommentDraft.trim();
@@ -3063,15 +3110,37 @@ export default function PlayerScreen() {
     setCreatorVideoCommentBusy(true);
     setCreatorVideoCommentsError(null);
     try {
-      const comment = await createCreatorVideoComment({ videoId: creatorVideoId, body });
+      const replyTarget = creatorVideoComments.find((comment) => comment.id === creatorVideoCommentReplyTargetId) ?? null;
+      const parentCommentId = replyTarget?.parentCommentId || replyTarget?.id || null;
+      const comment = await createCreatorVideoComment({
+        videoId: creatorVideoId,
+        body,
+        parentCommentId,
+        attachmentFile: creatorVideoCommentAttachmentFile,
+      });
       setCreatorVideoComments((current) => [...current.filter((entry) => entry.id !== comment.id), comment]);
       setCreatorVideoCommentDraft("");
-    } catch {
-      setCreatorVideoCommentsError("Unable to post this comment right now.");
+      setCreatorVideoCommentAttachmentFile(null);
+      setCreatorVideoCommentReplyTargetId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setCreatorVideoCommentsError(message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
+        ? SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
+        : "Unable to post this comment right now.");
     } finally {
       setCreatorVideoCommentBusy(false);
     }
-  }, [creatorVideo?.id, creatorVideoCommentBusy, creatorVideoCommentDraft, isSignedIn, playbackSourceKind, titleId]);
+  }, [
+    creatorVideo?.id,
+    creatorVideoCommentAttachmentFile,
+    creatorVideoCommentBusy,
+    creatorVideoCommentDraft,
+    creatorVideoCommentReplyTargetId,
+    creatorVideoComments,
+    isSignedIn,
+    playbackSourceKind,
+    titleId,
+  ]);
 
   const onDeleteCreatorVideoComment = useCallback((comment: CreatorVideoComment) => {
     if (!comment.id || creatorVideoCommentDeletingId) return;
@@ -3090,7 +3159,10 @@ export default function PlayerScreen() {
                 setCreatorVideoCommentDeletingId(comment.id);
                 setCreatorVideoCommentsError(null);
                 await deleteCreatorVideoComment(comment.id);
-                setCreatorVideoComments((current) => current.filter((entry) => entry.id !== comment.id));
+                setCreatorVideoComments((current) => current.filter((entry) => (
+                  entry.id !== comment.id && entry.parentCommentId !== comment.id
+                )));
+                setCreatorVideoCommentReplyTargetId((current) => (current === comment.id ? null : current));
               } catch {
                 setCreatorVideoCommentsError("Unable to delete this comment right now.");
               } finally {
@@ -4974,6 +5046,81 @@ export default function PlayerScreen() {
 
     const draftLength = creatorVideoCommentDraft.trim().length;
     const commentDisabled = creatorVideoCommentBusy || draftLength === 0 || draftLength > CREATOR_VIDEO_COMMENT_BODY_LIMIT;
+    const replyTarget = creatorVideoComments.find((comment) => comment.id === creatorVideoCommentReplyTargetId) ?? null;
+    const topLevelComments = creatorVideoComments.filter((comment) => !comment.parentCommentId);
+    const repliesByParentId = creatorVideoComments.reduce((map, comment) => {
+      if (!comment.parentCommentId) return map;
+      const current = map.get(comment.parentCommentId) ?? [];
+      current.push(comment);
+      map.set(comment.parentCommentId, current);
+      return map;
+    }, new Map<string, CreatorVideoComment[]>());
+    const renderCreatorVideoComment = (comment: CreatorVideoComment, nested = false) => {
+      const isOwnComment = !!creatorVideoCommentUserId && comment.userId === creatorVideoCommentUserId;
+
+      return (
+        <View key={comment.id} style={[styles.creatorCommentCard, nested && styles.creatorCommentReplyCard]}>
+          <View style={styles.creatorCommentAvatar}>
+            {comment.authorAvatarUrl ? (
+              <Image source={{ uri: comment.authorAvatarUrl }} style={styles.creatorCommentAvatarImage} />
+            ) : (
+              <Text style={styles.creatorCommentAvatarText}>{getInitials(comment.authorName)}</Text>
+            )}
+          </View>
+          <View style={styles.creatorCommentBodyWrap}>
+            <View style={styles.creatorCommentMetaRow}>
+              <Text style={styles.creatorCommentAuthor} numberOfLines={1}>{comment.authorName}</Text>
+              <Text style={styles.creatorCommentTime}>{formatCreatorCommentTime(comment.createdAt)}</Text>
+            </View>
+            <LinkedText text={comment.body} style={styles.creatorCommentBody} />
+            {comment.attachments.length ? (
+              <View style={styles.creatorCommentAttachmentStack}>
+                {comment.attachments.map((attachment) => (
+                  <SocialAttachmentCard key={attachment.id} attachment={attachment} compact />
+                ))}
+              </View>
+            ) : null}
+            {isOwnComment || isSignedIn ? (
+              <View style={styles.creatorCommentActionRow}>
+                {isSignedIn ? (
+                  <TouchableOpacity
+                    style={styles.creatorCommentAction}
+                    activeOpacity={0.84}
+                    onPress={() => {
+                      setCreatorVideoCommentReplyTargetId(comment.id);
+                      setCreatorVideoCommentsError(null);
+                    }}
+                  >
+                    <Text style={styles.creatorCommentActionText}>Reply</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {isOwnComment ? (
+                  <TouchableOpacity
+                    style={styles.creatorCommentAction}
+                    activeOpacity={0.84}
+                    disabled={creatorVideoCommentDeletingId === comment.id}
+                    onPress={() => onDeleteCreatorVideoComment(comment)}
+                  >
+                    <Text style={styles.creatorCommentActionText}>
+                      {creatorVideoCommentDeletingId === comment.id ? "Deleting" : "Delete"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {isSignedIn && !isOwnComment ? (
+                  <TouchableOpacity
+                    style={styles.creatorCommentAction}
+                    activeOpacity={0.84}
+                    onPress={() => setCreatorVideoCommentReportTarget(comment)}
+                  >
+                    <Text style={styles.creatorCommentActionText}>Report</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        </View>
+      );
+    };
 
     return (
       <View style={styles.creatorCommentsPanel}>
@@ -4993,90 +5140,84 @@ export default function PlayerScreen() {
           {creatorVideoCommentsError ? (
             <Text style={styles.creatorCommentsEmpty}>{creatorVideoCommentsError}</Text>
           ) : creatorVideoComments.length ? (
-            creatorVideoComments.map((comment) => {
-              const isOwnComment = !!creatorVideoCommentUserId && comment.userId === creatorVideoCommentUserId;
-
-              return (
-                <View key={comment.id} style={styles.creatorCommentCard}>
-                  <View style={styles.creatorCommentAvatar}>
-                    {comment.authorAvatarUrl ? (
-                      <Image source={{ uri: comment.authorAvatarUrl }} style={styles.creatorCommentAvatarImage} />
-                    ) : (
-                      <Text style={styles.creatorCommentAvatarText}>{getInitials(comment.authorName)}</Text>
-                    )}
-                  </View>
-                  <View style={styles.creatorCommentBodyWrap}>
-                    <View style={styles.creatorCommentMetaRow}>
-                      <Text style={styles.creatorCommentAuthor} numberOfLines={1}>{comment.authorName}</Text>
-                      <Text style={styles.creatorCommentTime}>{formatCreatorCommentTime(comment.createdAt)}</Text>
-                    </View>
-                    <Text style={styles.creatorCommentBody}>{comment.body}</Text>
-                    {isOwnComment || isSignedIn ? (
-                      <View style={styles.creatorCommentActionRow}>
-                        {isOwnComment ? (
-                          <TouchableOpacity
-                            style={styles.creatorCommentAction}
-                            activeOpacity={0.84}
-                            disabled={creatorVideoCommentDeletingId === comment.id}
-                            onPress={() => onDeleteCreatorVideoComment(comment)}
-                          >
-                            <Text style={styles.creatorCommentActionText}>
-                              {creatorVideoCommentDeletingId === comment.id ? "Deleting" : "Delete"}
-                            </Text>
-                          </TouchableOpacity>
-                        ) : null}
-                        {isSignedIn && !isOwnComment ? (
-                          <TouchableOpacity
-                            style={styles.creatorCommentAction}
-                            activeOpacity={0.84}
-                            onPress={() => setCreatorVideoCommentReportTarget(comment)}
-                          >
-                            <Text style={styles.creatorCommentActionText}>Report</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })
+            topLevelComments.map((comment) => (
+              <View key={comment.id} style={styles.creatorCommentThread}>
+                {renderCreatorVideoComment(comment)}
+                {(repliesByParentId.get(comment.id) ?? []).map((reply) => renderCreatorVideoComment(reply, true))}
+              </View>
+            ))
           ) : (
             <Text style={styles.creatorCommentsEmpty}>No comments yet.</Text>
           )}
         </ScrollView>
 
         {isSignedIn ? (
-          <View style={styles.creatorCommentsInputRow}>
-            <TextInput
-              value={creatorVideoCommentDraft}
-              onChangeText={(value) => {
-                setCreatorVideoCommentDraft(value);
-                if (creatorVideoCommentsError) setCreatorVideoCommentsError(null);
-              }}
-              onFocus={() => {
-                setControlsVisible(true);
-                resetAutoHideTimer();
-              }}
-              onSubmitEditing={() => {
-                void onSubmitCreatorVideoComment();
-              }}
-              style={styles.creatorCommentsInput}
-              placeholder="Add a text comment"
-              placeholderTextColor="rgba(212,216,226,0.68)"
-              editable={!creatorVideoCommentBusy}
-              maxLength={CREATOR_VIDEO_COMMENT_BODY_LIMIT}
-              returnKeyType="send"
-            />
-            <TouchableOpacity
-              style={[styles.creatorCommentsSendBtn, commentDisabled && styles.secondaryBtnDisabled]}
-              activeOpacity={0.85}
-              disabled={commentDisabled}
-              onPress={() => {
-                void onSubmitCreatorVideoComment();
-              }}
-            >
-              <Text style={styles.creatorCommentsSendText}>{creatorVideoCommentBusy ? "..." : "Post"}</Text>
-            </TouchableOpacity>
+          <View style={styles.creatorCommentsComposer}>
+            {replyTarget ? (
+              <View style={styles.creatorCommentReplyNotice}>
+                <Text style={styles.creatorCommentReplyNoticeText} numberOfLines={1}>
+                  Replying to {replyTarget.authorName}
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.82}
+                  onPress={() => setCreatorVideoCommentReplyTargetId(null)}
+                >
+                  <Text style={styles.creatorCommentReplyCancelText}>Cancel Reply</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            {creatorVideoCommentAttachmentFile ? (
+              <SocialAttachmentCard
+                file={creatorVideoCommentAttachmentFile}
+                compact
+                onRemove={() => setCreatorVideoCommentAttachmentFile(null)}
+              />
+            ) : null}
+            <View style={styles.creatorCommentsInputRow}>
+              <TouchableOpacity
+                style={[styles.creatorCommentsAttachBtn, creatorVideoCommentBusy && styles.secondaryBtnDisabled]}
+                activeOpacity={0.84}
+                disabled={creatorVideoCommentBusy}
+                onPress={() => {
+                  void onPickCreatorVideoCommentAttachment();
+                }}
+                accessibilityLabel="Attach to creator-video comment"
+              >
+                <MaterialIcons name="attach-file" size={16} color="#E6ECFA" />
+              </TouchableOpacity>
+              <TextInput
+                value={creatorVideoCommentDraft}
+                onChangeText={(value) => {
+                  setCreatorVideoCommentDraft(value);
+                  if (creatorVideoCommentsError) setCreatorVideoCommentsError(null);
+                }}
+                onFocus={() => {
+                  setControlsVisible(true);
+                  resetAutoHideTimer();
+                }}
+                onSubmitEditing={() => {
+                  void onSubmitCreatorVideoComment();
+                }}
+                style={styles.creatorCommentsInput}
+                placeholder={replyTarget ? "Add a reply" : "Add a comment"}
+                placeholderTextColor="rgba(212,216,226,0.68)"
+                editable={!creatorVideoCommentBusy}
+                maxLength={CREATOR_VIDEO_COMMENT_BODY_LIMIT}
+                returnKeyType="send"
+              />
+              <TouchableOpacity
+                style={[styles.creatorCommentsSendBtn, commentDisabled && styles.secondaryBtnDisabled]}
+                activeOpacity={0.85}
+                disabled={commentDisabled}
+                onPress={() => {
+                  void onSubmitCreatorVideoComment();
+                }}
+              >
+                <Text style={styles.creatorCommentsSendText}>
+                  {creatorVideoCommentBusy ? "..." : replyTarget ? "Reply" : "Post"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <Text style={styles.creatorCommentsSigninText}>Sign in to comment.</Text>
@@ -6753,6 +6894,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
+  creatorCommentThread: {
+    gap: 7,
+  },
+  creatorCommentReplyCard: {
+    marginLeft: 24,
+    paddingLeft: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: "rgba(115,134,255,0.28)",
+  },
   creatorCommentAvatar: {
     width: 30,
     height: 30,
@@ -6797,6 +6947,9 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: "600",
   },
+  creatorCommentAttachmentStack: {
+    gap: 7,
+  },
   creatorCommentActionRow: {
     flexDirection: "row",
     gap: 8,
@@ -6809,10 +6962,42 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: "900",
   },
+  creatorCommentsComposer: {
+    gap: 7,
+  },
+  creatorCommentReplyNotice: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.2)",
+    backgroundColor: "rgba(115,134,255,0.08)",
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    gap: 4,
+  },
+  creatorCommentReplyNoticeText: {
+    color: "#E7ECFF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  creatorCommentReplyCancelText: {
+    color: "#AFC0FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
   creatorCommentsInputRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
+  },
+  creatorCommentsAttachBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   creatorCommentsInput: {
     flex: 1,

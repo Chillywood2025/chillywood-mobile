@@ -1,5 +1,11 @@
 import type { Tables, TablesInsert } from "../supabase/database.types";
 
+import {
+  createSocialAttachmentForSurface,
+  readSocialAttachmentsForSurfaces,
+  type SocialAttachment,
+  type SocialAttachmentFile,
+} from "./socialAttachments";
 import { supabase } from "./supabase";
 
 export const PROFILE_POSTS_TABLE = "profile_posts";
@@ -22,11 +28,13 @@ export type ProfilePost = {
   moderatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  attachments: SocialAttachment[];
 };
 
 export type ProfilePostComment = {
   id: string;
   postId: string;
+  parentCommentId: string | null;
   userId: string;
   body: string;
   moderationStatus: ProfilePostModerationStatus;
@@ -35,6 +43,10 @@ export type ProfilePostComment = {
   moderatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  authorName: string;
+  authorUsername: string | null;
+  authorAvatarUrl: string | null;
+  attachments: SocialAttachment[];
 };
 
 export type ProfilePostEngagementState = {
@@ -52,11 +64,12 @@ type ProfilePostInsert = TablesInsert<"profile_posts">;
 type ProfilePostCommentRow = Tables<"profile_post_comments">;
 type ProfilePostCommentInsert = TablesInsert<"profile_post_comments">;
 type ProfilePostLikeInsert = TablesInsert<"profile_post_likes">;
+type UserProfileRow = Pick<Tables<"user_profiles">, "user_id" | "display_name" | "username" | "avatar_url">;
 
 const PROFILE_POST_SELECT =
   "id,user_id,body,visibility,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at";
 const PROFILE_POST_COMMENT_SELECT =
-  "id,post_id,user_id,body,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at";
+  "id,post_id,parent_comment_id,user_id,body,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -72,7 +85,10 @@ const normalizeModerationStatus = (value: unknown): ProfilePostModerationStatus 
   return "clean";
 };
 
-const parseProfilePost = (row: ProfilePostRow): ProfilePost => ({
+const parseProfilePost = (
+  row: ProfilePostRow,
+  attachments: SocialAttachment[] = [],
+): ProfilePost => ({
   id: normalizeText(row.id),
   userId: normalizeText(row.user_id),
   body: normalizeText(row.body),
@@ -83,20 +99,51 @@ const parseProfilePost = (row: ProfilePostRow): ProfilePost => ({
   moderatedBy: normalizeText(row.moderated_by) || null,
   createdAt: normalizeText(row.created_at) || new Date().toISOString(),
   updatedAt: normalizeText(row.updated_at) || normalizeText(row.created_at) || new Date().toISOString(),
+  attachments,
 });
 
-const parseProfilePostComment = (row: ProfilePostCommentRow): ProfilePostComment => ({
-  id: normalizeText(row.id),
-  postId: normalizeText(row.post_id),
-  userId: normalizeText(row.user_id),
-  body: normalizeText(row.body),
-  moderationStatus: normalizeModerationStatus(row.moderation_status),
-  moderationReason: normalizeText(row.moderation_reason) || null,
-  moderatedAt: normalizeText(row.moderated_at) || null,
-  moderatedBy: normalizeText(row.moderated_by) || null,
-  createdAt: normalizeText(row.created_at) || new Date().toISOString(),
-  updatedAt: normalizeText(row.updated_at) || normalizeText(row.created_at) || new Date().toISOString(),
-});
+async function readAuthorProfiles(userIds: string[]) {
+  const normalizedIds = Array.from(new Set(userIds.map(normalizeText).filter(Boolean)));
+  if (!normalizedIds.length) return new Map<string, UserProfileRow>();
+
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("user_id,display_name,username,avatar_url")
+    .in("user_id", normalizedIds)
+    .returns<UserProfileRow[]>();
+
+  if (error || !data) return new Map<string, UserProfileRow>();
+  return new Map(data.map((row) => [normalizeText(row.user_id), row]));
+}
+
+const parseProfilePostComment = (
+  row: ProfilePostCommentRow,
+  authors: Map<string, UserProfileRow>,
+  attachments: SocialAttachment[] = [],
+): ProfilePostComment => {
+  const userId = normalizeText(row.user_id);
+  const author = authors.get(userId) ?? null;
+  const username = normalizeText(author?.username) || null;
+  const displayName = normalizeText(author?.display_name) || username || "Member";
+
+  return {
+    id: normalizeText(row.id),
+    postId: normalizeText(row.post_id),
+    parentCommentId: normalizeText(row.parent_comment_id) || null,
+    userId,
+    body: normalizeText(row.body),
+    moderationStatus: normalizeModerationStatus(row.moderation_status),
+    moderationReason: normalizeText(row.moderation_reason) || null,
+    moderatedAt: normalizeText(row.moderated_at) || null,
+    moderatedBy: normalizeText(row.moderated_by) || null,
+    createdAt: normalizeText(row.created_at) || new Date().toISOString(),
+    updatedAt: normalizeText(row.updated_at) || normalizeText(row.created_at) || new Date().toISOString(),
+    authorName: displayName,
+    authorUsername: username,
+    authorAvatarUrl: normalizeText(author?.avatar_url) || null,
+    attachments,
+  };
+};
 
 async function getSignedInUserId() {
   const { data, error } = await supabase.auth.getSession();
@@ -134,12 +181,17 @@ export async function readProfilePosts(
 
   const { data, error } = await query.returns<ProfilePostRow[]>();
   if (error || !data) return [];
-  return data.map(parseProfilePost);
+  const attachmentsByPostId = await readSocialAttachmentsForSurfaces(
+    "profile_post",
+    data.map((row) => row.id),
+  );
+  return data.map((row) => parseProfilePost(row, attachmentsByPostId.get(normalizeText(row.id)) ?? []));
 }
 
 export async function createProfilePost(input: {
   body: string;
   visibility?: ProfilePostVisibility;
+  attachmentFile?: SocialAttachmentFile | null;
 }): Promise<ProfilePost> {
   const userId = await getRequiredUserId();
   const body = normalizeText(input.body);
@@ -164,7 +216,24 @@ export async function createProfilePost(input: {
     .single();
 
   if (error || !data) throw error ?? new Error("Unable to post this update right now.");
-  return parseProfilePost(data);
+
+  const post = parseProfilePost(data);
+  if (!input.attachmentFile) return post;
+
+  try {
+    const attachment = await createSocialAttachmentForSurface({
+      surfaceType: "profile_post",
+      surfaceId: post.id,
+      file: input.attachmentFile,
+    });
+    return {
+      ...post,
+      attachments: [attachment],
+    };
+  } catch (attachmentError) {
+    await deleteProfilePost(post.id).catch(() => undefined);
+    throw attachmentError;
+  }
 }
 
 export async function deleteProfilePost(postId: string): Promise<void> {
@@ -241,12 +310,20 @@ export async function readProfilePostComments(
     .returns<ProfilePostCommentRow[]>();
 
   if (error || !data) return [];
-  return data.map(parseProfilePostComment);
+  const [authors, attachmentsByCommentId] = await Promise.all([
+    readAuthorProfiles(data.map((row) => row.user_id)),
+    readSocialAttachmentsForSurfaces("profile_post_comment", data.map((row) => row.id)),
+  ]);
+  return data.map((row) => (
+    parseProfilePostComment(row, authors, attachmentsByCommentId.get(normalizeText(row.id)) ?? [])
+  ));
 }
 
 export async function createProfilePostComment(input: {
   postId: string;
   body: string;
+  parentCommentId?: string | null;
+  attachmentFile?: SocialAttachmentFile | null;
 }): Promise<ProfilePostComment> {
   const userId = await getRequiredUserId();
   const postId = normalizeText(input.postId);
@@ -259,6 +336,7 @@ export async function createProfilePostComment(input: {
 
   const payload: ProfilePostCommentInsert = {
     post_id: postId,
+    parent_comment_id: normalizeText(input.parentCommentId) || null,
     user_id: userId,
     body,
     moderation_status: "clean",
@@ -272,8 +350,26 @@ export async function createProfilePostComment(input: {
     .returns<ProfilePostCommentRow>()
     .single();
 
-  if (error || !data) throw error ?? new Error("Unable to post this comment right now.");
-  return parseProfilePostComment(data);
+  const created = data as ProfilePostCommentRow | null;
+  if (error || !created) throw error ?? new Error("Unable to post this comment right now.");
+  const authors = await readAuthorProfiles([created.user_id]);
+  const comment = parseProfilePostComment(created, authors);
+  if (!input.attachmentFile) return comment;
+
+  try {
+    const attachment = await createSocialAttachmentForSurface({
+      surfaceType: "profile_post_comment",
+      surfaceId: comment.id,
+      file: input.attachmentFile,
+    });
+    return {
+      ...comment,
+      attachments: [attachment],
+    };
+  } catch (attachmentError) {
+    await deleteProfilePostComment(comment.id).catch(() => undefined);
+    throw attachmentError;
+  }
 }
 
 export async function deleteProfilePostComment(commentId: string): Promise<void> {

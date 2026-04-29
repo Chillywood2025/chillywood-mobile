@@ -6,6 +6,12 @@ import {
   getCommunicationRoomSnapshot,
   readCommunicationIdentity,
 } from "./communication";
+import {
+  createSocialAttachmentForSurface,
+  readSocialAttachmentsForSurfaces,
+  type SocialAttachment,
+  type SocialAttachmentFile,
+} from "./socialAttachments";
 import { supabase } from "./supabase";
 import { readUserProfile } from "./userData";
 import { getWritablePartyUserId } from "./watchParty";
@@ -61,6 +67,7 @@ export type ChatMessage = {
   body: string;
   messageType: "text";
   createdAt: string;
+  attachments: SocialAttachment[];
 };
 
 type ChatThreadMemberRow = Pick<
@@ -228,7 +235,10 @@ function parseChatThread(row: ChatThreadRow, currentUserId: string): ChatThreadS
   };
 }
 
-function parseChatMessage(row: ChatMessageRow): ChatMessage | null {
+function parseChatMessage(
+  row: ChatMessageRow,
+  attachments: SocialAttachment[] = [],
+): ChatMessage | null {
   const id = toText(row.id);
   const threadId = toText(row.thread_id);
   const senderUserId = toText(row.sender_user_id);
@@ -242,6 +252,7 @@ function parseChatMessage(row: ChatMessageRow): ChatMessage | null {
     body,
     messageType: "text",
     createdAt: toText(row.created_at) || new Date().toISOString(),
+    attachments,
   };
 }
 
@@ -306,8 +317,12 @@ export async function listChatMessages(threadId: string): Promise<ChatMessage[]>
     .returns<ChatMessageRow[]>();
 
   if (error || !data) return [];
+  const attachmentsByMessageId = await readSocialAttachmentsForSurfaces(
+    "chat_message",
+    data.map((row) => row.id),
+  );
   return data
-    .map(parseChatMessage)
+    .map((row) => parseChatMessage(row, attachmentsByMessageId.get(toText(row.id)) ?? []))
     .filter(isDefined);
 }
 
@@ -529,18 +544,25 @@ async function getChatThreadByPairKey(pairKey: string) {
   return parseChatThread(data, currentUserId);
 }
 
-export async function sendChatMessage(threadId: string, body: string): Promise<ChatMessage> {
+export async function sendChatMessage(
+  threadId: string,
+  body: string,
+  attachmentFile?: SocialAttachmentFile | null,
+): Promise<ChatMessage> {
   const currentUserId = await getRequiredChatUserId();
   const normalizedThreadId = toText(threadId);
   const trimmedBody = toText(body);
-  if (!normalizedThreadId || !trimmedBody) {
+  const hasAttachment = !!attachmentFile;
+  const bodyForInsert = trimmedBody || (attachmentFile ? toText(attachmentFile.name) || "Attachment" : "");
+  if (!normalizedThreadId || !bodyForInsert) {
     throw new Error("Message text is required.");
   }
 
   logChatInvite("send_message_start", {
     currentUserId,
     threadId: normalizedThreadId,
-    bodyPreview: trimmedBody.slice(0, 80),
+    bodyPreview: bodyForInsert.slice(0, 80),
+    hasAttachment,
   });
 
   const { data, error } = await supabase
@@ -548,7 +570,7 @@ export async function sendChatMessage(threadId: string, body: string): Promise<C
     .insert({
       thread_id: normalizedThreadId,
       sender_user_id: currentUserId,
-      body: trimmedBody,
+      body: bodyForInsert,
       message_type: "text",
     } satisfies ChatMessageInsert)
     .select(CHAT_MESSAGE_SELECT)
@@ -572,10 +594,34 @@ export async function sendChatMessage(threadId: string, body: string): Promise<C
     });
     throw new Error("Failed to parse Chi'lly Chat message.");
   }
+
+  if (attachmentFile) {
+    try {
+      const attachment = await createSocialAttachmentForSurface({
+        surfaceType: "chat_message",
+        surfaceId: message.id,
+        file: attachmentFile,
+      });
+      message.attachments = [attachment];
+    } catch (attachmentError) {
+      try {
+        await supabase
+          .from(CHAT_MESSAGES_TABLE)
+          .delete()
+          .eq("id", message.id)
+          .eq("sender_user_id", currentUserId);
+      } catch {
+        // The visible error should stay about the attachment failure.
+      }
+      throw attachmentError;
+    }
+  }
+
   logChatInvite("send_message_success", {
     currentUserId,
     threadId: normalizedThreadId,
     messageId: message.id,
+    hasAttachment,
   });
   return message;
 }

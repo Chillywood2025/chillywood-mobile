@@ -548,6 +548,7 @@ export type Database = {
           moderated_by: string | null
           moderation_reason: string | null
           moderation_status: string
+          parent_comment_id: string | null
           updated_at: string
           user_id: string
           video_id: string
@@ -561,6 +562,7 @@ export type Database = {
           moderated_by?: string | null
           moderation_reason?: string | null
           moderation_status?: string
+          parent_comment_id?: string | null
           updated_at?: string
           user_id: string
           video_id: string
@@ -574,6 +576,7 @@ export type Database = {
           moderated_by?: string | null
           moderation_reason?: string | null
           moderation_status?: string
+          parent_comment_id?: string | null
           updated_at?: string
           user_id?: string
           video_id?: string
@@ -788,6 +791,7 @@ export type Database = {
           moderated_by: string | null
           moderation_reason: string | null
           moderation_status: string
+          parent_comment_id: string | null
           post_id: string
           updated_at: string
           user_id: string
@@ -801,6 +805,7 @@ export type Database = {
           moderated_by?: string | null
           moderation_reason?: string | null
           moderation_status?: string
+          parent_comment_id?: string | null
           post_id: string
           updated_at?: string
           user_id: string
@@ -814,6 +819,7 @@ export type Database = {
           moderated_by?: string | null
           moderation_reason?: string | null
           moderation_status?: string
+          parent_comment_id?: string | null
           post_id?: string
           updated_at?: string
           user_id?: string
@@ -893,6 +899,63 @@ export type Database = {
           updated_at?: string
           user_id?: string
           visibility?: string
+        }
+        Relationships: []
+      }
+      social_attachments: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          id: string
+          mime_type: string
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_reason: string | null
+          moderation_status: string
+          original_file_name: string | null
+          owner_user_id: string
+          size_bytes: number
+          storage_bucket: string
+          storage_path: string
+          surface_id: string
+          surface_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          mime_type: string
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          original_file_name?: string | null
+          owner_user_id: string
+          size_bytes?: number
+          storage_bucket?: string
+          storage_path: string
+          surface_id: string
+          surface_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          mime_type?: string
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          original_file_name?: string | null
+          owner_user_id?: string
+          size_bytes?: number
+          storage_bucket?: string
+          storage_path?: string
+          surface_id?: string
+          surface_type?: string
+          updated_at?: string
         }
         Relationships: []
       }

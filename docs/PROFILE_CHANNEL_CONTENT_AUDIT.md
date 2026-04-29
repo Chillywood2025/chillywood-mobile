@@ -43,32 +43,32 @@ Active code truth after this pass:
 - The Profile header shows identity, handle, avatar, tagline/bio when present, official/platform badges where backed, and backed live/role signals.
 - Owner top actions are Edit Profile, Manage Channel, Upload Video, and Settings.
 - Public top actions are backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, and Report where supported.
-- The Posts tab now shows real text-only Profile posts/status updates when backed rows exist, with owner composer/delete, public clean reads, "Post" composer/action copy, backed text comments, backed likes/counts, route-safe share, and backed report actions.
+- The Posts tab now shows real Profile posts/status updates when backed rows exist, with owner composer/delete, public clean reads, "Post" composer/action copy, backed comments/replies, backed likes/counts, route-safe share, clickable links, optional 250 MB social attachments, and backed report actions.
 - The Channel tab owns creator uploaded videos, uses `CreatorVideoCard`, and opens `/player/[id]?source=creator-video`.
 - The owner Profile composer remains available, but it is explicitly a creator-video upload into Channel.
 - `/channel-settings` labels current access controls as Access Defaults and no longer presents ad/sponsorship/Premium-playback cards as Channel owner controls.
 - Home has a backed "From People You Follow" section that reads `channel_followers` and shows public clean creator uploads from followed creators only.
-- Standalone creator-video Player has backed text-only comments through `creator_video_comments`; Live Stage and Watch-Party comments are unchanged.
+- Standalone creator-video Player has backed comments/replies through `creator_video_comments`; Live Stage and Watch-Party comments are unchanged.
 
 Public v1 status:
 
 - Profile 1-6 is present for identity, quick actions, Channel entry, backed social/community posture, and honest activity/empty states.
-- Personal posts/status updates are implemented as text-only v1 Profile content; Profile post text comments and single likes are implemented locally with a pending remote migration. Profile post media, nested replies, reposts, polls, and richer reactions remain post-v1.
+- Personal posts/status updates are implemented as v1 Profile content with text plus optional social attachments once the local attachment migration is applied remotely; Profile post comments/replies and single likes are implemented locally with pending remote migrations. Deep threads beyond one reply level, reposts, polls, richer reactions, automatic link previews, and Live/Watch-Party media comments remain post-v1.
 - Follow is backed by `channel_followers` and `_lib/channelAudience.ts`; public counts remain hidden unless backed/readable for that viewer.
-- Creator-video text comments are implemented in standalone Player only; media comments, nested replies, fake counts, and Live/Watch-Party comment layout changes remain out of scope.
+- Creator-video comments/replies are implemented in standalone Player only; fake counts and Live/Watch-Party comment layout changes remain out of scope.
 - Full Friends, likes/saves/counts on creator videos, paid creator content, payouts, tips, coins, ads, native game streaming, and real Chi'llyfects AR remain out of scope.
 
-Runtime proof status: remote Supabase migration/schema/RLS proof passed for the original social-basics tables and report target types through `202604290001`. New local migration `202604290002_profile_post_engagement.sql` still needs remote application/proof; Android runtime proof for Profile post comments, likes, share, reports, and keyboard visibility remains pending.
+Runtime proof status: remote Supabase migration/schema/RLS proof passed for the original social-basics tables and report target types through `202604290001`. Local migrations `202604290002_profile_post_engagement.sql` and `202604290003_social_replies_links_attachments.sql` still need remote application/proof; Android runtime proof for Profile post comments/replies, likes, share, links, attachments, reports, and keyboard visibility remains pending.
 
 ## 2026-04-29 Public V1 Social Basics Audit
 
 Backing truth after this pass:
 
-- Backed now: `channel_followers`, `channel_audience_blocks`, `safety_reports`, creator-video public/draft/moderation status, `profile_posts`, `creator_video_comments`, and local/pending-remote `profile_post_comments` / `profile_post_likes`.
+- Backed now: `channel_followers`, `channel_audience_blocks`, `safety_reports`, creator-video public/draft/moderation status, `profile_posts`, `creator_video_comments`, local/pending-remote `profile_post_comments` / `profile_post_likes`, and local/pending-remote `social_attachments`.
 - UI-only/fake removed/avoided: no fake personal post feed, no fake creator-video comments/counts, no fake creator-video likes/saves/shares, no fake Friends, and no fake platform title filler in Channels. Profile post counts now come only from backed comment/like queries.
-- Missing or post-v1: full Friends graph UI, friend requests/accept/decline, close friends, friend-only privacy, media Profile posts, media comments, nested replies, reposts, polls, richer reactions, advanced notifications, full VIP/audience roster, paid creator media, tips/coins/payouts/ads, native game streaming, and real Chi'llyfects AR.
-- Safe v1 build: text-only Profile posts, text-only Profile post comments/likes once the migration is applied, following-based creator-video discovery, and text-only standalone creator-video comments because each has table/RLS/helper/UI/report backing.
-- Report/moderation status: profile posts, profile-post comments, and creator-video comments can be reported through `safety_reports` when the relevant migration is applied; public reads filter to clean/reported and exclude deleted/hidden/removed content. Admin UI review/moderation for the new target types still needs runtime/admin workflow proof.
+- Missing or post-v1: full Friends graph UI, friend requests/accept/decline, close friends, friend-only privacy, deep reply threads beyond one level, reposts, polls, richer reactions, automatic link previews, malware scanning, advanced notifications, full VIP/audience roster, paid creator media, tips/coins/payouts/ads, native game streaming, and real Chi'llyfects AR.
+- Safe v1 build: Profile posts, Profile post comments/replies/likes, following-based creator-video discovery, standalone creator-video comments/replies, clickable links, and bounded social/chat attachments once the local migrations are applied because each has table/RLS/helper/UI/report backing.
+- Report/moderation status: profile posts, profile-post comments, creator-video comments, and the new `social_attachment` target can be reported through `safety_reports` when the relevant migration is applied; public reads filter to clean/reported and exclude deleted/hidden/removed content. Admin UI review/moderation for the new target types still needs runtime/admin workflow proof.
 
 ## Files Read
 
@@ -454,30 +454,30 @@ Storage:
 
 ## Comment Uploads Scope
 
-Main decision: comment media upload is post-v1 unless a future pass discovers a mostly complete implementation outside the checked-in code audited here. It is separate from creator channel video upload and should not block the Public v1 creator-upload lane.
+Main decision update: bounded social attachments are now a Public v1 local implementation for Profile posts/comments, standalone creator-video comments, and Chi'lly Chat, but Live Stage / Watch-Party media comments and movie-size comment/chat uploads remain post-v1. This remains separate from creator channel video upload and must not use the 5 GiB creator-video limit.
 
 Current comment truth:
 
 - Watch-party room comments use `watch_party_room_messages` with `party_id`, `user_id`, `username`, `text`, and `created_at`.
 - Live Stage comments use the same `watch_party_room_messages` table through `_lib/watchParty.ts` and `app/watch-party/live-stage/[partyId].tsx`.
 - Player room comments use `sendPartyMessage(...)` and `fetchPartyMessages(...)`; they are text-only room messages.
-- Standalone creator-video comments now use `creator_video_comments`; they are text-only and scoped to creator-video Player, not Live Stage or Watch-Party room comments.
-- Chi'lly Chat direct messages use `chat_messages` with a `message_type = 'text'` check. `_lib/chat.ts` inserts only text, and `app/chat/[threadId].tsx` explicitly says media and reactions are not live yet.
+- Standalone creator-video comments now use `creator_video_comments`; they support one-level replies and social attachments when the local migration is applied, and remain scoped to creator-video Player, not Live Stage or Watch-Party room comments.
+- Chi'lly Chat direct messages use `chat_messages` with a `message_type = 'text'` check plus `social_attachments` metadata for private thread attachments when the local migration is applied.
 - Reactions exist as emoji/floating room reactions and content relationship markers, not as comment attachments.
-- `profile_post_comments` is the scoped text-only Profile post comment table once `202604290002_profile_post_engagement.sql` is applied. There is no comment/reply table for platform Title comments, media comments, nested replies, or universal comments outside the scoped room/live/chat/profile-post/creator-video-comment contexts.
-- There is no attachment table, comment media bucket, storage policy, media picker, upload helper, thumbnail path, moderation queue, or RLS path for comment media.
-- `safety_reports` now supports `profile_post` and `creator_video_comment` target types in addition to participant/room/title/creator_video.
+- `profile_post_comments` is the scoped Profile post comment/reply table once `202604290002_profile_post_engagement.sql` and `202604290003_social_replies_links_attachments.sql` are applied. There is no platform Title comment table, Live/Watch-Party media comment table, deep nested thread model, or universal comment surface outside the scoped room/live/chat/profile-post/creator-video-comment contexts.
+- `social_attachments` plus the private `social-attachments` bucket are local/pending-remote for Profile posts/comments, creator-video comments, and chat messages. The cap is 250 MB per attachment, not the creator-video 5 GiB movie lane.
+- `safety_reports` supports `profile_post`, `profile_post_comment`, `creator_video_comment`, and local/pending-remote `social_attachment` target types in addition to participant/room/title/creator_video.
 
 Public v1 recommendation:
 
-- Keep text comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, Player room comments, Profile post text comments/likes, standalone creator-video text comments, Chi'lly Chat text, and existing reactions.
+- Keep comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, Player room comments, Profile post comments/replies/likes, standalone creator-video comments/replies, Chi'lly Chat, bounded social/chat attachments, and existing reactions.
 - Prioritize creator video upload to Channel/Profile before comment media.
-- Do not allow full video uploads in live comments for Public v1.
-- Do not add comment media UI until schema, storage, rate limits, moderation, deletion, and report targets exist.
+- Do not allow full movie-size uploads or media uploads in live comments for Public v1.
+- Do not add Live/Watch-Party attachment UI until schema, storage, rate limits, moderation, deletion, and report targets exist for those surfaces.
 
 Later comment media scope:
 
-- Start with images in non-live surfaces, then consider short clips or voice notes with strict type, size, duration, and rate limits.
+- Harden non-live attachments with malware scanning, richer moderation queues, and optional previews before expanding type/size/surface scope.
 - Live comments should remain fast and safe. Full video uploads in live comments should be disallowed or heavily restricted even after v1.
 - Required later pieces: canonical comment/thread tables or a deliberate extension of room/chat messages, `comment_attachments` or `message_attachments`, a `comment-media` storage bucket, owner/member/public RLS, moderation status, report target types for comment/message/attachment, delete/takedown paths, file scanning, thumbnail generation, and client upload progress/error states.
 

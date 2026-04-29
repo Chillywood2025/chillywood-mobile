@@ -14,7 +14,8 @@ export type SafetyReportTargetType =
   | "creator_video"
   | "profile_post"
   | "profile_post_comment"
-  | "creator_video_comment";
+  | "creator_video_comment"
+  | "social_attachment";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
 export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner" | "moderator";
 export type PlatformRole = "owner" | "operator" | "moderator";

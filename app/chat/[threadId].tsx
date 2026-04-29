@@ -1,4 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import * as DocumentPicker from "expo-document-picker";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -43,8 +45,16 @@ import { reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { useSession } from "../../_lib/session";
+import {
+  getSocialAttachmentValidationMessage,
+  SOCIAL_ATTACHMENT_PICKER_TYPES,
+  SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
+  type SocialAttachmentFile,
+} from "../../_lib/socialAttachments";
 import { InRoomCommunicationPanel } from "../../components/communication/in-room-communication-panel";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { LinkedText } from "../../components/social/linked-text";
+import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { useCommunicationRoomSession } from "../../hooks/use-communication-room-session";
 
 const logChatThread = (event: string, details?: Record<string, unknown>) => {
@@ -66,6 +76,13 @@ const formatStamp = (value: string) => {
   if (!Number.isFinite(date.getTime())) return "";
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 };
+
+const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
+  uri: asset.uri,
+  name: asset.name,
+  mimeType: asset.mimeType,
+  size: asset.size,
+});
 
 const getThreadStatusLabel = (thread: ChatThreadSummary | null, platformOwned = false) => {
   if (thread?.activeCommunicationRoomId && thread.activeCallType) {
@@ -175,6 +192,7 @@ export default function ChillyChatThreadScreen() {
   const [thread, setThread] = useState<ChatThreadSummary | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [attachmentFile, setAttachmentFile] = useState<SocialAttachmentFile | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [callPanelOpen, setCallPanelOpen] = useState(false);
@@ -511,35 +529,73 @@ export default function ChillyChatThreadScreen() {
     };
   }, [officialAccount, otherMember?.userId]);
 
+  const handlePickAttachment = useCallback(async () => {
+    try {
+      setError(null);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [...SOCIAL_ATTACHMENT_PICKER_TYPES],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        setError("Choose an attachment before sending.");
+        return;
+      }
+
+      const file = buildSocialAttachmentFileFromAsset(asset);
+      const validationMessage = getSocialAttachmentValidationMessage(file);
+      if (validationMessage) {
+        setAttachmentFile(null);
+        setError(validationMessage);
+        return;
+      }
+      setAttachmentFile(file);
+    } catch {
+      setError("Unable to attach that file right now.");
+    }
+  }, []);
+
   const handleSend = useCallback(async (bodyOverride?: string) => {
     const trimmedDraft = String(bodyOverride ?? draft).trim();
-    if (!threadId || !trimmedDraft || sending || !thread) return;
+    const selectedAttachment = bodyOverride ? null : attachmentFile;
+    if (!threadId || (!trimmedDraft && !selectedAttachment) || sending || !thread) return;
 
     const tempId = `temp-${Date.now()}`;
     const optimistic: ChatMessage = {
       id: tempId,
       threadId,
       senderUserId: currentUserId,
-      body: trimmedDraft,
+      body: trimmedDraft || selectedAttachment?.name || "Attachment",
       messageType: "text",
       createdAt: new Date().toISOString(),
+      attachments: [],
     };
 
     setDraft("");
+    if (!bodyOverride) setAttachmentFile(null);
     setSending(true);
     setMessages((prev) => [...prev, optimistic]);
 
     try {
-      const sent = await sendChatMessage(threadId, trimmedDraft);
+      const sent = await sendChatMessage(threadId, trimmedDraft, selectedAttachment);
       trackEvent("chat_message_sent", {
         surface: "chat-thread",
         threadId,
+        hasAttachment: selectedAttachment ? "true" : "false",
       });
       setMessages((prev) => prev.map((message) => (message.id === tempId ? sent : message)));
       await markChatThreadRead(threadId).catch(() => null);
     } catch (sendError) {
       setMessages((prev) => prev.filter((message) => message.id !== tempId));
-      const message = sendError instanceof Error ? sendError.message : "Unable to send Chi'lly Chat message.";
+      if (selectedAttachment) setAttachmentFile(selectedAttachment);
+      const message = sendError instanceof Error && sendError.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
+        ? SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
+        : sendError instanceof Error
+          ? sendError.message
+          : "Unable to send Chi'lly Chat message.";
       setError(message);
       reportRuntimeError("chat-thread-send-message", sendError, {
         threadId,
@@ -547,7 +603,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setSending(false);
     }
-  }, [currentUserId, draft, sending, thread, threadId]);
+  }, [attachmentFile, currentUserId, draft, sending, thread, threadId]);
 
   const handleStartCall = useCallback(async (mode: ChatCallType) => {
     logChatCall("handle_start_call", {
@@ -1170,7 +1226,14 @@ export default function ChillyChatThreadScreen() {
             <Text style={[styles.messageAuthor, message.isMe && styles.messageAuthorMe]}>
               {message.isMe ? "You" : message.authorLabel}
             </Text>
-            <Text style={styles.messageBody}>{message.body}</Text>
+            <LinkedText text={message.body} style={styles.messageBody} />
+            {message.attachments.length ? (
+              <View style={styles.messageAttachmentStack}>
+                {message.attachments.map((attachment) => (
+                  <SocialAttachmentCard key={attachment.id} attachment={attachment} compact />
+                ))}
+              </View>
+            ) : null}
             <Text style={[styles.messageTime, message.isMe && styles.messageTimeMe]}>
               {formatStamp(message.createdAt)}
             </Text>
@@ -1216,9 +1279,9 @@ export default function ChillyChatThreadScreen() {
       >
         <View style={styles.composerAffordanceRow}>
           <View style={styles.composerAffordanceChip}>
-            <Text style={styles.composerAffordanceText}>Text only</Text>
+            <Text style={styles.composerAffordanceText}>Text and attachments</Text>
           </View>
-          <Text style={styles.composerAssistText}>Calls stay in-thread. Media and reactions are not live yet.</Text>
+          <Text style={styles.composerAssistText}>Calls stay in-thread. Attachments stay private to this thread.</Text>
         </View>
         <GatedSmartReplySuggestions
           activeCallType={thread?.activeCallType}
@@ -1234,7 +1297,26 @@ export default function ChillyChatThreadScreen() {
             setDraft((current) => (current.trim() ? `${current.trim()} ${suggestion}` : suggestion));
           }}
         />
+        {attachmentFile ? (
+          <SocialAttachmentCard
+            file={attachmentFile}
+            compact
+            onRemove={() => setAttachmentFile(null)}
+          />
+        ) : null}
         <View style={styles.composerInputRow}>
+          <TouchableOpacity
+            testID="chat-thread-attach-button"
+            accessibilityLabel="Attach a Chi'lly Chat file"
+            style={[styles.attachBtn, sending && styles.callBtnDisabled]}
+            activeOpacity={0.86}
+            disabled={sending}
+            onPress={() => {
+              void handlePickAttachment();
+            }}
+          >
+            <MaterialIcons name="attach-file" size={18} color="#F4F8FF" />
+          </TouchableOpacity>
           <TextInput
             testID="chat-thread-input"
             accessibilityLabel="Write a Chi'lly Chat message"
@@ -1248,9 +1330,9 @@ export default function ChillyChatThreadScreen() {
           <TouchableOpacity
             testID="chat-thread-send-button"
             accessibilityLabel="Send Chi'lly Chat message"
-            style={[styles.sendBtn, (sending || !draft.trim()) && styles.callBtnDisabled]}
+            style={[styles.sendBtn, (sending || (!draft.trim() && !attachmentFile)) && styles.callBtnDisabled]}
             activeOpacity={0.86}
-            disabled={sending || !draft.trim()}
+            disabled={sending || (!draft.trim() && !attachmentFile)}
             onPress={() => {
               void handleSend();
             }}
@@ -1786,6 +1868,10 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: "600",
   },
+  messageAttachmentStack: {
+    gap: 7,
+    marginTop: 3,
+  },
   messageTime: {
     color: "#C7D1E3",
     fontSize: 10,
@@ -1925,6 +2011,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 10,
+  },
+  attachBtn: {
+    width: 44,
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   input: {
     flex: 1,

@@ -1,5 +1,11 @@
 import type { Tables, TablesInsert } from "../supabase/database.types";
 
+import {
+  createSocialAttachmentForSurface,
+  readSocialAttachmentsForSurfaces,
+  type SocialAttachment,
+  type SocialAttachmentFile,
+} from "./socialAttachments";
 import { supabase } from "./supabase";
 
 export const CREATOR_VIDEO_COMMENTS_TABLE = "creator_video_comments";
@@ -10,6 +16,7 @@ export type CreatorVideoCommentModerationStatus = "clean" | "reported" | "hidden
 export type CreatorVideoComment = {
   id: string;
   videoId: string;
+  parentCommentId: string | null;
   userId: string;
   body: string;
   moderationStatus: CreatorVideoCommentModerationStatus;
@@ -21,6 +28,7 @@ export type CreatorVideoComment = {
   authorName: string;
   authorUsername: string | null;
   authorAvatarUrl: string | null;
+  attachments: SocialAttachment[];
 };
 
 type CreatorVideoCommentRow = Tables<"creator_video_comments">;
@@ -28,7 +36,7 @@ type CreatorVideoCommentInsert = TablesInsert<"creator_video_comments">;
 type UserProfileRow = Pick<Tables<"user_profiles">, "user_id" | "display_name" | "username" | "avatar_url">;
 
 const CREATOR_VIDEO_COMMENT_SELECT =
-  "id,video_id,user_id,body,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at";
+  "id,video_id,parent_comment_id,user_id,body,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -72,6 +80,7 @@ async function readAuthorProfiles(userIds: string[]) {
 const parseCreatorVideoComment = (
   row: CreatorVideoCommentRow,
   authors: Map<string, UserProfileRow>,
+  attachments: SocialAttachment[] = [],
 ): CreatorVideoComment => {
   const userId = normalizeText(row.user_id);
   const author = authors.get(userId) ?? null;
@@ -81,6 +90,7 @@ const parseCreatorVideoComment = (
   return {
     id: normalizeText(row.id),
     videoId: normalizeText(row.video_id),
+    parentCommentId: normalizeText(row.parent_comment_id) || null,
     userId,
     body: normalizeText(row.body),
     moderationStatus: normalizeModerationStatus(row.moderation_status),
@@ -92,6 +102,7 @@ const parseCreatorVideoComment = (
     authorName: displayName,
     authorUsername: username,
     authorAvatarUrl: normalizeText(author?.avatar_url) || null,
+    attachments,
   };
 };
 
@@ -114,13 +125,22 @@ export async function readCreatorVideoComments(
 
   if (error || !data) return [];
 
-  const authors = await readAuthorProfiles(data.map((row) => row.user_id));
-  return data.map((row) => parseCreatorVideoComment(row, authors)).reverse();
+  const [authors, attachmentsByCommentId] = await Promise.all([
+    readAuthorProfiles(data.map((row) => row.user_id)),
+    readSocialAttachmentsForSurfaces("creator_video_comment", data.map((row) => row.id)),
+  ]);
+  return data
+    .map((row) => (
+      parseCreatorVideoComment(row, authors, attachmentsByCommentId.get(normalizeText(row.id)) ?? [])
+    ))
+    .reverse();
 }
 
 export async function createCreatorVideoComment(input: {
   videoId: string;
   body: string;
+  parentCommentId?: string | null;
+  attachmentFile?: SocialAttachmentFile | null;
 }): Promise<CreatorVideoComment> {
   const userId = await getRequiredUserId();
   const videoId = normalizeText(input.videoId);
@@ -133,6 +153,7 @@ export async function createCreatorVideoComment(input: {
 
   const payload: CreatorVideoCommentInsert = {
     video_id: videoId,
+    parent_comment_id: normalizeText(input.parentCommentId) || null,
     user_id: userId,
     body,
     moderation_status: "clean",
@@ -150,7 +171,23 @@ export async function createCreatorVideoComment(input: {
   if (error || !created) throw error ?? new Error("Unable to post this comment right now.");
 
   const authors = await readAuthorProfiles([created.user_id]);
-  return parseCreatorVideoComment(created, authors);
+  const comment = parseCreatorVideoComment(created, authors);
+  if (!input.attachmentFile) return comment;
+
+  try {
+    const attachment = await createSocialAttachmentForSurface({
+      surfaceType: "creator_video_comment",
+      surfaceId: comment.id,
+      file: input.attachmentFile,
+    });
+    return {
+      ...comment,
+      attachments: [attachment],
+    };
+  } catch (attachmentError) {
+    await deleteCreatorVideoComment(comment.id).catch(() => undefined);
+    throw attachmentError;
+  }
 }
 
 export async function deleteCreatorVideoComment(commentId: string): Promise<void> {
