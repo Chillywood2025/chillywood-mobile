@@ -49,7 +49,7 @@ Current Public v1 truth:
 - Paid/subscriber media, tips, coins, payouts, VIPs, and advanced creator studio are later phase.
 - Premium/access gate proof is required for Watch-Party Live.
 - Basic moderation/safety is required before public launch because creator uploads exist.
-- Supabase/RLS proof is required before public launch. Focused local proof now passes for the current creator media, premium/billing, moderation, creator-event, notification, reminder, and Watch-Party room policy lanes; live Supabase proof is still required.
+- Supabase/RLS proof is required before public launch. Focused local proof now passes for the current creator media, premium/billing, moderation, creator-event, notification, reminder, and Watch-Party room policy lanes. Remote proof now also passes for `profile_posts`, `creator_video_comments`, and the `profile_post` / `creator_video_comment` safety report target types; broader live Supabase proof is still required for storage limits, public/draft/non-owner creator media, admin writes, entitlement states, access gates, and Android route behavior.
 
 This plan does not create a code-level god system. Docs define ownership; routes, libs, backend policies, and proof artifacts enforce it.
 

@@ -8,6 +8,7 @@ Updated: 2026-04-28 for Profile/Channel versus Chi'llywood Originals ownership c
 Updated: 2026-04-28 for one-device non-live Profile/Channel and creator-video card proof
 Updated: 2026-04-29 for Profile/Channel Public v1 product-contract clarity
 Updated: 2026-04-29 for Public v1 social basics backing
+Updated: 2026-04-29 for remote social-basics schema/RLS proof
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -56,7 +57,7 @@ Public v1 status:
 - Creator-video text comments are implemented in standalone Player only; media comments, nested replies, fake counts, and Live/Watch-Party comment layout changes remain out of scope.
 - Full Friends, likes/saves/counts on creator videos, personal post comments/reactions, paid creator content, payouts, tips, coins, ads, native game streaming, and real Chi'llyfects AR remain out of scope.
 
-Runtime proof status: static/code/docs pass only. No Android runtime proof, production build, or database mutation was run.
+Runtime proof status: remote Supabase migration/schema/RLS proof now passed for the social-basics tables and report target types; Android runtime proof and production build proof remain pending.
 
 ## 2026-04-29 Public V1 Social Basics Audit
 

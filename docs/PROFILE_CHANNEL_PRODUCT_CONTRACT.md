@@ -64,6 +64,8 @@ They must not appear as filler inside user/creator Channels, profile posts, crea
 
 Public v1 includes a clear Profile/Channel split, owner/public Profile behavior, backed text-only Profile posts/status updates, backed following-based creator upload discovery, backed text-only creator-video comments, backed creator video upload/manage, public creator-video Channel display, explicit creator-video Player routing, backed report/share where implemented, honest event/live context, and premium mobile empty states.
 
+Remote Supabase schema/RLS proof for the text-only Profile posts, text-only creator-video comments, and new report target types is complete as of 2026-04-29. Android runtime proof remains a separate Public v1 proof lane.
+
 ## 9. What Is Post-V1
 
 Post-v1 includes photos/videos in Profile posts, media comments, nested replies, reposts, polls, full comments/reactions on Profile posts, generated thumbnails, advanced channel shelves, a richer creator dashboard, full search, push notifications, full Friends system, close friends, friend-only privacy, paid creator content, subscriber-only creator media, tips/coins, payouts, ads, and native game streaming.

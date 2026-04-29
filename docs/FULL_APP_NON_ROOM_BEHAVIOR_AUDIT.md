@@ -125,6 +125,8 @@ No separate public `/channel/[id]` route is required for v1. A later channel ali
 
 Runtime proof update: one-device owner proof on `R5CR120QCBF` confirms the creator Channel does not show Chi'llywood Originals/platform titles, platform title artwork, platform title jump chips, or platform saved/resume counts, and that owner Profile/Channel displays creator-owned video content with a branded fallback card. A focused visual proof under `/tmp/chillywood-profile-feed-reference-proof-20260428-203057` confirms the new collapsed and expanded mobile Profile composer shape in the Android dev-client runtime. Public/non-owner proof for owner controls, public empty states, public videos, hidden drafts, and non-owner denial still needs a second account or dedicated viewer session.
 
+Remote Supabase proof update: migration `202604290001_public_v1_social_basics.sql` is applied to the linked project, and sanitized PostgREST proof confirms `profile_posts` owner create/delete, public clean reads, draft/hidden filtering, and `profile_post` report target support. Android UI proof for the Profile Posts flow remains pending.
+
 ## 6. Creator Media Findings
 
 Status: Implemented / Proof Pending.
@@ -138,6 +140,8 @@ No fake paid/subscriber media, transcoding, payout, or advanced creator studio c
 Engagement truth: creator-video Report is backed in Player, public creator-video Share uses the app route/deep link, standalone creator-video text comments are backed through `creator_video_comments`, and text-only Profile updates are backed through `profile_posts`. Creator-video likes/saves/counts, Profile post comments/reactions, media posts/comments, nested replies, and full Friends are not backed or shown. Title-only engagement remains title-only.
 
 Runtime proof update: one-device owner proof confirms Channel Settings Content visibility, scrollability, modern fallback creator-video card presentation, owner controls, upload form visibility, route-safe Share, and creator-video Report sheet opening without submitting. Public/draft visibility, thumbnail-present visual smoke, edit, publish/unpublish, delete/storage remove, report row creation, admin hide/remove/restore, and non-owner denial remain pending.
+
+Remote Supabase proof update: sanitized PostgREST proof confirms `creator_video_comments` authenticated create/delete on public clean creator videos, anon public clean reads, anon write/delete denial, hidden comment insert blocking, and `creator_video_comment` plus existing `creator_video` safety-report targets. Android Player discussion UI proof remains pending.
 
 ## 7. Player/Title Findings
 
