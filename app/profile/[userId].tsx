@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   resolveChannelAccess,
@@ -32,18 +33,23 @@ import {
 } from "../../_lib/monetization";
 import {
   readCreatorVideos,
+  uploadCreatorVideo,
   type CreatorVideo,
+  type CreatorVideoFile,
+  type CreatorVideoVisibility,
 } from "../../_lib/creatorVideos";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
+    ActivityIndicator,
     Alert,
     Image,
     ScrollView,
     Share,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
@@ -279,6 +285,72 @@ const getBrowseAccessBody = (resolution: ChannelAccessResolution | null, isOffic
   return "the full channel story stays open to browse";
 };
 
+const SUPPORTED_PROFILE_VIDEO_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-m4v",
+]);
+
+const SUPPORTED_PROFILE_VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "m4v"]);
+
+const getReadableProfileFileName = (value?: string | null) => String(value ?? "").trim() || "video file";
+
+const getProfileVideoTitleFromName = (value?: string | null) => (
+  getReadableProfileFileName(value)
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim()
+);
+
+const formatProfileFileSize = (size?: number | null) => {
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) return "";
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
+};
+
+const isSupportedProfileVideoFile = (file: CreatorVideoFile) => {
+  const mimeType = String(file.mimeType ?? "").trim().toLowerCase();
+  const extension = String(file.name ?? "").trim().toLowerCase().split(".").pop() ?? "";
+  const hasSupportedMimeType = SUPPORTED_PROFILE_VIDEO_MIME_TYPES.has(mimeType) || mimeType.startsWith("video/");
+  const hasSupportedExtension = SUPPORTED_PROFILE_VIDEO_EXTENSIONS.has(extension);
+
+  if (hasSupportedMimeType || hasSupportedExtension) return !!file.uri;
+  if (!mimeType && !extension) return !!file.uri;
+
+  return false;
+};
+
+const formatProfileComposerError = (error: unknown, fallback: string) => {
+  const rawMessage = error instanceof Error ? error.message : String(error ?? "");
+  const message = rawMessage.trim().toLowerCase();
+
+  if (!message) return fallback;
+  if (message.includes("network") || message.includes("fetch")) {
+    return "Network trouble interrupted your profile upload. Check your connection and try again.";
+  }
+  if (message.includes("permission") || message.includes("denied") || message.includes("policy") || message.includes("rls")) {
+    return "This account cannot publish that profile upload right now.";
+  }
+  if (message.includes("empty") || message.includes("zero")) {
+    return "That video uploaded as an empty file. Choose a non-empty video and try again.";
+  }
+  if (message.includes("storage") || message.includes("bucket") || message.includes("upload")) {
+    return "The video could not be saved to creator storage right now. Try again in a moment.";
+  }
+  if (message.includes("file") || message.includes("mime") || message.includes("unsupported")) {
+    return "Choose an MP4, MOV, WebM, or M4V video file.";
+  }
+
+  return fallback;
+};
+
+const logProfileComposer = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[profile-composer]", event, details ?? {});
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState("");
@@ -289,6 +361,13 @@ export default function ProfileScreen() {
   const [reportBusy, setReportBusy] = useState(false);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
   const [creatorVideosReady, setCreatorVideosReady] = useState(false);
+  const [profileComposerOpen, setProfileComposerOpen] = useState(false);
+  const [profileComposerText, setProfileComposerText] = useState("");
+  const [profileComposerTitle, setProfileComposerTitle] = useState("");
+  const [profileComposerFile, setProfileComposerFile] = useState<CreatorVideoFile | null>(null);
+  const [profileComposerVisibility, setProfileComposerVisibility] = useState<CreatorVideoVisibility>("public");
+  const [profileComposerBusy, setProfileComposerBusy] = useState(false);
+  const [profileComposerNotice, setProfileComposerNotice] = useState<string | null>(null);
   const [channelAccessProfile, setChannelAccessProfile] = useState<UserProfile | null>(null);
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
   const [channelAccessReady, setChannelAccessReady] = useState(false);
@@ -642,12 +721,160 @@ export default function ProfileScreen() {
       : "";
   const showFriendshipHint = !!friendState?.isFriend && !isOfficialProfile && !isSelfProfile;
 
-  const onPressManageChannel = () => {
+  const openChannelSettings = (params?: { focus?: "content"; action?: "upload" }) => {
     if (!creatorSettingsEnabled) {
       Alert.alert("Manage Channel", "Creator channel settings are currently hidden by app configuration.");
       return;
     }
+    if (params) {
+      router.push({ pathname: "/channel-settings", params });
+      return;
+    }
     router.push("/channel-settings");
+  };
+  const onPressManageChannel = () => {
+    openChannelSettings();
+  };
+  const onPressUploadVideo = () => {
+    if (!creatorSettingsEnabled) {
+      Alert.alert("Upload Video", "Creator uploads are currently hidden by app configuration.");
+      return;
+    }
+    setProfileComposerOpen(true);
+    setProfileComposerNotice(null);
+    setActiveTab("content");
+  };
+  const refreshProfileCreatorVideos = async () => {
+    if (isOfficialProfile || !userId) {
+      setCreatorVideos([]);
+      setCreatorVideosReady(true);
+      return [];
+    }
+
+    const videos = await readCreatorVideos(userId, { includeDrafts: isSelfProfile, limit: 24 });
+    setCreatorVideos(videos);
+    setCreatorVideosReady(true);
+    return videos;
+  };
+  const onPickProfileComposerFile = async () => {
+    try {
+      setProfileComposerNotice(null);
+      logProfileComposer("picker_open");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled) {
+        logProfileComposer("picker_canceled");
+        setProfileComposerNotice("No video selected.");
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        logProfileComposer("picker_missing_asset");
+        setProfileComposerNotice("Choose a video file before posting.");
+        return;
+      }
+
+      const pickedFile: CreatorVideoFile = {
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: asset.mimeType,
+        size: asset.size,
+      };
+
+      if (!isSupportedProfileVideoFile(pickedFile)) {
+        logProfileComposer("picker_unsupported", {
+          name: pickedFile.name ?? "unnamed",
+          mimeType: pickedFile.mimeType ?? null,
+        });
+        setProfileComposerFile(null);
+        setProfileComposerNotice("Choose an MP4, MOV, WebM, or M4V video file.");
+        return;
+      }
+
+      setProfileComposerFile(pickedFile);
+      if (!profileComposerTitle.trim()) {
+        setProfileComposerTitle(getProfileVideoTitleFromName(pickedFile.name));
+      }
+      logProfileComposer("picker_selected", {
+        name: pickedFile.name ?? "unnamed",
+        mimeType: pickedFile.mimeType ?? null,
+        size: pickedFile.size ?? null,
+      });
+      setProfileComposerNotice(`${getReadableProfileFileName(pickedFile.name)} attached.`);
+    } catch (error) {
+      logProfileComposer("picker_failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      setProfileComposerNotice("Unable to open the video picker right now.");
+    }
+  };
+  const onSubmitProfileComposer = async () => {
+    if (!isSelfProfile) return;
+
+    if (!profileComposerFile) {
+      setProfileComposerNotice("Attach a video before posting to your Profile.");
+      return;
+    }
+
+    if (typeof profileComposerFile.size === "number" && profileComposerFile.size <= 0) {
+      setProfileComposerNotice("Choose a non-empty video file before posting.");
+      return;
+    }
+
+    if (!profileComposerTitle.trim()) {
+      setProfileComposerNotice("Add a title before posting this video.");
+      return;
+    }
+
+    try {
+      setProfileComposerBusy(true);
+      setProfileComposerNotice("Uploading to your Profile...");
+      logProfileComposer("submit_start", {
+        fileName: profileComposerFile.name ?? null,
+        fileSize: profileComposerFile.size ?? null,
+        visibility: profileComposerVisibility,
+      });
+
+      const uploadedVideo = await uploadCreatorVideo({
+        file: profileComposerFile,
+        title: profileComposerTitle,
+        description: profileComposerText,
+        visibility: profileComposerVisibility,
+      });
+
+      const refreshedVideos = await refreshProfileCreatorVideos().catch(() => []);
+      if (!refreshedVideos.some((video) => video.id === uploadedVideo.id)) {
+        setCreatorVideos((current) => [uploadedVideo, ...current.filter((video) => video.id !== uploadedVideo.id)]);
+        setCreatorVideosReady(true);
+      }
+
+      setActiveTab("content");
+      setProfileComposerFile(null);
+      setProfileComposerTitle("");
+      setProfileComposerText("");
+      setProfileComposerVisibility("public");
+      setProfileComposerNotice(
+        profileComposerVisibility === "public"
+          ? "Posted to your Profile and public Channel."
+          : "Saved as a draft on your Profile.",
+      );
+      logProfileComposer("submit_succeeded", {
+        id: uploadedVideo.id,
+        visibility: uploadedVideo.visibility,
+      });
+    } catch (error) {
+      logProfileComposer("submit_failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      setProfileComposerNotice(formatProfileComposerError(error, "Unable to post this video right now. Try again in a moment."));
+    } finally {
+      setProfileComposerBusy(false);
+    }
   };
   const onPressLive = () => {
     if (hasLiveRouteContext) {
@@ -888,8 +1115,8 @@ export default function ProfileScreen() {
   const contentCreatorVideosBody = isSelfProfile
     ? creatorVideosReady
       ? hasCreatorVideoTruth
-        ? "Manage uploaded videos in Channel Settings. Public videos appear here for visitors while drafts stay owner-only."
-        : "Upload your first video from Manage Channel."
+        ? "Post videos from this Profile. Public videos appear here for visitors while drafts stay owner-only; deeper edits stay in Channel Settings."
+        : "Post your first video from this Profile when you are ready to make the channel watchable."
       : "Loading your creator-video library."
     : isOfficialProfile
       ? "This official account does not host Chi'llywood Originals inside Profile/Channel."
@@ -1338,13 +1565,12 @@ export default function ProfileScreen() {
   ] : [];
   const ownerQuickActions: readonly OwnerQuickAction[] = isSelfProfile ? [
     {
-      label: "Open Manage Channel",
+      label: "Manage Channel",
       onPress: onPressManageChannel,
-      emphasis: "primary",
     },
     {
-      label: "Upload Video",
-      onPress: onPressManageChannel,
+      label: "Post Video",
+      onPress: onPressUploadVideo,
       emphasis: "primary",
     },
     {
@@ -1374,12 +1600,16 @@ export default function ProfileScreen() {
             : "Build the first visible shelf"
       ),
       body: ownerNextSteps.length > 1
-        ? "Start by adding a sharper channel line and uploading the first playable channel video."
+        ? "Start by adding a sharper channel line and posting the first playable channel video."
         : ownerNextSteps[0] === "add a sharper channel line"
           ? "Give visitors a clearer first read on your lane with a short tagline."
-          : "Upload a real video so your Channel starts feeling like a mini streaming platform.",
-      actionLabel: "Open Manage Channel",
-      onPress: onPressManageChannel,
+          : "Post a real video from this Profile so your Channel starts feeling like a mini streaming platform.",
+      actionLabel: ownerNextSteps.length === 1 && ownerNextSteps[0] === "upload your first video"
+        ? "Post Video"
+        : "Open Manage Channel",
+      onPress: ownerNextSteps.length === 1 && ownerNextSteps[0] === "upload your first video"
+        ? onPressUploadVideo
+        : onPressManageChannel,
     }] : []),
   ] : [];
   const renderOwnerHandoffCard = () => {
@@ -1527,6 +1757,131 @@ export default function ProfileScreen() {
             ) : null}
           </View>
           <Text style={styles.channelSupportText}>{channelHomeBody}</Text>
+          {isSelfProfile ? (
+            <View style={styles.ownerHeroToolsCard}>
+              <Text style={styles.ownerHeroToolsKicker}>PROFILE COMPOSER</Text>
+              <Text style={styles.ownerHeroToolsTitle}>Share from your Profile.</Text>
+              <Text style={styles.ownerHeroToolsBody}>
+                Attach a video, add the update around it, and publish it straight into your Profile/Channel.
+              </Text>
+              {profileComposerOpen ? (
+                <View style={styles.profileComposerStack}>
+                  <TextInput
+                    style={[styles.profileComposerInput, styles.profileComposerTextArea]}
+                    placeholder="What do you want people to know?"
+                    placeholderTextColor="#8A93A8"
+                    value={profileComposerText}
+                    onChangeText={setProfileComposerText}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={styles.profileComposerAttachButton}
+                    activeOpacity={0.86}
+                    onPress={() => {
+                      void onPickProfileComposerFile();
+                    }}
+                    disabled={profileComposerBusy}
+                  >
+                    <Text style={styles.profileComposerAttachText}>
+                      {profileComposerFile ? "Change Video" : "Attach Video"}
+                    </Text>
+                  </TouchableOpacity>
+                  {profileComposerFile ? (
+                    <View style={styles.profileComposerFileCard}>
+                      <Text style={styles.profileComposerFileKicker}>ATTACHED VIDEO</Text>
+                      <Text style={styles.profileComposerFileName} numberOfLines={2}>
+                        {getReadableProfileFileName(profileComposerFile.name)}
+                      </Text>
+                      {formatProfileFileSize(profileComposerFile.size) ? (
+                        <Text style={styles.profileComposerFileMeta}>{formatProfileFileSize(profileComposerFile.size)}</Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  <TextInput
+                    style={styles.profileComposerInput}
+                    placeholder="Video title"
+                    placeholderTextColor="#8A93A8"
+                    value={profileComposerTitle}
+                    onChangeText={setProfileComposerTitle}
+                  />
+                  <View style={styles.profileComposerVisibilityRow}>
+                    {(["public", "draft"] as const).map((visibility) => (
+                      <TouchableOpacity
+                        key={visibility}
+                        style={[
+                          styles.profileComposerVisibilityChip,
+                          profileComposerVisibility === visibility && styles.profileComposerVisibilityChipActive,
+                        ]}
+                        activeOpacity={0.84}
+                        disabled={profileComposerBusy}
+                        onPress={() => setProfileComposerVisibility(visibility)}
+                      >
+                        <Text
+                          style={[
+                            styles.profileComposerVisibilityText,
+                            profileComposerVisibility === visibility && styles.profileComposerVisibilityTextActive,
+                          ]}
+                        >
+                          {visibility === "public" ? "Public" : "Draft"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {profileComposerNotice ? (
+                    <View style={styles.profileComposerNotice}>
+                      <Text style={styles.profileComposerNoticeText}>{profileComposerNotice}</Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.ownerHeroToolsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.ownerHeroToolsButton,
+                        styles.ownerHeroToolsButtonPrimary,
+                        (!profileComposerFile || profileComposerBusy) && styles.ownerHeroToolsButtonDisabled,
+                      ]}
+                      activeOpacity={0.86}
+                      disabled={!profileComposerFile || profileComposerBusy}
+                      onPress={() => {
+                        void onSubmitProfileComposer();
+                      }}
+                    >
+                      <View style={styles.profileComposerSubmitContent}>
+                        {profileComposerBusy ? <ActivityIndicator size="small" color="#fff" /> : null}
+                        <Text style={styles.ownerHeroToolsButtonTextPrimary}>
+                          {profileComposerBusy ? "Posting..." : "Post To Profile"}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.ownerHeroToolsButton}
+                      activeOpacity={0.86}
+                      disabled={profileComposerBusy}
+                      onPress={onPressManageChannel}
+                    >
+                      <Text style={styles.ownerHeroToolsButtonText}>Manage</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.ownerHeroToolsRow}>
+                  <TouchableOpacity
+                    style={[styles.ownerHeroToolsButton, styles.ownerHeroToolsButtonPrimary]}
+                    activeOpacity={0.86}
+                    onPress={onPressUploadVideo}
+                  >
+                    <Text style={styles.ownerHeroToolsButtonTextPrimary}>Upload Video</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.ownerHeroToolsButton}
+                    activeOpacity={0.86}
+                    onPress={onPressManageChannel}
+                  >
+                    <Text style={styles.ownerHeroToolsButtonText}>Manage</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ) : null}
           {avatarQuickActionsOpen ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>
@@ -1742,16 +2097,16 @@ export default function ProfileScreen() {
                 </View>
               ) : isSelfProfile ? (
                 <View style={styles.creatorVideoEmptyCard}>
-                  <Text style={styles.creatorVideoTitle}>Upload your first video</Text>
+                  <Text style={styles.creatorVideoTitle}>Post your first video</Text>
                   <Text style={styles.creatorVideoBody}>
-                    Add a playable video from Manage Channel so this profile becomes a real channel library.
+                    Add a playable video right from this Profile so your Channel becomes watchable immediately.
                   </Text>
                   <TouchableOpacity
                     style={styles.ownerPromptAction}
                     activeOpacity={0.84}
-                    onPress={onPressManageChannel}
+                    onPress={onPressUploadVideo}
                   >
-                    <Text style={styles.ownerPromptActionText}>Upload Video</Text>
+                    <Text style={styles.ownerPromptActionText}>Post Video</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -2333,6 +2688,114 @@ const styles = StyleSheet.create({
   ownerActionChipText: { color: "#DDE4FF", fontSize: 12.5, fontWeight: "800" },
   ownerActionChipTextPrimary: { color: "#EEF2FF" },
   actionFootnote: { color: "#6D7486", fontSize: 11.5, lineHeight: 16, fontWeight: "600", textAlign: "center" },
+  ownerHeroToolsCard: {
+    width: "100%",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.24)",
+    backgroundColor: "rgba(28,13,24,0.82)",
+    padding: 14,
+    gap: 8,
+  },
+  ownerHeroToolsKicker: { color: "#F7AFC0", fontSize: 10.5, fontWeight: "900", letterSpacing: 1 },
+  ownerHeroToolsTitle: { color: "#FFF5F8", fontSize: 17, fontWeight: "900" },
+  ownerHeroToolsBody: { color: "#D7DFEF", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  ownerHeroToolsRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  ownerHeroToolsButton: {
+    flexGrow: 1,
+    minWidth: 118,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  ownerHeroToolsButtonPrimary: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#DC143C",
+  },
+  ownerHeroToolsButtonDisabled: {
+    opacity: 0.56,
+  },
+  ownerHeroToolsButtonText: { color: "#E9EEFB", fontSize: 13, fontWeight: "900" },
+  ownerHeroToolsButtonTextPrimary: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  profileComposerStack: {
+    width: "100%",
+    gap: 10,
+  },
+  profileComposerInput: {
+    width: "100%",
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    color: "#F7F9FF",
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  profileComposerTextArea: {
+    minHeight: 82,
+    textAlignVertical: "top",
+    lineHeight: 18,
+  },
+  profileComposerAttachButton: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.24)",
+    backgroundColor: "rgba(115,134,255,0.14)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  profileComposerAttachText: { color: "#E4E9FF", fontSize: 13, fontWeight: "900" },
+  profileComposerFileCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(0,0,0,0.2)",
+    padding: 12,
+    gap: 4,
+  },
+  profileComposerFileKicker: { color: "#8A95AA", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  profileComposerFileName: { color: "#F6F8FF", fontSize: 13.5, fontWeight: "900" },
+  profileComposerFileMeta: { color: "#A9B2C6", fontSize: 11.5, fontWeight: "700" },
+  profileComposerVisibilityRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  profileComposerVisibilityChip: {
+    flexGrow: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  profileComposerVisibilityChipActive: {
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(220,20,60,0.22)",
+  },
+  profileComposerVisibilityText: { color: "#BAC3D6", fontSize: 12.5, fontWeight: "900" },
+  profileComposerVisibilityTextActive: { color: "#FFF6F8" },
+  profileComposerNotice: {
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  profileComposerNoticeText: { color: "#DDE5F7", fontSize: 12.5, lineHeight: 17, fontWeight: "700" },
+  profileComposerSubmitContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   ownerModeCard: {
     width: "100%",
     borderRadius: 20,

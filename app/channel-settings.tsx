@@ -956,6 +956,11 @@ export default function ChannelSettingsScreen() {
 
   const sectionMap: readonly ChannelSettingsSectionModel[] = [
     {
+      title: "Content",
+      status: "current",
+      body: "Upload and manage creator videos.",
+    },
+    {
       title: "Identity",
       status: "current",
       body: "Name, tagline, and role.",
@@ -974,11 +979,6 @@ export default function ChannelSettingsScreen() {
       title: "Live Events",
       status: "current",
       body: "Schedule live sessions and replays.",
-    },
-    {
-      title: "Content",
-      status: "current",
-      body: "Upload and manage creator videos.",
     },
     {
       title: "Audience",
@@ -1373,6 +1373,194 @@ export default function ChannelSettingsScreen() {
     },
   ];
 
+  const renderContentPanel = () => (
+    <View style={[styles.panel, styles.creatorContentPanel]}>
+      <View style={styles.panelHeader}>
+        <View style={styles.panelHeaderCopy}>
+          <Text style={styles.panelTitle}>Creator Content</Text>
+          <Text style={styles.panelSubtitle}>Upload and manage videos for your public Profile/Channel.</Text>
+        </View>
+        <Text style={styles.panelStatus}>FIRST STOP</Text>
+      </View>
+      <Text style={styles.permissionCopy}>
+        Upload playable videos to your public channel. Drafts stay visible only to you; public videos can appear on your Profile/Channel and open in Player.
+      </Text>
+
+      {videoNotice ? (
+        <View style={styles.noticeCard}>
+          <Text style={styles.noticeText}>{videoNotice}</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.summaryGrid}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Videos</Text>
+          <Text style={styles.summaryValue}>{videosLoading ? "..." : String(creatorVideos.length)}</Text>
+          <Text style={styles.summaryBody}>creator-owned uploads in this channel library</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Public</Text>
+          <Text style={styles.summaryValue}>
+            {videosLoading ? "..." : String(creatorVideos.filter((video) => video.visibility === "public").length)}
+          </Text>
+          <Text style={styles.summaryBody}>visible to public profile visitors</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Drafts</Text>
+          <Text style={styles.summaryValue}>
+            {videosLoading ? "..." : String(creatorVideos.filter((video) => video.visibility === "draft").length)}
+          </Text>
+          <Text style={styles.summaryBody}>owner-only until published</Text>
+        </View>
+      </View>
+
+      <Text style={styles.sectionLabel}>Creator Library</Text>
+      {videosLoading ? (
+        <View style={styles.loadingCard}>
+          <ActivityIndicator color="#fff" />
+          <Text style={styles.loadingText}>Loading creator videos...</Text>
+        </View>
+      ) : videosLoadError ? (
+        <View style={styles.eventEmptyCard}>
+          <Text style={styles.eventEmptyTitle}>Creator videos couldn&apos;t refresh</Text>
+          <Text style={styles.eventEmptyBody}>{videosLoadError}</Text>
+          <TouchableOpacity
+            style={styles.eventSecondaryButton}
+            activeOpacity={0.86}
+            onPress={() => {
+              void loadCreatorVideos();
+            }}
+          >
+            <Text style={styles.eventSecondaryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : creatorVideos.length ? (
+        <View style={styles.eventList}>
+          {creatorVideos.map((video) => (
+            <CreatorVideoCard
+              key={video.id}
+              video={video}
+              mode="owner"
+              busy={videoSaving}
+              onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
+              onEdit={() => onEditVideo(video)}
+              onToggleVisibility={() => {
+                void updateCreatorVideoMetadata(video.id, {
+                  visibility: video.visibility === "public" ? "draft" : "public",
+                })
+                  .then(() => loadCreatorVideos())
+                  .then(() => setVideoNotice(video.visibility === "public" ? "Video moved to draft." : "Video published."))
+                  .catch((error) => setVideoNotice(formatCreatorVideoUiError(
+                    error,
+                    "Unable to update video visibility right now.",
+                  )));
+              }}
+              onDelete={() => onDeleteVideo(video)}
+            />
+          ))}
+        </View>
+      ) : (
+        <View style={styles.eventEmptyCard}>
+          <Text style={styles.eventEmptyTitle}>Upload your first video</Text>
+          <Text style={styles.eventEmptyBody}>
+            Your channel can now start with a real creator-owned video. Draft first, then publish when it is ready.
+          </Text>
+        </View>
+      )}
+
+      <Text style={styles.sectionLabel}>
+        {videoEditor.editingVideoId ? "Edit Video" : "Upload Video"}
+      </Text>
+      {!videoEditor.editingVideoId ? (
+        <TouchableOpacity
+          style={styles.eventSecondaryButton}
+          activeOpacity={0.86}
+          onPress={onPickVideoFile}
+          disabled={videoSaving}
+        >
+          <Text style={styles.eventSecondaryButtonText} numberOfLines={2}>
+            {selectedVideoFile?.name ? selectedVideoFile.name : "Choose Video File"}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+      {selectedVideoFile && !videoEditor.editingVideoId ? (
+        <Text style={styles.videoSelectedFileText} numberOfLines={2}>
+          Selected: {selectedVideoFile.name || "video file"}
+        </Text>
+      ) : null}
+      <TextInput
+        style={styles.input}
+        placeholder="Video title"
+        placeholderTextColor="#8d8d8d"
+        value={videoEditor.title}
+        onChangeText={(text) => updateVideoEditor({ title: text })}
+      />
+      <TextInput
+        style={[styles.input, styles.textArea]}
+        placeholder="Description"
+        placeholderTextColor="#8d8d8d"
+        value={videoEditor.description}
+        onChangeText={(text) => updateVideoEditor({ description: text })}
+        multiline
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Thumbnail URL (optional)"
+        placeholderTextColor="#8d8d8d"
+        value={videoEditor.thumbUrl}
+        onChangeText={(text) => updateVideoEditor({ thumbUrl: text })}
+        autoCapitalize="none"
+      />
+      <Text style={styles.sectionLabel}>Visibility</Text>
+      <View style={styles.chipRow}>
+        {(["draft", "public"] as const).map((value) => (
+          <TouchableOpacity
+            key={value}
+            style={[styles.chip, videoEditor.visibility === value && styles.chipActive]}
+            onPress={() => updateVideoEditor({ visibility: value })}
+            disabled={videoSaving}
+          >
+            <Text style={[styles.chipText, videoEditor.visibility === value && styles.chipTextActive]}>
+              {value.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {videoSubmitRequirement ? (
+        <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
+      ) : null}
+      <View style={styles.eventActionRow}>
+        <TouchableOpacity
+          style={[styles.eventPrimaryButton, isVideoSubmitDisabled && styles.eventPrimaryButtonDisabled]}
+          onPress={onSaveVideo}
+          activeOpacity={0.88}
+          disabled={isVideoSubmitDisabled}
+        >
+          {videoSaving ? (
+            <View style={styles.eventPrimaryButtonBusyRow}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.eventPrimaryButtonText}>
+                {videoEditor.editingVideoId ? "Saving..." : "Uploading..."}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.eventPrimaryButtonText}>
+              {videoEditor.editingVideoId ? "Update Video" : "Upload Video"}
+            </Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.eventSecondaryButton}
+          onPress={resetVideoEditor}
+          activeOpacity={0.88}
+          disabled={videoSaving}
+        >
+          <Text style={styles.eventSecondaryButtonText}>Clear</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   if (authLoading || betaLoading) {
     return (
       <BetaAccessScreen
@@ -1418,7 +1606,7 @@ export default function ChannelSettingsScreen() {
         <View style={styles.heroCard}>
           <Text style={styles.heroTitle}>Manage Channel</Text>
           <Text style={styles.heroBody}>
-            Run public identity, room defaults, scheduling, audience workflows, and creator summaries from this route. Public channel presentation stays on `/profile/[userId]`.
+            Start with creator videos, then tune identity, access, events, audience workflows, and creator summaries. Public channel presentation stays on `/profile/[userId]`.
           </Text>
         </View>
 
@@ -1442,11 +1630,13 @@ export default function ChannelSettingsScreen() {
               </View>
             ) : null}
 
+            {renderContentPanel()}
+
             <View style={styles.sectionMapCard}>
               <Text style={styles.sectionMapKicker}>CONTROL LANES</Text>
               <Text style={styles.sectionMapTitle}>Current controls first</Text>
               <Text style={styles.sectionMapBody}>
-                Run what is already live here first. Build-next lanes stay visible without crowding the creator tools that already work.
+                Video upload and owner management stay first. Build-next lanes remain visible below without crowding the creator tools that already work.
               </Text>
               <Text style={styles.sectionMapSubheading}>Ready Now</Text>
               <View style={styles.sectionMapGrid}>
@@ -1753,189 +1943,6 @@ export default function ChannelSettingsScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-            </View>
-
-            <View style={styles.panel}>
-              <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Content</Text>
-                <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
-              </View>
-              <Text style={styles.permissionCopy}>
-                Upload playable videos to your public channel. Drafts stay visible only to you; public videos can appear on your Profile/Channel and open in Player.
-              </Text>
-
-              {videoNotice ? (
-                <View style={styles.noticeCard}>
-                  <Text style={styles.noticeText}>{videoNotice}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.summaryGrid}>
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryLabel}>Videos</Text>
-                  <Text style={styles.summaryValue}>{videosLoading ? "..." : String(creatorVideos.length)}</Text>
-                  <Text style={styles.summaryBody}>creator-owned uploads in this channel library</Text>
-                </View>
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryLabel}>Public</Text>
-                  <Text style={styles.summaryValue}>
-                    {videosLoading ? "..." : String(creatorVideos.filter((video) => video.visibility === "public").length)}
-                  </Text>
-                  <Text style={styles.summaryBody}>visible to public profile visitors</Text>
-                </View>
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryLabel}>Drafts</Text>
-                  <Text style={styles.summaryValue}>
-                    {videosLoading ? "..." : String(creatorVideos.filter((video) => video.visibility === "draft").length)}
-                  </Text>
-                  <Text style={styles.summaryBody}>owner-only until published</Text>
-                </View>
-              </View>
-
-              <Text style={styles.sectionLabel}>Creator Library</Text>
-              {videosLoading ? (
-                <View style={styles.loadingCard}>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={styles.loadingText}>Loading creator videos...</Text>
-                </View>
-              ) : videosLoadError ? (
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Creator videos couldn&apos;t refresh</Text>
-                  <Text style={styles.eventEmptyBody}>{videosLoadError}</Text>
-                  <TouchableOpacity
-                    style={styles.eventSecondaryButton}
-                    activeOpacity={0.86}
-                    onPress={() => {
-                      void loadCreatorVideos();
-                    }}
-                  >
-                    <Text style={styles.eventSecondaryButtonText}>Retry</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : creatorVideos.length ? (
-                <View style={styles.eventList}>
-                  {creatorVideos.map((video) => (
-                    <CreatorVideoCard
-                      key={video.id}
-                      video={video}
-                      mode="owner"
-                      busy={videoSaving}
-                      onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
-                      onEdit={() => onEditVideo(video)}
-                      onToggleVisibility={() => {
-                        void updateCreatorVideoMetadata(video.id, {
-                          visibility: video.visibility === "public" ? "draft" : "public",
-                        })
-                          .then(() => loadCreatorVideos())
-                          .then(() => setVideoNotice(video.visibility === "public" ? "Video moved to draft." : "Video published."))
-                          .catch((error) => setVideoNotice(formatCreatorVideoUiError(
-                            error,
-                            "Unable to update video visibility right now.",
-                          )));
-                      }}
-                      onDelete={() => onDeleteVideo(video)}
-                    />
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Upload your first video</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    Your channel can now start with a real creator-owned video. Draft first, then publish when it is ready.
-                  </Text>
-                </View>
-              )}
-
-              <Text style={styles.sectionLabel}>
-                {videoEditor.editingVideoId ? "Edit Video" : "Upload Video"}
-              </Text>
-              {!videoEditor.editingVideoId ? (
-                <TouchableOpacity
-                  style={styles.eventSecondaryButton}
-                  activeOpacity={0.86}
-                  onPress={onPickVideoFile}
-                  disabled={videoSaving}
-                >
-                  <Text style={styles.eventSecondaryButtonText} numberOfLines={2}>
-                    {selectedVideoFile?.name ? selectedVideoFile.name : "Choose Video File"}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {selectedVideoFile && !videoEditor.editingVideoId ? (
-                <Text style={styles.videoSelectedFileText} numberOfLines={2}>
-                  Selected: {selectedVideoFile.name || "video file"}
-                </Text>
-              ) : null}
-              <TextInput
-                style={styles.input}
-                placeholder="Video title"
-                placeholderTextColor="#8d8d8d"
-                value={videoEditor.title}
-                onChangeText={(text) => updateVideoEditor({ title: text })}
-              />
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Description"
-                placeholderTextColor="#8d8d8d"
-                value={videoEditor.description}
-                onChangeText={(text) => updateVideoEditor({ description: text })}
-                multiline
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Thumbnail URL (optional)"
-                placeholderTextColor="#8d8d8d"
-                value={videoEditor.thumbUrl}
-                onChangeText={(text) => updateVideoEditor({ thumbUrl: text })}
-                autoCapitalize="none"
-              />
-              <Text style={styles.sectionLabel}>Visibility</Text>
-              <View style={styles.chipRow}>
-                {(["draft", "public"] as const).map((value) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={[styles.chip, videoEditor.visibility === value && styles.chipActive]}
-                    onPress={() => updateVideoEditor({ visibility: value })}
-                    disabled={videoSaving}
-                  >
-                    <Text style={[styles.chipText, videoEditor.visibility === value && styles.chipTextActive]}>
-                      {value.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {videoSubmitRequirement ? (
-                <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
-              ) : null}
-              <View style={styles.eventActionRow}>
-                <TouchableOpacity
-                  style={[styles.eventPrimaryButton, isVideoSubmitDisabled && styles.eventPrimaryButtonDisabled]}
-                  onPress={onSaveVideo}
-                  activeOpacity={0.88}
-                  disabled={isVideoSubmitDisabled}
-                >
-                  {videoSaving ? (
-                    <View style={styles.eventPrimaryButtonBusyRow}>
-                      <ActivityIndicator color="#fff" />
-                      <Text style={styles.eventPrimaryButtonText}>
-                        {videoEditor.editingVideoId ? "Saving..." : "Uploading..."}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.eventPrimaryButtonText}>
-                      {videoEditor.editingVideoId ? "Update Video" : "Upload Video"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.eventSecondaryButton}
-                  onPress={resetVideoEditor}
-                  activeOpacity={0.88}
-                  disabled={videoSaving}
-                >
-                  <Text style={styles.eventSecondaryButtonText}>Clear</Text>
-                </TouchableOpacity>
               </View>
             </View>
 
@@ -2800,6 +2807,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(12,16,24,0.9)",
     padding: 16,
   },
+  creatorContentPanel: {
+    borderColor: "rgba(220,20,60,0.26)",
+    backgroundColor: "rgba(30,13,24,0.92)",
+  },
   panelSubtle: {
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(10,14,22,0.74)",
@@ -2811,10 +2822,20 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12,
   },
+  panelHeaderCopy: {
+    flex: 1,
+    gap: 4,
+  },
   panelTitle: {
     color: "#fff",
     fontSize: 17,
     fontWeight: "900",
+  },
+  panelSubtitle: {
+    color: "#B9C2D5",
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "600",
   },
   panelStatus: {
     color: "#D6FFE4",

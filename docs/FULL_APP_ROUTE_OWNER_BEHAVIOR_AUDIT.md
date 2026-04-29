@@ -24,7 +24,7 @@ Chi'llywood's core route split is mostly aligned with doctrine:
 - Profile is the person/social identity and public discovery surface.
 - Channel is the creator's mini streaming platform inside the Profile/Channel surface.
 - User/creator Channels must show creator-owned uploads/videos/events/live-watch content only; Chi'llywood Originals/platform titles belong to platform surfaces and must not be Channel filler.
-- Channel Settings owns owner management, including creator upload/manage controls.
+- Profile owns the owner-only fast-post creator-video composer, while Channel Settings owns deeper creator upload/manage controls.
 - Creator Media owns upload, source resolution, creator video visibility, management, and player handoff.
 - Player owns standalone video watching.
 - Player Watch-Party Live owns title/content watch-party entry and routes into the normal Party flow.
@@ -173,7 +173,7 @@ No room/live layout changes, monetization implementation, native AR, native game
 
 | Route | Owner file | System | What it owns | Must not own | Access | Backend dependencies | Enters | Exits | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Profile/Channel `/profile/[userId]` | `app/profile/[userId].tsx` | Profile + Channel surface | Public identity, owner/public channel surface, creator video display, creator events, profile actions, channel empty states; no platform-title filler | Upload/save/delete logic, Player playback, admin moderation writes, platform title discovery | Signed-in normal app route; public viewer vs owner behavior is user-id based | `user_profiles`, `videos`, creator events, audience summaries, room snapshots, safety reports | Home, Chat, Party Room, Live Stage, creator cards | `/channel-settings`, `/player/[id]?source=creator-video`, `/watch-party`, `/watch-party/[partyId]`, `/watch-party/live-stage/[partyId]`, `/chat`, `/chat/[threadId]` | V1 core |
+| Profile/Channel `/profile/[userId]` | `app/profile/[userId].tsx` | Profile + Channel surface | Public identity, owner/public channel surface, owner-only fast-post creator-video composer, creator video display, creator events, profile actions, channel empty states; no platform-title filler | Deep edit/delete management, Player playback, admin moderation writes, platform title discovery | Signed-in normal app route; public viewer vs owner behavior is user-id based | `user_profiles`, `videos`, creator events, audience summaries, room snapshots, safety reports | Home, Chat, Party Room, Live Stage, creator cards | `/channel-settings`, `/player/[id]?source=creator-video`, `/watch-party`, `/watch-party/[partyId]`, `/watch-party/live-stage/[partyId]`, `/chat`, `/chat/[threadId]` | V1 core |
 | Channel Settings `/channel-settings` | `app/channel-settings.tsx` | Channel owner controls | Owner channel management, creator upload/manage, profile/channel settings, creator events, audience summaries, safety/admin summaries | Public channel display, standalone playback, admin platform-title ownership | Signed-in active beta user only | `user_profiles`, `creator_permissions`, `videos`, creator video storage, `creator_events`, `channel_*`, `safety_reports`, admin summaries | Owner profile/settings | `/player/[id]?source=creator-video` | V1 core |
 | Title detail `/title/[id]` | `app/title/[id].tsx` | Platform/Admin Title detail | Platform title metadata, access sheet, title play, title Watch-Party entry, title report | Creator upload/player source, Live Stage | Signed-in normal app route; access checks through content entitlements | `titles`, access entitlements, engagement, safety reports | Home, Explore, My List, Profile linked content | `/player/[id]`, `/watch-party?titleId=...` | V1 core |
 | Platform Player `/player/[id]` | `app/player/[id].tsx` | Player | Premium standalone platform title playback, title Watch-Party start, report title/player content, party playback when `partyId` present | Upload management, Profile display, Live Stage room creation | Signed-in route; access sheet/premium checks | `titles`, media sources, watch history, engagement, watch-party rooms, safety reports | Home/title/party room/admin | `/watch-party`, `/watch-party/[partyId]` | V1 core; missing platform ids now show honest unavailable state |
@@ -208,7 +208,7 @@ No room/live layout changes, monetization implementation, native AR, native game
 | System | Route owners | Logic/helper owners | Backend/storage owners | Current status | V1 status | Later status | Must not own | Proof before v1 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Auth / Session | `app/_layout.tsx`, `app/(auth)/*` | `_lib/session.tsx`, `_lib/supabase.ts` | Supabase auth | Working | Required | SSO/social later if desired | Premium entitlement truth | Login/signup/logout, redirect, protected deep-link behavior |
-| Profile | `app/profile/[userId].tsx` | `_lib/userData.ts`, `_lib/channelReadModels.ts` | `user_profiles`, audience summary tables | Working | Required | Public channel alias later | Upload management | Owner/public route proof |
+| Profile | `app/profile/[userId].tsx` | `_lib/userData.ts`, `_lib/channelReadModels.ts`, `_lib/creatorVideos.ts` for fast-post upload | `user_profiles`, `videos`, audience summary tables | Working | Required | Public channel alias later | Deep management/edit/delete | Owner/public route proof |
 | Channel | `app/profile/[userId].tsx`, `app/channel-settings.tsx` | `_lib/channelReadModels.ts`, `_lib/channelAudience.ts` | `user_profiles`, `channel_followers`, `channel_subscribers`, `channel_audience_requests`, `channel_audience_blocks` | Working foundation | Required | Full roster later | Player playback | Owner/public/manage proof |
 | Creator Media | `app/channel-settings.tsx`, `app/profile/[userId].tsx`, `app/player/[id].tsx` | `_lib/creatorVideos.ts`, `_lib/watchPartyContentSources.ts` | `videos`, `creator-videos` storage/RLS | Upload/play/watch-party linking built | Required | Advanced creator studio, transcoding later | Platform title creation | Draft/public/non-owner/two-device proof |
 | Player | `app/player/[id].tsx` | `_lib/mediaSources.ts`, `_lib/watchPartyContentSources.ts` | `titles`, `videos`, media storage/source URLs | Premium shell unified | Required | Ads, subscriber playback later | Upload/edit/delete | Platform and creator playback proof |
@@ -298,8 +298,9 @@ Owner Profile -> `/channel-settings` -> Content panel -> upload/manage videos.
 
 Observed:
 
-- Profile owner CTA routes to `/channel-settings`.
-- Channel Settings owns video selection, upload, edit, publish/unpublish, delete, and open-player actions.
+- Profile owner Manage CTA routes to `/channel-settings`; Upload Video expands the inline Profile composer.
+- Profile owns the fast-post owner composer for video selection and publish/draft upload without leaving the profile.
+- Channel Settings owns deeper video management: edit, publish/unpublish, delete, thumbnail URL, library review, and open-player actions.
 - Public Profile does not show upload/manage controls.
 
 Status: correct.
@@ -353,7 +354,7 @@ Status: foundation exists; full public v1 proof still required.
 | Home Live entry | Home sends `mode=live` to waiting room | Home + waiting room | Live waiting room/live room path | Title Party Room or creator-video source | Correct |
 | Title watch party | Title/Player send platform source to waiting room | Player + watch-party helpers | Party Waiting Room then Party Room | Live Stage route | Correct |
 | Creator-video watch party | Creator Player sends creator source to waiting room | Player + `_lib/watchParty.ts` + source resolver | Party Waiting Room then Party Room | Live Stage, sample fallback, platform fallback | Correct, more proof needed |
-| Creator upload | Channel Settings owns upload/edit/delete | `_lib/creatorVideos.ts` | Upload modal/state/error/list | Public owner controls, fake upload success | Correct |
+| Creator upload | Profile owns fast-post upload; Channel Settings owns upload/edit/delete depth | `_lib/creatorVideos.ts` | Inline composer plus management state/error/list | Public owner controls, fake upload success | Correct |
 | Profile display | Profile shows public or owner channel surface | Profile + read models | Owner/public variants | Management logic in Profile | Correct |
 | Admin | Admin route is role-gated | `_lib/moderation.ts` and platform roles | Admin studio or denied state | Hidden-button-only admin security | Correct foundation |
 | Premium gate | Access sheet and route guards decide | Access/entitlement helpers | Paywall/blocked/loading states | Premium by button hiding only | Foundation exists, proof needed |
@@ -364,7 +365,7 @@ Status: foundation exists; full public v1 proof still required.
 
 | Protected route/action | UI guard | Route guard | Backend/RLS owner | Deep-link risk | Status |
 | --- | --- | --- | --- | --- | --- |
-| Upload video | Owner-only Channel Settings | Channel Settings requires signed-in active beta | `videos`, storage policies | Low | Correct foundation |
+| Upload video | Owner-only Profile composer and Channel Settings | Profile/Channel Settings require signed-in owner context | `videos`, storage policies | Low | Correct foundation |
 | Edit/delete/publish creator video | Owner-only actions | Channel Settings requires signed-in owner context | `videos` owner policies plus moderation trigger | Low | Correct foundation |
 | Creator video public read | Public card query | Profile helper includes drafts only for owner | `videos` select policy and storage select policy | Medium until blocked-state proof | Needs final proof |
 | Draft/private video player | Owner/public read helper | Player source resolver | `videos` RLS | Medium | Proof deferred |

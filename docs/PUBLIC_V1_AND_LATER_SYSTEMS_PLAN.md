@@ -33,7 +33,8 @@ Current Public v1 truth:
 - User/creator Channels show creator-owned uploads, videos, events, live/watch-party content, and backed creator shelves only.
 - Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
 - `/profile/[userId]` is the public Profile/Channel surface.
-- `/channel-settings` is the owner control surface.
+- `/profile/[userId]` can include an owner-only fast-post composer for adding a creator video without leaving the Profile.
+- `/channel-settings` is the deeper owner control and management surface.
 - Creator Media System foundation exists.
 - Creator upload is Public v1 required.
 - Creator-uploaded videos upload, save metadata/storage, show on Profile/Channel, and open the standalone premium Player through `/player/[id]?source=creator-video`.
@@ -59,14 +60,16 @@ Owns:
 - public Profile/Channel discovery surface
 - self vs public viewer distinction
 - public/owner visibility presentation
+- owner-only fast-post creator-video composer that uses the Creator Media helper path
 - Chi'lly Chat handoff from profile
 - links into backed content, live, and channel surfaces
 
 Must not own:
 
-- creator video upload implementation
 - creator video storage
 - creator video editing/deletion logic
+- deep creator-video management
+- text-only profile posts/comments unless backed by profile feed/comment tables
 - billing validation
 - payout rules
 - LiveKit token rules
@@ -85,7 +88,8 @@ Future Codex should avoid:
 - making Profile a management console
 - leaking owner controls to public viewers
 - using Profile as a place to fake subscriber/VIP/private content access
-- making Profile route around Channel Settings for creator management
+- bypassing Channel Settings for deeper creator management
+- showing fake text-only posts, comments, reactions, or attachment feeds before a backed profile feed/comment system exists
 
 ### Channel System
 
@@ -126,7 +130,7 @@ Owns:
 
 - signed-in owner controls
 - profile/channel editing controls
-- creator upload/manage controls
+- deep creator upload/manage controls
 - channel defaults
 - backed audience actions
 - backed safety/admin summary display
@@ -152,7 +156,7 @@ Future Codex should avoid:
 - showing unsupported VIP/mod/co-host/subscriber mutation as real
 - making a button appear before its backend owner exists
 
-Example: the Upload Video button is not the upload owner. `/channel-settings` owns the owner UI; `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
+Example: the Profile Upload Video button is allowed to open an owner-only fast-post composer that calls `_lib/creatorVideos.ts` and refreshes the Profile list. `/channel-settings` still owns deeper management such as edit, publish/unpublish, delete, thumbnail URL, channel settings, and library review. `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
 
 ### Creator Media System
 

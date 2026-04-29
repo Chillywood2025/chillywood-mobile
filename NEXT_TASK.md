@@ -15,7 +15,7 @@ The foundation is implemented in code and static validation passed. Android proo
 
 The resumed 2026-04-28 one-phone proof on `R5CR120QCBF` proved route visibility fixes for Chat and bundled legal pages, Channel Settings owner Content visibility, Settings/Support/Subscribe/Admin denial route sanity, platform Player route sanity, explicit creator-video Player source ownership, and the creator-video Report sheet opening. It also proved the current creator-video media object is bad data: row `677650c2-4790-4298-8ddb-03ba7df5b424` says public `video/mp4` with `file_size_bytes = 30102504`, but the signed Storage object returns `content-length: 0` and range `416`, so ExoPlayer cannot read it. `_lib/creatorVideos.ts` now rejects/removes/retries future empty uploaded objects after upload, but the existing object still needs repair/re-upload before playback can pass.
 
-The Creator Media presentation pass now makes uploaded videos appear as modern content cards in both Channel Settings and Profile/Channel. Thumbnails are real only when `thumb_url` or `thumb_storage_path` is present; otherwise cards show a branded fallback preview rather than a broken or developer-looking record. Public videos can be route-shared with `chillywoodmobile://player/[id]?source=creator-video`; signed Storage URLs are never shared. Creator-video likes, comments, saves/My List, engagement counts, generated thumbnails, duration metadata, and creator-video comment threads are still pending lanes and are intentionally not faked in the UI.
+The Creator Media presentation pass now makes uploaded videos appear as modern content cards in both Channel Settings and Profile/Channel. Thumbnails are real only when `thumb_url` or `thumb_storage_path` is present; otherwise cards show a branded fallback preview rather than a broken or developer-looking record. Public videos can be route-shared with `chillywoodmobile://player/[id]?source=creator-video`; signed Storage URLs are never shared. Owner Profile now has an inline mobile composer for fast posting a creator video with update/caption text and Public/Draft visibility; it uses the same backed creator-video upload/storage/metadata path and refreshes the Profile content list immediately after save. Channel Settings remains the deeper management/edit/publish/unpublish/delete surface. Creator-video likes, comments, saves/My List, engagement counts, generated thumbnails, duration metadata, text-only profile updates, profile feed comments, and comment media remain pending lanes and are intentionally not faked in the UI.
 
 The Profile/Channel correction is now code-backed: user/creator Channels must not show Chi'llywood Originals/platform titles as filler. Profile remains the personal/social identity layer; Channel is the creator's own mini streaming platform. Creator Channels should show creator uploads/videos/events/live-watch content and backed creator shelves only. Platform titles remain on Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin surfaces.
 
@@ -26,26 +26,27 @@ Route/owner audit hardening is now handled for the highest-priority findings: `a
 ## Current Plan
 1. Resume from the latest non-live proof folder and preserve existing artifacts.
 2. Repair or re-upload creator video `677650c2-4790-4298-8ddb-03ba7df5b424`, then rerun the creator-video Player source sanity and save screenshots/logs.
-3. Continue Android visual smoke for creator-video cards only where it remains unproved: thumbnail-present state if data exists, public/non-owner Profile/Channel view, and draft/hidden/removed blocked states. Owner no-thumbnail fallback and no Chi'llywood Originals/platform-title filler already have one-device proof.
+3. Run Android smoke for the owner-only Profile composer: Upload Video must expand inline on Profile, attach a local video through the picker, show the selected file/title/visibility state, post through the existing creator-video backend path, refresh Profile/Channel immediately, and keep public viewers from seeing the composer.
 4. Include the smoothness hardening checks from `docs/PUBLIC_V1_SMOOTHNESS_HARDENING_AUDIT.md`: safe Home/Explore errors, My List empty/error actions, creator-video picker cancel/unsupported-file copy, creator-video load retry, Premium setup copy, and no token/signed URL logging.
-5. Reopen `/channel-settings` as the creator owner and confirm uploaded video `f6a5c96a-812a-4132-8a2b-e3ecab51c983` appears in the Content list.
-6. Confirm a draft video does not appear for public/non-owner viewers.
-7. Publish the video and confirm it appears for public/non-owner viewers on Profile/Channel.
-8. Confirm creator can edit metadata, publish/unpublish, and delete.
-9. Confirm a non-owner cannot manage another creator's video.
-10. Use the now-proved remote schema; do not rerun broad remote migration pushes unless `supabase migration list` shows drift.
-11. Run two-device creator-video Watch-Party join proof if two phones are available: host starts room, second device joins by code, both resolve `source_type=creator_video`, no Live Stage route, no sample/platform fallback.
-12. Confirm draft/private creator videos are blocked from public Watch-Party.
-13. Include the 2026-04-28 route hardening in final route smoke: generic Party waiting room no-source create/code guards, invalid platform title unavailable state, direct Live Stage open with a Party Room id, Player Watch-Party Live open with a live room id, and app behavior against the deployed `livekit-token` surface mismatch guard.
-14. Include the 2026-04-28 non-room hardening in final route smoke: signup Sign In handoff, signed-out Chat inbox/thread Sign In handoffs, valid/invalid platform Player routes, valid/invalid creator-video Player routes, and no creator-video fallback from bare `/player/[id]`.
-15. In a later live-layout proof, follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md` and confirm Home Live Watch-Party routes to `/watch-party/live-stage/[partyId]`, Live First and Live Watch-Party share the same Chi'lly Party Members overlay behavior, the current user's own preview is not inside that grid, other live feeds render three across with two visible rows before scrolling, free/access-granted viewers can watch without becoming a camera tile, comments remain in their current visible placement, the overlay/comments dock auto-hides after 10 seconds on initial Live Room entry and after mode switches unless controls are locked or an active panel/input is open, and Chi’llyfects opens as foundation-only/no-camera-processing.
-16. Do not pull Snap Camera Kit into Public v1. If Snap Camera Kit is revisited post-v1, follow `docs/CHILLYFECTS_SNAP_CAMERA_KIT_AUDIT.md`: Android-only, no production claim, keep layout/comments locked, and prove a second LiveKit device sees the processed feed before marking any Chi’llyfect as real.
-17. In a later Party Room proof, follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md` and confirm platform and creator Watch-Party Live remain content-first in `/watch-party/[partyId]`, with the shared source card at the top, host/viewer feed bubbles below it in a five-across/two-visible-row scroll grid, comments remain in their current visible placement, and no Live Stage route.
-18. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
-19. Keep the Admin role-alignment, temporary-operator proof, and Operator Center modernization in route smoke: signed-out users and local-helper/non-operator accounts must stay denied with no destructive controls, backend owner/operator roles can moderate safe creator videos, Rachi must appear only as the backend-protected official-account management section and never as Admin authority, and the Reports/Content/Roles/Audit/Rachi tabs plus Hide/Remove/Restore confirmation should render cleanly on Android.
-20. Confirm hidden/removed creator videos stay absent from public Profile/Channel as well as unavailable in Player; Player hidden/unavailable was proved during temporary Admin proof.
-21. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
-22. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
+5. Continue Android visual smoke for creator-video cards only where it remains unproved: thumbnail-present state if data exists, public/non-owner Profile/Channel view, and draft/hidden/removed blocked states. Owner no-thumbnail fallback and no Chi'llywood Originals/platform-title filler already have one-device proof.
+6. Reopen `/channel-settings` as the creator owner and confirm uploaded video `f6a5c96a-812a-4132-8a2b-e3ecab51c983` appears in the Content list.
+7. Confirm a draft video does not appear for public/non-owner viewers.
+8. Publish the video and confirm it appears for public/non-owner viewers on Profile/Channel.
+9. Confirm creator can edit metadata, publish/unpublish, and delete.
+10. Confirm a non-owner cannot manage another creator's video or see the owner-only Profile composer.
+11. Use the now-proved remote schema; do not rerun broad remote migration pushes unless `supabase migration list` shows drift.
+12. Run two-device creator-video Watch-Party join proof if two phones are available: host starts room, second device joins by code, both resolve `source_type=creator_video`, no Live Stage route, no sample/platform fallback.
+13. Confirm draft/private creator videos are blocked from public Watch-Party.
+14. Include the 2026-04-28 route hardening in final route smoke: generic Party waiting room no-source create/code guards, invalid platform title unavailable state, direct Live Stage open with a Party Room id, Player Watch-Party Live open with a live room id, and app behavior against the deployed `livekit-token` surface mismatch guard.
+15. Include the 2026-04-28 non-room hardening in final route smoke: signup Sign In handoff, signed-out Chat inbox/thread Sign In handoffs, valid/invalid platform Player routes, valid/invalid creator-video Player routes, and no creator-video fallback from bare `/player/[id]`.
+16. In a later live-layout proof, follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md` and confirm Home Live Watch-Party routes to `/watch-party/live-stage/[partyId]`, Live First and Live Watch-Party share the same Chi'lly Party Members overlay behavior, the current user's own preview is not inside that grid, other live feeds render three across with two visible rows before scrolling, free/access-granted viewers can watch without becoming a camera tile, comments remain in their current visible placement, the overlay/comments dock auto-hides after 10 seconds on initial Live Room entry and after mode switches unless controls are locked or an active panel/input is open, and Chi’llyfects opens as foundation-only/no-camera-processing.
+17. Do not pull Snap Camera Kit into Public v1. If Snap Camera Kit is revisited post-v1, follow `docs/CHILLYFECTS_SNAP_CAMERA_KIT_AUDIT.md`: Android-only, no production claim, keep layout/comments locked, and prove a second LiveKit device sees the processed feed before marking any Chi’llyfect as real.
+18. In a later Party Room proof, follow `docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md` and confirm platform and creator Watch-Party Live remain content-first in `/watch-party/[partyId]`, with the shared source card at the top, host/viewer feed bubbles below it in a five-across/two-visible-row scroll grid, comments remain in their current visible placement, and no Live Stage route.
+19. Confirm creator-video Report in Player writes a real `safety_reports` row with target type `creator_video`.
+20. Keep the Admin role-alignment, temporary-operator proof, and Operator Center modernization in route smoke: signed-out users and local-helper/non-operator accounts must stay denied with no destructive controls, backend owner/operator roles can moderate safe creator videos, Rachi must appear only as the backend-protected official-account management section and never as Admin authority, and the Reports/Content/Roles/Audit/Rachi tabs plus Hide/Remove/Restore confirmation should render cleanly on Android.
+21. Confirm hidden/removed creator videos stay absent from public Profile/Channel as well as unavailable in Player; Player hidden/unavailable was proved during temporary Admin proof.
+22. Confirm active backend entitlement rows allow protected access while missing/expired/revoked rows block protected access.
+23. Prove creator-video Storage API delete/remove behavior; direct SQL delete is intentionally blocked by Supabase's `storage.protect_delete()` trigger.
 
 ## Scope
 This proof lane should:
@@ -107,6 +108,7 @@ This proof lane should:
 ## Success Criteria
 The lane is successful when:
 - owner upload controls are visible only to the owner
+- owner Upload Video on Profile opens the inline composer instead of routing away
 - public viewers cannot see upload/manage controls
 - upload saves video metadata and storage object
 - public videos appear on Profile/Channel for public viewers
@@ -121,5 +123,5 @@ The lane is successful when:
 - premium/protected access uses backend entitlement or RevenueCat truth, not local-only cache
 - creator management actions work for owner and are denied for non-owner
 - creator-upload Watch-Party uses the normal party flow with the remote source-model migration now applied and proved
-- no comment media upload, native game streaming, monetization, payout, or transcoding scope is introduced
+- no fake text-only profile updates, profile feed comments, comment media upload, native game streaming, monetization, payout, or transcoding scope is introduced
 - staged files stay task-pure

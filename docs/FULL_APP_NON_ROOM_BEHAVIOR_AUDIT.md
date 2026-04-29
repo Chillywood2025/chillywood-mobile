@@ -50,7 +50,7 @@ Recommendation: keep the fixes, run the next route smoke on Android, and keep th
 | Home | `/(tabs)` index | `app/(tabs)/index.tsx` | Home/discovery | Premium home rails, title cards, live entry, shortcuts | Room ownership, upload management | Protected tab route | Correct / proof pending |
 | Explore | `/(tabs)/explore` | `app/(tabs)/explore.tsx` | Discovery | Platform-title browse | Creator upload management, fake search | Protected tab route | Correct / proof pending |
 | My List | `/(tabs)/my-list` | `app/(tabs)/my-list.tsx` | Saved content | Saved platform titles | Creator upload management | Protected tab route | Correct / proof pending |
-| Profile / Channel | `/profile/[userId]` | `app/profile/[userId].tsx` | Profile + public channel | Identity, public creator videos, owner/public channel state, profile actions | Upload/edit/delete logic | Protected route; owner and public viewer controls differ | Correct / proof pending |
+| Profile / Channel | `/profile/[userId]` | `app/profile/[userId].tsx` | Profile + public channel | Identity, public creator videos, owner/public channel state, profile actions, owner-only fast-post creator-video composer | Deep creator-video edit/delete management, Player playback, admin moderation writes, platform title discovery | Protected route; owner and public viewer controls differ | Correct / proof pending |
 | Channel Settings | `/channel-settings` | `app/channel-settings.tsx` | Channel owner controls | Channel fields, creator upload/manage, creator events, audience summaries | Public channel display, Player playback | Signed-in/beta route, owner-side controls | Correct / proof pending |
 | Creator Media management | `/channel-settings` Content panel | `app/channel-settings.tsx`, `_lib/creatorVideos.ts` | Creator Media | Choose file, metadata, draft/public, edit, publish/unpublish, delete | Paid media, transcoding, fake upload success | Owner-only UI; backend/RLS proof still required | Correct / proof pending |
 | Standalone Player | `/player/[id]` | `app/player/[id].tsx` | Player | Platform-title playback, creator-video playback when source is explicit, report, Watch-Party entry | Upload management, source guessing | Protected route plus access gate | Fixed / proof pending |
@@ -78,7 +78,8 @@ Recommendation: keep the fixes, run the next route smoke on Android, and keep th
 | Logout | Settings | Supabase sign out | Calls auth sign out and leaves protected routes to auth gate | Real / proof pending |
 | Edit/manage profile | Profile/Settings | Owner opens Channel Settings | Owner-only handoff exists | Real |
 | Manage Channel | Profile/Settings | Route to Channel Settings | Owner/account handoff exists | Real |
-| Upload Video / Choose Video File | Channel Settings | Open Android picker and show selected file | `expo-document-picker` flow exists; runtime proof from earlier upload lane exists, final non-room route smoke pending | Real / proof pending |
+| Upload Video from Profile | Owner Profile | Expand inline composer, open Android picker, attach a real video, and publish through creator-video backend path without routing away | Inline Profile composer now calls `expo-document-picker` and `_lib/creatorVideos.ts`; runtime proof pending | Real / proof pending |
+| Choose Video File | Channel Settings | Open Android picker and show selected file | `expo-document-picker` flow exists; runtime proof from earlier upload lane exists, final non-room route smoke pending | Real / proof pending |
 | Save/upload | Channel Settings | Save metadata/storage or show error | Upload/loading/error/success states exist; no fake success | Real / proof pending |
 | Edit video | Channel Settings | Edit metadata in owner lane | Existing code path present | Real / proof pending |
 | Publish/unpublish | Channel Settings | Toggle draft/public honestly, blocked by moderation when needed | Existing code path and moderated blocked copy present | Real / proof pending |
@@ -118,7 +119,7 @@ Proof pending: final Android route smoke for signup, login, signed-out protected
 
 Status: Implemented / Proof Pending.
 
-Profile acts as the person/social identity and public channel surface. Channel is the creator's own mini streaming platform, not a Chi'llywood Originals shelf. Channel Settings acts as the owner management/control center. Owner controls are not shown to public viewers in the audited code path. Public creator-video reads use `_lib/creatorVideos.ts`, which filters by visibility and moderation status; owner reads can include drafts. User/creator Channels no longer read `titles`, show jump-to-title platform filler, use platform title artwork as background, or use saved/resume title counts as channel stats.
+Profile acts as the person/social identity and public channel surface. Channel is the creator's own mini streaming platform, not a Chi'llywood Originals shelf. Owner Profile can now act like a modern mobile profile composer for the narrow fast-post lane: Upload Video expands inline, attaches a local video, accepts update/caption text as the creator-video description, chooses Public or Draft, and refreshes Profile content after the backed upload completes. Channel Settings remains the owner management/control center for deeper channel settings, edit, publish/unpublish, delete, and advanced controls. Owner controls are not shown to public viewers in the audited code path. Public creator-video reads use `_lib/creatorVideos.ts`, which filters by visibility and moderation status; owner reads can include drafts. User/creator Channels no longer read `titles`, show jump-to-title platform filler, use platform title artwork as background, or use saved/resume title counts as channel stats.
 
 No separate public `/channel/[id]` route is required for v1. A later channel alias can be considered only if product navigation needs it.
 
@@ -128,13 +129,13 @@ Runtime proof update: one-device owner proof on `R5CR120QCBF` confirms the creat
 
 Status: Implemented / Proof Pending.
 
-Channel Settings owns creator upload/manage. The current lane has file selection, selected file state, title requirement, optional description/thumbnail URL, draft/public state, upload loading state, notices/errors, edit metadata, publish/unpublish, delete confirmation, and moderated-status blocking copy.
+Profile owns the owner-only fast-post creator-video composer, while Channel Settings owns creator upload/manage depth. The current lane has file selection, selected file state, title requirement, optional description/thumbnail URL in Channel Settings, draft/public state, upload loading state, notices/errors, edit metadata, publish/unpublish, delete confirmation, and moderated-status blocking copy.
 
 Presentation update: creator videos now use a shared media-first card in Channel Settings and Profile/Channel. The card shows real thumbnails from `thumb_url` / `thumb_storage_path` when available, a branded fallback preview when not, Play overlay, visibility and moderation badges, file size/date metadata where present, and owner controls only in owner surfaces.
 
 No fake paid/subscriber media, transcoding, payout, or advanced creator studio controls were added.
 
-Engagement truth: creator-video Report is backed in Player, public creator-video Share uses the app route/deep link, and creator-video likes/comments/saves/counts are not backed or shown. Title-only engagement remains title-only.
+Engagement truth: creator-video Report is backed in Player, public creator-video Share uses the app route/deep link, and creator-video likes/comments/saves/counts, text-only profile updates, profile feed comments, and comment media are not backed or shown. Title-only engagement remains title-only.
 
 Runtime proof update: one-device owner proof confirms Channel Settings Content visibility, scrollability, modern fallback creator-video card presentation, owner controls, upload form visibility, route-safe Share, and creator-video Report sheet opening without submitting. Public/draft visibility, thumbnail-present visual smoke, edit, publish/unpublish, delete/storage remove, report row creation, admin hide/remove/restore, and non-owner denial remain pending.
 
