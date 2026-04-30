@@ -1,8 +1,13 @@
-import { File } from "expo-file-system";
-import * as FileSystem from "expo-file-system/legacy";
-
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import {
+  createSignedMediaDownload,
+  deleteStoredMediaObject,
+  getMediaStorageProviderBucket,
+  normalizeMediaStorageProvider,
+  uploadFileToMediaStorage,
+  type MediaStorageProvider,
+} from "./mediaStorage";
+import { supabase } from "./supabase";
 
 export const CREATOR_VIDEO_BUCKET = "creator-videos";
 export const CREATOR_VIDEO_SIGNED_URL_SECONDS = 60 * 60;
@@ -36,6 +41,9 @@ export type CreatorVideo = {
   moderatedBy: string | null;
   playbackUrl: string;
   thumbnailUrl: string;
+  storageProvider: MediaStorageProvider;
+  storageBucket: string;
+  storageObjectKey: string;
   storagePath: string;
   thumbStoragePath: string;
   mimeType: string;
@@ -49,7 +57,7 @@ type CreatorVideoInsert = TablesInsert<"videos">;
 type CreatorVideoUpdate = TablesUpdate<"videos">;
 
 const CREATOR_VIDEO_SELECT =
-  "id,owner_id,title,description,playback_url,thumb_url,created_at,visibility,moderation_status,moderation_reason,moderated_at,moderated_by,storage_path,thumb_storage_path,mime_type,file_size_bytes,updated_at";
+  "id,owner_id,title,description,playback_url,thumb_url,created_at,visibility,moderation_status,moderation_reason,moderated_at,moderated_by,storage_provider,storage_bucket,storage_object_key,storage_path,thumb_storage_path,mime_type,file_size_bytes,updated_at";
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -127,7 +135,7 @@ const getFileExtension = (file: CreatorVideoFile) => {
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
-async function createSignedUrl(path: string) {
+async function createSupabaseSignedUrl(path: string) {
   const normalizedPath = toText(path);
   if (!normalizedPath) return "";
   if (isHttpUrl(normalizedPath)) return normalizedPath;
@@ -140,162 +148,30 @@ async function createSignedUrl(path: string) {
   return data.signedUrl;
 }
 
-const shouldVerifyUploadBytes = (value: unknown) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0;
-};
-
-async function uploadedObjectHasReadableBytes(input: {
-  storagePath: string;
-  expectedSize?: number | null;
-}) {
-  if (!shouldVerifyUploadBytes(input.expectedSize)) return true;
-
-  const signedUrl = await createSignedUrl(input.storagePath);
-  if (!signedUrl) return true;
-
-  try {
-    const head = await fetch(signedUrl, { method: "HEAD" });
-    const contentLength = Number(head.headers.get("content-length"));
-    if (Number.isFinite(contentLength) && contentLength > 0) return true;
-
-    const rangeProbe = await fetch(signedUrl, { headers: { Range: "bytes=0-0" } });
-    if (rangeProbe.status === 416) return false;
-    if (!rangeProbe.ok) return true;
-
-    const body = await rangeProbe.arrayBuffer();
-    return body.byteLength > 0;
-  } catch {
-    return true;
-  }
-}
-
-async function assertUploadedObjectReadable(input: {
-  storagePath: string;
-  expectedSize?: number | null;
-}) {
-  const hasBytes = await uploadedObjectHasReadableBytes(input);
-  if (hasBytes) return;
-
-  await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([input.storagePath]).catch(() => undefined);
-  throw new Error("Uploaded video object was empty after upload.");
-}
-
-const encodeStoragePath = (path: string) => path
-  .split("/")
-  .map((part) => encodeURIComponent(part))
-  .join("/");
-
-async function uploadLocalFileToStorage(input: {
-  uri: string;
-  storagePath: string;
-  mimeType: string;
-  fileName?: string | null;
-  expectedSize?: number | null;
-}) {
-  const { data, error } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (error || !accessToken) {
-    throw new Error("Sign in before uploading creator videos.");
-  }
-
-  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${CREATOR_VIDEO_BUCKET}/${encodeStoragePath(input.storagePath)}`;
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    apikey: SUPABASE_ANON_KEY,
-    "x-upsert": "false",
-  };
-  const parseStorageError = (body: string) => {
-    let message = "Unable to upload the selected video file.";
-    try {
-      const parsed = JSON.parse(body) as { message?: string; error?: string };
-      message = toText(parsed.message) || toText(parsed.error) || message;
-    } catch {
-      message = toText(body) || message;
-    }
-    return message;
-  };
-
-  try {
-    const localFile = new File(input.uri);
-    const { error } = await supabase.storage
-      .from(CREATOR_VIDEO_BUCKET)
-      .upload(input.storagePath, localFile, {
-        contentType: input.mimeType,
-        cacheControl: "3600",
-        upsert: false,
-      });
-
-    if (error) throw error;
-    await assertUploadedObjectReadable({
-      storagePath: input.storagePath,
-      expectedSize: input.expectedSize,
-    });
-    return;
-  } catch (error) {
-    logCreatorVideoUpload("file_object_upload_failed", {
-      message: error instanceof Error ? error.message : "unknown",
-    });
-  }
-
-  try {
-    const result = await FileSystem.uploadAsync(uploadUrl, input.uri, {
-      httpMethod: "POST",
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      headers: {
-        ...headers,
-        "Content-Type": input.mimeType,
-        "cache-control": "max-age=3600",
-      },
-    });
-
-    if (result.status < 200 || result.status >= 300) {
-      throw new Error(parseStorageError(result.body));
-    }
-    await assertUploadedObjectReadable({
-      storagePath: input.storagePath,
-      expectedSize: input.expectedSize,
-    });
-    return;
-  } catch (error) {
-    logCreatorVideoUpload("native_upload_failed", {
-      message: error instanceof Error ? error.message : "unknown",
-    });
-  }
-
-  const formData = new FormData();
-  formData.append("cacheControl", "3600");
-  formData.append("", {
-    uri: input.uri,
-    name: toText(input.fileName) || `creator-video.${input.mimeType.split("/").pop() || "mp4"}`,
-    type: input.mimeType,
-  } as unknown as Blob);
-
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers,
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(parseStorageError(body));
-  }
-
-  await assertUploadedObjectReadable({
-    storagePath: input.storagePath,
-    expectedSize: input.expectedSize,
-  });
-}
-
 async function parseCreatorVideo(row: CreatorVideoRow): Promise<CreatorVideo> {
+  const id = toText(row.id);
   const storagePath = toText(row.storage_path);
-  const playbackPath = storagePath || toText(row.playback_url);
+  const storageProvider = normalizeMediaStorageProvider(row.storage_provider);
+  const storageBucket = getMediaStorageProviderBucket({
+    provider: storageProvider,
+    bucket: row.storage_bucket,
+    fallbackBucket: CREATOR_VIDEO_BUCKET,
+  });
+  const storageObjectKey = toText(row.storage_object_key) || storagePath || toText(row.playback_url);
   const thumbnailPath = toText(row.thumb_storage_path);
   const thumbnailFallback = toText(row.thumb_url);
+  const playbackUrl = storageProvider === "s3" && storageObjectKey
+    ? await createSignedMediaDownload({
+      surfaceType: "creator_video",
+      provider: storageProvider,
+      bucket: storageBucket,
+      objectKey: storageObjectKey,
+      recordId: id,
+    }).catch(() => "")
+    : await createSupabaseSignedUrl(storagePath || toText(row.playback_url));
 
   return {
-    id: toText(row.id),
+    id,
     ownerId: toText(row.owner_id),
     title: toText(row.title) || "Untitled Video",
     description: toText(row.description),
@@ -304,8 +180,11 @@ async function parseCreatorVideo(row: CreatorVideoRow): Promise<CreatorVideo> {
     moderationReason: toText(row.moderation_reason) || null,
     moderatedAt: toText(row.moderated_at) || null,
     moderatedBy: toText(row.moderated_by) || null,
-    playbackUrl: await createSignedUrl(playbackPath),
-    thumbnailUrl: thumbnailPath ? await createSignedUrl(thumbnailPath) : thumbnailFallback,
+    playbackUrl,
+    thumbnailUrl: thumbnailPath ? await createSupabaseSignedUrl(thumbnailPath) : thumbnailFallback,
+    storageProvider,
+    storageBucket,
+    storageObjectKey,
     storagePath,
     thumbStoragePath: thumbnailPath,
     mimeType: toText(row.mime_type),
@@ -408,6 +287,11 @@ export async function uploadCreatorVideo(input: {
   const id = createClientId();
   const mimeType = toText(input.file.mimeType) || "video/mp4";
   const storagePath = `${ownerId}/${id}/source.${getFileExtension(input.file)}`;
+  let uploadedObject: {
+    provider: MediaStorageProvider;
+    bucket: string;
+    objectKey: string;
+  } | null = null;
 
   try {
     logCreatorVideoUpload("storage_upload_start", {
@@ -417,12 +301,13 @@ export async function uploadCreatorVideo(input: {
       size: input.file.size ?? null,
       visibility: normalizeVisibility(input.visibility),
     });
-    await uploadLocalFileToStorage({
+    uploadedObject = await uploadFileToMediaStorage({
+      surfaceType: "creator_video",
       uri: fileUri,
-      storagePath,
+      objectKey: storagePath,
       mimeType,
       fileName: input.file.name,
-      expectedSize: input.file.size,
+      sizeBytes: input.file.size,
     });
   } catch (error) {
     logCreatorVideoUpload("storage_upload_failed", {
@@ -432,6 +317,7 @@ export async function uploadCreatorVideo(input: {
   }
 
   logCreatorVideoUpload("storage_upload_succeeded", { id });
+  if (!uploadedObject) throw new Error("Creator media storage did not return an upload object.");
 
   const payload: CreatorVideoInsert = {
     id,
@@ -442,7 +328,10 @@ export async function uploadCreatorVideo(input: {
     thumb_url: toText(input.thumbUrl) || null,
     visibility: normalizeVisibility(input.visibility),
     moderation_status: "clean",
-    storage_path: storagePath,
+    storage_provider: uploadedObject.provider,
+    storage_bucket: uploadedObject.bucket,
+    storage_object_key: uploadedObject.objectKey,
+    storage_path: uploadedObject.objectKey,
     thumb_storage_path: null,
     mime_type: mimeType,
     file_size_bytes: typeof input.file.size === "number" ? input.file.size : null,
@@ -461,7 +350,12 @@ export async function uploadCreatorVideo(input: {
       id,
       message: error instanceof Error ? error.message : "missing data",
     });
-    await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([storagePath]).catch(() => undefined);
+    await deleteStoredMediaObject({
+      surfaceType: "creator_video",
+      provider: uploadedObject.provider,
+      bucket: uploadedObject.bucket,
+      objectKey: uploadedObject.objectKey,
+    }).catch(() => undefined);
     throw error ?? new Error("Unable to save uploaded video metadata.");
   }
 
@@ -533,15 +427,29 @@ export async function moderateCreatorVideo(input: {
   return parseCreatorVideo(data);
 }
 
-export async function deleteCreatorVideo(video: Pick<CreatorVideo, "id" | "storagePath" | "thumbStoragePath">): Promise<void> {
+export async function deleteCreatorVideo(
+  video: Pick<CreatorVideo, "id" | "storageProvider" | "storageBucket" | "storageObjectKey" | "storagePath" | "thumbStoragePath">,
+): Promise<void> {
   const videoId = toText(video.id);
   if (!videoId) return;
 
   const { error } = await supabase.from("videos").delete().eq("id", videoId);
   if (error) throw error;
 
-  const paths = [toText(video.storagePath), toText(video.thumbStoragePath)].filter(Boolean);
-  if (paths.length) {
-    await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove(paths).catch(() => undefined);
+  const provider = normalizeMediaStorageProvider(video.storageProvider);
+  const objectKey = toText(video.storageObjectKey) || toText(video.storagePath);
+  if (provider === "s3" && objectKey) {
+    await deleteStoredMediaObject({
+      surfaceType: "creator_video",
+      provider,
+      bucket: toText(video.storageBucket),
+      objectKey,
+      recordId: videoId,
+    }).catch(() => undefined);
+  } else {
+    const paths = [toText(video.storagePath), toText(video.thumbStoragePath)].filter(Boolean);
+    if (paths.length) {
+      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove(paths).catch(() => undefined);
+    }
   }
 }

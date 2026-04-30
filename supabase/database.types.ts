@@ -916,7 +916,9 @@ export type Database = {
           owner_user_id: string
           size_bytes: number
           storage_bucket: string
+          storage_object_key: string | null
           storage_path: string
+          storage_provider: string
           surface_id: string
           surface_type: string
           updated_at: string
@@ -934,7 +936,9 @@ export type Database = {
           owner_user_id: string
           size_bytes?: number
           storage_bucket?: string
+          storage_object_key?: string | null
           storage_path: string
+          storage_provider?: string
           surface_id: string
           surface_type: string
           updated_at?: string
@@ -952,7 +956,9 @@ export type Database = {
           owner_user_id?: string
           size_bytes?: number
           storage_bucket?: string
+          storage_object_key?: string | null
           storage_path?: string
+          storage_provider?: string
           surface_id?: string
           surface_type?: string
           updated_at?: string
@@ -1290,7 +1296,10 @@ export type Database = {
           moderation_status: string
           owner_id: string
           playback_url: string | null
+          storage_bucket: string
+          storage_object_key: string | null
           storage_path: string | null
+          storage_provider: string
           thumb_storage_path: string | null
           thumb_url: string | null
           title: string | null
@@ -1309,7 +1318,10 @@ export type Database = {
           moderation_status?: string
           owner_id: string
           playback_url?: string | null
+          storage_bucket?: string
+          storage_object_key?: string | null
           storage_path?: string | null
+          storage_provider?: string
           thumb_storage_path?: string | null
           thumb_url?: string | null
           title?: string | null
@@ -1328,7 +1340,10 @@ export type Database = {
           moderation_status?: string
           owner_id?: string
           playback_url?: string | null
+          storage_bucket?: string
+          storage_object_key?: string | null
           storage_path?: string | null
+          storage_provider?: string
           thumb_storage_path?: string | null
           thumb_url?: string | null
           title?: string | null

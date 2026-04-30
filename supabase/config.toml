@@ -1,2 +1,5 @@
 [functions.livekit-token]
 verify_jwt = false
+
+[functions.media-storage]
+verify_jwt = false

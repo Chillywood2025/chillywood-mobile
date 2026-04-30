@@ -1,8 +1,13 @@
-import { File } from "expo-file-system";
-import * as FileSystem from "expo-file-system/legacy";
-
 import type { Tables, TablesInsert } from "../supabase/database.types";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
+import {
+  createSignedMediaDownload,
+  deleteStoredMediaObject,
+  getMediaStorageProviderBucket,
+  normalizeMediaStorageProvider,
+  uploadFileToMediaStorage,
+  type MediaStorageProvider,
+} from "./mediaStorage";
+import { supabase } from "./supabase";
 
 export const SOCIAL_ATTACHMENT_BUCKET = "social-attachments";
 export const SOCIAL_ATTACHMENT_SIGNED_URL_SECONDS = 60 * 60;
@@ -54,7 +59,9 @@ export type SocialAttachment = {
   ownerUserId: string;
   surfaceType: SocialAttachmentSurfaceType;
   surfaceId: string;
+  storageProvider: MediaStorageProvider;
   storageBucket: string;
+  storageObjectKey: string;
   storagePath: string;
   mimeType: string;
   sizeBytes: number;
@@ -72,7 +79,7 @@ type SocialAttachmentRow = Tables<"social_attachments">;
 type SocialAttachmentInsert = TablesInsert<"social_attachments">;
 
 const SOCIAL_ATTACHMENT_SELECT =
-  "id,owner_user_id,surface_type,surface_id,storage_bucket,storage_path,mime_type,size_bytes,original_file_name,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at";
+  "id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,size_bytes,original_file_name,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at";
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -82,11 +89,6 @@ const createClientId = () =>
     const next = char === "x" ? rand : (rand & 0x3) | 0x8;
     return next.toString(16);
   });
-
-const encodeStoragePath = (path: string) => path
-  .split("/")
-  .map((part) => encodeURIComponent(part))
-  .join("/");
 
 const getExtensionFromName = (name?: string | null) => {
   const normalized = toText(name).toLowerCase();
@@ -226,14 +228,13 @@ export const getSocialAttachmentValidationMessage = (file: SocialAttachmentFile 
 async function getSignedInUserSession() {
   const { data, error } = await supabase.auth.getSession();
   const userId = toText(data.session?.user?.id);
-  const accessToken = toText(data.session?.access_token);
-  if (error || !userId || !accessToken) {
+  if (error || !userId) {
     throw new Error("Sign in before adding attachments.");
   }
-  return { userId, accessToken };
+  return { userId };
 }
 
-async function createSignedUrl(path: string) {
+async function createSupabaseSignedUrl(path: string) {
   const normalizedPath = toText(path);
   if (!normalizedPath) return "";
 
@@ -245,140 +246,6 @@ async function createSignedUrl(path: string) {
   return data.signedUrl;
 }
 
-const shouldVerifyUploadBytes = (value: unknown) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0;
-};
-
-async function uploadedObjectHasReadableBytes(input: {
-  storagePath: string;
-  expectedSize?: number | null;
-}) {
-  if (!shouldVerifyUploadBytes(input.expectedSize)) return true;
-
-  const signedUrl = await createSignedUrl(input.storagePath);
-  if (!signedUrl) return true;
-
-  try {
-    const head = await fetch(signedUrl, { method: "HEAD" });
-    const contentLength = Number(head.headers.get("content-length"));
-    if (Number.isFinite(contentLength) && contentLength > 0) return true;
-
-    const rangeProbe = await fetch(signedUrl, { headers: { Range: "bytes=0-0" } });
-    if (rangeProbe.status === 416) return false;
-    if (!rangeProbe.ok) return true;
-
-    const body = await rangeProbe.arrayBuffer();
-    return body.byteLength > 0;
-  } catch {
-    return true;
-  }
-}
-
-async function assertUploadedObjectReadable(input: {
-  storagePath: string;
-  expectedSize?: number | null;
-}) {
-  const hasBytes = await uploadedObjectHasReadableBytes(input);
-  if (hasBytes) return;
-
-  await supabase.storage.from(SOCIAL_ATTACHMENT_BUCKET).remove([input.storagePath]).catch(() => undefined);
-  throw new Error("Uploaded attachment was empty after upload.");
-}
-
-async function uploadLocalFileToStorage(input: {
-  uri: string;
-  storagePath: string;
-  mimeType: string;
-  fileName?: string | null;
-  expectedSize?: number | null;
-  accessToken: string;
-}) {
-  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${SOCIAL_ATTACHMENT_BUCKET}/${encodeStoragePath(input.storagePath)}`;
-  const headers = {
-    Authorization: `Bearer ${input.accessToken}`,
-    apikey: SUPABASE_ANON_KEY,
-    "x-upsert": "false",
-  };
-  const parseStorageError = (body: string) => {
-    let message = "Unable to upload this attachment.";
-    try {
-      const parsed = JSON.parse(body) as { message?: string; error?: string };
-      message = toText(parsed.message) || toText(parsed.error) || message;
-    } catch {
-      message = toText(body) || message;
-    }
-    return message;
-  };
-
-  try {
-    const localFile = new File(input.uri);
-    const { error } = await supabase.storage
-      .from(SOCIAL_ATTACHMENT_BUCKET)
-      .upload(input.storagePath, localFile, {
-        contentType: input.mimeType,
-        cacheControl: "3600",
-        upsert: false,
-      });
-
-    if (error) throw error;
-    await assertUploadedObjectReadable({
-      storagePath: input.storagePath,
-      expectedSize: input.expectedSize,
-    });
-    return;
-  } catch {
-    // Fall through to the native uploader for Android content/file URI coverage.
-  }
-
-  try {
-    const result = await FileSystem.uploadAsync(uploadUrl, input.uri, {
-      httpMethod: "POST",
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      headers: {
-        ...headers,
-        "Content-Type": input.mimeType,
-        "cache-control": "max-age=3600",
-      },
-    });
-
-    if (result.status < 200 || result.status >= 300) {
-      throw new Error(parseStorageError(result.body));
-    }
-    await assertUploadedObjectReadable({
-      storagePath: input.storagePath,
-      expectedSize: input.expectedSize,
-    });
-    return;
-  } catch {
-    // Fall through to FormData for platforms where binary upload is unavailable.
-  }
-
-  const formData = new FormData();
-  formData.append("cacheControl", "3600");
-  formData.append("", {
-    uri: input.uri,
-    name: toText(input.fileName) || `attachment.${input.mimeType.split("/").pop() || "bin"}`,
-    type: input.mimeType,
-  } as unknown as Blob);
-
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers,
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(parseStorageError(body));
-  }
-
-  await assertUploadedObjectReadable({
-    storagePath: input.storagePath,
-    expectedSize: input.expectedSize,
-  });
-}
-
 const normalizeModerationStatus = (value: unknown): SocialAttachment["moderationStatus"] => {
   const normalized = toText(value).toLowerCase();
   if (normalized === "reported" || normalized === "hidden" || normalized === "removed") return normalized;
@@ -387,12 +254,31 @@ const normalizeModerationStatus = (value: unknown): SocialAttachment["moderation
 
 async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAttachment> {
   const storagePath = toText(row.storage_path);
+  const storageProvider = normalizeMediaStorageProvider(row.storage_provider);
+  const storageBucket = getMediaStorageProviderBucket({
+    provider: storageProvider,
+    bucket: row.storage_bucket,
+    fallbackBucket: SOCIAL_ATTACHMENT_BUCKET,
+  });
+  const storageObjectKey = toText(row.storage_object_key) || storagePath;
+  const signedUrl = storageProvider === "s3" && storageObjectKey
+    ? await createSignedMediaDownload({
+      surfaceType: "social_attachment",
+      provider: storageProvider,
+      bucket: storageBucket,
+      objectKey: storageObjectKey,
+      recordId: toText(row.id),
+    }).catch(() => "")
+    : await createSupabaseSignedUrl(storagePath);
+
   return {
     id: toText(row.id),
     ownerUserId: toText(row.owner_user_id),
     surfaceType: toText(row.surface_type) as SocialAttachmentSurfaceType,
     surfaceId: toText(row.surface_id),
-    storageBucket: toText(row.storage_bucket) || SOCIAL_ATTACHMENT_BUCKET,
+    storageProvider,
+    storageBucket,
+    storageObjectKey,
     storagePath,
     mimeType: toText(row.mime_type) || "application/octet-stream",
     sizeBytes: Math.max(0, Number(row.size_bytes ?? 0) || 0),
@@ -403,7 +289,7 @@ async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAt
     moderatedBy: toText(row.moderated_by) || null,
     createdAt: toText(row.created_at) || new Date().toISOString(),
     updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
-    signedUrl: await createSignedUrl(storagePath),
+    signedUrl,
   };
 }
 
@@ -447,19 +333,19 @@ export async function createSocialAttachmentForSurface(input: {
   if (!surfaceId) throw new Error("Attachment target is missing.");
   if (validationMessage) throw new Error(validationMessage);
 
-  const { userId, accessToken } = await getSignedInUserSession();
+  const { userId } = await getSignedInUserSession();
   const id = createClientId();
   const mimeType = inferMimeType(input.file);
   const fileName = getReadableSocialAttachmentName({ name: input.file.name });
   const storagePath = `${userId}/${input.surfaceType}/${surfaceId}/${id}.${getFileExtension(input.file)}`;
 
-  await uploadLocalFileToStorage({
+  const uploadedObject = await uploadFileToMediaStorage({
+    surfaceType: "social_attachment",
     uri: toText(input.file.uri),
-    storagePath,
+    objectKey: storagePath,
     mimeType,
     fileName,
-    expectedSize: input.file.size,
-    accessToken,
+    sizeBytes: input.file.size,
   });
 
   const payload: SocialAttachmentInsert = {
@@ -467,8 +353,10 @@ export async function createSocialAttachmentForSurface(input: {
     owner_user_id: userId,
     surface_type: input.surfaceType,
     surface_id: surfaceId,
-    storage_bucket: SOCIAL_ATTACHMENT_BUCKET,
-    storage_path: storagePath,
+    storage_provider: uploadedObject.provider,
+    storage_bucket: uploadedObject.bucket,
+    storage_object_key: uploadedObject.objectKey,
+    storage_path: uploadedObject.objectKey,
     mime_type: mimeType,
     size_bytes: Math.max(0, Number(input.file.size ?? 0) || 0),
     original_file_name: fileName,
@@ -484,14 +372,21 @@ export async function createSocialAttachmentForSurface(input: {
     .single();
 
   if (error || !data) {
-    await supabase.storage.from(SOCIAL_ATTACHMENT_BUCKET).remove([storagePath]).catch(() => undefined);
+    await deleteStoredMediaObject({
+      surfaceType: "social_attachment",
+      provider: uploadedObject.provider,
+      bucket: uploadedObject.bucket,
+      objectKey: uploadedObject.objectKey,
+    }).catch(() => undefined);
     throw error ?? new Error("Unable to save this attachment right now.");
   }
 
   return parseSocialAttachment(data);
 }
 
-export async function deleteSocialAttachment(attachment: Pick<SocialAttachment, "id" | "storagePath">): Promise<void> {
+export async function deleteSocialAttachment(
+  attachment: Pick<SocialAttachment, "id" | "storageProvider" | "storageBucket" | "storageObjectKey" | "storagePath">,
+): Promise<void> {
   const id = toText(attachment.id);
   if (!id) return;
 
@@ -501,8 +396,17 @@ export async function deleteSocialAttachment(attachment: Pick<SocialAttachment, 
     .eq("id", id);
 
   if (error) throw error;
-  const storagePath = toText(attachment.storagePath);
-  if (storagePath) {
-    await supabase.storage.from(SOCIAL_ATTACHMENT_BUCKET).remove([storagePath]).catch(() => undefined);
+  const provider = normalizeMediaStorageProvider(attachment.storageProvider);
+  const objectKey = toText(attachment.storageObjectKey) || toText(attachment.storagePath);
+  if (provider === "s3" && objectKey) {
+    await deleteStoredMediaObject({
+      surfaceType: "social_attachment",
+      provider,
+      bucket: toText(attachment.storageBucket),
+      objectKey,
+      recordId: id,
+    }).catch(() => undefined);
+  } else if (objectKey) {
+    await supabase.storage.from(SOCIAL_ATTACHMENT_BUCKET).remove([objectKey]).catch(() => undefined);
   }
 }
