@@ -299,6 +299,7 @@ export default function WatchPartyRoomScreen() {
   const chatScrollRef = useRef<ScrollView>(null);
   const roomScrollRef = useRef<ScrollView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [partyRoomCameraPreviewSuppressed, setPartyRoomCameraPreviewSuppressed] = useState(false);
 
   // ── Host controls (broadcast-driven) ────────────────────────────────────────
   const [reactionsGloballyMuted, setReactionsGloballyMuted] = useState(false);
@@ -930,6 +931,11 @@ export default function WatchPartyRoomScreen() {
 
   const myUserId = String(myUserIdRef.current ?? "").trim();
   const isNativeCameraPlatform = Platform.OS !== "web";
+  const allowLocalCameraPreview = isNativeCameraPlatform && isFocused && !partyRoomCameraPreviewSuppressed;
+
+  useEffect(() => {
+    if (isFocused) setPartyRoomCameraPreviewSuppressed(false);
+  }, [isFocused]);
 
   useEffect(() => {
     const channel = chatChannelRef.current;
@@ -1416,6 +1422,8 @@ export default function WatchPartyRoomScreen() {
       "Guest",
     );
     const participantRole = myRoleRef.current === "host" ? "host" : "speaker";
+
+    setPartyRoomCameraPreviewSuppressed(true);
 
     const joinResult = await prepareLiveKitJoinBoundary({
       surface: "watch-party-live",
@@ -2442,7 +2450,7 @@ export default function WatchPartyRoomScreen() {
           dominantSpeakerId={dominantLiveSpeakerId}
           speakingById={isSpeakingById}
           myCameraPreviewUrl={myCameraPreviewUrlRef.current}
-          allowCameraPreview={isNativeCameraPlatform}
+          allowCameraPreview={allowLocalCameraPreview}
           cameraPermissionGranted={!!cameraPermission?.granted}
           tapPulseById={tapPulseById}
           pointerEvents="box-none"
@@ -2569,7 +2577,7 @@ export default function WatchPartyRoomScreen() {
               const presentation = participantPresentationById[participant.userId] ?? "compact";
               const isExpanded = presentation === "expanded";
               const canModerateParticipant = participantState.role !== "host";
-              const showLocalCameraPreview = isNativeCameraPlatform && isCurrentUser && !!cameraPermission?.granted;
+              const showLocalCameraPreview = allowLocalCameraPreview && isCurrentUser && !!cameraPermission?.granted;
               const roleLabel = getParticipantRoleLabel(participantState);
               const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
               return (

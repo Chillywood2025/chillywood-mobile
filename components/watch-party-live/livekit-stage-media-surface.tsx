@@ -1,6 +1,5 @@
 import "../../_lib/livekit/dom-exception-polyfill";
 
-import { CameraView } from "expo-camera";
 import { Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
@@ -207,17 +206,13 @@ function LiveKitStageMediaContent({
             return (
               <View key={trackKey} style={styles.bubbleGridItem} collapsable={false}>
                 <View style={styles.bubbleVideoWrap} collapsable={false}>
-                  {isLocalParticipant ? (
-                    <CameraView style={styles.bubbleVideo} facing="front" mute mirror />
-                  ) : (
-                    <VideoTrack
-                      trackRef={trackRef}
-                      style={styles.bubbleVideo}
-                      objectFit="cover"
-                      mirror={false}
-                      zOrder={0}
-                    />
-                  )}
+                  <VideoTrack
+                    trackRef={trackRef}
+                    style={styles.bubbleVideo}
+                    objectFit="cover"
+                    mirror={isLocalParticipant}
+                    zOrder={0}
+                  />
                 </View>
                 <Text style={styles.bubbleLabel} numberOfLines={1}>
                   {getParticipantLabel(trackRef.participant.identity, localParticipant.identity)}
