@@ -63,7 +63,7 @@ Locked structure:
 - Live Watch-Party mode owns the Chi'lly Party Members box.
 - The Chi'lly Party Members grid remains the approved visual home for other live user feeds.
 - The current user's own preview is not inside the Chi'lly Party Members grid.
-- A participant already shown as the active hero/focus feed on a device must not be duplicated in that device's Chi'lly Party Members box.
+- Live Watch-Party must keep real other host/viewer feeds in the Chi'lly Party Members box; do not empty the box to avoid a duplicate.
 - Other live user feeds render in the approved grid behavior: three across, two visible rows, then scroll for more live users.
 - The host tile/badge behavior remains visually clear and consistent with the rest of the grid.
 - Host and participant tiles must not be replaced by fake placeholders as proof.
@@ -91,7 +91,7 @@ Must not happen:
 - Do not route Home Live Watch-Party into normal Party Room.
 - Do not make the host feed darker or visually inconsistent.
 - Do not hide real participant tiles.
-- Do not duplicate the active hero/focus feed inside the Chi'lly Party Members box on the same device.
+- Do not remove real other host/viewer feeds from the Chi'lly Party Members box as a duplicate workaround.
 - Do not use fake participant placeholders as proof.
 
 ## 4. Locked Watch-Party Live Layout
@@ -210,7 +210,7 @@ Manual proof items:
 - Live First does not show the Chi'lly Party Members box.
 - Live Watch-Party shows the Chi'lly Party Members box as the people-first visual home for other live feeds.
 - Current user's own preview is not inside the Chi'lly Party Members grid.
-- Active hero/focus feed is not duplicated inside the Chi'lly Party Members box on the same device.
+- Real other host/viewer feeds remain visible in the Chi'lly Party Members box.
 - Visible comments remain visible in their current placement.
 - Comments are not moved into menu-only/tap-only behavior.
 - Comments are not moved into a drawer, modal, bottom sheet, overlay-only surface, or hidden secondary panel.

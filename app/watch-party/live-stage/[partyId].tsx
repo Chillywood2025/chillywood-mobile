@@ -1912,7 +1912,9 @@ export default function WatchPartyLiveStageScreen() {
     ? "Host capture rules are active, while device blocking still stays best-effort."
     : "Capture protection stays best-effort on supported devices.";
   const liveRoomLayoutIsDefault = !tailoredFocusParticipant || tailoredFocusParticipant.userId === hostParticipant?.userId;
-  const heroParticipant = stageFocusTarget ?? hostParticipant ?? selfFallbackParticipant;
+  const heroParticipant = isHybridMode
+    ? selfFallbackParticipant
+    : (stageFocusTarget ?? hostParticipant ?? selfFallbackParticipant);
   const heroMediaParticipant = heroParticipant ? stageMediaParticipantsByUserId[heroParticipant.userId] as CommunicationParticipantView | undefined : undefined;
   const heroParticipantIsCurrentUser = heroParticipant?.userId === currentUserParticipantId;
   const showHeroLocalRtcVideo = heroParticipantIsCurrentUser && !!RTCView && !!localStreamURL;
@@ -1924,13 +1926,9 @@ export default function WatchPartyLiveStageScreen() {
   ).trim();
   const showHeroRemoteImage = !showHeroLocalRtcVideo && !showHeroRemoteVideo && !!heroParticipantPreviewUri;
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
-  const communityHeroParticipantId = !isHost && !heroParticipantIsCurrentUser
-    ? String(heroParticipant?.userId ?? "")
-    : "";
   const communityCardParticipants = useMemo(() => {
     return visibleStripParticipants.filter((participant) => {
       if (!participant.userId || participant.userId === currentUserParticipantId) return false;
-      if (communityHeroParticipantId && participant.userId === communityHeroParticipantId) return false;
       const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
         role: participant.role,
         isSpeaking: participant.isSpeaking,
@@ -1941,7 +1939,7 @@ export default function WatchPartyLiveStageScreen() {
       const hasRemoteCameraFeed = !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
       return hasRemoteCameraFeed || participantState.role === "host" || participantState.role === "speaker";
     });
-  }, [communityHeroParticipantId, currentUserParticipantId, participantStateById, stageMediaParticipantsByUserId, visibleStripParticipants]);
+  }, [currentUserParticipantId, participantStateById, stageMediaParticipantsByUserId, visibleStripParticipants]);
   const communityCardRows = useMemo(() => {
     const rows: typeof communityCardParticipants[] = [];
     let pendingRow: typeof communityCardParticipants = [];
@@ -3631,7 +3629,7 @@ export default function WatchPartyLiveStageScreen() {
             <LiveKitHybridHeroVideo
               fallbackInitial={heroFallbackInitial}
               participantRole={liveKitJoinContract.participantRole}
-              preferLocalHero={isHost}
+              preferLocalHero={isHost || isHybridMode}
               roomName={liveKitJoinContract.roomName}
             />
           ) : isHybridMode ? (
