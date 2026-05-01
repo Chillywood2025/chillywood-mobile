@@ -53,6 +53,7 @@ Live Watch-Party is people-first. The Live Stage route should make the room feel
 Current implementation:
 
 - `app/watch-party/live-stage/[partyId].tsx` renders the Chi'lly Party Members overlay only for hybrid Live Watch-Party mode. Live First must not show that box.
+- In hybrid Live Watch-Party mode, the hero/focus feed prefers the current device/local participant so real other host/viewer feeds remain visible in the Chi'lly Party Members grid.
 - The grid uses real remote live feeds, membership state, and LiveKit/RTC track fallbacks where available.
 - The grid excludes the current user and lays out remote feeds three across by two visible rows before vertical scroll.
 - Viewer camera-seat request copy is visible and honest.
@@ -258,6 +259,7 @@ Live Watch-Party:
 - Confirm Live First does not show the Chi'lly Party Members box.
 - Confirm Live Watch-Party shows the Chi'lly Party Members box.
 - Confirm the current user's own tile is not inside the Chi'lly Party Members grid.
+- Confirm the viewer device keeps the host visible in the Chi'lly Party Members box.
 - Confirm other live feeds appear three across and two rows visible, with scroll for more live feeds.
 - Confirm remote host badge is visible when the host is another participant.
 - Confirm comments lane is visible and does not cover the grid.

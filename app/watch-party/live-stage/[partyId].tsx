@@ -1912,6 +1912,8 @@ export default function WatchPartyLiveStageScreen() {
     ? "Host capture rules are active, while device blocking still stays best-effort."
     : "Capture protection stays best-effort on supported devices.";
   const liveRoomLayoutIsDefault = !tailoredFocusParticipant || tailoredFocusParticipant.userId === hostParticipant?.userId;
+  // Runtime lock: Live Watch-Party hero prefers the local/current device.
+  // Do not fix duplicate-looking feeds by removing real other host/viewer feeds from Chi'lly Party Members.
   const heroParticipant = isHybridMode
     ? selfFallbackParticipant
     : (stageFocusTarget ?? hostParticipant ?? selfFallbackParticipant);
@@ -1928,6 +1930,7 @@ export default function WatchPartyLiveStageScreen() {
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
   const communityCardParticipants = useMemo(() => {
     return visibleStripParticipants.filter((participant) => {
+      // The local/current device stays out of this box; real other host/viewer feeds stay in.
       if (!participant.userId || participant.userId === currentUserParticipantId) return false;
       const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
         role: participant.role,

@@ -63,6 +63,7 @@ Locked structure:
 - Live Watch-Party mode owns the Chi'lly Party Members box.
 - The Chi'lly Party Members grid remains the approved visual home for other live user feeds.
 - The current user's own preview is not inside the Chi'lly Party Members grid.
+- In Live Watch-Party, the hero/focus feed should prefer the current device/local participant so the Chi'lly Party Members box can keep the real other feeds visible.
 - Live Watch-Party must keep real other host/viewer feeds in the Chi'lly Party Members box; do not empty the box to avoid a duplicate.
 - Other live user feeds render in the approved grid behavior: three across, two visible rows, then scroll for more live users.
 - The host tile/badge behavior remains visually clear and consistent with the rest of the grid.
@@ -91,6 +92,7 @@ Must not happen:
 - Do not route Home Live Watch-Party into normal Party Room.
 - Do not make the host feed darker or visually inconsistent.
 - Do not hide real participant tiles.
+- Do not make the viewer device hide the host from Chi'lly Party Members just because the host was also eligible for focus.
 - Do not remove real other host/viewer feeds from the Chi'lly Party Members box as a duplicate workaround.
 - Do not use fake participant placeholders as proof.
 
@@ -210,6 +212,7 @@ Manual proof items:
 - Live First does not show the Chi'lly Party Members box.
 - Live Watch-Party shows the Chi'lly Party Members box as the people-first visual home for other live feeds.
 - Current user's own preview is not inside the Chi'lly Party Members grid.
+- Live Watch-Party hero/focus uses the current device/local participant instead of stealing the only other feed from Chi'lly Party Members.
 - Real other host/viewer feeds remain visible in the Chi'lly Party Members box.
 - Visible comments remain visible in their current placement.
 - Comments are not moved into menu-only/tap-only behavior.
