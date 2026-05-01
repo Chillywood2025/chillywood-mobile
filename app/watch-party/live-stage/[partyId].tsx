@@ -208,7 +208,7 @@ const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as
 const LIVE_STAGE_REMOTE_GRID_COLUMNS = 3;
 const LIVE_STAGE_REMOTE_GRID_VISIBLE_ROWS = 2;
 const LIVE_STAGE_REMOTE_GRID_GAP = 8;
-const LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT = 112;
+const LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT = 144;
 type CommunicationRTCViewComponent = React.ComponentType<{
   streamURL: string;
   style?: object;
@@ -547,6 +547,9 @@ function LiveKitHybridCommunityRoomHost({
   );
 }
 
+// Live Stage surface lock: preserve docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md.
+// Do not visually change routes, comments, controls, player, composer, labels, or member tiles here without explicit approval.
+// Live First must not render the Chi'lly Party Members box; Live Watch-Party owns that deck.
 export default function WatchPartyLiveStageScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -1758,6 +1761,7 @@ export default function WatchPartyLiveStageScreen() {
   const isLiveFirstMode = stageMode === "live";
   const isHybridMode = stageMode === "hybrid";
   const usesSharedStageCommentLane = isLiveFirstMode || isHybridMode;
+  const shouldShowStageCommunityDeck = isHybridMode;
   const stageReactionsEnabled = room?.reactionsPolicy !== "muted";
   const commentsLaneBottomOffset = liveDockBottomInset + (usesSharedStageCommentLane ? 292 : 172);
   const stageDockKeyboardLift = hybridCommentFocused
@@ -1778,48 +1782,9 @@ export default function WatchPartyLiveStageScreen() {
       return true;
     });
   }, [currentUserParticipantId, participantStateById, visibleStripParticipants]);
-  const communityCardParticipants = useMemo(() => {
-    return visibleStripParticipants.filter((participant) => {
-      if (!participant.userId || participant.userId === currentUserParticipantId) return false;
-      const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
-        role: participant.role,
-        isSpeaking: participant.isSpeaking,
-        isMuted: participant.isMuted,
-      });
-      if (participantState.isRemoved) return false;
-      const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
-      const hasRemoteCameraFeed = !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
-      return hasRemoteCameraFeed || participantState.role === "host" || participantState.role === "speaker";
-    });
-  }, [currentUserParticipantId, participantStateById, stageMediaParticipantsByUserId, visibleStripParticipants]);
-  const communityCardRows = useMemo(() => {
-    const rows: typeof communityCardParticipants[] = [];
-    let pendingRow: typeof communityCardParticipants = [];
-
-    communityCardParticipants.forEach((participant) => {
-      pendingRow.push(participant);
-      if (pendingRow.length === LIVE_STAGE_REMOTE_GRID_COLUMNS) {
-        rows.push(pendingRow);
-        pendingRow = [];
-      }
-    });
-
-    if (pendingRow.length > 0) {
-      rows.push(pendingRow);
-    }
-
-    return rows;
-  }, [communityCardParticipants]);
-  const communityCardParticipantIndexById = useMemo(
-    () => Object.fromEntries(communityCardParticipants.map((participant, index) => [participant.userId, index])),
-    [communityCardParticipants],
-  );
   const lowerCommunityCountLabel = isLiveFirstMode
     ? (lowerCommunityParticipants.length > 0 ? `${lowerCommunityParticipants.length} in audience` : "Audience waiting")
     : `${viewerCount} in room`;
-  const communityCardCountLabel = communityCardParticipants.length > 0
-    ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "live feed" : "live feeds"}`
-    : "Feeds syncing";
   const currentStageParticipantState = participantStateById[currentUserParticipantId] ?? createDefaultParticipantState({
     role: isHost ? "host" : "viewer",
     isSpeaking: false,
@@ -1959,6 +1924,49 @@ export default function WatchPartyLiveStageScreen() {
   ).trim();
   const showHeroRemoteImage = !showHeroLocalRtcVideo && !showHeroRemoteVideo && !!heroParticipantPreviewUri;
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
+  const communityHeroParticipantId = !isHost && !heroParticipantIsCurrentUser
+    ? String(heroParticipant?.userId ?? "")
+    : "";
+  const communityCardParticipants = useMemo(() => {
+    return visibleStripParticipants.filter((participant) => {
+      if (!participant.userId || participant.userId === currentUserParticipantId) return false;
+      if (communityHeroParticipantId && participant.userId === communityHeroParticipantId) return false;
+      const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
+        role: participant.role,
+        isSpeaking: participant.isSpeaking,
+        isMuted: participant.isMuted,
+      });
+      if (participantState.isRemoved) return false;
+      const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
+      const hasRemoteCameraFeed = !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
+      return hasRemoteCameraFeed || participantState.role === "host" || participantState.role === "speaker";
+    });
+  }, [communityHeroParticipantId, currentUserParticipantId, participantStateById, stageMediaParticipantsByUserId, visibleStripParticipants]);
+  const communityCardRows = useMemo(() => {
+    const rows: typeof communityCardParticipants[] = [];
+    let pendingRow: typeof communityCardParticipants = [];
+
+    communityCardParticipants.forEach((participant) => {
+      pendingRow.push(participant);
+      if (pendingRow.length === LIVE_STAGE_REMOTE_GRID_COLUMNS) {
+        rows.push(pendingRow);
+        pendingRow = [];
+      }
+    });
+
+    if (pendingRow.length > 0) {
+      rows.push(pendingRow);
+    }
+
+    return rows;
+  }, [communityCardParticipants]);
+  const communityCardParticipantIndexById = useMemo(
+    () => Object.fromEntries(communityCardParticipants.map((participant, index) => [participant.userId, index])),
+    [communityCardParticipants],
+  );
+  const communityCardCountLabel = communityCardParticipants.length > 0
+    ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "live feed" : "live feeds"}`
+    : "Feeds syncing";
   const heroFallbackInitial = String(heroParticipant?.displayName || "H").trim().slice(0, 1).toUpperCase();
   const selectedStageEffect = getLiveEffectById(selectedStageEffectId);
   const stageEffectAppliedToCamera = isLiveEffectAppliedToCamera(selectedStageEffect);
@@ -3701,7 +3709,8 @@ export default function WatchPartyLiveStageScreen() {
           renderToHardwareTextureAndroid
         >
         {renderStageTopChrome()}
-        {/* Layout lock: preserve the people-first Chi'lly Party Members grid structure. */}
+        {/* Layout lock: preserve the people-first Chi'lly Party Members grid structure in Live Watch-Party mode. */}
+        {shouldShowStageCommunityDeck ? (
         <View style={[styles.stageHybridDeck, { top: hybridDeckTop }]} pointerEvents="box-none">
           <View
             pointerEvents="auto"
@@ -4124,6 +4133,7 @@ export default function WatchPartyLiveStageScreen() {
             )}
           </View>
         </View>
+        ) : null}
         {renderStageOverlayUtilitySheets()}
         {renderStageLowerDock()}
         </Animated.View>
@@ -5677,11 +5687,11 @@ const styles = StyleSheet.create({
   },
   stagePresenceBubbleGrid: {
     width: "100%",
-    height: 58,
+    height: 92,
     borderRadius: 14,
   },
   stagePresenceBubbleSoloGrid: {
-    height: 58,
+    height: 92,
     borderRadius: 14,
   },
   stagePresenceBubbleExpanded: {
@@ -5691,7 +5701,7 @@ const styles = StyleSheet.create({
   },
   stagePresenceBubbleExpandedGrid: {
     width: "100%",
-    height: 58,
+    height: 92,
     borderRadius: 14,
   },
   stagePresenceBubbleFeatured: {
@@ -5702,7 +5712,7 @@ const styles = StyleSheet.create({
   },
   stagePresenceBubbleFeaturedGrid: {
     width: "100%",
-    height: 58,
+    height: 92,
     borderRadius: 14,
     marginHorizontal: 0,
   },

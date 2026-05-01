@@ -49,7 +49,7 @@ Current Live Stage placement:
 - Live Stage is people-first at `/watch-party/live-stage/[partyId]`.
 - The Chi’llyfects control opens from the approved Live Stage controls/menu area.
 - Live Stage comments remain in the locked lower dock and must not be moved for this work.
-- Live First and Live Watch-Party share the same Chi’ll Party Members remote-feed overlay behavior.
+- Live First must not show the Chi’ll Party Members box; Live Watch-Party owns that remote-feed box.
 
 Current Party Room placement:
 

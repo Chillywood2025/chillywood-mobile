@@ -1,6 +1,7 @@
 # Live Watch-Party Layout Lock
 
 Date: 2026-04-27
+Last updated: 2026-05-01
 
 Status: user-approved layout contract. Runtime proof remains tracked separately.
 
@@ -58,8 +59,11 @@ System owners:
 Locked structure:
 
 - Live Watch-Party stays people-first.
+- Live First must not show the Chi'lly Party Members box.
+- Live Watch-Party mode owns the Chi'lly Party Members box.
 - The Chi'lly Party Members grid remains the approved visual home for other live user feeds.
 - The current user's own preview is not inside the Chi'lly Party Members grid.
+- A participant already shown as the active hero/focus feed on a device must not be duplicated in that device's Chi'lly Party Members box.
 - Other live user feeds render in the approved grid behavior: three across, two visible rows, then scroll for more live users.
 - The host tile/badge behavior remains visually clear and consistent with the rest of the grid.
 - Host and participant tiles must not be replaced by fake placeholders as proof.
@@ -75,16 +79,19 @@ Locked structure:
 - Open comments, focused comment input, menus, reactions, studio controls, and Chi’llyfects panels may keep the overlay visible while active, but they must not move comments out of the current placement.
 - Controls may be refined only inside the approved structure and only by explicit user request.
 - Chi’llyfects controls may be refined inside approved locations, but fake AR/camera processing is forbidden.
+- Stream, LiveKit, RTC, audio, token, reconnect, stale-room, and media fixes must preserve the locked UI. They must not move buttons, boxes, player, composer, comments, member tiles, labels, or routes.
 
 Must not happen:
 
 - Do not redesign Live Stage.
 - Do not compact Live Stage into a different structure.
+- Do not show the Chi'lly Party Members box in Live First.
 - Do not replace the Chi'lly Party Members grid with another visual model.
 - Do not move or hide visible comments.
 - Do not route Home Live Watch-Party into normal Party Room.
 - Do not make the host feed darker or visually inconsistent.
 - Do not hide real participant tiles.
+- Do not duplicate the active hero/focus feed inside the Chi'lly Party Members box on the same device.
 - Do not use fake participant placeholders as proof.
 
 ## 4. Locked Watch-Party Live Layout
@@ -164,6 +171,7 @@ Forbidden without explicit user approval:
 - replacing visible comments with menu/tap-only comments
 - moving comments into a drawer, modal, bottom sheet, hidden secondary panel, or overlay-only surface
 - redesigning comments
+- showing the Chi'lly Party Members box in Live First
 - moving Watch-Party Live content away from the top
 - moving Watch-Party Live people/participants away from below the content
 - replacing the Chi'lly Party Members grid with a different visual structure
@@ -199,8 +207,10 @@ Manual proof items:
 
 - Live Stage route opens at `/watch-party/live-stage/[partyId]`.
 - Live Watch-Party layout still matches the approved current screen.
-- Chi'lly Party Members remains the people-first visual home for other live feeds.
+- Live First does not show the Chi'lly Party Members box.
+- Live Watch-Party shows the Chi'lly Party Members box as the people-first visual home for other live feeds.
 - Current user's own preview is not inside the Chi'lly Party Members grid.
+- Active hero/focus feed is not duplicated inside the Chi'lly Party Members box on the same device.
 - Visible comments remain visible in their current placement.
 - Comments are not moved into menu-only/tap-only behavior.
 - Comments are not moved into a drawer, modal, bottom sheet, overlay-only surface, or hidden secondary panel.
@@ -213,4 +223,5 @@ Manual proof items:
 - Creator-video Watch-Party remains normal Party flow.
 - Creator-video Watch-Party does not route to Live Stage.
 - No route drift occurs between Live Stage and Party Room.
+- Stream/media fixes do not change the locked UI.
 - No fake participant tiles or fake Chi’llyfects/effects are used as proof.
