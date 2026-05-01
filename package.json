@@ -11,7 +11,8 @@
     "proof:session": "node ./scripts/start-proof-session.mjs",
     "validate:runtime": "node ./scripts/validate-runtime.mjs",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs",
+    "typecheck": "tsc --noEmit && npm run guard:watch-party-livekit"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
