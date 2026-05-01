@@ -1,7 +1,6 @@
 import "../../_lib/livekit/dom-exception-polyfill";
 
-import { CameraView } from "expo-camera";
-import { Room, Track } from "livekit-client";
+import { RemoteTrackPublication, Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
@@ -118,7 +117,7 @@ function LiveKitStageMediaContent({
       { source: Track.Source.ScreenShare, withPlaceholder: false },
       { source: Track.Source.Camera, withPlaceholder: false },
     ],
-    { onlySubscribed: true },
+    { onlySubscribed: false },
   );
   const remoteTracks = useMemo(
     () => tracks
@@ -126,11 +125,15 @@ function LiveKitStageMediaContent({
       .filter((trackRef) => trackRef.participant.identity !== localParticipant.identity),
     [localParticipant.identity, tracks],
   );
+  const subscribedRemoteTracks = useMemo(
+    () => remoteTracks.filter((trackRef) => !!trackRef.publication.track),
+    [remoteTracks],
+  );
   const remoteCameraTracks = useMemo(
     () => remoteTracks.filter((trackRef) => trackRef.source === Track.Source.Camera),
     [remoteTracks],
   );
-  const primaryRemoteTrack = remoteTracks[0] ?? null;
+  const primaryRemoteTrack = subscribedRemoteTracks[0] ?? null;
   const localCameraTrackRef = useMemo<RenderableLiveKitTrackReference | null>(() => {
     if (!shouldPublishLocalCamera || !cameraTrack) return null;
     const trackRef = {
@@ -159,6 +162,24 @@ function LiveKitStageMediaContent({
     ];
     return nextTracks.slice(0, 25);
   }, [localCameraTrackRef, remoteCameraTracks]);
+  const bubbleGridSubscribedTrackCount = useMemo(
+    () => bubbleGridTracks.filter((trackRef) => !!trackRef.publication.track).length,
+    [bubbleGridTracks],
+  );
+
+  useEffect(() => {
+    remoteCameraTracks.forEach((trackRef) => {
+      const publication = trackRef.publication;
+      if (publication instanceof RemoteTrackPublication) {
+        if (!publication.isSubscribed) {
+          publication.setSubscribed(true);
+        }
+        if (!publication.isEnabled) {
+          publication.setEnabled(true);
+        }
+      }
+    });
+  }, [remoteCameraTracks]);
 
   useEffect(() => {
     debugLog("livekit", "stage media publish state", {
@@ -170,10 +191,12 @@ function LiveKitStageMediaContent({
       isCameraEnabled,
       isMicrophoneEnabled,
       hasLocalCameraTrack: !!cameraTrack,
-      hasRemoteTrack: !!primaryRemoteTrack,
-      remoteTrackCount: remoteTracks.length,
+      hasRemoteTrack: subscribedRemoteTracks.length > 0,
+      remoteTrackCount: subscribedRemoteTracks.length,
+      remotePublicationCount: remoteTracks.length,
       visibleTrackCount,
       bubbleGridTrackCount: bubbleGridTracks.length,
+      bubbleGridSubscribedTrackCount,
       connectionState: String(connectionState ?? ""),
       lastMicrophoneError: lastMicrophoneError?.message ?? null,
       mediaDeviceFailure,
@@ -190,9 +213,12 @@ function LiveKitStageMediaContent({
     publishLocalAudio,
     primaryRemoteTrack,
     bubbleGridTracks.length,
+    bubbleGridSubscribedTrackCount,
+    remoteCameraTracks,
     remoteTracks.length,
     shouldPublishLocalCamera,
     surfaceLabel,
+    subscribedRemoteTracks.length,
     visibleTrackCount,
   ]);
 
@@ -207,17 +233,13 @@ function LiveKitStageMediaContent({
             return (
               <View key={trackKey} style={styles.bubbleGridItem} collapsable={false}>
                 <View style={styles.bubbleVideoWrap} collapsable={false}>
-                  {isLocalParticipant ? (
-                    <CameraView style={styles.bubbleVideo} facing="front" mute mirror />
-                  ) : (
-                    <VideoTrack
-                      trackRef={trackRef}
-                      style={styles.bubbleVideo}
-                      objectFit="cover"
-                      mirror={false}
-                      zOrder={0}
-                    />
-                  )}
+                  <VideoTrack
+                    trackRef={trackRef}
+                    style={styles.bubbleVideo}
+                    objectFit="cover"
+                    mirror={isLocalParticipant}
+                    zOrder={0}
+                  />
                 </View>
                 <Text style={styles.bubbleLabel} numberOfLines={1}>
                   {getParticipantLabel(trackRef.participant.identity, localParticipant.identity)}
@@ -524,14 +546,14 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   bubbleGridItem: {
-    width: 82,
+    width: "18%",
     alignItems: "center",
     gap: 4,
   },
   bubbleVideoWrap: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 999,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
@@ -540,7 +562,7 @@ const styles = StyleSheet.create({
   bubbleVideo: {
     width: "100%",
     height: "100%",
-    borderRadius: 39,
+    borderRadius: 999,
   },
   bubbleLabel: {
     width: "100%",
