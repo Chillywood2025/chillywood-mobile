@@ -53,7 +53,6 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import { prepareLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
-import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import {
     reportDebugError,
     reportDebugParty,
@@ -101,7 +100,6 @@ import {
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
-import { LiveKitStageMediaSurface } from "../../components/watch-party-live/livekit-stage-media-surface";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -289,8 +287,6 @@ export default function WatchPartyRoomScreen() {
   const [tapPulseById, setTapPulseById] = useState<Record<string, boolean>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<LiveBubbleParticipant | null>(null);
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
-  const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
-  const [watchPartyLiveKitFallbackReason, setWatchPartyLiveKitFallbackReason] = useState<string | null>(null);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
@@ -327,7 +323,6 @@ export default function WatchPartyRoomScreen() {
   const micSpeakingRef = useRef(false);
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const watchPartyLiveKitRequestKeyRef = useRef("");
   const activityPulse = useRef(new Animated.Value(0)).current;
   const liveBubbleOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
@@ -484,27 +479,6 @@ export default function WatchPartyRoomScreen() {
       };
     });
     setParticipantStateById(nextParticipantStateById);
-
-    const snapshotParticipants = getActivePartyMemberships(snapshot.memberships)
-      .filter((membership) => membership.membershipState !== "removed" && membership.membershipState !== "left")
-      .map((membership) => buildSharedParticipantIdentity({
-        userId: membership.userId,
-        role: membership.role,
-        displayNameCandidates: [
-          membership.displayName,
-          membership.userId === resolvedUserId ? myProfileUsernameRef.current : "",
-          "Guest",
-        ],
-        avatarUrl: membership.avatarUrl ?? "",
-        cameraPreviewUrl: membership.cameraPreviewUrl ?? "",
-        currentUserId: resolvedUserId,
-        isLive: membership.membershipState === "active",
-        isSpeaking: false,
-        isMuted: membership.isMuted,
-      }));
-    if (snapshotParticipants.length > 0) {
-      setParticipants(snapshotParticipants);
-    }
   }, []);
 
   const refreshRoomSnapshot = useCallback(async (userId?: string | null) => {
@@ -738,7 +712,7 @@ export default function WatchPartyRoomScreen() {
           await saveLastPartySession({ partyId, titleId: snapshot.room.titleId, joinedAt: Date.now() }).catch(() => {});
         }
 
-        await startChatChannel(userId, myRoleRef.current === "host" ? "host" : "viewer", snapshot.room, profile);
+        startChatChannel(userId, myRoleRef.current === "host" ? "host" : "viewer", snapshot.room, profile);
         startRoomRealtimeSync();
         startRoomChatRealtimeSync();
       } catch (error) {
@@ -783,28 +757,16 @@ export default function WatchPartyRoomScreen() {
 
   // ── Chat + Presence channel ──────────────────────────────────────────────────
   const startChatChannel = useCallback(
-    async (userId: string | null, role: "host" | "viewer", fetchedRoom: WatchPartyState, profile: UserProfile | null) => {
+    (userId: string | null, role: "host" | "viewer", fetchedRoom: WatchPartyState, profile: UserProfile | null) => {
+      if (chatChannelRef.current) supabase.removeChannel(chatChannelRef.current);
       setConnState("connecting");
 
       const safeUserId = String(userId ?? "").trim();
       const trackedUserId = safeUserId || "anon";
       const username = resolveIdentityName(profile?.username, "Guest");
       myUsernameRef.current = username;
-      const channelName = `room-${partyId}`;
-      const channelsToRemove = supabase
-        .getChannels()
-        .filter(
-          (existingChannel) =>
-            existingChannel === chatChannelRef.current ||
-            existingChannel.topic === channelName ||
-            existingChannel.topic === `realtime:${channelName}`,
-        );
-      chatChannelRef.current = null;
-      if (channelsToRemove.length > 0) {
-        await Promise.all(channelsToRemove.map((existingChannel) => supabase.removeChannel(existingChannel).catch(() => null)));
-      }
 
-      const channel = supabase.channel(channelName, {
+      const channel = supabase.channel(`room-${partyId}`, {
         config: { presence: { key: trackedUserId } },
       });
 
@@ -1199,122 +1161,6 @@ export default function WatchPartyRoomScreen() {
     if (cameraPermission && !cameraPermission.canAskAgain) return;
     requestCameraPermission().catch(() => {});
   }, [myUserId, cameraPermission, requestCameraPermission, isNativeCameraPlatform]);
-
-  useEffect(() => {
-    if (isNativeCameraPlatform === false || !partyId || !room || room.roomType === "live" || !myUserId) {
-      watchPartyLiveKitRequestKeyRef.current = "";
-      setWatchPartyLiveKitJoinContract(null);
-      return;
-    }
-    if (blockedRoomAccess || accessGate) return;
-
-    const sourceType = resolveWatchPartySourceType(room);
-    const sourceId = resolveWatchPartySourceId(room);
-    const participantRole: LiveKitTokenReady["participantRole"] = myRoleRef.current === "host" ? "host" : "speaker";
-    const participantName = resolveIdentityName(
-      myProfileUsernameRef.current,
-      myUsernameRef.current,
-      participantRole === "host" ? "Host" : "Viewer",
-    );
-    const requestKey = [
-      partyId,
-      myUserId,
-      participantRole,
-      sourceType ?? "",
-      sourceId ?? "",
-    ].join(":");
-
-    if (watchPartyLiveKitFallbackReason && watchPartyLiveKitRequestKeyRef.current === requestKey) {
-      return;
-    }
-
-    const currentJoinContract = watchPartyLiveKitJoinContract;
-    if (
-      currentJoinContract
-      && watchPartyLiveKitRequestKeyRef.current === requestKey
-      && currentJoinContract.roomName === partyId
-      && currentJoinContract.participantRole === participantRole
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-    watchPartyLiveKitRequestKeyRef.current = requestKey;
-    setWatchPartyLiveKitFallbackReason(null);
-
-    prepareLiveKitJoinBoundary({
-      surface: "watch-party-live",
-      roomName: partyId,
-      participantIdentity: myUserId,
-      participantName,
-      participantRole,
-      metadata: {
-        roomCode: room.roomCode ?? null,
-        titleId: sourceType === "platform_title" ? sourceId : null,
-        sourceType,
-        sourceId,
-        source: "party-room-watch-party-live",
-      },
-    })
-      .then((joinResult) => {
-        if (cancelled) return;
-        if (joinResult.status === "ready") {
-          setWatchPartyLiveKitJoinContract(joinResult);
-          debugLog("livekit", "prepared party-room watch-party-live join contract", {
-            roomName: joinResult.roomName,
-            endpoint: joinResult.endpoint,
-            participantRole: joinResult.participantRole,
-            requestedGrants: joinResult.requestedGrants,
-          });
-          return;
-        }
-
-        setWatchPartyLiveKitJoinContract(null);
-        debugLog("livekit", "party-room watch-party-live join contract unavailable", {
-          reason: joinResult.reason,
-          roomName: joinResult.roomName,
-          endpoint: joinResult.endpoint,
-        });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setWatchPartyLiveKitJoinContract(null);
-        reportRuntimeError("watch-party-livekit-party-room-contract", error, {
-          partyId,
-          sourceType,
-          sourceId,
-        });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    accessGate,
-    blockedRoomAccess,
-    isNativeCameraPlatform,
-    myUserId,
-    myRole,
-    partyId,
-    room,
-    room?.partyId,
-    room?.roomCode,
-    room?.roomType,
-    room?.sourceId,
-    room?.sourceType,
-    room?.titleId,
-    watchPartyLiveKitFallbackReason,
-    watchPartyLiveKitJoinContract,
-  ]);
-
-  const onWatchPartyLiveKitFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
-    debugLog("livekit", "falling back from party-room watch-party-live rtc bubbles", {
-      reason,
-      roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
-    });
-    setWatchPartyLiveKitFallbackReason(reason);
-    setWatchPartyLiveKitJoinContract(null);
-  }, [partyId, watchPartyLiveKitJoinContract?.roomName]);
 
   useEffect(() => {
     if (!myUserId || !isFocused) return;
@@ -2146,12 +1992,6 @@ export default function WatchPartyRoomScreen() {
   const partyRoomSourceType = resolveWatchPartySourceType(room);
   const partyRoomSourceId = resolveWatchPartySourceId(room);
   const partyRoomSourceLabel = partyRoomSourceType === "creator_video" ? "creator_video" : "platform_title";
-  const shouldRenderWatchPartyLiveKitBubbles =
-    !isLiveRoom && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
-  const publishWatchPartyLiveKitAudio =
-    !!watchPartyLiveKitJoinContract
-    && watchPartyLiveKitJoinContract.participantRole !== "viewer"
-    && !(participantStateById[currentUserBubbleId]?.isMuted ?? false);
   const latestRoomMessages = messages.slice(-4);
   const selectedPartyEffect = getLiveEffectById(selectedPartyEffectId);
   const selectedPartyEffectCopy = getLiveEffectStatusCopy(selectedPartyEffect);
@@ -2708,226 +2548,212 @@ export default function WatchPartyRoomScreen() {
             </View>
             <Text style={styles.liveBubblesCount}>{watchPartyLiveFeedCountLabel}</Text>
           </View>
-          {shouldRenderWatchPartyLiveKitBubbles && watchPartyLiveKitJoinContract ? (
-            <View style={styles.watchPartyLiveRtcFrame}>
-              <LiveKitStageMediaSurface
-                joinContract={watchPartyLiveKitJoinContract}
-                onFallback={onWatchPartyLiveKitFallback}
-                fillParent={false}
-                layout="bubble-grid"
-                surfaceLabel="Watch-Party Live"
-                publishLocalAudio={publishWatchPartyLiveKitAudio}
-                containerStyle={styles.watchPartyLiveRtcFrameInner}
-              />
-            </View>
-          ) : (
-            <ScrollView
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-              style={styles.liveBubblesGridScroll}
-              contentContainerStyle={styles.liveBubblesGridWrap}
-            >
-              {visibleLiveBubbleParticipants.map((participant, index) => {
-                const participantState = participantStateById[participant.userId] ?? {
-                  isMuted: !!participant.isMuted,
-                  role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                  isRemoved: false,
-                };
-                const isCurrentUser = participant.userId === currentUserBubbleId;
-                const isFeatured = !!featuredParticipantById[participant.userId];
-                const isFocused = participant.userId === activeParticipantId;
-                const isMuted = participantState.isMuted;
-                const isSpeakerRole = participantState.role === "speaker";
-                const isRemoved = participantState.isRemoved;
-                const presentation = participantPresentationById[participant.userId] ?? "compact";
-                const isExpanded = presentation === "expanded";
-                const canModerateParticipant = participantState.role !== "host";
-                const showLocalCameraPreview = isNativeCameraPlatform && isCurrentUser && !!cameraPermission?.granted;
-                const roleLabel = getParticipantRoleLabel(participantState);
-                const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
-                return (
-                  <TouchableOpacity
-                    key={`${participant.userId}-${index}`}
-                    style={[
-                      styles.liveBubbleItem,
-                      isExpanded && styles.liveBubbleItemExpanded,
-                      isFocused && !isFeatured && styles.liveBubbleItemActive,
-                      isFeatured && styles.liveBubbleItemFeatured,
-                      isRemoved && styles.liveBubbleItemRemoved,
-                    ]}
-                    activeOpacity={0.76}
-                    onPress={() => {
-                      triggerBubbleTapPulse(participant.userId);
-                      if (isHost) {
-                        debugLog("watch-party", "host tap user", { userId: participant.userId });
-                      } else {
-                        debugLog("watch-party", "request mic", { userId: participant.userId });
-                      }
-                      setActiveParticipantId(participant.userId);
-                      setParticipantPresentationById((prev) => ({
-                        ...prev,
-                        [participant.userId]: (prev[participant.userId] ?? "compact") === "expanded" ? "compact" : "expanded",
-                      }));
-                      setSelectedParticipant(participant);
-                    }}
-                    onLongPress={() => {
-                      setFeaturedParticipantById((prev) => ({
-                        ...prev,
-                        [participant.userId]: !prev[participant.userId],
-                      }));
-                    }}
-                    delayLongPress={220}
-                  >
-                    {isHost && isFocused && canModerateParticipant ? (
-                      <View style={styles.liveBubbleActionMenu}>
-                        <TouchableOpacity
-                          style={styles.liveBubbleActionBtn}
-                          activeOpacity={0.82}
-                          onPress={() => {
-                            setParticipantStateById((prev) => {
-                              const current = prev[participant.userId] ?? {
-                                isMuted: !!participant.isMuted,
-                                role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                isRemoved: false,
-                              };
-                              return {
-                                ...prev,
-                                [participant.userId]: {
-                                  ...current,
-                                  isMuted: current.role === "host" ? current.isMuted : !current.isMuted,
-                                },
-                              };
-                            });
-                            emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
-                          }}
-                        >
-                          <Text style={styles.liveBubbleActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.liveBubbleActionBtn}
-                          activeOpacity={0.82}
-                          onPress={() => {
-                            setParticipantStateById((prev) => {
-                              const current = prev[participant.userId] ?? {
-                                isMuted: !!participant.isMuted,
-                                role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                isRemoved: false,
-                              };
-                              return {
-                                ...prev,
-                                [participant.userId]: {
-                                  ...current,
-                                  role: current.role === "host" ? "host" : current.role === "speaker" ? "listener" : "speaker",
-                                },
-                              };
-                            });
-                            emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
-                          }}
-                        >
-                          <Text style={styles.liveBubbleActionText}>{isSpeakerRole ? "Listener" : "Speaker"}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.liveBubbleActionBtn, styles.liveBubbleActionBtnDanger]}
-                          activeOpacity={0.82}
-                          onPress={() => {
-                            setParticipantStateById((prev) => {
-                              const current = prev[participant.userId] ?? {
-                                isMuted: !!participant.isMuted,
-                                role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                isRemoved: false,
-                              };
-                              return {
-                                ...prev,
-                                [participant.userId]: {
-                                  ...current,
-                                  isRemoved: current.role === "host" ? current.isRemoved : !current.isRemoved,
-                                },
-                              };
-                            });
-                            emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
-                          }}
-                        >
-                          <Text style={[styles.liveBubbleActionText, styles.liveBubbleActionTextDanger]}>
-                            {isRemoved ? "Restore" : "Remove"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
-                    <View style={styles.liveBubbleTapWrap}>
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            style={styles.liveBubblesGridScroll}
+            contentContainerStyle={styles.liveBubblesGridWrap}
+          >
+            {visibleLiveBubbleParticipants.map((participant, index) => {
+              const participantState = participantStateById[participant.userId] ?? {
+                isMuted: !!participant.isMuted,
+                role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                isRemoved: false,
+              };
+              const isCurrentUser = participant.userId === currentUserBubbleId;
+              const isFeatured = !!featuredParticipantById[participant.userId];
+              const isFocused = participant.userId === activeParticipantId;
+              const isMuted = participantState.isMuted;
+              const isSpeakerRole = participantState.role === "speaker";
+              const isRemoved = participantState.isRemoved;
+              const presentation = participantPresentationById[participant.userId] ?? "compact";
+              const isExpanded = presentation === "expanded";
+              const canModerateParticipant = participantState.role !== "host";
+              const showLocalCameraPreview = isNativeCameraPlatform && isCurrentUser && !!cameraPermission?.granted;
+              const roleLabel = getParticipantRoleLabel(participantState);
+              const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
+              return (
+                <TouchableOpacity
+                  key={`${participant.userId}-${index}`}
+                  style={[
+                    styles.liveBubbleItem,
+                    isExpanded && styles.liveBubbleItemExpanded,
+                    isFocused && !isFeatured && styles.liveBubbleItemActive,
+                    isFeatured && styles.liveBubbleItemFeatured,
+                    isRemoved && styles.liveBubbleItemRemoved,
+                  ]}
+                  activeOpacity={0.76}
+                  onPress={() => {
+                    triggerBubbleTapPulse(participant.userId);
+                    if (isHost) {
+                      debugLog("watch-party", "host tap user", { userId: participant.userId });
+                    } else {
+                      debugLog("watch-party", "request mic", { userId: participant.userId });
+                    }
+                    setActiveParticipantId(participant.userId);
+                    setParticipantPresentationById((prev) => ({
+                      ...prev,
+                      [participant.userId]: (prev[participant.userId] ?? "compact") === "expanded" ? "compact" : "expanded",
+                    }));
+                    setSelectedParticipant(participant);
+                  }}
+                  onLongPress={() => {
+                    setFeaturedParticipantById((prev) => ({
+                      ...prev,
+                      [participant.userId]: !prev[participant.userId],
+                    }));
+                  }}
+                  delayLongPress={220}
+                >
+                  {isHost && isFocused && canModerateParticipant ? (
+                    <View style={styles.liveBubbleActionMenu}>
+                      <TouchableOpacity
+                        style={styles.liveBubbleActionBtn}
+                        activeOpacity={0.82}
+                        onPress={() => {
+                          setParticipantStateById((prev) => {
+                            const current = prev[participant.userId] ?? {
+                              isMuted: !!participant.isMuted,
+                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                              isRemoved: false,
+                            };
+                            return {
+                              ...prev,
+                              [participant.userId]: {
+                                ...current,
+                                isMuted: current.role === "host" ? current.isMuted : !current.isMuted,
+                              },
+                            };
+                          });
+                          emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
+                        }}
+                      >
+                        <Text style={styles.liveBubbleActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.liveBubbleActionBtn}
+                        activeOpacity={0.82}
+                        onPress={() => {
+                          setParticipantStateById((prev) => {
+                            const current = prev[participant.userId] ?? {
+                              isMuted: !!participant.isMuted,
+                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                              isRemoved: false,
+                            };
+                            return {
+                              ...prev,
+                              [participant.userId]: {
+                                ...current,
+                                role: current.role === "host" ? "host" : current.role === "speaker" ? "listener" : "speaker",
+                              },
+                            };
+                          });
+                          emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
+                        }}
+                      >
+                        <Text style={styles.liveBubbleActionText}>{isSpeakerRole ? "Listener" : "Speaker"}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.liveBubbleActionBtn, styles.liveBubbleActionBtnDanger]}
+                        activeOpacity={0.82}
+                        onPress={() => {
+                          setParticipantStateById((prev) => {
+                            const current = prev[participant.userId] ?? {
+                              isMuted: !!participant.isMuted,
+                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                              isRemoved: false,
+                            };
+                            return {
+                              ...prev,
+                              [participant.userId]: {
+                                ...current,
+                                isRemoved: current.role === "host" ? current.isRemoved : !current.isRemoved,
+                              },
+                            };
+                          });
+                          emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
+                        }}
+                      >
+                        <Text style={[styles.liveBubbleActionText, styles.liveBubbleActionTextDanger]}>
+                          {isRemoved ? "Restore" : "Remove"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  <View style={styles.liveBubbleTapWrap}>
+                    <View
+                      style={[
+                        styles.liveBubble,
+                        isExpanded && styles.liveBubbleExpanded,
+                        isFocused && !isFeatured && styles.liveBubbleFocused,
+                        isFeatured && styles.liveBubbleFeatured,
+                        isCurrentUser && styles.liveBubbleMe,
+                      ]}
+                    >
+                      {(showLocalCameraPreview || bubbleMediaUri) ? (
+                        <View style={styles.liveBubbleFaceClip}>
+                          {showLocalCameraPreview ? (
+                            <CameraView
+                              style={styles.liveBubbleCameraFill}
+                              facing="front"
+                              mute
+                              mirror
+                            />
+                          ) : (
+                            <Image
+                              source={{ uri: bubbleMediaUri }}
+                              style={styles.liveBubbleImage}
+                            />
+                          )}
+                        </View>
+                      ) : (
+                        <Text style={[styles.liveBubbleInitials, isCurrentUser && styles.liveBubbleInitialsMe]}>
+                          {getInitials(isCurrentUser ? "You" : participant.displayName)}
+                        </Text>
+                      )}
+                      {participant.role === "host" ? (
+                        <View style={styles.liveBubbleHostBadge}>
+                          <Text style={styles.liveBubbleHostBadgeText}>👑</Text>
+                        </View>
+                      ) : null}
                       <View
                         style={[
-                          styles.liveBubble,
-                          isExpanded && styles.liveBubbleExpanded,
-                          isFocused && !isFeatured && styles.liveBubbleFocused,
-                          isFeatured && styles.liveBubbleFeatured,
-                          isCurrentUser && styles.liveBubbleMe,
+                          styles.liveBubbleOnlineDot,
+                          participant.isLive && !isMuted ? styles.liveBubbleOnlineDotLive : styles.liveBubbleOnlineDotIdle,
                         ]}
-                      >
-                        {(showLocalCameraPreview || bubbleMediaUri) ? (
-                          <View style={styles.liveBubbleFaceClip}>
-                            {showLocalCameraPreview ? (
-                              <CameraView
-                                style={styles.liveBubbleCameraFill}
-                                facing="front"
-                                mute
-                                mirror
-                              />
-                            ) : (
-                              <Image
-                                source={{ uri: bubbleMediaUri }}
-                                style={styles.liveBubbleImage}
-                              />
-                            )}
-                          </View>
-                        ) : (
-                          <Text style={[styles.liveBubbleInitials, isCurrentUser && styles.liveBubbleInitialsMe]}>
-                            {getInitials(isCurrentUser ? "You" : participant.displayName)}
-                          </Text>
-                        )}
-                        {participant.role === "host" ? (
-                          <View style={styles.liveBubbleHostBadge}>
-                            <Text style={styles.liveBubbleHostBadgeText}>👑</Text>
-                          </View>
-                        ) : null}
-                        <View
-                          style={[
-                            styles.liveBubbleOnlineDot,
-                            participant.isLive && !isMuted ? styles.liveBubbleOnlineDotLive : styles.liveBubbleOnlineDotIdle,
-                          ]}
-                        />
-                        {isMuted ? <Text style={styles.liveBubbleMutedIcon}>🔇</Text> : null}
-                      </View>
+                      />
+                      {isMuted ? <Text style={styles.liveBubbleMutedIcon}>🔇</Text> : null}
                     </View>
-                    <Text style={styles.liveBubbleName} numberOfLines={1}>
-                      <Text
-                        style={[
-                          isExpanded && styles.liveBubbleNameExpanded,
-                          isFocused && !isFeatured && styles.liveBubbleNameFocused,
-                          isFeatured && styles.liveBubbleNameFeatured,
-                        ]}
-                      >
-                        {isCurrentUser ? "You" : participant.displayName}
-                      </Text>
-                    </Text>
+                  </View>
+                  <Text style={styles.liveBubbleName} numberOfLines={1}>
                     <Text
                       style={[
-                        styles.liveBubbleRole,
+                        isExpanded && styles.liveBubbleNameExpanded,
+                        isFocused && !isFeatured && styles.liveBubbleNameFocused,
+                        isFeatured && styles.liveBubbleNameFeatured,
                       ]}
-                      numberOfLines={1}
                     >
-                      {isMuted ? `${roleLabel} · Muted` : roleLabel}
+                      {isCurrentUser ? "You" : participant.displayName}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })}
-              {Array.from({ length: watchPartyLiveFeedSpacerCount }).map((_, spacerIndex) => (
-                <View
-                  key={`watch-party-live-feed-spacer-${spacerIndex}`}
-                  style={styles.liveBubbleGridSpacer}
-                />
-              ))}
-            </ScrollView>
-          )}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.liveBubbleRole,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {isMuted ? `${roleLabel} · Muted` : roleLabel}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            {Array.from({ length: watchPartyLiveFeedSpacerCount }).map((_, spacerIndex) => (
+              <View
+                key={`watch-party-live-feed-spacer-${spacerIndex}`}
+                style={styles.liveBubbleGridSpacer}
+              />
+            ))}
+          </ScrollView>
         </View>
 
         {!isLiveRoom ? renderPartyRoomSetupShell() : null}
@@ -3369,19 +3195,6 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     gap: WATCH_PARTY_LIVE_FEED_GAP,
     paddingBottom: 2,
-  },
-  watchPartyLiveRtcFrame: {
-    height: (WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT * WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS)
-      + (WATCH_PARTY_LIVE_FEED_GAP * (WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS - 1))
-      + 6,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(5,7,14,0.96)",
-  },
-  watchPartyLiveRtcFrameInner: {
-    flex: 1,
   },
   liveBubbleGridSpacer: {
     width: "18%",
