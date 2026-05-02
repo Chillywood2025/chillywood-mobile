@@ -35,11 +35,20 @@ import {
   resolveRoomAccess,
   type RoomAccessResolution,
 } from "../../../_lib/accessEntitlements";
+import { trackEvent } from "../../../_lib/analytics";
 import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
     resolveBrandingConfig,
+    resolveMonetizationConfig,
 } from "../../../_lib/appConfig";
+import {
+  getMonetizationAccessSheetPresentation,
+} from "../../../_lib/monetization";
+import {
+    requireLiveWatchPartyPremium,
+    type PremiumWatchPartyFeatureAccessDecision,
+} from "../../../_lib/premiumWatchPartyAccess";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
 import {
   type LiveKitTokenReady,
@@ -89,6 +98,7 @@ import {
 } from "../../../_lib/communication";
 import { useCommunicationRoomSession } from "../../../hooks/use-communication-room-session";
 import { InternalInviteSheet } from "../../../components/chat/internal-invite-sheet";
+import { AccessSheet, type AccessSheetReason } from "../../../components/monetization/access-sheet";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { RoomReactionPicker, pushRecentReaction } from "../../../components/room/reaction-picker";
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
@@ -185,6 +195,10 @@ const getLiveStageAccessBody = (access: Pick<RoomAccessResolution, "reason" | "l
   }
   return `${access?.label ?? "Room"} access is unavailable right now.`;
 };
+
+const isAccessSheetReason = (reason: string | null | undefined): reason is AccessSheetReason => (
+  reason === "premium_required" || reason === "party_pass_required"
+);
 
 type StagePresenceEntry = {
   userId?: string;
@@ -561,13 +575,16 @@ export default function WatchPartyLiveStageScreen() {
   const partyId = (Array.isArray(partyIdParam) ? partyIdParam[0] : partyIdParam) ?? "";
   const modeParamValue = Array.isArray(modeParam) ? modeParam[0] : modeParam;
   const source = String(Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "").trim().toLowerCase();
-  const initialStageMode = normalizeSharedRoomMode(modeParamValue, "live");
+  const requestedRouteStageMode = normalizeSharedRoomMode(modeParamValue, "live");
+  const initialStageMode = requestedRouteStageMode === "hybrid" ? "live" : requestedRouteStageMode;
   const canUseBetaStage = isSignedIn && isActive;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Live Stage");
 
   const [loading, setLoading] = useState(true);
   const [room, setRoom] = useState<WatchPartyState | null>(null);
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
+  const [liveWatchPartyPremiumGate, setLiveWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
+  const [liveWatchPartyAccessSheetVisible, setLiveWatchPartyAccessSheetVisible] = useState(false);
   const [roomMissing, setRoomMissing] = useState(false);
   const [roomEntryError, setRoomEntryError] = useState("");
   const [participants, setParticipants] = useState<StageParticipant[]>([]);
@@ -633,6 +650,7 @@ export default function WatchPartyLiveStageScreen() {
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stripOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
+  const monetizationConfig = resolveMonetizationConfig(appConfig);
 
   useEffect(() => {
     let active = true;
@@ -654,6 +672,8 @@ export default function WatchPartyLiveStageScreen() {
     setCommunicationRoomId("");
     setLiveKitJoinContract(null);
     setBlockedRoomAccess(null);
+    setLiveWatchPartyPremiumGate(null);
+    setLiveWatchPartyAccessSheetVisible(false);
     setRoomMissing(false);
     setRoomEntryError("");
   }, [partyId]);
@@ -760,7 +780,32 @@ export default function WatchPartyLiveStageScreen() {
     }));
   }, [buildStageParticipantsFromPresence, canUseBetaStage, myUserId, myUsername, participantStateById, partyId]);
 
-  const updateStageMode = useCallback((nextMode: SharedRoomMode) => {
+  const requireHybridModePremium = useCallback(async (surface: "toggle" | "route") => {
+    const access = await requireLiveWatchPartyPremium({ accessKey: partyId }).catch(() => null);
+    if (access?.allowed) {
+      setLiveWatchPartyPremiumGate(null);
+      return true;
+    }
+
+    if (access) setLiveWatchPartyPremiumGate(access);
+    setLiveWatchPartyAccessSheetVisible(true);
+    trackEvent("monetization_gate_shown", {
+      surface: surface === "route" ? "live-stage-route-hybrid" : "live-stage-mode-toggle",
+      reason: access?.reason ?? "premium_required",
+      roomId: partyId,
+    });
+    return false;
+  }, [partyId]);
+
+  const updateStageMode = useCallback(async (nextMode: SharedRoomMode) => {
+    if (nextMode === "hybrid" && !(await requireHybridModePremium("toggle"))) {
+      setStageMode("live");
+      if (modeParamValue && normalizeSharedRoomMode(modeParamValue, "live") === "hybrid") {
+        router.setParams({ mode: "live" });
+      }
+      return;
+    }
+
     // Layout lock: mode switches must re-arm the same 10s overlay auto-hide without moving comments.
     if (stageOverlayAutoHideTimeoutRef.current) {
       clearTimeout(stageOverlayAutoHideTimeoutRef.current);
@@ -786,12 +831,36 @@ export default function WatchPartyLiveStageScreen() {
     if (modeParamValue !== nextMode) {
       router.setParams({ mode: nextMode });
     }
-  }, [modeParamValue, router, stageOverlayMotion]);
+  }, [modeParamValue, requireHybridModePremium, router, stageOverlayMotion]);
 
   useEffect(() => {
     const normalizedRouteMode = normalizeSharedRoomMode(modeParamValue, "live");
-    setStageMode((currentMode) => (currentMode === normalizedRouteMode ? currentMode : normalizedRouteMode));
-  }, [modeParamValue]);
+    if (normalizedRouteMode !== "hybrid") {
+      setStageMode((currentMode) => (currentMode === normalizedRouteMode ? currentMode : normalizedRouteMode));
+      return;
+    }
+
+    let cancelled = false;
+    requireHybridModePremium("route")
+      .then((allowed) => {
+        if (cancelled) return;
+        if (allowed) {
+          setStageMode("hybrid");
+          return;
+        }
+        setStageMode("live");
+        router.setParams({ mode: "live" });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStageMode("live");
+        router.setParams({ mode: "live" });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [modeParamValue, requireHybridModePremium, router]);
 
   useEffect(() => {
     setLiveSurface("room");
@@ -3186,7 +3255,9 @@ export default function WatchPartyLiveStageScreen() {
             accessibilityRole="button"
             accessibilityLabel="Switch to Live-First mode"
             hitSlop={STAGE_CONTROL_HIT_SLOP}
-            onPress={() => updateStageMode("live")}
+            onPress={() => {
+              void updateStageMode("live");
+            }}
             testID="live-stage-mode-live"
           >
             <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
@@ -3199,7 +3270,9 @@ export default function WatchPartyLiveStageScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Switch to ${branding.watchPartyLabel} mode`}
             hitSlop={STAGE_CONTROL_HIT_SLOP}
-            onPress={() => updateStageMode("hybrid")}
+            onPress={() => {
+              void updateStageMode("hybrid");
+            }}
             testID="live-stage-mode-hybrid"
           >
             <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
@@ -3459,6 +3532,14 @@ export default function WatchPartyLiveStageScreen() {
     displayParticipants: displayParticipants.length,
     liveKitRoomName: liveKitJoinContract?.roomName ?? null,
   });
+  const liveWatchPartyGatePresentation = liveWatchPartyPremiumGate
+    ? getMonetizationAccessSheetPresentation({
+        gate: liveWatchPartyPremiumGate,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
 
   if (authLoading || betaLoading) {
     return (
@@ -4226,6 +4307,45 @@ export default function WatchPartyLiveStageScreen() {
           setReportTarget(null);
         }}
       />
+      {liveWatchPartyPremiumGate && isAccessSheetReason(liveWatchPartyPremiumGate.reason) ? (
+        <AccessSheet
+          visible={liveWatchPartyAccessSheetVisible}
+          reason={liveWatchPartyPremiumGate.reason}
+          gate={liveWatchPartyPremiumGate}
+          appDisplayName={branding.appDisplayName}
+          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={liveWatchPartyGatePresentation?.kicker}
+          titleOverride={liveWatchPartyGatePresentation?.title}
+          bodyOverride={liveWatchPartyGatePresentation?.body}
+          actionLabelOverride={liveWatchPartyGatePresentation?.actionLabel}
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return {
+              message: "Premium access updated. Try Live Watch-Party again.",
+              tone: "success" as const,
+            };
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return {
+              message: "Purchases restored. Try Live Watch-Party again.",
+              tone: "success" as const,
+            };
+          }}
+          onClose={() => setLiveWatchPartyAccessSheetVisible(false)}
+        />
+      ) : null}
       <InternalInviteSheet
         visible={inviteSheetVisible}
         sourceSurface="live-room"

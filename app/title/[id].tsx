@@ -18,6 +18,10 @@ import {
   type SponsorPlacement,
   type TitleAccessRule,
 } from "../../_lib/monetization";
+import {
+  requireWatchPartyLivePremium,
+  type PremiumWatchPartyFeatureAccessDecision,
+} from "../../_lib/premiumWatchPartyAccess";
 import { trackEvent } from "../../_lib/analytics";
 import {
   clearTitleShare,
@@ -123,6 +127,8 @@ export default function TitleDetails() {
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [watchPartyAccessSheetVisible, setWatchPartyAccessSheetVisible] = useState(false);
+  const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [liveMetadata, setLiveMetadata] = useState<TitleLiveMetadata | null>(null);
   const [engagementState, setEngagementState] = useState<TitleEngagementState | null>(null);
   const [engagementLoading, setEngagementLoading] = useState(true);
@@ -480,10 +486,61 @@ export default function TitleDetails() {
     router.push({ pathname: "/player/[id]", params: { id: String(title?.id ?? titleId) } });
   };
 
-  const onOpenWatchPartyLive = () => {
+  const refreshWatchPartyPremiumAfterSheetAction = async (action: "purchase" | "restore") => {
+    const nextTitleId = String(title?.id ?? titleId).trim();
+    if (!nextTitleId) {
+      return {
+        message: "Unable to confirm Watch-Party Live access right now.",
+        tone: "error" as const,
+      };
+    }
+
+    const refreshed = await requireWatchPartyLivePremium({ accessKey: nextTitleId }).catch(() => null);
+    if (refreshed?.allowed) {
+      trackEvent("monetization_unlock_success", {
+        action,
+        surface: "title-detail-watch-party-live",
+        titleId: nextTitleId,
+      });
+      setWatchPartyPremiumGate(null);
+      setWatchPartyAccessSheetVisible(false);
+      return {
+        message: action === "restore" ? "Purchases restored. Watch-Party Live is ready." : "Premium access unlocked. Watch-Party Live is ready.",
+        tone: "success" as const,
+      };
+    }
+
+    if (refreshed) setWatchPartyPremiumGate(refreshed);
+    const message = refreshed?.monetization.issues[0] ?? "Watch-Party Live still needs Premium access on this account.";
+    trackEvent("monetization_unlock_failure", {
+      action,
+      surface: "title-detail-watch-party-live",
+      titleId: nextTitleId,
+    });
+    return {
+      message,
+      tone: "error" as const,
+    };
+  };
+
+  const onOpenWatchPartyLive = async () => {
     const nextTitleId = String(title?.id ?? titleId).trim();
     if (!nextTitleId) return;
 
+    const access = await requireWatchPartyLivePremium({ accessKey: nextTitleId }).catch(() => null);
+    if (!access?.allowed) {
+      const gate = access ?? watchPartyPremiumGate;
+      if (gate) setWatchPartyPremiumGate(gate);
+      trackEvent("monetization_gate_shown", {
+        surface: "title-detail-watch-party-live",
+        reason: gate?.reason ?? "premium_required",
+        titleId: nextTitleId,
+      });
+      setWatchPartyAccessSheetVisible(true);
+      return;
+    }
+
+    setWatchPartyPremiumGate(null);
     router.push({
       pathname: "/watch-party",
       params: {
@@ -543,6 +600,14 @@ export default function TitleDetails() {
   const accessSheetPresentation = titleAccess
     ? getMonetizationAccessSheetPresentation({
         gate: titleAccess,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
+  const watchPartyAccessSheetPresentation = watchPartyPremiumGate
+    ? getMonetizationAccessSheetPresentation({
+        gate: watchPartyPremiumGate,
         appDisplayName: branding.appDisplayName,
         premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
         premiumUpsellBody: monetizationConfig.premiumUpsellBody,
@@ -738,6 +803,50 @@ export default function TitleDetails() {
             return refreshTitleAccessAfterSheetAction("restore");
           }}
           onClose={() => setAccessSheetVisible(false)}
+        />
+      ) : null}
+
+      {watchPartyPremiumGate?.reason === "premium_required" ? (
+        <AccessSheet
+          visible={watchPartyAccessSheetVisible}
+          reason="premium_required"
+          gate={watchPartyPremiumGate}
+          appDisplayName={branding.appDisplayName}
+          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={watchPartyAccessSheetPresentation?.kicker}
+          titleOverride={watchPartyAccessSheetPresentation?.title}
+          bodyOverride={watchPartyAccessSheetPresentation?.body}
+          actionLabelOverride={watchPartyAccessSheetPresentation?.actionLabel}
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "purchase",
+                surface: "title-detail-watch-party-live",
+                titleId: String(title.id ?? titleId).trim(),
+              });
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return refreshWatchPartyPremiumAfterSheetAction("purchase");
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              trackEvent("monetization_unlock_failure", {
+                action: "restore",
+                surface: "title-detail-watch-party-live",
+                titleId: String(title.id ?? titleId).trim(),
+              });
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return refreshWatchPartyPremiumAfterSheetAction("restore");
+          }}
+          onClose={() => setWatchPartyAccessSheetVisible(false)}
         />
       ) : null}
 

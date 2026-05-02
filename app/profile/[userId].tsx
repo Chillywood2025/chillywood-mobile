@@ -9,7 +9,9 @@ import {
 import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
+    resolveBrandingConfig,
     resolveFeatureConfig,
+    resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
 import { getOrCreateDirectThread } from "../../_lib/chat";
@@ -36,8 +38,13 @@ import {
 import { reportRuntimeError } from "../../_lib/logger";
 import {
   readCreatorPermissions,
+  getMonetizationAccessSheetPresentation,
   type CreatorPermissionSet,
 } from "../../_lib/monetization";
+import {
+  requireWatchPartyLivePremium,
+  type PremiumWatchPartyFeatureAccessDecision,
+} from "../../_lib/premiumWatchPartyAccess";
 import {
   formatCreatorVideoFileSize,
   getCreatorVideoStorageLimitMessage,
@@ -98,6 +105,7 @@ import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { AccessSheet } from "../../components/monetization/access-sheet";
 
 type PublicProfileTabKey = "home" | "content" | "live" | "community" | "about";
 
@@ -453,7 +461,10 @@ export default function ProfileScreen() {
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
   const [viewerFollowState, setViewerFollowState] = useState<ProfileViewerFollowState>("unavailable");
   const [followActionBusy, setFollowActionBusy] = useState(false);
+  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
+  const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
+  const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
   const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -520,6 +531,8 @@ export default function ProfileScreen() {
     isLive: isLiveParam === "1" || isLiveParam === "true" || isLiveParam === "yes" || isLiveParam === "live",
     fallbackDisplayName: "Channel",
   });
+  const branding = resolveBrandingConfig(appConfig);
+  const monetizationConfig = resolveMonetizationConfig(appConfig);
   useEffect(() => {
     let active = true;
     getWritablePartyUserId()
@@ -573,10 +586,12 @@ export default function ProfileScreen() {
     readAppConfig()
       .then((config) => {
         if (!active) return;
+        setAppConfig(config);
         setCreatorSettingsEnabled(resolveFeatureConfig(config).creatorSettingsEnabled);
       })
       .catch(() => {
         if (!active) return;
+        setAppConfig(DEFAULT_APP_CONFIG);
         setCreatorSettingsEnabled(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
       });
 
@@ -1231,8 +1246,21 @@ export default function ProfileScreen() {
 
     setActiveTab("live");
   };
-  const onPressWatchParty = () => {
+  const onPressWatchParty = async () => {
     if (hasLiveRouteContext) {
+      const access = await requireWatchPartyLivePremium({ accessKey: partyIdParam }).catch(() => null);
+      if (!access?.allowed) {
+        if (access) setWatchPartyPremiumGate(access);
+        setWatchPartyPremiumSheetVisible(true);
+        trackEvent("monetization_gate_shown", {
+          surface: "profile-watch-party-live",
+          reason: access?.reason ?? "premium_required",
+          roomId: partyIdParam || "linked-room",
+        });
+        return;
+      }
+
+      setWatchPartyPremiumGate(null);
       router.push({
         pathname: "/watch-party/[partyId]",
         params: {
@@ -1245,7 +1273,19 @@ export default function ProfileScreen() {
     }
 
     if (!scheduledWatchPartyTitleId) return;
+    const access = await requireWatchPartyLivePremium({ accessKey: scheduledWatchPartyTitleId }).catch(() => null);
+    if (!access?.allowed) {
+      if (access) setWatchPartyPremiumGate(access);
+      setWatchPartyPremiumSheetVisible(true);
+      trackEvent("monetization_gate_shown", {
+        surface: "profile-watch-party-live",
+        reason: access?.reason ?? "premium_required",
+        titleId: scheduledWatchPartyTitleId,
+      });
+      return;
+    }
 
+    setWatchPartyPremiumGate(null);
     router.push({
       pathname: "/watch-party",
       params: {
@@ -2966,6 +3006,14 @@ export default function ProfileScreen() {
       </View>
     );
   };
+  const watchPartyGatePresentation = watchPartyPremiumGate
+    ? getMonetizationAccessSheetPresentation({
+        gate: watchPartyPremiumGate,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
 
   return (
     <View
@@ -3522,6 +3570,45 @@ export default function ProfileScreen() {
         />
       </ScrollView>
       </KeyboardAvoidingView>
+      {watchPartyPremiumGate?.reason === "premium_required" ? (
+        <AccessSheet
+          visible={watchPartyPremiumSheetVisible}
+          reason="premium_required"
+          gate={watchPartyPremiumGate}
+          appDisplayName={branding.appDisplayName}
+          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={watchPartyGatePresentation?.kicker}
+          titleOverride={watchPartyGatePresentation?.title}
+          bodyOverride={watchPartyGatePresentation?.body}
+          actionLabelOverride={watchPartyGatePresentation?.actionLabel}
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return {
+              message: "Premium access updated. Try Watch-Party Live again.",
+              tone: "success" as const,
+            };
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return {
+              message: "Purchases restored. Try Watch-Party Live again.",
+              tone: "success" as const,
+            };
+          }}
+          onClose={() => setWatchPartyPremiumSheetVisible(false)}
+        />
+      ) : null}
     </View>
   );
 }

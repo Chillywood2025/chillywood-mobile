@@ -68,6 +68,10 @@ import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed
 import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
+import {
+    requireWatchPartyLivePremium,
+    type PremiumWatchPartyFeatureAccessDecision,
+} from "../../_lib/premiumWatchPartyAccess";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
@@ -133,11 +137,17 @@ import {
 
 type ConnState = "loading" | "connecting" | "live" | "reconnecting" | "error";
 
-type MonetizationGate = {
-  source: "room";
-  access: RoomAccessResolution;
-  accessKey: string;
-};
+type MonetizationGate =
+  | {
+      source: "room";
+      access: RoomAccessResolution;
+      accessKey: string;
+    }
+  | {
+      source: "watch_party_live";
+      access: PremiumWatchPartyFeatureAccessDecision;
+      accessKey: string;
+    };
 
 type LocalMsg = {
   id: string;
@@ -208,6 +218,16 @@ const getRoomAccessGateBody = (access: Pick<RoomAccessResolution, "label"> | nul
   access?.label === "Party Pass"
     ? "This room stays locked because Party Pass access is not currently available for this device or account."
     : "This room stays locked because premium room access is not currently available for this device or account."
+);
+
+const getAccessGateTitle = (gate: MonetizationGate) => (
+  gate.source === "watch_party_live" ? "Premium access required" : getRoomAccessGateTitle(gate.access)
+);
+
+const getAccessGateBody = (gate: MonetizationGate) => (
+  gate.source === "watch_party_live"
+    ? "Watch-Party Live requires Premium before this room can open, join, or start a session from a direct route."
+    : getRoomAccessGateBody(gate.access)
 );
 
 const getRoomAccessMessage = (access: Pick<RoomAccessResolution, "reason" | "label"> | null | undefined) => {
@@ -603,6 +623,31 @@ export default function WatchPartyRoomScreen() {
         }
 
         resolvedRoomForBootstrap = true;
+        if (snapshot.room.roomType === "title") {
+          const premiumAccessKey = String(snapshot.room.sourceId ?? snapshot.room.titleId ?? snapshot.room.partyId ?? partyId).trim();
+          const premiumAccess = await requireWatchPartyLivePremium({ accessKey: premiumAccessKey }).catch(() => null);
+          if (cancelled) return;
+
+          if (!premiumAccess?.allowed) {
+            if (premiumAccess) {
+              setAccessGate({
+                source: "watch_party_live",
+                access: premiumAccess,
+                accessKey: premiumAccessKey || snapshot.room.partyId,
+              });
+            }
+            setAccessSheetVisible(true);
+            setRoom(snapshot.room);
+            setLoading(false);
+            trackEvent("monetization_gate_shown", {
+              surface: "watch-party-room",
+              reason: premiumAccess?.reason ?? "premium_required",
+              roomId: snapshot.room.partyId,
+            });
+            return;
+          }
+        }
+
         syncRoomFromSnapshot(snapshot, userId);
         const currentMembership = snapshot.memberships.find((membership) => membership.userId === userId) ?? null;
         const access = await resolveRoomAccess({
@@ -1321,6 +1366,44 @@ export default function WatchPartyRoomScreen() {
     }
 
     try {
+      if (accessGate.source === "watch_party_live") {
+        const access = await requireWatchPartyLivePremium({ accessKey: accessGate.accessKey }).catch(() => null);
+        if (access?.allowed) {
+          trackEvent("monetization_unlock_success", {
+            action,
+            surface: "watch-party-room",
+            reason: accessGate.access.reason,
+            roomId: accessGate.accessKey,
+          });
+          setAccessGate(null);
+          setAccessSheetVisible(false);
+          setLoading(true);
+          setJoinRetryToken((value) => value + 1);
+          return {
+            message: action === "restore" ? "Purchases restored. Rejoining room…" : "Premium access unlocked. Rejoining room…",
+            tone: "success" as const,
+          };
+        }
+
+        if (access) {
+          setAccessGate({
+            ...accessGate,
+            access,
+          });
+        }
+        const message = access?.monetization.issues[0] ?? "Watch-Party Live still needs Premium access on this account.";
+        trackEvent("monetization_unlock_failure", {
+          action,
+          surface: "watch-party-room",
+          reason: access?.reason ?? accessGate.access.reason,
+          roomId: accessGate.accessKey,
+        });
+        return {
+          message,
+          tone: "error" as const,
+        };
+      }
+
       const latestRoom = await getPartyRoom(accessGate.accessKey).catch(() => null);
       const userId = await getSafePartyUserId().catch(() => "");
       const roomToUse = latestRoom ?? room ?? undefined;
@@ -1876,10 +1959,10 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.center}>
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>
-            {getRoomAccessGateTitle(accessGate.access)}
+            {getAccessGateTitle(accessGate)}
             </Text>
             <Text style={styles.errorBody}>
-            {getRoomAccessGateBody(accessGate.access)}
+            {getAccessGateBody(accessGate)}
             </Text>
           <ProtectedSessionNote
             {...getProtectedSessionCopy(sharedRoomMode === "live" ? "live-room" : "party-room", {

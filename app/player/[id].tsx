@@ -21,6 +21,7 @@ import {
     LayoutAnimation,
     PanResponder,
     Platform,
+    Pressable,
     SafeAreaView,
     ScrollView,
     Share,
@@ -51,6 +52,10 @@ import {
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
+import {
+    requireWatchPartyLivePremium,
+    type PremiumWatchPartyFeatureAccessDecision,
+} from "../../_lib/premiumWatchPartyAccess";
 import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
@@ -696,6 +701,8 @@ export default function PlayerScreen() {
   const [standaloneAccessLoading, setStandaloneAccessLoading] = useState(true);
   const [standaloneAccessRetryToken, setStandaloneAccessRetryToken] = useState(0);
   const [standaloneAccessSheetVisible, setStandaloneAccessSheetVisible] = useState(false);
+  const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
+  const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [watchPartyEntryLoading, setWatchPartyEntryLoading] = useState(inWatchParty);
   const [watchPartyEntryMissing, setWatchPartyEntryMissing] = useState(false);
@@ -706,6 +713,7 @@ export default function PlayerScreen() {
     !watchPartyEntryLoading
     && !watchPartyEntryMissing
     && !watchPartyEntryError
+    && !watchPartyPremiumGate
     && !!watchPartyAccess?.isAllowed
   );
 
@@ -750,6 +758,15 @@ export default function PlayerScreen() {
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
   const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
+  const shouldPinWatchPartyControls = inWatchParty
+    && !isLiveModeFlag
+    && watchPartyEntryAllowed
+    && Platform.OS !== "web"
+    && !!watchPartyLiveKitJoinContract;
+  const effectiveControlsVisible = shouldPinWatchPartyControls || controlsVisible;
+  const isCreatorStandalonePlaybackSurface = !inWatchParty
+    && !isLiveModeFlag
+    && (playbackSourceKind === "creator-video" || expectsCreatorVideo);
   const [partyUserId, setPartyUserId] = useState("");
   const [, setPartyViewerCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(1);
@@ -1312,6 +1329,8 @@ export default function PlayerScreen() {
       setWatchPartyEntryMissing(false);
       setWatchPartyEntryError(null);
       setWatchPartyAccess(null);
+      setWatchPartyPremiumGate(null);
+      setWatchPartyPremiumSheetVisible(false);
       return;
     }
 
@@ -1320,6 +1339,7 @@ export default function PlayerScreen() {
     setWatchPartyEntryMissing(false);
     setWatchPartyEntryError(null);
     setWatchPartyAccess(null);
+    setWatchPartyPremiumGate(null);
 
     (async () => {
       const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
@@ -1347,6 +1367,21 @@ export default function PlayerScreen() {
 
       if (roomSourceType === "platform_title" && (expectsCreatorVideo || String(roomSourceId ?? snapshot.room.titleId ?? "") !== cleanId)) {
         setWatchPartyEntryError("This watch party is linked to a different title source.");
+        setWatchPartyEntryLoading(false);
+        return;
+      }
+
+      const premiumAccess = await requireWatchPartyLivePremium({ accessKey: partyId }).catch(() => null);
+      if (!active) return;
+
+      if (!premiumAccess?.allowed) {
+        if (premiumAccess) setWatchPartyPremiumGate(premiumAccess);
+        setWatchPartyPremiumSheetVisible(true);
+        trackEvent("monetization_gate_shown", {
+          surface: "watch-party-live-player-entry",
+          reason: premiumAccess?.reason ?? "premium_required",
+          roomId: partyId,
+        });
         setWatchPartyEntryLoading(false);
         return;
       }
@@ -2027,6 +2062,11 @@ export default function PlayerScreen() {
       hideControlsTimeoutRef.current = null;
     }
 
+    if (shouldPinWatchPartyControls) {
+      if (!controlsVisible) setControlsVisible(true);
+      return;
+    }
+
     if (!controlsVisible) return;
 
     hideControlsTimeoutRef.current = setTimeout(() => {
@@ -2040,7 +2080,7 @@ export default function PlayerScreen() {
         hideControlsTimeoutRef.current = null;
       }
     };
-  }, [controlsVisible]);
+  }, [controlsVisible, shouldPinWatchPartyControls]);
 
   useEffect(() => {
     if (!inWatchParty) {
@@ -2052,26 +2092,26 @@ export default function PlayerScreen() {
 
     Animated.parallel([
       Animated.timing(partyOverlayControlsOpacity, {
-        toValue: controlsVisible ? 1 : 0,
-        duration: controlsVisible ? 180 : 280,
-        easing: controlsVisible ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
+        toValue: effectiveControlsVisible ? 1 : 0,
+        duration: effectiveControlsVisible ? 180 : 280,
+        easing: effectiveControlsVisible ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(partyOverlayControlsTranslateY, {
-        toValue: controlsVisible ? 0 : 8,
-        duration: controlsVisible ? 180 : 280,
-        easing: controlsVisible ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
+        toValue: effectiveControlsVisible ? 0 : 8,
+        duration: effectiveControlsVisible ? 180 : 280,
+        easing: effectiveControlsVisible ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
     ]).start();
 
     Animated.timing(partyPresenceOpacity, {
-      toValue: controlsVisible ? 1 : 0.4,
-      duration: controlsVisible ? 180 : 280,
-      easing: controlsVisible ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
+      toValue: effectiveControlsVisible ? 1 : 0.4,
+      duration: effectiveControlsVisible ? 180 : 280,
+      easing: effectiveControlsVisible ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
       useNativeDriver: true,
     }).start();
-  }, [controlsVisible, inWatchParty, partyOverlayControlsOpacity, partyOverlayControlsTranslateY, partyPresenceOpacity]);
+  }, [effectiveControlsVisible, inWatchParty, partyOverlayControlsOpacity, partyOverlayControlsTranslateY, partyPresenceOpacity]);
 
   useEffect(() => {
     Animated.parallel([
@@ -2186,13 +2226,34 @@ export default function PlayerScreen() {
       hideControlsTimeoutRef.current = null;
     }
 
+    if (shouldPinWatchPartyControls) {
+      if (!controlsVisible) setControlsVisible(true);
+      return;
+    }
+
     if (controlsVisible) {
       hideControlsTimeoutRef.current = setTimeout(() => {
         setControlsVisible(false);
         hideControlsTimeoutRef.current = null;
       }, CONTROLS_AUTO_HIDE_MILLIS);
     }
-  }, [controlsVisible]);
+  }, [controlsVisible, shouldPinWatchPartyControls]);
+
+  const showControlsAndResetAutoHideTimer = useCallback(() => {
+    if (hideControlsTimeoutRef.current) {
+      clearTimeout(hideControlsTimeoutRef.current);
+      hideControlsTimeoutRef.current = null;
+    }
+
+    setControlsVisible(true);
+
+    if (shouldPinWatchPartyControls) return;
+
+    hideControlsTimeoutRef.current = setTimeout(() => {
+      setControlsVisible(false);
+      hideControlsTimeoutRef.current = null;
+    }, CONTROLS_AUTO_HIDE_MILLIS);
+  }, [shouldPinWatchPartyControls]);
 
   const onSendPartyComment = useCallback(async () => {
     if (!inWatchParty || !partyId || partyCommentSending) return;
@@ -2311,7 +2372,7 @@ export default function PlayerScreen() {
     }
 
     if (!controlsVisible) {
-      setControlsVisible(true);
+      showControlsAndResetAutoHideTimer();
       return;
     }
 
@@ -2436,7 +2497,11 @@ export default function PlayerScreen() {
 
           const isTap = Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10;
 
-          if (isTap && isVideoReady) {
+          if (isTap && !isVideoReady) {
+            if (isCreatorStandalonePlaybackSurface) {
+              showControlsAndResetAutoHideTimer();
+            }
+          } else if (isTap && isVideoReady) {
             const now = Date.now();
             const isDoubleTap = now - lastTapRef.current <= 250;
 
@@ -2492,11 +2557,13 @@ export default function PlayerScreen() {
       animateZoomTo,
       applySeekDelta,
       handleSingleTap,
+      isCreatorStandalonePlaybackSurface,
       isPlaying,
       isVideoReady,
       persistProgress,
       resetAutoHideTimer,
       resetGestureState,
+      showControlsAndResetAutoHideTimer,
       zoomScale,
     ],
   );
@@ -2867,6 +2934,24 @@ export default function PlayerScreen() {
     }
   }, [creatorVideo, resetAutoHideTimer]);
 
+  const ensureWatchPartyLivePremium = useCallback(async (accessKey: string) => {
+    const safeAccessKey = String(accessKey ?? "").trim();
+    const access = await requireWatchPartyLivePremium({ accessKey: safeAccessKey }).catch(() => null);
+    if (access?.allowed) {
+      setWatchPartyPremiumGate(null);
+      return true;
+    }
+
+    if (access) setWatchPartyPremiumGate(access);
+    setWatchPartyPremiumSheetVisible(true);
+    trackEvent("monetization_gate_shown", {
+      surface: "standalone-player-watch-party-live",
+      reason: access?.reason ?? "premium_required",
+      titleId: safeAccessKey || String(titleId ?? cleanId).trim(),
+    });
+    return false;
+  }, [cleanId, titleId]);
+
   const onWatchParty = useCallback(async () => {
     if (playbackSourceKind === "creator-video") {
       if (!isSignedIn) {
@@ -2891,6 +2976,8 @@ export default function PlayerScreen() {
         Alert.alert("Creator video unavailable", "Chi'llywood could not resolve this uploaded video for Watch-Party Live.");
         return;
       }
+
+      if (!(await ensureWatchPartyLivePremium(creatorVideoId))) return;
 
       try {
         const hostUserId = await getSafePartyUserId();
@@ -2933,6 +3020,9 @@ export default function PlayerScreen() {
       );
       return;
     }
+
+    const initialAccessKey = String(item?.id ?? titleId ?? cleanId).trim();
+    if (!(await ensureWatchPartyLivePremium(initialAccessKey))) return;
 
     try {
       const hostUserId = await getSafePartyUserId();
@@ -3017,7 +3107,7 @@ export default function PlayerScreen() {
         } : {}),
       },
     });
-  }, [creatorVideo, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
+  }, [cleanId, creatorVideo, ensureWatchPartyLivePremium, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
 
   const onSubmitCreatorVideoReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
     if (playbackSourceKind !== "creator-video" || !titleId || creatorVideoReportBusy) return;
@@ -4154,6 +4244,14 @@ export default function PlayerScreen() {
         premiumUpsellBody: monetizationConfig.premiumUpsellBody,
       })
     : null;
+  const watchPartyPremiumSheetPresentation = watchPartyPremiumGate
+    ? getMonetizationAccessSheetPresentation({
+        gate: watchPartyPremiumGate,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
   const blockedStandaloneAccessEntryLabel = standaloneAccessSheetReason && standaloneAccess
     ? getAccessSheetEntryLabel({
         reason: standaloneAccessSheetReason,
@@ -4205,6 +4303,42 @@ export default function PlayerScreen() {
       tone: "error" as const,
     };
   }, [cleanId, displayItem?.content_access_rule, displayItem?.id]);
+  const refreshWatchPartyPremiumAfterSheetAction = useCallback(async (action: "purchase" | "restore") => {
+    const accessKey = String(
+      watchPartyPremiumGate?.accessKey
+      ?? (playbackSourceKind === "creator-video" ? creatorVideo?.id : displayItem?.id)
+      ?? titleId
+      ?? cleanId,
+    ).trim();
+    const refreshed = await requireWatchPartyLivePremium({ accessKey }).catch(() => null);
+
+    if (refreshed?.allowed) {
+      trackEvent("monetization_unlock_success", {
+        action,
+        surface: inWatchParty ? "watch-party-live-player-entry" : "standalone-player-watch-party-live",
+        titleId: accessKey,
+      });
+      setWatchPartyPremiumGate(null);
+      setWatchPartyPremiumSheetVisible(false);
+      if (inWatchParty) setWatchPartyEntryRetryToken((current) => current + 1);
+      return {
+        message: action === "restore" ? "Purchases restored. Watch-Party Live is ready." : "Premium access unlocked. Watch-Party Live is ready.",
+        tone: "success" as const,
+      };
+    }
+
+    if (refreshed) setWatchPartyPremiumGate(refreshed);
+    const message = refreshed?.monetization.issues[0] ?? "Watch-Party Live still needs Premium access on this account.";
+    trackEvent("monetization_unlock_failure", {
+      action,
+      surface: inWatchParty ? "watch-party-live-player-entry" : "standalone-player-watch-party-live",
+      titleId: accessKey,
+    });
+    return {
+      message,
+      tone: "error" as const,
+    };
+  }, [cleanId, creatorVideo?.id, displayItem?.id, inWatchParty, playbackSourceKind, titleId, watchPartyPremiumGate?.accessKey]);
 
   useEffect(() => {
     if (inWatchParty || isLiveMode) {
@@ -4234,12 +4368,12 @@ export default function PlayerScreen() {
 
     setSpeedMenuOpen(false);
 
-    if (!controlsVisible) {
+    if (!effectiveControlsVisible) {
       setWatchPartyPeopleOpen(false);
       setWatchPartyMenuOpen(false);
       setPartyCommentsOpen(false);
     }
-  }, [controlsVisible, isSharedPartyPlayback]);
+  }, [effectiveControlsVisible, isSharedPartyPlayback]);
 
   const hasActiveRailParticipants = useMemo(
     () => liveBubbleParticipants.some((entry) => entry.isSpeaking || primaryActiveParticipantIds.includes(entry.id)),
@@ -4969,7 +5103,7 @@ export default function PlayerScreen() {
       </View>
 
       <Animated.View
-        pointerEvents={controlsVisible ? "auto" : "none"}
+        pointerEvents={effectiveControlsVisible ? "auto" : "none"}
         style={[
           styles.watchPartyDockOverlay,
           {
@@ -5594,18 +5728,31 @@ export default function PlayerScreen() {
     );
   }
 
-  if (inWatchParty && (watchPartyEntryMissing || !!watchPartyEntryError || (watchPartyAccess && !watchPartyAccess.isAllowed))) {
+  if (inWatchParty && (watchPartyEntryMissing || !!watchPartyEntryError || !!watchPartyPremiumGate || (watchPartyAccess && !watchPartyAccess.isAllowed))) {
     const blockedAccess = watchPartyAccess && !watchPartyAccess.isAllowed ? watchPartyAccess : null;
+    const blockedPremiumAccess = watchPartyPremiumGate;
     const title = watchPartyEntryMissing
       ? "Watch party unavailable"
+      : blockedPremiumAccess
+        ? "Premium access required"
       : blockedAccess
         ? getWatchPartyAccessTitle(blockedAccess)
         : "Watch-party access unavailable";
     const body = watchPartyEntryMissing
       ? "This watch party could not be found anymore. Open the canonical Party Room route if you want to re-check the room."
+      : blockedPremiumAccess
+        ? "Premium access is required before Watch-Party Live can open from this direct route."
       : blockedAccess
         ? getWatchPartyAccessBody(blockedAccess)
         : (watchPartyEntryError ?? "Unable to confirm watch-party access right now.");
+    const premiumGatePresentation = blockedPremiumAccess
+      ? getMonetizationAccessSheetPresentation({
+          gate: blockedPremiumAccess,
+          appDisplayName: branding.appDisplayName,
+          premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+          premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+        })
+      : null;
 
     return (
       <SafeAreaView style={styles.safe}>
@@ -5621,6 +5768,10 @@ export default function PlayerScreen() {
               <TouchableOpacity
                 style={styles.playerAccessPrimaryBtn}
                 onPress={() => {
+                  if (blockedPremiumAccess) {
+                    setWatchPartyPremiumSheetVisible(true);
+                    return;
+                  }
                   if (blockedAccess || watchPartyEntryMissing) {
                     router.replace({
                       pathname: "/watch-party/[partyId]",
@@ -5634,12 +5785,45 @@ export default function PlayerScreen() {
                 activeOpacity={0.85}
               >
                 <Text style={styles.playerAccessPrimaryText}>
-                  {blockedAccess || watchPartyEntryMissing ? "Open Party Room" : "Retry access"}
+                  {blockedPremiumAccess ? "Review Premium" : blockedAccess || watchPartyEntryMissing ? "Open Party Room" : "Retry access"}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
+        {blockedPremiumAccess ? (
+          <AccessSheet
+            visible={watchPartyPremiumSheetVisible}
+            reason="premium_required"
+            gate={blockedPremiumAccess}
+            appDisplayName={branding.appDisplayName}
+            premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+            premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+            kickerOverride={premiumGatePresentation?.kicker}
+            titleOverride={premiumGatePresentation?.title}
+            bodyOverride={premiumGatePresentation?.body}
+            actionLabelOverride={premiumGatePresentation?.actionLabel}
+            onPurchaseResult={(result) => {
+              if (!result.ok) {
+                return {
+                  message: result.message,
+                  tone: "error" as const,
+                };
+              }
+              return refreshWatchPartyPremiumAfterSheetAction("purchase");
+            }}
+            onRestoreResult={(result) => {
+              if (!result.ok) {
+                return {
+                  message: result.message,
+                  tone: "error" as const,
+                };
+              }
+              return refreshWatchPartyPremiumAfterSheetAction("restore");
+            }}
+            onClose={() => setWatchPartyPremiumSheetVisible(false)}
+          />
+        ) : null}
       </SafeAreaView>
     );
   }
@@ -5952,6 +6136,16 @@ export default function PlayerScreen() {
               )}
             </Animated.View>
 
+            {isCreatorStandalonePlaybackSurface ? (
+              <Pressable
+                pointerEvents={controlsVisible ? "none" : "auto"}
+                style={styles.creatorStandaloneSurfaceTapTarget}
+                onPress={showControlsAndResetAutoHideTimer}
+                accessibilityRole="button"
+                accessibilityLabel="Show player controls"
+              />
+            ) : null}
+
             {showStandaloneAccessOverlay && standaloneAccessPresentation ? (
               <View style={styles.playerAccessOverlay}>
                 <View style={styles.playerAccessCard}>
@@ -6016,6 +6210,40 @@ export default function PlayerScreen() {
                   return refreshStandaloneAccessAfterSheetAction("restore");
                 }}
                 onClose={() => setStandaloneAccessSheetVisible(false)}
+              />
+            ) : null}
+
+            {!inWatchParty && watchPartyPremiumGate?.reason === "premium_required" ? (
+              <AccessSheet
+                visible={watchPartyPremiumSheetVisible}
+                reason="premium_required"
+                gate={watchPartyPremiumGate}
+                appDisplayName={branding.appDisplayName}
+                premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+                premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+                kickerOverride={watchPartyPremiumSheetPresentation?.kicker}
+                titleOverride={watchPartyPremiumSheetPresentation?.title}
+                bodyOverride={watchPartyPremiumSheetPresentation?.body}
+                actionLabelOverride={watchPartyPremiumSheetPresentation?.actionLabel}
+                onPurchaseResult={(result) => {
+                  if (!result.ok) {
+                    return {
+                      message: result.message,
+                      tone: "error" as const,
+                    };
+                  }
+                  return refreshWatchPartyPremiumAfterSheetAction("purchase");
+                }}
+                onRestoreResult={(result) => {
+                  if (!result.ok) {
+                    return {
+                      message: result.message,
+                      tone: "error" as const,
+                    };
+                  }
+                  return refreshWatchPartyPremiumAfterSheetAction("restore");
+                }}
+                onClose={() => setWatchPartyPremiumSheetVisible(false)}
               />
             ) : null}
 
@@ -6158,11 +6386,11 @@ export default function PlayerScreen() {
             <View style={[styles.playerFrameworkBottomStack, inWatchParty && styles.playerFrameworkBottomStackWatchParty]}>
               {!isLiveMode && (!isStandalonePlayer || !standalonePlaybackGateActive) ? (
                 <View
-                  pointerEvents={controlsVisible ? "auto" : "none"}
+                  pointerEvents={effectiveControlsVisible ? "auto" : "none"}
                   style={[
                     styles.progressCard,
                     inWatchParty && styles.progressCardWatchPartyTitle,
-                    !controlsVisible && styles.playerControlHidden,
+                    !effectiveControlsVisible && styles.playerControlHidden,
                   ]}
                 >
                   <View style={styles.progressMetaRow}>
@@ -6596,6 +6824,9 @@ const styles = StyleSheet.create({
   videoAnimatedWrap: {
     width: "100%",
     height: "100%",
+  },
+  creatorStandaloneSurfaceTapTarget: {
+    ...StyleSheet.absoluteFillObject,
   },
   videoLoadingFallback: {
     ...StyleSheet.absoluteFillObject,

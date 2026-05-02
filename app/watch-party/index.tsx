@@ -32,6 +32,10 @@ import { reportRuntimeError } from "../../_lib/logger";
 import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
+import {
+  requireWatchPartyLivePremium,
+  type PremiumWatchPartyFeatureAccessDecision,
+} from "../../_lib/premiumWatchPartyAccess";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { useSession } from "../../_lib/session";
 import {
@@ -182,6 +186,8 @@ export default function WatchPartyIndexScreen() {
   const [accessSheetReason, setAccessSheetReason] = useState<AccessSheetReason | null>(null);
   const [pendingAccessPreview, setPendingAccessPreview] = useState<RoomPreview | null>(null);
   const [pendingAccessDecision, setPendingAccessDecision] = useState<RoomAccessResolution | null>(null);
+  const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
+  const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
@@ -229,6 +235,8 @@ export default function WatchPartyIndexScreen() {
     setAccessSheetReason(null);
     setPendingAccessPreview(null);
     setPendingAccessDecision(null);
+    setWatchPartyPremiumGate(null);
+    setWatchPartyPremiumSheetVisible(false);
     setInviteSheetVisible(false);
   }, [entryLaneKey]);
 
@@ -249,6 +257,46 @@ export default function WatchPartyIndexScreen() {
     const titleName = source?.displayName ?? null;
     return { room, titleName };
   }, []);
+
+  const requireWatchPartyLiveEntry = useCallback(async (accessKey: string | null | undefined) => {
+    const safeAccessKey = String(accessKey ?? "").trim();
+    const access = await requireWatchPartyLivePremium({ accessKey: safeAccessKey }).catch(() => null);
+    if (access?.allowed) {
+      setWatchPartyPremiumGate(null);
+      return true;
+    }
+
+    if (access) setWatchPartyPremiumGate(access);
+    setWatchPartyPremiumSheetVisible(true);
+    trackEvent("monetization_gate_shown", {
+      surface: "watch-party-waiting-room",
+      reason: access?.reason ?? "premium_required",
+      accessKey: safeAccessKey || "watch-party-live",
+    });
+    return false;
+  }, []);
+
+  useEffect(() => {
+    if (!canUseBetaRooms || !configReady || !features.watchPartyEnabled) return;
+    if (isLiveEntryMode && !isPlayerWatchPartyLiveFlow) return;
+
+    void requireWatchPartyLiveEntry(
+      initialRouteSourceId
+      || initialRouteTitleId
+      || initialLookupId
+      || "watch-party-live",
+    );
+  }, [
+    canUseBetaRooms,
+    configReady,
+    features.watchPartyEnabled,
+    initialLookupId,
+    initialRouteSourceId,
+    initialRouteTitleId,
+    isLiveEntryMode,
+    isPlayerWatchPartyLiveFlow,
+    requireWatchPartyLiveEntry,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -297,6 +345,7 @@ export default function WatchPartyIndexScreen() {
     sourceOptions?: { sourceType?: WatchPartyContentSourceType | null; sourceId?: string | null },
   ): Promise<RoomPreview | null> => {
     if (!canUseBetaRooms) return null;
+    if (roomType !== "live" && !(await requireWatchPartyLiveEntry(sourceOptions?.sourceId ?? titleId))) return null;
     const hostUserId = await getSafePartyUserId();
     const room = await createPartyRoom(titleId, hostUserId, 0, "paused", {
       roomType,
@@ -316,7 +365,7 @@ export default function WatchPartyIndexScreen() {
     });
     setHostLabel("You are hosting");
     return nextPreparedRoom;
-  }, [buildRoomPreview, canUseBetaRooms]);
+  }, [buildRoomPreview, canUseBetaRooms, requireWatchPartyLiveEntry]);
 
   useEffect(() => {
     if (!canUseBetaRooms) return;
@@ -548,6 +597,13 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
+    if (
+      nextPreview.room.roomType !== "live"
+      && !(await requireWatchPartyLiveEntry(nextPreview.room.sourceId ?? nextPreview.room.titleId ?? nextPartyId))
+    ) {
+      return;
+    }
+
     const userId = await getSafePartyUserId().catch(() => "");
     const access = await resolveRoomAccess({
       roomSurface: "watch_party",
@@ -589,7 +645,7 @@ export default function WatchPartyIndexScreen() {
     }
 
     setJoinError(getWatchPartyRoomAccessMessage(access));
-  }, [navigateToPreviewRoom]);
+  }, [navigateToPreviewRoom, requireWatchPartyLiveEntry]);
 
   const onConfirmJoin = async () => {
     if (!preview) return;
@@ -628,6 +684,16 @@ export default function WatchPartyIndexScreen() {
       }).catch(() => null);
 
       if (access?.isAllowed) {
+        if (
+          refreshedPreview.room.roomType !== "live"
+          && !(await requireWatchPartyLiveEntry(refreshedPreview.room.sourceId ?? refreshedPreview.room.titleId ?? accessKey))
+        ) {
+          return {
+            message: "Watch-Party Live still needs Premium access on this account.",
+            tone: "error" as const,
+          };
+        }
+
         trackEvent("monetization_unlock_success", {
           action,
           surface: "watch-party-lobby",
@@ -687,7 +753,7 @@ export default function WatchPartyIndexScreen() {
         tone: "error" as const,
       };
     }
-  }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview]);
+  }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview, requireWatchPartyLiveEntry]);
 
   const onCreateRoom = async () => {
     if (!features.watchPartyEnabled) {
@@ -715,6 +781,13 @@ export default function WatchPartyIndexScreen() {
 
     if (activeWaitingRoomType !== "live" && !effectiveTitleId && !effectiveSourceId && !preparedTargetPartyId) {
       setCreateError("Open Watch-Party Live from a Player, or enter a linked title id before creating a Party Room.");
+      return;
+    }
+
+    if (
+      activeWaitingRoomType !== "live"
+      && !(await requireWatchPartyLiveEntry(effectiveSourceId ?? effectiveTitleId ?? preparedTargetPartyId))
+    ) {
       return;
     }
 
@@ -980,6 +1053,14 @@ export default function WatchPartyIndexScreen() {
   );
   const shouldShowWaitingRoomInviteSection = Boolean(topRoomCode || isPreparingInitialCode || didInitialCodePrepFail);
   const roomCodeButtonLabel = topRoomCode ? "Generate New Code" : "Generate Room Code";
+  const watchPartyPremiumGatePresentation = watchPartyPremiumGate
+    ? getMonetizationAccessSheetPresentation({
+        gate: watchPartyPremiumGate,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
 
   const renderWaitingRoomSetupShell = () => {
     if (!shouldShowWaitingRoomSetupShell) return null;
@@ -1320,6 +1401,45 @@ export default function WatchPartyIndexScreen() {
             return onResolveJoinAccess("restore");
           }}
           onClose={() => setAccessSheetVisible(false)}
+        />
+      ) : null}
+      {watchPartyPremiumGate?.reason === "premium_required" ? (
+        <AccessSheet
+          visible={watchPartyPremiumSheetVisible}
+          reason="premium_required"
+          gate={watchPartyPremiumGate}
+          appDisplayName={branding.appDisplayName}
+          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+          kickerOverride={watchPartyPremiumGatePresentation?.kicker}
+          titleOverride={watchPartyPremiumGatePresentation?.title}
+          bodyOverride={watchPartyPremiumGatePresentation?.body}
+          actionLabelOverride={watchPartyPremiumGatePresentation?.actionLabel}
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return {
+              message: "Premium access updated. Try Watch-Party Live again.",
+              tone: "success" as const,
+            };
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return {
+              message: "Purchases restored. Try Watch-Party Live again.",
+              tone: "success" as const,
+            };
+          }}
+          onClose={() => setWatchPartyPremiumSheetVisible(false)}
         />
       ) : null}
       <InternalInviteSheet
