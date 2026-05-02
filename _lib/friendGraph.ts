@@ -9,9 +9,10 @@ import {
 } from "./userData";
 
 export const USER_FRIENDSHIPS_TABLE = "user_friendships";
+export const CHANNEL_AUDIENCE_BLOCKS_TABLE = "channel_audience_blocks";
 
 export type FriendRelationshipStatus = "pending" | "active" | "declined" | "canceled" | "removed";
-export type FriendRelationshipAvailability = "available" | "signed_out" | "self" | "official_platform";
+export type FriendRelationshipAvailability = "available" | "signed_out" | "self" | "official_platform" | "blocked";
 export type FriendPendingDirection = "incoming" | "outgoing";
 
 export type FriendRelationshipRecord = {
@@ -57,6 +58,16 @@ export type FriendListSummary = {
   items: FriendListSummaryItem[];
 };
 
+export type ChillyCircleListItem = Pick<
+  UserChannelProfile,
+  "id" | "displayName" | "avatarUrl" | "tagline" | "role" | "identityKind" | "officialBadgeLabel" | "handle"
+> & {
+  relationshipStatus: FriendRelationshipStatus;
+  pendingDirection: FriendPendingDirection | null;
+  requestedByUserId: string;
+  relationshipUpdatedAt: string;
+};
+
 type FriendRelationshipRow = Pick<
   Tables<"user_friendships">,
   | "user_low_id"
@@ -68,6 +79,7 @@ type FriendRelationshipRow = Pick<
   | "actioned_by_user_id"
   | "updated_at"
 >;
+type ChannelAudienceBlockRow = Pick<Tables<"channel_audience_blocks">, "channel_user_id" | "blocked_user_id">;
 
 const FRIEND_RELATIONSHIP_SELECT =
   "user_low_id,user_high_id,requested_by_user_id,status,created_at,responded_at,actioned_by_user_id,updated_at";
@@ -138,12 +150,44 @@ async function readFriendRelationshipRow(
     .select(FRIEND_RELATIONSHIP_SELECT)
     .eq("user_low_id", userLowId)
     .eq("user_high_id", userHighId)
-    .maybeSingle()
-    .returns<FriendRelationshipRow>();
+    .returns<FriendRelationshipRow>()
+    .maybeSingle();
 
   if (error) throw error;
 
   return parseFriendRelationshipRow(data);
+}
+
+async function readChillyCircleBlockOverride(
+  viewerUserId: string,
+  otherUserId: string,
+): Promise<boolean> {
+  const normalizedViewerUserId = toText(viewerUserId);
+  const normalizedOtherUserId = toText(otherUserId);
+  if (!normalizedViewerUserId || !normalizedOtherUserId || normalizedViewerUserId === normalizedOtherUserId) return false;
+
+  const [
+    { data: blockedByOther, error: blockedByOtherError },
+    { data: blockedByViewer, error: blockedByViewerError },
+  ] = await Promise.all([
+    supabase
+      .from(CHANNEL_AUDIENCE_BLOCKS_TABLE)
+      .select("channel_user_id,blocked_user_id")
+      .eq("channel_user_id", normalizedOtherUserId)
+      .eq("blocked_user_id", normalizedViewerUserId)
+      .returns<ChannelAudienceBlockRow>()
+      .maybeSingle(),
+    supabase
+      .from(CHANNEL_AUDIENCE_BLOCKS_TABLE)
+      .select("channel_user_id,blocked_user_id")
+      .eq("channel_user_id", normalizedViewerUserId)
+      .eq("blocked_user_id", normalizedOtherUserId)
+      .returns<ChannelAudienceBlockRow>()
+      .maybeSingle(),
+  ]);
+
+  if (blockedByOtherError || blockedByViewerError) return false;
+  return !!blockedByOther || !!blockedByViewer;
 }
 
 function buildFriendRelationshipState(options: {
@@ -167,7 +211,7 @@ function buildFriendRelationshipState(options: {
     availability: options.availability,
     status,
     pendingDirection,
-    isFriend: status === "active",
+    isFriend: isAvailable && status === "active",
     canRequest: isAvailable && (status === "none" || status === "declined" || status === "canceled" || status === "removed"),
     canAccept: isAvailable && status === "pending" && pendingDirection === "incoming",
     canDecline: isAvailable && status === "pending" && pendingDirection === "incoming",
@@ -187,10 +231,10 @@ function getFriendRelationshipAvailability(viewerUserId: string | null, otherUse
 function assertFriendTargetAllowed(otherUserId: string) {
   const normalizedOtherUserId = toText(otherUserId);
   if (!normalizedOtherUserId) {
-    throw new Error("Friend target user id is required.");
+    throw new Error("Chi'lly Circle target user id is required.");
   }
   if (isOfficialPlatformAccountUserId(normalizedOtherUserId)) {
-    throw new Error("Official platform accounts are not part of the native friend graph.");
+    throw new Error("Official platform accounts are not part of Chi'lly Circle.");
   }
   return normalizedOtherUserId;
 }
@@ -198,12 +242,15 @@ function assertFriendTargetAllowed(otherUserId: string) {
 async function mutateFriendRelationship(otherUserId: string, action: "accept" | "decline" | "cancel" | "remove") {
   const viewerUserId = await getSignedInFriendUserId();
   if (!viewerUserId) {
-    throw new Error("Chi'llywood friendship requires a signed-in user.");
+    throw new Error("Chi'lly Circle requires a signed-in user.");
   }
 
   const normalizedOtherUserId = assertFriendTargetAllowed(otherUserId);
   if (normalizedOtherUserId === viewerUserId) {
-    throw new Error("You cannot update friendship with yourself.");
+    throw new Error("You cannot update Chi'lly Circle with yourself.");
+  }
+  if (await readChillyCircleBlockOverride(viewerUserId, normalizedOtherUserId)) {
+    throw new Error("Chi'lly Circle is unavailable while a channel audience block exists between these accounts.");
   }
 
   const { data, error } = await supabase.rpc("respond_to_friendship", {
@@ -230,7 +277,7 @@ async function buildFriendListItem(
   const channelProfile = buildUserChannelProfile({
     id: otherUserId,
     profile,
-    fallbackDisplayName: "Friend",
+    fallbackDisplayName: "Chi'lly Circle",
   });
 
   return {
@@ -247,27 +294,138 @@ async function buildFriendListItem(
   };
 }
 
+function getRelationshipOtherUserId(viewerUserId: string, relationship: FriendRelationshipRecord) {
+  return relationship.userLowId === viewerUserId ? relationship.userHighId : relationship.userLowId;
+}
+
+async function filterUnblockedRelationships(
+  viewerUserId: string,
+  relationships: FriendRelationshipRecord[],
+): Promise<FriendRelationshipRecord[]> {
+  const checks = await Promise.all(relationships.map(async (relationship) => {
+    const otherUserId = getRelationshipOtherUserId(viewerUserId, relationship);
+    const blocked = await readChillyCircleBlockOverride(viewerUserId, otherUserId);
+    return blocked ? null : relationship;
+  }));
+
+  return checks.filter((relationship): relationship is FriendRelationshipRecord => !!relationship);
+}
+
+async function buildChillyCircleListItem(
+  viewerUserId: string,
+  relationship: FriendRelationshipRecord,
+): Promise<ChillyCircleListItem> {
+  const otherUserId = relationship.userLowId === viewerUserId ? relationship.userHighId : relationship.userLowId;
+  const profile = await readUserProfileByUserId(otherUserId).catch(() => null);
+  const channelProfile = buildUserChannelProfile({
+    id: otherUserId,
+    profile,
+    fallbackDisplayName: "Chi'lly Circle",
+  });
+  const pendingDirection = relationship.status === "pending"
+    ? relationship.requestedByUserId === viewerUserId
+      ? "outgoing"
+      : "incoming"
+    : null;
+
+  return {
+    id: channelProfile.id,
+    displayName: channelProfile.displayName,
+    avatarUrl: channelProfile.avatarUrl,
+    tagline: channelProfile.tagline,
+    role: channelProfile.role,
+    identityKind: channelProfile.identityKind,
+    officialBadgeLabel: channelProfile.officialBadgeLabel,
+    handle: channelProfile.handle,
+    relationshipStatus: relationship.status,
+    pendingDirection,
+    requestedByUserId: relationship.requestedByUserId,
+    relationshipUpdatedAt: relationship.updatedAt,
+  };
+}
+
+async function readCurrentUserRelationships(): Promise<{
+  viewerUserId: string;
+  relationships: FriendRelationshipRecord[];
+}> {
+  const viewerUserId = await getSignedInFriendUserId();
+  if (!viewerUserId) {
+    throw new Error("Chi'lly Circle requires a signed-in user.");
+  }
+
+  const [
+    { data: lowRows, error: lowError },
+    { data: highRows, error: highError },
+  ] = await Promise.all([
+    supabase
+      .from(USER_FRIENDSHIPS_TABLE)
+      .select(FRIEND_RELATIONSHIP_SELECT)
+      .eq("user_low_id", viewerUserId)
+      .order("updated_at", { ascending: false })
+      .returns<FriendRelationshipRow[]>(),
+    supabase
+      .from(USER_FRIENDSHIPS_TABLE)
+      .select(FRIEND_RELATIONSHIP_SELECT)
+      .eq("user_high_id", viewerUserId)
+      .order("updated_at", { ascending: false })
+      .returns<FriendRelationshipRow[]>(),
+  ]);
+
+  if (lowError) throw lowError;
+  if (highError) throw highError;
+
+  const relationshipMap = new Map<string, FriendRelationshipRecord>();
+  for (const row of [...(lowRows ?? []), ...(highRows ?? [])]) {
+    const relationship = parseFriendRelationshipRow(row);
+    if (!relationship) continue;
+    relationshipMap.set(`${relationship.userLowId}::${relationship.userHighId}`, relationship);
+  }
+
+  return {
+    viewerUserId,
+    relationships: [...relationshipMap.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+  };
+}
+
 export async function readFriendRelationshipState(otherUserId: string): Promise<FriendRelationshipState> {
   const normalizedOtherUserId = toText(otherUserId);
   if (!normalizedOtherUserId) {
-    throw new Error("Friend target user id is required.");
+    throw new Error("Chi'lly Circle target user id is required.");
   }
 
   const viewerUserId = await getSignedInFriendUserId();
-  const availability = getFriendRelationshipAvailability(viewerUserId, normalizedOtherUserId);
+  return getChillyCircleStatus(viewerUserId, normalizedOtherUserId);
+}
 
-  if (availability !== "available" || !viewerUserId) {
+export async function getChillyCircleStatus(
+  viewerUserId: string | null,
+  profileUserId: string,
+): Promise<FriendRelationshipState> {
+  const normalizedOtherUserId = toText(profileUserId);
+  if (!normalizedOtherUserId) {
+    throw new Error("Chi'lly Circle target user id is required.");
+  }
+
+  const normalizedViewerUserId = toText(viewerUserId) || null;
+  let availability = getFriendRelationshipAvailability(normalizedViewerUserId, normalizedOtherUserId);
+
+  if (availability === "available" && normalizedViewerUserId) {
+    const isBlocked = await readChillyCircleBlockOverride(normalizedViewerUserId, normalizedOtherUserId);
+    if (isBlocked) availability = "blocked";
+  }
+
+  if (availability !== "available" || !normalizedViewerUserId) {
     return buildFriendRelationshipState({
-      viewerUserId,
+      viewerUserId: normalizedViewerUserId,
       otherUserId: normalizedOtherUserId,
       availability,
       relationship: null,
     });
   }
 
-  const relationship = await readFriendRelationshipRow(viewerUserId, normalizedOtherUserId);
+  const relationship = await readFriendRelationshipRow(normalizedViewerUserId, normalizedOtherUserId);
   return buildFriendRelationshipState({
-    viewerUserId,
+    viewerUserId: normalizedViewerUserId,
     otherUserId: normalizedOtherUserId,
     availability,
     relationship,
@@ -277,12 +435,15 @@ export async function readFriendRelationshipState(otherUserId: string): Promise<
 export async function sendFriendRequest(otherUserId: string): Promise<FriendRelationshipState> {
   const viewerUserId = await getSignedInFriendUserId();
   if (!viewerUserId) {
-    throw new Error("Chi'llywood friendship requires a signed-in user.");
+    throw new Error("Chi'lly Circle requires a signed-in user.");
   }
 
   const normalizedOtherUserId = assertFriendTargetAllowed(otherUserId);
   if (normalizedOtherUserId === viewerUserId) {
-    throw new Error("You cannot friend yourself.");
+    throw new Error("You cannot request yourself.");
+  }
+  if (await readChillyCircleBlockOverride(viewerUserId, normalizedOtherUserId)) {
+    throw new Error("Chi'lly Circle is unavailable while a channel audience block exists between these accounts.");
   }
 
   const { data, error } = await supabase.rpc("request_friendship", {
@@ -316,55 +477,85 @@ export async function removeFriend(otherUserId: string) {
   return mutateFriendRelationship(otherUserId, "remove");
 }
 
+export async function sendChillyCircleRequest(profileUserId: string) {
+  return sendFriendRequest(profileUserId);
+}
+
+export async function acceptChillyCircleRequest(profileUserId: string) {
+  return acceptFriendRequest(profileUserId);
+}
+
+export async function declineChillyCircleRequest(profileUserId: string) {
+  return declineFriendRequest(profileUserId);
+}
+
+export async function cancelChillyCircleRequest(profileUserId: string) {
+  return cancelFriendRequest(profileUserId);
+}
+
+export async function removeFromChillyCircle(profileUserId: string) {
+  return removeFriend(profileUserId);
+}
+
+export async function isInChillyCircle(viewerUserId: string, ownerId: string): Promise<boolean> {
+  const state = await getChillyCircleStatus(viewerUserId, ownerId);
+  return state.isFriend;
+}
+
+export async function listMyChillyCircle(options?: { limit?: number }): Promise<ChillyCircleListItem[]> {
+  const { viewerUserId, relationships } = await readCurrentUserRelationships();
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(options?.limit ?? DEFAULT_FRIEND_LIST_LIMIT)) || DEFAULT_FRIEND_LIST_LIMIT));
+  const activeRelationships = relationships.filter((relationship) => relationship.status === "active");
+  const unblockedRelationships = await filterUnblockedRelationships(viewerUserId, activeRelationships);
+
+  return Promise.all(unblockedRelationships.slice(0, limit).map((relationship) => (
+    buildChillyCircleListItem(viewerUserId, relationship)
+  )));
+}
+
+export async function listIncomingChillyCircleRequests(options?: { limit?: number }): Promise<ChillyCircleListItem[]> {
+  const { viewerUserId, relationships } = await readCurrentUserRelationships();
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(options?.limit ?? DEFAULT_FRIEND_LIST_LIMIT)) || DEFAULT_FRIEND_LIST_LIMIT));
+  const unblockedRelationships = await filterUnblockedRelationships(viewerUserId, relationships);
+  const incoming = unblockedRelationships.filter((relationship) => (
+    relationship.status === "pending" && relationship.requestedByUserId !== viewerUserId
+  ));
+
+  return Promise.all(incoming.slice(0, limit).map((relationship) => (
+    buildChillyCircleListItem(viewerUserId, relationship)
+  )));
+}
+
+export async function listOutgoingChillyCircleRequests(options?: { limit?: number }): Promise<ChillyCircleListItem[]> {
+  const { viewerUserId, relationships } = await readCurrentUserRelationships();
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(options?.limit ?? DEFAULT_FRIEND_LIST_LIMIT)) || DEFAULT_FRIEND_LIST_LIMIT));
+  const unblockedRelationships = await filterUnblockedRelationships(viewerUserId, relationships);
+  const outgoing = unblockedRelationships.filter((relationship) => (
+    relationship.status === "pending" && relationship.requestedByUserId === viewerUserId
+  ));
+
+  return Promise.all(outgoing.slice(0, limit).map((relationship) => (
+    buildChillyCircleListItem(viewerUserId, relationship)
+  )));
+}
+
 export async function readFriendListSummary(options?: {
   limit?: number;
 }): Promise<FriendListSummary> {
-  const viewerUserId = await getSignedInFriendUserId();
-  if (!viewerUserId) {
-    throw new Error("Chi'llywood friendship requires a signed-in user.");
-  }
-
+  const { viewerUserId, relationships } = await readCurrentUserRelationships();
   const limit = Math.max(1, Math.min(100, Math.floor(Number(options?.limit ?? DEFAULT_FRIEND_LIST_LIMIT)) || DEFAULT_FRIEND_LIST_LIMIT));
-  const [
-    { data: lowRows, error: lowError },
-    { data: highRows, error: highError },
-  ] = await Promise.all([
-    supabase
-      .from(USER_FRIENDSHIPS_TABLE)
-      .select(FRIEND_RELATIONSHIP_SELECT)
-      .eq("user_low_id", viewerUserId)
-      .order("updated_at", { ascending: false })
-      .returns<FriendRelationshipRow[]>(),
-    supabase
-      .from(USER_FRIENDSHIPS_TABLE)
-      .select(FRIEND_RELATIONSHIP_SELECT)
-      .eq("user_high_id", viewerUserId)
-      .order("updated_at", { ascending: false })
-      .returns<FriendRelationshipRow[]>(),
-  ]);
-
-  if (lowError) throw lowError;
-  if (highError) throw highError;
-
-  const relationshipMap = new Map<string, FriendRelationshipRecord>();
-  for (const row of [...(lowRows ?? []), ...(highRows ?? [])]) {
-    const relationship = parseFriendRelationshipRow(row);
-    if (!relationship) continue;
-    relationshipMap.set(`${relationship.userLowId}::${relationship.userHighId}`, relationship);
-  }
-
-  const relationships = [...relationshipMap.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  const activeRelationships = relationships.filter((relationship) => relationship.status === "active");
-  const incomingRequestCount = relationships.filter((relationship) => (
+  const unblockedRelationships = await filterUnblockedRelationships(viewerUserId, relationships);
+  const activeRelationships = unblockedRelationships.filter((relationship) => relationship.status === "active");
+  const incomingRequestCount = unblockedRelationships.filter((relationship) => (
     relationship.status === "pending" && relationship.requestedByUserId !== viewerUserId
   )).length;
-  const outgoingRequestCount = relationships.filter((relationship) => (
+  const outgoingRequestCount = unblockedRelationships.filter((relationship) => (
     relationship.status === "pending" && relationship.requestedByUserId === viewerUserId
   )).length;
 
   const items = await Promise.all(
     activeRelationships.slice(0, limit).map((relationship) => {
-      const otherUserId = relationship.userLowId === viewerUserId ? relationship.userHighId : relationship.userLowId;
+      const otherUserId = getRelationshipOtherUserId(viewerUserId, relationship);
       return buildFriendListItem(otherUserId, relationship);
     }),
   );
@@ -413,7 +604,7 @@ export async function readActiveFriendUserIds(): Promise<string[]> {
     const otherUserId = relationship.userLowId === viewerUserId
       ? relationship.userHighId
       : relationship.userLowId;
-    if (otherUserId) {
+    if (otherUserId && !(await readChillyCircleBlockOverride(viewerUserId, otherUserId))) {
       friendUserIds.add(otherUserId);
     }
   }

@@ -16,7 +16,13 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import {
+  acceptChillyCircleRequest,
+  cancelChillyCircleRequest,
+  declineChillyCircleRequest,
+  readFriendListSummary,
   readFriendRelationshipState,
+  removeFromChillyCircle,
+  sendChillyCircleRequest,
   type FriendRelationshipState,
 } from "../../_lib/friendGraph";
 import {
@@ -459,6 +465,9 @@ export default function ProfileScreen() {
   const profilePostComposerYRef = useRef(0);
   const [currentUserId, setCurrentUserId] = useState("");
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
+  const [chillyCircleLoading, setChillyCircleLoading] = useState(false);
+  const [chillyCircleActionBusy, setChillyCircleActionBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
+  const [chillyCircleCount, setChillyCircleCount] = useState<number | null>(null);
   const [viewerFollowState, setViewerFollowState] = useState<ProfileViewerFollowState>("unavailable");
   const [followActionBusy, setFollowActionBusy] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
@@ -924,23 +933,50 @@ export default function ProfileScreen() {
 
     if (!userId || isOfficialProfile || isSelfProfile) {
       setFriendState(null);
+      setChillyCircleLoading(false);
       return () => {
         active = false;
       };
     }
 
+    setChillyCircleLoading(true);
     readFriendRelationshipState(userId)
       .then((nextState) => {
         if (active) setFriendState(nextState);
       })
       .catch(() => {
         if (active) setFriendState(null);
+      })
+      .finally(() => {
+        if (active) setChillyCircleLoading(false);
       });
 
     return () => {
       active = false;
     };
   }, [currentUserId, isOfficialProfile, isSelfProfile, userId]);
+  useEffect(() => {
+    let active = true;
+
+    if (!isSelfProfile || !currentUserId) {
+      setChillyCircleCount(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    readFriendListSummary({ limit: 1 })
+      .then((summary) => {
+        if (active) setChillyCircleCount(summary.activeCount);
+      })
+      .catch(() => {
+        if (active) setChillyCircleCount(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, isSelfProfile]);
   useEffect(() => {
     let active = true;
 
@@ -1042,8 +1078,6 @@ export default function ProfileScreen() {
       : hasLiveTabEntry
         ? "Use the Live tab for the current schedule and backed events."
         : "No room context is attached yet, but this channel's live posture still stays visible.";
-  const showFriendshipHint = !!friendState?.isFriend && !isOfficialProfile && !isSelfProfile;
-
   const openChannelSettings = (params?: { focus?: "content"; action?: "upload" }) => {
     if (!creatorSettingsEnabled) {
       Alert.alert("Manage Channel", "Creator channel settings are currently hidden by app configuration.");
@@ -1378,6 +1412,46 @@ export default function ProfileScreen() {
   };
   const onPressSettings = () => {
     router.push("/settings");
+  };
+  const onPressChillyCircleManage = () => {
+    router.push("/chilly-circle" as Parameters<typeof router.push>[0]);
+  };
+  const normalizeChillyCircleActionError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : "Unable to update Chi'lly Circle right now.";
+    return message
+      .replace(/friendship/gi, "Chi'lly Circle")
+      .replace(/friends/gi, "Chi'lly Circle")
+      .replace(/friend/gi, "Chi'lly Circle");
+  };
+  const onPressChillyCircleAction = async (action: "request" | "accept" | "decline" | "cancel" | "remove") => {
+    if (!userId || isSelfProfile || isOfficialProfile || chillyCircleActionBusy) return;
+
+    if (friendState?.availability === "signed_out") {
+      Alert.alert("Chi'lly Circle", "Sign in to send or manage Chi'lly Circle requests.");
+      return;
+    }
+    if (friendState?.availability === "blocked") {
+      Alert.alert("Chi'lly Circle", "Chi'lly Circle is unavailable while a channel audience block exists between these accounts.");
+      return;
+    }
+
+    setChillyCircleActionBusy(action);
+    try {
+      const nextState = action === "request"
+        ? await sendChillyCircleRequest(userId)
+        : action === "accept"
+          ? await acceptChillyCircleRequest(userId)
+          : action === "decline"
+            ? await declineChillyCircleRequest(userId)
+            : action === "cancel"
+              ? await cancelChillyCircleRequest(userId)
+              : await removeFromChillyCircle(userId);
+      setFriendState(nextState);
+    } catch (error) {
+      Alert.alert("Chi'lly Circle", normalizeChillyCircleActionError(error));
+    } finally {
+      setChillyCircleActionBusy(null);
+    }
   };
   const onShareProfile = async () => {
     if (!userId) {
@@ -1795,6 +1869,120 @@ export default function ProfileScreen() {
     : viewerFollowState === "following"
       ? "Following"
       : "Follow";
+  const renderChillyCircleActions = () => {
+    if (isSelfProfile || isOfficialProfile) return null;
+
+    const actionDisabled = chillyCircleLoading || chillyCircleActionBusy !== null;
+    if (chillyCircleLoading) {
+      return (
+        <View style={[styles.actionChip, styles.actionChipPlaceholder]}>
+          <Text style={[styles.actionChipText, styles.actionChipTextPlaceholder]}>Checking</Text>
+        </View>
+      );
+    }
+
+    if (friendState?.availability === "blocked") return null;
+
+    if (!friendState || friendState.canRequest || friendState.availability === "signed_out") {
+      return (
+        <TouchableOpacity
+          style={[styles.actionChip, styles.actionChipConnected, actionDisabled && styles.actionChipPlaceholder]}
+          activeOpacity={0.82}
+          disabled={actionDisabled}
+          onPress={() => {
+            void onPressChillyCircleAction("request");
+          }}
+        >
+          <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+            {chillyCircleActionBusy === "request" ? "Requesting" : "Add to Chi'lly Circle"}
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+
+    if (friendState.canAccept || friendState.canDecline) {
+      return (
+        <>
+          {friendState.canAccept ? (
+            <TouchableOpacity
+              style={[styles.actionChip, styles.actionChipConnected, actionDisabled && styles.actionChipPlaceholder]}
+              activeOpacity={0.82}
+              disabled={actionDisabled}
+              onPress={() => {
+                void onPressChillyCircleAction("accept");
+              }}
+            >
+              <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                {chillyCircleActionBusy === "accept" ? "Accepting" : "Accept"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {friendState.canDecline ? (
+            <TouchableOpacity
+              style={[styles.actionChip, styles.actionChipReport, actionDisabled && styles.actionChipPlaceholder]}
+              activeOpacity={0.82}
+              disabled={actionDisabled}
+              onPress={() => {
+                void onPressChillyCircleAction("decline");
+              }}
+            >
+              <Text style={[styles.actionChipText, styles.actionChipTextReport]}>
+                {chillyCircleActionBusy === "decline" ? "Declining" : "Decline"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </>
+      );
+    }
+
+    if (friendState.canCancel) {
+      return (
+        <>
+          <View style={[styles.actionChip, styles.actionChipPlaceholder]}>
+            <Text style={[styles.actionChipText, styles.actionChipTextPlaceholder]}>Requested</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.actionChip, styles.actionChipReport, actionDisabled && styles.actionChipPlaceholder]}
+            activeOpacity={0.82}
+            disabled={actionDisabled}
+            onPress={() => {
+              void onPressChillyCircleAction("cancel");
+            }}
+          >
+            <Text style={[styles.actionChipText, styles.actionChipTextReport]}>
+              {chillyCircleActionBusy === "cancel" ? "Canceling" : "Cancel Request"}
+            </Text>
+          </TouchableOpacity>
+        </>
+      );
+    }
+
+    if (friendState.canRemove || friendState.isFriend) {
+      return (
+        <>
+          <View style={[styles.actionChip, styles.actionChipConnected]}>
+            <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>In Chi'lly Circle</Text>
+          </View>
+          {friendState.canRemove ? (
+            <TouchableOpacity
+              style={[styles.actionChip, styles.actionChipReport, actionDisabled && styles.actionChipPlaceholder]}
+              activeOpacity={0.82}
+              disabled={actionDisabled}
+              onPress={() => {
+                void onPressChillyCircleAction("remove");
+              }}
+            >
+              <Text style={[styles.actionChipText, styles.actionChipTextReport]}>
+                {chillyCircleActionBusy === "remove" ? "Removing" : "Remove from Chi'lly Circle"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </>
+      );
+    }
+
+    return null;
+  };
   const publicEventCount = publicEvents.length;
   const liveEventCount = publicEvents.filter((event) => event.isLiveNow).length;
   const channelSignals = [
@@ -2291,6 +2479,12 @@ export default function ProfileScreen() {
   ];
   const ownerStatsRibbon: readonly OwnerStatCard[] = isSelfProfile ? [
     {
+      label: "Chi'lly Circle",
+      value: chillyCircleCount === null ? "..." : String(chillyCircleCount),
+      body: "mutual connections visible to you",
+      tone: "linked",
+    },
+    {
       label: "Videos",
       value: creatorVideosReady ? String(creatorVideos.length) : "...",
       body: "uploaded videos in your channel library",
@@ -2312,6 +2506,10 @@ export default function ProfileScreen() {
     {
       label: "Manage Channel",
       onPress: onPressManageChannel,
+    },
+    {
+      label: "Chi'lly Circle",
+      onPress: onPressChillyCircleManage,
     },
     {
       label: "Upload Video",
@@ -3174,6 +3372,13 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={[styles.actionChip, styles.actionChipConnected]}
                     activeOpacity={0.86}
+                    onPress={onPressChillyCircleManage}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Chi'lly Circle</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.86}
                     onPress={onPressSettings}
                   >
                     <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Settings</Text>
@@ -3268,13 +3473,7 @@ export default function ProfileScreen() {
                       </Text>
                     </TouchableOpacity>
                   ) : null}
-                  {showFriendshipHint ? (
-                    <View style={[styles.actionChip, styles.actionChipConnected]}>
-                      <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
-                        Friends
-                      </Text>
-                    </View>
-                  ) : null}
+                  {renderChillyCircleActions()}
                   {canReportProfile ? (
                     <TouchableOpacity
                       style={[styles.actionChip, styles.actionChipReport]}

@@ -124,6 +124,10 @@ export default function SettingsScreen() {
     router.push("/channel-settings");
   }, [router]);
 
+  const onPressChillyCircle = useCallback(() => {
+    router.push("/chilly-circle" as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   const openExternalDestination = useCallback(async (url: string, label: string) => {
     try {
       const supported = await Linking.canOpenURL(url);
@@ -270,6 +274,9 @@ export default function SettingsScreen() {
             <Text style={styles.utilityButtonText}>Manage Channel</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressChillyCircle}>
+          <Text style={styles.secondaryActionButtonText}>Chi'lly Circle</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]}
           activeOpacity={0.86}

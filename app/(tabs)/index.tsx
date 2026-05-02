@@ -716,7 +716,7 @@ export default function HomeScreen() {
           <Text style={styles.followingEmptyText}>
             {followedChannelCount
               ? "The channels you follow have no public clean creator videos ready for Home."
-              : "Following is a creator/audience relationship, not a Friends system."}
+              : "Following is a creator/audience relationship, not Chi'lly Circle."}
           </Text>
           <TouchableOpacity
             style={styles.followingEmptyButton}

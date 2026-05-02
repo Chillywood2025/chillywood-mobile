@@ -33,12 +33,12 @@ import {
 } from "../../_lib/chat";
 import { getCommunicationRoomSnapshot } from "../../_lib/communication";
 import {
-  acceptFriendRequest,
-  cancelFriendRequest,
-  declineFriendRequest,
+  acceptChillyCircleRequest,
+  cancelChillyCircleRequest,
+  declineChillyCircleRequest,
   readFriendRelationshipState,
-  removeFriend,
-  sendFriendRequest,
+  removeFromChillyCircle,
+  sendChillyCircleRequest,
   type FriendRelationshipState,
 } from "../../_lib/friendGraph";
 import { reportRuntimeError } from "../../_lib/logger";
@@ -420,9 +420,9 @@ export default function ChillyChatThreadScreen() {
 
     if (friendLoading) {
       return {
-        pill: "Checking friendship",
-        title: "Checking friend state",
-        body: "Chi'llywood is loading the private friend state for this direct thread.",
+        pill: "Checking Circle",
+        title: "Checking Chi'lly Circle",
+        body: "Chi'llywood is loading the private Chi'lly Circle state for this direct thread.",
       };
     }
 
@@ -430,46 +430,54 @@ export default function ChillyChatThreadScreen() {
       return {
         pill: "Direct thread only",
         title: "Direct thread only",
-        body: "Messaging here does not automatically make you friends. Friendship is a separate mutual, private-first relationship.",
+        body: "Messaging here does not automatically add someone to Chi'lly Circle. Chi'lly Circle is a separate mutual, private-first relationship.",
+      };
+    }
+
+    if (friendState.availability === "blocked") {
+      return {
+        pill: "Unavailable",
+        title: "Chi'lly Circle unavailable",
+        body: "A channel audience block currently prevents Chi'lly Circle actions between these accounts.",
       };
     }
 
     if (friendState.isFriend) {
       return {
-        pill: "Friends",
-        title: "Friends on Chi'llywood",
-        body: "Friendship is active here, but this thread still keeps its own chat and call history.",
+        pill: "In Chi'lly Circle",
+        title: "In Chi'lly Circle",
+        body: "Chi'lly Circle is active here, but this thread still keeps its own chat and call history.",
       };
     }
 
     if (friendState.pendingDirection === "incoming") {
       return {
         pill: "Request waiting",
-        title: "Friend request waiting on you",
-        body: `${otherMemberDisplayName} already has this direct thread. Accept only if you want a separate mutual friend connection too.`,
+        title: "Chi'lly Circle request waiting on you",
+        body: `${otherMemberDisplayName} already has this direct thread. Accept only if you want a separate mutual Chi'lly Circle connection too.`,
       };
     }
 
     if (friendState.pendingDirection === "outgoing") {
       return {
         pill: "Request sent",
-        title: "Friend request sent",
-        body: "This thread already works on its own. Friendship becomes real only if the request is accepted.",
+        title: "Chi'lly Circle request sent",
+        body: "This thread already works on its own. Chi'lly Circle becomes active only if the request is accepted.",
       };
     }
 
     if (friendState.availability === "signed_out") {
       return {
-        pill: "Sign in for friends",
-        title: "Sign in for native friendship",
-        body: "Direct threads can exist without friendship. Sign in if you want to send or manage a friend request here.",
+        pill: "Sign in for Circle",
+        title: "Sign in for Chi'lly Circle",
+        body: "Direct threads can exist without Chi'lly Circle. Sign in if you want to send or manage a request here.",
       };
     }
 
     return {
       pill: "Direct thread only",
       title: "Direct thread only",
-      body: "Messaging here does not automatically make you friends. Add friendship only if you both want a private mutual connection.",
+      body: "Messaging here does not automatically add someone to Chi'lly Circle. Add them only if you both want a private mutual connection.",
     };
   }, [friendLoading, friendState, officialAccount, otherMember?.userId, otherMemberDisplayName]);
 
@@ -851,20 +859,23 @@ export default function ChillyChatThreadScreen() {
     setFriendBusy(action);
     try {
       const nextState = action === "request"
-        ? await sendFriendRequest(targetUserId)
+        ? await sendChillyCircleRequest(targetUserId)
         : action === "accept"
-          ? await acceptFriendRequest(targetUserId)
+          ? await acceptChillyCircleRequest(targetUserId)
           : action === "decline"
-            ? await declineFriendRequest(targetUserId)
+            ? await declineChillyCircleRequest(targetUserId)
             : action === "cancel"
-              ? await cancelFriendRequest(targetUserId)
-              : await removeFriend(targetUserId);
+              ? await cancelChillyCircleRequest(targetUserId)
+              : await removeFromChillyCircle(targetUserId);
       setFriendState(nextState);
     } catch (friendError) {
       const message = friendError instanceof Error
         ? friendError.message
-        : "Unable to update friendship right now.";
-      Alert.alert("Friendship unavailable", message);
+            .replace(/friendship/gi, "Chi'lly Circle")
+            .replace(/friends/gi, "Chi'lly Circle")
+            .replace(/friend/gi, "Chi'lly Circle")
+        : "Unable to update Chi'lly Circle right now.";
+      Alert.alert("Chi'lly Circle unavailable", message);
     } finally {
       setFriendBusy(null);
     }
@@ -966,7 +977,7 @@ export default function ChillyChatThreadScreen() {
           <Text style={styles.headerHint}>
             {officialAccount
               ? "Tap the avatar for profile, report, and call actions."
-              : "Tap the avatar for profile, friendship, report, and call actions."}
+              : "Tap the avatar for profile, Chi'lly Circle, report, and call actions."}
           </Text>
         </View>
       </View>
@@ -980,7 +991,7 @@ export default function ChillyChatThreadScreen() {
           <Text style={styles.headerQuickActionBody}>
             {officialAccount
               ? "Open the profile or keep voice/video entry in this same thread."
-              : "Open the profile, manage friendship, or keep voice/video entry in this same thread."}
+              : "Open the profile, manage Chi'lly Circle, or keep voice/video entry in this same thread."}
           </Text>
           <View style={styles.headerQuickActionRow}>
             <TouchableOpacity
@@ -1037,7 +1048,7 @@ export default function ChillyChatThreadScreen() {
           {!officialAccount && otherMember?.userId && friendStatusSummary ? (
             <View style={styles.friendshipCard}>
               <View style={styles.friendshipHeader}>
-                <Text style={styles.friendshipKicker}>FRIENDSHIP</Text>
+                <Text style={styles.friendshipKicker}>CHI'LLY CIRCLE</Text>
                 <View style={styles.friendshipPill}>
                   <Text style={styles.friendshipPillText}>{friendStatusSummary.pill}</Text>
                 </View>
@@ -1055,7 +1066,7 @@ export default function ChillyChatThreadScreen() {
                     }}
                   >
                     <Text style={styles.friendshipActionButtonAccentText}>
-                      {friendBusy === "request" ? "Sending..." : "Add Friend"}
+                      {friendBusy === "request" ? "Sending..." : "Add to Chi'lly Circle"}
                     </Text>
                   </TouchableOpacity>
                 ) : null}
@@ -1111,7 +1122,7 @@ export default function ChillyChatThreadScreen() {
                     }}
                   >
                     <Text style={styles.friendshipActionButtonText}>
-                      {friendBusy === "remove" ? "Removing..." : "Remove Friend"}
+                      {friendBusy === "remove" ? "Removing..." : "Remove from Chi'lly Circle"}
                     </Text>
                   </TouchableOpacity>
                 ) : null}
