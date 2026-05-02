@@ -11,6 +11,10 @@ import {
   type JoinPolicy,
   type ReactionsPolicy,
 } from "./roomRules";
+import {
+  normalizeProfileVisibility,
+  type ProfileVisibility,
+} from "./profileVisibility";
 import { supabase } from "./supabase";
 
 export const WATCH_PROGRESS_KEY = "@chillywood/watch-progress";
@@ -38,6 +42,7 @@ export type UserProfile = {
   tagline?: string;
   channelLayoutPreset?: "spotlight" | "live_first" | "library_first";
   channelRole?: "viewer" | "host" | "creator";
+  profileVisibility?: ProfileVisibility;
   publicActivityVisibility?: "public" | "followers_only" | "subscribers_only" | "private";
   followerSurfaceEnabled?: boolean;
   subscriberSurfaceEnabled?: boolean;
@@ -97,6 +102,7 @@ type UserProfileRow = Pick<
   | "tagline"
   | "channel_layout_preset"
   | "channel_role"
+  | "profile_visibility"
   | "public_activity_visibility"
   | "follower_surface_enabled"
   | "subscriber_surface_enabled"
@@ -161,6 +167,7 @@ export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): Use
     tagline: normalizeTextValue(profile?.tagline),
     channelLayoutPreset: normalizeChannelLayoutPreset(profile?.channelLayoutPreset),
     channelRole: normalizeChannelRole(profile?.channelRole),
+    profileVisibility: normalizeProfileVisibility(profile?.profileVisibility),
     publicActivityVisibility: normalizePublicActivityVisibility(profile?.publicActivityVisibility),
     followerSurfaceEnabled: typeof profile?.followerSurfaceEnabled === "boolean" ? profile.followerSurfaceEnabled : undefined,
     subscriberSurfaceEnabled: typeof profile?.subscriberSurfaceEnabled === "boolean" ? profile.subscriberSurfaceEnabled : undefined,
@@ -254,6 +261,7 @@ const parseRemoteUserProfile = (row: UserProfileRow | null | undefined): UserPro
     tagline: normalizeTextValue(row.tagline),
     channelLayoutPreset: normalizeChannelLayoutPreset(row.channel_layout_preset),
     channelRole: normalizeChannelRole(row.channel_role),
+    profileVisibility: normalizeProfileVisibility(row.profile_visibility),
     publicActivityVisibility: normalizePublicActivityVisibility(row.public_activity_visibility),
     followerSurfaceEnabled: typeof row.follower_surface_enabled === "boolean" ? row.follower_surface_enabled : undefined,
     subscriberSurfaceEnabled: typeof row.subscriber_surface_enabled === "boolean" ? row.subscriber_surface_enabled : undefined,
@@ -362,7 +370,7 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
     const { data, error } = await supabase
       .from(USER_PROFILES_TABLE)
       .select(
-        "user_id,username,avatar_index,display_name,avatar_url,tagline,channel_layout_preset,channel_role,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
+        "user_id,username,avatar_index,display_name,avatar_url,tagline,channel_layout_preset,channel_role,profile_visibility,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
       )
       .eq("user_id", normalizedUserId)
       .maybeSingle();
@@ -890,6 +898,52 @@ export async function readUserProfile(): Promise<UserProfile> {
   });
   await saveUserProfile(generated);
   return generated;
+}
+
+export async function readMyProfileVisibility(): Promise<ProfileVisibility> {
+  const userId = await getSignedInUserId();
+  if (!userId) return "everyone";
+
+  try {
+    const { data, error } = await supabase
+      .from(USER_PROFILES_TABLE)
+      .select("profile_visibility")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!error && data) {
+      return normalizeProfileVisibility(data.profile_visibility);
+    }
+  } catch {
+    // local fallback below keeps Settings responsive if remote profile is temporarily unavailable
+  }
+
+  const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
+  return normalizeProfileVisibility(cached.profileVisibility);
+}
+
+export async function updateMyProfileVisibility(visibility: ProfileVisibility): Promise<ProfileVisibility> {
+  const normalizedVisibility = normalizeProfileVisibility(visibility);
+  const userId = await getSignedInUserId();
+  if (!userId) throw new Error("Sign in before updating profile privacy.");
+
+  const existingProfile = await readUserProfile();
+  const { error } = await supabase
+    .from(USER_PROFILES_TABLE)
+    .update({
+      profile_visibility: normalizedVisibility,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+
+  if (error) throw error;
+
+  await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile({
+    ...existingProfile,
+    profileVisibility: normalizedVisibility,
+  }));
+
+  return normalizedVisibility;
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {

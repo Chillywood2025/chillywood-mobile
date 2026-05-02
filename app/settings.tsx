@@ -9,9 +9,15 @@ import {
   readMonetizationSnapshot,
   subscribeToMonetizationSnapshot,
 } from "../_lib/monetization";
+import {
+  getProfileVisibilityLabel,
+  PROFILE_VISIBILITY_OPTIONS,
+  type ProfileVisibility,
+} from "../_lib/profileVisibility";
 import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
 import { useSession } from "../_lib/session";
+import { readMyProfileVisibility, updateMyProfileVisibility } from "../_lib/userData";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -20,6 +26,10 @@ export default function SettingsScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
   const [monetizationLoading, setMonetizationLoading] = useState(false);
+  const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>("everyone");
+  const [profileVisibilityLoading, setProfileVisibilityLoading] = useState(false);
+  const [profileVisibilitySaving, setProfileVisibilitySaving] = useState<ProfileVisibility | null>(null);
+  const [profileVisibilityNotice, setProfileVisibilityNotice] = useState<string | null>(null);
   const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
 
   useEffect(() => {
@@ -48,6 +58,30 @@ export default function SettingsScreen() {
     if (isLoading || !isSignedIn) return;
     void refreshMonetizationStatus(false);
   }, [isLoading, isSignedIn, refreshMonetizationStatus]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (isLoading || !isSignedIn) return () => {
+      active = false;
+    };
+
+    setProfileVisibilityLoading(true);
+    void readMyProfileVisibility()
+      .then((visibility) => {
+        if (active) setProfileVisibility(visibility);
+      })
+      .catch(() => {
+        if (active) setProfileVisibility("everyone");
+      })
+      .finally(() => {
+        if (active) setProfileVisibilityLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isLoading, isSignedIn]);
 
   const monetizationStatusLabel = useMemo(() => {
     if (!monetizationSnapshot.configuration.shouldConfigure) return "Premium is not enabled on this build";
@@ -127,6 +161,24 @@ export default function SettingsScreen() {
   const onPressChillyCircle = useCallback(() => {
     router.push("/chilly-circle" as Parameters<typeof router.push>[0]);
   }, [router]);
+
+  const onPressProfileVisibility = useCallback(async (visibility: ProfileVisibility) => {
+    if (profileVisibilitySaving || visibility === profileVisibility) return;
+
+    setProfileVisibilitySaving(visibility);
+    setProfileVisibilityNotice(null);
+    try {
+      const savedVisibility = await updateMyProfileVisibility(visibility);
+      setProfileVisibility(savedVisibility);
+      setProfileVisibilityNotice(`Profile privacy set to ${getProfileVisibilityLabel(savedVisibility)}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update profile privacy right now.";
+      setProfileVisibilityNotice(message);
+      Alert.alert("Profile Privacy", message);
+    } finally {
+      setProfileVisibilitySaving(null);
+    }
+  }, [profileVisibility, profileVisibilitySaving]);
 
   const openExternalDestination = useCallback(async (url: string, label: string) => {
     try {
@@ -277,6 +329,47 @@ export default function SettingsScreen() {
         <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressChillyCircle}>
           <Text style={styles.secondaryActionButtonText}>Chi'lly Circle</Text>
         </TouchableOpacity>
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Profile privacy</Text>
+          <Text style={styles.identityValue}>
+            {profileVisibilityLoading ? "Loading privacy" : getProfileVisibilityLabel(profileVisibility)}
+          </Text>
+          <Text style={styles.statusNote}>
+            Choose who can see your full Profile posts, comments, attachments, and activity. Follow remains separate.
+          </Text>
+          <View style={styles.privacyOptionRow}>
+            {PROFILE_VISIBILITY_OPTIONS.map((option) => {
+              const active = profileVisibility === option.value;
+              const saving = profileVisibilitySaving === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.privacyOptionButton,
+                    active && styles.privacyOptionButtonActive,
+                    (profileVisibilityLoading || !!profileVisibilitySaving) && styles.utilityButtonDisabled,
+                  ]}
+                  activeOpacity={0.86}
+                  disabled={profileVisibilityLoading || !!profileVisibilitySaving}
+                  onPress={() => {
+                    void onPressProfileVisibility(option.value);
+                  }}
+                >
+                  {saving ? <ActivityIndicator color="#FFE4EA" size="small" /> : null}
+                  <Text style={[
+                    styles.privacyOptionButtonText,
+                    active && styles.privacyOptionButtonTextActive,
+                  ]}>
+                    {saving ? "Saving" : option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {profileVisibilityNotice ? (
+            <Text style={styles.metaText}>{profileVisibilityNotice}</Text>
+          ) : null}
+        </View>
         <TouchableOpacity
           style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]}
           activeOpacity={0.86}
@@ -510,6 +603,35 @@ const styles = StyleSheet.create({
     color: "#F4F7FC",
     fontSize: 12.5,
     fontWeight: "800",
+  },
+  privacyOptionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  privacyOptionButton: {
+    minHeight: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  privacyOptionButtonActive: {
+    borderColor: "rgba(220,20,60,0.45)",
+    backgroundColor: "rgba(220,20,60,0.18)",
+  },
+  privacyOptionButtonText: {
+    color: "#EAF0FF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  privacyOptionButtonTextActive: {
+    color: "#FFE4EA",
   },
   secondaryActionButton: {
     minHeight: 46,

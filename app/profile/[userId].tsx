@@ -66,6 +66,12 @@ import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../.
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
+  getProfilePrivacyLockedBody,
+  getProfilePrivacyLockedTitle,
+  resolveProfilePrivacyAccess,
+  type ProfilePrivacyAccess,
+} from "../../_lib/profilePrivacy";
+import {
   createProfilePost,
   createProfilePostComment,
   deleteProfilePostComment,
@@ -503,6 +509,8 @@ export default function ProfileScreen() {
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
   const [channelAccessReady, setChannelAccessReady] = useState(false);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
+  const [profilePrivacyAccess, setProfilePrivacyAccess] = useState<ProfilePrivacyAccess | null>(null);
+  const [profilePrivacyReady, setProfilePrivacyReady] = useState(false);
   const [publicEvents, setPublicEvents] = useState<CreatorEventSummary[]>([]);
   const [publicReminderSummaries, setPublicReminderSummaries] = useState<PublicEventReminderSummary[]>([]);
   const [publicEventsReady, setPublicEventsReady] = useState(false);
@@ -542,6 +550,7 @@ export default function ProfileScreen() {
   });
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
+  const canViewFullProfile = profilePrivacyAccess?.canViewFullProfile ?? false;
   useEffect(() => {
     let active = true;
     getWritablePartyUserId()
@@ -561,7 +570,16 @@ export default function ProfileScreen() {
 
     setPublicEventsReady(false);
 
-    if (!userId) {
+    if (!userId || !profilePrivacyReady) {
+      setPublicEvents([]);
+      setPublicReminderSummaries([]);
+      setPublicEventsReady(!!profilePrivacyReady);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!canViewFullProfile) {
       setPublicEvents([]);
       setPublicReminderSummaries([]);
       setPublicEventsReady(true);
@@ -587,7 +605,7 @@ export default function ProfileScreen() {
     return () => {
       active = false;
     };
-  }, [currentUserId, userId]);
+  }, [canViewFullProfile, currentUserId, profilePrivacyReady, userId]);
 
   useEffect(() => {
     let active = true;
@@ -615,13 +633,25 @@ export default function ProfileScreen() {
   const isSelfProfile = !profile.isProtectedFromClaim
     && hasVerifiedSelfIdentity
     && (!requestedSelfProfile || hasVerifiedSelfIdentity);
+  const shouldShowLockedShell = profilePrivacyReady
+    && !!profilePrivacyAccess?.isLocked
+    && !isOfficialProfile
+    && !isSelfProfile;
 
   useEffect(() => {
     let active = true;
 
     setCreatorVideosReady(false);
 
-    if (isOfficialProfile || !userId) {
+    if (isOfficialProfile || !userId || !profilePrivacyReady) {
+      setCreatorVideos([]);
+      setCreatorVideosReady(!!profilePrivacyReady);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!canViewFullProfile) {
       setCreatorVideos([]);
       setCreatorVideosReady(true);
       return () => {
@@ -644,7 +674,7 @@ export default function ProfileScreen() {
     return () => {
       active = false;
     };
-  }, [isOfficialProfile, isSelfProfile, userId]);
+  }, [canViewFullProfile, isOfficialProfile, isSelfProfile, profilePrivacyReady, userId]);
 
   useEffect(() => {
     let active = true;
@@ -652,7 +682,15 @@ export default function ProfileScreen() {
     setProfilePostsReady(false);
     setProfilePostsNotice(null);
 
-    if (!userId) {
+    if (!userId || !profilePrivacyReady) {
+      setProfilePosts([]);
+      setProfilePostsReady(!!profilePrivacyReady);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!canViewFullProfile) {
       setProfilePosts([]);
       setProfilePostsReady(true);
       return () => {
@@ -676,7 +714,7 @@ export default function ProfileScreen() {
     return () => {
       active = false;
     };
-  }, [isSelfProfile, userId]);
+  }, [canViewFullProfile, isSelfProfile, profilePrivacyReady, userId]);
 
   const profilePostIdsKey = useMemo(
     () => profilePosts.map((post) => post.id).join("|"),
@@ -928,6 +966,75 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [channelAccessPermissions, channelAccessProfile, channelAccessReady, isOfficialProfile, userId]);
+  useEffect(() => {
+    let active = true;
+
+    setProfilePrivacyReady(false);
+
+    if (!userId) {
+      setProfilePrivacyAccess(null);
+      setProfilePrivacyReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (isOfficialProfile || isSelfProfile) {
+      void resolveProfilePrivacyAccess({
+        ownerUserId: userId,
+        viewerUserId: currentUserId || null,
+        visibility: "everyone",
+      })
+        .then((access) => {
+          if (!active) return;
+          setProfilePrivacyAccess(access);
+          setProfilePrivacyReady(true);
+        })
+        .catch(() => {
+          if (!active) return;
+          setProfilePrivacyAccess(null);
+          setProfilePrivacyReady(true);
+        });
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!channelAccessReady) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void resolveProfilePrivacyAccess({
+      ownerUserId: userId,
+      viewerUserId: currentUserId || null,
+      visibility: channelAccessProfile?.profileVisibility,
+      relationshipState: friendState,
+    })
+      .then((access) => {
+        if (!active) return;
+        setProfilePrivacyAccess(access);
+        setProfilePrivacyReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setProfilePrivacyAccess(null);
+        setProfilePrivacyReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    channelAccessProfile?.profileVisibility,
+    channelAccessReady,
+    currentUserId,
+    friendState,
+    isOfficialProfile,
+    isSelfProfile,
+    userId,
+  ]);
   useEffect(() => {
     let active = true;
 
@@ -3245,19 +3352,21 @@ export default function ProfileScreen() {
         <View style={styles.profileCard}>
           <View style={styles.profileCover}>
             <View style={styles.profileCoverTopRow}>
-              <Text style={styles.profileEyebrow}>{profileEyebrow}</Text>
-              <View style={styles.profileCoverBadgeRow}>
-                {isOfficialProfile ? (
-                  <View style={[styles.heroBadge, styles.heroBadgeOfficial]}>
-                    <Text style={[styles.heroBadgeText, styles.heroBadgeTextOfficial]}>
-                      {profile.officialBadgeLabel ?? officialAccount?.officialBadgeLabel ?? "OFFICIAL"}
-                    </Text>
+              <Text style={styles.profileEyebrow}>{shouldShowLockedShell ? "PROFILE" : profileEyebrow}</Text>
+              {!shouldShowLockedShell ? (
+                <View style={styles.profileCoverBadgeRow}>
+                  {isOfficialProfile ? (
+                    <View style={[styles.heroBadge, styles.heroBadgeOfficial]}>
+                      <Text style={[styles.heroBadgeText, styles.heroBadgeTextOfficial]}>
+                        {profile.officialBadgeLabel ?? officialAccount?.officialBadgeLabel ?? "OFFICIAL"}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.heroBadge, profile.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
+                    <Text style={[styles.heroBadgeText, profile.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
                   </View>
-                ) : null}
-                <View style={[styles.heroBadge, profile.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
-                  <Text style={[styles.heroBadgeText, profile.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
                 </View>
-              </View>
+              ) : null}
             </View>
           </View>
           <View style={styles.profileIdentityRow}>
@@ -3275,7 +3384,7 @@ export default function ProfileScreen() {
                     <Text style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
                   )}
                 </View>
-                {profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
+                {!shouldShowLockedShell && profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
               </View>
             </TouchableOpacity>
             <View style={styles.profileIdentityCopy}>
@@ -3290,44 +3399,50 @@ export default function ProfileScreen() {
                 {profile.displayName}
               </Text>
               <Text style={styles.userIdLabel} numberOfLines={1}>{channelHandle}</Text>
-              {profile.tagline ? <Text style={styles.profileTagline}>{profile.tagline}</Text> : null}
-              <View style={styles.metaRow}>
-                <View style={styles.metaPill}>
-                  <Text style={styles.metaPillText}>{roleLabel}</Text>
+              {profile.tagline && !shouldShowLockedShell ? <Text style={styles.profileTagline}>{profile.tagline}</Text> : null}
+              {!shouldShowLockedShell ? (
+                <View style={styles.metaRow}>
+                  <View style={styles.metaPill}>
+                    <Text style={styles.metaPillText}>{roleLabel}</Text>
+                  </View>
+                  {hasLiveRouteContext ? (
+                    <View style={[styles.metaPill, styles.metaPillLinked]}>
+                      <Text style={styles.metaPillText}>{routeContextLabel}</Text>
+                    </View>
+                  ) : null}
+                  {isOfficialProfile ? (
+                    <View style={[styles.metaPill, styles.metaPillOfficial]}>
+                      <Text style={[styles.metaPillText, styles.metaPillTextOfficial]}>
+                        {profile.platformOwnershipLabel ?? officialAccount?.platformOwnershipLabel ?? "PLATFORM OWNED"}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
-                {hasLiveRouteContext ? (
-                  <View style={[styles.metaPill, styles.metaPillLinked]}>
-                    <Text style={styles.metaPillText}>{routeContextLabel}</Text>
-                  </View>
-                ) : null}
-                {isOfficialProfile ? (
-                  <View style={[styles.metaPill, styles.metaPillOfficial]}>
-                    <Text style={[styles.metaPillText, styles.metaPillTextOfficial]}>
-                      {profile.platformOwnershipLabel ?? officialAccount?.platformOwnershipLabel ?? "PLATFORM OWNED"}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
+              ) : null}
             </View>
           </View>
-          <Text style={styles.channelSupportText}>{channelHomeBody}</Text>
-          <View style={styles.channelSignalGrid}>
-            {channelSignals.map((signal) => (
-              <View
-                key={signal.label}
-                style={[
-                  styles.channelSignalCard,
-                  signal.tone === "live" && styles.channelSignalCardLive,
-                  signal.tone === "linked" && styles.channelSignalCardLinked,
-                  signal.tone === "official" && styles.channelSignalCardOfficial,
-                ]}
-              >
-                <Text style={styles.channelSignalLabel}>{signal.label}</Text>
-                <Text style={styles.channelSignalValue}>{signal.value}</Text>
+          {!shouldShowLockedShell ? (
+            <>
+              <Text style={styles.channelSupportText}>{channelHomeBody}</Text>
+              <View style={styles.channelSignalGrid}>
+                {channelSignals.map((signal) => (
+                  <View
+                    key={signal.label}
+                    style={[
+                      styles.channelSignalCard,
+                      signal.tone === "live" && styles.channelSignalCardLive,
+                      signal.tone === "linked" && styles.channelSignalCardLinked,
+                      signal.tone === "official" && styles.channelSignalCardOfficial,
+                    ]}
+                  >
+                    <Text style={styles.channelSignalLabel}>{signal.label}</Text>
+                    <Text style={styles.channelSignalValue}>{signal.value}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-          {avatarQuickActionsOpen && quickActions.length > 0 ? (
+            </>
+          ) : null}
+          {!shouldShowLockedShell && avatarQuickActionsOpen && quickActions.length > 0 ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>
                 {isOfficialProfile ? "Official Quick Actions" : isSelfProfile ? "Your Channel Quick Actions" : "Channel Quick Actions"}
@@ -3350,7 +3465,7 @@ export default function ProfileScreen() {
             </View>
           ) : null}
           <View style={styles.actionCluster}>
-            {isSelfProfile ? (
+            {shouldShowLockedShell ? null : isSelfProfile ? (
               <>
                 <View style={styles.primaryActionRow}>
                   <TouchableOpacity
@@ -3491,9 +3606,20 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {renderProfileComposerCard()}
+        {shouldShowLockedShell ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionKicker}>PROFILE PRIVACY</Text>
+            <Text style={styles.sectionTitle}>{getProfilePrivacyLockedTitle(profilePrivacyAccess)}</Text>
+            <Text style={styles.sectionBody}>{getProfilePrivacyLockedBody(profilePrivacyAccess)}</Text>
+            <View style={styles.secondaryActionRow}>
+              {renderChillyCircleActions()}
+            </View>
+          </View>
+        ) : (
+          <>
+            {renderProfileComposerCard()}
 
-        <View style={styles.sectionStack}>
+            <View style={styles.sectionStack}>
           <View style={styles.tabStripCard}>
             <ScrollView
               horizontal
@@ -3743,7 +3869,9 @@ export default function ProfileScreen() {
               ) : null}
             </>
           ) : null}
-        </View>
+            </View>
+          </>
+        )}
         <ReportSheet
           visible={reportVisible}
           title={profilePostCommentReportTarget

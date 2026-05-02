@@ -1175,6 +1175,7 @@ export type Database = {
           display_name: string | null
           follower_surface_enabled: boolean
           likes_visibility: string
+          profile_visibility: string
           public_activity_visibility: string
           shares_visibility: string
           subscriber_surface_enabled: boolean
@@ -1197,6 +1198,7 @@ export type Database = {
           display_name?: string | null
           follower_surface_enabled?: boolean
           likes_visibility?: string
+          profile_visibility?: string
           public_activity_visibility?: string
           shares_visibility?: string
           subscriber_surface_enabled?: boolean
@@ -1219,6 +1221,7 @@ export type Database = {
           display_name?: string | null
           follower_surface_enabled?: boolean
           likes_visibility?: string
+          profile_visibility?: string
           public_activity_visibility?: string
           shares_visibility?: string
           subscriber_surface_enabled?: boolean
