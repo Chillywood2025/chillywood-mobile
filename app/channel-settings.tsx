@@ -89,6 +89,12 @@ type ChannelSettingsSectionModel = {
   body: string;
 };
 
+type ChannelSettingsSectionGroup = {
+  title: string;
+  body: string;
+  sections: readonly ChannelSettingsSectionModel[];
+};
+
 type ChannelAccessSummaryDetail = {
   label: string;
   value: string;
@@ -376,6 +382,12 @@ const formatAudienceActionStatus = (value: ChannelAudienceActionStatus) =>
 const formatReadModelStatusValue = (value: Exclude<ChannelReadModelFieldStatus, "available">) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
 
+const formatStudioSectionStatusLabel = (status: ChannelSettingsSectionStatus) => {
+  if (status === "current") return "CURRENT";
+  if (status === "near_term") return "COMING SOON";
+  return "COMING LATER";
+};
+
 const analyticsUnavailableMetricDefinitions: readonly {
   key: CreatorAnalyticsMetricKey;
   label: string;
@@ -461,7 +473,7 @@ export default function ChannelSettingsScreen() {
         : "Enter a title to enable upload.";
   const isVideoSubmitDisabled = videoSaving || !!videoSubmitRequirement;
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
-  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel settings");
+  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel Studio");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
 
   useEffect(() => {
@@ -973,63 +985,112 @@ export default function ChannelSettingsScreen() {
       });
       await saveUserProfile(normalized);
       setProfile(normalized);
-      setNotice("Channel settings saved.");
+      setNotice("Channel Studio saved.");
     } catch {
-      setNotice("Unable to save channel settings right now.");
+      setNotice("Unable to save Channel Studio changes right now.");
     } finally {
       setSaving(false);
     }
   };
 
-  const sectionMap: readonly ChannelSettingsSectionModel[] = [
+  const studioSectionGroups: readonly ChannelSettingsSectionGroup[] = [
     {
       title: "Content",
-      status: "current",
-      body: "Upload and manage creator videos.",
+      body: "Creator-owned videos and the future channel library shape.",
+      sections: [
+        {
+          title: "Creator Content",
+          status: "current",
+          body: "Upload and manage creator videos.",
+        },
+        {
+          title: "Featured Video / Trailer",
+          status: "near_term",
+          body: "Coming soon once featured/trailer backing is added.",
+        },
+        {
+          title: "Playlists / Shelves",
+          status: "near_term",
+          body: "Coming soon once playlist or shelf backing exists.",
+        },
+      ],
     },
     {
-      title: "Identity",
-      status: "current",
-      body: "Name, tagline, and role.",
+      title: "Brand & Design",
+      body: "Channel identity controls that stay separate from personal Profile privacy.",
+      sections: [
+        {
+          title: "Identity",
+          status: "current",
+          body: "Name, tagline, and role.",
+        },
+        {
+          title: "Layout",
+          status: "current",
+          body: "Home emphasis and layout preset.",
+        },
+        {
+          title: "Design",
+          status: "near_term",
+          body: "Coming soon for hero, avatar, accent, and brand treatment.",
+        },
+      ],
     },
     {
-      title: "Layout",
-      status: "current",
-      body: "Home emphasis and layout preset.",
-    },
-    {
-      title: "Access Defaults",
-      status: "current",
-      body: "Room defaults and backed creator grants.",
-    },
-    {
-      title: "Live Events",
-      status: "current",
-      body: "Schedule live sessions and replays.",
+      title: "Live & Events",
+      body: "Room defaults, creator events, and backed scheduling posture.",
+      sections: [
+        {
+          title: "Access Defaults",
+          status: "current",
+          body: "Room defaults and backed creator grants.",
+        },
+        {
+          title: "Live Events",
+          status: "current",
+          body: "Schedule live sessions and replays.",
+        },
+      ],
     },
     {
       title: "Audience",
-      status: "current",
-      body: "Followers, requests, blocks, and visibility.",
+      body: "Channel-owned audience relationships and visibility controls.",
+      sections: [
+        {
+          title: "Audience",
+          status: "current",
+          body: "Followers, requests, blocks, and visibility.",
+        },
+      ],
     },
     {
-      title: "Analytics",
-      status: "current",
-      body: "Backed room, event, and audience signals.",
+      title: "Insights",
+      body: "Only backed summaries render here; assistant-style help stays later.",
+      sections: [
+        {
+          title: "Analytics",
+          status: "current",
+          body: "Backed room, event, and audience signals.",
+        },
+        {
+          title: "Channel IQ / Rachi Studio Assistant",
+          status: "later_phase",
+          body: "Coming later; no assistant implementation is wired in this pass.",
+        },
+      ],
     },
     {
-      title: "Safety/Admin",
-      status: "current",
-      body: "Role, report, and admin reach.",
-    },
-    {
-      title: "Design",
-      status: "near_term",
-      body: "Hero, avatar, and brand treatment.",
+      title: "Safety",
+      body: "Role and report context without replacing the Admin surface.",
+      sections: [
+        {
+          title: "Safety/Admin",
+          status: "current",
+          body: "Role, report, and admin reach.",
+        },
+      ],
     },
   ];
-  const currentSectionMap = sectionMap.filter((section) => section.status === "current");
-  const buildNextSectionMap = sectionMap.filter((section) => section.status !== "current");
   const designSectionHighlights = [
     "Hero treatment",
     "Avatar framing",
@@ -1562,8 +1623,8 @@ export default function ChannelSettingsScreen() {
   if (authLoading || betaLoading) {
     return (
       <BetaAccessScreen
-        title="Loading channel access"
-        body="Checking your signed-in identity before opening channel settings."
+        title="Loading Channel Studio"
+        body="Checking your signed-in identity before opening the channel management surface."
         loadingOverride
       />
     );
@@ -1572,8 +1633,8 @@ export default function ChannelSettingsScreen() {
   if (!isSignedIn) {
     return (
       <BetaAccessScreen
-        title="Sign in to manage your channel"
-        body="Channel settings stay behind signed-in access because they change creator defaults and room options."
+        title="Sign in to open Channel Studio"
+        body="Channel Studio stays behind signed-in access because it changes creator defaults and room options."
       />
     );
   }
@@ -1597,25 +1658,39 @@ export default function ChannelSettingsScreen() {
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>{appDisplayName.toUpperCase()} · CHANNEL</Text>
+          <Text style={styles.kicker}>{appDisplayName.toUpperCase()} · STUDIO</Text>
           <View style={{ width: 18 }} />
         </View>
 
         <View style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Manage Channel</Text>
+          <Text style={styles.heroTitle}>Channel Studio</Text>
           <Text style={styles.heroBody}>
-            Start with creator videos, then tune identity, access, events, audience workflows, and creator summaries. Public channel presentation stays on `/profile/[userId]`.
+            Manage the channel side of your Chi'llywood identity: your mini streaming platform for creator videos, live/events, audience posture, and backed channel defaults. Personal Profile settings and privacy stay separate.
           </Text>
+          <View style={styles.heroTruthGrid}>
+            <View style={styles.heroTruthCard}>
+              <Text style={styles.heroTruthLabel}>CHANNEL</Text>
+              <Text style={styles.heroTruthBody}>Creator content, events, audience, and channel defaults.</Text>
+            </View>
+            <View style={styles.heroTruthCard}>
+              <Text style={styles.heroTruthLabel}>PROFILE</Text>
+              <Text style={styles.heroTruthBody}>Personal posts, privacy, and Chi'lly Circle remain in Profile/Settings.</Text>
+            </View>
+            <View style={styles.heroTruthCard}>
+              <Text style={styles.heroTruthLabel}>PUBLIC HOME</Text>
+              <Text style={styles.heroTruthBody}>The viewer-facing channel still renders through your Profile route.</Text>
+            </View>
+          </View>
         </View>
 
         {loading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color="#fff" />
-            <Text style={styles.loadingText}>Loading channel settings…</Text>
+            <Text style={styles.loadingText}>Loading Channel Studio…</Text>
           </View>
         ) : !settingsEnabled ? (
           <View style={styles.disabledCard}>
-            <Text style={styles.disabledTitle}>Channel settings are hidden</Text>
+            <Text style={styles.disabledTitle}>Channel Studio is hidden</Text>
             <Text style={styles.disabledBody}>
               The creator settings entry is currently disabled in global app config.
             </Text>
@@ -1631,79 +1706,46 @@ export default function ChannelSettingsScreen() {
             {renderContentPanel()}
 
             <View style={styles.sectionMapCard}>
-              <Text style={styles.sectionMapKicker}>CONTROL LANES</Text>
-              <Text style={styles.sectionMapTitle}>Current controls first</Text>
+              <Text style={styles.sectionMapKicker}>CHANNEL STUDIO MAP</Text>
+              <Text style={styles.sectionMapTitle}>Built on your existing channel controls</Text>
               <Text style={styles.sectionMapBody}>
-                Video upload and owner management stay first. Build-next lanes remain visible below without crowding the creator tools that already work.
+                The controls below are organized by channel job. Current sections stay wired to the same data and actions; missing channel-builder pieces are labeled only as coming soon or coming later.
               </Text>
-              <Text style={styles.sectionMapSubheading}>Ready Now</Text>
-              <View style={styles.sectionMapGrid}>
-                {currentSectionMap.map((section) => (
-                  <View key={section.title} style={styles.sectionMapItem}>
-                    <View style={styles.sectionMapHeader}>
-                      <Text style={styles.sectionMapItemTitle}>{section.title}</Text>
-                      <View
-                        style={[
-                          styles.sectionStatusChip,
-                          section.status === "current" && styles.sectionStatusChipCurrent,
-                          section.status === "near_term" && styles.sectionStatusChipNearTerm,
-                          section.status === "later_phase" && styles.sectionStatusChipLaterPhase,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.sectionStatusChipText,
-                            section.status === "current" && styles.sectionStatusChipTextCurrent,
-                            section.status === "near_term" && styles.sectionStatusChipTextNearTerm,
-                            section.status === "later_phase" && styles.sectionStatusChipTextLaterPhase,
-                          ]}
-                        >
-                          {section.status === "current"
-                            ? "CURRENT"
-                            : section.status === "near_term"
-                              ? "BUILD NEXT"
-                              : "LATER"}
-                        </Text>
+              {studioSectionGroups.map((group) => (
+                <View key={group.title} style={styles.sectionMapGroup}>
+                  <Text style={styles.sectionMapSubheading}>{group.title}</Text>
+                  <Text style={styles.sectionMapGroupBody}>{group.body}</Text>
+                  <View style={styles.sectionMapGrid}>
+                    {group.sections.map((section) => (
+                      <View key={section.title} style={styles.sectionMapItem}>
+                        <View style={styles.sectionMapHeader}>
+                          <Text style={styles.sectionMapItemTitle}>{section.title}</Text>
+                          <View
+                            style={[
+                              styles.sectionStatusChip,
+                              section.status === "current" && styles.sectionStatusChipCurrent,
+                              section.status === "near_term" && styles.sectionStatusChipNearTerm,
+                              section.status === "later_phase" && styles.sectionStatusChipLaterPhase,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.sectionStatusChipText,
+                                section.status === "current" && styles.sectionStatusChipTextCurrent,
+                                section.status === "near_term" && styles.sectionStatusChipTextNearTerm,
+                                section.status === "later_phase" && styles.sectionStatusChipTextLaterPhase,
+                              ]}
+                            >
+                              {formatStudioSectionStatusLabel(section.status)}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.sectionMapItemBody}>{section.body}</Text>
                       </View>
-                    </View>
-                    <Text style={styles.sectionMapItemBody}>{section.body}</Text>
+                    ))}
                   </View>
-                ))}
-              </View>
-              <Text style={styles.sectionMapSubheading}>Build Next</Text>
-              <View style={styles.sectionMapGrid}>
-                {buildNextSectionMap.map((section) => (
-                  <View key={section.title} style={styles.sectionMapItem}>
-                    <View style={styles.sectionMapHeader}>
-                      <Text style={styles.sectionMapItemTitle}>{section.title}</Text>
-                      <View
-                        style={[
-                          styles.sectionStatusChip,
-                          section.status === "current" && styles.sectionStatusChipCurrent,
-                          section.status === "near_term" && styles.sectionStatusChipNearTerm,
-                          section.status === "later_phase" && styles.sectionStatusChipLaterPhase,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.sectionStatusChipText,
-                            section.status === "current" && styles.sectionStatusChipTextCurrent,
-                            section.status === "near_term" && styles.sectionStatusChipTextNearTerm,
-                            section.status === "later_phase" && styles.sectionStatusChipTextLaterPhase,
-                          ]}
-                        >
-                          {section.status === "current"
-                            ? "CURRENT"
-                            : section.status === "near_term"
-                              ? "BUILD NEXT"
-                              : "LATER"}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.sectionMapItemBody}>{section.body}</Text>
-                  </View>
-                ))}
-              </View>
+                </View>
+              ))}
             </View>
 
             <View style={styles.panel}>
@@ -2579,10 +2621,10 @@ export default function ChannelSettingsScreen() {
             <View style={[styles.panel, styles.panelSubtle]}>
               <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>Design</Text>
-                <Text style={styles.panelStatusMuted}>BUILD NEXT</Text>
+                <Text style={styles.panelStatusMuted}>COMING SOON</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Hero, avatar framing, accent tone, and visible brand treatment can deepen here later without leaving this route.
+                Hero, avatar framing, accent tone, and visible brand treatment can deepen here later without leaving this route. No new design persistence is wired in this pass.
               </Text>
               <View style={styles.previewChipRow}>
                 {designSectionHighlights.map((item) => (
@@ -2594,7 +2636,7 @@ export default function ChannelSettingsScreen() {
             </View>
 
             <TouchableOpacity style={styles.saveButton} onPress={onSave} activeOpacity={0.88} disabled={saving}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Channel Settings</Text>}
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Channel Studio</Text>}
             </TouchableOpacity>
           </>
         ) : null}
@@ -2654,6 +2696,36 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 8,
     fontWeight: "600",
+  },
+  heroTruthGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14,
+  },
+  heroTruthCard: {
+    flexBasis: "31%",
+    flexGrow: 1,
+    minWidth: 118,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 4,
+  },
+  heroTruthLabel: {
+    color: "#F2C5D0",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  heroTruthBody: {
+    color: "#D9E0EE",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
   },
   permissionCopy: {
     color: "#93A0B8",
@@ -2736,6 +2808,15 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.6,
     marginTop: 2,
+  },
+  sectionMapGroup: {
+    gap: 8,
+  },
+  sectionMapGroupBody: {
+    color: "#9FA9BF",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
   },
   sectionMapGrid: {
     gap: 10,

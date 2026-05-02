@@ -323,7 +323,7 @@ export default function SettingsScreen() {
             <Text style={styles.utilityButtonText}>Open Profile</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressManageChannel}>
-            <Text style={styles.utilityButtonText}>Manage Channel</Text>
+            <Text style={styles.utilityButtonText}>Channel Studio</Text>
           </TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressChillyCircle}>
