@@ -1,8 +1,19 @@
 import "../../_lib/livekit/dom-exception-polyfill";
 
-import { Room, Track } from "livekit-client";
+import { ConnectionState, Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  ActivityIndicator,
+  AppState,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type AppStateStatus,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import {
@@ -19,6 +30,7 @@ import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 type LiveKitStageMediaSurfaceProps = {
   joinContract: LiveKitTokenReady;
   onFallback: (reason: "connection_timeout" | "disconnected" | "room_error") => void;
+  active?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
   fillParent?: boolean;
   layout?: "stage" | "bubble-grid";
@@ -41,11 +53,41 @@ const isRenderableTrackReference = (trackRef: unknown): trackRef is RenderableLi
 );
 
 const LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
+const LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS = 4_500;
 
 type LiveKitSignalClientPatchable = {
   startReadingLoop?: (...args: unknown[]) => Promise<unknown>;
   handleWSError?: (error: unknown) => void;
   __chillywoodStageReadingLoopPatched?: boolean;
+};
+
+const getErrorMessage = (error: unknown) => (
+  error instanceof Error ? error.message : String(error ?? "")
+);
+
+const isTransientSignalReadLoopError = (error: unknown) => {
+  if (typeof error === "object" && error !== null && !(error instanceof Error)) {
+    return true;
+  }
+
+  const normalizedMessage = getErrorMessage(error).toLowerCase();
+  return normalizedMessage.includes("software caused connection abort")
+    || normalizedMessage.includes("abort")
+    || normalizedMessage.includes("1006")
+    || normalizedMessage.includes("websocket")
+    || normalizedMessage.includes("network request failed");
+};
+
+const isConnectedishState = (state: unknown) => (
+  state === ConnectionState.Connected
+  || state === ConnectionState.Connecting
+  || state === ConnectionState.Reconnecting
+  || state === ConnectionState.SignalReconnecting
+);
+
+const isClientInitiatedDisconnectReason = (reason: unknown) => {
+  const normalizedReason = String(reason ?? "").toLowerCase();
+  return normalizedReason.includes("client") || normalizedReason.includes("user initiated");
 };
 
 export const patchLiveKitSignalReadingLoop = (
@@ -70,13 +112,20 @@ export const patchLiveKitSignalReadingLoop = (
       if (shouldSuppressError?.()) {
         debugLog("livekit", "suppressed stale stage signal read loop error", {
           surfaceLabel,
-          error: error instanceof Error ? error.message : String(error),
+          error: getErrorMessage(error),
+        });
+        return undefined;
+      }
+      if (isTransientSignalReadLoopError(error)) {
+        debugLog("livekit", "suppressed transient stage signal read loop error", {
+          surfaceLabel,
+          error: getErrorMessage(error),
         });
         return undefined;
       }
       debugLog("livekit", "contained stage signal read loop error", {
         surfaceLabel,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
       client.handleWSError?.(error);
       return undefined;
@@ -336,6 +385,7 @@ function LiveKitStageMediaContent({
 export function LiveKitStageMediaSurface({
   joinContract,
   onFallback,
+  active = true,
   containerStyle,
   fillParent = true,
   layout = "stage",
@@ -343,10 +393,20 @@ export function LiveKitStageMediaSurface({
   publishLocalAudio = joinContract.participantRole !== "viewer",
 }: LiveKitStageMediaSurfaceProps) {
   const fallbackTriggeredRef = useRef(false);
+  const didConnectOnceRef = useRef(false);
+  const shouldConnectRoomRef = useRef(false);
+  const disconnectFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tearingDownRoomsRef = useRef(new Set<Room>());
   const [didConnectOnce, setDidConnectOnce] = useState(false);
+  const [appState, setAppState] = useState<AppStateStatus>(() => AppState.currentState);
+  const [hasAndroidFocus, setHasAndroidFocus] = useState(true);
   const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
   const publishLocalCamera = joinContract.participantRole !== "viewer";
+  const appIsInteractive = appState === "active" && (Platform.OS !== "android" || hasAndroidFocus);
+  const shouldConnectRoom = active && appIsInteractive;
+  shouldConnectRoomRef.current = shouldConnectRoom;
+  const effectivePublishLocalAudio = shouldConnectRoom && publishLocalAudio;
+  const effectivePublishLocalCamera = shouldConnectRoom && publishLocalCamera;
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const room = useMemo(() => {
     const nextRoom = new Room({ adaptiveStream: layout !== "bubble-grid", dynacast: false });
@@ -358,10 +418,36 @@ export function LiveKitStageMediaSurface({
     return nextRoom;
   }, [joinContract.participantToken, joinContract.roomName, layout, surfaceLabel]);
 
+  const clearDisconnectFallbackTimeout = useCallback(() => {
+    if (!disconnectFallbackTimeoutRef.current) return;
+    clearTimeout(disconnectFallbackTimeoutRef.current);
+    disconnectFallbackTimeoutRef.current = null;
+  }, []);
+
+  const disableLocalMediaQuietly = useCallback((reason: string) => {
+    const localParticipant = room.localParticipant as {
+      setCameraEnabled?: (enabled: boolean) => Promise<unknown>;
+      setMicrophoneEnabled?: (enabled: boolean) => Promise<unknown>;
+    };
+
+    Promise.all([
+      localParticipant.setCameraEnabled?.(false) ?? Promise.resolve(),
+      localParticipant.setMicrophoneEnabled?.(false) ?? Promise.resolve(),
+    ]).catch((error) => {
+      debugLog("livekit", "local media disable during pause failed", {
+        surfaceLabel,
+        roomName: joinContract.roomName,
+        reason,
+        error: getErrorMessage(error),
+      });
+    });
+  }, [joinContract.roomName, room, surfaceLabel]);
+
   const triggerFallback = useCallback(
     (reason: "connection_timeout" | "disconnected" | "room_error", error?: unknown) => {
       if (fallbackTriggeredRef.current) return;
       fallbackTriggeredRef.current = true;
+      clearDisconnectFallbackTimeout();
 
       if (error) {
         reportRuntimeError("livekit-stage-room", error, {
@@ -374,24 +460,57 @@ export function LiveKitStageMediaSurface({
 
       onFallback(reason);
     },
-    [joinContract.endpoint, joinContract.participantRole, joinContract.roomName, onFallback],
+    [clearDisconnectFallbackTimeout, joinContract.endpoint, joinContract.participantRole, joinContract.roomName, onFallback],
   );
 
   useEffect(() => {
     fallbackTriggeredRef.current = false;
+    didConnectOnceRef.current = false;
+    clearDisconnectFallbackTimeout();
     setDidConnectOnce(false);
     setMediaDeviceFailure(null);
-  }, [room]);
+  }, [clearDisconnectFallbackTimeout, room]);
 
   useEffect(() => {
+    const tearingDownRooms = tearingDownRoomsRef.current;
     return () => {
-      tearingDownRoomsRef.current.add(room);
+      tearingDownRooms.add(room);
       fallbackTriggeredRef.current = true;
+      clearDisconnectFallbackTimeout();
+      disableLocalMediaQuietly("unmount");
     };
-  }, [room]);
+  }, [clearDisconnectFallbackTimeout, disableLocalMediaQuietly, room]);
+
+  useEffect(() => {
+    const changeSubscription = AppState.addEventListener("change", (nextState) => {
+      setAppState(nextState);
+    });
+    const focusSubscription = Platform.OS === "android"
+      ? AppState.addEventListener("focus", () => setHasAndroidFocus(true))
+      : null;
+    const blurSubscription = Platform.OS === "android"
+      ? AppState.addEventListener("blur", () => setHasAndroidFocus(false))
+      : null;
+
+    return () => {
+      changeSubscription.remove();
+      focusSubscription?.remove();
+      blurSubscription?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (shouldConnectRoom) return;
+    clearDisconnectFallbackTimeout();
+    disableLocalMediaQuietly(appIsInteractive ? "inactive-prop" : "app-not-interactive");
+  }, [appIsInteractive, clearDisconnectFallbackTimeout, disableLocalMediaQuietly, shouldConnectRoom]);
 
   useEffect(() => {
     let active = true;
+
+    if (!shouldConnectRoom) return () => {
+      active = false;
+    };
 
     AudioSession.startAudioSession().catch((error) => {
       if (!active) return;
@@ -405,9 +524,11 @@ export function LiveKitStageMediaSurface({
       active = false;
       AudioSession.stopAudioSession().catch(() => {});
     };
-  }, [joinContract.participantRole, joinContract.roomName]);
+  }, [joinContract.participantRole, joinContract.roomName, shouldConnectRoom]);
 
   useEffect(() => {
+    if (!shouldConnectRoom) return undefined;
+
     const timeout = setTimeout(() => {
       if (!didConnectOnce) {
         triggerFallback(
@@ -420,10 +541,12 @@ export function LiveKitStageMediaSurface({
     return () => {
       clearTimeout(timeout);
     };
-  }, [didConnectOnce, triggerFallback]);
+  }, [didConnectOnce, shouldConnectRoom, triggerFallback]);
 
   const handleConnected = useCallback(() => {
+    clearDisconnectFallbackTimeout();
     tearingDownRoomsRef.current.delete(room);
+    didConnectOnceRef.current = true;
     setDidConnectOnce(true);
     debugLog("livekit", "room connected", {
       surfaceLabel,
@@ -431,22 +554,69 @@ export function LiveKitStageMediaSurface({
       participantRole: joinContract.participantRole,
       publishLocalCamera,
     });
-  }, [joinContract.participantRole, joinContract.roomName, publishLocalCamera, room, surfaceLabel]);
+  }, [clearDisconnectFallbackTimeout, joinContract.participantRole, joinContract.roomName, publishLocalCamera, room, surfaceLabel]);
 
-  const handleDisconnected = useCallback(() => {
-    if (tearingDownRoomsRef.current.has(room)) return;
-    triggerFallback(
-      "disconnected",
-      new Error("LiveKit disconnected before the stage path was stable enough to replace the legacy fallback."),
-    );
-  }, [room, triggerFallback]);
+  const handleDisconnected = useCallback((reason?: unknown) => {
+    if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current || isClientInitiatedDisconnectReason(reason)) {
+      debugLog("livekit", "room disconnected without fallback", {
+        surfaceLabel,
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        reason: String(reason ?? "unknown"),
+        appState,
+        hasAndroidFocus,
+      });
+      return;
+    }
+    if (!didConnectOnceRef.current) {
+      triggerFallback(
+        "disconnected",
+        new Error("LiveKit disconnected before the stage path connected once."),
+      );
+      return;
+    }
+
+    clearDisconnectFallbackTimeout();
+    disconnectFallbackTimeoutRef.current = setTimeout(() => {
+      disconnectFallbackTimeoutRef.current = null;
+      if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current || isConnectedishState(room.state)) {
+        return;
+      }
+      triggerFallback(
+        "disconnected",
+        new Error("LiveKit stayed disconnected after the stage reconnect grace period."),
+      );
+    }, LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS);
+  }, [
+    appState,
+    clearDisconnectFallbackTimeout,
+    hasAndroidFocus,
+    joinContract.participantRole,
+    joinContract.roomName,
+    room,
+    surfaceLabel,
+    triggerFallback,
+  ]);
 
   const handleError = useCallback((error: Error) => {
-    if (tearingDownRoomsRef.current.has(room)) return;
+    if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current) return;
     triggerFallback("room_error", error);
   }, [room, triggerFallback]);
 
-  const handleMediaDeviceFailure = useCallback((failure: unknown) => {
+  const handleMediaDeviceFailure = useCallback((failure: unknown, kind?: unknown) => {
+    if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current) {
+      debugLog("livekit", "suppressed media-device failure during inactive room state", {
+        surfaceLabel,
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        failure: String(failure ?? "unknown_failure"),
+        kind: String(kind ?? ""),
+        appState,
+        hasAndroidFocus,
+      });
+      return;
+    }
+
     const normalizedFailure = String(failure ?? "unknown_failure");
     setMediaDeviceFailure(normalizedFailure);
     reportRuntimeError("livekit-stage-media-device", new Error(`LiveKit media-device failure: ${normalizedFailure}`), {
@@ -454,8 +624,18 @@ export function LiveKitStageMediaSurface({
       participantRole: joinContract.participantRole,
       publishLocalAudio,
       publishLocalCamera,
+      kind: String(kind ?? ""),
     });
-  }, [joinContract.participantRole, joinContract.roomName, publishLocalAudio, publishLocalCamera]);
+  }, [
+    appState,
+    hasAndroidFocus,
+    joinContract.participantRole,
+    joinContract.roomName,
+    publishLocalAudio,
+    publishLocalCamera,
+    room,
+    surfaceLabel,
+  ]);
 
   return (
     <View
@@ -463,15 +643,15 @@ export function LiveKitStageMediaSurface({
       pointerEvents="none"
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-      >
-        <LiveKitRoom
+    >
+      <LiveKitRoom
         key={`${joinContract.roomName}:${joinContract.participantToken}`}
         room={room}
         serverUrl={joinContract.serverUrl}
         token={joinContract.participantToken}
-        connect
-        audio={publishLocalAudio}
-        video={publishLocalCamera}
+        connect={shouldConnectRoom}
+        audio={effectivePublishLocalAudio}
+        video={effectivePublishLocalCamera}
         connectOptions={connectOptions}
         onConnected={handleConnected}
         onDisconnected={handleDisconnected}
@@ -482,7 +662,7 @@ export function LiveKitStageMediaSurface({
           joinContract={joinContract}
           layout={layout}
           surfaceLabel={surfaceLabel}
-          publishLocalAudio={publishLocalAudio}
+          publishLocalAudio={effectivePublishLocalAudio}
           mediaDeviceFailure={mediaDeviceFailure}
         />
       </LiveKitRoom>

@@ -12,6 +12,7 @@ import {
     Alert,
     ActivityIndicator,
     Animated,
+    AppState,
     Easing,
     FlatList,
     Image,
@@ -31,6 +32,7 @@ import {
     TouchableOpacity,
     UIManager,
     View,
+    type AppStateStatus,
     type GestureResponderEvent,
     type ImageSourcePropType,
     type StyleProp,
@@ -57,7 +59,10 @@ import {
     type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
 import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
-import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
+import {
+    isLiveKitParticipantTokenExpired,
+    type LiveKitTokenReady,
+} from "../../_lib/livekit/token-contract";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { readCreatorVideoForPlayer, type CreatorVideo } from "../../_lib/creatorVideos";
@@ -3809,7 +3814,33 @@ export default function PlayerScreen() {
     () => liveBubbleParticipants.find((participant) => participant.id === trackedUserId)?.name || "You",
     [liveBubbleParticipants, trackedUserId],
   );
-  const shouldRenderWatchPartyLiveKit = inWatchParty && watchPartyEntryAllowed && Platform.OS !== "web" && !!watchPartyLiveKitJoinContract;
+  const [playerAppState, setPlayerAppState] = useState<AppStateStatus>(() => AppState.currentState);
+  const [playerHasAndroidFocus, setPlayerHasAndroidFocus] = useState(true);
+  useEffect(() => {
+    const changeSubscription = AppState.addEventListener("change", (nextState) => {
+      setPlayerAppState(nextState);
+    });
+    const focusSubscription = Platform.OS === "android"
+      ? AppState.addEventListener("focus", () => setPlayerHasAndroidFocus(true))
+      : null;
+    const blurSubscription = Platform.OS === "android"
+      ? AppState.addEventListener("blur", () => setPlayerHasAndroidFocus(false))
+      : null;
+
+    return () => {
+      changeSubscription.remove();
+      focusSubscription?.remove();
+      blurSubscription?.remove();
+    };
+  }, []);
+  const playerMediaIsInteractive = playerAppState === "active" && (Platform.OS !== "android" || playerHasAndroidFocus);
+  const watchPartyLiveKitJoinContractExpired = !!watchPartyLiveKitJoinContract
+    && isLiveKitParticipantTokenExpired(watchPartyLiveKitJoinContract.participantToken);
+  const shouldRenderWatchPartyLiveKit = inWatchParty
+    && watchPartyEntryAllowed
+    && Platform.OS !== "web"
+    && !!watchPartyLiveKitJoinContract
+    && !watchPartyLiveKitJoinContractExpired;
   const currentWatchPartyParticipantMuted = useMemo(() => {
     const currentParticipant = partyParticipants.find((participant) => participant.id === trackedUserId);
     if (currentParticipant) return !!currentParticipant.muted;
@@ -3830,7 +3861,16 @@ export default function PlayerScreen() {
       return;
     }
 
-    if (watchPartyLiveKitJoinContract?.roomName === partyId) return;
+    if (watchPartyLiveKitJoinContract?.roomName === partyId) {
+      if (watchPartyLiveKitJoinContractExpired) {
+        debugLog("livekit", "dropping expired watch-party-live join contract", {
+          roomName: watchPartyLiveKitJoinContract.roomName,
+          participantRole: watchPartyLiveKitJoinContract.participantRole,
+        });
+        setWatchPartyLiveKitJoinContract(null);
+      }
+      return;
+    }
     if (!trackedUserId || trackedUserId === "anon") return;
 
     const preparedContract = consumePreparedLiveKitJoinBoundary({
@@ -3847,7 +3887,15 @@ export default function PlayerScreen() {
       participantRole: preparedContract.participantRole,
       requestedGrants: preparedContract.requestedGrants,
     });
-  }, [inWatchParty, partyId, trackedUserId, watchPartyEntryAllowed, watchPartyLiveKitJoinContract?.roomName]);
+  }, [
+    inWatchParty,
+    partyId,
+    trackedUserId,
+    watchPartyEntryAllowed,
+    watchPartyLiveKitJoinContract?.participantRole,
+    watchPartyLiveKitJoinContract?.roomName,
+    watchPartyLiveKitJoinContractExpired,
+  ]);
 
   const onWatchPartyLiveKitFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
     debugLog("livekit", "falling back to legacy watch-party-live playback path", {
@@ -4867,6 +4915,7 @@ export default function PlayerScreen() {
             Platform.OS !== "web"
             && isCurrentUser
             && !!cameraPermission?.granted
+            && playerMediaIsInteractive
             && !shouldRenderWatchPartyLiveKit
           );
           const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
@@ -5085,6 +5134,7 @@ export default function PlayerScreen() {
             <LiveKitStageMediaSurface
               joinContract={watchPartyLiveKitJoinContract}
               onFallback={onWatchPartyLiveKitFallback}
+              active={playerMediaIsInteractive}
               fillParent={false}
               layout="bubble-grid"
               surfaceLabel="Watch-Party Live"

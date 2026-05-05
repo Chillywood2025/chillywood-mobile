@@ -1,4 +1,5 @@
 import {
+  isLiveKitParticipantTokenExpired,
   requestLiveKitParticipantToken,
   type LiveKitTokenContractResult,
   type LiveKitTokenReady,
@@ -52,5 +53,6 @@ export function consumePreparedLiveKitJoinBoundary(
   const entry = preparedLiveKitBoundaries.get(key);
   if (!entry) return null;
   preparedLiveKitBoundaries.delete(key);
+  if (isLiveKitParticipantTokenExpired(entry.joinContract.participantToken)) return null;
   return entry.joinContract;
 }

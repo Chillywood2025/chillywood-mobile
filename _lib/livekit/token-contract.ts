@@ -1,3 +1,5 @@
+import { decodeTokenPayload } from "livekit-client";
+
 import { getRuntimeLiveKitConfig, isLiveKitRuntimeConfigured } from "../runtimeConfig";
 import { supabase } from "../supabase";
 
@@ -50,6 +52,29 @@ export type LiveKitTokenUnavailable = {
 };
 
 export type LiveKitTokenContractResult = LiveKitTokenReady | LiveKitTokenUnavailable;
+
+const LIVEKIT_TOKEN_REFRESH_SKEW_MILLIS = 60_000;
+
+export const isLiveKitParticipantTokenExpired = (
+  participantToken: string,
+  nowMillis = Date.now(),
+) => {
+  const token = String(participantToken ?? "").trim();
+  if (!token) return true;
+
+  try {
+    const payload = decodeTokenPayload(token) as { exp?: unknown; nbf?: unknown };
+    const expiresAtSeconds = Number(payload.exp);
+    const notBeforeSeconds = Number(payload.nbf);
+
+    if (!Number.isFinite(expiresAtSeconds)) return true;
+    if (Number.isFinite(notBeforeSeconds) && notBeforeSeconds * 1000 > nowMillis) return true;
+
+    return expiresAtSeconds * 1000 - LIVEKIT_TOKEN_REFRESH_SKEW_MILLIS <= nowMillis;
+  } catch {
+    return true;
+  }
+};
 
 const sanitizeMetadata = (value: LiveKitTokenRequest["metadata"]) => {
   if (!value) return {};

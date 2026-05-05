@@ -248,6 +248,8 @@ const TITLE_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["paid_title_access", "p
 const LIVE_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_live_access", "premium_subscription"];
 const WATCH_PARTY_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_watch_party_access", "premium_subscription"];
 const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
+const PREMIUM_TEST_BYPASS_ENABLED =
+  __DEV__ && String(process.env.EXPO_PUBLIC_PREMIUM_TEST_BYPASS ?? "").trim() === "1";
 
 export const createEmptyMonetizationGateResolution = (
   snapshotStatus: MonetizationGateResolution["snapshotStatus"] = "disabled",
@@ -693,6 +695,20 @@ const mergeBackendEntitlementsIntoGate = (
   return {
     ...monetization,
     entitledTargetIds: Array.from(new Set([...monetization.entitledTargetIds, ...backendEntitledTargetIds])),
+  };
+};
+
+const mergePremiumTestBypassIntoGate = (
+  monetization: MonetizationGateResolution,
+  policy: MonetizationAccessPolicy,
+): MonetizationGateResolution => {
+  if (!PREMIUM_TEST_BYPASS_ENABLED || !policy.qualifyingTargetIds.includes("premium_subscription")) {
+    return monetization;
+  }
+
+  return {
+    ...monetization,
+    entitledTargetIds: Array.from(new Set([...monetization.entitledTargetIds, "premium_subscription"])),
   };
 };
 
@@ -1277,6 +1293,7 @@ export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
 export async function hasPremiumAccess(): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return true;
+  if (PREMIUM_TEST_BYPASS_ENABLED) return true;
 
   const snapshot = await readMonetizationSnapshot();
   if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
@@ -1290,6 +1307,7 @@ export async function hasPremiumAccess(): Promise<boolean> {
 export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.partyPass || !runtime.partyPassEnabled) return true;
+  if (PREMIUM_TEST_BYPASS_ENABLED) return true;
 
   const snapshot = await readMonetizationSnapshot();
   if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
@@ -1457,9 +1475,12 @@ export async function resolveMonetizationAccess(options: {
     )
     : [];
   const backendEntitledTargetIds = buildBackendEntitledTargetIds(policy, backendEntitlements);
-  const monetization = mergeBackendEntitlementsIntoGate(
-    buildMonetizationGateResolution(snapshot, policy),
-    backendEntitledTargetIds,
+  const monetization = mergePremiumTestBypassIntoGate(
+    mergeBackendEntitlementsIntoGate(
+      buildMonetizationGateResolution(snapshot, policy),
+      backendEntitledTargetIds,
+    ),
+    policy,
   );
   const hasTrustedEntitlement = monetization.entitledTargetIds.length > 0;
   const plan: UserPlan = hasTrustedEntitlement && monetization.entitledTargetIds.includes("premium_subscription")
