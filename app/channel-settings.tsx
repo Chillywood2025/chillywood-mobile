@@ -220,6 +220,13 @@ const formatRoomDefaultAccessLabel = (value: "open" | "party_pass" | "premium") 
   return "Open";
 };
 
+const formatChannelRoleLabel = (value?: UserChannelRole | null) => {
+  if (value === "creator") return "Creator";
+  if (value === "host") return "Host";
+  if (value === "viewer") return "Viewer";
+  return "";
+};
+
 const formatJoinPolicyLabel = (value: "open" | "locked") => (value === "locked" ? "Locked" : "Open");
 const formatReactionsPolicyLabel = (value: "enabled" | "muted") => (value === "muted" ? "Muted" : "Enabled");
 const formatCapturePolicyLabel = (value: "best_effort" | "host_managed") => (
@@ -1530,6 +1537,7 @@ export function ChannelStudioScreen() {
   const recentSafetyReportCount = typeof safetyAdminSummary?.recentSafetyReportCount === "number"
     ? safetyAdminSummary.recentSafetyReportCount
     : null;
+  const channelRoleLabel = formatChannelRoleLabel(profile?.channelRole ?? null);
   const snapshotCards: readonly {
     label: string;
     value: string;
@@ -1537,45 +1545,45 @@ export function ChannelStudioScreen() {
     tab: StudioTabId;
   }[] = [
     {
-      label: "Published Videos",
+      label: "Published",
       value: videosLoading ? "..." : String(publishedVideoCount),
-      body: publishedVideoCount ? "Public channel videos." : "No published videos yet.",
+      body: publishedVideoCount ? "Public videos" : "No public videos",
       tab: "content",
     },
     {
       label: "Drafts",
       value: videosLoading ? "..." : String(draftVideoCount),
-      body: draftVideoCount ? "Owner-only drafts." : "No drafts right now.",
+      body: draftVideoCount ? "Waiting to publish" : "No drafts",
       tab: "content",
     },
     {
-      label: "Upcoming Events",
+      label: "Events",
       value: eventsLoading ? "..." : String(upcomingEvents.length),
-      body: upcomingEvents.length ? "Scheduled channel events." : "No upcoming events yet.",
+      body: upcomingEvents.length ? "Upcoming" : "None scheduled",
       tab: "live",
     },
     ...(audienceFollowerCount == null ? [] : [{
       label: "Followers",
       value: String(audienceFollowerCount),
-      body: audienceFollowerCount ? "Channel follower relationships." : "No followers yet.",
+      body: audienceFollowerCount ? "Channel audience" : "No followers",
       tab: "audience" as const,
     }]),
     ...(pendingAudienceRequestCount == null ? [] : [{
-      label: "Audience Requests",
+      label: "Requests",
       value: String(pendingAudienceRequestCount),
-      body: pendingAudienceRequestCount ? "Requests need review." : "No audience requests right now.",
+      body: pendingAudienceRequestCount ? "Needs review" : "None waiting",
       tab: "audience" as const,
     }]),
     ...(blockedAudienceCount == null ? [] : [{
-      label: "Blocked Users",
+      label: "Blocks",
       value: String(blockedAudienceCount),
-      body: blockedAudienceCount ? "Blocked channel audience members." : "No blocked audience members.",
+      body: blockedAudienceCount ? "Blocked audience" : "No blocks",
       tab: "audience" as const,
     }]),
     ...(audienceSubscriberCount == null ? [] : [{
       label: "Subscribers",
       value: String(audienceSubscriberCount),
-      body: audienceSubscriberCount ? "Backed subscriber signal." : "No subscribers yet.",
+      body: audienceSubscriberCount ? "Backed signal" : "No subscribers",
       tab: "audience" as const,
     }]),
   ];
@@ -1911,7 +1919,7 @@ export function ChannelStudioScreen() {
 
     return (
       <TouchableOpacity
-        style={styles.studioActionButton}
+        style={[styles.studioActionButton, styles.studioActionButtonPrimary]}
         activeOpacity={0.86}
         onPress={() => {
           router.push({
@@ -1929,8 +1937,8 @@ export function ChannelStudioScreen() {
   const renderStudioHeader = () => (
     <View style={styles.studioHeaderCard}>
       <Text style={styles.heroTitle}>Channel Studio</Text>
-      <Text style={styles.studioSubtitle}>Run your channel, content, audience, and live events from one place.</Text>
-      <Text style={styles.studioClarifier}>Profile settings are separate. This Studio controls your public channel.</Text>
+      <Text style={styles.studioSubtitle}>Run your channel from one place.</Text>
+      <Text style={styles.studioClarifier}>Profile settings stay separate.</Text>
       {profile ? (
         <View style={styles.channelIdentityRow}>
           {profile.avatarUrl ? (
@@ -1942,8 +1950,11 @@ export function ChannelStudioScreen() {
           )}
           <View style={styles.channelIdentityCopy}>
             <Text style={styles.channelIdentityName} numberOfLines={1}>{channelName}</Text>
+            {channelRoleLabel ? (
+              <Text style={styles.channelRoleChip}>{channelRoleLabel}</Text>
+            ) : null}
             {channelTagline ? (
-              <Text style={styles.channelIdentityTagline} numberOfLines={2}>{channelTagline}</Text>
+              <Text style={styles.channelIdentityTagline} numberOfLines={1}>{channelTagline}</Text>
             ) : null}
           </View>
         </View>
@@ -1951,7 +1962,7 @@ export function ChannelStudioScreen() {
       <View style={styles.studioHeaderActions}>
         {renderPreviewChannelAction()}
         <TouchableOpacity
-          style={[styles.studioActionButton, styles.studioActionButtonPrimary]}
+          style={styles.studioActionButton}
           activeOpacity={0.88}
           onPress={() => setActiveStudioTab("brand")}
         >
@@ -2006,6 +2017,28 @@ export function ChannelStudioScreen() {
     >
       <Text style={styles.quickActionTitle}>{title}</Text>
       <Text style={styles.quickActionBody}>{body}</Text>
+    </TouchableOpacity>
+  );
+
+  const renderHomeActionCard = ({
+    title,
+    body,
+    onPress,
+    disabled = false,
+  }: {
+    title: string;
+    body?: string;
+    onPress?: () => void;
+    disabled?: boolean;
+  }) => (
+    <TouchableOpacity
+      style={[styles.homeActionCard, disabled && styles.homeActionCardDisabled]}
+      activeOpacity={0.86}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Text style={[styles.homeActionTitle, disabled && styles.homeActionTitleDisabled]}>{title}</Text>
+      {body ? <Text style={styles.homeActionBody} numberOfLines={2}>{body}</Text> : null}
     </TouchableOpacity>
   );
 
@@ -2064,69 +2097,74 @@ export function ChannelStudioScreen() {
 
   const renderStudioHomeTab = () => (
     <>
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Quick Actions</Text>
-          </View>
-        </View>
-        <View style={styles.quickActionGrid}>
-          {renderQuickActionCard({
-            title: "Upload",
-            body: "Open the backed creator upload flow.",
-            onPress: () => setActiveStudioTab("content"),
-          })}
-          {renderQuickActionCard({
-            title: "Go Live",
-            body: "Live launch controls will connect here when the live route is safely wired.",
-            disabled: true,
-          })}
-          {renderQuickActionCard({
-            title: "Schedule",
-            body: "Create or edit a backed channel event.",
-            onPress: () => setActiveStudioTab("live"),
-          })}
-          {renderQuickActionCard({
-            title: "Edit Brand",
-            body: "Update backed channel identity fields.",
-            onPress: () => setActiveStudioTab("brand"),
-          })}
-          {renderQuickActionCard({
-            title: "Audience",
-            body: "Review requests, followers, and blocks.",
-            onPress: () => setActiveStudioTab("audience"),
-          })}
-          {renderQuickActionCard({
-            title: "Insights",
-            body: "View backed channel signals.",
-            onPress: () => setActiveStudioTab("insights"),
-          })}
-        </View>
-      </View>
-
-      <View style={styles.panel}>
+      <View style={styles.dashboardPanel}>
         <View style={styles.panelHeader}>
           <View style={styles.panelHeaderCopy}>
             <Text style={styles.panelTitle}>Today’s Snapshot</Text>
           </View>
         </View>
-        <View style={styles.summaryGrid}>
+        <View style={styles.homeSnapshotGrid}>
           {snapshotCards.map((card) => (
             <TouchableOpacity
               key={card.label}
-              style={styles.summaryCard}
+              style={styles.homeSnapshotCard}
               activeOpacity={0.86}
               onPress={() => setActiveStudioTab(card.tab)}
             >
-              <Text style={styles.summaryLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
-              <Text style={styles.summaryBody}>{card.body}</Text>
+              <Text style={styles.homeSnapshotValue}>{card.value}</Text>
+              <Text style={styles.homeSnapshotLabel}>{card.label}</Text>
+              <Text style={styles.homeSnapshotBody} numberOfLines={1}>{card.body}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      <View style={styles.panel}>
+      <View style={styles.dashboardPanel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Quick Actions</Text>
+          </View>
+        </View>
+        <View style={styles.homeActionGrid}>
+          {renderHomeActionCard({
+            title: "Upload",
+            body: "Add video",
+            onPress: () => setActiveStudioTab("content"),
+          })}
+          {renderHomeActionCard({
+            title: "Content",
+            body: "Library",
+            onPress: () => setActiveStudioTab("content"),
+          })}
+          {renderHomeActionCard({
+            title: "Go Live",
+            body: "Not wired",
+            disabled: true,
+          })}
+          {renderHomeActionCard({
+            title: "Live",
+            body: "Events",
+            onPress: () => setActiveStudioTab("live"),
+          })}
+          {renderHomeActionCard({
+            title: "Audience",
+            body: "Requests",
+            onPress: () => setActiveStudioTab("audience"),
+          })}
+          {renderHomeActionCard({
+            title: "Insights",
+            body: "Signals",
+            onPress: () => setActiveStudioTab("insights"),
+          })}
+          {renderHomeActionCard({
+            title: "Brand",
+            body: "Identity",
+            onPress: () => setActiveStudioTab("brand"),
+          })}
+        </View>
+      </View>
+
+      <View style={styles.dashboardPanel}>
         <View style={styles.panelHeader}>
           <View style={styles.panelHeaderCopy}>
             <Text style={styles.panelTitle}>Needs Attention</Text>
@@ -2147,11 +2185,13 @@ export function ChannelStudioScreen() {
             ))}
           </View>
         ) : (
-          <Text style={styles.permissionCopy}>No urgent channel tasks right now.</Text>
+          <View style={styles.homeEmptyTaskCard}>
+            <Text style={styles.homeEmptyTaskText}>No urgent channel tasks right now.</Text>
+          </View>
         )}
       </View>
 
-      <View style={styles.panel}>
+      <View style={styles.dashboardPanel}>
         <View style={styles.panelHeader}>
           <View style={styles.panelHeaderCopy}>
             <Text style={styles.panelTitle}>Latest Content</Text>
@@ -2160,10 +2200,10 @@ export function ChannelStudioScreen() {
         {renderLatestContentCard()}
       </View>
 
-      <View style={[styles.panel, styles.roadmapPanel]}>
+      <View style={[styles.dashboardPanel, styles.roadmapPanel]}>
         <View style={styles.panelHeader}>
           <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Roadmap</Text>
+            <Text style={styles.roadmapTitle}>Later</Text>
           </View>
         </View>
         <View style={styles.roadmapList}>
@@ -3230,7 +3270,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: "#fff",
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "900",
   },
   heroBody: {
@@ -3241,45 +3281,45 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   studioHeaderCard: {
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(12,16,24,0.9)",
-    padding: 16,
-    gap: 12,
+    padding: 13,
+    gap: 9,
   },
   studioSubtitle: {
     color: "#D8E0F0",
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: "700",
   },
   studioClarifier: {
     color: "#98A5BD",
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: "700",
   },
   channelIdentityRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderRadius: 14,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 10,
+    padding: 9,
   },
   channelAvatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   channelAvatarFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(220,20,60,0.2)",
@@ -3288,7 +3328,7 @@ const styles = StyleSheet.create({
   },
   channelAvatarFallbackText: {
     color: "#fff",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "900",
   },
   channelIdentityCopy: {
@@ -3297,13 +3337,24 @@ const styles = StyleSheet.create({
   },
   channelIdentityName: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  channelRoleChip: {
+    alignSelf: "flex-start",
+    overflow: "hidden",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    color: "#D6F8FF",
+    backgroundColor: "rgba(126,215,255,0.14)",
+    fontSize: 10.5,
     fontWeight: "900",
   },
   channelIdentityTagline: {
     color: "#B8C2D7",
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: "600",
   },
   studioHeaderActions: {
@@ -3315,11 +3366,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: "46%",
     minWidth: 132,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
-    paddingVertical: 11,
-    gap: 3,
+    paddingVertical: 10,
+    gap: 2,
   },
   studioActionButtonPrimary: {
     borderColor: "rgba(220,20,60,0.45)",
@@ -3402,6 +3453,91 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: "700",
   },
+  homeActionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  homeActionCard: {
+    flexBasis: "30%",
+    flexGrow: 1,
+    minWidth: 96,
+    minHeight: 64,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    justifyContent: "center",
+    gap: 4,
+  },
+  homeActionCardDisabled: {
+    opacity: 0.52,
+  },
+  homeActionTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  homeActionTitleDisabled: {
+    color: "#BBC3D5",
+  },
+  homeActionBody: {
+    color: "#98A4BC",
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: "800",
+  },
+  homeSnapshotGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+  },
+  homeSnapshotCard: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 132,
+    minHeight: 82,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    justifyContent: "center",
+    gap: 3,
+  },
+  homeSnapshotValue: {
+    color: "#F3F6FF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  homeSnapshotLabel: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  homeSnapshotBody: {
+    color: "#93A0B8",
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: "700",
+  },
+  homeEmptyTaskCard: {
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  homeEmptyTaskText: {
+    color: "#AEB8CE",
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
   attentionCard: {
     borderRadius: 14,
     borderWidth: 1,
@@ -3423,6 +3559,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   latestContentCard: {
+    flexDirection: "row",
+    alignItems: "stretch",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
@@ -3430,12 +3568,13 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   latestContentThumb: {
-    width: "100%",
-    height: 154,
+    width: 118,
+    height: 126,
     backgroundColor: "#080A10",
   },
   latestContentFallback: {
-    height: 154,
+    width: 118,
+    height: 126,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(220,20,60,0.16)",
@@ -3447,8 +3586,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   latestContentBody: {
+    flex: 1,
     padding: 12,
-    gap: 10,
+    gap: 8,
+    justifyContent: "space-between",
   },
   latestContentTitleRow: {
     flexDirection: "row",
@@ -3459,14 +3600,14 @@ const styles = StyleSheet.create({
   latestContentTitle: {
     flex: 1,
     color: "#fff",
-    fontSize: 16,
-    lineHeight: 21,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: "900",
   },
   latestContentDescription: {
     color: "#AEB8CE",
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: "600",
   },
   contentStatusChip: {
@@ -3488,15 +3629,21 @@ const styles = StyleSheet.create({
   },
   roadmapPanel: {
     borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(10,14,22,0.74)",
+    backgroundColor: "rgba(10,14,22,0.56)",
+    paddingVertical: 11,
   },
   roadmapList: {
-    gap: 7,
+    gap: 5,
+  },
+  roadmapTitle: {
+    color: "#B8C2D7",
+    fontSize: 13,
+    fontWeight: "900",
   },
   roadmapItem: {
-    color: "#AEB8CE",
-    fontSize: 12,
-    lineHeight: 17,
+    color: "#8F9AB1",
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: "700",
   },
   brandActionRow: {
@@ -3731,6 +3878,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(12,16,24,0.9)",
     padding: 16,
+  },
+  dashboardPanel: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(12,16,24,0.84)",
+    padding: 13,
   },
   creatorContentPanel: {
     borderColor: "rgba(220,20,60,0.26)",
