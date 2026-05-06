@@ -178,6 +178,22 @@ export default function PublicChannelScreen() {
     }
     return stats;
   }, [events.length, followerCount, videos.length]);
+  const channelPulseCards = useMemo(() => {
+    const cards: { label: string; value: string }[] = [
+      { label: "Videos", value: String(videos.length) },
+      { label: "Events", value: String(events.length) },
+    ];
+    if (followerCount !== null) {
+      cards.unshift({ label: "Followers", value: String(followerCount) });
+    }
+    if (featuredVideo) {
+      cards.push({
+        label: formatDate(featuredVideo.createdAt) || "Published",
+        value: "Latest Upload",
+      });
+    }
+    return cards;
+  }, [events.length, featuredVideo, followerCount, videos.length]);
 
   const aboutItems = useMemo(() => {
     if (!channel) return [];
@@ -371,8 +387,8 @@ export default function PublicChannelScreen() {
                 </Text>
               )}
             </View>
-            {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
             <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Channel"}</Text>
+            {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
               {visibleStats.map((stat) => (
@@ -407,8 +423,8 @@ export default function PublicChannelScreen() {
             <Text style={styles.actionButtonText}>Share</Text>
           </TouchableOpacity>
           {!isOwner ? (
-            <TouchableOpacity style={styles.actionButton} activeOpacity={0.86} onPress={openReport}>
-              <Text style={styles.actionButtonText}>Report</Text>
+            <TouchableOpacity style={[styles.actionButton, styles.actionButtonReport]} activeOpacity={0.86} onPress={openReport}>
+              <Text style={styles.actionButtonReportText}>Report</Text>
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity style={styles.actionButton} activeOpacity={0.86} onPress={openProfile}>
@@ -424,22 +440,41 @@ export default function PublicChannelScreen() {
     );
   };
 
-  const renderVideoCard = (video: CreatorVideo, featured = false) => (
-    <View key={video.id} style={[styles.videoCard, featured ? styles.featuredVideoCard : styles.latestVideoCard]}>
-      <View style={[styles.videoThumb, featured ? styles.featuredVideoThumb : styles.latestVideoThumb]}>
+  const renderChannelPulse = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.pulseScroll}
+      contentContainerStyle={styles.pulseRow}
+    >
+      {channelPulseCards.map((card) => (
+        <View key={`${card.value}-${card.label}`} style={styles.pulseCard}>
+          <Text style={styles.pulseValue}>{card.value}</Text>
+          <Text style={styles.pulseLabel}>{card.label}</Text>
+        </View>
+      ))}
+    </ScrollView>
+  );
+
+  const renderFeaturedVideoCard = (video: CreatorVideo) => (
+    <View key={video.id} style={styles.featuredSpotlightCard}>
+      <View style={styles.featuredSpotlightMedia}>
         {video.thumbnailUrl ? (
           <Image source={{ uri: video.thumbnailUrl }} resizeMode="cover" style={styles.videoThumbImage} />
         ) : (
-          <View style={styles.videoThumbFallback}>
+          <View style={styles.featuredSpotlightFallback}>
             <Text style={styles.videoThumbInitial}>{video.title.slice(0, 1).toUpperCase()}</Text>
           </View>
         )}
+        <View style={styles.mediaScrim} />
+        <View style={styles.featuredMediaFooter}>
+          <Text style={styles.cardKicker}>Latest from this channel</Text>
+          <Text style={styles.featuredCardTitle} numberOfLines={2}>{video.title}</Text>
+        </View>
       </View>
-      <View style={styles.videoCopy}>
-        {featured ? <Text style={styles.cardKicker}>Latest from this channel</Text> : null}
-        <Text style={[styles.cardTitle, featured && styles.featuredCardTitle]} numberOfLines={2}>{video.title}</Text>
+      <View style={styles.featuredSpotlightCopy}>
         {video.description ? (
-          <Text style={styles.cardBody} numberOfLines={featured ? 3 : 2}>{video.description}</Text>
+          <Text style={styles.cardBody} numberOfLines={3}>{video.description}</Text>
         ) : null}
         <View style={styles.metaRow}>
           {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
@@ -452,13 +487,40 @@ export default function PublicChannelScreen() {
     </View>
   );
 
+  const renderLatestUploadCard = (video: CreatorVideo) => (
+    <View key={video.id} style={styles.shelfCard}>
+      <View style={styles.shelfThumb}>
+        {video.thumbnailUrl ? (
+          <Image source={{ uri: video.thumbnailUrl }} resizeMode="cover" style={styles.videoThumbImage} />
+        ) : (
+          <View style={styles.videoThumbFallback}>
+            <Text style={styles.videoThumbInitial}>{video.title.slice(0, 1).toUpperCase()}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.shelfCopy}>
+        <Text style={styles.shelfTitle} numberOfLines={2}>{video.title}</Text>
+        {video.description ? (
+          <Text style={styles.shelfBody} numberOfLines={2}>{video.description}</Text>
+        ) : null}
+        <View style={styles.metaRow}>
+          {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
+          <Text style={styles.publicChip}>Public</Text>
+        </View>
+        <TouchableOpacity style={styles.shelfPlayButton} activeOpacity={0.86} onPress={() => openPlayer(video)}>
+          <Text style={styles.playButtonText}>Play</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   const renderFeatured = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Featured</Text>
       {featuredVideo ? (
-        renderVideoCard(featuredVideo, true)
+        renderFeaturedVideoCard(featuredVideo)
       ) : (
-        <View style={[styles.emptyCard, styles.featuredEmptyCard]}>
+        <View style={[styles.emptyCard, styles.featuredEmptyCard, styles.spotlightEmptyCard]}>
           <Text style={styles.emptyText}>This channel has not published videos yet.</Text>
           {isOwner ? (
             <TouchableOpacity style={styles.emptySecondaryButton} activeOpacity={0.86} onPress={openStudio}>
@@ -474,9 +536,14 @@ export default function PublicChannelScreen() {
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Latest Uploads</Text>
       {videos.length ? (
-        <View style={styles.listStack}>
-          {videos.map((video) => renderVideoCard(video))}
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.shelfScroll}
+          contentContainerStyle={styles.shelfRow}
+        >
+          {videos.map((video) => renderLatestUploadCard(video))}
+        </ScrollView>
       ) : (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>No public uploads yet.</Text>
@@ -491,7 +558,7 @@ export default function PublicChannelScreen() {
       {events.length ? (
         <View style={styles.listStack}>
           {events.map((event) => (
-            <View key={event.id} style={styles.eventCard}>
+            <View key={event.id} style={styles.programmingCard}>
               <Text style={styles.cardKicker}>{formatEventStatus(event)}</Text>
               <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
               <Text style={styles.cardBody}>{formatEventDate(event.startsAt)}</Text>
@@ -502,7 +569,7 @@ export default function PublicChannelScreen() {
           ))}
         </View>
       ) : (
-        <View style={styles.emptyCard}>
+        <View style={[styles.emptyCard, styles.programmingEmptyCard]}>
           <Text style={styles.emptyText}>No upcoming live events yet.</Text>
         </View>
       )}
@@ -560,6 +627,7 @@ export default function PublicChannelScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {renderBackHeader()}
         {renderHero()}
+        {renderChannelPulse()}
         {renderFeatured()}
         {renderLatestUploads()}
         {renderEvents()}
@@ -638,24 +706,24 @@ const styles = StyleSheet.create({
   },
   hero: {
     marginHorizontal: 18,
-    borderRadius: 24,
+    borderRadius: 26,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: "rgba(255,255,255,0.16)",
     backgroundColor: "#0B1018",
     shadowColor: "#000",
-    shadowOpacity: 0.32,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 8,
+    shadowOpacity: 0.38,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 10,
   },
   heroBackdrop: {
-    minHeight: 336,
+    minHeight: 352,
     justifyContent: "flex-end",
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(4,7,13,0.68)",
+    backgroundColor: "rgba(3,6,12,0.7)",
   },
   heroContent: {
     paddingHorizontal: 22,
@@ -685,8 +753,8 @@ const styles = StyleSheet.create({
   },
   channelName: {
     color: "#F8FAFF",
-    fontSize: 35,
-    lineHeight: 40,
+    fontSize: 37,
+    lineHeight: 42,
     fontWeight: "900",
   },
   channelTagline: {
@@ -716,7 +784,7 @@ const styles = StyleSheet.create({
   statPill: {
     minWidth: 88,
     flexGrow: 1,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
     backgroundColor: "rgba(8,11,18,0.62)",
@@ -764,8 +832,17 @@ const styles = StyleSheet.create({
   actionButtonSecondary: {
     backgroundColor: "rgba(255,255,255,0.12)",
   },
+  actionButtonReport: {
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+  },
+  actionButtonReportText: {
+    color: "#9AA7BC",
+    fontSize: 13,
+    fontWeight: "900",
+  },
   actionButtonOwner: {
-    backgroundColor: "rgba(220,20,60,0.12)",
+    backgroundColor: "#DC143C",
     borderColor: "rgba(220,20,60,0.45)",
   },
   actionButtonDisabled: {
@@ -782,9 +859,36 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   actionButtonOwnerText: {
-    color: "#FFE6EC",
+    color: "#fff",
     fontSize: 13,
     fontWeight: "900",
+  },
+  pulseScroll: {
+    marginTop: 14,
+  },
+  pulseRow: {
+    paddingHorizontal: 18,
+    gap: 10,
+  },
+  pulseCard: {
+    minWidth: 116,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.11)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  pulseValue: {
+    color: "#F8FAFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  pulseLabel: {
+    color: "#96A5BE",
+    fontSize: 10.5,
+    fontWeight: "800",
+    marginTop: 2,
   },
   section: {
     marginTop: 26,
@@ -846,6 +950,43 @@ const styles = StyleSheet.create({
     padding: 17,
     gap: 10,
   },
+  featuredSpotlightCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.28)",
+    backgroundColor: "#10141D",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 7,
+  },
+  featuredSpotlightMedia: {
+    width: "100%",
+    aspectRatio: 16 / 9.4,
+    justifyContent: "flex-end",
+    backgroundColor: "#171D29",
+  },
+  featuredSpotlightFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#171D29",
+  },
+  mediaScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(4,6,11,0.34)",
+  },
+  featuredMediaFooter: {
+    padding: 18,
+    gap: 7,
+  },
+  featuredSpotlightCopy: {
+    padding: 17,
+    gap: 11,
+    backgroundColor: "#0E131C",
+  },
   cardKicker: {
     color: "#7ED7FF",
     fontSize: 11,
@@ -859,8 +1000,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   featuredCardTitle: {
-    fontSize: 21,
-    lineHeight: 27,
+    color: "#F8FAFF",
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
   },
   cardBody: {
     color: "#AEB9CF",
@@ -897,10 +1040,67 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 2,
   },
+  shelfScroll: {
+    marginHorizontal: -18,
+  },
+  shelfRow: {
+    paddingHorizontal: 18,
+    gap: 12,
+  },
+  shelfCard: {
+    width: 282,
+    minHeight: 378,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#10141D",
+    overflow: "hidden",
+  },
+  shelfThumb: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#171D29",
+  },
+  shelfCopy: {
+    flex: 1,
+    padding: 14,
+    gap: 9,
+    justifyContent: "space-between",
+  },
+  shelfTitle: {
+    color: "#F8FAFF",
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "900",
+  },
+  shelfBody: {
+    color: "#AEB9CF",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  shelfPlayButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: "auto",
+  },
   playButtonText: {
     color: "#080A10",
     fontSize: 13,
     fontWeight: "900",
+  },
+  programmingCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(126,215,255,0.18)",
+    backgroundColor: "rgba(14,20,30,0.96)",
+    padding: 17,
+    gap: 9,
   },
   eventCard: {
     borderRadius: 18,
@@ -910,11 +1110,16 @@ const styles = StyleSheet.create({
     padding: 17,
     gap: 9,
   },
+  programmingEmptyCard: {
+    minHeight: 112,
+    borderColor: "rgba(126,215,255,0.15)",
+    backgroundColor: "rgba(14,20,30,0.86)",
+  },
   aboutCard: {
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "#10141D",
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(16,20,29,0.72)",
     paddingHorizontal: 17,
     paddingVertical: 4,
   },
@@ -950,6 +1155,10 @@ const styles = StyleSheet.create({
   },
   featuredEmptyCard: {
     minHeight: 190,
+  },
+  spotlightEmptyCard: {
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(18,14,22,0.96)",
   },
   emptyText: {
     color: "#AEB9CF",
