@@ -1456,6 +1456,7 @@ export async function resolveMonetizationAccess(options: {
   accessKey?: string | null;
   plan?: UserPlan | null;
   targetHint?: MonetizationTargetId | null;
+  strictEntitlementRequired?: boolean;
 }): Promise<ContentAccessDecision> {
   const runtime = getAppMonetizationRuntimeFeatures();
   const accessRule = normalizeMonetizationAccessRule(options.accessRule);
@@ -1475,13 +1476,13 @@ export async function resolveMonetizationAccess(options: {
     )
     : [];
   const backendEntitledTargetIds = buildBackendEntitledTargetIds(policy, backendEntitlements);
-  const monetization = mergePremiumTestBypassIntoGate(
-    mergeBackendEntitlementsIntoGate(
-      buildMonetizationGateResolution(snapshot, policy),
-      backendEntitledTargetIds,
-    ),
-    policy,
+  const entitlementBackedGate = mergeBackendEntitlementsIntoGate(
+    buildMonetizationGateResolution(snapshot, policy),
+    backendEntitledTargetIds,
   );
+  const monetization = options.strictEntitlementRequired
+    ? entitlementBackedGate
+    : mergePremiumTestBypassIntoGate(entitlementBackedGate, policy);
   const hasTrustedEntitlement = monetization.entitledTargetIds.length > 0;
   const plan: UserPlan = hasTrustedEntitlement && monetization.entitledTargetIds.includes("premium_subscription")
     ? {
@@ -1499,8 +1500,10 @@ export async function resolveMonetizationAccess(options: {
 
   if (accessRule === "premium") {
     if (
-      !FEATURE_FLAGS.monetization.subscriptions
-      || !runtime.premiumEnabled
+      (!options.strictEntitlementRequired && (
+        !FEATURE_FLAGS.monetization.subscriptions
+        || !runtime.premiumEnabled
+      ))
       || hasTrustedEntitlement
     ) {
       return {
@@ -1529,8 +1532,10 @@ export async function resolveMonetizationAccess(options: {
 
   if (accessRule === "party_pass") {
     if (
-      !FEATURE_FLAGS.monetization.partyPass
-      || !runtime.partyPassEnabled
+      (!options.strictEntitlementRequired && (
+        !FEATURE_FLAGS.monetization.partyPass
+        || !runtime.partyPassEnabled
+      ))
       || hasTrustedEntitlement
     ) {
       return {

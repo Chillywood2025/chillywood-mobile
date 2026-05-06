@@ -15,8 +15,14 @@ import {
     resolveBrandingConfig,
     resolveFeatureConfig,
     resolveHomeConfig,
+    resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
+import {
+    LIVE_FIRST_PREMIUM_UPSELL_COPY,
+    requireLiveFirstPremium,
+    type PremiumWatchPartyFeatureAccessDecision,
+} from "../../_lib/premiumWatchPartyAccess";
 
 import {
     ActivityIndicator,
@@ -41,6 +47,7 @@ import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
 import { readCreatorVideosForOwners, type CreatorVideo } from "../../_lib/creatorVideos";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
+import { AccessSheet } from "../../components/monetization/access-sheet";
 
 type TitleRow = Omit<
   Pick<
@@ -133,9 +140,12 @@ export default function HomeScreen() {
   const [followingVideos, setFollowingVideos] = useState<CreatorVideo[]>([]);
   const [followingFeedLoading, setFollowingFeedLoading] = useState(true);
   const [followingFeedError, setFollowingFeedError] = useState<string | null>(null);
+  const [liveFirstPremiumGate, setLiveFirstPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
+  const [liveFirstPremiumSheetVisible, setLiveFirstPremiumSheetVisible] = useState(false);
   const homeConfig = resolveHomeConfig(appConfig);
   const brandingConfig = resolveBrandingConfig(appConfig);
   const featureConfig = resolveFeatureConfig(appConfig);
+  const monetizationConfig = resolveMonetizationConfig(appConfig);
   const maxRailItems = Math.max(1, homeConfig.maxItemsPerRail || 8);
   const canShowContinueWatching = featureConfig.continueWatchingEnabled && homeConfig.enabledRails.continue_watching;
 
@@ -450,7 +460,15 @@ export default function HomeScreen() {
     });
   }
 
-  function openWatchParty() {
+  async function openWatchParty() {
+    const access = await requireLiveFirstPremium({ accessKey: "home-live-entry" }).catch(() => null);
+    if (!access?.allowed) {
+      if (access) setLiveFirstPremiumGate(access);
+      setLiveFirstPremiumSheetVisible(true);
+      return;
+    }
+
+    setLiveFirstPremiumGate(null);
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
   }
 
@@ -960,6 +978,17 @@ export default function HomeScreen() {
         </ScrollView>
       )}
     </View>
+    <AccessSheet
+      visible={liveFirstPremiumSheetVisible}
+      reason="premium_required"
+      gate={liveFirstPremiumGate}
+      appDisplayName={brandingConfig.appDisplayName}
+      premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+      premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+      titleOverride={LIVE_FIRST_PREMIUM_UPSELL_COPY.title}
+      bodyOverride={LIVE_FIRST_PREMIUM_UPSELL_COPY.message}
+      onClose={() => setLiveFirstPremiumSheetVisible(false)}
+    />
     </ImageBackground>
   );
 }

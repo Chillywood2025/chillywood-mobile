@@ -9,6 +9,13 @@ import {
   sanitizeCreatorRoomAccessRule,
 } from "./monetization";
 import {
+  LIVE_FIRST_PREMIUM_UPSELL_COPY,
+  WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
+  requireLiveFirstPremium,
+  requireWatchPartyLivePremium,
+  type PremiumWatchPartyFeatureAccessDecision,
+} from "./premiumWatchPartyAccess";
+import {
   buildRoomCapabilities,
   deriveWatchPartyStageRole,
   evaluateRoomAccess,
@@ -367,6 +374,42 @@ const toCreateError = (
     payload,
   };
 };
+
+const resolvePremiumAccessKeyForRoom = (room: Pick<WatchPartyState, "partyId" | "roomType" | "titleId" | "sourceId">) => {
+  if (room.roomType === "live") return room.partyId || "live-first";
+  return room.sourceId || room.titleId || room.partyId || "watch-party-live";
+};
+
+const requirePremiumAccessForRoomType = async (
+  roomType: WatchPartyRoomType,
+  accessKey: string | null | undefined,
+): Promise<PremiumWatchPartyFeatureAccessDecision> => (
+  roomType === "live"
+    ? requireLiveFirstPremium({ accessKey: accessKey || "live-first" })
+    : requireWatchPartyLivePremium({ accessKey: accessKey || "watch-party-live" })
+);
+
+const requirePremiumAccessForRoom = async (room: WatchPartyState) => (
+  requirePremiumAccessForRoomType(room.roomType, resolvePremiumAccessKeyForRoom(room))
+);
+
+const toPremiumRoomCreateError = (
+  roomType: WatchPartyRoomType,
+  access: PremiumWatchPartyFeatureAccessDecision,
+  payload: Record<string, unknown>,
+): WatchPartyCreateError => ({
+  code: access.reason,
+  message: roomType === "live"
+    ? LIVE_FIRST_PREMIUM_UPSELL_COPY.message
+    : WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message,
+  details: null,
+  hint: null,
+  payload: {
+    ...payload,
+    requiresPremium: true,
+    monetizationReason: access.reason,
+  },
+});
 
 async function getAuthBackedUserId(): Promise<string | null> {
   try {
@@ -747,6 +790,38 @@ export async function createPartyRoom(
     return { error: explicitError };
   }
 
+  const premiumAccessKey = requestedRoomType === "live"
+    ? requestedHostUserId || resolvedHostUserId || "live-first"
+    : creatorVideoSourceId || resolvedTitleId || platformTitleRequestId || "watch-party-live";
+  const premiumAccess = await requirePremiumAccessForRoomType(requestedRoomType, premiumAccessKey).catch(() => null);
+  if (!premiumAccess?.allowed) {
+    return {
+      error: premiumAccess
+        ? toPremiumRoomCreateError(requestedRoomType, premiumAccess, {
+          requestedRoomType,
+          premiumAccessKey,
+          requestedTitleId,
+          requestedSourceType,
+          requestedSourceId,
+        })
+        : toCreateError(
+          {
+            code: "premium_required",
+            message: requestedRoomType === "live"
+              ? LIVE_FIRST_PREMIUM_UPSELL_COPY.message
+              : WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message,
+          },
+          {
+            requestedRoomType,
+            premiumAccessKey,
+            requestedTitleId,
+            requestedSourceType,
+            requestedSourceId,
+          },
+        ),
+    };
+  }
+
   let lastError: WatchPartyCreateError | null = null;
 
   try {
@@ -984,6 +1059,11 @@ export async function evaluatePartyRoomAccess(options: {
 }
 
 export async function joinPartyRoomSession(options: MembershipUpsertOptions): Promise<WatchPartyRoomMembership | null> {
+  const room = await getPartyRoom(options.partyId).catch(() => null);
+  if (!room) return null;
+  const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
+  if (!premiumAccess?.allowed) return null;
+
   return upsertMembership({
     ...options,
     membershipState: "active",
@@ -993,6 +1073,11 @@ export async function joinPartyRoomSession(options: MembershipUpsertOptions): Pr
 }
 
 export async function touchPartyRoomSession(options: MembershipUpsertOptions): Promise<WatchPartyRoomMembership | null> {
+  const room = await getPartyRoom(options.partyId).catch(() => null);
+  if (!room) return null;
+  const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
+  if (!premiumAccess?.allowed) return null;
+
   return upsertMembership({
     ...options,
     membershipState: options.membershipState ?? "active",
@@ -1019,6 +1104,10 @@ export async function setPartyRoomPolicies(
   const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
   const writableUserId = await getWritablePartyUserId();
   if (!normalizedPartyId || !writableUserId) return null;
+  const room = await getPartyRoom(normalizedPartyId).catch(() => null);
+  if (!room) return null;
+  const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
+  if (!premiumAccess?.allowed) return null;
   const creatorPermissions = await readCreatorPermissions(writableUserId).catch(() => null);
 
   const now = new Date().toISOString();
@@ -1058,6 +1147,10 @@ export async function setPartyParticipantState(
   const normalizedTargetUserId = String(targetUserId ?? "").trim();
   const writableUserId = await getWritablePartyUserId();
   if (!normalizedPartyId || !normalizedTargetUserId || !writableUserId) return null;
+  const room = await getPartyRoom(normalizedPartyId).catch(() => null);
+  if (!room) return null;
+  const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
+  if (!premiumAccess?.allowed) return null;
 
   const now = new Date().toISOString();
   const updates: PartyMembershipUpdate = {

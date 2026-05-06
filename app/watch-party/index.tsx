@@ -33,6 +33,9 @@ import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
 import {
+  LIVE_FIRST_PREMIUM_UPSELL_COPY,
+  WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
+  requireLiveFirstPremium,
   requireWatchPartyLivePremium,
   type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
@@ -69,6 +72,10 @@ type IncomingHandoff = {
   sourceType: WatchPartyContentSourceType | null;
   sourceId: string | null;
 };
+
+type PremiumLiveUpsellCopy =
+  | typeof LIVE_FIRST_PREMIUM_UPSELL_COPY
+  | typeof WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY;
 
 const getWaitingRoomPreviewTitle = (preview: RoomPreview) => {
   if (preview.titleName) return preview.titleName;
@@ -188,6 +195,7 @@ export default function WatchPartyIndexScreen() {
   const [pendingAccessDecision, setPendingAccessDecision] = useState<RoomAccessResolution | null>(null);
   const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
+  const [watchPartyPremiumSheetCopy, setWatchPartyPremiumSheetCopy] = useState<PremiumLiveUpsellCopy>(WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
@@ -258,33 +266,40 @@ export default function WatchPartyIndexScreen() {
     return { room, titleName };
   }, []);
 
-  const requireWatchPartyLiveEntry = useCallback(async (accessKey: string | null | undefined) => {
+  const requirePremiumRoomEntry = useCallback(async (
+    roomType: WatchPartyRoomType,
+    accessKey: string | null | undefined,
+  ) => {
     const safeAccessKey = String(accessKey ?? "").trim();
-    const access = await requireWatchPartyLivePremium({ accessKey: safeAccessKey }).catch(() => null);
+    const isLiveRoom = roomType === "live";
+    const copy = isLiveRoom ? LIVE_FIRST_PREMIUM_UPSELL_COPY : WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY;
+    const access = await (isLiveRoom ? requireLiveFirstPremium : requireWatchPartyLivePremium)({
+      accessKey: safeAccessKey || (isLiveRoom ? "live-first" : "watch-party-live"),
+    }).catch(() => null);
     if (access?.allowed) {
       setWatchPartyPremiumGate(null);
       return true;
     }
 
     if (access) setWatchPartyPremiumGate(access);
+    setWatchPartyPremiumSheetCopy(copy);
     setWatchPartyPremiumSheetVisible(true);
     trackEvent("monetization_gate_shown", {
       surface: "watch-party-waiting-room",
       reason: access?.reason ?? "premium_required",
-      accessKey: safeAccessKey || "watch-party-live",
+      accessKey: safeAccessKey || (isLiveRoom ? "live-first" : "watch-party-live"),
     });
     return false;
   }, []);
 
   useEffect(() => {
     if (!canUseBetaRooms || !configReady || !features.watchPartyEnabled) return;
-    if (isLiveEntryMode && !isPlayerWatchPartyLiveFlow) return;
-
-    void requireWatchPartyLiveEntry(
+    void requirePremiumRoomEntry(
+      isLiveEntryMode && !isPlayerWatchPartyLiveFlow ? "live" : "title",
       initialRouteSourceId
       || initialRouteTitleId
       || initialLookupId
-      || "watch-party-live",
+      || (isLiveEntryMode && !isPlayerWatchPartyLiveFlow ? "live-first" : "watch-party-live"),
     );
   }, [
     canUseBetaRooms,
@@ -295,7 +310,7 @@ export default function WatchPartyIndexScreen() {
     initialRouteTitleId,
     isLiveEntryMode,
     isPlayerWatchPartyLiveFlow,
-    requireWatchPartyLiveEntry,
+    requirePremiumRoomEntry,
   ]);
 
   useEffect(() => {
@@ -345,7 +360,7 @@ export default function WatchPartyIndexScreen() {
     sourceOptions?: { sourceType?: WatchPartyContentSourceType | null; sourceId?: string | null },
   ): Promise<RoomPreview | null> => {
     if (!canUseBetaRooms) return null;
-    if (roomType !== "live" && !(await requireWatchPartyLiveEntry(sourceOptions?.sourceId ?? titleId))) return null;
+    if (!(await requirePremiumRoomEntry(roomType, sourceOptions?.sourceId ?? titleId))) return null;
     const hostUserId = await getSafePartyUserId();
     const room = await createPartyRoom(titleId, hostUserId, 0, "paused", {
       roomType,
@@ -365,7 +380,7 @@ export default function WatchPartyIndexScreen() {
     });
     setHostLabel("You are hosting");
     return nextPreparedRoom;
-  }, [buildRoomPreview, canUseBetaRooms, requireWatchPartyLiveEntry]);
+  }, [buildRoomPreview, canUseBetaRooms, requirePremiumRoomEntry]);
 
   useEffect(() => {
     if (!canUseBetaRooms) return;
@@ -597,10 +612,10 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    if (
-      nextPreview.room.roomType !== "live"
-      && !(await requireWatchPartyLiveEntry(nextPreview.room.sourceId ?? nextPreview.room.titleId ?? nextPartyId))
-    ) {
+    if (!(await requirePremiumRoomEntry(
+      nextPreview.room.roomType,
+      nextPreview.room.sourceId ?? nextPreview.room.titleId ?? nextPartyId,
+    ))) {
       return;
     }
 
@@ -645,7 +660,7 @@ export default function WatchPartyIndexScreen() {
     }
 
     setJoinError(getWatchPartyRoomAccessMessage(access));
-  }, [navigateToPreviewRoom, requireWatchPartyLiveEntry]);
+  }, [navigateToPreviewRoom, requirePremiumRoomEntry]);
 
   const onConfirmJoin = async () => {
     if (!preview) return;
@@ -684,12 +699,14 @@ export default function WatchPartyIndexScreen() {
       }).catch(() => null);
 
       if (access?.isAllowed) {
-        if (
-          refreshedPreview.room.roomType !== "live"
-          && !(await requireWatchPartyLiveEntry(refreshedPreview.room.sourceId ?? refreshedPreview.room.titleId ?? accessKey))
-        ) {
+        if (!(await requirePremiumRoomEntry(
+          refreshedPreview.room.roomType,
+          refreshedPreview.room.sourceId ?? refreshedPreview.room.titleId ?? accessKey,
+        ))) {
           return {
-            message: "Watch-Party Live still needs Premium access on this account.",
+            message: refreshedPreview.room.roomType === "live"
+              ? "Live rooms still need Premium access on this account."
+              : "Watch-Party Live still needs Premium access on this account.",
             tone: "error" as const,
           };
         }
@@ -753,7 +770,7 @@ export default function WatchPartyIndexScreen() {
         tone: "error" as const,
       };
     }
-  }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview, requireWatchPartyLiveEntry]);
+  }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview, requirePremiumRoomEntry]);
 
   const onCreateRoom = async () => {
     if (!features.watchPartyEnabled) {
@@ -784,10 +801,10 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    if (
-      activeWaitingRoomType !== "live"
-      && !(await requireWatchPartyLiveEntry(effectiveSourceId ?? effectiveTitleId ?? preparedTargetPartyId))
-    ) {
+    if (!(await requirePremiumRoomEntry(
+      activeWaitingRoomType,
+      effectiveSourceId ?? effectiveTitleId ?? preparedTargetPartyId,
+    ))) {
       return;
     }
 
@@ -1412,8 +1429,8 @@ export default function WatchPartyIndexScreen() {
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
           kickerOverride={watchPartyPremiumGatePresentation?.kicker}
-          titleOverride={watchPartyPremiumGatePresentation?.title}
-          bodyOverride={watchPartyPremiumGatePresentation?.body}
+          titleOverride={watchPartyPremiumSheetCopy.title}
+          bodyOverride={watchPartyPremiumSheetCopy.message}
           actionLabelOverride={watchPartyPremiumGatePresentation?.actionLabel}
           onPurchaseResult={(result) => {
             if (!result.ok) {

@@ -128,6 +128,26 @@ const resolveRoomMonetizationTargetHint = (room: RoomPolicyLike): MonetizationTa
   return "premium_subscription";
 };
 
+const resolveFullPremiumRoomMonetizationTargetHint = (room: RoomPolicyLike): MonetizationTargetId => {
+  const roomType = String(room.roomType ?? "").trim().toLowerCase();
+  if (roomType === "live") return "premium_live_access";
+  if (roomType === "title") return "premium_watch_party_access";
+
+  const linkedRoomMode = String(room.linkedRoomMode ?? "").trim().toLowerCase();
+  if (linkedRoomMode === "live") return "premium_live_access";
+  if (linkedRoomMode === "hybrid") return "premium_watch_party_access";
+
+  return "premium_subscription";
+};
+
+const isFullLiveOrWatchPartyRoom = (room: RoomPolicyLike) => {
+  const roomType = String(room.roomType ?? "").trim().toLowerCase();
+  if (roomType === "live" || roomType === "title") return true;
+
+  const linkedRoomMode = String(room.linkedRoomMode ?? "").trim().toLowerCase();
+  return linkedRoomMode === "live" || linkedRoomMode === "hybrid";
+};
+
 export async function evaluateRoomAccess(options: {
   partyId: string;
   room: RoomPolicyLike;
@@ -136,6 +156,8 @@ export async function evaluateRoomAccess(options: {
 }): Promise<RoomAccessDecision> {
   const joinPolicy = normalizeJoinPolicy(options.room.joinPolicy);
   const contentAccessRule = normalizeContentAccessRule(options.room.contentAccessRule);
+  const requiresFullPremium = isFullLiveOrWatchPartyRoom(options.room);
+  const effectiveContentAccessRule: ContentAccessRule = requiresFullPremium ? "premium" : contentAccessRule;
   const capturePolicy = normalizeCapturePolicy(options.room.capturePolicy);
   const emptyMonetization = createEmptyMonetizationGateResolution();
   const isHost = String(options.room.hostUserId ?? "").trim() === String(options.membership?.userId ?? "").trim();
@@ -147,7 +169,7 @@ export async function evaluateRoomAccess(options: {
       canJoin: false,
       reason: "identity_required",
       joinPolicy,
-      contentAccessRule,
+      contentAccessRule: effectiveContentAccessRule,
       capturePolicy,
       requiresAuthIdentity: true,
       monetization: emptyMonetization,
@@ -159,7 +181,7 @@ export async function evaluateRoomAccess(options: {
       canJoin: false,
       reason: "removed",
       joinPolicy,
-      contentAccessRule,
+      contentAccessRule: effectiveContentAccessRule,
       capturePolicy,
       requiresAuthIdentity: true,
       monetization: emptyMonetization,
@@ -171,7 +193,7 @@ export async function evaluateRoomAccess(options: {
       canJoin: false,
       reason: "room_locked",
       joinPolicy,
-      contentAccessRule,
+      contentAccessRule: effectiveContentAccessRule,
       capturePolicy,
       requiresAuthIdentity: true,
       monetization: emptyMonetization,
@@ -179,7 +201,26 @@ export async function evaluateRoomAccess(options: {
   }
 
   let monetization = emptyMonetization;
-  if (!isHost && contentAccessRule !== "open") {
+  if (requiresFullPremium) {
+    const monetizationAccess = await resolveMonetizationAccess({
+      accessRule: "premium",
+      accessKey: options.partyId,
+      targetHint: resolveFullPremiumRoomMonetizationTargetHint(options.room),
+      strictEntitlementRequired: true,
+    });
+    monetization = monetizationAccess.monetization;
+    if (!monetizationAccess.allowed) {
+      return {
+        canJoin: false,
+        reason: monetizationAccess.reason,
+        joinPolicy,
+        contentAccessRule: effectiveContentAccessRule,
+        capturePolicy,
+        requiresAuthIdentity: true,
+        monetization,
+      };
+    }
+  } else if (!isHost && contentAccessRule !== "open") {
     const monetizationAccess = await resolveMonetizationAccess({
       accessRule: contentAccessRule,
       accessKey: options.partyId,
@@ -191,7 +232,7 @@ export async function evaluateRoomAccess(options: {
         canJoin: false,
         reason: monetizationAccess.reason,
         joinPolicy,
-        contentAccessRule,
+        contentAccessRule: effectiveContentAccessRule,
         capturePolicy,
         requiresAuthIdentity: true,
         monetization,
@@ -203,7 +244,7 @@ export async function evaluateRoomAccess(options: {
     canJoin: true,
     reason: "allowed",
     joinPolicy,
-    contentAccessRule,
+    contentAccessRule: effectiveContentAccessRule,
     capturePolicy,
     requiresAuthIdentity: true,
     monetization,

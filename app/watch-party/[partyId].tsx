@@ -69,6 +69,9 @@ import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
 import {
+    LIVE_FIRST_PREMIUM_UPSELL_COPY,
+    WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
+    requireLiveFirstPremium,
     requireWatchPartyLivePremium,
     type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
@@ -141,6 +144,11 @@ type MonetizationGate =
   | {
       source: "room";
       access: RoomAccessResolution;
+      accessKey: string;
+    }
+  | {
+      source: "live_first";
+      access: PremiumWatchPartyFeatureAccessDecision;
       accessKey: string;
     }
   | {
@@ -221,13 +229,19 @@ const getRoomAccessGateBody = (access: Pick<RoomAccessResolution, "label"> | nul
 );
 
 const getAccessGateTitle = (gate: MonetizationGate) => (
-  gate.source === "watch_party_live" ? "Premium access required" : getRoomAccessGateTitle(gate.access)
+  gate.source === "live_first"
+    ? LIVE_FIRST_PREMIUM_UPSELL_COPY.title
+    : gate.source === "watch_party_live"
+      ? WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.title
+      : getRoomAccessGateTitle(gate.access)
 );
 
 const getAccessGateBody = (gate: MonetizationGate) => (
-  gate.source === "watch_party_live"
-    ? "Watch-Party Live requires Premium before this room can open, join, or start a session from a direct route."
-    : getRoomAccessGateBody(gate.access)
+  gate.source === "live_first"
+    ? LIVE_FIRST_PREMIUM_UPSELL_COPY.message
+    : gate.source === "watch_party_live"
+      ? WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message
+      : getRoomAccessGateBody(gate.access)
 );
 
 const getRoomAccessMessage = (access: Pick<RoomAccessResolution, "reason" | "label"> | null | undefined) => {
@@ -623,29 +637,34 @@ export default function WatchPartyRoomScreen() {
         }
 
         resolvedRoomForBootstrap = true;
-        if (snapshot.room.roomType === "title") {
-          const premiumAccessKey = String(snapshot.room.sourceId ?? snapshot.room.titleId ?? snapshot.room.partyId ?? partyId).trim();
-          const premiumAccess = await requireWatchPartyLivePremium({ accessKey: premiumAccessKey }).catch(() => null);
-          if (cancelled) return;
+        const premiumAccessSource = snapshot.room.roomType === "live" ? "live_first" : "watch_party_live";
+        const premiumAccessKey = String(
+          snapshot.room.roomType === "live"
+            ? snapshot.room.partyId ?? partyId
+            : snapshot.room.sourceId ?? snapshot.room.titleId ?? snapshot.room.partyId ?? partyId,
+        ).trim();
+        const premiumAccess = await (
+          premiumAccessSource === "live_first" ? requireLiveFirstPremium : requireWatchPartyLivePremium
+        )({ accessKey: premiumAccessKey }).catch(() => null);
+        if (cancelled) return;
 
-          if (!premiumAccess?.allowed) {
-            if (premiumAccess) {
-              setAccessGate({
-                source: "watch_party_live",
-                access: premiumAccess,
-                accessKey: premiumAccessKey || snapshot.room.partyId,
-              });
-            }
-            setAccessSheetVisible(true);
-            setRoom(snapshot.room);
-            setLoading(false);
-            trackEvent("monetization_gate_shown", {
-              surface: "watch-party-room",
-              reason: premiumAccess?.reason ?? "premium_required",
-              roomId: snapshot.room.partyId,
+        if (!premiumAccess?.allowed) {
+          if (premiumAccess) {
+            setAccessGate({
+              source: premiumAccessSource,
+              access: premiumAccess,
+              accessKey: premiumAccessKey || snapshot.room.partyId,
             });
-            return;
           }
+          setAccessSheetVisible(true);
+          setRoom(snapshot.room);
+          setLoading(false);
+          trackEvent("monetization_gate_shown", {
+            surface: "watch-party-room",
+            reason: premiumAccess?.reason ?? "premium_required",
+            roomId: snapshot.room.partyId,
+          });
+          return;
         }
 
         syncRoomFromSnapshot(snapshot, userId);
@@ -1366,8 +1385,10 @@ export default function WatchPartyRoomScreen() {
     }
 
     try {
-      if (accessGate.source === "watch_party_live") {
-        const access = await requireWatchPartyLivePremium({ accessKey: accessGate.accessKey }).catch(() => null);
+      if (accessGate.source === "live_first" || accessGate.source === "watch_party_live") {
+        const access = await (
+          accessGate.source === "live_first" ? requireLiveFirstPremium : requireWatchPartyLivePremium
+        )({ accessKey: accessGate.accessKey }).catch(() => null);
         if (access?.allowed) {
           trackEvent("monetization_unlock_success", {
             action,
@@ -1391,7 +1412,10 @@ export default function WatchPartyRoomScreen() {
             access,
           });
         }
-        const message = access?.monetization.issues[0] ?? "Watch-Party Live still needs Premium access on this account.";
+        const message = access?.monetization.issues[0]
+          ?? (accessGate.source === "live_first"
+            ? "Live rooms still need Premium access on this account."
+            : "Watch-Party Live still needs Premium access on this account.");
         trackEvent("monetization_unlock_failure", {
           action,
           surface: "watch-party-room",
@@ -1495,6 +1519,24 @@ export default function WatchPartyRoomScreen() {
 
     if (!nextPartyId || !targetSourceId) {
       Alert.alert("Unable to go live", "This room is missing required watch-party context.");
+      return;
+    }
+
+    const premiumAccess = await requireWatchPartyLivePremium({ accessKey: targetSourceId || nextPartyId }).catch(() => null);
+    if (!premiumAccess?.allowed) {
+      if (premiumAccess) {
+        setAccessGate({
+          source: "watch_party_live",
+          access: premiumAccess,
+          accessKey: targetSourceId || nextPartyId,
+        });
+      }
+      setAccessSheetVisible(true);
+      trackEvent("monetization_gate_shown", {
+        surface: "party-room-watch-party-live",
+        reason: premiumAccess?.reason ?? "premium_required",
+        roomId: nextPartyId,
+      });
       return;
     }
 
@@ -1948,13 +1990,18 @@ export default function WatchPartyRoomScreen() {
     );
   }
 
-  if (accessGate?.source === "room" && room) {
+  if (accessGate && room) {
     const accessGatePresentation = getMonetizationAccessSheetPresentation({
       gate: accessGate.access,
       appDisplayName: branding.appDisplayName,
       premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
       premiumUpsellBody: monetizationConfig.premiumUpsellBody,
     });
+    const accessGateUpsellCopy = accessGate.source === "live_first"
+      ? LIVE_FIRST_PREMIUM_UPSELL_COPY
+      : accessGate.source === "watch_party_live"
+        ? WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY
+        : null;
     return (
         <View style={styles.center}>
           <View style={styles.errorCard}>
@@ -1992,8 +2039,8 @@ export default function WatchPartyRoomScreen() {
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
           deferredMonetization
           kickerOverride={accessGatePresentation.kicker}
-          titleOverride={accessGatePresentation.title}
-          bodyOverride={accessGatePresentation.body}
+          titleOverride={accessGateUpsellCopy?.title ?? accessGatePresentation.title}
+          bodyOverride={accessGateUpsellCopy?.message ?? accessGatePresentation.body}
           actionLabelOverride={accessGatePresentation.actionLabel}
           onPurchaseResult={(result) => {
             if (!result.ok) {
@@ -2079,6 +2126,11 @@ export default function WatchPartyRoomScreen() {
         premiumUpsellBody: monetizationConfig.premiumUpsellBody,
       })
     : null;
+  const accessGateUpsellCopy = accessGate?.source === "live_first"
+    ? LIVE_FIRST_PREMIUM_UPSELL_COPY
+    : accessGate?.source === "watch_party_live"
+      ? WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY
+      : null;
   const partyRoomTitleContext = getSafeRoomTitleLabel(titleName, room, "Selected Title");
   const partyRoomSourceType = resolveWatchPartySourceType(room);
   const partyRoomSourceId = resolveWatchPartySourceId(room);
@@ -2924,8 +2976,8 @@ export default function WatchPartyRoomScreen() {
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
           deferredMonetization
           kickerOverride={accessGatePresentation?.kicker}
-          titleOverride={accessGatePresentation?.title}
-          bodyOverride={accessGatePresentation?.body}
+          titleOverride={accessGateUpsellCopy?.title ?? accessGatePresentation?.title}
+          bodyOverride={accessGateUpsellCopy?.message ?? accessGatePresentation?.body}
           actionLabelOverride={accessGatePresentation?.actionLabel}
           onPurchaseResult={(result) => {
             if (!result.ok) {

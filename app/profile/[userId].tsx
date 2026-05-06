@@ -48,6 +48,7 @@ import {
   type CreatorPermissionSet,
 } from "../../_lib/monetization";
 import {
+  WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
   requireWatchPartyLivePremium,
   type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
@@ -3910,8 +3911,8 @@ export default function ProfileScreen() {
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
           kickerOverride={watchPartyGatePresentation?.kicker}
-          titleOverride={watchPartyGatePresentation?.title}
-          bodyOverride={watchPartyGatePresentation?.body}
+          titleOverride={WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.title}
+          bodyOverride={WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message}
           actionLabelOverride={watchPartyGatePresentation?.actionLabel}
           onPurchaseResult={(result) => {
             if (!result.ok) {

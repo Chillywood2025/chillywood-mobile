@@ -46,6 +46,9 @@ import {
   getMonetizationAccessSheetPresentation,
 } from "../../../_lib/monetization";
 import {
+    LIVE_FIRST_PREMIUM_UPSELL_COPY,
+    LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY,
+    requireLiveFirstPremium,
     requireLiveWatchPartyPremium,
     type PremiumWatchPartyFeatureAccessDecision,
 } from "../../../_lib/premiumWatchPartyAccess";
@@ -176,7 +179,7 @@ const getLiveStageAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | 
   if (access?.reason === "room_locked") return "Live room locked";
   if (access?.reason === "removed") return "Live room access removed";
   if (access?.reason === "identity_required") return "Sign in required";
-  if (access?.reason === "premium_required") return "Premium access required";
+  if (access?.reason === "premium_required") return LIVE_FIRST_PREMIUM_UPSELL_COPY.title;
   if (access?.reason === "party_pass_required") return "Party Pass required";
   return "Live room access unavailable";
 };
@@ -188,7 +191,7 @@ const getLiveStageAccessBody = (access: Pick<RoomAccessResolution, "reason" | "l
     return "Sign in before entering Live Stage so room membership, moderation, and reconnect truth stay reliable.";
   }
   if (access?.reason === "premium_required") {
-    return "Premium access is required before this live room can open from the direct Live Stage route.";
+    return LIVE_FIRST_PREMIUM_UPSELL_COPY.message;
   }
   if (access?.reason === "party_pass_required") {
     return "Party Pass access is required before this live room can open from the direct Live Stage route.";
@@ -585,6 +588,7 @@ export default function WatchPartyLiveStageScreen() {
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
   const [liveWatchPartyPremiumGate, setLiveWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [liveWatchPartyAccessSheetVisible, setLiveWatchPartyAccessSheetVisible] = useState(false);
+  const [livePremiumGateKind, setLivePremiumGateKind] = useState<"live_first" | "live_watch_party">("live_watch_party");
   const [roomMissing, setRoomMissing] = useState(false);
   const [roomEntryError, setRoomEntryError] = useState("");
   const [participants, setParticipants] = useState<StageParticipant[]>([]);
@@ -673,6 +677,7 @@ export default function WatchPartyLiveStageScreen() {
     setLiveKitJoinContract(null);
     setBlockedRoomAccess(null);
     setLiveWatchPartyPremiumGate(null);
+    setLivePremiumGateKind("live_watch_party");
     setLiveWatchPartyAccessSheetVisible(false);
     setRoomMissing(false);
     setRoomEntryError("");
@@ -780,22 +785,35 @@ export default function WatchPartyLiveStageScreen() {
     }));
   }, [buildStageParticipantsFromPresence, canUseBetaStage, myUserId, myUsername, participantStateById, partyId]);
 
-  const requireHybridModePremium = useCallback(async (surface: "toggle" | "route") => {
-    const access = await requireLiveWatchPartyPremium({ accessKey: partyId }).catch(() => null);
+  const requireLiveStagePremium = useCallback(async (
+    feature: "live_first" | "live_watch_party",
+    surface: "toggle" | "route",
+  ) => {
+    const access = await (feature === "live_first" ? requireLiveFirstPremium : requireLiveWatchPartyPremium)({
+      accessKey: partyId,
+    }).catch(() => null);
     if (access?.allowed) {
       setLiveWatchPartyPremiumGate(null);
       return true;
     }
 
     if (access) setLiveWatchPartyPremiumGate(access);
+    setLivePremiumGateKind(feature);
     setLiveWatchPartyAccessSheetVisible(true);
     trackEvent("monetization_gate_shown", {
-      surface: surface === "route" ? "live-stage-route-hybrid" : "live-stage-mode-toggle",
+      surface: surface === "route"
+        ? (feature === "live_first" ? "live-stage-route-live" : "live-stage-route-hybrid")
+        : (feature === "live_first" ? "live-stage-entry" : "live-stage-mode-toggle"),
       reason: access?.reason ?? "premium_required",
       roomId: partyId,
     });
     return false;
   }, [partyId]);
+
+  const requireHybridModePremium = useCallback(
+    (surface: "toggle" | "route") => requireLiveStagePremium("live_watch_party", surface),
+    [requireLiveStagePremium],
+  );
 
   const updateStageMode = useCallback(async (nextMode: SharedRoomMode) => {
     if (nextMode === "hybrid" && !(await requireHybridModePremium("toggle"))) {
@@ -2404,6 +2422,11 @@ export default function WatchPartyLiveStageScreen() {
   ]);
 
   const onEnterLiveStage = useCallback(async () => {
+    if (!(await requireLiveStagePremium(stageMode === "hybrid" ? "live_watch_party" : "live_first", "route"))) {
+      setLiveKitJoinContract(null);
+      return;
+    }
+
     if (liveKitFoundationEnabled && partyId) {
       const participantRole = await resolveLiveKitStageEntryRole();
       const joinResult = await prepareLiveKitJoinBoundary({
@@ -2455,6 +2478,7 @@ export default function WatchPartyLiveStageScreen() {
     closeStageOverlayPanels,
     liveKitFoundationEnabled,
     partyId,
+    requireLiveStagePremium,
     resolveLiveKitStageEntryRole,
     resolvedCurrentUsername,
     room?.roomCode,
@@ -3540,6 +3564,9 @@ export default function WatchPartyLiveStageScreen() {
         premiumUpsellBody: monetizationConfig.premiumUpsellBody,
       })
     : null;
+  const livePremiumGateCopy = livePremiumGateKind === "live_first"
+    ? LIVE_FIRST_PREMIUM_UPSELL_COPY
+    : LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY;
 
   if (authLoading || betaLoading) {
     return (
@@ -4316,8 +4343,8 @@ export default function WatchPartyLiveStageScreen() {
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
           kickerOverride={liveWatchPartyGatePresentation?.kicker}
-          titleOverride={liveWatchPartyGatePresentation?.title}
-          bodyOverride={liveWatchPartyGatePresentation?.body}
+          titleOverride={livePremiumGateCopy.title}
+          bodyOverride={livePremiumGateCopy.message}
           actionLabelOverride={liveWatchPartyGatePresentation?.actionLabel}
           onPurchaseResult={(result) => {
             if (!result.ok) {

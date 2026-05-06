@@ -19,6 +19,7 @@ import {
   type TitleAccessRule,
 } from "../../_lib/monetization";
 import {
+  WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
   requireWatchPartyLivePremium,
   type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
@@ -815,8 +816,8 @@ export default function TitleDetails() {
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
           kickerOverride={watchPartyAccessSheetPresentation?.kicker}
-          titleOverride={watchPartyAccessSheetPresentation?.title}
-          bodyOverride={watchPartyAccessSheetPresentation?.body}
+          titleOverride={WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.title}
+          bodyOverride={WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message}
           actionLabelOverride={watchPartyAccessSheetPresentation?.actionLabel}
           onPurchaseResult={(result) => {
             if (!result.ok) {
