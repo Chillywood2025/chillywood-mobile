@@ -371,9 +371,9 @@ export default function PublicChannelScreen() {
                 </Text>
               )}
             </View>
-            <Text style={styles.channelName}>{channel.displayName || "Untitled Channel"}</Text>
-            {channel.tagline ? <Text style={styles.channelTagline}>{channel.tagline}</Text> : null}
             {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
+            <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Channel"}</Text>
+            {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
               {visibleStats.map((stat) => (
                 <View key={stat.label} style={styles.statPill}>
@@ -390,6 +390,7 @@ export default function PublicChannelScreen() {
             <TouchableOpacity
               style={[
                 styles.actionButton,
+                styles.actionButtonWide,
                 viewerFollowState === "following" ? styles.actionButtonSecondary : styles.actionButtonPrimary,
                 followBusy && styles.actionButtonDisabled,
               ]}
@@ -414,8 +415,8 @@ export default function PublicChannelScreen() {
             <Text style={styles.actionButtonText}>View Profile</Text>
           </TouchableOpacity>
           {isOwner ? (
-            <TouchableOpacity style={[styles.actionButton, styles.actionButtonPrimary]} activeOpacity={0.86} onPress={openStudio}>
-              <Text style={styles.actionButtonTextPrimary}>Open Channel Studio</Text>
+            <TouchableOpacity style={[styles.actionButton, styles.actionButtonWide, styles.actionButtonOwner]} activeOpacity={0.86} onPress={openStudio}>
+              <Text style={styles.actionButtonOwnerText}>Open Channel Studio</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -424,18 +425,22 @@ export default function PublicChannelScreen() {
   };
 
   const renderVideoCard = (video: CreatorVideo, featured = false) => (
-    <View key={video.id} style={styles.videoCard}>
-      <View style={styles.videoThumb}>
+    <View key={video.id} style={[styles.videoCard, featured ? styles.featuredVideoCard : styles.latestVideoCard]}>
+      <View style={[styles.videoThumb, featured ? styles.featuredVideoThumb : styles.latestVideoThumb]}>
         {video.thumbnailUrl ? (
-          <Image source={{ uri: video.thumbnailUrl }} style={styles.videoThumbImage} />
+          <Image source={{ uri: video.thumbnailUrl }} resizeMode="cover" style={styles.videoThumbImage} />
         ) : (
-          <Text style={styles.videoThumbInitial}>{video.title.slice(0, 1).toUpperCase()}</Text>
+          <View style={styles.videoThumbFallback}>
+            <Text style={styles.videoThumbInitial}>{video.title.slice(0, 1).toUpperCase()}</Text>
+          </View>
         )}
       </View>
       <View style={styles.videoCopy}>
         {featured ? <Text style={styles.cardKicker}>Latest from this channel</Text> : null}
-        <Text style={styles.cardTitle}>{video.title}</Text>
-        {video.description ? <Text style={styles.cardBody} numberOfLines={3}>{video.description}</Text> : null}
+        <Text style={[styles.cardTitle, featured && styles.featuredCardTitle]} numberOfLines={2}>{video.title}</Text>
+        {video.description ? (
+          <Text style={styles.cardBody} numberOfLines={featured ? 3 : 2}>{video.description}</Text>
+        ) : null}
         <View style={styles.metaRow}>
           {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
           <Text style={styles.publicChip}>Public</Text>
@@ -453,8 +458,13 @@ export default function PublicChannelScreen() {
       {featuredVideo ? (
         renderVideoCard(featuredVideo, true)
       ) : (
-        <View style={styles.emptyCard}>
+        <View style={[styles.emptyCard, styles.featuredEmptyCard]}>
           <Text style={styles.emptyText}>This channel has not published videos yet.</Text>
+          {isOwner ? (
+            <TouchableOpacity style={styles.emptySecondaryButton} activeOpacity={0.86} onPress={openStudio}>
+              <Text style={styles.emptySecondaryButtonText}>Open Channel Studio</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
     </View>
@@ -483,7 +493,7 @@ export default function PublicChannelScreen() {
           {events.map((event) => (
             <View key={event.id} style={styles.eventCard}>
               <Text style={styles.cardKicker}>{formatEventStatus(event)}</Text>
-              <Text style={styles.cardTitle}>{event.eventTitle}</Text>
+              <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
               <Text style={styles.cardBody}>{formatEventDate(event.startsAt)}</Text>
               {event.reminder.canSetReminder ? (
                 <Text style={styles.metaText}>Reminder ready</Text>
@@ -504,8 +514,14 @@ export default function PublicChannelScreen() {
       <Text style={styles.sectionTitle}>About</Text>
       {aboutItems.length ? (
         <View style={styles.aboutCard}>
-          {aboutItems.map((item) => (
-            <View key={item.label} style={styles.aboutRow}>
+          {aboutItems.map((item, index) => (
+            <View
+              key={item.label}
+              style={[
+                styles.aboutRow,
+                index < aboutItems.length - 1 ? styles.aboutRowDivider : null,
+              ]}
+            >
               <Text style={styles.aboutLabel}>{item.label}</Text>
               <Text style={styles.aboutValue}>{item.value}</Text>
             </View>
@@ -570,7 +586,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#07080D",
   },
   content: {
-    paddingBottom: 34,
+    paddingBottom: 40,
   },
   navBar: {
     minHeight: 92,
@@ -584,10 +600,10 @@ const styles = StyleSheet.create({
   navButton: {
     width: 42,
     height: 42,
-    borderRadius: 21,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
@@ -604,16 +620,16 @@ const styles = StyleSheet.create({
   navStudioButton: {
     minWidth: 72,
     minHeight: 42,
-    borderRadius: 21,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(220,20,60,0.2)",
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.14)",
     paddingHorizontal: 14,
   },
   navStudioText: {
-    color: "#FFE7EC",
+    color: "#F8FAFF",
     fontSize: 13,
     fontWeight: "900",
   },
@@ -622,34 +638,41 @@ const styles = StyleSheet.create({
   },
   hero: {
     marginHorizontal: 18,
-    borderRadius: 8,
+    borderRadius: 24,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "#11141D",
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "#0B1018",
+    shadowColor: "#000",
+    shadowOpacity: 0.32,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
   },
   heroBackdrop: {
-    minHeight: 370,
+    minHeight: 336,
     justifyContent: "flex-end",
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(4,6,12,0.58)",
+    backgroundColor: "rgba(4,7,13,0.68)",
   },
   heroContent: {
-    padding: 24,
-    gap: 12,
+    paddingHorizontal: 22,
+    paddingTop: 78,
+    paddingBottom: 20,
+    gap: 11,
   },
   avatarWrap: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
+    width: 94,
+    height: 94,
+    borderRadius: 47,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.16)",
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.28)",
+    borderColor: "rgba(255,255,255,0.38)",
   },
   avatarImage: {
     width: "100%",
@@ -657,20 +680,21 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     color: "#F8FAFF",
-    fontSize: 34,
+    fontSize: 36,
     fontWeight: "900",
   },
   channelName: {
     color: "#F8FAFF",
-    fontSize: 34,
-    lineHeight: 39,
+    fontSize: 35,
+    lineHeight: 40,
     fontWeight: "900",
   },
   channelTagline: {
-    color: "#DCE5F5",
+    color: "#D7E2F3",
     fontSize: 15,
     lineHeight: 22,
     fontWeight: "700",
+    maxWidth: 780,
   },
   rolePill: {
     alignSelf: "flex-start",
@@ -678,25 +702,26 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    color: "#BFFFE8",
-    backgroundColor: "rgba(57,217,138,0.14)",
+    color: "#D6F8FF",
+    backgroundColor: "rgba(126,215,255,0.18)",
     fontSize: 12,
     fontWeight: "900",
   },
   statsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginTop: 4,
+    gap: 9,
+    marginTop: 8,
   },
   statPill: {
-    minWidth: 92,
-    borderRadius: 8,
+    minWidth: 88,
+    flexGrow: 1,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(8,11,18,0.62)",
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 11,
   },
   statValue: {
     color: "#F8FAFF",
@@ -704,7 +729,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   statLabel: {
-    color: "#AEB9CF",
+    color: "#B7C1D2",
     fontSize: 11,
     fontWeight: "800",
     marginTop: 2,
@@ -712,27 +737,36 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    gap: 9,
+    padding: 16,
+    backgroundColor: "#0A0D14",
   },
   actionButton: {
     minHeight: 44,
-    borderRadius: 8,
+    minWidth: 118,
+    flexGrow: 1,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(255,255,255,0.07)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
+  actionButtonWide: {
+    flexBasis: "100%",
+  },
   actionButtonPrimary: {
     backgroundColor: "#DC143C",
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.18)",
   },
   actionButtonSecondary: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  actionButtonOwner: {
+    backgroundColor: "rgba(220,20,60,0.12)",
+    borderColor: "rgba(220,20,60,0.45)",
   },
   actionButtonDisabled: {
     opacity: 0.7,
@@ -747,36 +781,61 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
+  actionButtonOwnerText: {
+    color: "#FFE6EC",
+    fontSize: 13,
+    fontWeight: "900",
+  },
   section: {
-    marginTop: 22,
+    marginTop: 26,
     paddingHorizontal: 18,
-    gap: 12,
+    gap: 14,
   },
   sectionTitle: {
     color: "#F8FAFF",
-    fontSize: 22,
+    fontSize: 23,
+    lineHeight: 29,
     fontWeight: "900",
   },
   listStack: {
     gap: 12,
   },
   videoCard: {
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "#10131B",
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#10141D",
     overflow: "hidden",
+  },
+  featuredVideoCard: {
+    backgroundColor: "#111824",
+    borderColor: "rgba(126,215,255,0.18)",
+  },
+  latestVideoCard: {
+    backgroundColor: "#0F131C",
   },
   videoThumb: {
     width: "100%",
-    aspectRatio: 16 / 9,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#191F2B",
+    backgroundColor: "#171D29",
+  },
+  featuredVideoThumb: {
+    aspectRatio: 16 / 9.6,
+  },
+  latestVideoThumb: {
+    aspectRatio: 16 / 9,
   },
   videoThumbImage: {
     width: "100%",
     height: "100%",
+  },
+  videoThumbFallback: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#171D29",
   },
   videoThumbInitial: {
     color: "#F8FAFF",
@@ -784,12 +843,13 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   videoCopy: {
-    padding: 16,
+    padding: 17,
     gap: 10,
   },
   cardKicker: {
     color: "#7ED7FF",
     fontSize: 11,
+    letterSpacing: 0,
     fontWeight: "900",
   },
   cardTitle: {
@@ -797,6 +857,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
     fontWeight: "900",
+  },
+  featuredCardTitle: {
+    fontSize: 21,
+    lineHeight: 27,
   },
   cardBody: {
     color: "#AEB9CF",
@@ -811,7 +875,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metaText: {
-    color: "#91A0BA",
+    color: "#95A5BF",
     fontSize: 12,
     fontWeight: "800",
   },
@@ -826,11 +890,12 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   playButton: {
-    minHeight: 44,
-    borderRadius: 8,
+    minHeight: 46,
+    borderRadius: 12,
     backgroundColor: "#F8FAFF",
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 2,
   },
   playButtonText: {
     color: "#080A10",
@@ -838,26 +903,31 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   eventCard: {
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "#10131B",
-    padding: 16,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#10141D",
+    padding: 17,
     gap: 9,
   },
   aboutCard: {
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "#10131B",
-    padding: 16,
-    gap: 14,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#10141D",
+    paddingHorizontal: 17,
+    paddingVertical: 4,
   },
   aboutRow: {
     gap: 5,
+    paddingVertical: 14,
+  },
+  aboutRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   aboutLabel: {
-    color: "#91A0BA",
+    color: "#95A5BF",
     fontSize: 11,
     fontWeight: "900",
   },
@@ -868,14 +938,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   emptyCard: {
-    minHeight: 92,
-    borderRadius: 8,
+    minHeight: 118,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "#10131B",
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#10141D",
     alignItems: "center",
     justifyContent: "center",
-    padding: 18,
+    padding: 20,
+    gap: 12,
+  },
+  featuredEmptyCard: {
+    minHeight: 190,
   },
   emptyText: {
     color: "#AEB9CF",
@@ -884,13 +958,28 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
+  emptySecondaryButton: {
+    minHeight: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.45)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  emptySecondaryButtonText: {
+    color: "#FFE6EC",
+    fontSize: 13,
+    fontWeight: "900",
+  },
   loadingCard: {
     margin: 18,
     minHeight: 180,
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "#10131B",
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#10141D",
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
@@ -903,10 +992,10 @@ const styles = StyleSheet.create({
   unavailableCard: {
     margin: 18,
     minHeight: 230,
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "#10131B",
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#10141D",
     justifyContent: "center",
     padding: 20,
     gap: 12,
@@ -924,7 +1013,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     minHeight: 46,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: "#DC143C",
     alignItems: "center",
     justifyContent: "center",
