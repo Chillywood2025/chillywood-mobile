@@ -43,6 +43,11 @@ Do not:
 - `Live Watch-Party`: the home-screen product-flow label and the social live-viewing mode inside Live Room.
 - `Watch-Party Live`: the title/player-driven watch-together flow label.
 - `Profile`: Chi'llywood's social identity hub for creator identity, community activity, and public/private content relationships.
+- `Channel`: the public mini streaming platform/network for a user's creator uploads, public videos, events, live/watch-party context, and backed shelves.
+- `Channel Studio`: the owner-only creator operating system for running a Channel. The preferred owner route is `/channel-studio`; `/channel-settings` remains compatibility.
+- `Follow`: a one-way channel audience relationship, not personal friendship.
+- `Chi'lly Circle`: a mutual personal connection/friendship layer, separate from Follow and separate from channel subscribers.
+- `Subscriber`: a later monetized channel supporter/member relationship, separate from account-tier Premium and separate from Chi'lly Circle.
 - `Rachi`: Chi'llywood's official platform-owned seeded account, concierge presence, and moderation-ready official persona inside the same canonical profile/channel and Chi'lly Chat system.
 - `Like`: a first-class content relationship showing affinity for a title or creator surface when policy allows it.
 - `Share / Repost`: a first-class content relationship for redistributing or signaling content when policy allows it.
@@ -121,7 +126,12 @@ MVP truth:
 - viewing another user's profile should support opening or creating a direct Chi'lly Chat thread
 - profile surfaces should naturally connect with Chi'lly Chat, watch-party coordination, live communication, and broader social identity
 - Profile is personal/social identity; Channel is the creator's own mini streaming platform for that creator's uploads, videos, events, live/watch-party content, and backed shelves
+- Public Channel lives at `/channel/[userId]` and is viewer-facing
+- Channel Studio lives at `/channel-studio` and is owner-only
+- `/channel-settings` remains a compatibility route for the owner Studio
+- Profile `View Channel` should route to `/channel/[userId]`; Studio `Preview Channel` should route to `/channel/[ownUserId]`
 - Chi'llywood Originals/platform titles must stay on Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not as filler inside user/creator Channels
+- Public Channel must never leak owner controls, drafts, private videos, unpublished content, analytics/admin controls, or management actions to non-owners
 - the base profile experience must remain meaningful even when a user never builds out a fuller creator platform layer
 - photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction are approved profile/channel depth
 - future profile/channel depth must extend the same native Chi'llywood profile system instead of inventing a disconnected second app or parallel creator identity

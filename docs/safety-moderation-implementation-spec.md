@@ -1,5 +1,7 @@
 # Chi'llywood Safety / Moderation Workflow Implementation Spec
 
+2026-05-06 current-route note: creator/channel safety summaries belong in owner Channel Studio on `/channel-studio`; `/channel-settings` remains compatibility. Public Channel on `/channel/[userId]` may open public-safe report intake but must not expose moderation/admin controls.
+
 ## 1. Purpose And Scope
 This document defines Chi'llywood's safety / moderation workflow deepening chapter.
 
@@ -15,7 +17,7 @@ It exists to:
 
 This spec does not:
 - change route truth
-- create `/studio*` routes
+- create extra studio route families beyond pushed `/channel-studio`
 - invent fake enforcement systems
 - invent fake strikes, dispute flows, appeal queues, or viewer audit systems
 - change schema directly
@@ -25,8 +27,10 @@ This spec does not:
 ### 2.1 Locked Route Truth
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
-| `/channel-settings` | `app/channel-settings.tsx` | Canonical creator-side control center. May show creator/channel safety summary truth, but is not the platform moderation queue. |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel route. May open honest report intake, but is not a creator moderation console. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator-side control center. May show creator/channel safety summary truth, but is not the platform moderation queue. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. May open honest report intake, but is not a creator moderation console. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. May open honest public-safe report intake, but must not expose owner/admin controls. |
 | `/title/[id]` | `app/title/[id].tsx` | Canonical title detail route. May open honest report intake for title-owned context. |
 | `/chat/[threadId]` | `app/chat/[threadId].tsx` | Canonical Chi'lly Chat thread route. May open honest report intake for message/thread context. |
 | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Canonical Party Room route. May open honest report intake for party-room context. |
@@ -37,8 +41,10 @@ This spec does not:
 Do not create route proliferation in this chapter.
 
 ### 2.2 Product Rules To Preserve
-- `/channel-settings` remains the creator-side owner for channel safety summary truth, not the global moderation queue.
-- `/profile/[userId]` remains the public identity/channel route and must not become a creator moderation console.
+- `/channel-studio` remains the creator-side owner for channel safety summary truth, not the global moderation queue.
+- `/channel-settings` remains compatibility for older owner Studio links.
+- `/profile/[userId]` remains the personal/social Profile route and must not become a creator moderation console.
+- `/channel/[userId]` remains the public Channel route and must not expose owner/admin safety controls.
 - Report submission must remain grounded in actual target, route, and audit context.
 - Official-platform identity truth and operator-role truth must remain separate but interoperable.
 - Audience block truth is audience-management truth, not a substitute for platform moderation review.
@@ -242,7 +248,7 @@ The next narrow implementation lanes in this chapter, if supported by audit trut
 - `_lib/moderation.ts` for helper normalization or narrowly scoped operator actions
 - `_lib/channelReadModels.ts` for creator summary normalization
 - `app/admin.tsx` for operator workflow adoption
-- `app/channel-settings.tsx` for creator-side summary adoption only where honest
+- `app/channel-settings.tsx` / `/channel-studio` for creator-side summary adoption only where honest
 
 Do not create a broad new moderation subsystem owner unless the audit proves the current owners cannot carry the next narrow workflow truth.
 

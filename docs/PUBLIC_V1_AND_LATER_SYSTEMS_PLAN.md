@@ -29,13 +29,17 @@ Current Public v1 truth:
 - Brand is `Chi'llywood`.
 - Every account has Profile + Channel.
 - Profile is the person/social identity.
-- Channel is the creator's mini streaming platform inside Profile/Channel, not a separate public route today.
+- Channel is the public mini streaming platform/network at `/channel/[userId]`.
+- Channel Studio is the owner-only creator operating system at `/channel-studio`.
+- `/channel-settings` remains compatibility for older owner links.
+- Profile View Channel routes to `/channel/[userId]`.
+- Channel Studio Preview Channel routes to `/channel/[ownUserId]`.
 - User/creator Channels show creator-owned uploads, videos, events, live/watch-party content, and backed creator shelves only.
 - Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
-- `/profile/[userId]` is the public Profile/Channel surface.
+- `/profile/[userId]` is the public Profile/social identity surface.
 - `/profile/[userId]` can include an owner-only creator-video upload composer without leaving the Profile.
 - Profile's current mobile shape is identity-first and mobile-social: compact identity header, backed text-only personal Posts/status updates, backed text-only comments/likes once the engagement migration is applied, Channel tab for creator uploads, and clear owner/public quick actions. It may reference modern social profile patterns without copying third-party branding or showing unbacked engagement.
-- `/channel-settings` is the deeper owner control and management surface.
+- `/channel-studio` is the preferred owner control and management surface; `/channel-settings` resolves for compatibility.
 - Creator Media System foundation exists.
 - Creator upload is Public v1 required.
 - Creator-uploaded videos upload, save metadata/storage, show on Profile/Channel, and open the standalone premium Player through `/player/[id]?source=creator-video`.
@@ -49,6 +53,7 @@ Current Public v1 truth:
 - Native game/video streaming is later phase.
 - Paid/subscriber media, tips, coins, payouts, VIPs, and advanced creator studio are later phase.
 - Premium/access gate proof is required for Watch-Party Live.
+- Current business decision is that all full live/watch-party access will become Premium in a later gate update; free preview is allowed only if explicitly designed safely.
 - Basic moderation/safety is required before public launch because creator uploads exist.
 - Supabase/RLS proof is required before public launch. Focused local proof now passes for the current creator media, premium/billing, moderation, creator-event, notification, reminder, and Watch-Party room policy lanes. Remote proof now also passes for `profile_posts`, `creator_video_comments`, and the `profile_post` / `creator_video_comment` safety report target types; broader live Supabase proof is still required for storage limits, public/draft/non-owner creator media, admin writes, entitlement states, access gates, and Android route behavior.
 
@@ -106,12 +111,12 @@ Future Codex should avoid:
 
 Owns:
 
-- creator/network surface
+- public creator/network surface on `/channel/[userId]`
 - channel posture
 - channel defaults
 - audience summary display
-- owner handoff into Channel Settings
-- the public creator platform feeling inside Profile
+- public hero, featured, latest uploads, live/upcoming, and about display
+- owner handoff into Channel Studio
 
 Must not own:
 
@@ -124,6 +129,8 @@ Must not own:
 Interacts with:
 
 - `/profile/[userId]`
+- `/channel/[userId]`
+- `/channel-studio`
 - `/channel-settings`
 - `_lib/channelReadModels.ts`
 - `_lib/channelAudience.ts`
@@ -131,11 +138,12 @@ Interacts with:
 
 Future Codex should avoid:
 
-- inventing a second public channel route unless doctrine changes
+- removing or bypassing `/channel/[userId]`
 - renaming Profile and Channel into separate identities
 - relying on unbacked audience roles for upload security
+- leaking owner-only Studio controls, drafts, private videos, unpublished videos, upload/edit/publish/delete actions, insights, or admin controls to non-owners
 
-### Channel Settings
+### Channel Studio / Channel Settings Compatibility
 
 Owns:
 
@@ -155,6 +163,7 @@ Must not own:
 
 Interacts with:
 
+- `app/channel-studio/index.tsx`
 - `app/channel-settings.tsx`
 - `_lib/creatorVideos.ts`
 - `_lib/channelReadModels.ts`
@@ -163,11 +172,11 @@ Interacts with:
 
 Future Codex should avoid:
 
-- turning Channel Settings into platform admin
+- turning Channel Studio or Channel Settings into platform admin
 - showing unsupported VIP/mod/co-host/subscriber mutation as real
 - making a button appear before its backend owner exists
 
-Example: the Profile Upload Video button is allowed to open an owner-only creator-video composer that calls `_lib/creatorVideos.ts` and refreshes the Channel tab. The Posts tab owns text-only `profile_posts` updates/status posts, while Channel owns creator uploaded videos. `/channel-settings` still owns deeper management such as edit, publish/unpublish, delete, thumbnail URL, channel settings, and library review. `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
+Example: the Profile Upload Video button is allowed to open an owner-only creator-video composer that calls `_lib/creatorVideos.ts` and refreshes the Channel tab. The Posts tab owns text-only `profile_posts` updates/status posts, while Channel owns creator uploaded videos. `/channel-studio` is the preferred deeper management shell for edit, publish/unpublish, delete, thumbnail URL, channel settings, and library review; `/channel-settings` remains compatibility. `_lib/creatorVideos.ts` owns creator-video upload/read/write/delete behavior; Supabase `videos` and `creator-videos` storage enforce metadata/storage truth.
 
 Creator Channels are allowed to carry movie-sized uploads, not only short clips. The Public v1 standard upload lane targets files larger than 50 MB and currently sets app/bucket intent to 5 GiB; Supabase's project Storage global file-size limit must be configured to match. If the product requires uploads beyond the standard upload path or needs stronger long-network reliability, add a backed resumable/TUS or S3 multipart lane before claiming full-size movie proof.
 
@@ -752,10 +761,11 @@ The Moderation / Safety System protects Chi'llywood from abusive users, bad uplo
 Current route/surface owners:
 
 - `app/admin.tsx`: operator/admin visibility, platform title programming, bounded safety report queue, role-aware review access.
-- `app/profile/[userId].tsx`: profile/channel report entry.
+- `app/profile/[userId].tsx`: Profile report entry.
+- `app/channel/[userId].tsx`: public Channel report entry.
 - `app/title/[id].tsx`: title report entry.
 - `app/player/[id].tsx`: playback unavailable states, creator-video not-ready states, and creator-video report entry.
-- `app/channel-settings.tsx`: creator/channel safety summary, moderated creator-video status display, and owner management constraints, not global moderation queue.
+- Channel Studio (`app/channel-settings.tsx` implementation, `/channel-studio` preferred route): creator/channel safety summary, moderated creator-video status display, and owner management constraints, not global moderation queue.
 - `app/watch-party/[partyId].tsx`: Party Room report entry.
 - `app/watch-party/live-stage/[partyId].tsx`: Live Room report entry.
 - `app/chat/[threadId].tsx`: direct-thread report context where supported.
@@ -1713,7 +1723,7 @@ Recommendation:
 - Admin controls platform titles, reports, takedowns, configs, and later monetization support.
 - Admin access must be backend enforced.
 - Admin UI must not expose fake authority.
-- Admin is the private Operator Center for backend platform roles; Channel Settings is the creator/content-owner surface.
+- Admin is the private Operator Center for backend platform roles; Channel Studio is the creator/content-owner surface, with `/channel-settings` compatibility preserved.
 - Rachi can have a backend-protected official-account management section inside Admin, but Rachi is not Admin and must not imply operator authority.
 - Admin actions should gain audit records before sensitive mutation launch.
 

@@ -17,7 +17,7 @@ This spec does not:
 
 ## 2. Current Truth Already In Repo
 
-### 2.1 Native Friend Doctrine Exists, And Native Friend Foundation Is Now Real
+### 2.1 Chi'lly Circle Doctrine Exists, And Native Friend Foundation Is Now Real
 Current friend doctrine is already locked in `docs/native-friend-graph-implementation-spec.md`.
 
 That doctrine already defines:
@@ -31,11 +31,15 @@ Current repo truth now also includes:
 - `request_friendship(...)`
 - `respond_to_friendship(...)`
 - `_lib/friendGraph.ts`
+- shipped Chi'lly Circle V1 request / accept / decline / cancel / remove behavior
+- My Chi'lly Circle management
+- Chi'lly Circle profile privacy: Everyone, Chi'lly Circle Only, Private
 
 What does not exist yet:
-- self-only friend UI adoption
-- public friend visibility controls
-- mutual-friend context
+- public friend-list modules
+- public friend counts
+- friend-powered room access
+- any permission bypass from friendship
 
 ### 2.2 Native Likes Already Have Real Schema Truth For Titles
 Current repo schema already supports title-level native like truth through:
@@ -92,7 +96,7 @@ That system-share behavior is real, but it is not the same thing as:
 - a universal share ledger across all entity types
 
 ## 3. Hard Distinctions That Must Stay Intact
-- `friends` are person-to-person and mutual
+- `Chi'lly Circle` connections are person-to-person and mutual
 - `followers` are creator/channel audience relationships
 - `subscribers` are creator/channel member/access relationships
 - `comments` are currently room-owned interaction truth only

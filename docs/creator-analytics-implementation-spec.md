@@ -1,5 +1,7 @@
 # Chi'llywood Creator Analytics / Conversion Implementation Spec
 
+2026-05-06 current-route note: creator analytics/insights belong in owner Channel Studio on `/channel-studio`. Public Channel on `/channel/[userId]` may show public-safe backed stats only. `/channel-settings` remains compatibility.
+
 ## 1. Purpose And Scope
 This document defines Chi'llywood's creator analytics / conversion chapter.
 
@@ -10,12 +12,12 @@ It exists to:
 - separate raw event emission from actual creator-facing aggregate truth
 - define what analytics and conversion signals already exist in the repo today
 - define the support-status discipline that prevents fake metrics
-- define how analytics truth must relate to `/channel-settings`, `/profile/[userId]`, live/event truth, audience truth, monetization/access truth, and internal operator/admin surfaces
+- define how analytics truth must relate to `/channel-studio`, `/channel-settings` compatibility, `/profile/[userId]`, `/channel/[userId]`, live/event truth, audience truth, monetization/access truth, and internal operator/admin surfaces
 - define the phased implementation order for the chapter
 
 This spec does not:
 - change route truth
-- create `/studio*` routes
+- create extra studio route families beyond pushed `/channel-studio`
 - implement analytics UI directly
 - change schema directly
 - invent fake funnels, profile visits, attendance counts, or revenue reporting
@@ -25,8 +27,10 @@ This spec does not:
 ### 2.1 Locked Route Truth
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
-| `/channel-settings` | `app/channel-settings.tsx` | Canonical creator-side analytics summary owner today. |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel route. Not a creator analytics console. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator-side analytics/Insights owner today. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. Not a creator analytics console. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. Public-safe backed stats only, not creator analytics console. |
 | `/chat` | `app/chat/index.tsx` | Canonical Chi'lly Chat inbox route. |
 | `/chat/[threadId]` | `app/chat/[threadId].tsx` | Canonical Chi'lly Chat direct-thread route. |
 | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Canonical Party Room route. |
@@ -37,8 +41,10 @@ This spec does not:
 Do not create route proliferation in this chapter.
 
 ### 2.2 Current Product Rules To Preserve
-- `/channel-settings` remains the current creator-side control center and current creator analytics summary owner.
-- `/profile/[userId]` remains a public identity/channel surface, not a private creator analytics dashboard.
+- `/channel-studio` remains the preferred creator-side control center and current creator analytics/Insights summary owner.
+- `/channel-settings` remains compatibility for older owner Studio links.
+- `/profile/[userId]` remains a personal/social identity surface, not a private creator analytics dashboard.
+- `/channel/[userId]` remains the public Channel route and may show public-safe backed stats only.
 - Chi'lly Chat unread/read truth stays messaging-owned truth, not creator analytics by default.
 - Access/entitlement truth remains access truth, not a conversion dashboard by default.
 - Live/event scheduling truth remains event truth, not attendance analytics by default.
@@ -54,8 +60,8 @@ Current creator analytics doctrine is intentionally narrow:
 
 ## 3. Exact Metric Buckets And Meanings
 
-### 3.1 Profile
-Profile analytics means creator-facing aggregate truth about the public profile/channel surface.
+### 3.1 Profile / Channel
+Profile and Channel analytics means creator-facing aggregate truth about public Profile and public Channel surfaces.
 
 Examples:
 - profile visits
@@ -148,17 +154,19 @@ Rules:
 
 ### 5.1 Creator Surface
 Creator analytics truth must apply to:
-- `/channel-settings`
-- creator summary cards
+- `/channel-studio`
+- `/channel-settings` compatibility
+- creator Insights summary cards
 - creator support-status messaging
 - later creator analytics sections when aggregates are real
 
 ### 5.2 Public Surface
-`/profile/[userId]` may only reflect analytics truth where doctrine already supports it:
-- public-safe identity and programming truth
-- public-safe event and reminder truth
+`/channel/[userId]` may only reflect analytics truth where doctrine already supports it:
+- public-safe backed Channel Pulse stats
+- public-safe event and upload counts
+- no creator analytics dashboard
 
-`/profile/[userId]` must not become a creator analytics surface.
+`/profile/[userId]` remains personal/social identity and must not become a creator analytics surface.
 
 ### 5.3 Internal Operator / Admin Surfaces
 Operator/admin surfaces may use internal operational truth when it is already real:

@@ -21,6 +21,11 @@
 - Leave unrelated worktree noise alone.
 - Before every commit, show `git diff --cached --name-only` and confirm the staged set is task-pure.
 
+## Prompt Standard
+- Chi'llywood is production-grade now. Future Codex prompts must be exact, scoped, and proof-minded.
+- Required prompt ingredients: product truth, scope, route/screen purpose, UI layout, buttons/actions, data sources, empty/loading/error states, permissions/gates, backend/RLS/storage limits, forbidden areas, validation/manual proof, and report format.
+- Do not proceed from vague prompts like "modernize", "polish", "add filters", "add route", or "improve dashboard" unless every behavior is spelled out.
+
 ## Checkpoint Bookkeeping Order
 - Update `CURRENT_STATE.md` first.
 - Update `NEXT_TASK.md` second.

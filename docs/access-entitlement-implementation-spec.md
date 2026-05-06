@@ -1,5 +1,7 @@
 # Chi'llywood Access / Entitlement Implementation Spec
 
+2026-05-06 current-route note: Profile is `/profile/[userId]`, public Channel is `/channel/[userId]`, owner Channel Studio is `/channel-studio`, and `/channel-settings` remains compatibility. The next access lane should make all full live/watch-party access Premium.
+
 ## 1. Purpose And Scope
 This document defines Chi'llywood's current access and entitlement architecture.
 
@@ -24,15 +26,17 @@ This spec does not:
 ### 2.1 Locked Route Truth
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel surface. |
-| `/channel-settings` | `app/channel-settings.tsx` | Canonical owner control center. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile surface. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel surface. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Channel Studio. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
 | `/title/[id]` | `app/title/[id].tsx` | Canonical title detail and title-entry gate surface. |
 | `/player/[id]` | `app/player/[id].tsx` | Canonical standalone player surface. |
 | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Canonical Party Room route. |
 | `/watch-party/live-stage/[partyId]` | `app/watch-party/live-stage/[partyId].tsx` | Canonical Live Room / Live Stage route. |
 | `/chat` and `/chat/[threadId]` | `app/chat/index.tsx`, `app/chat/[threadId].tsx` | Canonical Chi'lly Chat routes. |
 
-Do not create `/studio*` route drift inside this chapter.
+Do not create extra studio route drift beyond pushed `/channel-studio` inside this chapter.
 
 ### 2.2 Locked Label Doctrine
 | Locked Label | Meaning |
@@ -191,7 +195,7 @@ Current room truth includes:
 This is related to access posture, but it is not yet the same as a general entitlement resolver.
 
 ### 5.7 Current Channel Access Summaries
-`app/profile/[userId].tsx` and `app/channel-settings.tsx` already derive channel access summary labels from current room defaults:
+Channel Studio (`app/channel-settings.tsx` implementation, `/channel-studio` preferred route) derives channel access summary labels from current room defaults. `/profile/[userId]` and `/channel/[userId]` may surface only public-safe backed posture:
 - `Official Access`
 - `Loading Access`
 - `Subscriber Access`

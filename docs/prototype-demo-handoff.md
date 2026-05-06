@@ -59,12 +59,12 @@
 
 ## Step 7 Configurability Checkpoint
 - Global no-code presentation/config truth now lives in the singleton `app_configurations` row `global`, read through `_lib/appConfig.ts` and merged over `DEFAULT_APP_CONFIG` so missing or partial config always falls back to current-safe defaults.
-- Creator-owned settings remain intentionally local in Step 7: self-profile now opens `app/channel-settings.tsx`, which persists display/tagline/channel-role and personal new-room defaults through `USER_PROFILE_KEY` / `readUserProfile()` / `saveUserProfile()`.
+- Historical Step 7 note: creator-owned settings were local in that prototype checkpoint. Current pushed truth uses owner Channel Studio at `/channel-studio`, with `/channel-settings` compatibility.
 - Current global no-code surfaces: theme preset and background mode, homepage hero strategy, homepage rail order/visibility, browse label/query, top-picks source, bounded branding copy, feature toggles for watch-party/communication/favorites/continue-watching/creator-settings, and default room policy seeds for newly created watch-party and communication rooms.
 - Current content truth is still the `titles` table, but title flags now drive more of the homepage curation path: hero-flag, featured, trending, and top-row metadata can all be used by the new global home-config selector layer without changing code.
 - Current room truth remains the Step 6 persisted room/member model after creation. Step 7 config only seeds defaults into newly created rooms; once a room exists, its own persisted room row stays authoritative.
 - Current branding/truth consumption: Home, tab bar shell, admin header copy, waiting-room labels, watch-party watch label, and communication entry surfaces now resolve from the merged app config instead of hardcoded strings only.
-- Current creator/host setting surface: `Manage Channel` on self-profile is now a lightweight local settings form, not a backend-synced creator system. This keeps Step 7 aligned with the existing architecture and avoids prematurely expanding creator backend scope.
+- Historical Step 7 creator/host setting surface: `Manage Channel` has since been renamed and organized as Channel Studio. Current pushed truth is `/channel-studio` owner Studio plus `/channel-settings` compatibility.
 - Still intentionally code-driven after Step 7: arbitrary custom themes, freeform page-builder layouts, deep player/title/watch-party composition, cross-device creator-settings sync, admin RBAC, audit trails, rollout targeting, and the underlying Step 6 permission semantics.
 
 ## Step 8 Monetization Checkpoint

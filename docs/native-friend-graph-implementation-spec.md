@@ -3,10 +3,12 @@
 ## 1. Purpose And Scope
 This document defines Chi'llywood's native friend-graph doctrine before any friend implementation work begins.
 
-April 21, 2026 update:
+May 6, 2026 update:
 - this file still governs the friend graph doctrine and hard boundaries
-- the narrow schema + helper foundation is now real in repo truth through `user_friendships`, `request_friendship(...)`, `respond_to_friendship(...)`, and `_lib/friendGraph.ts`
-- public adoption, mutual-friend context, and public-safe visibility options are still not yet real
+- the narrow schema + helper foundation is real in repo truth through `user_friendships`, request/respond helpers, and `_lib/friendGraph.ts`
+- the shipped product name for this mutual relationship is `Chi'lly Circle`
+- Chi'lly Circle V1 is pushed with request, accept, decline, cancel, remove, My Chi'lly Circle management, Follow separation, and channel-audience block override
+- Chi'lly Circle profile privacy is pushed with Everyone, Chi'lly Circle Only, and Private
 
 It exists to:
 - lock the exact meaning of a Chi'llywood friend relationship
@@ -16,7 +18,7 @@ It exists to:
 - define the exact phased implementation order for the native friend graph
 
 This spec does not:
-- change route truth
+- change current route truth beyond recording that Profile is `/profile/[userId]`, public Channel is `/channel/[userId]`, and owner Studio is `/channel-studio`
 - implement UI behavior
 - add schema in this pass
 - rename followers, subscribers, requests, or blocked audience into friends
@@ -41,9 +43,9 @@ These mean:
 These are not person-to-person friendship truth.
 
 ### 2.2 Public Profile / Channel Truth Already Exists
-`/profile/[userId]` is already the canonical public profile/channel route.
+`/profile/[userId]` is the personal/social Profile route. `/channel/[userId]` is the public Channel route. `/channel-studio` is the owner-only Channel Studio route, with `/channel-settings` kept as compatibility.
 
-Current public-safe social truth on that route is limited to:
+Current public-safe social truth on Profile and Channel routes is limited to:
 - identity and official/profile state
 - creator/channel audience posture
 - public activity visibility posture
@@ -84,11 +86,11 @@ Rachi is not yet:
 - owner authority
 
 ### 2.5 What Does Not Exist Yet
-The current repo does not have:
-- a friend-list module on `/profile/[userId]`
-- private mutual-friend context
-- public friend visibility controls
-- any person-to-person friendship truth under another name
+The current repo now has Chi'lly Circle V1 mutual connection actions and privacy gates. It still does not have:
+- a public friend-list module on `/profile/[userId]`
+- broad public mutual-friend context
+- a public friend count
+- friend-powered room access
 
 ## 3. Why Friend Truth Must Not Be Faked
 If friend truth were faked now, the product would become structurally confusing:
@@ -113,7 +115,7 @@ Canonical doctrine:
 - official-platform presence is not automatically friendship
 
 ## 5. Canonical Friend Lifecycle Doctrine
-When friend truth is implemented later, the native lifecycle should support:
+The native lifecycle supports or should preserve:
 - `pending`
 - `active`
 - `declined`
@@ -127,7 +129,7 @@ Meaning:
 - `canceled`: the sender withdrew the invite before acceptance
 - `removed`: an active friendship was ended
 
-This pass does not add schema for those states. It only locks the doctrine.
+Current Chi'lly Circle behavior must preserve request, accept, decline, cancel, and remove semantics without renaming Follow or subscribers into friendship.
 
 ## 6. Public Vs Private Visibility Doctrine
 

@@ -17,8 +17,10 @@ This document does not:
 - rename followers or subscribers into friends
 
 ## 2. Current Doctrine That Must Be Preserved
-- `/profile/[userId]` remains the canonical public profile/channel route.
-- `/channel-settings` remains the creator-side control center.
+- `/profile/[userId]` is the personal/social Profile route.
+- `/channel/[userId]` is the public Channel route.
+- `/channel-studio` is the preferred owner Channel Studio route.
+- `/channel-settings` remains compatibility for older creator-side Studio links.
 - `/admin` remains the bounded internal/admin owner.
 - owner remains above Rachi.
 - Rachi is internal AI operations/system truth and official platform identity, not owner authority.
@@ -54,13 +56,19 @@ The current repo has real social/audience relationship truth for:
 - public activity visibility and follower/subscriber surface visibility on `user_profiles`
 - direct Chi'lly Chat threads between users and official accounts
 
-### 4.2 What Does Not Exist Yet
-The current repo does not have:
-- a native friend relationship table or friend helper
-- a friend-list read model
-- friend visibility rules
-- a public or private profile friend-list surface
-- a doctrine-backed mutual-friend concept under another name
+### 4.2 What Exists As Chi'lly Circle
+The current repo now has Chi'lly Circle V1 as the productized mutual connection layer:
+- request / accept / decline / cancel / remove
+- My Chi'lly Circle management
+- Follow stays separate
+- channel-audience block override
+- Profile privacy choices: Everyone, Chi'lly Circle Only, Private
+
+The current repo still does not have:
+- a public friend-list module
+- a public friend count
+- broad mutual-friend context
+- friend-powered room access or entitlement bypass
 
 Followers and subscribers are not a hidden friend system:
 - followers are one-way creator/channel audience relationships
@@ -75,15 +83,15 @@ Why:
 - the repo already protects Rachi as official platform identity and moderation actor truth
 - but `everyone's embedded first friend` is not fully real because there is no backed friend relationship, no universal seeded friend row, and no current doctrine that turns Rachi into a mutual social-graph node
 
-### 5.2 `FRIEND_LIST_TRUTH = MISSING_BUT_NEXT`
+### 5.2 `CHILLY_CIRCLE_V1_TRUTH = REAL_BUT_PRIVATE_FIRST`
 Why:
-- the repo has zero native friend-list truth today
-- broader behavior/polish work should not continue while the product still lacks a locked definition for what `friend` means inside Chi'llywood
-- the next lane should define the native friend system cleanly before any broader UI behavior starts speaking as if that graph already exists
+- the repo now has a backed mutual Chi'lly Circle request/accept/decline/cancel/remove lane
+- Chi'lly Circle profile privacy is backed and pushed
+- public friend-list style surfaces and public friend counts are still not real
 
 This does not mean:
-- friends are already a Public v1 shipped capability
-- followers or subscribers should be renamed into friends
+- followers or subscribers should be renamed into Chi'lly Circle
+- Chi'lly Circle bypasses Premium, room gates, privacy, or channel audience blocks
 - schema should be changed in this doctrine pass
 
 ## 6. What A Native Chi'llywood Friend List Should Mean

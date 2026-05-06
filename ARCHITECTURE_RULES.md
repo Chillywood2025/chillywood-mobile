@@ -23,7 +23,10 @@ If an older monetization, compliance, product-phase, or profile/channel-platform
 - Live Room / Live Stage: `/watch-party/live-stage/[partyId]`
 - Party Waiting Room routes into Party Room
 - Live Waiting Room routes into Live Room
-- Profile / Channel surface: `/profile/[userId]`
+- Profile social identity surface: `/profile/[userId]`
+- Public Channel surface: `/channel/[userId]`
+- Owner Channel Studio surface: `/channel-studio`
+- Channel Settings compatibility surface: `/channel-settings`
 - Chi'lly Chat inbox lives on `/chat`
 - Chi'lly Chat direct threads live on `/chat/[threadId]`
 
@@ -92,6 +95,8 @@ These labels are locked and are not runtime-branding experiments.
 - `/chat` controls standalone Chi'lly Chat copy and behavior
 - Party Room and Live Room control room-native communication copy and behavior
 - Profile controls social identity and public/private social relationship visibility
+- Channel controls the public creator/network viewing experience on `/channel/[userId]`
+- Channel Studio controls owner-only creator operations on `/channel-studio`
 - Title and player control reusable rights-aware content actions
 
 If duplicate files or shared constants exist, prove which active surface owns the label before editing.
@@ -188,11 +193,25 @@ Profiles are not simple account pages.
 
 Locked product direction:
 - profiles are Chi'llywood social identity hubs
-- channels are creator-owned mini streaming platforms, not platform-title shelves
+- public channels are creator-owned mini streaming platforms/networks on `/channel/[userId]`, not platform-title shelves
+- Channel Studio is the owner-only creator operating system on `/channel-studio`
+- `/channel-settings` remains compatibility only and must continue to resolve
+- Profile `View Channel` routes to `/channel/[userId]`
+- Studio `Preview Channel` routes to `/channel/[ownUserId]`
 - cross-cutting profile/channel-platform doctrine lives in `PRODUCT_DOCTRINE.md`
 - the authenticated user's own profile opens their own channel/profile surface
 - viewing another user's profile should support opening or creating a direct Chi'lly Chat thread
 - photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction must extend the same profile/channel system over time, but Chi'llywood Originals/platform `titles` must stay in platform surfaces and must not be used as creator-channel filler
+- public Channel must not expose owner-only Studio controls, upload, edit, publish, unpublish, delete, audience management, analytics, admin controls, drafts, private videos, or unpublished videos to non-owners
+
+## Relationship Separation Rule
+- Follow is channel audience.
+- Chi'lly Circle is personal mutual connection/friendship.
+- Subscribers are later monetized channel supporters.
+- Account-tier Premium is a subscription entitlement.
+- Admin is platform/operator authority.
+
+Do not rename one relationship into another, reuse one backend truth as another, or imply one relationship grants permissions owned by another system.
 
 ## Billing / Payout Separation Rule
 - app-store subscriptions and in-app billing are not the creator payout system
@@ -203,7 +222,7 @@ Locked product direction:
 Rachi is Chi'llywood's official platform-owned seeded account.
 
 Architecture requirements:
-- Rachi must use the canonical `/profile/[userId]` profile/channel route and the canonical Chi'lly Chat thread path instead of a disconnected special route
+- Rachi must use the canonical `/profile/[userId]` Profile route, `/channel/[userId]` public Channel route where channel presentation is needed, and the canonical Chi'lly Chat thread path instead of disconnected special routes
 - Rachi must not be treated as an ordinary self-editable or user-claimable profile
 - Rachi must carry explicit official/platform markers in both UI and logic
 - future moderation, admin, announcement, and audit-minded behavior must build on the same protected official-account foundation
@@ -278,6 +297,9 @@ Do not guess when duplicate surfaces may exist.
 - durable room/surface blueprint doctrine belongs in `ROOM_BLUEPRINT.md`
 - roadmap/phasing belongs in `ROADMAP.md`
 - current implementation truth belongs in `CURRENT_STATE.md`
+
+## Production Prompt Rule
+Future Codex prompts for Chi'llywood must be production-grade. They need exact product truth, scope, route/screen purpose, UI layout, buttons/actions, data sources, empty/loading/error states, permissions/gates, backend/RLS/storage limits, forbidden areas, validation/manual proof, and report format. Vague prompts such as "modernize", "polish", "add filters", "add route", or "improve dashboard" are not enough unless every behavior is spelled out.
 - immediate execution scope belongs in `NEXT_TASK.md`
 - session guardrails belong in `SESSION_START_PROTOCOL.md`
 - temporary ADB/device/emulator debugging does not belong in permanent product doctrine

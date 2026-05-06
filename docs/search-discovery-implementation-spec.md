@@ -9,7 +9,7 @@ It exists to:
 - preserve current route truth while Chi'llywood deepens discovery
 - define MVP discovery only
 - separate current public discovery truth from missing or later recommendation systems
-- define how discovery truth should relate to Home, creator-owned public profile/channel discovery, title/player, and public live/event surfaces
+- define how discovery truth should relate to Home, creator-owned public Profile and public Channel discovery, title/player, and public live/event surfaces
 - define the phased implementation order for this chapter
 
 This spec does not:
@@ -26,16 +26,18 @@ This spec does not:
 | --- | --- | --- |
 | `/` / Home tab | `app/(tabs)/index.tsx` | Canonical current discovery/home owner. |
 | `/explore` tab | `app/(tabs)/explore.tsx` | Current browse/explore surface. |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel surface and creator/channel discovery node. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile discovery surface. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel discovery node and viewer-facing media/network destination. |
 | `/title/[id]` | `app/title/[id].tsx` | Canonical title detail surface. |
 | `/player/[id]` | `app/player/[id].tsx` | Canonical standalone playback surface, not the main discovery owner. |
-| current live/event public surfaces | `/profile/[userId]`, current Home/live entry points | Canonical public live/event discovery surfaces until broader discovery depth is justified. |
+| current live/event public surfaces | `/channel/[userId]`, current Home/live entry points | Canonical public live/event discovery surfaces until broader discovery depth is justified. |
 
 Do not create route proliferation in this chapter.
 
 ### 2.2 Product Rules To Preserve
 - Home remains the main discovery surface.
-- `/profile/[userId]` remains a creator/channel discovery surface, not a generic creator marketplace.
+- `/profile/[userId]` remains a person/social discovery surface, not a generic creator marketplace.
+- `/channel/[userId]` remains the public creator/channel discovery surface.
 - Title and player surfaces remain canonical consumption routes, not new discovery hubs.
 - Public live/event discovery must stay honest to the live/event model already landed.
 - Discovery must stay MVP-first and curated before it becomes algorithmic.
@@ -74,13 +76,14 @@ Current doctrine:
 Creator/channel discovery means finding people, identities, and public channel surfaces through existing public routes.
 
 Examples:
-- public profile/channel spotlight
+- public Profile spotlight
+- public Channel spotlight
 - creator/channel home emphasis
 - channel live state
 - creator event presence
 
 Current doctrine:
-- backed in public profile/channel surfaces
+- backed in public Profile and public Channel surfaces
 - not yet a broad marketplace or ranking engine
 
 ### 3.3 Content Discovery
@@ -220,13 +223,13 @@ It is currently a lightweight browse surface, not a full discovery engine.
 
 ### 7.1 Keep Current Ownership
 - `_lib/appConfig.ts` remains the current owner for global Home discovery config
-- profile/public route owners remain public discovery owners for creator/channel discovery
+- Profile and public Channel route owners remain public discovery owners for people/channel discovery
 - live/event helpers remain the source of public live-event truth
 
 ### 7.2 Likely Next Discovery Layer
 The next narrow implementation lanes in this chapter, if justified by audit truth, should stay within:
 - current Home owner
-- current public profile/channel owner
+- current Profile and public Channel owners
 - current live/event public read helpers
 
 Do not invent a broad recommendation helper layer unless real backing truth exists.

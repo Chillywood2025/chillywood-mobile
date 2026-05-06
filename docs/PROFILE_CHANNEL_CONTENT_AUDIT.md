@@ -10,6 +10,7 @@ Updated: 2026-04-29 for Profile/Channel Public v1 product-contract clarity
 Updated: 2026-04-29 for Public v1 social basics backing
 Updated: 2026-04-29 for remote social-basics schema/RLS proof
 Updated: 2026-04-29 for Profile post engagement backing
+Updated: 2026-05-06 for pushed Public Channel and Channel Studio route truth
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -32,21 +33,24 @@ This audit began as documentation only. The follow-up creator media foundation n
 Current governing truth:
 
 - Profile is personal/social identity.
-- Channel is the creator's mini streaming platform.
-- Profile and Channel stay connected on `/profile/[userId]`, but they must not collapse into one vague feed.
+- Channel is the public mini streaming platform/network at `/channel/[userId]`.
+- Channel Studio is the owner-only creator operating system at `/channel-studio`.
+- `/channel-settings` remains compatibility.
+- Profile remains connected to Channel through View Channel, but `/profile/[userId]` must not collapse into one vague Profile/Channel feed.
 - Personal Profile posts/status updates are now backed for Public v1 as text-only `profile_posts`.
 - Creator uploaded videos belong to the Channel/creator content area, not the personal Posts lane.
 - Chi'llywood Originals/platform `titles` stay on Home, Explore, platform title/player routes, dedicated Originals/platform surfaces, and admin-managed title surfaces.
+- Public Channel must not show owner controls, drafts, private videos, or unpublished content to non-owners.
 
 Active code truth after this pass:
 
 - The Profile header shows identity, handle, avatar, tagline/bio when present, official/platform badges where backed, and backed live/role signals.
-- Owner top actions are Edit Profile, Manage Channel, Upload Video, and Settings.
+- Owner top actions include Edit Profile, Channel Studio, Upload Video where currently present, and Settings.
 - Public top actions are backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, and Report where supported.
 - The Posts tab now shows real Profile posts/status updates when backed rows exist, with owner composer/delete, public clean reads, "Post" composer/action copy, backed comments/replies, backed likes/counts, route-safe share, clickable links, optional 250 MB social attachments, and backed report actions.
-- The Channel tab owns creator uploaded videos, uses `CreatorVideoCard`, and opens `/player/[id]?source=creator-video`.
+- Public Channel owns viewer-facing creator uploaded videos; owner surfaces use `CreatorVideoCard` where current code provides it and open `/player/[id]?source=creator-video`.
 - The owner Profile composer remains available, but it is explicitly a creator-video upload into Channel.
-- `/channel-settings` labels current access controls as Access Defaults and no longer presents ad/sponsorship/Premium-playback cards as Channel owner controls.
+- Channel Studio labels current access controls as Access Defaults and no longer presents ad/sponsorship/Premium-playback cards as Channel owner controls.
 - Home has a backed "From People You Follow" section that reads `channel_followers` and shows public clean creator uploads from followed creators only.
 - Standalone creator-video Player has backed comments/replies through `creator_video_comments`; Live Stage and Watch-Party comments are unchanged.
 
@@ -121,8 +125,10 @@ Backing truth after this pass:
 
 | Route | Owner | Current role |
 | --- | --- | --- |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel surface for person identity, channel home, public tabs, access posture, live/event cues, Chi'lly Chat handoff, and owner handoff. |
-| `/channel-settings` | `app/channel-settings.tsx` | Signed-in creator control center for identity, layout preset, room defaults, access posture, creator events, audience actions, analytics summaries, and safety/admin summaries. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile surface for person identity, Profile posts, Chi'lly Circle/privacy-aware social context, Chi'lly Chat handoff, and owner/public Profile actions. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel surface with hero, backed Channel Pulse stats, Featured, Latest Uploads, Live & Upcoming, About, viewer-facing Play, and no owner controls for non-owners. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred signed-in owner Channel Studio route for Home, Content, Live, Audience, Insights, Brand, creator content management, audience actions, analytics summaries, and safety/admin summaries. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
 | `/` home tab | `app/(tabs)/index.tsx` | Discovery/home surface. It opens the signed-in user's profile/channel avatar route and reads public `titles` programming. |
 | `/title/[id]` | `app/title/[id].tsx` | Title detail, access gate, play, favorites, like, share marker, report, and Watch-Party Live entry. |
 | `/player/[id]` | `app/player/[id].tsx` | Playback and watch-party player owner. Uses title `video_url` or local fallback video. |
@@ -132,7 +138,7 @@ Backing truth after this pass:
 | `/chat` and `/chat/[threadId]` | `app/chat/index.tsx`, `app/chat/[threadId].tsx` | Canonical Chi'lly Chat inbox/direct-thread routes. |
 | `/admin` | `app/admin.tsx` | Internal/admin content programming and platform operations surface, including the only real title creation/edit route found. |
 
-There is no separate public `/channel/[id]` route. Doctrine and current code intentionally make `/profile/[userId]` the public profile plus channel route, with `/channel-settings` as the owner-side control center.
+The separate public Channel route is now `/channel/[userId]`. Doctrine and current code keep `/profile/[userId]` as the personal/social Profile route, `/channel/[userId]` as the viewer-facing Channel route, `/channel-studio` as the owner Studio route, and `/channel-settings` as compatibility.
 
 ## Owner File Map
 
@@ -148,28 +154,28 @@ There is no separate public `/channel/[id]` route. Doctrine and current code int
 
 ## Current Profile Truth
 
-`/profile/[userId]` is already a connected person/channel surface, not a plain account page. It renders:
+`/profile/[userId]` is the personal/social Profile surface. It renders:
 
 - public identity: display name, handle, avatar, tagline, role, official account badges, live/off-air state, and room context state
-- public channel framing: "Your Channel", "Creator Channel", "Host Channel", or official concierge copy
-- primary public actions: backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, Report, and live/watch-party handoffs when real context exists
-- primary owner actions: Edit Profile, Manage Channel, Upload Video, and Settings
+- public Channel handoff through View Channel
+- primary public actions: backed Follow/Following where currently present, Chi'lly Chat, View Channel, Share Profile, Report, and live/watch-party handoffs when real context exists
+- primary owner actions: Edit Profile, Channel Studio, Upload Video where currently present, and Settings
 - channel access posture: browse, Watch Party, and Chi'lly Chat access cards backed by user profile defaults and creator permissions
 - tabs: Posts, Channel, Live, Community, About
 - Posts tab: backed text-only Profile posts/status updates, owner composer/delete, public clean reads, backed text comments, backed single likes/counts, and route-safe share
-- Channel tab: creator-owned video cards from `videos`; user/creator Channels do not show Chi'llywood Originals or platform `titles` as filler
+- Channel handoff: Profile View Channel routes to `/channel/[userId]`; user/creator Channels do not show Chi'llywood Originals or platform `titles` as filler
 - public live/event summaries from backed `creator_events` and reminder summaries
 - owner mode on the same route when the signed-in user matches the route user id
-- owner-only handoff card and quick actions to `Manage Channel`, creator-video upload, Settings, and Chi'lly Chat
+- owner-only handoff card and quick actions to Channel Studio, creator-video upload where currently present, Settings, and Chi'lly Chat
 - report/safety path for non-self profiles
 
-The self vs public viewer experience is different at the control level: self-view gets owner stats, owner prompts, edit/manage/upload/settings actions, and drafts; visitors get backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, Report, and public channel copy. The distinction still shares one canonical route by design.
+The self vs public viewer experience is different at the control level: self-view gets owner prompts, edit/Studio/upload/settings actions where backed, and drafts only on owner surfaces; visitors get backed Follow/Following where present, Chi'lly Chat, View Channel, Share Profile, Report, and public channel handoff. Public Channel viewing now uses `/channel/[userId]`.
 
 ## Current Channel Truth
 
-Channel exists as a product layer, but it does not exist as a separate public route. The public channel lives inside `/profile/[userId]`; private creator controls live in `/channel-settings`.
+Channel exists as a separate public route at `/channel/[userId]`. Private creator controls live in `/channel-studio`, with `/channel-settings` preserved as compatibility.
 
-`/channel-settings` currently supports:
+Channel Studio currently supports:
 
 - identity fields: display name, tagline, channel role
 - layout preset: spotlight, live first, library first
@@ -204,12 +210,12 @@ Channel settings does not yet support:
 Working connections:
 
 - Home opens the signed-in user's canonical `/profile/[userId]` route from the avatar button.
-- Profile self-view opens `/channel-settings` via Manage Channel.
+- Profile self-view opens `/channel-studio` via Channel Studio.
 - Profile visitor view opens Chi'lly Chat direct threads through `/chat/[threadId]`.
 - Profile can hand back into live/watch-party routes when real room or scheduled title context exists.
 - Profile reads channel defaults and layout posture from `user_profiles`.
-- Channel settings writes the same `user_profiles` fields that profile reads.
-- Channel settings reads the same creator/event/audience/permission state surfaced publicly where appropriate.
+- Channel Studio writes the same backed `user_profiles` fields that Profile/public Channel read.
+- Channel Studio reads the same creator/event/audience/permission state surfaced publicly where appropriate.
 
 Updated working connections:
 
@@ -222,19 +228,19 @@ Updated working connections:
 
 Confusing or missing connections:
 
-- "Channel" is real in the UI but has no standalone public URL, so a user expecting a separate Channel destination may not know that Profile is the Channel home.
+- Older audit language said Channel had no standalone public URL; current truth is `/channel/[userId]` exists and Profile View Channel routes there.
 - The Channel tab now has a creator-video section, but shelf curation beyond the simple uploaded-video grid is still later.
 - Channel settings has a current upload/manage lane, but not a full shelf builder or advanced creator studio.
 - The app still has both `titles` and `videos`: `titles` remain platform/admin programming and `videos` now cover creator-owned uploads.
 
-No route drift was found against doctrine. `/profile/[userId]` and `/channel-settings` match the control files.
+No route drift was found against current doctrine. `/profile/[userId]`, `/channel/[userId]`, `/channel-studio`, and `/channel-settings` compatibility match the control files.
 
 ## Add-Content Flow Truth
 
 Current user-facing add/content management paths:
 
-- `/channel-settings` can create and edit `creator_events`.
-- `/channel-settings` can link Watch-Party Live events to an existing title id.
+- Channel Studio (`/channel-studio`, implemented through `app/channel-settings.tsx`) can create and edit backed creator events where currently supported.
+- Channel Studio can link Watch-Party Live events to an existing title id where currently supported.
 - `/admin` can create/edit platform `titles` with title, category, year, runtime, synopsis, poster URL, thumbnail URL where present, video URL, preview URL where present, status, release date, sort order, hero/featured/trending/top-row flags, access rule, ads, sponsor placement, and sponsor label.
 
 What now exists for normal creators:
@@ -334,7 +340,7 @@ Creator-video comment proof still needed:
 
 Smallest safe Public v1 upload requirements:
 
-1. Owner entry point from `/channel-settings`, with a clear `Upload Video` or `Add Video` action and an owner-only Profile empty-state CTA.
+1. Owner entry point from Channel Studio (`/channel-studio`, with `/channel-settings` compatibility), with a clear `Upload Video` or `Add Video` action and an owner-only public Channel empty-state CTA where backed.
 2. Upload form with video file picker, title, description, optional thumbnail or fallback, optional category/genre, draft/public visibility, creator `owner_id`, and Profile/Channel linkage through that owner id.
 3. Storage/backend lane with repo-owned bucket/policy migrations, video metadata rows, owner CRUD, public read for public videos only, and no token/secret exposure.
 4. Profile/Channel display where public uploaded videos appear for visitors, owner drafts are visible only to the owner, public empty state stays premium, and owner empty state points to upload.
@@ -382,7 +388,7 @@ Creators can currently:
 - create/edit creator event records
 - see and manage some audience relationships
 - see limited analytics and safety/admin summaries
-- open their public profile/channel route
+- open their public Profile or public Channel route
 
 Creators still cannot currently:
 
@@ -494,10 +500,11 @@ Later implementation order:
 
 ### A. Already Working
 
-- Canonical `/profile/[userId]` public profile/channel route.
-- Self vs visitor differences on the profile route.
-- Manage Channel handoff to `/channel-settings`.
-- Channel settings as a signed-in owner control center.
+- Canonical `/profile/[userId]` personal/social Profile route.
+- Canonical `/channel/[userId]` public Channel route.
+- Self vs visitor differences on Profile and Channel routes.
+- Channel Studio handoff to `/channel-studio`, with `/channel-settings` compatibility.
+- Channel Studio as a signed-in owner control center.
 - Profile access posture based on real defaults/permissions.
 - Chi'lly Chat handoff from profile and chat routes.
 - Public live/event visibility from backed creator events.
@@ -549,7 +556,7 @@ Current foundations that can support it later:
 
 - LiveKit-backed Live Stage and Watch-Party Live runtime.
 - Canonical Profile/Channel identity and owner handoff.
-- `/channel-settings` creator control center.
+- `/channel-studio` creator control center, with `/channel-settings` compatibility.
 - `creator_events` for scheduling live/video sessions.
 - Player and Watch Party routes for content playback and shared viewing.
 - Room/default access posture and creator permissions.

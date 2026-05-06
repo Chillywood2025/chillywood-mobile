@@ -1,5 +1,7 @@
 # Chi'llywood Live / Event Scheduling Implementation Spec
 
+2026-05-06 current-route note: public live/upcoming event presentation can appear on `/channel/[userId]` only when public-safe and backed. Owner event management belongs in `/channel-studio`; `/channel-settings` remains compatibility.
+
 ## 1. Purpose And Scope
 This document defines Chi'llywood's live / event scheduling chapter.
 
@@ -9,12 +11,12 @@ It exists to:
 - preserve the current Party / Live route doctrine while Chi'llywood adds real scheduled event truth
 - define what live and event scheduling mean in the current repo without collapsing them into title metadata
 - separate current doctrine, missing truth, and later-phase ideas clearly
-- define how scheduled event truth must relate to `/profile/[userId]`, `/channel-settings`, the current watch-party/live routes, replay truth, reminder truth, and the access/entitlement resolver
+- define how scheduled event truth must relate to `/profile/[userId]`, `/channel/[userId]`, `/channel-studio`, `/channel-settings` compatibility, the current watch-party/live routes, replay truth, reminder truth, and the access/entitlement resolver
 - define the phased implementation order for the live/event chapter
 
 This spec does not:
 - change route truth
-- create `/studio*` routes
+- create extra studio route families beyond pushed `/channel-studio`
 - implement event access
 - change schema directly
 - create fake countdowns, reminders, replays, or discovery surfaces
@@ -24,8 +26,10 @@ This spec does not:
 ### 2.1 Locked Route Truth
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel route. Owner mode stays on the same route. |
-| `/channel-settings` | `app/channel-settings.tsx` | Canonical creator control center and future creator event-management owner. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route and public-safe event presentation surface. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Channel Studio and future creator event-management owner. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
 | `/watch-party/index` | `app/watch-party/index.tsx` | Waiting-room entry owner for party and live flows. |
 | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Canonical Party Room route. |
 | `/watch-party/live-stage/[partyId]` | `app/watch-party/live-stage/[partyId].tsx` | Canonical Live Room / Live Stage route. |
@@ -44,9 +48,10 @@ Do not create route proliferation in this chapter.
 Do not mix `Watch-Party Live` and `Live Watch-Party`.
 
 ### 2.3 Current Product Rules To Preserve
-- `/profile/[userId]` remains the canonical public profile/channel surface.
-- Owner mode remains on `/profile/[userId]`.
-- `/channel-settings` remains the current studio-equivalent owner/control center.
+- `/profile/[userId]` remains the canonical personal/social Profile surface.
+- `/channel/[userId]` remains the canonical public Channel surface and public-safe Live & Upcoming owner.
+- `/channel-studio` remains the preferred owner Studio surface for creator live/event management.
+- `/channel-settings` remains compatibility for older owner Studio links.
 - The access/entitlement resolver remains the canonical owner for channel/content/room access truth already landed.
 - Event access stays explicitly later until canonical event truth exists.
 - Title publication scheduling and live/event scheduling are related but not the same source-of-truth.
@@ -60,15 +65,15 @@ Current repo doctrine already supports:
 - in-room distinction between `Live First` and `Live Watch-Party`
 - title publication scheduling in Content Studio through `status`, `is_published`, and `release_at`
 - title/player `Watch-Party Live` launch posture
-- profile/channel live-tab doctrine and current live/watch continuity framing
+- Channel Studio Live tab framing and public Channel Live & Upcoming presentation
 - access resolver groundwork for future event access, without implementing it yet
 
 ### 3.2 Current Doctrine Does Not Yet Support
 Current repo doctrine does not yet support:
 - canonical scheduled creator-event truth
 - a dedicated scheduled-event data model separate from title metadata
-- public upcoming-event truth on profile/channel
-- creator-facing event scheduling inside `/channel-settings`
+- richer public upcoming-event truth beyond currently backed public-safe creator events
+- creator-facing event scheduling beyond currently backed/disabled Studio surfaces
 - replay availability and expiration truth for creator events
 - reminder-ready truth for scheduled events
 - event-access resolution
@@ -90,8 +95,8 @@ These must remain separate in meaning:
 - Scheduled events do not create new user-facing route families.
 - A future scheduled `Live First` or `Live Watch-Party` event should still resolve into the canonical live route owner on `/watch-party/live-stage/[partyId]` once it is live.
 - A future scheduled `Watch-Party Live` event should still resolve into the canonical party flow and party-room owners instead of inventing a new event route.
-- `/profile/[userId]` should surface live-event truth publicly when it becomes real, but it remains a profile/channel surface, not the live room itself.
-- `/channel-settings` should own creator scheduling and event management when event truth becomes real.
+- `/channel/[userId]` should surface public-safe live-event truth when it becomes real, but it remains a public Channel surface, not the live room itself.
+- `/channel-studio` should own creator scheduling and event management when event truth becomes real; `/channel-settings` remains compatibility.
 
 ### 4.3 Current Relationship To Content Publishing
 Content Studio title scheduling is not the same thing as live/event scheduling.
@@ -296,9 +301,9 @@ This later phase must not:
 
 ### 13.1 Current Doctrine / Should Build Now
 - preserve current Party / Live route truth
-- preserve `/profile/[userId]` and `/channel-settings` ownership
+- preserve `/profile/[userId]`, `/channel/[userId]`, `/channel-studio`, and `/channel-settings` compatibility ownership
 - define the canonical event model
-- build creator scheduling inside `/channel-settings`
+- build creator scheduling inside Channel Studio when backed
 - build public live/upcoming/replay summary truth on existing surfaces only
 
 ### 13.2 Later Phase / Do Not Fake Yet

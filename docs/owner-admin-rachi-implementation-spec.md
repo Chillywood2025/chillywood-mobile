@@ -1,5 +1,7 @@
 # Chi'llywood Owner Admin + Rachi Control Implementation Spec
 
+2026-05-06 current-route note: creator owner controls live in Channel Studio on `/channel-studio`; `/channel-settings` remains compatibility. Platform/operator controls remain in `/admin`.
+
 ## 1. Purpose And Scope
 This document defines Chi'llywood's owner-admin / admin-workflow / Rachi-control chapter.
 
@@ -24,8 +26,10 @@ This chapter does not:
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
 | `/admin` | `app/admin.tsx` | Canonical bounded admin/operator owner. |
-| `/channel-settings` | `app/channel-settings.tsx` | Canonical creator control center, not the platform admin console. |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel route, including official-platform identities like Rachi. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator control center, not the platform admin console. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route, including official-platform identities like Rachi. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route; must not expose platform admin controls. |
 | `/chat`, `/chat/[threadId]` | `app/chat/index.tsx`, `app/chat/[threadId].tsx` | Canonical Chi'lly Chat routes, including official-platform thread continuity. |
 
 Do not create route proliferation in this chapter.
@@ -43,7 +47,7 @@ Chi'llywood should preserve three distinct modes:
 
 1. `User / Creator Mode`
    - public/product and creator/channel workflows
-   - canonical owners remain `/profile/[userId]`, `/channel-settings`, title/player, chat, and room routes
+   - canonical owners remain `/profile/[userId]`, `/channel/[userId]`, `/channel-studio`, `/channel-settings` compatibility, title/player, chat, and room routes
 
 2. `Admin Mode`
    - bounded staff/operator workflows
@@ -197,7 +201,7 @@ Current doctrine:
 - `_lib/officialAccounts.ts` for canonical Rachi identity truth
 - `app/profile/[userId].tsx` and `app/chat/*` for canonical official-platform route continuity
 - `platform_role_memberships` for current staff-role membership truth
-- `_lib/channelReadModels.ts` and `app/channel-settings.tsx` for creator-side admin/safety summary truth
+- `_lib/channelReadModels.ts` and Channel Studio (`app/channel-settings.tsx` implementation, `app/channel-studio/index.tsx` route) for creator-side admin/safety summary truth
 
 ## 9. Missing Truth That Still Needs To Be Built
 - explicit owner / super-admin role truth

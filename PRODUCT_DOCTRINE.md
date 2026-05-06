@@ -17,6 +17,11 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - creators can choose whether content is free or paid
 - preset price tiers are preferred over arbitrary pricing
 - Chi'llywood Premium gates Watch-Party Live and other recurring premium value
+- full live/watch-party access is planned to become Premium in a later gate update
+- free users do not get full live/watch-party access; a free preview is allowed only if explicitly designed and proved safely
+- the current planned Premium price is `$9.99/month` and `$99/year`
+- Premium supports expensive live usage
+- RevenueCat remains the Premium subscription truth owner
 - creators keep 100% of tips
 - tips are anonymous to other users but fully traceable in backend and admin records
 - Chi'llywood should not take a direct percentage cut from tips
@@ -50,14 +55,26 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 ## Ads Direction
 - ads are a secondary revenue stream, not the core business model
 - Premium remains ad-free
-- a free tier can include light ads
+- free users see ads at launch
+- Premium users see zero ads
+- ads support free browsing
+- AppLovin MAX is the primary ad mediation direction
+- Unity LevelPlay / Unity Ads may be added through AppLovin MAX later
+- do not build an AdMob-only ad system
+- launch ad cap: base active session allows 3 interstitial plus 1 native/feed; after 2 active browsing hours allow +2 interstitial plus +1 native/feed; daily cap is 6 interstitial plus 3 native/feed
 - rewarded ads and carefully integrated native ads are preferred over disruptive formats
 - aggressive or unexpected full-screen interstitials are not approved doctrine
 - room-specific ad cautions belong in `ROOM_BLUEPRINT.md`, not here
 
 ## Profile / Channel Platform Direction
 - profiles remain Chi'llywood's social identity hubs
-- Profile and Channel are connected but different product layers: Profile is personal/social identity, while Channel is the creator's own mini streaming platform
+- Profile and Channel are connected but different product layers: Profile is personal/social identity, while Channel is the public mini streaming platform/network
+- Channel Studio is the owner-only creator operating system
+- `/channel/[userId]` is the public Channel route
+- `/channel-studio` is the preferred owner Studio route
+- `/channel-settings` remains compatibility
+- Profile View Channel routes to `/channel/[userId]`
+- Channel Studio Preview Channel routes to `/channel/[ownUserId]`
 - every user can have the option to build their own mini streaming platform or channel inside Chi'llywood, but platform-building is optional
 - a user/creator Channel must show that creator's own channel content only: creator uploads, creator videos, creator events, creator live/watch-party content, and creator shelves/sections when those are backed
 - Chi'llywood Originals and platform/admin `titles` belong to platform surfaces such as Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces
@@ -68,11 +85,16 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - creator-channel customization is preferred over relying on third-party streaming account connections
 - users should be able to start with the base profile experience and expand later without losing that base experience
 - profiles remain social identity hubs even when creator-platform mode grows deeper
+- Public Channel must never show owner-only controls to non-owners
+- Public Channel must never show drafts, private videos, or unpublished content
 
 ## Official Presence And Social Graph Truth
 - Rachi remains Chi'llywood's protected official platform concierge presence on the canonical `/profile/[userId]` and Chi'lly Chat routes.
 - owner authority remains above Rachi; Rachi is not owner authority, not a hidden admin override, and not the final decision-maker for platform actions.
 - current creator/channel relationship truth is `followers`, creator/channel `subscribers`, audience `requests`, and `blocked` audience boundaries.
+- Follow is channel audience.
+- Chi'lly Circle is personal mutual friendship/connection.
+- Subscribers are later monetized channel supporters.
 - creator/channel subscriber truth remains distinct from account-tier Premium entitlement truth.
 - a native Chi'llywood friend list is distinct from followers and creator/channel subscribers.
 - current repo truth does not yet include a native friend relationship, friend-list read model, or public friend-list surface.
@@ -80,9 +102,16 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - when a native friend system lands, it should be a mutual person-to-person social relationship with privacy-aware visibility rules instead of a rename of follower, subscriber, or admin truth.
 
 ## Public Product Phasing
+- Launch is planned as 18+.
 - Public v1 should focus on the core social streaming experience, not the full long-term platform vision
 - Public v1 includes login/settings/logout, home/discovery, customizable basic profiles, standalone player, Watch-Party Live core flow, Live Watch-Party / Live Stage core flow, comments/reactions/basic social interaction, basic Chi'lly Chat or simple direct messaging, Premium subscription gating, moderation basics, and analytics/error monitoring/admin visibility
 - Public v1 should keep room-scale truth honest: `500+` joined presence can be a valid product target, but Public v1 does not assume `500+` equal live camera feeds.
 - Post-v1 can expand into heavier creator monetization rollout, a fuller creator mini-platform builder, deeper room personalization, request/promote room controls, premium/ticketed room tooling, instant payout lane foundations, and light compliant ad systems
 - Later phase holds Game Live rollout beyond the Public v1 window, Game Watch-Party after Game Live, larger premium stages, higher simultaneous live-seat capacity as infrastructure improves, advanced payouts and tax automation, overseas creator payouts, and broader ad systems
 - `ROADMAP.md` should operationalize the active Public v1 / Post-v1 / Later phase split and the current dependencies, blockers, and compliance-sensitive areas
+
+## Storage And Infrastructure Doctrine
+- Cloudflare R2 is the direction for public/high-download media.
+- Hetzner Object Storage is the direction for source/original uploads, drafts, backups, archive, and private/held/deleted media.
+- Hetzner/OVH boxes are the direction for LiveKit and real-time live/watch-party traffic.
+- Do not move storage, LiveKit, or real-time infrastructure doctrine ad hoc inside feature prompts; require exact scope, proof, and rollback posture.

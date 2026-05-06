@@ -1,5 +1,7 @@
 # Chi'llywood Channel Design / Layout Implementation Spec
 
+2026-05-06 current-route note: current Channel design/layout ownership is public Channel on `/channel/[userId]` for viewer presentation and owner Channel Studio on `/channel-studio` for owner controls. `/channel-settings` remains compatibility.
+
 ## 1. Purpose And Scope
 This document defines Chi'llywood's channel design / layout chapter.
 
@@ -7,15 +9,15 @@ It is implementation doctrine, not UI code.
 
 It exists to:
 - preserve current route truth while Chi'llywood deepens creator-controlled channel presentation
-- keep `/channel-settings` as the creator-side design/layout owner
-- keep `/profile/[userId]` as the canonical public channel presentation surface
+- keep `/channel-studio` as the creator-side design/layout owner
+- keep `/channel/[userId]` as the canonical public channel presentation surface
 - define what design/layout truth already exists in global config, title programming, and current profile rendering
 - define the structured design/layout system Chi'llywood should build next without drifting into freeform chaos
 - define the phased implementation order for this chapter
 
 This spec does not:
 - change route truth
-- create `/studio*` routes
+- create extra studio route families beyond pushed `/channel-studio`
 - create a freeform page builder
 - add schema directly
 - turn `/profile/[userId]` into an arbitrary drag-and-drop canvas
@@ -25,16 +27,19 @@ This spec does not:
 ### 2.1 Locked Route Truth
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
-| `/channel-settings` | `app/channel-settings.tsx` | Canonical creator-side control center and future owner for channel design/layout controls. |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel route and public presentation surface. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route and public presentation surface. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator-side control center and future owner for channel design/layout controls. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
 | `/title/[id]` | `app/title/[id].tsx` | Canonical title detail surface. Title programming flags may influence profile presentation, but title route truth does not move here. |
 | `/watch-party/*` | current room owners | Live/party route truth remains separate from channel layout truth. |
 
 Do not create route proliferation in this chapter.
 
 ### 2.2 Product Rules To Preserve
-- `/channel-settings` stays the creator-side owner for design/layout controls.
-- `/profile/[userId]` stays the public-facing channel surface.
+- `/channel-studio` stays the creator-side owner for design/layout controls; `/channel-settings` remains compatibility.
+- `/channel/[userId]` stays the public-facing Channel surface.
+- `/profile/[userId]` stays the personal/social Profile surface.
 - Global app theme truth stays in app config until per-channel design truth is honestly backed.
 - Content programming truth and layout truth may interact, but they are not the same system.
 - Live/event surfaces remain distinct from channel hero/layout choices.
@@ -43,8 +48,8 @@ Do not create route proliferation in this chapter.
 ### 2.3 Current Design/Layout Boundary
 Current doctrine is intentionally narrow:
 - global theme and home presentation truth already exist
-- current user/creator profile/channel presentation uses creator-owned videos, creator events, and live/community blocks; platform title-programming stays in Home/Explore/title/admin surfaces
-- creator-facing design/layout control on `/channel-settings` is still mostly doctrinal/placeholder
+- current public Channel presentation uses creator-owned public videos, creator events, public-safe audience signals, and about blocks; platform title-programming stays in Home/Explore/title/admin surfaces
+- creator-facing design/layout control lives in `/channel-studio`, with `/channel-settings` kept as compatibility
 
 That means:
 - do not imply per-channel design customization where no persisted truth exists
@@ -68,7 +73,7 @@ Current doctrine:
 - per-channel design customization is not yet real
 
 ### 3.2 Layout
-Layout means the structured arrangement of major channel blocks on the public profile/channel route.
+Layout means the structured arrangement of major channel blocks on the public Channel route.
 
 Examples:
 - hero lead choice
@@ -78,7 +83,7 @@ Examples:
 - content shelf order
 
 Current doctrine:
-- public profile block order is real in the route owner
+- public Channel block order is real in the route owner
 - home/config rail ordering is real globally
 - per-channel public block ordering is not yet backed
 
@@ -110,18 +115,22 @@ Current doctrine:
 ## 4. Exact Surfaces Where Design / Layout Truth Must Apply Now
 
 ### 4.1 Creator-Side Surface
-`/channel-settings` must remain the owner for:
+`/channel-studio` must remain the owner for:
 - future design settings
 - future layout settings
 - template or block-order controls if they become real
 - summary/explainer copy about what this route will own
 
+`/channel-settings` must remain compatibility for older owner Studio links.
+
 ### 4.2 Public Surface
-`/profile/[userId]` must remain the owner for:
+`/channel/[userId]` must remain the owner for:
 - hero presentation
-- profile/channel section order
-- content/live/community/about rendering
+- public Channel section order
+- Featured, Latest Uploads, Live & Upcoming, and About rendering
 - any future public-facing layout result from creator controls
+
+`/profile/[userId]` remains the personal/social identity route and must not become the public Channel layout owner.
 
 ### 4.3 Internal / Global Config Surface
 Global config helpers may continue to own app-wide defaults for:
@@ -152,17 +161,17 @@ Current backed global fields include:
 
 This is global app/home truth, not channel-specific design truth.
 
-### 5.2 Current Public Profile/Channel Presentation Truth
+### 5.2 Current Public Channel Presentation Truth
 Current public channel presentation truth already exists in:
-- `app/profile/[userId].tsx`
+- `app/channel/[userId].tsx`
 
 The route already uses real presentation inputs such as:
-- hero state
-- official/live/linked badges
-- tab structure
-- hero-programming selection based on current programming truth
-- featured/trending/top-row programming grouping
-- public-safe community and event modules
+- channel hero/backdrop/avatar/name/tagline
+- backed Channel Pulse stats
+- Featured spotlight with viewer-facing `Play`
+- Latest Uploads shelf
+- public-safe Live & Upcoming module
+- final About card
 
 ### 5.3 Current Content Programming Inputs
 Current title/programming truth already exists in:
@@ -173,20 +182,17 @@ Current title/programming truth already exists in:
 - `pin_to_top_row`
 - `sort_order`
 
-These already shape public channel presentation today, especially for:
-- hero lead choice
-- featured groupings
-- public shelves and content emphasis
+These shape platform Home/Explore/title presentation today. They must not be used as fake Channel layout truth unless a later backed channel-programming model explicitly connects them.
 
 ### 5.4 Current Creator-Side Design/Layout Ownership Signals
 Current creator-side route ownership already exists in:
 - `app/channel-settings.tsx`
+- `app/channel-studio/index.tsx`
 
-That route already:
-- labels `Design` as a near-term section
-- labels `Layout` as a near-term section
-- labels `Content` as a near-term section
-- explicitly states these controls belong here under current route doctrine
+The owner Studio already:
+- exposes the Brand tab for backed identity/default fields
+- keeps unsupported design/layout controls out of the public Channel
+- preserves `/channel-settings` compatibility for older links
 
 This is route-ownership truth, not yet a fully backed design system.
 
@@ -202,8 +208,9 @@ This is route-ownership truth, not yet a fully backed design system.
 
 ### 7.1 Keep Current Ownership
 - `_lib/appConfig.ts` remains the owner for global theme/home defaults
-- `app/profile/[userId].tsx` remains the public presentation owner
-- `app/channel-settings.tsx` remains the creator control owner
+- `app/channel/[userId].tsx` remains the public Channel presentation owner
+- `app/channel-settings.tsx` remains the Channel Studio implementation/compatibility owner
+- `app/channel-studio/index.tsx` remains the preferred owner Studio route wrapper
 
 ### 7.2 Likely Next Helper / Model Need
 The next narrow implementation lanes in this chapter, if justified by audit truth, should stay within:
@@ -227,7 +234,7 @@ Do not create a generic page-builder abstraction unless the product truth truly 
 - do not build a freeform block builder
 - do not fake per-channel themes when only global theme truth exists
 - do not collapse content programming truth into arbitrary layout truth
-- do not let `/profile/[userId]` drift from its canonical public-route role
+- do not let `/profile/[userId]`, `/channel/[userId]`, or `/channel-studio` drift from their canonical roles
 - do not invent drag-and-drop layout persistence without backed data ownership
 - do not treat title metadata alone as a complete channel design system
 
@@ -236,9 +243,9 @@ Do not create a generic page-builder abstraction unless the product truth truly 
 ### 10.1 Current Doctrine
 Current doctrine supports:
 - global app theme and home layout defaults
-- public profile/channel hero and section structure
+- public Channel hero and section structure
 - title-driven hero/featured/trending/top-row programming emphasis
-- creator-side ownership of future design/layout controls on `/channel-settings`
+- creator-side ownership of future design/layout controls in `/channel-studio`, with `/channel-settings` compatibility
 
 ### 10.2 Later-Phase Ideas
 Later only, unless explicitly backed by future chapter work:

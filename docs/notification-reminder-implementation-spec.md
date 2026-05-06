@@ -9,12 +9,12 @@ It exists to:
 - preserve the current route and owner doctrine while Chi'llywood adds honest notification and reminder truth
 - define what notification-adjacent truth already exists in the repo today
 - separate current doctrine, missing truth, and later-phase ideas clearly
-- define how notification/reminder truth must relate to `/channel-settings`, `/profile/[userId]`, `/chat`, live/event helpers, moderation/admin surfaces, and current access/monetization outcomes
+- define how notification/reminder truth must relate to `/channel-studio`, `/channel-settings` compatibility, `/profile/[userId]`, `/channel/[userId]`, `/chat`, live/event helpers, moderation/admin surfaces, and current access/monetization outcomes
 - define the phased implementation order for the chapter
 
 This spec does not:
 - change route truth
-- create `/studio*` routes
+- create additional studio route families beyond the pushed `/channel-studio`
 - implement push delivery
 - implement a fake notification center
 - invent background infrastructure that current repo truth does not support
@@ -24,8 +24,10 @@ This spec does not:
 ### 2.1 Locked Route Truth
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical public profile/channel route. Owner mode stays on the same route. |
-| `/channel-settings` | `app/channel-settings.tsx` | Canonical creator control center and future creator-side reminder/notification-adjacent owner where truthful. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Channel Studio route and future creator-side reminder/notification-adjacent owner where truthful. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older Channel Studio links. |
 | `/chat` | `app/chat/index.tsx` | Canonical Chi'lly Chat inbox route. |
 | `/chat/[threadId]` | `app/chat/[threadId].tsx` | Canonical Chi'lly Chat direct-thread route. |
 | `/watch-party/index` | `app/watch-party/index.tsx` | Waiting-room owner for live and party entry. |
@@ -35,8 +37,9 @@ This spec does not:
 Do not create route proliferation in this chapter.
 
 ### 2.2 Current Product Rules To Preserve
-- `/profile/[userId]` remains a public profile/channel route, not a notification inbox.
-- `/channel-settings` remains the creator-side control center, not a new studio route family.
+- `/profile/[userId]` remains the personal/social Profile route, not a notification inbox.
+- `/channel/[userId]` remains the public Channel route, not an owner notification inbox.
+- `/channel-studio` remains the owner creator operating system; `/channel-settings` remains compatibility.
 - `/chat` and `/chat/[threadId]` remain the canonical messaging routes for message-state truth.
 - `Watch-Party Live`, `Live Watch-Party`, and `Live First` remain distinct.
 - access/entitlement truth already exists and must not be reopened or faked through notifications.
@@ -56,8 +59,8 @@ Do not create route proliferation in this chapter.
 Current repo doctrine already supports:
 - creator-event reminder-ready truth on `creator_events`
 - creator and public event summary reads in `_lib/liveEvents.ts`
-- public reminder-ready surface cues on `/profile/[userId]`
-- creator reminder-ready control and summary cues on `/channel-settings`
+- public reminder-ready surface cues on `/profile/[userId]` and `/channel/[userId]` only where backed and public-safe
+- creator reminder-ready control and summary cues on `/channel-studio` / `/channel-settings` compatibility
 - Chi'lly Chat unread/read truth via `chat_thread_members.last_read_at` and `unread_count`
 - moderation/admin source truth through safety reports and platform-role access
 - monetization/access action outcomes as local runtime feedback
@@ -319,8 +322,8 @@ This phase should:
 Adopt the first honest notification/reminder-adjacent surfaces.
 
 This phase should stay narrow:
-- `/channel-settings` for creator-side reminder visibility where backed
-- `/profile/[userId]` or live surfaces only for real reminder enrollment or reminder status where backed
+- `/channel-studio` for creator-side reminder visibility where backed, with `/channel-settings` compatibility preserved
+- `/channel/[userId]` or live surfaces only for real public-safe reminder enrollment or reminder status where backed
 - chat surfaces only where direct unread/read truth already exists
 
 ### Phase F — Chapter Closeout Audit

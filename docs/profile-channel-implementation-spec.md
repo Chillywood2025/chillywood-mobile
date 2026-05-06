@@ -1,20 +1,23 @@
 # Chi'llywood Profile / Channel Implementation Spec
 
+2026-05-06 current-route note: this older implementation spec is superseded where it says Profile and Channel share one public route or where it treats `/channel-settings` as the primary studio route. Current truth is Profile = `/profile/[userId]`, public Channel = `/channel/[userId]`, owner Channel Studio = `/channel-studio`, and `/channel-settings` compatibility must remain.
+
 ## 1. Purpose And Scope
 This document translates the full profile/channel product blueprint into the current Chi'llywood repo structure.
 
 It is implementation doctrine, not UI code.
 
 It exists to:
-- keep `/profile/[userId]` as the single canonical public-facing profile/channel surface
-- keep owner mode on that same route instead of splitting creator identity into a second app
-- keep `/channel-settings` as the current studio-equivalent control center
-- map larger "studio" ideas into current sections and later-phase possibilities without silently making new `/studio*` routes active
+- preserve Profile as the canonical personal/social identity surface
+- preserve public Channel as the canonical viewer-facing mini streaming/network surface
+- preserve Channel Studio as the owner-only creator operating system
+- keep `/channel-settings` compatibility working for older links
+- map larger studio ideas into current sections and later-phase possibilities without silently making extra route families active
 - preserve Chi'lly Chat, Watch-Party Live, and Live Watch-Party doctrine exactly as already locked
 - define the exact phased build order for future implementation passes
 
 This spec does not:
-- change route truth
+- change current route truth
 - add UI implementation
 - change schema or remote DB state
 - create `/studio`, `/studio/identity`, `/studio/design`, `/studio/layout`, `/studio/content`, `/studio/access`, `/studio/audience`, `/studio/analytics`, or `/studio/safety` as active routes
@@ -23,8 +26,10 @@ This spec does not:
 ### 2.1 Canonical Current Routes
 | Route | Current Owner File | Current Doctrine |
 | --- | --- | --- |
-| `/profile/[userId]` | `app/profile/[userId].tsx` | Single canonical public-facing profile/channel surface for self, other-user, and official identity. Owner mode stays on this same route. |
-| `/channel-settings` | `app/channel-settings.tsx` | Current studio-equivalent owner/control center. |
+| `/profile/[userId]` | `app/profile/[userId].tsx` | Personal/social Profile surface for self, other-user, and official identity. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Public viewer-facing Channel surface. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner-only Channel Studio. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
 | `/chat` | `app/chat/index.tsx` | Canonical Chi'lly Chat inbox. |
 | `/chat/[threadId]` | `app/chat/[threadId].tsx` | Canonical direct-thread and thread-based call surface. |
 | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Canonical Party Room route. |
@@ -41,26 +46,39 @@ This spec does not:
 Do not mix `Watch-Party Live` and `Live Watch-Party`.
 
 ### 2.3 Current Cross-Surface Preservation Rules
-- `/profile/[userId]` is identity and channel presentation, not a room and not an inbox.
-- `/channel-settings` is the current studio-equivalent control center, not a temporary placeholder to be replaced silently by `/studio*`.
+- `/profile/[userId]` is identity/social presentation, not a room and not an inbox.
+- `/channel/[userId]` is public Channel presentation, not an owner console.
+- `/channel-studio` is the owner Studio; `/channel-settings` is compatibility.
 - `/chat` and `/chat/[threadId]` remain the only canonical standalone Chi'lly Chat routes.
 - `app/communication/index.tsx` and `app/communication/[roomId].tsx` remain compatibility-only, not new user-facing route truth.
 - Rachi remains on canonical `/profile/[userId]` and canonical Chi'lly Chat routes.
 
-## 3. Public Profile / Channel Surface On `/profile/[userId]`
+## 3. Public Profile And Channel Surfaces
 ### 3.1 Route Ownership
-Current route owner:
+Current Profile route owner:
 - `app/profile/[userId].tsx`
 
-Future extraction is allowed only as supporting component files under the same route owner. Route truth does not change.
+Current public Channel route owner:
+- `app/channel/[userId].tsx`
+
+Owner Channel Studio route:
+- `app/channel-studio/index.tsx`
+- `app/channel-settings.tsx` implementation/compatibility
+
+Future extraction is allowed only as supporting component files under those route owners. Route truth does not change.
 
 ### 3.2 Public Surface Purpose
-`/profile/[userId]` is Chi'llywood's unified public identity and channel surface.
+`/profile/[userId]` is Chi'llywood's personal/social identity surface. `/channel/[userId]` is the public mini streaming/network Channel surface.
 
-It must answer:
+Profile must answer:
 1. Who is this person, creator, or official presence?
-2. What content, live presence, and community signals define their channel?
-3. What should the visitor do next from here?
+2. What social/Profile activity and identity signals are public-safe?
+3. What should the visitor do next from the Profile?
+
+Public Channel must answer:
+1. What media, live/upcoming, audience signals, and about details define this Channel?
+2. What public creator videos are playable?
+3. What should the viewer do next from the Channel?
 
 It must not become:
 - a second inbox
@@ -116,12 +134,12 @@ The primary action row on `/profile/[userId]` owns:
 - `Chi'lly Chat`
 - live entry when real live context exists
 - watch-party entry when real party context exists
-- owner-only `Manage Channel` when the viewer is the owner
+- owner-only `Channel Studio` when the viewer is the owner
 
 Primary action rules:
 - messaging must hand off to `/chat` or `/chat/[threadId]`
 - room entry must hand off to real party/live routes only when real room context exists
-- owner management must hand off to `/channel-settings`
+- owner management must hand off to `/channel-studio`
 - no fake follow, subscribe, or monetization CTA should appear until backed by real doctrine and implementation
 
 ### 3.7 Tab Strip
@@ -233,17 +251,18 @@ Owner mode still shares:
 - tab strip
 - public channel presentation
 
-### 4.4 What Must Not Move Off-Route Yet
-Do not move these off `/profile/[userId]` yet:
+### 4.4 Current Route Split
+Preserve this split:
 - owner-vs-public view switching
-- owner stats and quick actions
-- self-facing channel overview
-- self-facing public-channel preview
+- Profile owner/public actions stay on `/profile/[userId]`
+- public Channel preview/presentation stays on `/channel/[userId]`
+- owner stats and quick actions stay in `/channel-studio`
 
-`/channel-settings` should own deeper editing controls, not the entire owner identity surface.
+`/channel-studio` should own deeper editing controls, not the entire owner identity surface. `/channel-settings` remains compatibility.
 
-## 5. `/channel-settings` As The Current Studio-Equivalent Control Center
+## 5. `/channel-studio` As The Current Studio Control Center
 Current route owner:
+- `app/channel-studio/index.tsx`
 - `app/channel-settings.tsx`
 
 This route is the current studio-equivalent control center.
@@ -615,12 +634,14 @@ Remaining later-phase data gaps:
   - does not claim broader audience-role or moderation CRM depth yet
 
 ## 8. Exact Phased Implementation Order
-### Stage 1 - Public Unified `/profile/[userId]` Profile / Channel Surface
+### Stage 1 - Profile And Public Channel Route Split
 Goal:
-- land the unified public profile/channel surface on the canonical route
+- preserve personal/social Profile on `/profile/[userId]`
+- preserve public Channel on `/channel/[userId]`
 
 Exact route/file owner(s):
 - `app/profile/[userId].tsx`
+- `app/channel/[userId].tsx`
 - presentational support components only if extraction becomes necessary
 
 Exact sections/components to build:
@@ -650,15 +671,15 @@ Explicitly out of scope:
 - schema work
 
 Acceptance criteria:
-- `/profile/[userId]` reads as one public profile/channel surface
-- tab strip is stable and intentional
+- `/profile/[userId]` reads as a personal/social Profile surface
+- `/channel/[userId]` reads as a public mini streaming/network Channel surface
 - `Chi'lly Chat` handoff remains canonical
 - live/watch-party labels remain correct
 - no owner-control leakage to other-user view
 
 Proof requirements before moving on:
-- self route renders unified surface without collapsing into settings
-- other-user route renders unified surface without owner leakage
+- self Profile and own public Channel render without collapsing into settings
+- other-user Profile and public Channel render without owner leakage
 - official route still reads as official/protected
 - room-linked entry preserves canonical live/watch-party handoff labels
 
@@ -690,14 +711,14 @@ Exact data/view models needed:
 
 Explicitly out of scope:
 - moving owner mode to a separate app
-- replacing `/channel-settings`
+- replacing `/channel-studio`
 - deep analytics or monetization consoles
 
 Acceptance criteria:
-- owner mode is visibly richer on the same canonical route
+- owner mode is visibly richer in Channel Studio
 - self-only actions remain self-only
 - public presentation remains shared with owner mode
-- `Manage Channel` still routes to `/channel-settings`
+- `Channel Studio` routes to `/channel-studio`
 
 Proof requirements before moving on:
 - self route shows owner-only additions
@@ -708,11 +729,12 @@ Likely risk areas / doctrine drift risks:
 - treating owner mode like a separate app
 - letting settings swallow profile identity
 
-### Stage 3 - `/channel-settings` Studio-Equivalent Expansion
+### Stage 3 - Channel Studio Expansion
 Goal:
-- make `/channel-settings` the durable current studio-equivalent control center
+- make `/channel-studio` the durable current Studio control center while preserving `/channel-settings` compatibility
 
 Exact route/file owner(s):
+- `app/channel-studio/index.tsx`
 - `app/channel-settings.tsx`
 
 Exact sections/components to build:
@@ -735,7 +757,8 @@ Explicitly out of scope:
 - schema rewrites
 
 Acceptance criteria:
-- `/channel-settings` reads as a coherent control center
+- `/channel-studio` reads as a coherent control center
+- `/channel-settings` remains compatibility
 - current sections stay intact
 - near-term and later-phase sections are clearly labeled
 
@@ -841,7 +864,7 @@ Do not:
 - freeform-design too early before route ownership and component boundaries are stable
 - hide access or monetization rules behind vague copy
 - mix `Watch-Party Live` and `Live Watch-Party`
-- bury owner tools across many menus when `/profile/[userId]` and `/channel-settings` already own them
+- bury owner tools across many menus when `/channel-studio` and `/channel-settings` compatibility already own them
 - silently create route truth that conflicts with canonical doctrine
 - turn profile into an inbox
 - turn profile into a room
@@ -851,16 +874,17 @@ Do not:
 ## 10. Current Doctrine vs Near-Term vs Later-Phase Ideas
 | Bucket | Items |
 | --- | --- |
-| Current doctrine / should build now | Unified public profile/channel surface on `/profile/[userId]`; owner mode on the same route; `Home`, `Content`, `Live`, `Community`, `About` tab strip; `Chi'lly Chat` as the communication entry; `/channel-settings` as current studio-equivalent control center; locked `Watch-Party Live` and `Live Watch-Party` semantics; official Rachi behavior on canonical profile/chat surfaces. |
-| Near-term but not current route truth | Expanded `/channel-settings` sections for Design, Layout, Content, and Access & Monetization; richer owner stats ribbons and setup prompts; stronger curated Home/Content/Live/Community/About blocks; audience summary and creator-signal refinement under existing routes. |
-| Later-phase / planned only | Any `/studio*` route expansion; advanced creator tooling beyond current doctrine; deep audience tooling; full analytics suite; broader safety/admin surfaces; advanced creator monetization rollout; platform-builder depth such as uploads/clips/lists/partnership modules when product doctrine intentionally promotes them. |
+| Current doctrine / should build now | Personal/social Profile on `/profile/[userId]`; public Channel on `/channel/[userId]`; owner Studio on `/channel-studio`; `/channel-settings` compatibility; Channel Studio tabs Home, Content, Live, Audience, Insights, Brand; public Channel sections Hero, Featured, Latest Uploads, Live & Upcoming, About; `Chi'lly Chat` as the communication entry; locked `Watch-Party Live` and `Live Watch-Party` semantics; official Rachi behavior on canonical profile/chat/channel surfaces. |
+| Near-term but not current route truth | Deeper backed Studio controls, richer owner stats only when backed, stronger curated public Channel shelves only when backed, and audience summary refinement under existing routes. |
+| Later-phase / planned only | Additional `/channel-studio/*` child routes, advanced creator tooling beyond current doctrine, deep audience tooling, full analytics suite, broader safety/admin surfaces, advanced creator monetization rollout, and platform-builder depth such as uploads/clips/lists/partnership modules when product doctrine intentionally promotes them. |
 
 ## 11. Execution Boundary
 This document is the durable source of truth for future profile/channel implementation passes until the control files intentionally change again.
 
 Current route truth remains unchanged after this spec:
-- `/profile/[userId]` is canonical
-- owner mode stays on `/profile/[userId]`
-- `/channel-settings` remains the current studio-equivalent route
+- `/profile/[userId]` is the Profile route
+- `/channel/[userId]` is the public Channel route
+- `/channel-studio` is the preferred owner Studio route
+- `/channel-settings` remains compatibility
 - `/chat` and `/chat/[threadId]` remain canonical Chi'lly Chat routes
 - `Watch-Party Live` and `Live Watch-Party` remain distinct and locked

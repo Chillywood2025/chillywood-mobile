@@ -97,8 +97,8 @@ This checklist combines actual remote migration alignment with local migration/g
 
 | Area | Remote status from this lane | Migration owner | App owner | V1 blocker if missing |
 | --- | --- | --- | --- | --- |
-| `user_profiles` | Present by baseline and later profile/channel migrations | `202604190004`, `202604190006`, `202604200003` | `app/profile/[userId].tsx`, `app/channel-settings.tsx`, `_lib/userData.ts`, `_lib/channelReadModels.ts` | Yes |
-| `videos` | Present by baseline and creator media migrations | `202604190004`, `202604250001`, `202604260002` | `_lib/creatorVideos.ts`, `app/profile/[userId].tsx`, `app/channel-settings.tsx`, `app/player/[id].tsx` | Yes |
+| `user_profiles` | Present by baseline and later profile/channel migrations | `202604190004`, `202604190006`, `202604200003` | `app/profile/[userId].tsx`, `app/channel/[userId].tsx`, `app/channel-studio/index.tsx`, `app/channel-settings.tsx`, `_lib/userData.ts`, `_lib/channelReadModels.ts` | Yes |
+| `videos` | Present by baseline and creator media migrations | `202604190004`, `202604250001`, `202604260002` | `_lib/creatorVideos.ts`, `app/channel/[userId].tsx`, `app/channel-settings.tsx`, `app/player/[id].tsx` | Yes |
 | `videos.visibility` | Present by applied migration | `202604250001` | `_lib/creatorVideos.ts` | Yes |
 | `videos.storage_path`, `thumb_storage_path`, `mime_type`, `file_size_bytes`, `updated_at` | Present by applied migration | `202604250001` | `_lib/creatorVideos.ts` | Yes |
 | `videos.moderation_status`, `moderated_at`, `moderated_by`, `moderation_reason` | Present by applied migration | `202604260002` | `_lib/creatorVideos.ts`, `_lib/moderation.ts`, `app/admin.tsx`, `app/player/[id].tsx` | Yes |

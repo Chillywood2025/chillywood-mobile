@@ -12,6 +12,8 @@
 - login, settings, and logout
 - home and discovery
 - customizable basic profiles
+- public Channel route at `/channel/[userId]`
+- owner Channel Studio at `/channel-studio` with `/channel-settings` compatibility
 - standalone player
 - Watch-Party Live core flow
 - Live Watch-Party / Live Stage core flow
@@ -19,12 +21,19 @@
 - basic Chi'lly Chat or simple direct messaging
 - preserved Rachi official seeded-account foundation on the canonical profile and Chi'lly Chat surfaces
 - Premium subscription gate
+- 18+ launch posture
 - moderation basics
 - analytics, error monitoring, and admin visibility
 - layered room participation truth with limited active live seats, scalable participant browsing, and a clear distinction between joined presence and true live-seat media
 - Public v1 should stay focused on the core social streaming experience instead of the full long-term platform vision
 
 ## Post-v1
+- Free vs Premium live gate update: all full live/watch-party access becomes Premium, Live First is no longer free full access, no free full LiveKit token, and free preview only if explicitly built safely
+- Admin Command Center V1 with Revenue, Usage, Ads, payout/network-plan/sponsor-deal foundations, Fraud Holds, and Kill Switches
+- Ads launch foundation with AppLovin MAX wrapper, placeholder provider, admin on/off, session/daily caps, and Premium no-ads enforcement
+- 18+ age gate implementation
+- upload/content lifecycle polish
+- security/compliance/moderation pass
 - heavier creator monetization rollout
 - fuller creator mini-platform builder
 - deeper room personalization
@@ -46,6 +55,10 @@
 
 ## Dependencies / Blockers / Compliance-Sensitive Areas
 - Apple and Google billing constraints
+- RevenueCat remains Premium subscription truth
+- AppLovin MAX is the primary ad mediation direction; do not build AdMob-only ads
+- launch ad caps: base active session 3 interstitial + 1 native/feed; after 2 active browsing hours +2 interstitial + 1 native/feed; daily cap 6 interstitial + 3 native/feed; Premium sees zero ads
+- storage doctrine: Cloudflare R2 for public/high-download media; Hetzner Object Storage for source/original uploads/drafts/backups/archive/private-held-deleted media; Hetzner/OVH boxes for LiveKit and real-time live/watch-party traffic
 - Stripe Connect or equivalent marketplace payout layer for creator cash-out
 - creator payout operations and reconciliation from net receipts, not gross sticker price
 - tax reporting and finance operations
