@@ -17,6 +17,8 @@
 - standalone player
 - Watch-Party Live core flow
 - Live Watch-Party / Live Stage core flow
+- all full Live First, Live Watch-Party, and Watch-Party Live access gated by Premium
+- no free full LiveKit room/token/connect access and no free preview mode
 - comments, reactions, and basic social interaction
 - basic Chi'lly Chat or simple direct messaging
 - preserved Rachi official seeded-account foundation on the canonical profile and Chi'lly Chat surfaces
@@ -28,9 +30,8 @@
 - Public v1 should stay focused on the core social streaming experience instead of the full long-term platform vision
 
 ## Post-v1
-- Free vs Premium live gate update: all full live/watch-party access becomes Premium, Live First is no longer free full access, no free full LiveKit token, and free preview only if explicitly built safely
 - Admin Command Center V1 with Revenue, Usage, Ads, payout/network-plan/sponsor-deal foundations, Fraud Holds, and Kill Switches
-- Ads launch foundation with AppLovin MAX wrapper, placeholder provider, admin on/off, session/daily caps, and Premium no-ads enforcement
+- Ads launch foundation with AppLovin MAX wrapper, placeholder provider, Unity LevelPlay / Unity Ads later through AppLovin MAX, no AdMob-only system, admin on/off, session/daily caps, and Premium no-ads enforcement
 - 18+ age gate implementation
 - upload/content lifecycle polish
 - security/compliance/moderation pass

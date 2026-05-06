@@ -23,8 +23,8 @@
 2. Attempt watch-party create/join while signed out and confirm sign-in is required.
 3. Attempt communication create/join while signed out and confirm sign-in is required.
 4. Attempt channel settings, support feedback submission, safety reporting, and admin while signed out and confirm sign-in is required.
-5. Sign in with a real account and confirm watch-party room create/join works.
-6. Sign in with a second distinct account and confirm two-device watch-party membership and reconnect still behave correctly.
+5. Sign in with a real entitlement-backed Premium account and confirm full watch-party room create/join works.
+6. Sign in with a second distinct entitlement-backed Premium account and confirm two-device watch-party membership and reconnect still behave correctly.
 7. Sign in with a second distinct account and confirm communication room join, leave, and reconnect still behave correctly.
 8. Submit one title report, one room or participant report, and confirm no client error is shown.
 9. Open `/support`, submit one feedback item, and confirm it lands in `beta_feedback_items`.

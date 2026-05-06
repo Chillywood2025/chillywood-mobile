@@ -65,7 +65,7 @@ Use current official documentation during actual setup because console requireme
 
 | Area | Current repo status | Dashboard/manual action needed | Owner/responsible person | Proof required | Status | Exact next action |
 | --- | --- | --- | --- | --- | --- | --- |
-| Google Play Billing product | `react-native-purchases` and `react-native-purchases-ui` are installed. `_lib/revenuecat.ts`, `_lib/monetization.ts`, `_lib/premiumEntitlements.ts`, and `app/subscribe.tsx` own Premium billing UX and entitlement checks. The app does not grant Premium from local-only state. | Create the Google Play subscription product for Chi'llywood Premium, configure base plan/offers, and connect the product to RevenueCat. Confirm product IDs match the RevenueCat offering/entitlement model used by the app. | Product owner plus Play Console/RevenueCat operator. | Internal build purchase starts, product loads, purchase completes, backend entitlement becomes active, and protected routes unlock only after trusted entitlement truth. | External Setup Pending | Follow the Lane 1 runbook below: create the Play subscription product/base plan, connect it to RevenueCat entitlement `premium`, then run license-tester purchase proof. |
+| Google Play Billing product | `react-native-purchases` and `react-native-purchases-ui` are installed. `_lib/revenuecat.ts`, `_lib/monetization.ts`, `_lib/premiumEntitlements.ts`, `_lib/premiumWatchPartyAccess.ts`, and `app/subscribe.tsx` own Premium billing UX and entitlement checks. The app does not grant Premium from local-only state. All full live/watch-party access is Premium in app-side gates. | Create the Google Play subscription product for Chi'llywood Premium, configure base plan/offers, and connect the product to RevenueCat. Confirm product IDs match the RevenueCat offering/entitlement model used by the app. | Product owner plus Play Console/RevenueCat operator. | Internal build purchase starts, product loads, purchase completes, backend entitlement becomes active, and protected live/watch-party routes unlock only after trusted entitlement truth. | External Setup Pending | Follow the Lane 1 runbook below: create the Play subscription product/base plan, connect it to RevenueCat entitlement `premium`, then run license-tester purchase proof with full Live First, Live Watch-Party, and Watch-Party Live. |
 | RevenueCat configuration | Runtime config supports `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV`, `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`, and `EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY`. Monetization targets include `premium_subscription`, `premium_live_access`, and `premium_watch_party_access`; later paid content targets remain non-v1. | Configure Android app `com.chillywood.mobile`, Play service credentials, offerings, products, entitlements, and public SDK keys in RevenueCat. | Billing owner. | `/subscribe` shows configured offer, purchase and restore call RevenueCat, active entitlement is reflected by account-owned truth, and missing/expired/revoked states remain blocked. | External Setup Pending | Add the RevenueCat Android public SDK key to release env, keep all Play service credentials in RevenueCat/dashboard storage only, and verify offering `premium` loads in `/subscribe`. |
 | Billing restore path | `/subscribe` exposes restore/manage actions through the existing RevenueCat owner and shows honest failure copy when unavailable. | Ensure store account restore is configured and RevenueCat is connected to the Play app. | Billing owner. | Reinstall/login on a second install, tap Restore, validate server/store result, and confirm Premium unlocks only after entitlement refresh. | External Setup Pending | After purchase setup, run restore proof with the same Google license tester and capture screenshots/logs without receipt tokens. |
 | Google Play Store listing | `app.json` names the app `Chi'llywood`, version `1.0.0`, Android package `com.chillywood.mobile`, and icons/splash assets under `assets/images`. `eas.json` has a production Android app-bundle profile. `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md` now records draft listing copy, asset gaps, screenshot plan, category guidance, and content-rating prep. | Prepare Play Store app listing, short/full descriptions, screenshots, feature graphic, app category, contact email, privacy policy URL, account deletion URL, content rating, target audience, and tester tracks. | Product owner plus release manager. | Play Console listing checklist passes, internal/closed testing track accepts AAB, policy declarations are accepted. | External Setup Pending | Follow `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`: approve copy, create icon/feature/screenshot assets, fill content rating/target audience, then upload first production-profile AAB to internal testing after release proof. |
@@ -120,7 +120,10 @@ Scope for this lane only:
   - `premium_live_access` / offering `premium-live`
   - `premium_watch_party_access` / offering `premium-watch-party`
 - `/subscribe` is honest when setup is missing: it reports unavailable/partial setup and does not grant Premium locally.
-- `hasPremiumAccess()` and Watch-Party gate helpers read RevenueCat/backend entitlement truth rather than trusting a local-only toggle when subscriptions are enabled.
+- `hasPremiumAccess()` and live/watch-party gate helpers read RevenueCat/backend entitlement truth rather than trusting a local-only toggle when subscriptions are enabled.
+- All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Free users are blocked before full room/session/token/connect and do not receive full LiveKit room/token/connect access.
+- Centralized helper exports include `canUseLiveFirst`, `canUseLiveWatchParty`, `canUseWatchPartyLive`, `requireLiveFirstPremium`, `requireLiveWatchPartyPremium`, and `requireWatchPartyLivePremium`.
+- No free preview mode, 60/120-second preview, low-quality preview token, or read-only live preview exists.
 
 ### Manual Dashboard Steps
 
@@ -165,11 +168,11 @@ Use an internal/closed-test Android build or a release-like build with the corre
 6. Complete a license-tester purchase with the test payment method that always approves.
 7. Confirm RevenueCat customer info shows active entitlement `premium`.
 8. Confirm the app shows Premium active for the signed-in Chi'llywood account.
-9. Confirm a protected Watch-Party/Premium action unlocks only after entitlement truth refreshes.
+9. Confirm protected Live First, Live Watch-Party, and Watch-Party Live actions unlock only after entitlement truth refreshes.
 10. Reinstall or clear app state, sign into the same Chi'llywood account, tap Restore, and confirm Premium is restored only from store/RevenueCat/backend truth.
 11. Test a revoked/expired/canceled state using RevenueCat, Play Console refund/revoke, or Play Billing Lab where appropriate.
 12. Confirm missing/expired/revoked/pending entitlement states block Premium access and show honest copy.
-13. Confirm signed-out and non-premium users remain blocked from Premium-required Watch-Party flows.
+13. Confirm signed-out and non-premium users remain blocked from Premium-required full live/watch-party flows before room/session/token/connect.
 14. Save screenshots/logs under `/tmp/chillywood-premium-billing-proof-*`.
 15. Do not save purchase tokens, receipts, service account details, or personal payment details in proof artifacts.
 
@@ -183,7 +186,7 @@ Stop and do not mark Done if:
 - `/subscribe` still says no Premium offer is available in a release-like build.
 - Purchase succeeds in Google Play but RevenueCat entitlement does not become active.
 - Restore does not recover a valid active purchase.
-- The app unlocks Premium from local-only state, a hidden button, or an untrusted row.
+- The app unlocks Premium from local-only state, a hidden button, an untrusted row, or dev bypass behavior on strict live/watch-party gates.
 - Any proof artifact would expose secrets, receipt payloads, purchase tokens, or personal payment details.
 
 ## Lane 2 Runbook - Account Deletion / Legal URLs / Play Data Safety

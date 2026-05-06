@@ -52,8 +52,8 @@ Current Public v1 truth:
 - Comment media upload is post-v1.
 - Native game/video streaming is later phase.
 - Paid/subscriber media, tips, coins, payouts, VIPs, and advanced creator studio are later phase.
-- Premium/access gate proof is required for Watch-Party Live.
-- Current business decision is that all full live/watch-party access will become Premium in a later gate update; free preview is allowed only if explicitly designed safely.
+- Premium/access gate proof is required for full Live First, Live Watch-Party, and Watch-Party Live.
+- Current business decision is that all full live/watch-party access is Premium. Live First is no longer free, free users do not receive full LiveKit room/token/connect access, and no free preview mode exists. Any future preview must be explicitly designed, limited, low-cost, separately gated, and proved safely.
 - Basic moderation/safety is required before public launch because creator uploads exist.
 - Supabase/RLS proof is required before public launch. Focused local proof now passes for the current creator media, premium/billing, moderation, creator-event, notification, reminder, and Watch-Party room policy lanes. Remote proof now also passes for `profile_posts`, `creator_video_comments`, and the `profile_post` / `creator_video_comment` safety report target types; broader live Supabase proof is still required for storage limits, public/draft/non-owner creator media, admin writes, entitlement states, access gates, and Android route behavior.
 
@@ -530,7 +530,7 @@ Future Codex should avoid:
 
 ### Purpose
 
-The Premium / Access Gate System determines whether a user can access premium features, including Watch-Party Live and later premium channel tools. It answers: "Can this signed-in identity use this protected feature right now, and what honest explanation should the app show if not?"
+The Premium / Access Gate System determines whether a user can access premium features, including full Live First, Live Watch-Party, Watch-Party Live, and later premium channel tools. It answers: "Can this signed-in identity use this protected feature right now, and what honest explanation should the app show if not?"
 
 ### A. System ownership
 
@@ -538,6 +538,8 @@ Current route/surface owners:
 
 - `app/title/[id].tsx`: title-detail gate and Watch-Party Live entry copy.
 - `app/player/[id].tsx`: standalone playback gate and Watch-Party Live CTA gate.
+- `app/(tabs)/index.tsx`: Home Live Watch-Party / Live First entry gate.
+- `app/watch-party/index.tsx`: waiting-room create/join gate.
 - `app/watch-party/[partyId].tsx`: Party Room direct-route access gate.
 - `app/watch-party/live-stage/[partyId].tsx`: Live Room direct-route access gate.
 - `app/channel-settings.tsx`: creator room-default access settings and creator grant summaries.
@@ -548,6 +550,7 @@ Current helper/component owners:
 - `_lib/premiumEntitlements.ts`: backend-trusted entitlement reads for active/expired/revoked/pending account access.
 - `_lib/revenuecat.ts`: RevenueCat configuration, customer info, offerings, purchases, restore, manage subscription handoff.
 - `_lib/roomRules.ts`: room-level access decision for join policy and premium/party-pass content access.
+- `_lib/premiumWatchPartyAccess.ts`: centralized full live/watch-party Premium helper layer for Live First, Live Watch-Party, and Watch-Party Live.
 - `_lib/watchParty.ts`: watch-party room persistence and room policy data.
 - `components/monetization/access-sheet.tsx`: premium/party-pass gate sheet, purchase/restore/manage UI.
 
@@ -585,6 +588,7 @@ Relationship to Watch-Party:
 - Waiting Room checks access before entry.
 - Party Room direct deep links check access before joining.
 - Backend room/session creation must enforce premium requirements where applicable.
+- Free users are blocked before full room/session/token/connect and do not receive full LiveKit room/token/connect access.
 
 Relationship to Player:
 
@@ -627,17 +631,19 @@ Relationship to Creator Media:
 
 Signed-out user:
 
-- Block premium Watch-Party Live, Premium room, and protected direct-route access.
+- Block full Live First, Live Watch-Party, Watch-Party Live, Premium room, and protected direct-route access.
 - Show sign-in-required copy when identity is required.
 - Do not create room membership for anonymous users.
 - Do not show "room not found" when the real issue is sign-in.
 
 Signed-in non-premium user:
 
-- Show premium gate for premium Watch-Party Live / room / title access.
+- Show premium gate for full Live First, Live Watch-Party, Watch-Party Live, room, and title access.
 - Offer Upgrade and Restore purchase actions if billing is configured.
 - Preserve route context so the user can continue after entitlement refresh.
 - Do not create protected sessions if premium entitlement is absent.
+- Do not request or connect a full LiveKit room token for blocked full live/watch-party access.
+- No free preview mode exists; do not add 60/120-second preview, low-quality preview token, or read-only live preview unless a future pass explicitly designs it.
 
 Premium user:
 
@@ -692,7 +698,10 @@ Restore purchase path:
 
 Required copy style:
 
-- Premium gate title: "Watch-Party Live is a Premium feature."
+- Premium gate title: "Premium required."
+- Live First message: "Live rooms are a Premium feature. Upgrade to go live and join full live rooms."
+- Live Watch-Party message: "Live Watch-Party is Premium. Upgrade to join full live watch parties."
+- Watch-Party Live message: "Watch-Party Live is Premium. Upgrade to start or join watch-party rooms."
 - Primary action: "Upgrade"
 - Utility action: "Restore purchase"
 - Secondary action: "Back"
@@ -719,10 +728,11 @@ Rules:
 
 ### G. Proof checklist
 
-- Signed-out user is blocked from premium Watch-Party Live.
-- Signed-in non-premium user is blocked.
+- Signed-out user is blocked from full Live First, Live Watch-Party, and Watch-Party Live where identity is required.
+- Signed-in non-premium user is blocked before room/session/token/connect.
 - Non-premium direct deep link is blocked.
-- Premium user is allowed.
+- Free-user runtime proof showed Home live entry displays the Premium sheet and does not route into `/watch-party`, generate a room code, or request/connect LiveKit; direct `/watch-party?mode=live` is blocked with the same gate.
+- Premium user is allowed; real entitlement-backed Premium account proof remains pending when available.
 - Expired/canceled user is blocked.
 - Restore purchase path is tested.
 - Route guards are tested.
@@ -1675,6 +1685,8 @@ Recommendation:
 - Deep links check premium.
 - Backend session creation checks premium.
 - Access denial uses access copy, not room-not-found copy.
+- Live First, Live Watch-Party, and Watch-Party Live all require Premium for full access.
+- Free users do not get full LiveKit room/token/connect access.
 
 ### Creator Media + Watch-Party
 
@@ -1733,7 +1745,7 @@ Recommendation:
 
 | Area | Required before public launch |
 | --- | --- |
-| Premium / Access Gates | Watch-Party Live premium gate proof, signed-out protection, deep-link protection, honest failure copy. |
+| Premium / Access Gates | Full Live First, Live Watch-Party, and Watch-Party Live premium gate proof, signed-out protection, deep-link protection, honest failure copy, and real Premium-account proof. |
 | Creator Media | Runtime proof complete, public/draft proof, owner/non-owner proof, Player source proof preserved. |
 | Supabase / RLS | Live schema/RLS proof for creator videos, admin, reports, rooms, premium-protected actions. |
 | Moderation / Safety | Basic report path for uploaded videos, creator delete/unpublish, admin hide/remove or explicit blocker, non-owner denial. |

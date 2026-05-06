@@ -36,6 +36,8 @@ Before a feature or AI behavior belongs in a room, it should be tested against t
 - Treat Standalone Player as solo-first and playback-first.
 - Treat Profile / Channel and Chi'lly Chat as cross-room identity and communication layers, not replacement room systems.
 - Keep Rachi on the canonical profile and Chi'lly Chat paths as the official platform-owned concierge and moderation-ready presence.
+- All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Free users must be blocked before full room/session/token/connect and must not receive full LiveKit room/token/connect access.
+- No free live/watch-party preview mode exists. Any future preview must be separately designed, limited, low-cost, and separately gated.
 
 ## Feature Maturity Model
 - `Core features now`: practical MVP and near-term product behaviors that fit the current direction and can be implemented without rewriting the platform.
@@ -247,7 +249,7 @@ Relationship to other rooms: Live Waiting Room is the pre-entry layer for Live R
 
 ### L. Monetization / growth relevance
 - Growth relevance is strong: follows, reminders, sharing, and re-entry behavior belong here.
-- Monetization relevance is moderate and mostly later: premium live access, sponsored events, or reserved entry can fit here later.
+- Monetization relevance is active for access: full live entry is Premium and must block free users before full room/session/token/connect. Sponsored events or reserved entry can fit later.
 
 ### M. Accessibility / usability considerations
 - join path must be obvious and fast
@@ -347,7 +349,7 @@ Relationship to other rooms: Live Room is the canonical live-session shell on `/
 
 ### L. Monetization / growth relevance
 - Growth relevance is high: follows, shares, rejoin behavior, and audience retention belong here.
-- Monetization relevance is medium now and high later: paid live access, creator boosts, sponsored sessions, and premium room templates fit later.
+- Monetization relevance is medium now and high later: full live access is Premium now; paid live access, creator boosts, sponsored sessions, and premium room templates can fit later.
 - This room should not assume ambient ads by default; premium-feeling immersive live surfaces should stay clear unless a specific compliant placement strategy is intentionally chosen later.
 
 ### M. Accessibility / usability considerations

@@ -120,6 +120,13 @@ Locked meanings:
 - `Live Watch-Party` = social live-viewing mode in Live Room
 - `Watch-Party Live` = title/player watch-together flow
 
+## Premium Live Access Rule
+Full `Live First`, `Live Watch-Party`, and `Watch-Party Live` access is Premium.
+
+This must be enforced at visible actions, route/deep-link entry, room/session creation or join, and any LiveKit token/connect path the app controls. Free users must be blocked before full room/session/token/connect and must not receive full LiveKit room/token/connect access.
+
+No free live/watch-party preview mode exists. Do not add preview behavior unless a future prompt explicitly defines the limited preview UX, token restrictions, cost boundary, and proof.
+
 ## Party / Live Split Rule
 - Party Waiting Room routes into Party Room on `/watch-party/[partyId]`
 - Live Waiting Room routes into Live Room on `/watch-party/live-stage/[partyId]`

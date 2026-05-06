@@ -1,27 +1,24 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement the Free vs Premium live gate update.
+Implement Admin Command Center V1.
 
-Product decision:
+Product direction:
 
-- all full live/watch-party access becomes Premium
-- Live First is no longer free full access
-- free users do not receive a full LiveKit token
-- free preview is allowed only if the prompt explicitly specifies the safe preview behavior, duration, UI copy, token restrictions, and proof
-- Premium remains backed by RevenueCat / backend entitlement truth, not local-only cache
-- do not change Player controls, Watch-Party layout, Live Stage layout, creator comments, Channel Studio, public Channel, Chi'lly Circle, profile privacy, ads, billing/payout systems, storage, RLS, or migrations unless the prompt explicitly scopes and proves the change
+- Admin is platform/operator authority, not creator/channel owner authority.
+- Admin Command Center V1 should focus on Revenue, Usage, Ads, payout/network-plan/sponsor-deal foundations, Fraud Holds, and Kill Switches.
+- Keep it backend-authorized and operator-only.
+- Do not blur Admin with Channel Studio, Profile, Chi'lly Circle, public Channel, Premium entitlement ownership, or creator payout systems unless the prompt explicitly scopes and proves the change.
 
 Required proof for that lane:
 
-- signed-out live/watch-party deep links are blocked or redirected according to existing auth behavior
-- signed-in free users cannot enter full Live First, Live Watch-Party, or Watch-Party Live
-- signed-in Premium users can enter the full allowed live/watch-party paths
-- no free full LiveKit token is minted
-- any free preview, if built, cannot become full room access by deep link, stale state, or hidden button
-- existing `/channel-studio`, `/channel-settings`, `/channel/[userId]`, Profile View Channel, and Studio Preview Channel routes still work
+- signed-out and non-operator users are denied by backend/platform-role truth
+- operator users see only backed controls
+- no fake revenue, payout, ad, sponsor, or network-plan data appears
+- sensitive mutations have confirmation and audit posture where backed
+- existing `/channel-studio`, `/channel-settings`, `/channel/[userId]`, Profile View Channel, Studio Preview Channel, Player, Watch-Party, and Live Stage routes still work
 
-## Next Product Lanes After Live Gate
+## Current Product Lane Order
 1. Admin Command Center V1:
    - Revenue
    - Usage
@@ -32,18 +29,22 @@ Required proof for that lane:
    - Fraud Holds
    - Kill Switches
 2. Ads launch foundation:
-   - AppLovin MAX provider wrapper
+   - AppLovin MAX primary/provider wrapper
    - placeholder provider until AppLovin IDs are ready
+   - Unity LevelPlay / Unity Ads later through AppLovin MAX
+   - no AdMob-only system
    - admin on/off
    - active-session and daily caps
    - Premium sees zero ads
 3. 18+ age gate.
 4. Upload/content lifecycle polish.
 5. Security/compliance/moderation pass.
-6. Public Channel streaming-network visual correction only if a later proof identifies remaining issues.
 
 ## Current Pushed Truth To Preserve
-- Premium gate foundation is pushed.
+- Premium gate is pushed.
+- Free vs Premium full live/watch-party gate is pushed: all full Live First, Live Watch-Party, and Watch-Party Live access is Premium.
+- Free users are blocked before full room/session/token/connect and receive no full LiveKit room/token/connect access.
+- No free live/watch-party preview mode was added.
 - Chi'lly Circle V1 is pushed.
 - Chi'lly Circle profile privacy is pushed.
 - Channel Studio Phase 1 rename/organization is pushed.
@@ -72,7 +73,8 @@ Required proof for that lane:
 - Free users see ads at launch.
 - Premium users see no ads.
 - Planned Premium price: `$9.99/month` and `$99/year`.
-- Full live/watch-party access becomes Premium in the next gate lane.
+- Full live/watch-party access is Premium and must not be made free again without an explicit product decision.
+- Free users may only get live/watch-party preview in a separate future pass if explicitly designed safely; no preview mode exists now.
 - Ads support free browsing.
 - Premium supports expensive live usage.
 - RevenueCat remains Premium subscription truth.

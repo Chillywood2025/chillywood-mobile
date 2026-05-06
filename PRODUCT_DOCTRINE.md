@@ -16,9 +16,10 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 ## Monetization Core
 - creators can choose whether content is free or paid
 - preset price tiers are preferred over arbitrary pricing
-- Chi'llywood Premium gates Watch-Party Live and other recurring premium value
-- full live/watch-party access is planned to become Premium in a later gate update
-- free users do not get full live/watch-party access; a free preview is allowed only if explicitly designed and proved safely
+- Chi'llywood Premium gates all full live/watch-party access: Live First, Live Watch-Party, and Watch-Party Live
+- Live First is no longer free full access
+- free users do not get full live/watch-party access, full LiveKit room tokens, or full LiveKit room/connect access
+- no free live/watch-party preview mode exists; any future preview must be explicitly designed, limited, low-cost, separately gated, and proved safely
 - the current planned Premium price is `$9.99/month` and `$99/year`
 - Premium supports expensive live usage
 - RevenueCat remains the Premium subscription truth owner

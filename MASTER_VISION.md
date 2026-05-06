@@ -58,6 +58,7 @@ Do not:
 - `Live First` means just-live creator/live-room behavior.
 - `Live Watch-Party` means a live social viewing room where host sees viewers, viewers see host, and viewers see viewers.
 - `Watch-Party Live` means watch content together while viewers can see each other.
+- Full access to `Live First`, `Live Watch-Party`, and `Watch-Party Live` is Premium. Free users do not get full room/session/token/connect access.
 - Party flow is `Player -> Watch-Party Live -> Party Waiting Room -> Party Room -> shared watch-party player`.
 - Live Stage belongs only to the separate Live flow.
 - Party Room must not hand off to Live Stage.
