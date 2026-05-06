@@ -1,9 +1,10 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ImageBackground,
   ScrollView,
   StyleSheet,
@@ -108,6 +109,9 @@ type SummaryMetricCard = {
   tone?: "default" | "unavailable";
 };
 
+type StudioTabId = "home" | "content" | "live" | "audience" | "insights" | "brand";
+type ContentStatusFilter = "all" | "published" | "drafts";
+type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 
 type ChannelEventEditorState = {
@@ -426,10 +430,62 @@ const analyticsUnavailableMetricDefinitions: readonly {
   },
 ];
 
-export default function ChannelSettingsScreen() {
+const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
+  { id: "home", label: "Home" },
+  { id: "content", label: "Content" },
+  { id: "live", label: "Live" },
+  { id: "audience", label: "Audience" },
+  { id: "insights", label: "Insights" },
+  { id: "brand", label: "Brand" },
+];
+
+const CONTENT_STATUS_FILTERS: readonly { id: ContentStatusFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "published", label: "Published" },
+  { id: "drafts", label: "Drafts" },
+];
+
+const CONTENT_SORT_OPTIONS: readonly { id: ContentSortId; label: string }[] = [
+  { id: "newest", label: "Newest" },
+  { id: "oldest", label: "Oldest" },
+];
+
+const normalizeStudioTabId = (value: unknown): StudioTabId | null => {
+  const normalized = String(Array.isArray(value) ? value[0] : value ?? "").trim().toLowerCase();
+  if (
+    normalized === "home"
+    || normalized === "content"
+    || normalized === "live"
+    || normalized === "audience"
+    || normalized === "insights"
+    || normalized === "brand"
+  ) {
+    return normalized;
+  }
+  return null;
+};
+
+const getCreatorVideoCreatedTimestamp = (video: CreatorVideo) => {
+  const timestamp = Date.parse(video.createdAt || video.updatedAt);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const hasPlayableCreatorVideoSource = (video: CreatorVideo) => !!(video.playbackUrl || video.storagePath);
+
+export function ChannelStudioScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ tab?: string; focus?: string; action?: string }>();
   const { isLoading: authLoading, isSignedIn, user } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
+  const routeAction = String(Array.isArray(routeParams.action) ? routeParams.action[0] : routeParams.action ?? "").trim();
+  const initialStudioTab = normalizeStudioTabId(routeParams.tab)
+    ?? normalizeStudioTabId(routeParams.focus)
+    ?? (routeAction === "upload" ? "content" : null)
+    ?? "home";
+  const [activeStudioTab, setActiveStudioTab] = useState<StudioTabId>(initialStudioTab);
+  const [contentStatusFilter, setContentStatusFilter] = useState<ContentStatusFilter>("all");
+  const [contentSearchQuery, setContentSearchQuery] = useState("");
+  const [contentSort, setContentSort] = useState<ContentSortId>("newest");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -475,6 +531,15 @@ export default function ChannelSettingsScreen() {
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel Studio");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
+
+  useEffect(() => {
+    const nextTab = normalizeStudioTabId(routeParams.tab)
+      ?? normalizeStudioTabId(routeParams.focus)
+      ?? (routeAction === "upload" ? "content" : null);
+    if (nextTab) {
+      setActiveStudioTab(nextTab);
+    }
+  }, [routeAction, routeParams.focus, routeParams.tab]);
 
   useEffect(() => {
     if (!canUseChannelSettings) {
@@ -1337,6 +1402,10 @@ export default function ChannelSettingsScreen() {
     () => creatorEvents.filter((event) => event.isUpcoming),
     [creatorEvents],
   );
+  const otherCreatorEvents = useMemo(
+    () => creatorEvents.filter((event) => !event.isUpcoming),
+    [creatorEvents],
+  );
   const liveNowEvents = useMemo(
     () => creatorEvents.filter((event) => event.isLiveNow),
     [creatorEvents],
@@ -1431,15 +1500,166 @@ export default function ChannelSettingsScreen() {
       tone: eventsWithReminderInterest.length ? "default" : "unavailable",
     },
   ];
+  const channelName = String(profile?.displayName || profile?.username || "Your Channel").trim();
+  const channelTagline = String(profile?.tagline ?? "").trim();
+  const channelInitial = channelName.charAt(0).toUpperCase() || "C";
+  const publishedVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
+  const draftVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
+  const latestCreatorVideo = useMemo(
+    () => [...creatorVideos].sort((a, b) => getCreatorVideoCreatedTimestamp(b) - getCreatorVideoCreatedTimestamp(a))[0] ?? null,
+    [creatorVideos],
+  );
+  const filteredCreatorVideos = useMemo(() => {
+    const query = contentSearchQuery.trim().toLowerCase();
+    return creatorVideos
+      .filter((video) => {
+        if (contentStatusFilter === "published" && video.visibility !== "public") return false;
+        if (contentStatusFilter === "drafts" && video.visibility !== "draft") return false;
+        if (!query) return true;
+        return `${video.title} ${video.description}`.toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
+        const diff = getCreatorVideoCreatedTimestamp(a) - getCreatorVideoCreatedTimestamp(b);
+        return contentSort === "oldest" ? diff : -diff;
+      });
+  }, [contentSearchQuery, contentSort, contentStatusFilter, creatorVideos]);
+  const audienceFollowerCount = typeof audienceSummary?.followerCount === "number" ? audienceSummary.followerCount : null;
+  const audienceSubscriberCount = typeof audienceSummary?.subscriberCount === "number" ? audienceSummary.subscriberCount : null;
+  const pendingAudienceRequestCount = typeof audienceSummary?.pendingRequestCount === "number" ? audienceSummary.pendingRequestCount : null;
+  const blockedAudienceCount = typeof audienceSummary?.blockedAudienceCount === "number" ? audienceSummary.blockedAudienceCount : null;
+  const recentSafetyReportCount = typeof safetyAdminSummary?.recentSafetyReportCount === "number"
+    ? safetyAdminSummary.recentSafetyReportCount
+    : null;
+  const snapshotCards: readonly {
+    label: string;
+    value: string;
+    body: string;
+    tab: StudioTabId;
+  }[] = [
+    {
+      label: "Published Videos",
+      value: videosLoading ? "..." : String(publishedVideoCount),
+      body: publishedVideoCount ? "Public channel videos." : "No published videos yet.",
+      tab: "content",
+    },
+    {
+      label: "Drafts",
+      value: videosLoading ? "..." : String(draftVideoCount),
+      body: draftVideoCount ? "Owner-only drafts." : "No drafts right now.",
+      tab: "content",
+    },
+    {
+      label: "Upcoming Events",
+      value: eventsLoading ? "..." : String(upcomingEvents.length),
+      body: upcomingEvents.length ? "Scheduled channel events." : "No upcoming events yet.",
+      tab: "live",
+    },
+    ...(audienceFollowerCount == null ? [] : [{
+      label: "Followers",
+      value: String(audienceFollowerCount),
+      body: audienceFollowerCount ? "Channel follower relationships." : "No followers yet.",
+      tab: "audience" as const,
+    }]),
+    ...(pendingAudienceRequestCount == null ? [] : [{
+      label: "Audience Requests",
+      value: String(pendingAudienceRequestCount),
+      body: pendingAudienceRequestCount ? "Requests need review." : "No audience requests right now.",
+      tab: "audience" as const,
+    }]),
+    ...(blockedAudienceCount == null ? [] : [{
+      label: "Blocked Users",
+      value: String(blockedAudienceCount),
+      body: blockedAudienceCount ? "Blocked channel audience members." : "No blocked audience members.",
+      tab: "audience" as const,
+    }]),
+    ...(audienceSubscriberCount == null ? [] : [{
+      label: "Subscribers",
+      value: String(audienceSubscriberCount),
+      body: audienceSubscriberCount ? "Backed subscriber signal." : "No subscribers yet.",
+      tab: "audience" as const,
+    }]),
+  ];
+  const needsAttentionItems: readonly {
+    title: string;
+    body: string;
+    tab: StudioTabId;
+  }[] = [
+    ...(draftVideoCount > 0 ? [{
+      title: "Drafts waiting",
+      body: `${draftVideoCount} draft${draftVideoCount === 1 ? "" : "s"} can be reviewed for publish.`,
+      tab: "content" as const,
+    }] : []),
+    ...((pendingAudienceRequestCount ?? 0) > 0 ? [{
+      title: "Audience requests",
+      body: `${pendingAudienceRequestCount} request${pendingAudienceRequestCount === 1 ? "" : "s"} need review.`,
+      tab: "audience" as const,
+    }] : []),
+    ...((recentSafetyReportCount ?? 0) > 0 ? [{
+      title: "Safety review",
+      body: `${recentSafetyReportCount} recent report${recentSafetyReportCount === 1 ? "" : "s"} are visible to this account.`,
+      tab: "insights" as const,
+    }] : []),
+  ];
+  const insightMetricCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Published Videos",
+      value: videosLoading ? "..." : String(publishedVideoCount),
+      body: "Public creator videos loaded for this channel.",
+    },
+    {
+      label: "Drafts",
+      value: videosLoading ? "..." : String(draftVideoCount),
+      body: "Owner-only creator uploads loaded for this channel.",
+    },
+    ...(audienceFollowerCount == null ? [] : [{
+      label: "Followers",
+      value: String(audienceFollowerCount),
+      body: "Backed channel follower relationships.",
+    }]),
+    ...(pendingAudienceRequestCount == null ? [] : [{
+      label: "Audience Requests",
+      value: String(pendingAudienceRequestCount),
+      body: "Pending backed audience requests.",
+    }]),
+    ...(blockedAudienceCount == null ? [] : [{
+      label: "Blocked Users",
+      value: String(blockedAudienceCount),
+      body: "Blocked audience rows in current channel truth.",
+    }]),
+    ...(audienceSubscriberCount == null ? [] : [{
+      label: "Subscribers",
+      value: String(audienceSubscriberCount),
+      body: "Creator/channel subscriber signal only.",
+    }]),
+    {
+      label: "Upcoming Events",
+      value: eventsLoading ? "..." : String(upcomingEvents.length),
+      body: "Scheduled creator events with future start times.",
+    },
+  ];
 
-  const renderContentPanel = () => (
+  const renderContentPanel = () => {
+    const filteredEmptyCopy = contentStatusFilter === "published"
+      ? "No published videos yet. Publish a draft when it is ready."
+      : contentStatusFilter === "drafts"
+        ? "No drafts right now."
+        : "No channel videos yet. Upload your first video.";
+
+    return (
     <View style={[styles.panel, styles.creatorContentPanel]}>
       <View style={styles.panelHeader}>
         <View style={styles.panelHeaderCopy}>
-          <Text style={styles.panelTitle}>Creator Content</Text>
-          <Text style={styles.panelSubtitle}>Upload and manage videos for your public Profile/Channel.</Text>
+          <Text style={styles.panelTitle}>Content</Text>
+          <Text style={styles.panelSubtitle}>Manage your channel videos, drafts, and published uploads.</Text>
         </View>
-        <Text style={styles.panelStatus}>FIRST STOP</Text>
+        <TouchableOpacity
+          style={styles.panelHeaderButton}
+          activeOpacity={0.86}
+          onPress={onPickVideoFile}
+          disabled={videoSaving}
+        >
+          <Text style={styles.panelHeaderButtonText}>Upload</Text>
+        </TouchableOpacity>
       </View>
       <Text style={styles.permissionCopy}>
         Upload playable videos to your public channel. Drafts stay visible only to you; public videos can appear on your Profile/Channel and open in Player.
@@ -1458,19 +1678,61 @@ export default function ChannelSettingsScreen() {
           <Text style={styles.summaryBody}>creator-owned uploads in this channel library</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Public</Text>
+          <Text style={styles.summaryLabel}>Published</Text>
           <Text style={styles.summaryValue}>
-            {videosLoading ? "..." : String(creatorVideos.filter((video) => video.visibility === "public").length)}
+            {videosLoading ? "..." : String(publishedVideoCount)}
           </Text>
           <Text style={styles.summaryBody}>visible to public profile visitors</Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Drafts</Text>
           <Text style={styles.summaryValue}>
-            {videosLoading ? "..." : String(creatorVideos.filter((video) => video.visibility === "draft").length)}
+            {videosLoading ? "..." : String(draftVideoCount)}
           </Text>
           <Text style={styles.summaryBody}>owner-only until published</Text>
         </View>
+      </View>
+
+      <Text style={styles.sectionLabel}>Status</Text>
+      <View style={styles.segmentRow}>
+        {CONTENT_STATUS_FILTERS.map((filter) => (
+          <TouchableOpacity
+            key={filter.id}
+            style={[styles.segmentButton, contentStatusFilter === filter.id && styles.segmentButtonActive]}
+            activeOpacity={0.86}
+            onPress={() => setContentStatusFilter(filter.id)}
+          >
+            <Text style={[styles.segmentButtonText, contentStatusFilter === filter.id && styles.segmentButtonTextActive]}>
+              {filter.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.sectionLabel}>Search videos</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Search videos"
+        placeholderTextColor="#8d8d8d"
+        value={contentSearchQuery}
+        onChangeText={setContentSearchQuery}
+        autoCapitalize="none"
+      />
+
+      <Text style={styles.sectionLabel}>Sort</Text>
+      <View style={styles.segmentRow}>
+        {CONTENT_SORT_OPTIONS.map((option) => (
+          <TouchableOpacity
+            key={option.id}
+            style={[styles.segmentButton, contentSort === option.id && styles.segmentButtonActive]}
+            activeOpacity={0.86}
+            onPress={() => setContentSort(option.id)}
+          >
+            <Text style={[styles.segmentButtonText, contentSort === option.id && styles.segmentButtonTextActive]}>
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <Text style={styles.sectionLabel}>Creator Library</Text>
@@ -1493,9 +1755,9 @@ export default function ChannelSettingsScreen() {
             <Text style={styles.eventSecondaryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      ) : creatorVideos.length ? (
+      ) : creatorVideos.length && filteredCreatorVideos.length ? (
         <View style={styles.eventList}>
-          {creatorVideos.map((video) => (
+          {filteredCreatorVideos.map((video) => (
             <CreatorVideoCard
               key={video.id}
               video={video}
@@ -1518,12 +1780,23 @@ export default function ChannelSettingsScreen() {
             />
           ))}
         </View>
+      ) : creatorVideos.length ? (
+        <View style={styles.eventEmptyCard}>
+          <Text style={styles.eventEmptyTitle}>No matching videos</Text>
+          <Text style={styles.eventEmptyBody}>{filteredEmptyCopy}</Text>
+        </View>
       ) : (
         <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>Upload your first video</Text>
-          <Text style={styles.eventEmptyBody}>
-            Your channel can now start with a real creator-owned video. Draft first, then publish when it is ready.
-          </Text>
+          <Text style={styles.eventEmptyTitle}>No channel videos yet</Text>
+          <Text style={styles.eventEmptyBody}>No channel videos yet. Upload your first video.</Text>
+          <TouchableOpacity
+            style={styles.eventSecondaryButton}
+            activeOpacity={0.86}
+            onPress={onPickVideoFile}
+            disabled={videoSaving}
+          >
+            <Text style={styles.eventSecondaryButtonText}>Upload</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1618,6 +1891,328 @@ export default function ChannelSettingsScreen() {
         </TouchableOpacity>
       </View>
     </View>
+    );
+  };
+
+  const renderPreviewDisabledAction = () => (
+    <TouchableOpacity
+      style={[styles.studioActionButton, styles.studioActionButtonDisabled]}
+      activeOpacity={0.86}
+      disabled
+    >
+      <Text style={styles.studioActionButtonText}>Preview Channel</Text>
+      <Text style={styles.studioActionButtonCopy}>Preview coming in Phase 2B</Text>
+    </TouchableOpacity>
+  );
+
+  const renderStudioHeader = () => (
+    <View style={styles.studioHeaderCard}>
+      <Text style={styles.heroTitle}>Channel Studio</Text>
+      <Text style={styles.studioSubtitle}>Run your channel, content, audience, and live events from one place.</Text>
+      <Text style={styles.studioClarifier}>Profile settings are separate. This Studio controls your public channel.</Text>
+      {profile ? (
+        <View style={styles.channelIdentityRow}>
+          {profile.avatarUrl ? (
+            <Image source={{ uri: profile.avatarUrl }} style={styles.channelAvatarImage} />
+          ) : (
+            <View style={styles.channelAvatarFallback}>
+              <Text style={styles.channelAvatarFallbackText}>{channelInitial}</Text>
+            </View>
+          )}
+          <View style={styles.channelIdentityCopy}>
+            <Text style={styles.channelIdentityName} numberOfLines={1}>{channelName}</Text>
+            {channelTagline ? (
+              <Text style={styles.channelIdentityTagline} numberOfLines={2}>{channelTagline}</Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+      <View style={styles.studioHeaderActions}>
+        {renderPreviewDisabledAction()}
+        <TouchableOpacity
+          style={[styles.studioActionButton, styles.studioActionButtonPrimary]}
+          activeOpacity={0.88}
+          onPress={() => setActiveStudioTab("brand")}
+        >
+          <Text style={styles.studioActionButtonText}>Edit Brand</Text>
+          <Text style={styles.studioActionButtonCopy}>Open Brand</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderStudioTabBar = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.studioTabScroll}
+      contentContainerStyle={styles.studioTabBar}
+    >
+      {STUDIO_TABS.map((tab) => {
+        const active = activeStudioTab === tab.id;
+        return (
+          <TouchableOpacity
+            key={tab.id}
+            style={[styles.studioTabButton, active && styles.studioTabButtonActive]}
+            activeOpacity={0.86}
+            onPress={() => setActiveStudioTab(tab.id)}
+          >
+            <Text style={[styles.studioTabButtonText, active && styles.studioTabButtonTextActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+
+  const renderQuickActionCard = ({
+    title,
+    body,
+    onPress,
+    disabled = false,
+  }: {
+    title: string;
+    body: string;
+    onPress?: () => void;
+    disabled?: boolean;
+  }) => (
+    <TouchableOpacity
+      style={[styles.quickActionCard, disabled && styles.quickActionCardDisabled]}
+      activeOpacity={0.86}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Text style={styles.quickActionTitle}>{title}</Text>
+      <Text style={styles.quickActionBody}>{body}</Text>
+    </TouchableOpacity>
+  );
+
+  const renderLatestContentCard = () => {
+    if (!latestCreatorVideo) {
+      return (
+        <View style={styles.eventEmptyCard}>
+          <Text style={styles.eventEmptyTitle}>No channel videos yet</Text>
+          <Text style={styles.eventEmptyBody}>No channel videos yet. Upload your first video to start building your channel.</Text>
+        </View>
+      );
+    }
+
+    const playable = hasPlayableCreatorVideoSource(latestCreatorVideo);
+    const statusLabel = !playable
+      ? "Unavailable"
+      : latestCreatorVideo.visibility === "public"
+        ? "Published"
+        : "Draft";
+    const actionLabel = playable && latestCreatorVideo.visibility === "public" ? "Open Player" : "Edit";
+    const onPressAction = () => {
+      if (actionLabel === "Open Player") {
+        router.push({ pathname: "/player/[id]", params: { id: latestCreatorVideo.id, source: "creator-video" } });
+        return;
+      }
+      onEditVideo(latestCreatorVideo);
+      setActiveStudioTab("content");
+    };
+
+    return (
+      <View style={styles.latestContentCard}>
+        {latestCreatorVideo.thumbnailUrl ? (
+          <Image source={{ uri: latestCreatorVideo.thumbnailUrl }} style={styles.latestContentThumb} />
+        ) : (
+          <View style={styles.latestContentFallback}>
+            <Text style={styles.latestContentFallbackText}>{"CHI'LLYWOOD"}</Text>
+          </View>
+        )}
+        <View style={styles.latestContentBody}>
+          <View style={styles.latestContentTitleRow}>
+            <Text style={styles.latestContentTitle} numberOfLines={2}>{latestCreatorVideo.title}</Text>
+            <View style={[styles.contentStatusChip, !playable && styles.contentStatusChipUnavailable]}>
+              <Text style={styles.contentStatusChipText}>{statusLabel}</Text>
+            </View>
+          </View>
+          {latestCreatorVideo.description ? (
+            <Text style={styles.latestContentDescription} numberOfLines={2}>{latestCreatorVideo.description}</Text>
+          ) : null}
+          <TouchableOpacity style={styles.eventPrimaryButton} activeOpacity={0.88} onPress={onPressAction}>
+            <Text style={styles.eventPrimaryButtonText}>{actionLabel}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderStudioHomeTab = () => (
+    <>
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Quick Actions</Text>
+          </View>
+        </View>
+        <View style={styles.quickActionGrid}>
+          {renderQuickActionCard({
+            title: "Upload",
+            body: "Open the backed creator upload flow.",
+            onPress: () => setActiveStudioTab("content"),
+          })}
+          {renderQuickActionCard({
+            title: "Go Live",
+            body: "Live launch controls will connect here when the live route is safely wired.",
+            disabled: true,
+          })}
+          {renderQuickActionCard({
+            title: "Schedule",
+            body: "Create or edit a backed channel event.",
+            onPress: () => setActiveStudioTab("live"),
+          })}
+          {renderQuickActionCard({
+            title: "Edit Brand",
+            body: "Update backed channel identity fields.",
+            onPress: () => setActiveStudioTab("brand"),
+          })}
+          {renderQuickActionCard({
+            title: "Audience",
+            body: "Review requests, followers, and blocks.",
+            onPress: () => setActiveStudioTab("audience"),
+          })}
+          {renderQuickActionCard({
+            title: "Insights",
+            body: "View backed channel signals.",
+            onPress: () => setActiveStudioTab("insights"),
+          })}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Today’s Snapshot</Text>
+          </View>
+        </View>
+        <View style={styles.summaryGrid}>
+          {snapshotCards.map((card) => (
+            <TouchableOpacity
+              key={card.label}
+              style={styles.summaryCard}
+              activeOpacity={0.86}
+              onPress={() => setActiveStudioTab(card.tab)}
+            >
+              <Text style={styles.summaryLabel}>{card.label}</Text>
+              <Text style={styles.summaryValue}>{card.value}</Text>
+              <Text style={styles.summaryBody}>{card.body}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Needs Attention</Text>
+          </View>
+        </View>
+        {needsAttentionItems.length ? (
+          <View style={styles.eventList}>
+            {needsAttentionItems.map((item) => (
+              <TouchableOpacity
+                key={item.title}
+                style={styles.attentionCard}
+                activeOpacity={0.86}
+                onPress={() => setActiveStudioTab(item.tab)}
+              >
+                <Text style={styles.attentionTitle}>{item.title}</Text>
+                <Text style={styles.attentionBody}>{item.body}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.permissionCopy}>No urgent channel tasks right now.</Text>
+        )}
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Latest Content</Text>
+          </View>
+        </View>
+        {renderLatestContentCard()}
+      </View>
+
+      <View style={[styles.panel, styles.roadmapPanel]}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Roadmap</Text>
+          </View>
+        </View>
+        <View style={styles.roadmapList}>
+          <Text style={styles.roadmapItem}>Featured Video / Trailer — Coming later</Text>
+          <Text style={styles.roadmapItem}>Playlists / Shelves — Coming later</Text>
+          <Text style={styles.roadmapItem}>Channel IQ / Rachi Studio Assistant — Coming later</Text>
+        </View>
+      </View>
+    </>
+  );
+
+  const renderCreatorEventCard = (event: CreatorEventSummary) => {
+    const reminderSummary = creatorReminderSummaryByEventId.get(event.id);
+
+    return (
+      <View key={event.id} style={styles.eventCard}>
+        <View style={styles.eventCardHeader}>
+          <View style={styles.eventCardCopy}>
+            <Text style={styles.eventCardTitle}>{event.eventTitle}</Text>
+            <Text style={styles.eventCardMeta}>
+              {formatEventTypeLabel(event.eventType)} · {formatEventStatusLabel(event.status)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.eventActionButton}
+            onPress={() => onEditEvent(event)}
+            activeOpacity={0.86}
+          >
+            <Text style={styles.eventActionButtonText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.eventCardBody}>
+          Starts: {formatIsoDate(event.startsAt)}{"\n"}
+          Ends: {formatIsoDate(event.endsAt)}{"\n"}
+          Replay: {formatReplayPolicyLabel(event.replayPolicy)} · {formatReplayStateLabel(event)}{"\n"}
+          Reminder: {formatReminderLabel(event)} · {reminderSummary?.activeReminderCount ?? 0} active enrollment{(reminderSummary?.activeReminderCount ?? 0) === 1 ? "" : "s"}
+          {reminderSummary?.canceledReminderCount
+            ? `\nCanceled reminders: ${reminderSummary.canceledReminderCount}`
+            : ""}
+          {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderLiveActionsPanel = () => (
+    <View style={styles.panel}>
+      <View style={styles.panelHeader}>
+        <View style={styles.panelHeaderCopy}>
+          <Text style={styles.panelTitle}>Live Actions</Text>
+        </View>
+      </View>
+      <View style={styles.quickActionGrid}>
+        {renderQuickActionCard({
+          title: "Go Live",
+          body: "Live route not wired from Studio yet.",
+          disabled: true,
+        })}
+        {renderQuickActionCard({
+          title: "Schedule Event",
+          body: "Use the backed creator event form below.",
+          onPress: () => undefined,
+        })}
+        {renderQuickActionCard({
+          title: "Watch-Party Tools",
+          body: "Premium Watch-Party tools stay on existing routes for now.",
+          disabled: true,
+        })}
+      </View>
+    </View>
   );
 
   if (authLoading || betaLoading) {
@@ -1662,26 +2257,7 @@ export default function ChannelSettingsScreen() {
           <View style={{ width: 18 }} />
         </View>
 
-        <View style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Channel Studio</Text>
-          <Text style={styles.heroBody}>
-            Manage the channel side of your Chi'llywood identity: your mini streaming platform for creator videos, live/events, audience posture, and backed channel defaults. Personal Profile settings and privacy stay separate.
-          </Text>
-          <View style={styles.heroTruthGrid}>
-            <View style={styles.heroTruthCard}>
-              <Text style={styles.heroTruthLabel}>CHANNEL</Text>
-              <Text style={styles.heroTruthBody}>Creator content, events, audience, and channel defaults.</Text>
-            </View>
-            <View style={styles.heroTruthCard}>
-              <Text style={styles.heroTruthLabel}>PROFILE</Text>
-              <Text style={styles.heroTruthBody}>Personal posts, privacy, and Chi'lly Circle remain in Profile/Settings.</Text>
-            </View>
-            <View style={styles.heroTruthCard}>
-              <Text style={styles.heroTruthLabel}>PUBLIC HOME</Text>
-              <Text style={styles.heroTruthBody}>The viewer-facing channel still renders through your Profile route.</Text>
-            </View>
-          </View>
-        </View>
+        {renderStudioHeader()}
 
         {loading ? (
           <View style={styles.loadingCard}>
@@ -1703,49 +2279,22 @@ export default function ChannelSettingsScreen() {
               </View>
             ) : null}
 
-            {renderContentPanel()}
+            {renderStudioTabBar()}
+            {activeStudioTab === "home" ? renderStudioHomeTab() : null}
+            {activeStudioTab === "content" ? renderContentPanel() : null}
 
-            <View style={styles.sectionMapCard}>
-              <Text style={styles.sectionMapKicker}>CHANNEL STUDIO MAP</Text>
-              <Text style={styles.sectionMapTitle}>Built on your existing channel controls</Text>
-              <Text style={styles.sectionMapBody}>
-                The controls below are organized by channel job. Current sections stay wired to the same data and actions; missing channel-builder pieces are labeled only as coming soon or coming later.
-              </Text>
-              {studioSectionGroups.map((group) => (
-                <View key={group.title} style={styles.sectionMapGroup}>
-                  <Text style={styles.sectionMapSubheading}>{group.title}</Text>
-                  <Text style={styles.sectionMapGroupBody}>{group.body}</Text>
-                  <View style={styles.sectionMapGrid}>
-                    {group.sections.map((section) => (
-                      <View key={section.title} style={styles.sectionMapItem}>
-                        <View style={styles.sectionMapHeader}>
-                          <Text style={styles.sectionMapItemTitle}>{section.title}</Text>
-                          <View
-                            style={[
-                              styles.sectionStatusChip,
-                              section.status === "current" && styles.sectionStatusChipCurrent,
-                              section.status === "near_term" && styles.sectionStatusChipNearTerm,
-                              section.status === "later_phase" && styles.sectionStatusChipLaterPhase,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.sectionStatusChipText,
-                                section.status === "current" && styles.sectionStatusChipTextCurrent,
-                                section.status === "near_term" && styles.sectionStatusChipTextNearTerm,
-                                section.status === "later_phase" && styles.sectionStatusChipTextLaterPhase,
-                              ]}
-                            >
-                              {formatStudioSectionStatusLabel(section.status)}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={styles.sectionMapItemBody}>{section.body}</Text>
-                      </View>
-                    ))}
-                  </View>
+            {activeStudioTab === "brand" ? (
+              <>
+            <View style={styles.panel}>
+              <View style={styles.panelHeader}>
+                <View style={styles.panelHeaderCopy}>
+                  <Text style={styles.panelTitle}>Brand</Text>
+                  <Text style={styles.panelSubtitle}>Control how your public channel presents itself.</Text>
                 </View>
-              ))}
+              </View>
+              <Text style={styles.permissionCopy}>
+                Channel defaults below stay with Brand because they use the backed controls already available today.
+              </Text>
             </View>
 
             <View style={styles.panel}>
@@ -1755,7 +2304,7 @@ export default function ChannelSettingsScreen() {
               </View>
               <TextInput
                 style={styles.input}
-                placeholder="Display name"
+                placeholder="Channel Name"
                 placeholderTextColor="#8d8d8d"
                 value={profile.displayName ?? ""}
                 onChangeText={(text) => updateProfile({ displayName: text })}
@@ -1986,9 +2535,24 @@ export default function ChannelSettingsScreen() {
               </View>
             </View>
 
+            <View style={styles.brandActionRow}>
+              {renderPreviewDisabledAction()}
+              <TouchableOpacity style={styles.saveButton} onPress={onSave} activeOpacity={0.88} disabled={saving}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Brand</Text>}
+              </TouchableOpacity>
+            </View>
+              </>
+            ) : null}
+
+            {activeStudioTab === "live" ? (
+              <>
+                {renderLiveActionsPanel()}
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Live Events</Text>
+                <View style={styles.panelHeaderCopy}>
+                  <Text style={styles.panelTitle}>Live</Text>
+                  <Text style={styles.panelSubtitle}>Manage live events and future Watch-Party tools for your channel.</Text>
+                </View>
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <Text style={styles.permissionCopy}>
@@ -2038,56 +2602,31 @@ export default function ChannelSettingsScreen() {
                 </Text>
               </View>
 
-              <Text style={styles.sectionLabel}>Current Events</Text>
+              <Text style={styles.sectionLabel}>Upcoming Events</Text>
               {eventsLoading ? (
                 <View style={styles.loadingCard}>
                   <ActivityIndicator color="#fff" />
                   <Text style={styles.loadingText}>Loading creator events…</Text>
                 </View>
-              ) : creatorEvents.length ? (
+              ) : upcomingEvents.length ? (
                 <View style={styles.eventList}>
-                  {creatorEvents.map((event) => {
-                    const reminderSummary = creatorReminderSummaryByEventId.get(event.id);
-
-                    return (
-                    <View key={event.id} style={styles.eventCard}>
-                      <View style={styles.eventCardHeader}>
-                        <View style={styles.eventCardCopy}>
-                          <Text style={styles.eventCardTitle}>{event.eventTitle}</Text>
-                          <Text style={styles.eventCardMeta}>
-                            {formatEventTypeLabel(event.eventType)} · {formatEventStatusLabel(event.status)}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.eventActionButton}
-                          onPress={() => onEditEvent(event)}
-                          activeOpacity={0.86}
-                        >
-                          <Text style={styles.eventActionButtonText}>Edit</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={styles.eventCardBody}>
-                        Starts: {formatIsoDate(event.startsAt)}{"\n"}
-                        Ends: {formatIsoDate(event.endsAt)}{"\n"}
-                        Replay: {formatReplayPolicyLabel(event.replayPolicy)} · {formatReplayStateLabel(event)}{"\n"}
-                        Reminder: {formatReminderLabel(event)} · {reminderSummary?.activeReminderCount ?? 0} active enrollment{(reminderSummary?.activeReminderCount ?? 0) === 1 ? "" : "s"}
-                        {reminderSummary?.canceledReminderCount
-                          ? `\nCanceled reminders: ${reminderSummary.canceledReminderCount}`
-                          : ""}
-                        {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
-                      </Text>
-                    </View>
-                    );
-                  })}
+                  {upcomingEvents.map(renderCreatorEventCard)}
                 </View>
               ) : (
                 <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>No creator events yet</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    Scheduled event truth is backed, but nothing has been created for this channel yet.
-                  </Text>
+                  <Text style={styles.eventEmptyTitle}>No upcoming events yet.</Text>
+                  <Text style={styles.eventEmptyBody}>No upcoming events yet.</Text>
                 </View>
               )}
+
+              {!eventsLoading && otherCreatorEvents.length ? (
+                <>
+                  <Text style={styles.sectionLabel}>Other Events</Text>
+                  <View style={styles.eventList}>
+                    {otherCreatorEvents.map(renderCreatorEventCard)}
+                  </View>
+                </>
+              ) : null}
 
               <Text style={styles.sectionLabel}>
                 {eventEditor.editingEventId ? "Edit Event" : "Create Event"}
@@ -2247,9 +2786,17 @@ export default function ChannelSettingsScreen() {
               </View>
             </View>
 
+              </>
+            ) : null}
+
+            {activeStudioTab === "audience" ? (
+              <>
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Audience</Text>
+                <View style={styles.panelHeaderCopy}>
+                  <Text style={styles.panelTitle}>Audience</Text>
+                  <Text style={styles.panelSubtitle}>Manage followers, requests, blocks, and subscriber signals for your channel.</Text>
+                </View>
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
               <Text style={styles.permissionCopy}>
@@ -2273,16 +2820,6 @@ export default function ChannelSettingsScreen() {
                   </View>
                 ))}
               </View>
-              <View style={styles.summaryGrid}>
-                {audienceUnavailableCards.map((card) => (
-                  <View key={card.label} style={[styles.summaryCard, styles.summaryCardUnavailable]}>
-                    <Text style={styles.summaryLabel}>{card.label}</Text>
-                    <Text style={styles.summaryValue}>{card.value}</Text>
-                    <Text style={styles.summaryBody}>{card.body}</Text>
-                  </View>
-                ))}
-              </View>
-
               <View style={styles.eventSnapshotCard}>
                 <Text style={styles.accessSummaryKicker}>LIVE WORKFLOWS</Text>
                 <Text style={styles.accessSummaryTitle}>Real audience actions live here now</Text>
@@ -2534,24 +3071,34 @@ export default function ChannelSettingsScreen() {
                   )}
                 </TouchableOpacity>
               </View>
-
-              <View style={[styles.summaryCard, styles.summaryCardUnavailable, styles.audienceWorkflowLimitCard]}>
-                <Text style={styles.summaryLabel}>Later</Text>
-                <Text style={styles.summaryValue}>Subscriber / VIP / Roles</Text>
-                <Text style={styles.summaryBody}>
-                  {subscriberMutationSupport.message} VIP/mod/co-host workflows also stay out until the chapter lands real supporting helper truth.
-                </Text>
-              </View>
             </View>
 
+              </>
+            ) : null}
+
+            {activeStudioTab === "insights" ? (
+              <>
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Analytics</Text>
+                <View style={styles.panelHeaderCopy}>
+                  <Text style={styles.panelTitle}>Insights</Text>
+                  <Text style={styles.panelSubtitle}>Track what is actually backed by your channel data today.</Text>
+                </View>
                 <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
               </View>
               <Text style={styles.permissionCopy}>
                 Only backed creator analytics render here. Unsupported metrics stay unavailable instead of being zeroed or fabricated.
               </Text>
+              <Text style={styles.sectionLabel}>Channel Metrics</Text>
+              <View style={styles.summaryGrid}>
+                {insightMetricCards.map((card) => (
+                  <View key={card.label} style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
               <Text style={styles.sectionLabel}>Room And Audience Signals</Text>
               <View style={styles.summaryGrid}>
                 {analyticsSummaryCards.map((card) => (
@@ -2566,16 +3113,6 @@ export default function ChannelSettingsScreen() {
               <View style={styles.summaryGrid}>
                 {analyticsEventSignalCards.map((card) => (
                   <View key={card.label} style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>{card.label}</Text>
-                    <Text style={styles.summaryValue}>{card.value}</Text>
-                    <Text style={styles.summaryBody}>{card.body}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.sectionLabel}>Unavailable / Later</Text>
-              <View style={styles.summaryGrid}>
-                {analyticsUnavailableCards.map((card) => (
-                  <View key={card.label} style={[styles.summaryCard, styles.summaryCardUnavailable]}>
                     <Text style={styles.summaryLabel}>{card.label}</Text>
                     <Text style={styles.summaryValue}>{card.value}</Text>
                     <Text style={styles.summaryBody}>{card.body}</Text>
@@ -2617,32 +3154,17 @@ export default function ChannelSettingsScreen() {
                 ))}
               </View>
             </View>
-
-            <View style={[styles.panel, styles.panelSubtle]}>
-              <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Design</Text>
-                <Text style={styles.panelStatusMuted}>COMING SOON</Text>
-              </View>
-              <Text style={styles.permissionCopy}>
-                Hero, avatar framing, accent tone, and visible brand treatment can deepen here later without leaving this route. No new design persistence is wired in this pass.
-              </Text>
-              <View style={styles.previewChipRow}>
-                {designSectionHighlights.map((item) => (
-                  <View key={item} style={styles.previewChip}>
-                    <Text style={styles.previewChipText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.saveButton} onPress={onSave} activeOpacity={0.88} disabled={saving}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Channel Studio</Text>}
-            </TouchableOpacity>
+              </>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
     </ImageBackground>
   );
+}
+
+export default function ChannelSettingsCompatibilityRoute() {
+  return <ChannelStudioScreen />;
 }
 
 const styles = StyleSheet.create({
@@ -2696,6 +3218,309 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 8,
     fontWeight: "600",
+  },
+  studioHeaderCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(12,16,24,0.9)",
+    padding: 16,
+    gap: 12,
+  },
+  studioSubtitle: {
+    color: "#D8E0F0",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "700",
+  },
+  studioClarifier: {
+    color: "#98A5BD",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  channelIdentityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10,
+  },
+  channelAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  channelAvatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(220,20,60,0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.35)",
+  },
+  channelAvatarFallbackText: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  channelIdentityCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  channelIdentityName: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  channelIdentityTagline: {
+    color: "#B8C2D7",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  studioHeaderActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  studioActionButton: {
+    flexGrow: 1,
+    flexBasis: "46%",
+    minWidth: 132,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 3,
+  },
+  studioActionButtonPrimary: {
+    borderColor: "rgba(220,20,60,0.45)",
+    backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  studioActionButtonDisabled: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    opacity: 0.78,
+  },
+  studioActionButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  studioActionButtonCopy: {
+    color: "#B8C2D7",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
+  },
+  studioTabScroll: {
+    marginHorizontal: -16,
+  },
+  studioTabBar: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  studioTabButton: {
+    minHeight: 42,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  studioTabButtonActive: {
+    borderColor: "rgba(220,20,60,0.55)",
+    backgroundColor: "rgba(220,20,60,0.28)",
+  },
+  studioTabButtonText: {
+    color: "#B9C3D9",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  studioTabButtonTextActive: {
+    color: "#fff",
+  },
+  quickActionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  quickActionCard: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 138,
+    minHeight: 92,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 12,
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  quickActionCardDisabled: {
+    opacity: 0.58,
+  },
+  quickActionTitle: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  quickActionBody: {
+    color: "#AEB8CE",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  attentionCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(220,20,60,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  attentionTitle: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  attentionBody: {
+    color: "#F0C2CB",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  latestContentCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    overflow: "hidden",
+  },
+  latestContentThumb: {
+    width: "100%",
+    height: 154,
+    backgroundColor: "#080A10",
+  },
+  latestContentFallback: {
+    height: 154,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(220,20,60,0.16)",
+  },
+  latestContentFallbackText: {
+    color: "#F4C4CC",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  latestContentBody: {
+    padding: 12,
+    gap: 10,
+  },
+  latestContentTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  latestContentTitle: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "900",
+  },
+  latestContentDescription: {
+    color: "#AEB8CE",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  contentStatusChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(45,153,92,0.36)",
+    backgroundColor: "rgba(45,153,92,0.16)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  contentStatusChipUnavailable: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  contentStatusChipText: {
+    color: "#F3F6FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  roadmapPanel: {
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(10,14,22,0.74)",
+  },
+  roadmapList: {
+    gap: 7,
+  },
+  roadmapItem: {
+    color: "#AEB8CE",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  brandActionRow: {
+    gap: 10,
+  },
+  panelHeaderButton: {
+    borderRadius: 999,
+    backgroundColor: "#DC143C",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  panelHeaderButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  segmentRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
+  segmentButton: {
+    minHeight: 38,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  segmentButtonActive: {
+    borderColor: "rgba(220,20,60,0.55)",
+    backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  segmentButtonText: {
+    color: "#B9C3D9",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  segmentButtonTextActive: {
+    color: "#fff",
   },
   heroTruthGrid: {
     flexDirection: "row",

@@ -170,6 +170,7 @@ function RootNavigator() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="subscribe" />
         <Stack.Screen name="admin" />
+        <Stack.Screen name="channel-studio/index" />
         <Stack.Screen name="channel-settings" />
         <Stack.Screen name="support" />
         <Stack.Screen name="beta-support" />

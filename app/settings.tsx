@@ -155,7 +155,7 @@ export default function SettingsScreen() {
   }, [router, user?.id]);
 
   const onPressManageChannel = useCallback(() => {
-    router.push("/channel-settings");
+    router.push("/channel-studio");
   }, [router]);
 
   const onPressChillyCircle = useCallback(() => {

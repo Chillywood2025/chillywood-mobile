@@ -1191,10 +1191,10 @@ export default function ProfileScreen() {
       return;
     }
     if (params) {
-      router.push({ pathname: "/channel-settings", params });
+      router.push({ pathname: "/channel-studio", params });
       return;
     }
-    router.push("/channel-settings");
+    router.push("/channel-studio");
   };
   const onPressManageChannel = () => {
     openChannelSettings();
