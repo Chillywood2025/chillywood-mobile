@@ -167,6 +167,7 @@ function RootNavigator() {
         <Stack.Screen name="chat/index" />
         <Stack.Screen name="chat/[threadId]" />
         <Stack.Screen name="profile/[userId]" />
+        <Stack.Screen name="channel/[userId]" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="subscribe" />
         <Stack.Screen name="admin" />

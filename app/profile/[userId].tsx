@@ -1515,7 +1515,11 @@ export default function ProfileScreen() {
     setReportVisible(true);
   };
   const onPressViewChannel = () => {
-    setActiveTab("content");
+    if (!userId) return;
+    router.push({
+      pathname: "/channel/[userId]",
+      params: { userId },
+    });
   };
   const onPressSettings = () => {
     router.push("/settings");

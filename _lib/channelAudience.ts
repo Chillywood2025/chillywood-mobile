@@ -78,6 +78,12 @@ export type ChannelViewerFollowState =
   | "not_following"
   | "unavailable";
 
+export type PublicChannelAudienceState = {
+  followerCount: number | null;
+  viewerFollowState: ChannelViewerFollowState;
+  isViewerBlocked: boolean;
+};
+
 type ChannelFollowerRow = Tables<"channel_followers">;
 type ChannelAudienceRequestRow = Tables<"channel_audience_requests">;
 type ChannelAudienceBlockRow = Tables<"channel_audience_blocks">;
@@ -350,6 +356,62 @@ export async function readMyChannelFollowState(channelUserId: string): Promise<C
 
   const existing = await readFollowerRow(context.channelUserId, context.viewerUserId);
   return existing ? "following" : "not_following";
+}
+
+export async function readPublicChannelAudienceState(channelUserId: string): Promise<PublicChannelAudienceState> {
+  const context = await readAudienceActorContext(channelUserId);
+  if (!context.channelUserId) {
+    return {
+      followerCount: null,
+      viewerFollowState: "unavailable",
+      isViewerBlocked: false,
+    };
+  }
+
+  const blockedRow = context.viewerUserId && context.viewerUserId !== context.channelUserId
+    ? await readBlockRow(context.channelUserId, context.viewerUserId).catch(() => null)
+    : null;
+
+  let followerCount: number | null = null;
+  const { count, error } = await supabase
+    .from(CHANNEL_FOLLOWERS_TABLE)
+    .select("*", { count: "exact", head: true })
+    .eq("channel_user_id", context.channelUserId);
+
+  if (!error) {
+    followerCount = Number(count ?? 0);
+  }
+
+  if (!context.viewerUserId) {
+    return {
+      followerCount,
+      viewerFollowState: "signed_out",
+      isViewerBlocked: false,
+    };
+  }
+
+  if (context.viewerUserId === context.channelUserId) {
+    return {
+      followerCount,
+      viewerFollowState: "self",
+      isViewerBlocked: false,
+    };
+  }
+
+  if (blockedRow) {
+    return {
+      followerCount,
+      viewerFollowState: "unavailable",
+      isViewerBlocked: true,
+    };
+  }
+
+  const existing = await readFollowerRow(context.channelUserId, context.viewerUserId);
+  return {
+    followerCount,
+    viewerFollowState: existing ? "following" : "not_following",
+    isViewerBlocked: false,
+  };
 }
 
 export async function readFollowedChannelUserIds(options?: { limit?: number }): Promise<string[]> {

@@ -1894,16 +1894,37 @@ export function ChannelStudioScreen() {
     );
   };
 
-  const renderPreviewDisabledAction = () => (
-    <TouchableOpacity
-      style={[styles.studioActionButton, styles.studioActionButtonDisabled]}
-      activeOpacity={0.86}
-      disabled
-    >
-      <Text style={styles.studioActionButtonText}>Preview Channel</Text>
-      <Text style={styles.studioActionButtonCopy}>Preview coming in Phase 2B</Text>
-    </TouchableOpacity>
-  );
+  const renderPreviewChannelAction = () => {
+    const previewUserId = String(user?.id ?? "").trim();
+    if (!previewUserId) {
+      return (
+        <TouchableOpacity
+          style={[styles.studioActionButton, styles.studioActionButtonDisabled]}
+          activeOpacity={0.86}
+          disabled
+        >
+          <Text style={styles.studioActionButtonText}>Preview Channel</Text>
+          <Text style={styles.studioActionButtonCopy}>Profile required to preview channel.</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <TouchableOpacity
+        style={styles.studioActionButton}
+        activeOpacity={0.86}
+        onPress={() => {
+          router.push({
+            pathname: "/channel/[userId]",
+            params: { userId: previewUserId },
+          });
+        }}
+      >
+        <Text style={styles.studioActionButtonText}>Preview Channel</Text>
+        <Text style={styles.studioActionButtonCopy}>Open public channel</Text>
+      </TouchableOpacity>
+    );
+  };
 
   const renderStudioHeader = () => (
     <View style={styles.studioHeaderCard}>
@@ -1928,7 +1949,7 @@ export function ChannelStudioScreen() {
         </View>
       ) : null}
       <View style={styles.studioHeaderActions}>
-        {renderPreviewDisabledAction()}
+        {renderPreviewChannelAction()}
         <TouchableOpacity
           style={[styles.studioActionButton, styles.studioActionButtonPrimary]}
           activeOpacity={0.88}
@@ -2536,7 +2557,7 @@ export function ChannelStudioScreen() {
             </View>
 
             <View style={styles.brandActionRow}>
-              {renderPreviewDisabledAction()}
+              {renderPreviewChannelAction()}
               <TouchableOpacity style={styles.saveButton} onPress={onSave} activeOpacity={0.88} disabled={saving}>
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Brand</Text>}
               </TouchableOpacity>
