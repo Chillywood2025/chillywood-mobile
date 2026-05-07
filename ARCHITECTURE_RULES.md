@@ -115,9 +115,32 @@ Admin is separate from:
 
 Admin must remain protected by signed-in plus beta/platform-role/backend permission checks. Future admin work must not weaken route access, report visibility, privileged-write boundaries, RLS, platform_role_memberships, confirmation prompts, reason/audit requirements, or secret handling.
 
-Admin V1A is pushed and includes Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System. Foundation sections must remain honest and must not show fake revenue, fake usage, fake payouts, fake sponsor money, fake network invoices, fake fraud holds, fake ad provider state, or fake kill switches.
+Admin V1A is pushed and includes Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System. Foundation sections must remain honest and must not show fake revenue, fake usage, fake payouts, fake sponsor money, fake network invoices, fake fraud holds, fake live ad provider state, or fake kill switches.
 
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
+
+## Ads Launch Foundation Rule
+Ads Launch Foundation V1A is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+
+Current Ads V1A owners:
+- `_lib/ads/adConfig.ts`
+- `_lib/ads/adEligibility.ts`
+- `_lib/ads/adProvider.ts`
+- `_lib/ads/providers/placeholder.ts`
+- `_lib/ads/adSession.ts`
+- `hooks/useAdEligibility.ts`
+- `hooks/useActiveBrowsingTime.ts`
+- `app/admin.tsx` for read-only/foundation Admin Ads status only
+
+Ads V1A defaults `ads_enabled` to false and `ads_provider` to `placeholder`. The placeholder provider reports not connected and must not call any SDK, use real ad unit IDs, initialize providers, or render real ads.
+
+Premium/ad-free users must always be ineligible for ads and must not increment ad counters. Future ad placements must call the central ad config, eligibility, session/cap, and provider wrapper layers instead of making direct screen-level SDK calls.
+
+AppLovin MAX remains the primary future ad platform. Unity LevelPlay / Unity Ads may be added later through AppLovin MAX. Do not build an AdMob-only path.
+
+Ads must be blocked inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, immediately at app launch, in Admin, in Channel Studio, in Chat, and in Profile/composer contexts unless a future prompt explicitly redesigns and proves a safe surface.
+
+CTV ads are future-only for Chi'llywood Originals and network-style content. Do not add CTV inventory, fake CTV revenue, fake ad revenue, creator earnings, sponsor revenue, payout balances, invoices, or creator revenue ledgers without a separately backed implementation.
 
 ## Branded Background Rule
 - `assets/images/chillywood-branded-background.png` is the exact source-of-truth Chi'llywood branded-background asset for the current nighttime city direction

@@ -80,13 +80,14 @@ Currently real:
 - section tabs for Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System
 - Reports, Content, Roles, Audit, and Rachi backed behavior preserved
 - Users, Premium, Kill Switches, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and portions of Usage/System presented as read-only or foundation-only where backing is not connected
+- Ads Launch Foundation V1A status in Admin Ads as read-only/foundation: placeholder/not-connected provider, launch caps, forbidden contexts, AppLovin MAX future direction, Unity through AppLovin MAX future direction, no AdMob-only doctrine, and CTV future-only copy
 
 Currently not real:
 - full immutable admin audit logs
 - user search, ban, suspend, restrict, upload-disable, live-disable, or entitlement-edit tools
 - manual Premium toggles or subscription editing
 - working runtime kill switches beyond current Premium access logic labels
-- ad SDKs, ad IDs, ad provider initialization, ad rendering, or ad revenue
+- real ad SDKs, real ad IDs, real ad provider initialization, real ad rendering, CTV inventory, or ad revenue
 - fake MRR, ARR, creator earnings, sponsor revenue, payout balances, invoices, network billing, or payout execution
 - sponsor checkout/upload/approval or payout split execution
 - working fraud holds, payout pauses, account restrictions, or risk scores
@@ -220,6 +221,7 @@ Current doctrine:
 - `platform_role_memberships` for current staff-role membership truth
 - `_lib/channelReadModels.ts` and Channel Studio (`app/channel-settings.tsx` implementation, `app/channel-studio/index.tsx` route) for creator-side admin/safety summary truth
 - `app/admin.tsx` for Admin Command Center V1A section structure and foundation-only copy
+- Ads V1A foundation source files: `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`
 
 ## 9. Missing Truth That Still Needs To Be Built
 - explicit owner / super-admin role truth
@@ -230,6 +232,8 @@ Current doctrine:
 - real Rachi-control state and domain controls
 - real emergency/system controls
 - real user search and user restriction tools
+- real Admin Ads write controls backed by schema/config/enforcement and real app-surface reads
+- real AppLovin MAX integration after external account/app/ad-unit setup
 - real revenue, payout, network billing, sponsor-deal, fraud-hold, bandwidth, storage, LiveKit, and participant-minute ledger systems
 
 ## 10. Safe Owner Bootstrap Doctrine
@@ -281,11 +285,14 @@ Admin V1A already presents these sections, but many are foundation-only. Current
 
 ## 12. Exact Phased Implementation Order
 1. Admin Command Center V1A is pushed: canonical `/admin`, backed admin behavior preserved, and missing business systems shown honestly as foundation-only.
-2. Ads Launch Foundation is the next recommended lane.
-3. Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan.
-4. Usage metering and ledger systems later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
-5. Real Rachi-control state and domain controls later only when backed.
-6. Advanced owner/super-admin controls only if justified by real backing and proof.
+2. Ads Launch Foundation V1A is pushed: provider-neutral config, eligibility, placeholder provider, active browsing time, session/daily caps, and read-only/foundation Admin Ads status; no SDK, real ad IDs, provider initialization, real rendering, CTV inventory, or fake revenue.
+3. Ads V1B Native/feed placeholder placement is the next ads lane: one labeled placeholder/native slot on safe free-user browsing surfaces only, likely Home and/or Explore, respecting Premium no ads, V1A eligibility/caps, and forbidden contexts.
+4. Ads V1C Interstitial controller later: placeholder interstitial first, safe transitions only, no app-launch ad, 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts.
+5. Real AppLovin MAX integration later only after external setup is ready; keep provider wrapper architecture and no AdMob-only path.
+6. Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan.
+7. Usage metering and ledger systems later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
+8. Real Rachi-control state and domain controls later only when backed.
+9. Advanced owner/super-admin controls only if justified by real backing and proof.
 
 ## 13. What Not To Do
 - do not build a messy god-panel

@@ -114,7 +114,7 @@ Current doctrine does not yet allow it to claim:
 - strike workflow
 - appeal/dispute workflow
 - creator-visible enforcement history
-- real fraud holds, payout pauses, sponsor enforcement, network billing actions, ad provider state, or runtime kill switches unless those systems are separately backed
+- real fraud holds, payout pauses, sponsor enforcement, network billing actions, live ad provider state, or runtime kill switches unless those systems are separately backed
 
 ## 4. Current Source-Of-Truth Already In Repo
 

@@ -59,13 +59,28 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - free users see ads at launch
 - Premium users see zero ads
 - ads support free browsing
+- Ads Launch Foundation V1A is pushed as provider-neutral foundation only
+- no real ads render yet
+- no AppLovin SDK, Unity LevelPlay SDK, Unity Ads SDK, or AdMob SDK is installed for ads
+- no real ad IDs, real provider initialization, CTV inventory, fake ad revenue, sponsor revenue, creator earnings, payout balances, invoices, or CTV revenue were added by Ads V1A
+- Ads V1A defaults `ads_enabled` to false and uses a placeholder provider that reports not connected and does not call any SDK
+- Ads V1A added central config, eligibility, provider, placeholder provider, session/daily cap, active browsing time, and read-only/foundation Admin Ads status
 - AppLovin MAX is the primary ad mediation direction
 - Unity LevelPlay / Unity Ads may be added through AppLovin MAX later
 - do not build an AdMob-only ad system
+- all future real ad providers must go through the provider-neutral Chi'llywood ad wrapper
+- do not make direct screen-level SDK calls
 - launch ad cap: base active session allows 3 interstitial plus 1 native/feed; after 2 active browsing hours allow +2 interstitial plus +1 native/feed; daily cap is 6 interstitial plus 3 native/feed
-- ads must not appear inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, or immediately at app launch
+- Premium/ad-free users are always ineligible for ads and must not increment ad counters
+- ads must not appear inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, immediately at app launch, in Admin, in Channel Studio, in Chat, or in Profile/composer contexts unless explicitly redesigned later
 - rewarded ads and carefully integrated native ads are preferred over disruptive formats
 - aggressive or unexpected full-screen interstitials are not approved doctrine
+- launch app ads are platform money at first; RevenueCat remains Premium subscription truth only and does not take ad revenue
+- Google Play does not take a subscription fee from AppLovin ad payouts
+- creator-page ad revenue share is later: creator 70% net and Chi'llywood 30% net
+- creator-sold sponsor slots are later: brand pays Chi'llywood first, creator 80% net, and Chi'llywood 20% net
+- no creator ad revenue ledger, payout ledger, sponsor deal system, or CTV revenue system exists yet
+- CTV ads are future-only for Chi'llywood Originals and network-style content and are not active now
 - room-specific ad cautions belong in `ROOM_BLUEPRINT.md`, not here
 
 ## Profile / Channel Platform Direction
@@ -109,7 +124,8 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - Admin must remain protected by signed-in plus beta/platform-role/backend permission checks, including separate route access, report visibility, and privileged-write boundaries.
 - Admin V1A is pushed with Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System sections.
 - Admin V1A preserves backed Reports, Content, Roles, Audit, and Rachi behavior. Audit is a summary, not a full immutable audit-log system, and Rachi does not grant operator permissions.
-- Admin V1A foundation areas must stay honest: user search, runtime kill switches, ad provider state, money, payouts, network billing, sponsor tools, fraud holds, bandwidth metering, LiveKit metering, participant-minute metering, and deeper ledgers are not active unless separately backed.
+- Admin V1A foundation areas must stay honest: user search, runtime kill switches, live ad provider state, money, payouts, network billing, sponsor tools, fraud holds, bandwidth metering, LiveKit metering, participant-minute metering, and deeper ledgers are not active unless separately backed.
+- Admin Ads is read-only/foundation after Ads V1A: it may show placeholder/not-connected provider status, launch caps, forbidden contexts, AppLovin MAX future direction, Unity-through-MAX future direction, and no-AdMob-only doctrine, but it must not show fake ad revenue, working ad toggles, SDK state, ad IDs, or CTV inventory unless separately backed.
 - RevenueCat remains Premium truth. Admin must not add manual Premium toggles or subscription editing unless a future scoped proof adds safe backing.
 - Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 - Any future destructive admin action must require confirmation and reason or audit context where appropriate.
@@ -119,8 +135,9 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - Public v1 should focus on the core social streaming experience, not the full long-term platform vision
 - Public v1 includes login/settings/logout, home/discovery, customizable basic profiles, standalone player, Watch-Party Live core flow, Live Watch-Party / Live Stage core flow, comments/reactions/basic social interaction, basic Chi'lly Chat or simple direct messaging, Premium subscription gating, moderation basics, and analytics/error monitoring/admin visibility
 - Admin Command Center V1A is pushed on `/admin`; future Admin V1B kill switches require dedicated schema/config/enforcement planning and real app-surface reads.
+- Ads Launch Foundation V1A is pushed as no-SDK, no-real-rendering, provider-neutral infrastructure; Ads V1B Native/feed placeholder placement and Ads V1C Interstitial controller are the next ad lanes before real AppLovin MAX integration.
 - Public v1 should keep room-scale truth honest: `500+` joined presence can be a valid product target, but Public v1 does not assume `500+` equal live camera feeds.
-- Post-v1 can expand into heavier creator monetization rollout, a fuller creator mini-platform builder, deeper room personalization, request/promote room controls, premium/ticketed room tooling, instant payout lane foundations, and light compliant ad systems
+- Post-v1 can expand into Ads V1B/V1C placement/controller work, heavier creator monetization rollout, a fuller creator mini-platform builder, deeper room personalization, request/promote room controls, premium/ticketed room tooling, and instant payout lane foundations
 - Later phase holds Game Live rollout beyond the Public v1 window, Game Watch-Party after Game Live, larger premium stages, higher simultaneous live-seat capacity as infrastructure improves, advanced payouts and tax automation, overseas creator payouts, and broader ad systems
 - `ROADMAP.md` should operationalize the active Public v1 / Post-v1 / Later phase split and the current dependencies, blockers, and compliance-sensitive areas
 

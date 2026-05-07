@@ -1,58 +1,74 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement Ads Launch Foundation.
+Implement Ads V1B Native/feed placeholder placement.
 
 Product direction:
 
+- Ads Launch Foundation V1A is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+- V1A added central ad config defaults, placeholder provider, eligibility, active browsing time, session caps, daily caps, AsyncStorage daily persistence, and read-only/foundation Admin Ads status.
+- V1A did not add real ad rendering, real ad IDs, AppLovin/Unity/AdMob SDKs, provider initialization, CTV inventory, or fake ad revenue.
 - AppLovin MAX is the primary ad mediation direction.
 - Use a placeholder provider until AppLovin IDs are ready.
 - Unity LevelPlay / Unity Ads may be added through AppLovin MAX later.
 - Do not build an AdMob-only ad system.
+- All future real ad providers must go through the provider-neutral Chi'llywood ad wrapper; do not make direct screen-level SDK calls.
 - Free users see ads at launch; Premium users see zero ads.
-- Ads must never appear inside forbidden contexts: active LiveKit rooms, active video playback, typing/commenting, upload, subscribe/payment screens, or immediately at app launch.
-- Admin V1A already records Ads as foundation only; future ads work must wire real config and enforcement instead of fake toggles.
+- Ads must never appear inside forbidden contexts: active LiveKit rooms, active video playback, typing/commenting, upload, subscribe/payment screens, immediately at app launch, Admin, Channel Studio, Chat, or Profile/composer contexts unless explicitly redesigned later.
+- Admin Ads remains read-only/foundation until a dedicated config/admin-write lane creates real backed controls.
 
 Required proof for that lane:
 
-- provider wrapper stays disabled or placeholder-backed until real IDs/config exist
-- Premium users see no ads
-- free-user ad caps match the launch policy
-- forbidden contexts suppress ads
+- one labeled placeholder/native slot appears only on safe free-user browsing surfaces, likely Home and/or Explore
+- Premium users see no native/feed placeholder slot and do not increment counters
+- free-user native/feed eligibility respects existing V1A ad config, active browsing time, session cap, daily cap, and forbidden-context helper behavior
+- no native/feed slot appears in Player, Watch-Party, Live Stage, Profile composer, Chat, Admin, Channel Studio, or Subscribe/payment surfaces
 - no SDK IDs, secret keys, or provider credentials are committed
 - no AdMob-only system is introduced
+- no real ad rendering, real provider initialization, fake ad revenue, fake sponsor revenue, fake creator earnings, payout balances, invoices, or CTV inventory is added
 - existing `/admin`, `/channel-studio`, `/channel-settings`, `/channel/[userId]`, Profile, Player, Watch-Party, and Live Stage behavior remains intact
 
 ## Current Product Lane Order
-1. Ads Launch Foundation:
-   - AppLovin MAX provider wrapper
-   - placeholder provider until AppLovin IDs are ready
-   - Unity LevelPlay / Unity Ads later through AppLovin MAX
-   - no AdMob-only system
-   - real admin on/off config
-   - active-session and daily caps
-   - Premium sees zero ads
-   - no ads in forbidden contexts
-2. 18+ age gate:
+1. Ads V1B Native/feed placeholder placement:
+   - one labeled placeholder/native slot on safe free-user browsing surfaces only
+   - likely Home and/or Explore
+   - respects Premium no ads
+   - respects V1A eligibility and caps
+   - no Player, Watch-Party, Live Stage, Profile composer, Chat, Admin, Channel Studio, Subscribe/payment
+   - no real SDK
+   - no real ad IDs
+2. Ads V1C Interstitial controller:
+   - placeholder interstitial first
+   - safe transitions only
+   - no app-launch ad
+   - respects 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts
+   - no real SDK
+   - no real ad IDs
+3. Real AppLovin MAX integration:
+   - only after external AppLovin setup is ready
+   - keep provider wrapper architecture
+   - Unity LevelPlay / Unity Ads later through AppLovin MAX if needed
+   - no AdMob-only path
+4. 18+ age gate:
    - account creation confirms user is 18 or older
    - store confirmation safely
-3. Upload/content lifecycle polish:
+5. Upload/content lifecycle polish:
    - upload progress
    - processing/failed states if backed
    - thumbnail handling
    - draft/published status clarity
    - retry only if backed
-4. Security/compliance/moderation pass:
+6. Security/compliance/moderation pass:
    - Terms
    - Privacy Policy
    - Community Guidelines
    - DMCA/copyright policy
    - sponsorship disclosure rules
    - UGC moderation/admin review hardening
-5. Admin V1B Kill Switches:
+7. Admin V1B Kill Switches:
    - only after a dedicated schema/config/enforcement plan
    - switches must be real and read by affected app surfaces
-6. Usage metering / ledger systems later:
+8. Usage metering / ledger systems later:
    - bandwidth
    - participant-minutes
    - storage
@@ -83,7 +99,11 @@ Required proof for that lane:
 - Admin remains protected by existing signed-in plus beta/platform-role/backend permission checks. Route access, report visibility, and privileged-write boundaries were preserved, and no production admin bypass was added.
 - Admin V1A sections are Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System.
 - Admin V1A keeps Reports, Content, Roles, Audit, and Rachi backed behavior working. Users, Premium, Kill Switches, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and parts of Usage/System are foundation or read-only where not backed.
-- Admin V1A must not be expanded with fake money, fake usage, fake payouts, fake sponsor revenue, fake network invoices, fake fraud holds, fake ad provider state, fake kill switches, or hard-coded credentials.
+- Admin V1A must not be expanded with fake money, fake usage, fake payouts, fake sponsor revenue, fake network invoices, fake fraud holds, fake live ad provider state, fake kill switches, or hard-coded credentials.
+- Ads Launch Foundation V1A is pushed.
+- Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
+- Ads V1A added `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`. `app/admin.tsx` was updated only for read-only/foundation Admin Ads status.
+- Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
 
 ## Product Truth To Preserve
 - Profile = person/social identity.
@@ -112,8 +132,13 @@ Required proof for that lane:
 - RevenueCat remains Premium subscription truth.
 - AppLovin MAX is primary ad mediation direction; Unity LevelPlay / Unity Ads may come through AppLovin MAX later.
 - Do not build AdMob-only ads.
+- Do not make direct screen-level SDK calls; future real providers must use the Chi'llywood provider-neutral ad wrapper.
 - Ads launch cap: base active session 3 interstitial + 1 native/feed; after 2 active browsing hours +2 interstitial + 1 native/feed; daily cap 6 interstitial + 3 native/feed; Premium sees zero ads.
-- Ads must not appear inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, or immediately at app launch.
+- Ads must not appear inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, immediately at app launch, in Admin, in Channel Studio, in Chat, or in Profile/composer contexts unless explicitly redesigned later.
+- Launch app ads are platform money at first. RevenueCat remains Premium subscription truth only and does not take ad revenue. Google Play does not take a subscription fee from AppLovin ad payouts.
+- Creator-page ad revenue share is later: creator 70% net and Chi'llywood 30% net. Creator-sold sponsor slots are later: brand pays Chi'llywood first, creator 80% net, and Chi'llywood 20% net.
+- No creator ad revenue ledger, payout ledger, sponsor deal system, or CTV revenue system exists yet.
+- CTV ads are future-only for Chi'llywood Originals and network-style content and are not active now.
 - Storage doctrine: Cloudflare R2 for public/high-download media; Hetzner Object Storage for source/original uploads, drafts, backups, archive, private/held/deleted media; Hetzner/OVH boxes for LiveKit and real-time live/watch-party traffic.
 
 ## Prompt Standard
