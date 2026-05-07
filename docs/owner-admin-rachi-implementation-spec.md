@@ -225,6 +225,7 @@ Current doctrine:
 - Ads V1B source files: `components/ads/NativeAdSlot.tsx`, Home placement in `app/(tabs)/index.tsx`, native/feed cap proof support in `_lib/ads/adSession.ts`, and read-only/foundation Admin Ads copy in `app/admin.tsx`
 - Ads V1C source files: `components/ads/InterstitialController.tsx`, root mount in `app/_layout.tsx`, and read-only/foundation Admin Ads copy in `app/admin.tsx`
 - Admin Usage Metering Foundations 37-39 source files: `_lib/platformUsage.ts`, read-only Admin Usage copy in `app/admin.tsx`, and local migration `supabase/migrations/202605070003_platform_usage_metering_foundation.sql`
+- Ledger Systems 4A-4D finance foundation source files: `_lib/platformFinance.ts`, read-only Admin Revenue/Payouts/Networks/Sponsors/Fraud copy in `app/admin.tsx`, and local migration `supabase/migrations/202605070004_platform_finance_ledger_foundation.sql`
 - Admin V1B2A source files: `app/(auth)/signup.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; New Accounts is enforced on signup only
 - Admin V1B2B source files: `app/channel-settings.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; Uploads is enforced on new creator-video upload submit only
 
@@ -297,9 +298,10 @@ Admin V1A already presents these sections, but many are foundation-only. Current
 6. Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan.
 7. Admin Usage Metering Foundations 37-39 is pushed: local schema/helper/read-only Admin Usage foundation for future `bandwidth_bytes`, `participant_minutes`, and `storage_bytes` metering, with storage shown only as metadata estimate, participant-minutes shown only as DB estimate, and bandwidth still `Not connected yet` unless future real metering rows exist. The local migration was not applied remotely in the foundation pass.
 8. Usage remote migration/type refresh and event writers later only under a separately authorized Supabase/app-surface prompt.
-9. Ledger systems later: revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
-10. Real Rachi-control state and domain controls later only when backed.
-11. Advanced owner/super-admin controls only if justified by real backing and proof.
+9. Ledger Systems 4A-4D finance foundation is pushed: local schema/helper/read-only Admin foundation for future finance ledger events, creator payout ledger entries, network billing accounts, network invoice records, sponsor deal records, and platform fraud holds. No remote finance migration, generated type edit, provider integration, payout execution, invoice action, sponsor checkout, payout split execution, or fraud enforcement is active.
+10. Finance remote migration/type refresh and provider/event writers later only under a separately authorized Supabase/provider prompt.
+11. Real Rachi-control state and domain controls later only when backed.
+12. Advanced owner/super-admin controls only if justified by real backing and proof.
 
 ## 13. What Not To Do
 - do not build a messy god-panel

@@ -149,6 +149,10 @@ Admin Usage Metering Foundations 37-39 is pushed. Current owners are `_lib/platf
 
 Admin Usage estimate doctrine: live room counts, watch-party counts, uploads today, and participant-minutes are DB estimates; storage is a metadata estimate from existing app rows; bandwidth remains `Not connected yet` unless future real metering events/provider logs exist. These values are not cost, billing, payout, creator earnings, ad revenue, storage-billing, LiveKit invoice, or provider-log truth.
 
+Ledger Systems 4A-4D finance foundation is pushed. Current owners are `_lib/platformFinance.ts`, `app/admin.tsx` Revenue/Payouts/Networks/Sponsors/Fraud readouts, and local migration `supabase/migrations/202605070004_platform_finance_ledger_foundation.sql`. The migration defines future finance ledger, creator payout ledger, network billing, sponsor deal, and fraud hold tables but was not applied remotely in the foundation pass, and generated database types were not edited.
+
+Admin finance doctrine: Admin may show safe foundation row counts only. Counts are not live money totals, payout balances, invoice totals, sponsor revenue, creator earnings, fraud risk scores, or provider reconciliation truth. Do not add payout buttons, invoice actions, sponsor checkout, payout split execution, fraud enforcement, provider imports, SDKs, or provider keys without a separately scoped implementation and proof.
+
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Ads Launch Foundation Rule
