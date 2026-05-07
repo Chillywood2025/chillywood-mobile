@@ -265,6 +265,16 @@ export default function SettingsScreen() {
     openLocalLegalRoute("/copyright");
   }, [openLocalLegalRoute]);
 
+  const onPressSupport = useCallback(() => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "support",
+      destination: "local",
+    });
+
+    router.push("/support" as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   const onPressManagePremium = useCallback(() => {
     trackEvent("settings_premium_manage_opened", {
       source: "settings",
@@ -403,6 +413,11 @@ export default function SettingsScreen() {
           </TouchableOpacity>
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyright}>
             <Text style={styles.utilityButtonText}>Copyright / DMCA</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.utilityRow}>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupport}>
+            <Text style={styles.utilityButtonText}>Support</Text>
           </TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressAccountDeletion}>

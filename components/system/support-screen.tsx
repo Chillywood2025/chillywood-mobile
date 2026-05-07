@@ -41,6 +41,7 @@ const SUPPORT_CATEGORIES = [
   "Billing and Premium help: subscription status, restore purchase, Premium gating, and store-managed cancellation questions.",
   "Creator upload help: Channel Settings upload, draft/public visibility, creator-video playback, and upload errors.",
   "Report abuse and safety: creator videos, profiles/channels, rooms, live behavior, chat/message issues, harassment, impersonation, and unsafe content.",
+  "Sponsorship, ads, and scam concerns: undisclosed sponsorship, unsafe product promotion, misleading paid placement claims, fake offers, or fraud.",
   "Copyright and DMCA: takedown notices, counter-notice questions, unauthorized media, and creator upload rights concerns.",
   "Product reliability: playback, Watch-Party, Live Stage, Chi'lly Chat, crash, performance, and confusing route behavior.",
 ];

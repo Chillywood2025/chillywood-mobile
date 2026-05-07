@@ -11,6 +11,7 @@ import {
 
 import {
   SAFETY_REPORT_CATEGORIES,
+  SAFETY_REPORT_CATEGORY_COPY,
   type SafetyReportCategory,
 } from "../../_lib/moderation";
 
@@ -22,9 +23,6 @@ type ReportSheetProps = {
   onSubmit: (input: { category: SafetyReportCategory; note: string }) => Promise<void> | void;
   onClose: () => void;
 };
-
-const formatCategoryLabel = (category: SafetyReportCategory) =>
-  category === "copyright" ? "Copyright" : category.replace("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
 export function ReportSheet({
   visible,
@@ -38,9 +36,10 @@ export function ReportSheet({
   const [note, setNote] = useState("");
 
   const helperText = useMemo(
-    () => "Reports are logged for Chi'llywood moderation review. Device capture controls remain best-effort.",
+    () => "Reports use backed safety categories. Dedicated fraud, sponsorship, and unsafe-product categories need a later schema pass; use Safety or Other with a note for now.",
     [],
   );
+  const categoryCopy = SAFETY_REPORT_CATEGORY_COPY[category];
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -61,11 +60,16 @@ export function ReportSheet({
                 onPress={() => setCategory(entry)}
               >
                 <Text style={[styles.categoryChipText, category === entry && styles.categoryChipTextActive]}>
-                  {formatCategoryLabel(entry)}
+                  {SAFETY_REPORT_CATEGORY_COPY[entry].label}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          <View style={styles.categoryHelp}>
+            <Text style={styles.categoryHelpTitle}>{categoryCopy.label}</Text>
+            <Text style={styles.categoryHelpText}>{categoryCopy.description}</Text>
+          </View>
 
           <TextInput
             value={note}
@@ -162,6 +166,26 @@ const styles = StyleSheet.create({
   },
   categoryChipTextActive: {
     color: "#FFE6EB",
+  },
+  categoryHelp: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 3,
+  },
+  categoryHelpTitle: {
+    color: "#F4F7FC",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  categoryHelpText: {
+    color: "#A5B0C7",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
   },
   input: {
     minHeight: 98,

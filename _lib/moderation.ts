@@ -17,6 +17,10 @@ export type SafetyReportTargetType =
   | "creator_video_comment"
   | "social_attachment";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
+export type SafetyReportCategoryCopy = {
+  label: string;
+  description: string;
+};
 export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner" | "moderator";
 export type PlatformRole = "owner" | "operator" | "moderator";
 
@@ -148,6 +152,33 @@ export const SAFETY_REPORT_CATEGORIES: SafetyReportCategory[] = [
   "other",
 ];
 
+export const SAFETY_REPORT_CATEGORY_COPY: Record<SafetyReportCategory, SafetyReportCategoryCopy> = {
+  abuse: {
+    label: "Abuse",
+    description: "Threats, doxxing, coercion, hate, exploitation, or targeted harm.",
+  },
+  harassment: {
+    label: "Harassment",
+    description: "Bullying, stalking, repeated unwanted contact, or hostile behavior.",
+  },
+  impersonation: {
+    label: "Impersonation",
+    description: "Fake creator, operator, official account, affiliation, or identity claims.",
+  },
+  copyright: {
+    label: "Copyright",
+    description: "Stolen uploads, unauthorized media, DMCA/copyright concerns, or rights misuse.",
+  },
+  safety: {
+    label: "Safety",
+    description: "Illegal content, scams/fraud, unsafe product or ad concerns, spam, malware, or platform abuse.",
+  },
+  other: {
+    label: "Other",
+    description: "Anything else, including undisclosed sponsorship or context the current categories do not cover.",
+  },
+};
+
 type SafetyReportInsert = TablesInsert<"safety_reports">;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
@@ -237,6 +268,20 @@ const normalizeSafetyReportCategory = (value: unknown): SafetyReportCategory => 
     || normalized === "other"
   ) {
     return normalized;
+  }
+  if (
+    normalized === "illegal"
+    || normalized === "scam"
+    || normalized === "fraud"
+    || normalized === "spam"
+    || normalized === "malware"
+    || normalized === "unsafe_product"
+    || normalized === "unsafe_product_ad"
+  ) {
+    return "safety";
+  }
+  if (normalized === "undisclosed_sponsorship" || normalized === "sponsorship_disclosure") {
+    return "other";
   }
   return "safety";
 };
