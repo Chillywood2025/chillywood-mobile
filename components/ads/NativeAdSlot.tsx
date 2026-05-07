@@ -23,6 +23,7 @@ import type { UserPlan } from "../../_lib/monetization";
 import { useOptionalSession } from "../../_lib/session";
 import { useActiveBrowsingTime } from "../../hooks/useActiveBrowsingTime";
 import { useAdEligibility } from "../../hooks/useAdEligibility";
+import { useAdsLaunchConfig } from "../../hooks/useAdsLaunchConfig";
 
 type NativeAdSlotProps = {
   surface: "home" | "explore" | string;
@@ -129,7 +130,8 @@ export function NativeAdSlot({
   onRecordedPlaceholderShow,
 }: NativeAdSlotProps) {
   const session = useOptionalSession();
-  const config = configOverride ?? ADS_LAUNCH_CONFIG_DEFAULTS;
+  const { config: appConfigAdsLaunch } = useAdsLaunchConfig({ enabled: !configOverride });
+  const config = configOverride ?? appConfigAdsLaunch;
   const providerStatus = providerStatusOverride ?? DISCONNECTED_PLACEHOLDER_AD_STATUS;
   const [resolvedIsAdFree, setResolvedIsAdFree] = useState<boolean | null>(
     typeof providedIsAdFree === "boolean" ? providedIsAdFree : null,

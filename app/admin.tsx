@@ -3131,7 +3131,10 @@ export default function AdminStudioScreen() {
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Ads Launch config source</Text>
-                <Text style={styles.configListBody}>app_config.adsLaunch foundation normalized through code-owned defaults.</Text>
+                <Text style={styles.configListBody}>app_config.adsLaunch is normalized through code-owned defaults.</Text>
+                <Text style={styles.configListBody}>
+                  Native/feed and interstitial runtime owners read this normalized source with default-disabled fallback.
+                </Text>
                 <Text style={styles.configListBody}>This is read-only foundation copy; no Admin ad toggles are live.</Text>
               </View>
             </View>

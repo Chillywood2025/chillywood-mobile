@@ -27,6 +27,7 @@ import { placeholderAdProvider } from "../../_lib/ads/providers/placeholder";
 import type { UserPlan } from "../../_lib/monetization";
 import { useOptionalSession } from "../../_lib/session";
 import { useActiveBrowsingTime } from "../../hooks/useActiveBrowsingTime";
+import { useAdsLaunchConfig } from "../../hooks/useAdsLaunchConfig";
 
 const DEFAULT_INTERSTITIAL_FORBIDDEN_CONTEXTS: AdForbiddenContextFlags = {
   activeVideoPlayback: false,
@@ -205,7 +206,8 @@ export function InterstitialController({
 }) {
   const pathname = usePathname();
   const session = useOptionalSession();
-  const config = configOverride ?? ADS_LAUNCH_CONFIG_DEFAULTS;
+  const { config: appConfigAdsLaunch } = useAdsLaunchConfig({ enabled: !configOverride });
+  const config = configOverride ?? appConfigAdsLaunch;
   const provider = providerOverride ?? placeholderAdProvider;
   const providerStatus = providerStatusOverride ?? provider.getStatus();
   const forbiddenContexts = useMemo(
