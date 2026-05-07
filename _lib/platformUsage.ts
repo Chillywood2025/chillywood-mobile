@@ -11,8 +11,16 @@ export const PROVIDER_USAGE_IMPORTS_TABLE = "provider_usage_imports";
 export const PROVIDER_USAGE_DAILY_TABLE = "provider_usage_daily";
 export const PROVIDER_BILLING_SNAPSHOTS_TABLE = "provider_billing_snapshots";
 export const PROVIDER_USAGE_RECONCILIATION_TABLE = "provider_usage_reconciliation";
+export const RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC = "record_creator_video_upload_usage";
 
 export type PlatformUsageMetricKey = "bandwidth_bytes" | "participant_minutes" | "storage_bytes";
+
+export type CreatorVideoUploadUsageResult = {
+  status: string;
+  videoId: string | null;
+  usageEventRecorded: boolean;
+  storageEventRecorded: boolean;
+};
 
 export type AdminUsageReadModel = {
   premiumActiveCount: number | null;
@@ -72,9 +80,21 @@ const toPositiveNumber = (value: unknown) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
+const toUsageText = (value: unknown) => String(value ?? "").trim();
+
 const toTimestamp = (value: unknown) => {
   const parsed = Date.parse(String(value ?? ""));
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeCreatorVideoUploadUsageResult = (value: unknown, fallbackVideoId: string): CreatorVideoUploadUsageResult => {
+  const result = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    status: toUsageText(result.status) || "unknown",
+    videoId: toUsageText(result.video_id) || fallbackVideoId || null,
+    usageEventRecorded: result.usage_event_recorded === true,
+    storageEventRecorded: result.storage_event_recorded === true,
+  };
 };
 
 const safeRead = async <T>(loader: () => Promise<T>): Promise<T | null> => {
@@ -248,6 +268,25 @@ export const formatUsageMinutes = (minutes?: number | null) => {
   if (minutes >= 60) return `${(minutes / 60).toFixed(1)} participant-hours`;
   return `${Math.round(minutes)} participant-minutes`;
 };
+
+export async function recordCreatorVideoUploadUsage(videoId: string): Promise<CreatorVideoUploadUsageResult> {
+  const targetVideoId = toUsageText(videoId);
+  if (!targetVideoId) {
+    return {
+      status: "invalid_video_id",
+      videoId: null,
+      usageEventRecorded: false,
+      storageEventRecorded: false,
+    };
+  }
+
+  const { data, error } = await supabase.rpc(RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC, {
+    target_video_id: targetVideoId,
+  });
+  if (error) throw error;
+
+  return normalizeCreatorVideoUploadUsageResult(data, targetVideoId);
+}
 
 export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
   const startOfToday = startOfTodayIso();

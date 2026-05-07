@@ -7,6 +7,7 @@ import {
   uploadFileToMediaStorage,
   type MediaStorageProvider,
 } from "./mediaStorage";
+import { recordCreatorVideoUploadUsage } from "./platformUsage";
 import { supabase } from "./supabase";
 
 export const CREATOR_VIDEO_BUCKET = "creator-videos";
@@ -361,7 +362,23 @@ export async function uploadCreatorVideo(input: {
 
   logCreatorVideoUpload("metadata_insert_succeeded", { id, visibility: payload.visibility });
 
-  return parseCreatorVideo(data);
+  const createdVideo = await parseCreatorVideo(data);
+  try {
+    const usageResult = await recordCreatorVideoUploadUsage(createdVideo.id);
+    logCreatorVideoUpload("usage_metering_recorded", {
+      id: createdVideo.id,
+      status: usageResult.status,
+      usageEventRecorded: usageResult.usageEventRecorded,
+      storageEventRecorded: usageResult.storageEventRecorded,
+    });
+  } catch (usageError) {
+    logCreatorVideoUpload("usage_metering_failed", {
+      id: createdVideo.id,
+      message: usageError instanceof Error ? usageError.message : "unknown",
+    });
+  }
+
+  return createdVideo;
 }
 
 export async function updateCreatorVideoMetadata(
