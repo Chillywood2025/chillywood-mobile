@@ -119,6 +119,8 @@ Admin V1A is pushed and includes Home, Reports, Content, Roles, Audit, Rachi, Us
 
 Admin V1B1 runtime controls config foundation is pushed. Runtime controls are typed defaults stored under the existing `app_configurations.config.runtimeControls` JSON shape, with `_lib/featureFlags.ts` owning defaults/normalization, `_lib/appConfig.ts` owning normalized app-config storage, and `app/admin.tsx` owning read-only Kill Switches status copy only. Admin Kill Switches may show `Configured foundation` and `Not enforced yet`, but must not show working toggles or imply enforcement until affected app surfaces actually read the controls.
 
+Admin V1B2A is pushed as the first real runtime control enforcement. Signup reads `runtimeControls.new_accounts_enabled` after email/password and 18+ confirmation pass and before `supabase.auth.signUp`; when false, account creation is paused before a Supabase auth account is created. Admin may label New Accounts as `Enforced on signup`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
+
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Ads Launch Foundation Rule

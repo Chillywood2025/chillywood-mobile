@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Audit/spec Admin V1B2 kill switch enforcement for the first runtime control that should affect real app behavior.
+Audit/spec Admin V1B2B kill switch enforcement for `uploads_enabled` on the existing creator upload action.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -17,20 +17,23 @@ Product direction:
 - Ads V1C added only placeholder interstitial decision/controller foundation. It did not install SDKs, add real IDs, initialize AppLovin/Unity/AdMob, render real ads, add CTV inventory, show fake ad revenue, or change forbidden surfaces.
 - Normal runtime must remain honest: ads stay disabled by default because `ads_enabled=false`.
 - Admin V1B1 runtime controls config foundation is pushed. Typed defaults live under `app_configurations.config.runtimeControls`; Admin Kill Switches shows read-only `Configured foundation` and `Not enforced yet`; no working toggles or runtime enforcement were added.
+- Admin V1B2A new-account enforcement is pushed. Signup reads `runtimeControls.new_accounts_enabled` after email/password and 18+ confirmation pass, blocks before `supabase.auth.signUp` when false, preserves default true behavior, and updates Admin New Accounts copy as read-only `Enforced on signup`.
 
-Required proof before any Admin V1B2 enforcement lane:
+Required proof before Admin V1B2B:
 
-- choose exactly one switch or a tightly related pair for first enforcement
-- prove the affected app surface reads normalized `runtimeControls`
+- prove the existing creator upload action can read normalized `runtimeControls.uploads_enabled`
+- block only the actual upload submit/action path when false; do not hide or duplicate the existing upload form unless explicitly scoped
 - preserve existing signed-in, beta, platform-role, RLS, Premium, privacy, and route gates
+- preserve the one clear Channel Studio `Video Upload` form and do not reintroduce duplicate upload boxes/buttons
+- preserve existing picker/storage/metadata/publish/unpublish/delete behavior when uploads are enabled
 - do not expose working Admin write controls unless the prompt also scopes backed config save permissions and manual proof
 - do not change migrations, generated database types, RLS, Supabase remote state, storage, LiveKit config, ads SDKs, RevenueCat setup, or forbidden surfaces
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Admin V1B2 Kill Switch Enforcement:
-   - audit/spec first, then implement one narrowly scoped real runtime read
-   - recommended first candidates: `new_accounts_enabled` on signup or `uploads_enabled` on existing upload action
+1. Admin V1B2B Upload Kill Switch Enforcement:
+   - audit/spec first, then implement one narrowly scoped real runtime read for `uploads_enabled`
+   - block upload submit before storage/upload work when disabled
    - keep Admin toggles read-only unless a separate backed write-control prompt is provided
 2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
@@ -70,6 +73,7 @@ Required proof before any Admin V1B2 enforcement lane:
 - Admin V1A keeps Reports, Content, Roles, Audit, and Rachi backed behavior working. Users, Premium, Kill Switches, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and parts of Usage/System are foundation or read-only where not backed.
 - Admin V1A must not be expanded with fake money, fake usage, fake payouts, fake sponsor revenue, fake network invoices, fake fraud holds, fake live ad provider state, fake kill switches, or hard-coded credentials.
 - Admin V1B1 runtime controls config foundation is pushed. `_lib/featureFlags.ts` owns typed defaults and normalization, `_lib/appConfig.ts` persists normalized `runtimeControls` under existing `app_configurations.config`, and `app/admin.tsx` updates Kill Switches copy only as read-only `Configured foundation` / `Not enforced yet`. No runtime behavior, Premium gate, migration, generated type, RLS, storage, Supabase remote, or Admin permission boundary changed.
+- Admin V1B2A new-account enforcement is pushed. `app/(auth)/signup.tsx` blocks before `supabase.auth.signUp` if `runtimeControls.new_accounts_enabled` is false, after existing email/password and 18+ checks. Admin marks New Accounts as read-only `Enforced on signup`; no working toggle, login change, legal acceptance storage change, migration, generated type edit, RLS/storage change, Supabase remote change, or Premium gate change was added.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
