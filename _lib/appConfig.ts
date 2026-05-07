@@ -11,6 +11,11 @@ import {
   type AppRuntimeFeatures,
 } from "./featureFlags";
 import {
+  ADS_LAUNCH_CONFIG_DEFAULTS,
+  resolveAdsLaunchConfig as normalizeAdsLaunchConfig,
+  type AdsLaunchConfig,
+} from "./ads/adConfig";
+import {
   normalizeCapturePolicy,
   normalizeContentAccessRule,
   normalizeJoinPolicy,
@@ -79,6 +84,7 @@ export type AppConfig = {
   branding: BrandingConfig;
   features: AppRuntimeFeatures;
   runtimeControls: AppRuntimeControls;
+  adsLaunch: AdsLaunchConfig;
   monetization: AppMonetizationRuntimeFeatures & {
     defaultSponsorLabel: string;
     premiumUpsellTitle: string;
@@ -140,6 +146,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
   features: APP_RUNTIME_FEATURE_DEFAULTS,
   runtimeControls: APP_RUNTIME_CONTROL_DEFAULTS,
+  adsLaunch: { ...ADS_LAUNCH_CONFIG_DEFAULTS },
   monetization: {
     ...APP_MONETIZATION_RUNTIME_DEFAULTS,
     defaultSponsorLabel: "Sponsored",
@@ -284,6 +291,7 @@ export const normalizeAppConfig = (raw: unknown): AppConfig => {
   const branding = isPlainObject(config.branding) ? config.branding : {};
   const features = isPlainObject(config.features) ? config.features : {};
   const runtimeControls = isPlainObject(config.runtimeControls) ? config.runtimeControls : {};
+  const adsLaunch = isPlainObject(config.adsLaunch) ? config.adsLaunch : {};
   const monetization = isPlainObject(config.monetization) ? config.monetization : {};
   const roomDefaults = isPlainObject(config.roomDefaults) ? config.roomDefaults : {};
   const watchParty = isPlainObject(roomDefaults.watchParty) ? roomDefaults.watchParty : {};
@@ -318,6 +326,7 @@ export const normalizeAppConfig = (raw: unknown): AppConfig => {
     },
     features: resolveAppRuntimeFeatures(features),
     runtimeControls: resolveAppRuntimeControls(runtimeControls),
+    adsLaunch: normalizeAdsLaunchConfig(adsLaunch),
     monetization: {
       ...resolveAppMonetizationRuntimeFeatures(monetization),
       defaultSponsorLabel: toText(monetization.defaultSponsorLabel, DEFAULT_APP_CONFIG.monetization.defaultSponsorLabel),
@@ -358,6 +367,10 @@ export const resolveFeatureConfig = (config?: Partial<AppConfig> | AppConfig | n
 export const resolveRuntimeControlsConfig = (
   config?: Partial<AppConfig> | AppConfig | null,
 ): AppRuntimeControls => normalizeAppConfig(config).runtimeControls;
+
+export const resolveAdsLaunchConfigFromAppConfig = (
+  config?: Partial<AppConfig> | AppConfig | null,
+): AdsLaunchConfig => normalizeAppConfig(config).adsLaunch;
 
 export const resolveMonetizationConfig = (
   config?: Partial<AppConfig> | AppConfig | null,

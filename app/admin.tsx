@@ -20,7 +20,6 @@ import {
   type AppConfig,
   type HomeRailKey,
 } from "../_lib/appConfig";
-import { ADS_LAUNCH_CONFIG_DEFAULTS } from "../_lib/ads/adConfig";
 import { placeholderAdProvider } from "../_lib/ads/providers/placeholder";
 import { FEATURE_FLAGS, type AppRuntimeControls } from "../_lib/featureFlags";
 import type { Database } from "../supabase/database.types";
@@ -781,7 +780,7 @@ export default function AdminStudioScreen() {
   const runtimeConfigIssues = useMemo(() => getRuntimeConfigIssues(runtimeConfig), [runtimeConfig]);
   const liveKitConfigured = useMemo(() => isLiveKitRuntimeConfigured(runtimeConfig), [runtimeConfig]);
   const adsProviderStatus = useMemo(() => placeholderAdProvider.getStatus(), []);
-  const adsLaunchConfig = ADS_LAUNCH_CONFIG_DEFAULTS;
+  const adsLaunchConfig = experienceConfig.adsLaunch;
   const moderationAccess = getModerationAccess({
     userId: user?.id ?? null,
     email: user?.email ?? null,
@@ -3131,7 +3130,14 @@ export default function AdminStudioScreen() {
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>V1A config defaults</Text>
+                <Text style={styles.configListTitle}>Ads Launch config source</Text>
+                <Text style={styles.configListBody}>app_config.adsLaunch foundation normalized through code-owned defaults.</Text>
+                <Text style={styles.configListBody}>This is read-only foundation copy; no Admin ad toggles are live.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>V1A config values</Text>
                 <Text style={styles.configListBody}>{`ads_enabled: ${String(adsLaunchConfig.ads_enabled)}`}</Text>
                 <Text style={styles.configListBody}>{`ads_provider: ${adsLaunchConfig.ads_provider}`}</Text>
                 <Text style={styles.configListBody}>{`interstitial_enabled: ${String(adsLaunchConfig.interstitial_enabled)}`}</Text>
