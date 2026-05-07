@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement Public V1 Hardening H3 Security / Compliance / Moderation Hardening.
+Implement Ads V1C Interstitial Controller as placeholder-only, no-SDK, no-real-ad infrastructure.
 
 Product direction:
 
@@ -10,46 +10,40 @@ Product direction:
 - Public V1 Hardening H2 upload/content lifecycle polish is pushed.
 - H2 keeps the existing creator-video picker/upload/storage/metadata path, adds honest local upload lifecycle states, clarifies backed draft/published and media-ready/unavailable status, and does not add fake processing/transcoding/archive/retry/storage-billing states.
 - H2 duplicate-upload UI correction is pushed. Channel Studio Content has one clear `Video Upload` form, no duplicate upload boxes/buttons, and `Upload Status` is inline inside that form.
-- Security/compliance/moderation is the next Public V1 hardening lane.
-- This lane must improve public launch safety posture without pretending full legal approval, full moderation automation, full audit logs, or unsupported enforcement exists.
-- Do not change RLS, storage policies, migrations, generated database types, Player controls, Watch-Party layout, Live Stage layout, public Channel layout, Profile visual layout, Chi'lly Circle behavior, profile privacy behavior, ads, RevenueCat, billing, payout, sponsor, or LiveKit config unless a later prompt explicitly scopes that work.
+- Public V1 Hardening H3 security/compliance/moderation hardening is pushed. Settings has a direct Support entry, Support includes sponsorship/ad/scam concern copy, the Report Sheet explains existing backed categories, and no new report schema/action system was added.
+- Ads V1A/V1B are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+- Ads V1C must add only a placeholder interstitial decision/controller foundation. It must not install SDKs, add real IDs, initialize AppLovin/Unity/AdMob, render real ads, add CTV inventory, show fake ad revenue, or change forbidden surfaces.
+- Normal runtime must remain honest: ads stay disabled by default because `ads_enabled=false`.
 
 Required proof for that lane:
 
-- Settings/legal/support entries still open for Terms, Privacy Policy, Community Guidelines, DMCA/Copyright, Support, Account Deletion, and any existing legal surfaces touched
-- report sheet still opens where currently backed and shows only backed/easy-safe report categories
-- admin Reports/Content surfaces remain permission-gated and do not add fake resolve/dismiss/ban/delete actions
-- destructive moderation actions, if touched, keep confirmation and reason/audit requirements
-- no private profile/Circle content is exposed through public or admin routes beyond existing backed permissions
-- no unsupported legal-compliance claims are added
-- no service-role key, LiveKit secret, RevenueCat secret, app-store key, provider secret, hard-coded admin credential, test password, or real ad ID is added or printed
-- `npm run typecheck`, `git diff --check`, and scoped forbidden-file checks pass
-- current Android/runtime proof or scoped route proof confirms touched safety/legal/admin surfaces render without crashes
+- default runtime shows no interstitial because `ads_enabled=false`
+- safe in-memory/helper proof can make a free user eligible only after 180 active browsing seconds, with caps available, app active, allowed route, provider placeholder test-connected, and all forbidden context flags false
+- Premium/ad-free users never become eligible and do not increment counters
+- `/admin`, `/channel-studio`, `/channel-settings`, `/profile`, `/player`, `/watch-party`, `/subscribe`, and `/chat` remain interstitial-ineligible
+- active video playback, active LiveKit room, typing/commenting, upload, payment/subscription surface, Admin surface, Studio surface, inactive/background app, and unknown context all block eligibility
+- interstitial spacing blocks a second interstitial until 600 seconds after the last placeholder show
+- session and daily interstitial caps are enforced by existing Ads V1A cap truth
+- no real SDK/provider/ad ID/rendering/revenue is added
+- `npm run typecheck`, `git diff --check`, scoped forbidden-file checks, package/native dependency checks, and current Android/runtime or helper proof pass
 
 ## Current Product Lane Order
-1. Security/compliance/moderation pass:
-   - Terms
-   - Privacy Policy
-   - Community Guidelines
-   - DMCA/copyright policy
-   - sponsorship disclosure rules
-   - UGC moderation/admin review hardening
-2. Ads V1C Interstitial controller:
+1. Ads V1C Interstitial controller:
    - placeholder interstitial first
    - safe transitions only
    - no app-launch ad
    - respects 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts
    - no real SDK
    - no real ad IDs
-3. Real AppLovin MAX integration:
+2. Real AppLovin MAX integration:
    - only after external AppLovin setup is ready
    - keep provider wrapper architecture
    - Unity LevelPlay / Unity Ads later through AppLovin MAX if needed
    - no AdMob-only path
-4. Admin V1B Kill Switches:
+3. Admin V1B Kill Switches:
    - only after a dedicated schema/config/enforcement plan
    - switches must be real and read by affected app surfaces
-5. Usage metering / ledger systems later:
+4. Usage metering / ledger systems later:
    - bandwidth
    - participant-minutes
    - storage
@@ -97,6 +91,9 @@ Required proof for that lane:
 - H2 changed only `app/channel-settings.tsx` and `components/creator-media/creator-video-card.tsx`.
 - H2 keeps existing picker/upload/storage/metadata/Open Player/Edit/Publish/Unpublish/Delete behavior, adds honest local upload lifecycle copy, clarifies backed `Published`/`Draft` and `Media Ready`/`Media Unavailable` states, and does not add fake processing/transcoding/archive/retry/storage-billing states.
 - H2 follow-up duplicate-upload UI correction changed only `app/channel-settings.tsx`; keep one clear Channel Studio `Video Upload` form and do not reintroduce separate header/empty-state upload boxes.
+- Public V1 Hardening H3 security/compliance/moderation hardening is pushed.
+- H3 changed only `_lib/moderation.ts`, `components/safety/report-sheet.tsx`, `app/settings.tsx`, and `components/system/support-screen.tsx`.
+- H3 preserves the existing backed `safety_reports` categories and explains them more clearly. Scam/fraud/unsafe product/ad concerns use `Safety`; undisclosed sponsorship uses `Other` until a later schema pass. H3 does not add new schema categories, fake moderation actions, fake legal claims, RLS changes, migrations, generated-type edits, or admin bypasses.
 
 ## Product Truth To Preserve
 - Profile = person/social identity.

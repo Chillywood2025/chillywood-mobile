@@ -27,13 +27,13 @@
 - Ads Launch Foundation V1A/V1B as provider-neutral, no-SDK, no-real-rendering infrastructure; the Home native/feed placeholder foundation exists but normal runtime keeps it hidden while `ads_enabled=false`, and real ad SDK integration is not live yet
 - 18+ launch posture with H1A signup confirmation and H1B2 legal acceptance storage pushed
 - Public V1 Hardening H2 upload/content lifecycle polish in Channel Studio Content, with one clear `Video Upload` form, honest no-file/selected/ready/uploading/succeeded/failed local states, and backed draft/published/media-ready labels
+- Public V1 Hardening H3 security/compliance/moderation hardening: Settings Support entry, Support sponsorship/ad/scam concern copy, and backed Report Sheet category guidance without new schema/actions
 - moderation basics
 - analytics, error monitoring, and admin visibility
 - layered room participation truth with limited active live seats, scalable participant browsing, and a clear distinction between joined presence and true live-seat media
 - Public v1 should stay focused on the core social streaming experience instead of the full long-term platform vision
 
 ## Post-v1
-- security/compliance/moderation pass
 - Ads V1C Interstitial controller with placeholder interstitial first, safe transitions only, no app-launch ad, 180-second first delay, 600-second spacing, session/daily caps, and no forbidden contexts
 - Real AppLovin MAX integration later only after external account/app/ad-unit setup is ready, keeping the provider wrapper architecture and avoiding an AdMob-only path
 - Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan; switches must be real and read by affected app surfaces
@@ -68,6 +68,8 @@
 - Public V1 Hardening H2 upload/content lifecycle polish is pushed in `app/channel-settings.tsx` and `components/creator-media/creator-video-card.tsx`. It preserves existing picker/upload/storage/metadata/Open Player/Edit/Publish/Unpublish/Delete behavior, adds local-only upload lifecycle states, labels upload progress honestly without fake percentages, and shows backed owner `Published`/`Draft` plus `Media Ready`/`Media Unavailable`.
 - H2 does not add fake processing, transcoding, archive, retry, storage billing, revenue, payout, or moderation states; it does not change RLS/storage policies, migrations, generated types, Player, Public Channel, Profile, Watch-Party, Live Stage, ads, RevenueCat, billing, or payout systems.
 - H2 duplicate-upload UI correction is pushed: Channel Studio Content has one `Video Upload` form, no extra header/empty-state upload buttons, and `Upload Status` is inline inside the form rather than a second upload-looking box.
+- Public V1 Hardening H3 security/compliance/moderation hardening is pushed in `_lib/moderation.ts`, `components/safety/report-sheet.tsx`, `app/settings.tsx`, and `components/system/support-screen.tsx`. It preserves backed `safety_reports` categories, adds clear category guidance for abuse/harassment/impersonation/copyright/safety/other, routes scam/fraud/unsafe product concerns through `Safety`, routes undisclosed sponsorship through `Other`, adds a Settings Support entry, and adds support copy for sponsorship/ad/scam concerns.
+- H3 does not add new report schema categories, fake resolve/dismiss/ban/delete actions, unsupported legal-compliance claims, RLS changes, migrations, generated-type edits, admin bypasses, or forbidden surface changes.
 - Ads Launch Foundation V1A is pushed with `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`; `app/admin.tsx` only shows read-only/foundation Admin Ads status.
 - Ads Launch Foundation V1B is pushed with `components/ads/NativeAdSlot.tsx`, one Home native/feed placeholder foundation in `app/(tabs)/index.tsx`, native/feed long-use cap proof support in `_lib/ads/adSession.ts`, and read-only Admin Ads status copy in `app/admin.tsx`.
 - Ads V1A defaults `ads_enabled` to false, uses `placeholder` as the default provider, and has a placeholder provider that reports not connected and calls no SDK.
