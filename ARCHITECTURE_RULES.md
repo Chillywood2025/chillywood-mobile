@@ -115,6 +115,8 @@ Admin is separate from:
 
 Admin must remain protected by signed-in plus beta/platform-role/backend permission checks. Future admin work must not weaken route access, report visibility, privileged-write boundaries, RLS, platform_role_memberships, confirmation prompts, reason/audit requirements, or secret handling.
 
+The Login screen may offer an Admin Command Center sign-in entry by setting `redirectTo=/admin`, but that entry must remain normal Supabase authentication followed by the canonical `/admin` platform-role checks. It must not store credentials, print credentials, hard-code admin accounts, add production bypasses, weaken `platform_role_memberships`, or make Admin visible to users who fail backend admin role checks.
+
 Admin V1A is pushed and includes Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System. Foundation sections must remain honest and must not show fake revenue, fake usage, fake payouts, fake sponsor money, fake network invoices, fake fraud holds, fake live ad provider state, or fake kill switches.
 
 Admin V1B1 runtime controls config foundation is pushed. Runtime controls are typed defaults stored under the existing `app_configurations.config.runtimeControls` JSON shape, with `_lib/featureFlags.ts` owning defaults/normalization, `_lib/appConfig.ts` owning normalized app-config storage, and `app/admin.tsx` owning read-only Kill Switches status copy only. Admin Kill Switches may show `Configured foundation` and `Not enforced yet`, but must not show working toggles or imply enforcement until affected app surfaces actually read the controls.

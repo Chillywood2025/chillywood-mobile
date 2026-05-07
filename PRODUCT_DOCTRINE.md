@@ -134,6 +134,7 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - `/admin` is the canonical Admin Command Center route for platform owner/operator operations.
 - Admin is separate from Channel Studio, Profile Settings, Public Channel, Chi'lly Circle, and future Room Control.
 - Admin must remain protected by signed-in plus beta/platform-role/backend permission checks, including separate route access, report visibility, and privileged-write boundaries.
+- The Login screen can present an Admin Command Center sign-in entry that routes successful normal auth to `/admin`, but it is not an admin bypass. Credentials must never be stored, printed, logged, hard-coded, or committed, and backend platform-role checks remain the only Admin access truth.
 - Admin V1A is pushed with Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System sections.
 - Admin V1A preserves backed Reports, Content, Roles, Audit, and Rachi behavior. Audit is a summary, not a full immutable audit-log system, and Rachi does not grant operator permissions.
 - Admin V1A foundation areas must stay honest: user search, runtime kill switches, live ad provider state, money, payouts, network billing, sponsor tools, fraud holds, bandwidth metering, LiveKit metering, participant-minute metering, and deeper ledgers are not active unless separately backed.

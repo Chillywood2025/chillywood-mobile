@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Ads Config V1D1 proof/smoke, then Ads V1D2 runtime-read plan.
+Ads V1D2 runtime-read implementation/proof.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -16,6 +16,7 @@ Product direction:
 - Ads V1A/V1B/V1C are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
 - Ads V1C added only placeholder interstitial decision/controller foundation. It did not install SDKs, add real IDs, initialize AppLovin/Unity/AdMob, render real ads, add CTV inventory, show fake ad revenue, or change forbidden surfaces.
 - Ads Config V1D1 app-config `adsLaunch` resolver foundation is pushed. `_lib/appConfig.ts` now normalizes optional `app_configurations.config.adsLaunch` through code-owned `ADS_LAUNCH_CONFIG_DEFAULTS`, and `app/admin.tsx` reads `experienceConfig.adsLaunch` for read-only Admin Ads status copy.
+- Admin Command Center sign-in entry is pushed. `app/(auth)/login.tsx` supports a normal admin-intent sign-in state with `redirectTo=/admin`, stores no credentials, hard-codes no account, adds no bypass, and still relies on canonical `/admin` signed-in plus backend platform-role checks after sign-in.
 - Normal runtime must remain honest: ads stay disabled by default because `ads_enabled=false`.
 - Runtime ad owners are not wired to app config yet: Home `NativeAdSlot` and root `InterstitialController` still use `ADS_LAUNCH_CONFIG_DEFAULTS` when no explicit override is provided.
 - Admin V1B1 runtime controls config foundation is pushed. Typed defaults live under `app_configurations.config.runtimeControls`; Admin Kill Switches shows read-only `Configured foundation` and `Not enforced yet`; no working toggles or runtime enforcement were added.
@@ -43,25 +44,19 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Ads Config V1D1 Proof/Smoke:
-   - source-proof `_lib/appConfig.ts` normalizes `config.adsLaunch` through `resolveAdsLaunchConfig`
-   - source-proof `app/admin.tsx` reads `experienceConfig.adsLaunch` only for read-only Ads status
-   - source-proof Home `NativeAdSlot` and root `InterstitialController` still use `ADS_LAUNCH_CONFIG_DEFAULTS` with no app-config override
-   - runtime-smoke `/admin` Ads tab if an admin session is available without printing credentials
-   - run `npm run typecheck`, `git diff --check`, and `git status --short`
-2. Ads V1D2 Runtime Read Plan:
-   - design the next no-SDK/no-real-rendering pass to read normalized `app_config.adsLaunch` into ad runtime owners
+1. Ads V1D2 Runtime Read:
+   - implement the next no-SDK/no-real-rendering pass to read normalized `app_config.adsLaunch` into ad runtime owners
    - default runtime must stay disabled because normalized `ads_enabled` remains false
    - do not layer Admin `runtimeControls.ads_enabled` into Ads Launch runtime
    - preserve Premium/ad-free zero ads and forbidden route/context blocking
    - do not add AppLovin, Unity, AdMob, real ad IDs, provider initialization, real rendering, CTV inventory, fake revenue, or working Admin toggles
    - keep Admin Kill Switches read-only unless a separate backed write-control prompt is provided
-3. Real AppLovin MAX readiness/integration planning:
+2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
    - keep provider wrapper architecture
    - Unity LevelPlay / Unity Ads later through AppLovin MAX if needed
    - no AdMob-only path
-4. Usage metering / ledger systems later:
+3. Usage metering / ledger systems later:
    - bandwidth
    - participant-minutes
    - storage

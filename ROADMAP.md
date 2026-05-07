@@ -24,6 +24,7 @@
 - preserved Rachi official seeded-account foundation on the canonical profile and Chi'lly Chat surfaces
 - Premium subscription gate
 - Admin Command Center V1A on the canonical `/admin` route, protected by signed-in plus beta/platform-role/backend permission checks
+- Login Admin Command Center sign-in entry, using normal auth plus `/admin` backend platform-role checks only, with no stored credentials or bypass
 - Ads Launch Foundation V1A/V1B/V1C and Ads Config V1D1 as provider-neutral, no-SDK, no-real-rendering infrastructure; the Home native/feed placeholder foundation and placeholder interstitial controller foundation exist but normal runtime keeps them hidden while `ads_enabled=false`, `app_configurations.config.adsLaunch` now has normalized defaults for future reads, and real ad SDK integration is not live yet
 - 18+ launch posture with H1A signup confirmation and H1B2 legal acceptance storage pushed
 - Public V1 Hardening H2 upload/content lifecycle polish in Channel Studio Content, with one clear `Video Upload` form, honest no-file/selected/ready/uploading/succeeded/failed local states, and backed draft/published/media-ready labels
