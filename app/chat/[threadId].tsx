@@ -589,6 +589,10 @@ export default function ChillyChatThreadScreen() {
     const trimmedDraft = String(bodyOverride ?? draft).trim();
     const selectedAttachment = bodyOverride ? null : attachmentFile;
     if (!threadId || (!trimmedDraft && !selectedAttachment) || sending || !thread) return;
+    if (!appConfig.runtimeControls.chat_enabled) {
+      setError("Chi'lly Chat is temporarily paused. You can still read existing messages.");
+      return;
+    }
     if (selectedAttachment && !appConfig.runtimeControls.chat_attachments_enabled) {
       setError("Chat attachments are temporarily paused. You can still send text messages.");
       return;
@@ -634,7 +638,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setSending(false);
     }
-  }, [appConfig.runtimeControls.chat_attachments_enabled, attachmentFile, currentUserId, draft, sending, thread, threadId]);
+  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, sending, thread, threadId]);
 
   const handleStartCall = useCallback(async (mode: ChatCallType) => {
     logChatCall("handle_start_call", {
@@ -644,6 +648,10 @@ export default function ChillyChatThreadScreen() {
       activeCommunicationRoomId: activeCallRoomId,
     });
     if (!threadId || callBusy || !!activeCallRoomId) return;
+    if (!appConfig.runtimeControls.chat_enabled) {
+      setError("Chi'lly Chat calls are temporarily paused. You can still read existing messages.");
+      return;
+    }
 
     try {
       setCallBusy(true);
@@ -676,7 +684,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setCallBusy(false);
     }
-  }, [activeCallRoomId, callBusy, threadId]);
+  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, callBusy, threadId]);
 
   useEffect(() => {
     const nextMode: ChatCallType | null = requestedCallMode === "voice"

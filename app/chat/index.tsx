@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
+import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
 import { getOrCreateDirectThread, listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../../_lib/chat";
 import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { getOfficialPlatformAccount, RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
@@ -75,6 +76,23 @@ export default function ChillyChatInboxScreen() {
   const [quickActionThreadId, setQuickActionThreadId] = useState("");
   const [starterBusy, setStarterBusy] = useState(false);
   const [activeFriendUserIds, setActiveFriendUserIds] = useState<string[]>([]);
+  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
+
+  useEffect(() => {
+    let active = true;
+
+    readAppConfig()
+      .then((config) => {
+        if (active) setAppConfig(config);
+      })
+      .catch(() => {
+        if (active) setAppConfig(DEFAULT_APP_CONFIG);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadThreads = useCallback(async (refresh = false) => {
     if (!isSignedIn) {
@@ -222,6 +240,14 @@ export default function ChillyChatInboxScreen() {
   }, [router]);
 
   const openOfficialThread = useCallback(async () => {
+    if (!appConfig.runtimeControls.chat_enabled) {
+      setError({
+        message: "Chi'lly Chat is temporarily paused. You can still read existing threads.",
+        source: "official-thread",
+      });
+      return;
+    }
+
     setStarterBusy(true);
     setError(null);
 
@@ -250,7 +276,7 @@ export default function ChillyChatInboxScreen() {
     } finally {
       setStarterBusy(false);
     }
-  }, [router]);
+  }, [appConfig.runtimeControls.chat_enabled, router]);
 
   const listHeader = useMemo(() => (
     <View style={styles.header}>

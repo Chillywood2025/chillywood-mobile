@@ -254,7 +254,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Chat",
     controlKey: "chat_enabled",
-    body: "Chi'lly Chat surfaces do not read this runtime control yet. Not enforced yet.",
+    body: "Standalone Chi'lly Chat send, call-start, official starter, and Profile-to-chat entry paths read this runtime control before new chat writes or starts. Enforced on standalone chat.",
+    badgeLabel: "Enforced on standalone chat",
   },
   {
     label: "Chat Attachments",

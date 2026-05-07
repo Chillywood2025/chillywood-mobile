@@ -1457,6 +1457,21 @@ export default function ProfileScreen() {
       return;
     }
 
+    if (!appConfig.runtimeControls.chat_enabled) {
+      trackEvent("communication_profile_entry_blocked", {
+        entryPath: "profile",
+        profileIsSelf: "false",
+        reason: "chat_paused",
+        targetUserId: userId,
+        entryMode,
+      });
+      Alert.alert(
+        "Chi'lly Chat is paused",
+        "Chi'lly Chat is temporarily paused. You can still view this Profile.",
+      );
+      return;
+    }
+
     try {
       trackEvent("communication_profile_entry_requested", {
         targetRoute: "/chat/[threadId]",
