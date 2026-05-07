@@ -146,7 +146,7 @@ Admin V1B runtimeControls closeout truth is recorded. `new_accounts_enabled`, `u
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Ads Launch Foundation Rule
-Ads Launch Foundation V1A/V1B/V1C is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+Ads Launch Foundation V1A/V1B/V1C and Ads Config V1D1 are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
 
 Current Ads V1A owners:
 - `_lib/ads/adConfig.ts`
@@ -169,7 +169,13 @@ Current Ads V1C owners:
 - `app/_layout.tsx` for mounting the null-rendering placeholder controller only
 - `app/admin.tsx` for read-only/foundation Admin Ads status copy only
 
+Current Ads Config V1D1 owners:
+- `_lib/appConfig.ts` for optional normalized `app_configurations.config.adsLaunch` under existing app config JSON
+- `app/admin.tsx` for read-only/foundation Admin Ads source/status copy only
+
 Ads V1A defaults `ads_enabled` to false and `ads_provider` to `placeholder`. The placeholder provider reports not connected and must not call any SDK, use real ad unit IDs, initialize providers, or render real ads.
+
+Ads Config V1D1 normalizes `config.adsLaunch` through code-owned `ADS_LAUNCH_CONFIG_DEFAULTS` and does not wire runtime ad owners to app config yet. Home `NativeAdSlot` and root `InterstitialController` still use defaults unless a future scoped pass explicitly provides normalized app-config reads. Admin `runtimeControls.ads_enabled` is not the current Ads Launch runtime source.
 
 Ads V1B adds one native/feed placeholder foundation slot on Home. Normal runtime still hides it because `ads_enabled` defaults false. `NativeAdSlot` may render only after central eligibility passes, Premium/ad-free users must never see it or increment counters, native/feed base session cap is 1, long-use unlock allows a second native/feed placement after 120 active browsing minutes, daily native/feed cap is 3, and forbidden routes/contexts stay blocked.
 
