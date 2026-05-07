@@ -767,6 +767,87 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_usage_daily_rollups: {
+        Row: {
+          event_count: number
+          generated_at: string
+          id: number
+          metadata: Json
+          metric_key: string
+          owner_user_id: string | null
+          quantity: number
+          rollup_date: string
+          source_type: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          event_count?: number
+          generated_at?: string
+          id?: number
+          metadata?: Json
+          metric_key: string
+          owner_user_id?: string | null
+          quantity?: number
+          rollup_date: string
+          source_type?: string
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          event_count?: number
+          generated_at?: string
+          id?: number
+          metadata?: Json
+          metric_key?: string
+          owner_user_id?: string | null
+          quantity?: number
+          rollup_date?: string
+          source_type?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      platform_usage_metering_events: {
+        Row: {
+          id: number
+          metadata: Json
+          metric_key: string
+          occurred_at: string
+          owner_user_id: string | null
+          quantity: number
+          recorded_at: string
+          source_id: string | null
+          source_type: string
+          unit: string
+        }
+        Insert: {
+          id?: number
+          metadata?: Json
+          metric_key: string
+          occurred_at?: string
+          owner_user_id?: string | null
+          quantity: number
+          recorded_at?: string
+          source_id?: string | null
+          source_type?: string
+          unit: string
+        }
+        Update: {
+          id?: number
+          metadata?: Json
+          metric_key?: string
+          occurred_at?: string
+          owner_user_id?: string | null
+          quantity?: number
+          recorded_at?: string
+          source_id?: string | null
+          source_type?: string
+          unit?: string
+        }
+        Relationships: []
+      }
       profile_post_comments: {
         Row: {
           body: string
