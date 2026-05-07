@@ -22,7 +22,7 @@ import {
 } from "../_lib/appConfig";
 import { ADS_LAUNCH_CONFIG_DEFAULTS } from "../_lib/ads/adConfig";
 import { placeholderAdProvider } from "../_lib/ads/providers/placeholder";
-import { FEATURE_FLAGS } from "../_lib/featureFlags";
+import { FEATURE_FLAGS, type AppRuntimeControls } from "../_lib/featureFlags";
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
@@ -219,25 +219,97 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   generatedAt: null,
 };
 const ACTIVE_PREMIUM_ENTITLEMENT_STATUSES = ["active", "trialing", "grace_period"] as const;
-const plannedKillSwitchRows = [
-  "New Accounts",
-  "Uploads",
-  "Comments",
-  "Attachments",
-  "Chat",
-  "Chat Attachments",
-  "Live First",
-  "Live Watch-Party",
-  "Watch-Party Live",
-  "Ads",
-  "Creator Posting",
-  "Profile Posting",
-  "Max Live Room Minutes",
-  "Max Room Participants",
-  "Max Upload Size",
-  "Premium Required For Live",
-  "Premium Required For Watch-Party",
-] as const;
+type PlannedKillSwitchRow = {
+  label: string;
+  controlKey?: keyof AppRuntimeControls;
+  body: string;
+};
+
+const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
+  {
+    label: "New Accounts",
+    controlKey: "new_accounts_enabled",
+    body: "Signup and onboarding do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Uploads",
+    controlKey: "uploads_enabled",
+    body: "Creator upload surfaces do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Comments",
+    controlKey: "comments_enabled",
+    body: "Comment surfaces do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Attachments",
+    controlKey: "attachments_enabled",
+    body: "Attachment surfaces do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Chat",
+    controlKey: "chat_enabled",
+    body: "Chi'lly Chat surfaces do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Chat Attachments",
+    controlKey: "chat_attachments_enabled",
+    body: "Chat attachment surfaces do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Live First",
+    controlKey: "live_first_enabled",
+    body: "Live First entry points do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Live Watch-Party",
+    controlKey: "live_watch_party_enabled",
+    body: "Live Watch-Party entry points do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Watch-Party Live",
+    controlKey: "watch_party_live_enabled",
+    body: "Watch-Party Live entry points do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Ads",
+    controlKey: "ads_enabled",
+    body: "Ads continue to use the existing Ads Launch config foundation. This runtime control is not enforced yet.",
+  },
+  {
+    label: "Creator Posting",
+    controlKey: "creator_posting_enabled",
+    body: "Creator posting surfaces do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Profile Posting",
+    controlKey: "profile_posting_enabled",
+    body: "Profile posting surfaces do not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Max Live Room Minutes",
+    body: "No typed runtime control exists for this limit in V1B1. Not connected yet.",
+  },
+  {
+    label: "Max Room Participants",
+    body: "No typed runtime control exists for this limit in V1B1. Not connected yet.",
+  },
+  {
+    label: "Max Upload Size",
+    controlKey: "max_upload_size_mb",
+    body: "Upload validation does not read this runtime control yet. Not enforced yet.",
+  },
+  {
+    label: "Premium Required For Live",
+    controlKey: "premium_required_for_live",
+    body: "Existing Premium live gates remain enforced separately. Not enforced yet as a runtime switch.",
+  },
+  {
+    label: "Premium Required For Watch-Party",
+    controlKey: "premium_required_for_watch_party",
+    body: "Existing Premium watch-party gates remain enforced separately. Not enforced yet as a runtime switch.",
+  },
+];
 const railLabels: Record<HomeRailKey, string> = {
   top_picks: "Top Picks",
   browse: "Browse",
@@ -265,6 +337,11 @@ const toTimestamp = (value?: string | null) => {
 
 const formatProgrammingToken = (value: string) =>
   value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+
+const formatRuntimeControlValue = (value: AppRuntimeControls[keyof AppRuntimeControls]) => {
+  if (typeof value === "boolean") return value ? "On by default" : "Off by default";
+  return `${value} MB default`;
+};
 
 const sortTitlesByProgrammingTruth = (items: TitleRow[]) => {
   return [...items].sort((a, b) => {
@@ -2916,34 +2993,36 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>KILL SWITCHES</Text>
               <Text style={styles.configTitle}>Kill Switches</Text>
               <Text style={styles.configBody}>
-                Runtime kill switches are not connected yet. Planned switches are shown as foundation rows, not working toggles.
+                Typed runtimeControls defaults now live under app_configurations.config. These rows are read-only foundation, not working toggles.
               </Text>
             </View>
-            <View style={[styles.badge, styles.badgeOff]}>
-              <Text style={styles.badgeText}>Foundation only</Text>
+            <View style={[styles.badge, styles.badgeScheduled]}>
+              <Text style={styles.badgeText}>Configured foundation</Text>
             </View>
           </View>
           <View style={styles.configList}>
-            {plannedKillSwitchRows.map((label) => {
-              const backedByAccessLogic =
-                label === "Premium Required For Live"
-                || label === "Premium Required For Watch-Party";
+            {plannedKillSwitchRows.map((row) => {
+              const configuredValue = row.controlKey
+                ? experienceConfig.runtimeControls[row.controlKey]
+                : null;
+              const isConfiguredFoundation = configuredValue !== null;
+
               return (
-                <View key={label} style={styles.configListRow}>
+                <View key={row.label} style={styles.configListRow}>
                   <View style={styles.configListCopy}>
-                    <Text style={styles.configListTitle}>{label}</Text>
+                    <Text style={styles.configListTitle}>{row.label}</Text>
                     <Text style={styles.configListBody}>
-                      {backedByAccessLogic
-                        ? "Backed by current access logic."
-                        : "Not connected yet."}
+                      {isConfiguredFoundation
+                        ? `${formatRuntimeControlValue(configuredValue)}. ${row.body}`
+                        : row.body}
                     </Text>
                   </View>
                   <View style={[
                     styles.badge,
-                    backedByAccessLogic ? styles.badgePublished : styles.badgeOff,
+                    isConfiguredFoundation ? styles.badgeScheduled : styles.badgeOff,
                   ]}>
                     <Text style={styles.badgeText}>
-                      {backedByAccessLogic ? "Backed by current access logic" : "Not connected yet"}
+                      {isConfiguredFoundation ? "Configured foundation" : "Not connected yet"}
                     </Text>
                   </View>
                 </View>
