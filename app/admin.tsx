@@ -242,7 +242,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Comments",
     controlKey: "comments_enabled",
-    body: "Comment surfaces do not read this runtime control yet. Not enforced yet.",
+    body: "Profile post and creator-video comment submit paths read this runtime control before inserts. Enforced on comments.",
+    badgeLabel: "Enforced on comments",
   },
   {
     label: "Attachments",

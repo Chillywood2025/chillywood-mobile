@@ -3222,6 +3222,10 @@ export default function PlayerScreen() {
       setCreatorVideoCommentsError(`Comments can be ${CREATOR_VIDEO_COMMENT_BODY_LIMIT} characters or fewer.`);
       return;
     }
+    if (!appConfig.runtimeControls.comments_enabled) {
+      setCreatorVideoCommentsError("Comments are temporarily paused. You can still read existing comments.");
+      return;
+    }
 
     setCreatorVideoCommentBusy(true);
     setCreatorVideoCommentsError(null);
@@ -3247,6 +3251,7 @@ export default function PlayerScreen() {
       setCreatorVideoCommentBusy(false);
     }
   }, [
+    appConfig.runtimeControls.comments_enabled,
     creatorVideo?.id,
     creatorVideoCommentAttachmentFile,
     creatorVideoCommentBusy,

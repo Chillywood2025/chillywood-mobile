@@ -1782,6 +1782,13 @@ export default function ProfileScreen() {
       }));
       return;
     }
+    if (!appConfig.runtimeControls.comments_enabled) {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentNotice: "Comments are temporarily paused. You can still read existing comments.",
+      }));
+      return;
+    }
 
     updateProfilePostUiState(post.id, (current) => ({
       ...current,
