@@ -150,6 +150,15 @@ Ads must be blocked inside active LiveKit rooms, during active video playback, w
 
 CTV ads are future-only for Chi'llywood Originals and network-style content. Do not add CTV inventory, fake CTV revenue, fake ad revenue, creator earnings, sponsor revenue, payout balances, invoices, or creator revenue ledgers without a separately backed implementation.
 
+## 18+ Signup Confirmation Rule
+Launch is planned as 18+.
+
+Public V1 Hardening H1A is pushed as a no-migration signup-only confirmation in `app/(auth)/signup.tsx`. Signup must show `Chi'llywood is for users 18 and older.`, require the user to actively confirm `I confirm I am 18 or older.`, and block before `supabase.auth.signUp` with the required 18+ confirmation alert if unchecked.
+
+H1A must preserve existing signup email/password validation, closed-beta copy, loading state, Terms of Service link, Privacy Policy link, Community Guidelines link, and Sign In handoff.
+
+H1A does not durably store age confirmation. Do not claim persisted account-level age acceptance until a later H1B schema-backed pass adds and proves durable storage such as `age_confirmed_at` / acceptance-version fields. Do not collect full birthdate or sensitive ID verification for V1 unless a future exact legal/compliance prompt explicitly changes that product decision.
+
 ## Branded Background Rule
 - `assets/images/chillywood-branded-background.png` is the exact source-of-truth Chi'llywood branded-background asset for the current nighttime city direction
 - `assets/images/chicago-skyline.jpg` remains the shared runtime owner path that active branded shells and skyline-style fallback posters currently import, and it should stay visually aligned with the source-of-truth asset

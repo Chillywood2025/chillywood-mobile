@@ -42,6 +42,8 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - future monetization guidance must proactively stay compliant with Apple and Google billing rules, creator payouts, tax reporting, moderation requirements, and country rollout constraints
 - compliance-sensitive design choices must be called out before implementation decisions are made
 - app-store billing decisions and creator payout decisions must be evaluated together, but they must not be collapsed into the same system
+- Launch is planned as 18+. Public V1 Hardening H1A is pushed as a signup-only, no-migration confirmation: new signup shows `Chi'llywood is for users 18 and older.`, requires `I confirm I am 18 or older.`, and blocks account creation before `supabase.auth.signUp` if unchecked.
+- H1A does not durably store age confirmation. Do not claim account-level persisted age acceptance until a later schema-backed H1B pass adds and proves durable storage.
 
 ## Payout Direction
 - standard scheduled creator payouts remain free
@@ -133,11 +135,11 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - Any future destructive admin action must require confirmation and reason or audit context where appropriate.
 
 ## Public Product Phasing
-- Launch is planned as 18+.
+- Launch is planned as 18+. H1A no-migration signup confirmation is pushed; H1B persisted age/legal acceptance storage remains the next compliance-hardening lane.
 - Public v1 should focus on the core social streaming experience, not the full long-term platform vision
 - Public v1 includes login/settings/logout, home/discovery, customizable basic profiles, standalone player, Watch-Party Live core flow, Live Watch-Party / Live Stage core flow, comments/reactions/basic social interaction, basic Chi'lly Chat or simple direct messaging, Premium subscription gating, moderation basics, and analytics/error monitoring/admin visibility
 - Admin Command Center V1A is pushed on `/admin`; future Admin V1B kill switches require dedicated schema/config/enforcement planning and real app-surface reads.
-- Ads Launch Foundation V1A/V1B is pushed as no-SDK, no-real-rendering, provider-neutral infrastructure; Ads V1C Interstitial controller is the next ad lane before real AppLovin MAX integration.
+- Ads Launch Foundation V1A/V1B is pushed as no-SDK, no-real-rendering, provider-neutral infrastructure; Ads V1C Interstitial controller remains the next ad lane before real AppLovin MAX integration after the current H1B compliance-storage lane.
 - Public v1 should keep room-scale truth honest: `500+` joined presence can be a valid product target, but Public v1 does not assume `500+` equal live camera feeds.
 - Post-v1 can expand into Ads V1C controller work, heavier creator monetization rollout, a fuller creator mini-platform builder, deeper room personalization, request/promote room controls, premium/ticketed room tooling, and instant payout lane foundations
 - Later phase holds Game Live rollout beyond the Public v1 window, Game Watch-Party after Game Live, larger premium stages, higher simultaneous live-seat capacity as infrastructure improves, advanced payouts and tax automation, overseas creator payouts, and broader ad systems

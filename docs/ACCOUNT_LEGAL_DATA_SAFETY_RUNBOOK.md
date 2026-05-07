@@ -28,7 +28,7 @@ Use current official docs during final setup because requirements can change:
 
 | Surface | Route / config | Reachable from Settings | Reachable from Support | Current status | External URL/domain need |
 | --- | --- | --- | --- | --- | --- |
-| Signup acceptance | `app/(auth)/signup.tsx` | N/A | N/A | Signup now shows visible Terms of Service, Privacy Policy, and Community Guidelines acceptance copy with links before account creation; Android/release smoke still pending | Final wording needs attorney/legal approval before launch |
+| Signup acceptance | `app/(auth)/signup.tsx` | N/A | N/A | Signup now shows visible 18+ copy, requires the user to check `I confirm I am 18 or older.` before account creation is attempted, and shows Terms of Service, Privacy Policy, and Community Guidelines acceptance copy with links before account creation. H1A is no-migration and does not durably store the age confirmation; current-build Android proof passed, release smoke still pending. | Final wording needs attorney/legal approval before launch; durable age/legal acceptance storage needs a later H1B schema-backed pass if required |
 | Privacy Policy | `app/privacy.tsx`; runtime env `EXPO_PUBLIC_PRIVACY_POLICY_URL`; fallback `https://live.chillywoodstream.com/privacy` | Yes; Settings opens configured external URL first, otherwise bundled `/privacy` | Yes | Expanded route exists with account/profile/channel, uploads, chat, room, billing, diagnostics, provider, retention, deletion, and safety/legal data categories; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Privacy Policy URL must be approved and entered in Play Console |
 | Terms of Service | `app/terms.tsx`; runtime env `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`; fallback `https://live.chillywoodstream.com/terms` | Yes; Settings opens configured external URL first, otherwise bundled `/terms` | Yes | Expanded route exists with acceptance, Profile/Channel, UGC, creator upload, Watch-Party/Live/Chat, Premium, moderation, liability/indemnification placeholders, and legal-review notices; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Terms URL must be approved and available without login |
 | Account Deletion | `app/account-deletion.tsx`; runtime env `EXPO_PUBLIC_ACCOUNT_DELETION_URL`; fallback `https://live.chillywoodstream.com/account-deletion` | Yes; Settings opens configured external URL first, otherwise bundled `/account-deletion` | Yes; signed-in support can start request/help | Expanded request-based page exists; no destructive deletion runs in app; configured fallback returned HTTP 200 during this audit; final backend/support process pending | Final public account deletion URL must be approved, reachable without login where Play requires it, and entered in Play Console |
@@ -43,6 +43,7 @@ This section is not legal advice and does not make legal guarantees. It records 
 
 Implemented in this lane:
 
+- Signup now states: "Chi'llywood is for users 18 and older." It requires the user to check "I confirm I am 18 or older." before account creation is attempted. If unchecked, signup blocks before `supabase.auth.signUp` and shows the required 18+ confirmation alert.
 - Signup now states: "By creating an account, you agree to Chi'llywood's Terms of Service, Privacy Policy, and Community Guidelines." It links to the bundled Terms, Privacy, and Community Guidelines routes.
 - Terms now say users are responsible for what they upload, stream, post, message, share, or otherwise make available, and the page now includes detailed Profile/Channel, creator upload, Watch-Party, Live, Chat, Premium, moderation, suspension, and feature-availability sections.
 - Privacy now maps account/profile/channel, creator-uploaded media, file picker, camera/microphone, chat/messages, Watch-Party/Live participation, billing/entitlement, support/report/moderation, diagnostics/crash/performance, provider, sharing, retention, deletion, and minor-safety posture.
@@ -59,6 +60,7 @@ Implemented in this lane:
 Still pending:
 
 - Attorney/legal approval of final Terms, Privacy, Community Guidelines, Copyright/DMCA, account deletion, and signup acceptance wording.
+- Durable storage for 18+ confirmation and, if required, terms/privacy acceptance timestamps. H1A is signup-only and does not write Supabase fields, AsyncStorage, auth metadata, migrations, generated database types, or Supabase remote state.
 - Final hosted public URLs for legal/support pages, especially Community Guidelines and Copyright/DMCA if Play listing links to them.
 - Final DMCA agent/contact decision and any required U.S. Copyright Office designated-agent registration.
 - Final backend deletion/de-identification and retention runbook.
@@ -116,6 +118,7 @@ This table is a preparation aid for manual Google Play Console entry. Use Google
 Current repo-ready posture:
 
 - Signup now presents Terms, Privacy Policy, and Community Guidelines acceptance copy with links before account creation.
+- Signup now presents the H1A 18+ checkbox confirmation before account creation, but the confirmation is not durably stored yet.
 - Community Guidelines route exists and covers creator uploads, profiles, Chi'lly Chat, Watch-Party rooms, Live Stage, reports, and enforcement.
 - Copyright/DMCA route exists and explains takedown notice information, review, removal, counter-notice posture, repeat-infringer posture, and pending DMCA agent/legal approval.
 - Creator-video reports exist through Player/report sheet ownership.
@@ -172,6 +175,7 @@ Still proof-pending:
 Done:
 
 - Signup acceptance copy now links Terms, Privacy Policy, and Community Guidelines before account creation.
+- H1A 18+ signup confirmation is pushed and current-build Android-proved: unchecked signup shows the 18+ required alert before account creation, checked signup falls through to the existing signup validation path, and the signup legal links plus Sign In handoff still work.
 - Bundled legal routes exist for Privacy, Terms, Account Deletion, Community Guidelines, and Copyright/DMCA.
 - Privacy, Terms, Account Deletion, Community Guidelines, Copyright/DMCA, and Support are expanded beyond placeholder pages and now contain structured, launch-ready draft content.
 - Settings links to privacy, terms, community guidelines, copyright/DMCA, and account deletion.
@@ -184,6 +188,7 @@ External Setup Pending:
 
 - Final legal review and approval of Privacy, Terms, Community Guidelines, Copyright/DMCA, and account deletion copy.
 - Final legal review and approval of signup acceptance wording.
+- H1B durable age/legal acceptance storage if the launch owner needs persisted account-level confirmation before release.
 - Final DMCA agent/contact process and any required designated-agent registration.
 - Final public support email/URL and account deletion support process/SLA.
 - Final backend deletion/de-identification and retention runbook.
@@ -193,7 +198,7 @@ External Setup Pending:
 
 Proof Pending:
 
-- Signup legal-link route smoke on Android/release build.
+- Signup H1A route smoke passed on the current Android dev-client build for legal links, 18+ unchecked blocking, checked fallback to existing validation, and Sign In handoff; release-build proof and real existing-account login proof remain pending.
 - Android Settings legal/support/account deletion route smoke.
 - Release build opens configured URLs correctly.
 - Support/account deletion request lands in expected backend/support queue.
@@ -202,4 +207,4 @@ Proof Pending:
 
 ## Exact Next Action
 
-Legal/support owner should finalize the signup acceptance wording, account deletion process, DMCA agent/contact process, and public URL set, then manually complete Google Play Data Safety, UGC, copyright, and account deletion entries using this runbook. Engineering should not implement destructive account deletion until the backend deletion/de-identification and retention plan is explicitly approved.
+Legal/support owner should finalize the signup acceptance wording, account deletion process, DMCA agent/contact process, and public URL set, then manually complete Google Play Data Safety, UGC, copyright, and account deletion entries using this runbook. Engineering should handle H1B persisted 18+ / legal acceptance storage as a separate schema-backed pass before claiming durable account-level acceptance. Engineering should not implement destructive account deletion until the backend deletion/de-identification and retention plan is explicitly approved.

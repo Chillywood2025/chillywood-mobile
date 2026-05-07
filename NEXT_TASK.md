@@ -1,63 +1,59 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement Ads V1C Interstitial controller.
+Implement Public V1 Hardening H1B persisted 18+ / legal acceptance storage.
 
 Product direction:
 
-- Ads Launch Foundation V1A is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
-- Ads Launch Foundation V1B is pushed as native/feed placeholder placement foundation on Home only.
-- V1A added central ad config defaults, placeholder provider, eligibility, active browsing time, session caps, daily caps, AsyncStorage daily persistence, and read-only/foundation Admin Ads status.
-- V1B added `components/ads/NativeAdSlot.tsx`, one Home native/feed placeholder slot, read-only Admin Ads status copy, and native/feed long-use cap proof support.
-- Default runtime still hides ads because `ads_enabled` defaults false.
-- V1B did not add real ad rendering, real ad IDs, AppLovin/Unity/AdMob SDKs, provider initialization, interstitials, CTV inventory, or fake ad revenue.
-- AppLovin MAX is the primary ad mediation direction.
-- Use a placeholder provider until AppLovin IDs are ready.
-- Unity LevelPlay / Unity Ads may be added through AppLovin MAX later.
-- Do not build an AdMob-only ad system.
-- All future real ad providers must go through the provider-neutral Chi'llywood ad wrapper; do not make direct screen-level SDK calls.
-- Free users see ads at launch; Premium users see zero ads.
-- Ads must never appear inside forbidden contexts: active LiveKit rooms, active video playback, typing/commenting, upload, subscribe/payment screens, immediately at app launch, Admin, Channel Studio, Chat, or Profile/composer contexts unless explicitly redesigned later.
-- Admin Ads remains read-only/foundation until a dedicated config/admin-write lane creates real backed controls.
+- Public V1 Hardening H1A 18+ Signup Confirmation is pushed as a no-migration signup-only gate in `app/(auth)/signup.tsx`.
+- H1A shows `Chi'llywood is for users 18 and older.` and requires the user to check `I confirm I am 18 or older.` before `supabase.auth.signUp` is called.
+- H1A preserves email/password validation, closed-beta copy, loading state, Terms of Service link, Privacy Policy link, Community Guidelines link, and existing Sign In handoff.
+- H1A does not durably store the age confirmation. It does not write Supabase data, AsyncStorage, auth metadata, migrations, generated database types, RLS, or Supabase remote state.
+- Launch remains 18+, but durable confirmation requires a schema-backed pass before claiming account-level age acceptance is stored.
+- H1B should decide the exact backed storage owner before implementation. Preferred fields are `age_confirmed_at timestamptz nullable`, `age_confirmed_version text nullable`, and, only if not already backed elsewhere, `terms_accepted_at timestamptz nullable` and `privacy_accepted_at timestamptz nullable`.
+- H1B must not block existing signed-in/admin/test users unexpectedly without a migration/backfill/first-use plan.
+- H1B must not collect full birthdate or sensitive ID verification for V1.
+- H1B must not fake storing acceptance if schema/storage is missing.
 
 Required proof for that lane:
 
-- placeholder interstitial is controlled by the central V1A/V1B ad config, eligibility, provider, session, daily cap, and forbidden-context helpers
-- no interstitial appears immediately at app launch
-- first interstitial remains blocked before 180 active browsing seconds
-- repeat interstitial remains blocked until 600 seconds after the previous eligible placeholder interstitial show
-- session and daily interstitial caps are enforced
-- Premium users see no interstitial and do not increment counters
-- no interstitial appears in Player, Watch-Party, Live Stage, Profile composer, Chat, Admin, Channel Studio, Subscribe/payment, upload, typing/commenting, active playback, or active LiveKit contexts
-- no SDK IDs, secret keys, or provider credentials are committed
-- no AdMob-only system is introduced
-- no real ad rendering, real provider initialization, fake ad revenue, fake sponsor revenue, fake creator earnings, payout balances, invoices, or CTV inventory is added
-- existing `/admin`, `/channel-studio`, `/channel-settings`, `/channel/[userId]`, Profile, Player, Watch-Party, and Live Stage behavior remains intact
+- signup still blocks before account creation when the 18+ checkbox is unchecked
+- signup stores backed age confirmation only after the user actively checks the confirmation and account creation succeeds, if the schema-backed write is implemented
+- stored fields are not written to AsyncStorage or hard-coded auth metadata unless the dedicated prompt explicitly approves that storage owner
+- Terms, Privacy Policy, Community Guidelines, and Sign In handoff remain intact
+- existing account login and signed-in sessions are not interrupted unexpectedly
+- admin/test accounts are not blocked by a new production bypass or brittle local-only rule
+- no migrations are applied to remote Supabase during local implementation/proof unless a separate migration-application prompt explicitly authorizes it
+- generated database types are not edited by hand
+- no credentials or secrets are committed
+- no unrelated Profile, Channel Studio, Public Channel, Player, Watch-Party, Live Stage, Ads, RevenueCat, storage, RLS, or admin behavior changes are made
 
 ## Current Product Lane Order
-1. Ads V1C Interstitial controller:
-   - placeholder interstitial first
-   - safe transitions only
-   - no app-launch ad
-   - respects 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts
-   - no real SDK
-   - no real ad IDs
-2. 18+ age gate:
-   - account creation confirms user is 18 or older
-   - store confirmation safely
-3. Upload/content lifecycle polish:
+1. H1B persisted 18+ / legal acceptance storage:
+   - add schema-backed storage for age confirmation
+   - decide whether terms/privacy acceptance timestamps are needed in the same schema pass
+   - do not fake persistence if the schema is missing
+   - do not collect full birthdate or ID verification in V1
+2. Upload/content lifecycle polish:
    - upload progress
    - processing/failed states if backed
    - thumbnail handling
    - draft/published status clarity
    - retry only if backed
-4. Security/compliance/moderation pass:
+3. Security/compliance/moderation pass:
    - Terms
    - Privacy Policy
    - Community Guidelines
    - DMCA/copyright policy
    - sponsorship disclosure rules
    - UGC moderation/admin review hardening
+4. Ads V1C Interstitial controller:
+   - placeholder interstitial first
+   - safe transitions only
+   - no app-launch ad
+   - respects 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts
+   - no real SDK
+   - no real ad IDs
 5. Real AppLovin MAX integration:
    - only after external AppLovin setup is ready
    - keep provider wrapper architecture
@@ -106,6 +102,9 @@ Required proof for that lane:
 - Ads V1B added one native/feed placeholder placement on Home through `components/ads/NativeAdSlot.tsx` and `app/(tabs)/index.tsx`.
 - Ads V1B behavior to preserve: normal runtime hides the placeholder because `ads_enabled=false`; `NativeAdSlot` renders only after V1A eligibility passes; Premium/ad-free users never see it and do not increment counters; placeholder native/feed records only when eligible; base native/feed session cap is 1; long-use unlock allows a second placement after 120 active browsing minutes; daily native/feed cap is 3; forbidden routes/contexts remain blocked; Admin Ads stays read-only/foundation.
 - Ads V1B did not add real ad rendering, SDKs, real IDs, provider initialization, interstitials, CTV inventory, fake revenue, or payout/sponsor/creator earnings systems.
+- Public V1 Hardening H1A 18+ Signup Confirmation is pushed.
+- H1A added a no-migration checkbox gate to `app/(auth)/signup.tsx`: signup shows `Chi'llywood is for users 18 and older.`, requires `I confirm I am 18 or older.`, blocks before `supabase.auth.signUp` with the required alert if unchecked, and preserves legal links plus Sign In handoff.
+- H1A did not persist age confirmation, add migrations, edit generated types, touch Supabase remote state, write AsyncStorage, use auth metadata, block existing signed-in users, or change login behavior.
 
 ## Product Truth To Preserve
 - Profile = person/social identity.
@@ -124,6 +123,7 @@ Required proof for that lane:
 
 ## Locked Business Decisions
 - Launch planned as 18+.
+- H1A no-migration signup confirmation is pushed, but durable age confirmation storage is not backed yet.
 - Free users see ads at launch.
 - Premium users see no ads.
 - Planned Premium price: `$9.99/month` and `$99/year`.
