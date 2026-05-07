@@ -9,6 +9,7 @@ Product direction:
 - Public V1 Hardening H1B2 legal acceptance storage is pushed. New signups with authenticated sessions write age/terms/privacy acceptance timestamps plus versions to `user_account_legal_acceptances`.
 - Public V1 Hardening H2 upload/content lifecycle polish is pushed.
 - H2 keeps the existing creator-video picker/upload/storage/metadata path, adds honest local upload lifecycle states, clarifies backed draft/published and media-ready/unavailable status, and does not add fake processing/transcoding/archive/retry/storage-billing states.
+- H2 duplicate-upload UI correction is pushed. Channel Studio Content has one clear `Video Upload` form, no duplicate upload boxes/buttons, and `Upload Status` is inline inside that form.
 - Security/compliance/moderation is the next Public V1 hardening lane.
 - This lane must improve public launch safety posture without pretending full legal approval, full moderation automation, full audit logs, or unsupported enforcement exists.
 - Do not change RLS, storage policies, migrations, generated database types, Player controls, Watch-Party layout, Live Stage layout, public Channel layout, Profile visual layout, Chi'lly Circle behavior, profile privacy behavior, ads, RevenueCat, billing, payout, sponsor, or LiveKit config unless a later prompt explicitly scopes that work.
@@ -95,6 +96,7 @@ Required proof for that lane:
 - Public V1 Hardening H2 upload/content lifecycle polish is pushed.
 - H2 changed only `app/channel-settings.tsx` and `components/creator-media/creator-video-card.tsx`.
 - H2 keeps existing picker/upload/storage/metadata/Open Player/Edit/Publish/Unpublish/Delete behavior, adds honest local upload lifecycle copy, clarifies backed `Published`/`Draft` and `Media Ready`/`Media Unavailable` states, and does not add fake processing/transcoding/archive/retry/storage-billing states.
+- H2 follow-up duplicate-upload UI correction changed only `app/channel-settings.tsx`; keep one clear Channel Studio `Video Upload` form and do not reintroduce separate header/empty-state upload boxes.
 
 ## Product Truth To Preserve
 - Profile = person/social identity.
