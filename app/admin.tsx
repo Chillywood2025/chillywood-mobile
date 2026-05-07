@@ -259,7 +259,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Chat Attachments",
     controlKey: "chat_attachments_enabled",
-    body: "Chat attachment surfaces do not read this runtime control yet. Not enforced yet.",
+    body: "Standalone Chi'lly Chat attachment submit reads this runtime control before optimistic message insert or attachment upload. Enforced on chat attachments.",
+    badgeLabel: "Enforced on chat attachments",
   },
   {
     label: "Live First",

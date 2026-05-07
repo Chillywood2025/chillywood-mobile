@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
+import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
 import {
   clearEndedChatThreadCall,
   getChatThread,
@@ -193,6 +194,7 @@ export default function ChillyChatThreadScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<SocialAttachmentFile | null>(null);
+  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [callPanelOpen, setCallPanelOpen] = useState(false);
@@ -204,6 +206,23 @@ export default function ChillyChatThreadScreen() {
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
+
+  useEffect(() => {
+    let active = true;
+
+    readAppConfig()
+      .then((config) => {
+        if (active) setAppConfig(config);
+      })
+      .catch(() => {
+        if (active) setAppConfig(DEFAULT_APP_CONFIG);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const reconcileEndedCallState = useCallback(async (nextThread: ChatThreadSummary | null) => {
     logChatCall("reconcile_start", {
       threadId: nextThread?.threadId ?? threadId,
@@ -570,6 +589,10 @@ export default function ChillyChatThreadScreen() {
     const trimmedDraft = String(bodyOverride ?? draft).trim();
     const selectedAttachment = bodyOverride ? null : attachmentFile;
     if (!threadId || (!trimmedDraft && !selectedAttachment) || sending || !thread) return;
+    if (selectedAttachment && !appConfig.runtimeControls.chat_attachments_enabled) {
+      setError("Chat attachments are temporarily paused. You can still send text messages.");
+      return;
+    }
 
     const tempId = `temp-${Date.now()}`;
     const optimistic: ChatMessage = {
@@ -611,7 +634,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setSending(false);
     }
-  }, [attachmentFile, currentUserId, draft, sending, thread, threadId]);
+  }, [appConfig.runtimeControls.chat_attachments_enabled, attachmentFile, currentUserId, draft, sending, thread, threadId]);
 
   const handleStartCall = useCallback(async (mode: ChatCallType) => {
     logChatCall("handle_start_call", {
