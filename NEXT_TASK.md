@@ -1,64 +1,54 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement Public V1 Hardening H2 Upload / Content Lifecycle Polish.
+Implement Public V1 Hardening H3 Security / Compliance / Moderation Hardening.
 
 Product direction:
 
-- H1A 18+ signup confirmation is pushed.
-- H1B2 legal acceptance storage is pushed. New signups with authenticated sessions write age/terms/privacy acceptance timestamps plus versions to `user_account_legal_acceptances`.
-- Remote migrations `202605070001` and `202605070002` are applied, generated database types are regenerated, and anon reads to the legal acceptance table are denied.
-- Creator upload/content management is the next Public V1 hardening lane.
-- This lane must improve clarity without moving storage providers, changing RLS/storage policies, changing Player controls, or faking processing states.
-- Creators should always understand whether no file is selected, upload is ready, upload is in progress, upload succeeded, upload failed locally, content is draft, content is public/published, or media is unavailable.
-- Show progress only if actual upload progress is backed. If percent progress is not backed, use honest non-percent copy such as `Uploading...`.
-- Do not add fake processing, retry, archive, transcoding, or storage-billing states unless backed.
-- Preserve existing publish/unpublish/delete/open-player behavior and existing storage implementation.
+- Public V1 Hardening H1A 18+ signup confirmation is pushed.
+- Public V1 Hardening H1B2 legal acceptance storage is pushed. New signups with authenticated sessions write age/terms/privacy acceptance timestamps plus versions to `user_account_legal_acceptances`.
+- Public V1 Hardening H2 upload/content lifecycle polish is pushed.
+- H2 keeps the existing creator-video picker/upload/storage/metadata path, adds honest local upload lifecycle states, clarifies backed draft/published and media-ready/unavailable status, and does not add fake processing/transcoding/archive/retry/storage-billing states.
+- Security/compliance/moderation is the next Public V1 hardening lane.
+- This lane must improve public launch safety posture without pretending full legal approval, full moderation automation, full audit logs, or unsupported enforcement exists.
+- Do not change RLS, storage policies, migrations, generated database types, Player controls, Watch-Party layout, Live Stage layout, public Channel layout, Profile visual layout, Chi'lly Circle behavior, profile privacy behavior, ads, RevenueCat, billing, payout, sponsor, or LiveKit config unless a later prompt explicitly scopes that work.
 
 Required proof for that lane:
 
-- Channel Studio Content opens and existing creator-video list still loads
-- upload panel clearly shows no-file, ready, uploading, success, and local failure states
-- upload button remains disabled until required backed inputs are present
-- no fake percent progress appears unless the upload API reports real progress
-- draft/public or published status chips reflect backed `videos.visibility` / existing fields only
-- existing Open Player, Edit, Publish/Unpublish, and Delete actions remain available where currently backed
-- destructive delete/unpublish behavior keeps confirmation copy
-- no Player controls, Public Channel layout, Channel Studio layout shell, Profile layout, RLS, storage policy, migration, or database type changes are made
-- no fake processing, archive, retry, transcoding, bandwidth, storage billing, or moderation states are added
-- no credentials or secrets are committed
-- current Android/runtime proof or a clearly scoped no-mutation proof confirms the creator media UI states
+- Settings/legal/support entries still open for Terms, Privacy Policy, Community Guidelines, DMCA/Copyright, Support, Account Deletion, and any existing legal surfaces touched
+- report sheet still opens where currently backed and shows only backed/easy-safe report categories
+- admin Reports/Content surfaces remain permission-gated and do not add fake resolve/dismiss/ban/delete actions
+- destructive moderation actions, if touched, keep confirmation and reason/audit requirements
+- no private profile/Circle content is exposed through public or admin routes beyond existing backed permissions
+- no unsupported legal-compliance claims are added
+- no service-role key, LiveKit secret, RevenueCat secret, app-store key, provider secret, hard-coded admin credential, test password, or real ad ID is added or printed
+- `npm run typecheck`, `git diff --check`, and scoped forbidden-file checks pass
+- current Android/runtime proof or scoped route proof confirms touched safety/legal/admin surfaces render without crashes
 
 ## Current Product Lane Order
-1. Upload/content lifecycle polish:
-   - upload progress
-   - processing/failed states if backed
-   - thumbnail handling
-   - draft/published status clarity
-   - retry only if backed
-2. Security/compliance/moderation pass:
+1. Security/compliance/moderation pass:
    - Terms
    - Privacy Policy
    - Community Guidelines
    - DMCA/copyright policy
    - sponsorship disclosure rules
    - UGC moderation/admin review hardening
-3. Ads V1C Interstitial controller:
+2. Ads V1C Interstitial controller:
    - placeholder interstitial first
    - safe transitions only
    - no app-launch ad
    - respects 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts
    - no real SDK
    - no real ad IDs
-4. Real AppLovin MAX integration:
+3. Real AppLovin MAX integration:
    - only after external AppLovin setup is ready
    - keep provider wrapper architecture
    - Unity LevelPlay / Unity Ads later through AppLovin MAX if needed
    - no AdMob-only path
-5. Admin V1B Kill Switches:
+4. Admin V1B Kill Switches:
    - only after a dedicated schema/config/enforcement plan
    - switches must be real and read by affected app surfaces
-6. Usage metering / ledger systems later:
+5. Usage metering / ledger systems later:
    - bandwidth
    - participant-minutes
    - storage
@@ -92,7 +82,6 @@ Required proof for that lane:
 - Admin V1A must not be expanded with fake money, fake usage, fake payouts, fake sponsor revenue, fake network invoices, fake fraud holds, fake live ad provider state, fake kill switches, or hard-coded credentials.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
-- Ads V1A added `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`. `app/admin.tsx` was updated only for read-only/foundation Admin Ads status.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
 - Ads V1B is pushed.
 - Ads V1B added one native/feed placeholder placement on Home through `components/ads/NativeAdSlot.tsx` and `app/(tabs)/index.tsx`.
@@ -100,14 +89,12 @@ Required proof for that lane:
 - Ads V1B did not add real ad rendering, SDKs, real IDs, provider initialization, interstitials, CTV inventory, fake revenue, or payout/sponsor/creator earnings systems.
 - Public V1 Hardening H1A 18+ Signup Confirmation is pushed.
 - H1A added a no-migration checkbox gate to `app/(auth)/signup.tsx`: signup shows `Chi'llywood is for users 18 and older.`, requires `I confirm I am 18 or older.`, blocks before `supabase.auth.signUp` with the required alert if unchecked, and preserves legal links plus Sign In handoff.
-- H1A did not persist age confirmation, add migrations, edit generated types, touch Supabase remote state, write AsyncStorage, use auth metadata, block existing signed-in users, or change login behavior.
-- Public V1 Hardening H1B1 private legal acceptance schema foundation is pushed.
-- H1B1 added local migration `supabase/migrations/202605070001_user_account_legal_acceptances.sql` and pure helper `_lib/accountLegalAcceptance.ts`.
-- H1B1 keeps legal acceptance data out of `user_profiles`, uses a dedicated private table with owner-only authenticated RLS, and does not expose public legal acceptance rows.
 - H1B2 legal acceptance storage is pushed.
 - H1B2 applied remote migrations `202605070001` and `202605070002`, regenerated database types from the linked remote schema, wires signup writes through `_lib/accountLegalAcceptance.ts`, and keeps anon access to the legal acceptance table denied.
 - H1B2 writes only after signup returns an authenticated session. If email confirmation returns no session, the app does not fake the write.
-- H1B2 does not use AsyncStorage/auth metadata, does not collect full birthdate or ID verification, does not add a first-use gate, does not block existing users, and does not change login behavior.
+- Public V1 Hardening H2 upload/content lifecycle polish is pushed.
+- H2 changed only `app/channel-settings.tsx` and `components/creator-media/creator-video-card.tsx`.
+- H2 keeps existing picker/upload/storage/metadata/Open Player/Edit/Publish/Unpublish/Delete behavior, adds honest local upload lifecycle copy, clarifies backed `Published`/`Draft` and `Media Ready`/`Media Unavailable` states, and does not add fake processing/transcoding/archive/retry/storage-billing states.
 
 ## Product Truth To Preserve
 - Profile = person/social identity.

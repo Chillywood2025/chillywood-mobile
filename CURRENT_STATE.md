@@ -6,7 +6,7 @@ This file is intentionally compact. Keep current truth here, keep detailed proof
 Full checkpoint history through April 24, 2026 is preserved at `docs/archive/current-state-history-through-2026-04-24.md`. Later detailed proof history is available in git history and task artifacts; this hot-path file should carry only the current governing facts future sessions must not undo.
 
 ## Current Checkpoint
-Current `main` is production-grade Public v1 hardening with Admin Command Center V1A, Ads Launch Foundation V1A/V1B, Public V1 Hardening H1A 18+ Signup Confirmation, and H1B2 legal acceptance storage pushed. The Admin V1A checkpoint is committed at `2690367912e4f10309d09d08433be25662028ed3`; the Ads V1A checkpoint is committed at `3bfe82328b4200e86ff15955c95bac7a1e218013`; the Ads V1B native/feed placeholder checkpoint is committed at `c8a21b93d01f8af5d6ed5b229f03a594b9a59832`; the H1A 18+ signup confirmation checkpoint is committed at `b7f9c53a2e505375aa8c04ec4669acf310d78233`; the H1B1 legal acceptance schema foundation checkpoint is committed at `e052dc816c12f58d056e01f93867199304bca467`; the H1B2 legal acceptance storage checkpoint is committed at `2ecbd1f4d2ef66a4be77fba03c6f54d299413cf8`.
+Current `main` is production-grade Public v1 hardening with Admin Command Center V1A, Ads Launch Foundation V1A/V1B, Public V1 Hardening H1A 18+ Signup Confirmation, H1B2 legal acceptance storage, and H2 upload/content lifecycle polish pushed. The Admin V1A checkpoint is committed at `2690367912e4f10309d09d08433be25662028ed3`; the Ads V1A checkpoint is committed at `3bfe82328b4200e86ff15955c95bac7a1e218013`; the Ads V1B native/feed placeholder checkpoint is committed at `c8a21b93d01f8af5d6ed5b229f03a594b9a59832`; the H1A 18+ signup confirmation checkpoint is committed at `b7f9c53a2e505375aa8c04ec4669acf310d78233`; the H1B1 legal acceptance schema foundation checkpoint is committed at `e052dc816c12f58d056e01f93867199304bca467`; the H1B2 legal acceptance storage checkpoint is committed at `2ecbd1f4d2ef66a4be77fba03c6f54d299413cf8`; the H2 upload/content lifecycle polish checkpoint is committed at `d5a4a9143b9443828cd4a81289b68f20b73d4119`.
 
 Already pushed and to be preserved:
 
@@ -39,6 +39,9 @@ Already pushed and to be preserved:
 - Public V1 Hardening H1B2 legal acceptance storage is pushed. Remote Supabase migrations `202605070001_user_account_legal_acceptances.sql` and `202605070002_harden_user_account_legal_acceptance_grants.sql` are applied, `supabase/database.types.ts` was regenerated from the linked remote schema, and signup now writes the accepted age/terms/privacy timestamp plus version to `user_account_legal_acceptances` after account creation succeeds with an authenticated session.
 - H1B2 keeps legal acceptance storage out of `user_profiles`, AsyncStorage, and auth metadata. It does not collect full birthdate or ID verification, does not add first-use enforcement, does not block existing signed-in/admin/test users, and does not change login behavior. If Supabase signup returns no authenticated session because email confirmation is required, the app does not fake the write and records no backend acceptance until a later first-use/sign-in persistence lane is explicitly designed.
 - H1B2 hardens public access: anon REST reads to `user_account_legal_acceptances` return `401 permission denied`; authenticated users keep owner-only select/insert/update through RLS.
+- Public V1 Hardening H2 upload/content lifecycle polish is pushed. It touches `app/channel-settings.tsx` and `components/creator-media/creator-video-card.tsx` only.
+- H2 keeps the existing creator-video picker, upload, storage, metadata save, Open Player, Edit, Publish/Unpublish, and Delete paths. It adds local-only Channel Studio Content lifecycle status for `No File Selected`, `File Selected`, `Ready To Upload`, `Uploading...`, `Upload Succeeded`, `Upload Failed`, `Saving Metadata`, and `Editing Metadata`, with honest non-percent upload copy because backed upload progress is not available.
+- H2 creator video cards now show owner-facing `Published`/`Draft` status from existing visibility truth and `Media Ready`/`Media Unavailable` from existing source availability. It does not add fake processing, transcoding, archive, retry, storage-billing, payout, revenue, or moderation states; it does not move storage, change RLS/storage policies, change migrations/generated types, or alter Player/Public Channel/Profile/Watch-Party/Live Stage/ads/RevenueCat behavior.
 
 ## Product Truth
 - Chi'llywood is production-grade now; future Codex prompts must be exact and scoped, not vague.
@@ -102,12 +105,11 @@ Do not accept vague prompts such as "modernize", "polish", "add filters", "add r
 ## Current Next Action
 Recommended next lanes, in order:
 
-1. Upload/content lifecycle polish: upload progress, backed processing/failed states, thumbnail handling, draft/published clarity, and retry only where backed.
-2. Security/compliance/moderation pass: Terms, Privacy Policy, Community Guidelines, DMCA/copyright policy, sponsorship disclosure rules, and UGC moderation/admin review hardening.
-3. Ads V1C Interstitial controller: placeholder interstitial first, safe transitions only, no app-launch ad, respect 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts; no real SDK or real ad IDs yet.
-4. Real AppLovin MAX integration: only after external AppLovin account/app/ad units are ready; keep provider wrapper architecture, use Unity LevelPlay / Unity Ads later through AppLovin MAX if needed, and do not create an AdMob-only path.
-5. Admin V1B Kill Switches: only after a dedicated schema/config/enforcement plan; switches must be real and read by affected app surfaces.
-6. Later usage metering and ledger systems: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
+1. Security/compliance/moderation pass: Terms, Privacy Policy, Community Guidelines, DMCA/copyright policy, sponsorship disclosure rules, and UGC moderation/admin review hardening.
+2. Ads V1C Interstitial controller: placeholder interstitial first, safe transitions only, no app-launch ad, respect 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts; no real SDK or real ad IDs yet.
+3. Real AppLovin MAX integration: only after external AppLovin account/app/ad units are ready; keep provider wrapper architecture, use Unity LevelPlay / Unity Ads later through AppLovin MAX if needed, and do not create an AdMob-only path.
+4. Admin V1B Kill Switches: only after a dedicated schema/config/enforcement plan; switches must be real and read by affected app surfaces.
+5. Later usage metering and ledger systems: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
 
 ## Validation Truth
 Latest pushed live access work was checked with `npm run typecheck` and `git diff --check` before commit/push. Free-user runtime proof showed the Home live entry displays the Premium sheet and does not route into `/watch-party`, generate a room code, or request/connect LiveKit; direct `/watch-party?mode=live` was blocked with the same Premium gate. Existing Premium paths were intentionally preserved, but a real entitlement-backed Premium account proof should still be done later when available.
@@ -123,6 +125,8 @@ Public V1 Hardening H1A 18+ Signup Confirmation was checked with `npm run typech
 Public V1 Hardening H1B1 private legal acceptance schema foundation was checked with `npm run typecheck` and `git diff --check` before commit/push. It added only the local migration and pure helper, did not apply remote migrations, did not hand-edit generated database types, and did not change runtime app behavior.
 
 Public V1 Hardening H1B2 legal acceptance storage was checked with `npm run typecheck`, `git diff --check`, `supabase migration list`, generated type inspection, and anon REST denial proof. Remote migrations `202605070001` and `202605070002` are applied. Anon REST reads to `user_account_legal_acceptances` return `401 permission denied`. Runtime signup write proof with a safe disposable account is still pending because no test signup identity was provided in the implementation/proof pass.
+
+Public V1 Hardening H2 upload/content lifecycle polish was checked with `npm run typecheck`, `git diff --check`, scoped forbidden-file diff checks, and current-build Android dev-client no-mutation proof. Runtime proof confirmed a disposable signed-in proof account could open `/channel-studio?tab=content`, the Content tab rendered summary cards and empty Creator Library truth, the upload panel showed `Upload Status`, `No File Selected`, honest no-file guidance, `Choose Video File`, title/description fields, and no fake percent progress or processing/transcoding/archive/retry states. The proof account had no videos, so publish/unpublish/delete confirmation modals still need safe-media proof later.
 
 ## Staging Discipline
 - Work on current `main` only.
