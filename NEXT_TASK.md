@@ -1,7 +1,16 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Store/external launch readiness audit after completed Public V1 current-build release proof.
+Admin Usage Writer V1A2 daily rollup foundation for creator-video upload/storage usage.
+
+V1A2 should be scoped to rollups from already-backed usage rows only:
+
+- read existing `usage_meter_events` rows for `event_type = video_uploaded`, `event_source = app_rpc`, and `usage_class = upload`
+- read existing `platform_usage_metering_events` rows for `metric_key = storage_bytes` and `source_type = creator_video`
+- upsert daily totals into `usage_daily_summaries`
+- keep Admin Usage read-only and honest
+- do not add bandwidth, participant-minute, provider-import, provider-billing, reconciliation, customer billing, overage, payout, revenue, or fake provider-value writers
+- do not change creator upload behavior, storage implementation, Player, Watch-Party, Live Stage, Channel Studio layout, Public Channel, Profile, ads, RevenueCat, finance, RLS, migrations, generated database types, or Supabase remote state unless a later exact prompt scopes it
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -35,7 +44,7 @@ Product direction:
 - Admin V1B2I-C room comment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` read normalized `runtimeControls.chat_enabled` and block only room-native text/comment submits before `sendPartyMessageRecord` when false. Existing room message reads, room layouts, LiveKit behavior, Premium gates, invite behavior/system share, `chat_attachments_enabled`, attachment picker behavior, `_lib/watchParty.ts`, `_lib/chat.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on chat, invites, and room comments`; no working Admin toggle was added.
 - Admin V1B runtimeControls closeout truth is recorded. Enforced controls are limited to pushed scoped surfaces: `new_accounts_enabled`, `uploads_enabled`, `comments_enabled`, `attachments_enabled`, `chat_enabled`, `chat_attachments_enabled`, `creator_posting_enabled`, and `profile_posting_enabled`. `live_first_enabled`, `live_watch_party_enabled`, `watch_party_live_enabled`, and `max_upload_size_mb` are configured foundation-only and not enforced. Admin `runtimeControls.ads_enabled` is not the same source as Ads Launch config; Ads V1D2 runtime owners read normalized `app_config.adsLaunch` and remain disabled by default while `ads_enabled=false`. `premium_required_for_live` and `premium_required_for_watch_party` are not runtime switches; Premium gates are enforced separately through Premium access helpers and must not be weakened.
 - Admin Usage Metering Foundations 37-39 and Admin Usage Metering Foundation V1 remote/provider schema are pushed. `_lib/platformUsage.ts` reads existing backed Admin Usage data and safe schema counts, migrations `supabase/migrations/202605070003_platform_usage_metering_foundation.sql` and `supabase/migrations/202605070004_admin_usage_metering_v1.sql` have been applied to the linked Supabase remote, and `supabase/database.types.ts` now includes `platform_usage_metering_events`, `platform_usage_daily_rollups`, `usage_meter_events`, `usage_daily_summaries`, `usage_monthly_summaries`, `provider_accounts`, `provider_usage_imports`, `provider_usage_daily`, `provider_billing_snapshots`, and `provider_usage_reconciliation`.
-- Admin Usage Writer V1A0/V1A1 is pushed for successful creator-video upload usage only. V1A0 adds secure idempotent RPC `record_creator_video_upload_usage(target_video_id text)`. V1A1 adds `_lib/platformUsage.ts` helper `recordCreatorVideoUploadUsage` and calls it from `_lib/creatorVideos.ts` only after the `videos` row insert succeeds. Metering failure is non-fatal to upload success.
+- Admin Usage Writer V1A0/V1A1 is pushed and runtime-proved for successful creator-video upload usage only. V1A0 adds secure idempotent RPC `record_creator_video_upload_usage(target_video_id text)`. V1A1 adds `_lib/platformUsage.ts` helper `recordCreatorVideoUploadUsage` and calls it from `_lib/creatorVideos.ts` only after the `videos` row insert succeeds. Runtime proof showed one `video_uploaded` usage row, one `storage_bytes` metadata row, and replay skipping without double-counting. Metering failure is non-fatal to upload success.
 - Admin Usage remains read-only. Live/watch-party rooms and uploads are DB estimates; storage is a metadata estimate from existing video/attachment rows; participant-minutes are a DB estimate from room membership rows; internal usage/provider import/reconciliation rows are schema foundation only; bandwidth remains `Not connected yet` unless future real metering events exist. Do not treat these values as billing, payout, revenue, cost, LiveKit invoice, provider bill, overage, customer invoice, or provider-log truth.
 - Ledger Systems 4A-4D finance foundation is pushed. `_lib/platformFinance.ts` reads safe foundation counts and local migration `supabase/migrations/202605070005_platform_finance_ledger_foundation.sql` defines future finance/payout/network/sponsor/fraud tables, but that migration has not been applied remotely and generated database types do not include those finance tables yet.
 - Admin Revenue, Payouts, Networks, Sponsors, and Fraud remain read-only/foundation. They may show row counts if future tables are readable, but they must not show live money totals, payout buttons, invoice actions, sponsor checkout, payout split execution, fraud enforcement, provider keys, or fake revenue.
@@ -63,7 +72,8 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - no AdMob-only path
 3. Admin Usage later writers:
    - usage remote migration/type refresh is complete for `202605070003_platform_usage_metering_foundation.sql` and `202605070004_admin_usage_metering_v1.sql`
-   - creator-video upload usage writer V1A0/V1A1 is pushed for `video_uploaded` and `storage_bytes` metadata only after successful backed video row creation
+   - creator-video upload usage writer V1A0/V1A1 is pushed and runtime-proved for `video_uploaded` and `storage_bytes` metadata only after successful backed video row creation
+   - next safe candidate is V1A2 daily rollup foundation from already-backed creator-video usage/storage rows into `usage_daily_summaries`
    - add bandwidth, participant-minute, provider-import, provider-billing, reconciliation, customer billing, overage, payout, or revenue writers/jobs only in separate scoped lanes
    - prove writer/import behavior before relying on metering rows or provider rows as real usage/provider truth
    - keep Admin Usage read-only and honest: DB estimate, Metadata estimate, Schema connected, Not connected yet, or Not active yet
