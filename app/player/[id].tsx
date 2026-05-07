@@ -3226,6 +3226,10 @@ export default function PlayerScreen() {
       setCreatorVideoCommentsError("Comments are temporarily paused. You can still read existing comments.");
       return;
     }
+    if (creatorVideoCommentAttachmentFile && !appConfig.runtimeControls.attachments_enabled) {
+      setCreatorVideoCommentsError("Attachments are temporarily paused. You can still comment without an attachment.");
+      return;
+    }
 
     setCreatorVideoCommentBusy(true);
     setCreatorVideoCommentsError(null);
@@ -3251,6 +3255,7 @@ export default function PlayerScreen() {
       setCreatorVideoCommentBusy(false);
     }
   }, [
+    appConfig.runtimeControls.attachments_enabled,
     appConfig.runtimeControls.comments_enabled,
     creatorVideo?.id,
     creatorVideoCommentAttachmentFile,

@@ -1635,6 +1635,10 @@ export default function ProfileScreen() {
       setProfilePostsNotice("Profile posting is temporarily paused. You can still read existing posts.");
       return;
     }
+    if (profilePostAttachmentFile && !appConfig.runtimeControls.attachments_enabled) {
+      setProfilePostsNotice("Attachments are temporarily paused. You can still post without an attachment.");
+      return;
+    }
 
     try {
       setProfilePostBusy(true);
@@ -1790,6 +1794,13 @@ export default function ProfileScreen() {
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
         commentNotice: "Comments are temporarily paused. You can still read existing comments.",
+      }));
+      return;
+    }
+    if (uiState.commentAttachmentFile && !appConfig.runtimeControls.attachments_enabled) {
+      updateProfilePostUiState(post.id, (current) => ({
+        ...current,
+        commentNotice: "Attachments are temporarily paused. You can still comment without an attachment.",
       }));
       return;
     }

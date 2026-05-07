@@ -248,7 +248,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Attachments",
     controlKey: "attachments_enabled",
-    body: "Attachment surfaces do not read this runtime control yet. Not enforced yet.",
+    body: "Profile post, Profile comment, and creator-video comment attachment submit paths read this runtime control before parent create or attachment upload. Enforced on social attachments.",
+    badgeLabel: "Enforced on social attachments",
   },
   {
     label: "Chat",
