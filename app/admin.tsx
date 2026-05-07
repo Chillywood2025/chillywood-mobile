@@ -20,6 +20,8 @@ import {
   type AppConfig,
   type HomeRailKey,
 } from "../_lib/appConfig";
+import { ADS_LAUNCH_CONFIG_DEFAULTS } from "../_lib/ads/adConfig";
+import { placeholderAdProvider } from "../_lib/ads/providers/placeholder";
 import { FEATURE_FLAGS } from "../_lib/featureFlags";
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
@@ -692,6 +694,8 @@ export default function AdminStudioScreen() {
   const runtimeConfig = useMemo(() => getRuntimeConfig(), []);
   const runtimeConfigIssues = useMemo(() => getRuntimeConfigIssues(runtimeConfig), [runtimeConfig]);
   const liveKitConfigured = useMemo(() => isLiveKitRuntimeConfigured(runtimeConfig), [runtimeConfig]);
+  const adsProviderStatus = useMemo(() => placeholderAdProvider.getStatus(), []);
+  const adsLaunchConfig = ADS_LAUNCH_CONFIG_DEFAULTS;
   const moderationAccess = getModerationAccess({
     userId: user?.id ?? null,
     email: user?.email ?? null,
@@ -1042,7 +1046,7 @@ export default function AdminStudioScreen() {
       {
         label: "Ads Foundation",
         value: "Foundation only",
-        body: "Provider/caps not connected yet. AppLovin MAX remains the primary direction; no ad SDK is integrated here.",
+        body: "Placeholder provider and launch cap defaults are defined, but ads remain disabled and no ad SDK is integrated here.",
         tone: "unavailable",
         destination: "ads",
       },
@@ -3013,7 +3017,7 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>ADS</Text>
               <Text style={styles.configTitle}>Ads</Text>
-              <Text style={styles.configBody}>Ad provider is not connected yet.</Text>
+              <Text style={styles.configBody}>Provider: placeholder / not connected. No real ads render in V1A.</Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
@@ -3023,6 +3027,10 @@ export default function AdminStudioScreen() {
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Planned provider</Text>
+                <Text style={styles.configListBody}>
+                  {`Current foundation provider: ${adsProviderStatus.provider} / ${adsProviderStatus.isConnected ? "connected" : "not connected"}`}
+                </Text>
+                <Text style={styles.configListBody}>{adsProviderStatus.message}</Text>
                 <Text style={styles.configListBody}>Primary: AppLovin MAX</Text>
                 <Text style={styles.configListBody}>Unity LevelPlay / Unity Ads may be added through AppLovin MAX later.</Text>
                 <Text style={styles.configListBody}>No AdMob-only system.</Text>
@@ -3035,11 +3043,38 @@ export default function AdminStudioScreen() {
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>V1A config defaults</Text>
+                <Text style={styles.configListBody}>{`ads_enabled: ${String(adsLaunchConfig.ads_enabled)}`}</Text>
+                <Text style={styles.configListBody}>{`ads_provider: ${adsLaunchConfig.ads_provider}`}</Text>
+                <Text style={styles.configListBody}>{`interstitial_enabled: ${String(adsLaunchConfig.interstitial_enabled)}`}</Text>
+                <Text style={styles.configListBody}>{`native_feed_enabled: ${String(adsLaunchConfig.native_feed_enabled)}`}</Text>
+                <Text style={styles.configListBody}>{`premium_users_ad_free: ${String(adsLaunchConfig.premium_users_ad_free)}`}</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Launch caps</Text>
-                <Text style={styles.configListBody}>Base active session: 3 interstitial + 1 native/feed</Text>
-                <Text style={styles.configListBody}>After 120 active browsing minutes: +2 interstitial + 1 native/feed</Text>
-                <Text style={styles.configListBody}>Daily hard cap: 6 interstitial + 3 native/feed</Text>
+                <Text style={styles.configListBody}>
+                  {`Base active session: ${adsLaunchConfig.session_interstitial_base_cap} interstitial + ${adsLaunchConfig.session_native_base_cap} native/feed`}
+                </Text>
+                <Text style={styles.configListBody}>
+                  {`After ${adsLaunchConfig.long_use_minutes} active browsing minutes: +${adsLaunchConfig.long_use_interstitial_extra_cap} interstitial + ${adsLaunchConfig.long_use_native_extra_cap} native/feed`}
+                </Text>
+                <Text style={styles.configListBody}>
+                  {`Daily hard cap: ${adsLaunchConfig.daily_interstitial_cap} interstitial + ${adsLaunchConfig.daily_native_cap} native/feed`}
+                </Text>
                 <Text style={styles.configListBody}>Premium users: zero ads</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Timing guardrails</Text>
+                <Text style={styles.configListBody}>
+                  {`No interstitial before ${adsLaunchConfig.min_seconds_before_first_interstitial} active browsing seconds.`}
+                </Text>
+                <Text style={styles.configListBody}>
+                  {`At least ${adsLaunchConfig.min_seconds_between_interstitials} seconds between interstitials.`}
+                </Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -3051,6 +3086,22 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListBody}>No ads during upload</Text>
                 <Text style={styles.configListBody}>No ads on subscribe/payment screens</Text>
                 <Text style={styles.configListBody}>No ads immediately at app launch</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>CTV future</Text>
+                <Text style={styles.configListBody}>CTV ads are not active yet.</Text>
+                <Text style={styles.configListBody}>Future inventory: Chi'llywood Originals and network-style content.</Text>
+                <Text style={styles.configListBody}>
+                  {`ctv_ads_enabled_later: ${String(adsLaunchConfig.ctv_ads_enabled_later)}`}
+                </Text>
+                <Text style={styles.configListBody}>
+                  {`creator_page_ads_enabled_later: ${String(adsLaunchConfig.creator_page_ads_enabled_later)}`}
+                </Text>
+                <Text style={styles.configListBody}>
+                  {`sponsor_slots_enabled_later: ${String(adsLaunchConfig.sponsor_slots_enabled_later)}`}
+                </Text>
               </View>
             </View>
           </View>
