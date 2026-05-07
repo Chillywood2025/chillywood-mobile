@@ -120,7 +120,7 @@ Admin V1A is pushed and includes Home, Reports, Content, Roles, Audit, Rachi, Us
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Ads Launch Foundation Rule
-Ads Launch Foundation V1A/V1B is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+Ads Launch Foundation V1A/V1B/V1C is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
 
 Current Ads V1A owners:
 - `_lib/ads/adConfig.ts`
@@ -138,9 +138,16 @@ Current Ads V1B owners:
 - `_lib/ads/adSession.ts` for explicit active-browsing seconds in placeholder cap recording
 - `app/admin.tsx` for read-only/foundation Admin Ads status copy only
 
+Current Ads V1C owners:
+- `components/ads/InterstitialController.tsx`
+- `app/_layout.tsx` for mounting the null-rendering placeholder controller only
+- `app/admin.tsx` for read-only/foundation Admin Ads status copy only
+
 Ads V1A defaults `ads_enabled` to false and `ads_provider` to `placeholder`. The placeholder provider reports not connected and must not call any SDK, use real ad unit IDs, initialize providers, or render real ads.
 
 Ads V1B adds one native/feed placeholder foundation slot on Home. Normal runtime still hides it because `ads_enabled` defaults false. `NativeAdSlot` may render only after central eligibility passes, Premium/ad-free users must never see it or increment counters, native/feed base session cap is 1, long-use unlock allows a second native/feed placement after 120 active browsing minutes, daily native/feed cap is 3, and forbidden routes/contexts stay blocked.
+
+Ads V1C adds a placeholder interstitial controller foundation. Normal runtime still shows no interstitial because `ads_enabled` defaults false and the placeholder provider is not connected. `InterstitialController` must render `null`, ignore first route mount, consider route transitions only, call central eligibility with `placementKind: "interstitial"`, and record placeholder interstitial shows only after eligibility and placeholder-provider success. It must preserve the 180-second first delay, 600-second spacing, base session cap 3, long-use extra +2 after 120 active browsing minutes, daily cap 6, Premium zero ads, and forbidden route/context blocking.
 
 Premium/ad-free users must always be ineligible for ads and must not increment ad counters. Future ad placements must call the central ad config, eligibility, session/cap, and provider wrapper layers instead of making direct screen-level SDK calls.
 

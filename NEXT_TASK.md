@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement Ads V1C Interstitial Controller as placeholder-only, no-SDK, no-real-ad infrastructure.
+Audit/spec the Real AppLovin MAX readiness and integration lane without installing SDKs until external AppLovin app/ad-unit setup is ready.
 
 Product direction:
 
@@ -11,39 +11,31 @@ Product direction:
 - H2 keeps the existing creator-video picker/upload/storage/metadata path, adds honest local upload lifecycle states, clarifies backed draft/published and media-ready/unavailable status, and does not add fake processing/transcoding/archive/retry/storage-billing states.
 - H2 duplicate-upload UI correction is pushed. Channel Studio Content has one clear `Video Upload` form, no duplicate upload boxes/buttons, and `Upload Status` is inline inside that form.
 - Public V1 Hardening H3 security/compliance/moderation hardening is pushed. Settings has a direct Support entry, Support includes sponsorship/ad/scam concern copy, the Report Sheet explains existing backed categories, and no new report schema/action system was added.
-- Ads V1A/V1B are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
-- Ads V1C must add only a placeholder interstitial decision/controller foundation. It must not install SDKs, add real IDs, initialize AppLovin/Unity/AdMob, render real ads, add CTV inventory, show fake ad revenue, or change forbidden surfaces.
+- Ads V1A/V1B/V1C are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+- Ads V1C added only placeholder interstitial decision/controller foundation. It did not install SDKs, add real IDs, initialize AppLovin/Unity/AdMob, render real ads, add CTV inventory, show fake ad revenue, or change forbidden surfaces.
 - Normal runtime must remain honest: ads stay disabled by default because `ads_enabled=false`.
 
-Required proof for that lane:
+Required proof before any real AppLovin integration lane:
 
-- default runtime shows no interstitial because `ads_enabled=false`
-- safe in-memory/helper proof can make a free user eligible only after 180 active browsing seconds, with caps available, app active, allowed route, provider placeholder test-connected, and all forbidden context flags false
-- Premium/ad-free users never become eligible and do not increment counters
-- `/admin`, `/channel-studio`, `/channel-settings`, `/profile`, `/player`, `/watch-party`, `/subscribe`, and `/chat` remain interstitial-ineligible
+- external AppLovin account/app/ad-unit IDs are ready and approved for use
+- the repo lane explicitly decides which SDK/package/native config changes are allowed
+- provider wrapper architecture remains the only path to real provider calls
+- Premium/ad-free users remain zero ads and do not increment counters
+- `/admin`, `/channel-studio`, `/channel-settings`, `/profile`, `/player`, `/watch-party`, `/subscribe`, and `/chat` remain ad-ineligible
 - active video playback, active LiveKit room, typing/commenting, upload, payment/subscription surface, Admin surface, Studio surface, inactive/background app, and unknown context all block eligibility
-- interstitial spacing blocks a second interstitial until 600 seconds after the last placeholder show
-- session and daily interstitial caps are enforced by existing Ads V1A cap truth
-- no real SDK/provider/ad ID/rendering/revenue is added
-- `npm run typecheck`, `git diff --check`, scoped forbidden-file checks, package/native dependency checks, and current Android/runtime or helper proof pass
+- native/feed and interstitial caps remain enforced by existing Ads V1A/V1B/V1C truth
+- no fake ad revenue, creator earnings, sponsor revenue, payout balance, invoice, or CTV inventory is added
 
 ## Current Product Lane Order
-1. Ads V1C Interstitial controller:
-   - placeholder interstitial first
-   - safe transitions only
-   - no app-launch ad
-   - respects 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts
-   - no real SDK
-   - no real ad IDs
-2. Real AppLovin MAX integration:
+1. Real AppLovin MAX readiness/integration planning:
    - only after external AppLovin setup is ready
    - keep provider wrapper architecture
    - Unity LevelPlay / Unity Ads later through AppLovin MAX if needed
    - no AdMob-only path
-3. Admin V1B Kill Switches:
+2. Admin V1B Kill Switches:
    - only after a dedicated schema/config/enforcement plan
    - switches must be real and read by affected app surfaces
-4. Usage metering / ledger systems later:
+3. Usage metering / ledger systems later:
    - bandwidth
    - participant-minutes
    - storage
@@ -82,6 +74,10 @@ Required proof for that lane:
 - Ads V1B added one native/feed placeholder placement on Home through `components/ads/NativeAdSlot.tsx` and `app/(tabs)/index.tsx`.
 - Ads V1B behavior to preserve: normal runtime hides the placeholder because `ads_enabled=false`; `NativeAdSlot` renders only after V1A eligibility passes; Premium/ad-free users never see it and do not increment counters; placeholder native/feed records only when eligible; base native/feed session cap is 1; long-use unlock allows a second placement after 120 active browsing minutes; daily native/feed cap is 3; forbidden routes/contexts remain blocked; Admin Ads stays read-only/foundation.
 - Ads V1B did not add real ad rendering, SDKs, real IDs, provider initialization, interstitials, CTV inventory, fake revenue, or payout/sponsor/creator earnings systems.
+- Ads V1C is pushed.
+- Ads V1C added `components/ads/InterstitialController.tsx`, mounted it in `app/_layout.tsx`, and updated Admin Ads read-only/foundation copy in `app/admin.tsx`.
+- Ads V1C behavior to preserve: normal runtime shows no interstitial because `ads_enabled=false` and placeholder provider is not connected; the controller renders `null`, ignores first route mount, considers route transitions only, calls central eligibility with `placementKind: "interstitial"`, records placeholder interstitial shows only after eligibility and placeholder-provider success, blocks Premium/ad-free users, respects 180-second first delay, 600-second spacing, session cap 3 plus long-use +2 after 120 active browsing minutes, daily cap 6, and forbidden routes/contexts.
+- Ads V1C did not add real ad rendering, SDKs, real IDs, provider initialization, CTV inventory, fake revenue, or payout/sponsor/creator earnings systems.
 - Public V1 Hardening H1A 18+ Signup Confirmation is pushed.
 - H1A added a no-migration checkbox gate to `app/(auth)/signup.tsx`: signup shows `Chi'llywood is for users 18 and older.`, requires `I confirm I am 18 or older.`, blocks before `supabase.auth.signUp` with the required alert if unchecked, and preserves legal links plus Sign In handoff.
 - H1B2 legal acceptance storage is pushed.
