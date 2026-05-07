@@ -3083,7 +3083,9 @@ export default function AdminStudioScreen() {
                     ? `Schema connected. ${adminV1ReadModel.usageMeterEventsCount ?? 0} raw event row${adminV1ReadModel.usageMeterEventsCount === 1 ? "" : "s"}, ${adminV1ReadModel.usageDailySummariesCount ?? 0} daily summary row${adminV1ReadModel.usageDailySummariesCount === 1 ? "" : "s"}, ${adminV1ReadModel.usageMonthlySummariesCount ?? 0} monthly summary row${adminV1ReadModel.usageMonthlySummariesCount === 1 ? "" : "s"}.`
                     : "Schema added, admin read not connected yet."}
                 </Text>
-                <Text style={styles.configListBody}>Read-only foundation. App usage event writers are not active yet.</Text>
+                <Text style={styles.configListBody}>
+                  Read-only foundation. Creator video upload usage writer is active; broader app usage writers are not connected yet.
+                </Text>
               </View>
             </View>
             <View style={styles.configListRow}>
