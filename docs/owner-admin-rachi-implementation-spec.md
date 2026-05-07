@@ -224,6 +224,7 @@ Current doctrine:
 - Ads V1A foundation source files: `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`
 - Ads V1B source files: `components/ads/NativeAdSlot.tsx`, Home placement in `app/(tabs)/index.tsx`, native/feed cap proof support in `_lib/ads/adSession.ts`, and read-only/foundation Admin Ads copy in `app/admin.tsx`
 - Ads V1C source files: `components/ads/InterstitialController.tsx`, root mount in `app/_layout.tsx`, and read-only/foundation Admin Ads copy in `app/admin.tsx`
+- Admin Usage Metering Foundations 37-39 source files: `_lib/platformUsage.ts`, read-only Admin Usage copy in `app/admin.tsx`, and local migration `supabase/migrations/202605070003_platform_usage_metering_foundation.sql`
 - Admin V1B2A source files: `app/(auth)/signup.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; New Accounts is enforced on signup only
 - Admin V1B2B source files: `app/channel-settings.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; Uploads is enforced on new creator-video upload submit only
 
@@ -294,9 +295,11 @@ Admin V1A already presents these sections, but many are foundation-only. Current
 4. Ads V1C Interstitial controller is pushed: placeholder interstitial first, safe transitions only, no app-launch ad, 180-second first delay, 600-second spacing, session/daily caps, forbidden contexts, no SDK, no real IDs, no real rendering, and no fake revenue.
 5. Real AppLovin MAX integration later only after external setup is ready; keep provider wrapper architecture and no AdMob-only path.
 6. Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan.
-7. Usage metering and ledger systems later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
-8. Real Rachi-control state and domain controls later only when backed.
-9. Advanced owner/super-admin controls only if justified by real backing and proof.
+7. Admin Usage Metering Foundations 37-39 is pushed: local schema/helper/read-only Admin Usage foundation for future `bandwidth_bytes`, `participant_minutes`, and `storage_bytes` metering, with storage shown only as metadata estimate, participant-minutes shown only as DB estimate, and bandwidth still `Not connected yet` unless future real metering rows exist. The local migration was not applied remotely in the foundation pass.
+8. Usage remote migration/type refresh and event writers later only under a separately authorized Supabase/app-surface prompt.
+9. Ledger systems later: revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
+10. Real Rachi-control state and domain controls later only when backed.
+11. Advanced owner/super-admin controls only if justified by real backing and proof.
 
 ## 13. What Not To Do
 - do not build a messy god-panel
