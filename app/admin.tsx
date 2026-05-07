@@ -20,10 +20,16 @@ import {
   type AppConfig,
   type HomeRailKey,
 } from "../_lib/appConfig";
+import { FEATURE_FLAGS } from "../_lib/featureFlags";
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
 import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
+import {
+  getRuntimeConfig,
+  getRuntimeConfigIssues,
+  isLiveKitRuntimeConfigured,
+} from "../_lib/runtimeConfig";
 import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
@@ -100,7 +106,24 @@ type FilterKey =
   | "top-row";
 
 type EditorMode = "create" | "edit";
-type OperatorTabKey = "reports" | "content" | "roles" | "audit" | "rachi";
+type OperatorTabKey =
+  | "home"
+  | "reports"
+  | "content"
+  | "roles"
+  | "audit"
+  | "rachi"
+  | "users"
+  | "premium"
+  | "kill-switches"
+  | "usage"
+  | "ads"
+  | "revenue"
+  | "payouts"
+  | "networks"
+  | "sponsors"
+  | "fraud"
+  | "system";
 
 type EditorForm = {
   id?: TitleId;
@@ -147,6 +170,7 @@ type AdminDashboardCard = {
   value: string;
   body: string;
   tone?: "default" | "unavailable";
+  destination?: OperatorTabKey;
 };
 
 type PendingCreatorVideoModerationAction = {
@@ -155,14 +179,63 @@ type PendingCreatorVideoModerationAction = {
   reason: string;
 };
 
+type AdminV1ReadModel = {
+  loading: boolean;
+  premiumActiveCount: number | null;
+  activeLiveRoomCount: number | null;
+  activeWatchPartyCount: number | null;
+  uploadsTodayCount: number | null;
+  generatedAt: string | null;
+};
+
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
 const operatorTabs: { key: OperatorTabKey; label: string }[] = [
+  { key: "home", label: "Home" },
   { key: "reports", label: "Reports" },
   { key: "content", label: "Content" },
   { key: "roles", label: "Roles" },
   { key: "audit", label: "Audit" },
   { key: "rachi", label: "Rachi" },
+  { key: "users", label: "Users" },
+  { key: "premium", label: "Premium" },
+  { key: "kill-switches", label: "Kill Switches" },
+  { key: "usage", label: "Usage" },
+  { key: "ads", label: "Ads" },
+  { key: "revenue", label: "Revenue" },
+  { key: "payouts", label: "Payouts" },
+  { key: "networks", label: "Networks" },
+  { key: "sponsors", label: "Sponsors" },
+  { key: "fraud", label: "Fraud" },
+  { key: "system", label: "System" },
 ];
+const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
+  loading: false,
+  premiumActiveCount: null,
+  activeLiveRoomCount: null,
+  activeWatchPartyCount: null,
+  uploadsTodayCount: null,
+  generatedAt: null,
+};
+const ACTIVE_PREMIUM_ENTITLEMENT_STATUSES = ["active", "trialing", "grace_period"] as const;
+const plannedKillSwitchRows = [
+  "New Accounts",
+  "Uploads",
+  "Comments",
+  "Attachments",
+  "Chat",
+  "Chat Attachments",
+  "Live First",
+  "Live Watch-Party",
+  "Watch-Party Live",
+  "Ads",
+  "Creator Posting",
+  "Profile Posting",
+  "Max Live Room Minutes",
+  "Max Room Participants",
+  "Max Upload Size",
+  "Premium Required For Live",
+  "Premium Required For Watch-Party",
+] as const;
 const railLabels: Record<HomeRailKey, string> = {
   top_picks: "Top Picks",
   browse: "Browse",
@@ -501,6 +574,11 @@ const formatCreatorVideoModerationFailure = (error: any) => {
   return "Unable to update creator video moderation status. Try again after confirming this content still exists.";
 };
 
+const formatAdminV1Count = (value: number | null, loading: boolean) => {
+  if (loading) return "Loading";
+  return value === null ? "Not connected yet" : String(value);
+};
+
 const getCreatorVideoModerationActionLabel = (status: CreatorVideoModerationStatus) => {
   if (status === "hidden") return "Hide From Public";
   if (status === "removed") return "Remove From Public";
@@ -552,7 +630,7 @@ export default function AdminStudioScreen() {
   const [query, setQuery] = useState("");
   const [manualHeroQuery, setManualHeroQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [operatorTab, setOperatorTab] = useState<OperatorTabKey>("reports");
+  const [operatorTab, setOperatorTab] = useState<OperatorTabKey>("home");
   const [saving, setSaving] = useState(false);
   const [editorVisible, setEditorVisible] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
@@ -560,6 +638,7 @@ export default function AdminStudioScreen() {
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [experienceConfig, setExperienceConfig] = useState<AppConfig>(DEFAULT_APP_CONFIG);
   const [configLoading, setConfigLoading] = useState(true);
+  const [appConfigConnected, setAppConfigConnected] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
   const [creatorGrantUserId, setCreatorGrantUserId] = useState("");
   const [creatorGrantLoading, setCreatorGrantLoading] = useState(false);
@@ -586,6 +665,7 @@ export default function AdminStudioScreen() {
   const [pendingCreatorVideoModeration, setPendingCreatorVideoModeration] =
     useState<PendingCreatorVideoModerationAction | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
+  const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [form, setForm] = useState<EditorForm>({
     title: "",
     category: "",
@@ -609,6 +689,9 @@ export default function AdminStudioScreen() {
     sponsor_label: "",
   });
   const themePalette = getThemePresetPalette(experienceConfig.theme.preset);
+  const runtimeConfig = useMemo(() => getRuntimeConfig(), []);
+  const runtimeConfigIssues = useMemo(() => getRuntimeConfigIssues(runtimeConfig), [runtimeConfig]);
+  const liveKitConfigured = useMemo(() => isLiveKitRuntimeConfigured(runtimeConfig), [runtimeConfig]);
   const moderationAccess = getModerationAccess({
     userId: user?.id ?? null,
     email: user?.email ?? null,
@@ -624,6 +707,7 @@ export default function AdminStudioScreen() {
     if (!isSignedIn || !isActive) {
       setLoading(false);
       setConfigLoading(false);
+      setAppConfigConnected(false);
       setPlatformRoles([]);
       setPlatformRolesLoading(false);
       setPlatformRolesChecked(false);
@@ -641,6 +725,7 @@ export default function AdminStudioScreen() {
       setCreatorVideoModerationBusy(null);
       setPendingCreatorVideoModeration(null);
       setAdminOpsNotice(null);
+      setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       return;
     }
     void loadPlatformRoles();
@@ -651,6 +736,7 @@ export default function AdminStudioScreen() {
     if (!canAccessAdmin) {
       setLoading(false);
       setConfigLoading(false);
+      setAppConfigConnected(false);
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
       setPlatformRoleRosterLoading(false);
@@ -659,10 +745,12 @@ export default function AdminStudioScreen() {
       setAdminAuditLogLoading(false);
       setSafetyReports([]);
       setSafetyReportsLoading(false);
+      setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       return;
     }
     loadTitles();
     loadExperienceConfig();
+    void loadAdminV1ReadModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessAdmin]);
 
@@ -871,58 +959,280 @@ export default function AdminStudioScreen() {
     const activeRoleLabels = platformRoles.length
       ? platformRoles.map((membership) => formatModerationToken(membership.role)).join(" · ")
       : formatModerationToken(resolvedActorRole);
-    const openReportValue = canReviewSafetyReports
+    const recentReportValue = canReviewSafetyReports
       ? String(safetyReportQueueSummary?.totalReports ?? safetyReports.length)
       : "Locked";
     const creatorVideoValue = canManagePrivilegedWrites ? "Ready" : "Locked";
-    const auditValue = adminAuditLogSummary
-      ? `${adminAuditLogSummary.totalItems} recent`
-      : canManagePrivilegedWrites || canReviewSafetyReports
-        ? "Ready"
-        : "Locked";
+    const appConfigValue = configLoading ? "Loading" : appConfigConnected ? "Connected" : "Not connected yet";
+    const premiumValue = formatAdminV1Count(adminV1ReadModel.premiumActiveCount, adminV1ReadModel.loading);
+    const activeLiveValue = formatAdminV1Count(adminV1ReadModel.activeLiveRoomCount, adminV1ReadModel.loading);
+    const activeWatchPartyValue = formatAdminV1Count(adminV1ReadModel.activeWatchPartyCount, adminV1ReadModel.loading);
+    const uploadsTodayValue = formatAdminV1Count(adminV1ReadModel.uploadsTodayCount, adminV1ReadModel.loading);
 
     return [
       {
-        label: "Open Reports",
-        value: openReportValue,
+        label: "Recent Reports",
+        value: recentReportValue,
         body: canReviewSafetyReports
-          ? "Recent reports are available to review from backend safety-report truth."
+          ? "Recent safety reports are available from backed report intake. First-class open/resolved status is not connected yet."
           : "Report review requires active platform role membership.",
         tone: canReviewSafetyReports ? "default" : "unavailable",
+        destination: "reports",
       },
       {
-        label: "Creator Videos",
+        label: "Creator Video Safety",
         value: creatorVideoValue,
         body: canManagePrivilegedWrites
           ? "Hide, remove, and restore actions are available with confirmation and audit reason."
           : "Manual creator-video safety writes require backend owner/operator role truth.",
         tone: canManagePrivilegedWrites ? "default" : "unavailable",
+        destination: "content",
       },
       {
-        label: "Operator Status",
+        label: "Operator Role",
         value: activeRoleLabels,
         body: "This surface requires backend platform-role membership. Local helper state never unlocks operator controls.",
+        destination: "roles",
       },
       {
-        label: "Rachi Presence",
-        value: RACHI_OFFICIAL_ACCOUNT.officialBadgeLabel,
-        body: "Rachi is managed here as Chi'llywood's official public presence, not as an admin authority.",
+        label: "App Config",
+        value: appConfigValue,
+        body: appConfigConnected
+          ? "Current app configuration loaded through the existing app_configurations foundation."
+          : "Admin can render with defaults, but app config is not confirmed connected yet.",
+        tone: appConfigConnected ? "default" : "unavailable",
+        destination: "system",
       },
       {
-        label: "Audit Visibility",
-        value: auditValue,
-        body: "Audit context stays visible without becoming a raw database console.",
-        tone: canManagePrivilegedWrites || canReviewSafetyReports ? "default" : "unavailable",
+        label: "Premium Entitlements",
+        value: premiumValue,
+        body: adminV1ReadModel.premiumActiveCount === null
+          ? "Entitlement counts are not connected yet."
+          : "Active Premium count comes from user_entitlements only, not subscription money.",
+        tone: adminV1ReadModel.premiumActiveCount === null ? "unavailable" : "default",
+        destination: "premium",
+      },
+      {
+        label: "Active Live Rooms",
+        value: activeLiveValue,
+        body: adminV1ReadModel.activeLiveRoomCount === null
+          ? "Live usage is not connected yet."
+          : "DB estimate from active live room records. This is not LiveKit truth.",
+        tone: adminV1ReadModel.activeLiveRoomCount === null ? "unavailable" : "default",
+        destination: "usage",
+      },
+      {
+        label: "Active Watch-Parties",
+        value: activeWatchPartyValue,
+        body: adminV1ReadModel.activeWatchPartyCount === null
+          ? "Watch-party usage is not connected yet."
+          : "DB estimate from active title/watch-party room records.",
+        tone: adminV1ReadModel.activeWatchPartyCount === null ? "unavailable" : "default",
+        destination: "usage",
+      },
+      {
+        label: "Uploads Today",
+        value: uploadsTodayValue,
+        body: adminV1ReadModel.uploadsTodayCount === null
+          ? "Upload counts are not connected yet."
+          : "Count comes from creator video records created today.",
+        tone: adminV1ReadModel.uploadsTodayCount === null ? "unavailable" : "default",
+        destination: "usage",
+      },
+      {
+        label: "Ads Foundation",
+        value: "Foundation only",
+        body: "Provider/caps not connected yet. AppLovin MAX remains the primary direction; no ad SDK is integrated here.",
+        tone: "unavailable",
+        destination: "ads",
+      },
+      {
+        label: "Revenue",
+        value: "Money not connected yet",
+        body: "Premium entitlement counts may be visible, but subscription money and ad money are not backed here.",
+        tone: "unavailable",
+        destination: "revenue",
+      },
+      {
+        label: "Payouts",
+        value: "Not active yet",
+        body: "Creator payouts are not active yet.",
+        tone: "unavailable",
+        destination: "payouts",
+      },
+      {
+        label: "Networks",
+        value: "Not active yet",
+        body: "Network plans are not active yet.",
+        tone: "unavailable",
+        destination: "networks",
+      },
+      {
+        label: "Sponsors",
+        value: "Not active yet",
+        body: "Sponsor tools are not active yet.",
+        tone: "unavailable",
+        destination: "sponsors",
+      },
+      {
+        label: "Fraud",
+        value: "Not connected yet",
+        body: "Fraud holds are not connected yet.",
+        tone: "unavailable",
+        destination: "fraud",
       },
     ];
   }, [
-    adminAuditLogSummary,
+    adminV1ReadModel.activeLiveRoomCount,
+    adminV1ReadModel.activeWatchPartyCount,
+    adminV1ReadModel.loading,
+    adminV1ReadModel.premiumActiveCount,
+    adminV1ReadModel.uploadsTodayCount,
+    appConfigConnected,
     canManagePrivilegedWrites,
     canReviewSafetyReports,
+    configLoading,
     platformRoles,
     resolvedActorRole,
     safetyReportQueueSummary,
     safetyReports.length,
+  ]);
+
+  const needsAttentionCards = useMemo<readonly AdminDashboardCard[]>(() => {
+    const rows: AdminDashboardCard[] = [];
+    const recentReportsCount = canReviewSafetyReports
+      ? safetyReportQueueSummary?.totalReports ?? safetyReports.length
+      : 0;
+
+    if (canReviewSafetyReports && recentReportsCount > 0) {
+      rows.push({
+        label: "Recent Reports",
+        value: String(recentReportsCount),
+        body: "Backed safety reports are waiting in the recent review queue slice.",
+        destination: "reports",
+      });
+    }
+
+    if (!configLoading && !appConfigConnected) {
+      rows.push({
+        label: "App Config",
+        value: "Not connected yet",
+        body: "Current app configuration did not confirm a connected load.",
+        tone: "unavailable",
+        destination: "system",
+      });
+    }
+
+    if (notice?.type === "error") {
+      rows.push({
+        label: "Admin Error",
+        value: "Needs review",
+        body: notice.text,
+        tone: "unavailable",
+      });
+    }
+
+    if (moderationNotice) {
+      rows.push({
+        label: "Moderation Notice",
+        value: "Needs review",
+        body: moderationNotice,
+        tone: "unavailable",
+        destination: "reports",
+      });
+    }
+
+    if (adminOpsNotice) {
+      rows.push({
+        label: "Admin Ops Notice",
+        value: "Needs review",
+        body: adminOpsNotice,
+        tone: "unavailable",
+        destination: "audit",
+      });
+    }
+
+    return rows;
+  }, [
+    adminOpsNotice,
+    appConfigConnected,
+    canReviewSafetyReports,
+    configLoading,
+    moderationNotice,
+    notice,
+    safetyReportQueueSummary,
+    safetyReports.length,
+  ]);
+
+  const systemStatusCards = useMemo<readonly AdminDashboardCard[]>(() => {
+    const hasRevenueCatPublicKey = !!(
+      runtimeConfig.revenueCat.androidPublicSdkKey
+      || runtimeConfig.revenueCat.androidDebugPublicSdkKey
+      || runtimeConfig.revenueCat.iosPublicSdkKey
+    );
+    const hasLegalUrls = !!(
+      runtimeConfig.legal.privacyPolicyUrl
+      && runtimeConfig.legal.termsOfServiceUrl
+      && runtimeConfig.legal.accountDeletionUrl
+    );
+
+    return [
+      {
+        label: "App Config",
+        value: configLoading ? "Loading" : appConfigConnected ? "Connected" : "Not connected yet",
+        body: "Existing app_configurations read path only. This is not a server health check.",
+        tone: appConfigConnected ? "default" : "unavailable",
+      },
+      {
+        label: "Runtime Config",
+        value: runtimeConfigIssues.length ? "Needs setup" : "Ready",
+        body: runtimeConfigIssues.length
+          ? "Base public runtime config has missing values."
+          : "Base public runtime config values are present without exposing secrets.",
+        tone: runtimeConfigIssues.length ? "unavailable" : "default",
+      },
+      {
+        label: "Feature Flags",
+        value: "Foundation only",
+        body: "Static app flags and client Remote Config defaults are readable; Admin write controls are not connected yet.",
+        tone: "unavailable",
+      },
+      {
+        label: "Supabase Setup",
+        value: runtimeConfig.supabaseUrl && runtimeConfig.supabaseAnonKey ? "Ready" : "Not connected yet",
+        body: "Presence check only. No Supabase remote state was touched.",
+        tone: runtimeConfig.supabaseUrl && runtimeConfig.supabaseAnonKey ? "default" : "unavailable",
+      },
+      {
+        label: "RevenueCat Public Setup",
+        value: hasRevenueCatPublicKey ? "Ready" : "Not connected yet",
+        body: "Public SDK-key presence only. RevenueCat dashboard/setup is not changed here.",
+        tone: hasRevenueCatPublicKey ? "default" : "unavailable",
+      },
+      {
+        label: "LiveKit URL Setup",
+        value: liveKitConfigured ? "Ready" : "Not connected yet",
+        body: "URL/token-endpoint presence only. This is not a LiveKit server status ping.",
+        tone: liveKitConfigured ? "default" : "unavailable",
+      },
+      {
+        label: "Legal URLs",
+        value: hasLegalUrls ? "Ready" : "Not connected yet",
+        body: "Privacy, Terms, and account-deletion URL presence only.",
+        tone: hasLegalUrls ? "default" : "unavailable",
+      },
+      {
+        label: "Readiness Docs",
+        value: "Ready",
+        body: "PUBLIC_V1_READINESS_CHECKLIST and EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST exist for manual proof lanes.",
+      },
+    ];
+  }, [
+    appConfigConnected,
+    configLoading,
+    liveKitConfigured,
+    runtimeConfig,
+    runtimeConfigIssues.length,
   ]);
 
   const adminSectionRows = useMemo<readonly AdminDashboardCard[]>(() => [
@@ -1118,10 +1428,13 @@ export default function AdminStudioScreen() {
   const loadExperienceConfig = useCallback(async () => {
     try {
       setConfigLoading(true);
+      setAppConfigConnected(false);
       const config = await readAppConfig();
       setExperienceConfig(config);
+      setAppConfigConnected(true);
     } catch (err: any) {
       setExperienceConfig(DEFAULT_APP_CONFIG);
+      setAppConfigConnected(false);
       setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to load experience config.") });
     } finally {
       setConfigLoading(false);
@@ -1158,6 +1471,78 @@ export default function AdminStudioScreen() {
     } finally {
       setSafetyReportsLoading(false);
     }
+  }, []);
+
+  const loadAdminV1ReadModel = useCallback(async () => {
+    const readCount = async (query: PromiseLike<{ count: number | null; error: any }>) => {
+      const { count, error } = await query;
+      if (error) throw error;
+      return Number(count ?? 0);
+    };
+    const safeCount = async (loader: () => Promise<number>) => {
+      try {
+        return await loader();
+      } catch {
+        return null;
+      }
+    };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startOfToday = today.toISOString();
+
+    setAdminV1ReadModel((current) => ({ ...current, loading: true }));
+
+    const [
+      premiumActiveCount,
+      activeLiveRoomCount,
+      activeWatchPartyCount,
+      uploadsTodayCount,
+    ] = await Promise.all([
+      safeCount(() =>
+        readCount(
+          supabase
+            .from("user_entitlements")
+            .select("user_id", { count: "exact", head: true })
+            .eq("entitlement_key", "premium")
+            .in("status", [...ACTIVE_PREMIUM_ENTITLEMENT_STATUSES]),
+        ),
+      ),
+      safeCount(() =>
+        readCount(
+          supabase
+            .from("watch_party_rooms")
+            .select("party_id", { count: "exact", head: true })
+            .eq("is_active", true)
+            .eq("room_type", "live"),
+        ),
+      ),
+      safeCount(() =>
+        readCount(
+          supabase
+            .from("watch_party_rooms")
+            .select("party_id", { count: "exact", head: true })
+            .eq("is_active", true)
+            .eq("room_type", "title"),
+        ),
+      ),
+      safeCount(() =>
+        readCount(
+          supabase
+            .from("videos")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", startOfToday),
+        ),
+      ),
+    ]);
+
+    setAdminV1ReadModel({
+      loading: false,
+      premiumActiveCount,
+      activeLiveRoomCount,
+      activeWatchPartyCount,
+      uploadsTodayCount,
+      generatedAt: new Date().toISOString(),
+    });
   }, []);
 
   const queueCreatorVideoModeration = useCallback((status: CreatorVideoModerationStatus) => {
@@ -1827,9 +2212,9 @@ export default function AdminStudioScreen() {
         <View style={styles.headerBlock}>
           <View>
             <Text style={styles.kicker}>PRIVATE PLATFORM SURFACE</Text>
-            <Text style={styles.title}>{"Chi'llywood Operator Center"}</Text>
+            <Text style={styles.title}>Admin Command Center</Text>
             <Text style={styles.subtitle}>
-              Safety reports, creator-video moderation, role visibility, and platform programming stay behind backend platform-role membership.
+              Operate Chi'llywood, review platform risk, and monitor launch readiness.
             </Text>
           </View>
 
@@ -1846,22 +2231,6 @@ export default function AdminStudioScreen() {
           </View>
         )}
 
-        <View style={styles.operatorSummaryGrid}>
-          {adminDashboardCards.map((card) => (
-            <View
-              key={card.label}
-              style={[
-                styles.dashboardMetricCard,
-                card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
-              ]}
-            >
-              <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
-              <Text style={styles.dashboardMetricValue}>{card.value}</Text>
-              <Text style={styles.dashboardMetricBody}>{card.body}</Text>
-            </View>
-          ))}
-        </View>
-
         <View style={styles.tabBar}>
           {operatorTabs.map((tab) => {
             const active = operatorTab === tab.key;
@@ -1875,6 +2244,105 @@ export default function AdminStudioScreen() {
               </TouchableOpacity>
             );
           })}
+        </View>
+
+        {operatorTab === "home" ? (
+        <>
+        <View style={styles.configCard}>
+          <Text style={styles.configKicker}>PLATFORM SNAPSHOT</Text>
+          <Text style={styles.configTitle}>Platform Snapshot</Text>
+          <Text style={styles.configBody}>
+            Backed command-center signals appear as counts or ready states. Unbacked systems stay labeled as foundation or not connected.
+          </Text>
+          <View style={styles.operatorSummaryGrid}>
+            {adminDashboardCards.map((card) => {
+              const destination = card.destination;
+              const content = (
+                <>
+                  <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+                  <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+                  <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+                </>
+              );
+              const cardStyle = [
+                styles.dashboardMetricCard,
+                card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
+              ];
+
+              if (!destination) {
+                return (
+                  <View key={card.label} style={cardStyle}>
+                    {content}
+                  </View>
+                );
+              }
+
+              return (
+                <TouchableOpacity
+                  key={card.label}
+                  style={cardStyle}
+                  activeOpacity={0.84}
+                  onPress={() => setOperatorTab(destination)}
+                >
+                  {content}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.configCard}>
+          <Text style={styles.configKicker}>NEEDS ATTENTION</Text>
+          <Text style={styles.configTitle}>Needs Attention</Text>
+          {needsAttentionCards.length ? (
+            <View style={styles.configList}>
+              {needsAttentionCards.map((card) => {
+                const destination = card.destination;
+                const content = (
+                  <>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>{card.label}</Text>
+                      <Text style={styles.configListBody}>{card.body}</Text>
+                    </View>
+                    <View style={[
+                      styles.badge,
+                      card.tone === "unavailable" ? styles.badgeOff : styles.badgeScheduled,
+                    ]}>
+                      <Text style={styles.badgeText}>{card.value}</Text>
+                    </View>
+                  </>
+                );
+
+                if (!destination) {
+                  return (
+                    <View key={card.label} style={styles.configListRow}>
+                      {content}
+                    </View>
+                  );
+                }
+
+                return (
+                  <TouchableOpacity
+                    key={card.label}
+                    style={styles.configListRow}
+                    activeOpacity={0.84}
+                    onPress={() => setOperatorTab(destination)}
+                  >
+                    {content}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>No urgent admin tasks right now.</Text>
+                <Text style={styles.configListBody}>
+                  Only backed report, config, and admin-error signals appear here.
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={styles.roleBoundaryPanel}>
@@ -1893,15 +2361,17 @@ export default function AdminStudioScreen() {
             </View>
           ))}
         </View>
+        </>
+        ) : null}
 
         {operatorTab === "reports" ? (
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>REPORTS</Text>
-              <Text style={styles.configTitle}>Safety review queue</Text>
+              <Text style={styles.configTitle}>Recent Reports</Text>
               <Text style={styles.configBody}>
-                Platform operators review safety reports and apply creator-video actions here. Channel owners manage their own uploads in Channel Settings.
+                Platform operators review the recent safety-report slice and apply already-backed creator-video actions here. Report resolution status is not connected yet.
               </Text>
             </View>
           </View>
@@ -2102,12 +2572,12 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>{operatorTab === "roles" ? "ROLES" : "AUDIT"}</Text>
               <Text style={styles.configTitle}>
-                {operatorTab === "roles" ? "Platform role visibility" : "Bounded audit visibility"}
+                {operatorTab === "roles" ? "Platform role visibility" : "Audit summary"}
               </Text>
               <Text style={styles.configBody}>
                 {operatorTab === "roles"
                   ? "Platform role records are backend operator truth. Channel ownership and audience roles are separate."
-                  : "Audit context stays available for platform role and report-review records without becoming a raw database console."}
+                  : "Full immutable admin audit logs are not connected yet. This summary is limited to current role-record metadata and safety-report audit context."}
               </Text>
             </View>
           </View>
@@ -2225,7 +2695,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Audit Visibility</Text>
                 <Text style={styles.configListBody}>
-                  Audit visibility is bounded to current role-record metadata and safety-report audit context. There is still no fake cross-domain audit system here.
+                  Full immutable admin audit logs are not connected yet. Audit visibility is bounded to current role-record metadata and safety-report audit context.
                 </Text>
               </View>
             </View>
@@ -2368,6 +2838,423 @@ export default function AdminStudioScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "users" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>USERS</Text>
+              <Text style={styles.configTitle}>Users</Text>
+              <Text style={styles.configBody}>
+                Future admin user tools will show account, profile, channel, Premium, and restriction status here.
+              </Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Foundation only</Text>
+            </View>
+          </View>
+          <View style={styles.configListRow}>
+            <View style={styles.configListCopy}>
+              <Text style={styles.configListTitle}>User search is not connected yet.</Text>
+              <Text style={styles.configListBody}>
+                No user ban, suspend, upload-disable, live-disable, reset-password, entitlement-edit, or deletion action is exposed in V1A.
+              </Text>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "premium" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>PREMIUM</Text>
+              <Text style={styles.configTitle}>Premium / Entitlements</Text>
+              <Text style={styles.configBody}>
+                RevenueCat remains Premium truth. V1A only reads backed entitlement signals when the current admin role can safely read them.
+              </Text>
+            </View>
+            <View style={[styles.badge, styles.badgeScheduled]}>
+              <Text style={styles.badgeText}>Read-only</Text>
+            </View>
+          </View>
+          <View style={styles.dashboardGrid}>
+            <View style={[
+              styles.dashboardMetricCard,
+              adminV1ReadModel.premiumActiveCount === null && styles.dashboardMetricCardUnavailable,
+            ]}>
+              <Text style={styles.dashboardMetricLabel}>Active Premium</Text>
+              <Text style={styles.dashboardMetricValue}>
+                {formatAdminV1Count(adminV1ReadModel.premiumActiveCount, adminV1ReadModel.loading)}
+              </Text>
+              <Text style={styles.dashboardMetricBody}>
+                {adminV1ReadModel.premiumActiveCount === null
+                  ? "Entitlement counts are not connected yet."
+                  : "Count comes from active, trialing, and grace-period user_entitlements rows."}
+              </Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Manual Premium Toggles</Text>
+              <Text style={styles.dashboardMetricValue}>Not available</Text>
+              <Text style={styles.dashboardMetricBody}>Manual Premium toggles are not available in V1A.</Text>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "kill-switches" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>KILL SWITCHES</Text>
+              <Text style={styles.configTitle}>Kill Switches</Text>
+              <Text style={styles.configBody}>
+                Runtime kill switches are not connected yet. Planned switches are shown as foundation rows, not working toggles.
+              </Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Foundation only</Text>
+            </View>
+          </View>
+          <View style={styles.configList}>
+            {plannedKillSwitchRows.map((label) => {
+              const backedByAccessLogic =
+                label === "Premium Required For Live"
+                || label === "Premium Required For Watch-Party";
+              return (
+                <View key={label} style={styles.configListRow}>
+                  <View style={styles.configListCopy}>
+                    <Text style={styles.configListTitle}>{label}</Text>
+                    <Text style={styles.configListBody}>
+                      {backedByAccessLogic
+                        ? "Backed by current access logic."
+                        : "Not connected yet."}
+                    </Text>
+                  </View>
+                  <View style={[
+                    styles.badge,
+                    backedByAccessLogic ? styles.badgePublished : styles.badgeOff,
+                  ]}>
+                    <Text style={styles.badgeText}>
+                      {backedByAccessLogic ? "Backed by current access logic" : "Not connected yet"}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "usage" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>USAGE</Text>
+              <Text style={styles.configTitle}>Usage</Text>
+              <Text style={styles.configBody}>
+                Usage in V1A is limited to safe DB estimates from existing room and creator-video records.
+              </Text>
+            </View>
+            <View style={[styles.badge, styles.badgeScheduled]}>
+              <Text style={styles.badgeText}>Read-only</Text>
+            </View>
+          </View>
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Live Now</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.activeLiveRoomCount === null
+                    ? "Live usage is not connected yet."
+                    : `${adminV1ReadModel.activeLiveRoomCount} active live room record${adminV1ReadModel.activeLiveRoomCount === 1 ? "" : "s"} · DB estimate`}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Watch-Parties</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.activeWatchPartyCount === null
+                    ? "Watch-party usage is not connected yet."
+                    : `${adminV1ReadModel.activeWatchPartyCount} active watch-party room record${adminV1ReadModel.activeWatchPartyCount === 1 ? "" : "s"} · DB estimate`}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Uploads / Media</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.uploadsTodayCount === null
+                    ? "Upload counts are not connected yet."
+                    : `${adminV1ReadModel.uploadsTodayCount} creator video upload record${adminV1ReadModel.uploadsTodayCount === 1 ? "" : "s"} created today.`}
+                </Text>
+                <Text style={styles.configListBody}>Storage estimate is not connected yet.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Cost Risk Flags</Text>
+                <Text style={styles.configListBody}>Bandwidth metering is not connected yet.</Text>
+                <Text style={styles.configListBody}>LiveKit metering is not connected yet.</Text>
+                <Text style={styles.configListBody}>Participant-minute metering is not connected yet.</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "ads" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>ADS</Text>
+              <Text style={styles.configTitle}>Ads</Text>
+              <Text style={styles.configBody}>Ad provider is not connected yet.</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Foundation only</Text>
+            </View>
+          </View>
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Planned provider</Text>
+                <Text style={styles.configListBody}>Primary: AppLovin MAX</Text>
+                <Text style={styles.configListBody}>Unity LevelPlay / Unity Ads may be added through AppLovin MAX later.</Text>
+                <Text style={styles.configListBody}>No AdMob-only system.</Text>
+                <Text style={styles.configListBody}>
+                  {FEATURE_FLAGS.monetization.ads
+                    ? "Static app ad flag exists, but provider/caps are not connected yet."
+                    : "Static app ad flag is off; provider/caps are not connected yet."}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Launch caps</Text>
+                <Text style={styles.configListBody}>Base active session: 3 interstitial + 1 native/feed</Text>
+                <Text style={styles.configListBody}>After 120 active browsing minutes: +2 interstitial + 1 native/feed</Text>
+                <Text style={styles.configListBody}>Daily hard cap: 6 interstitial + 3 native/feed</Text>
+                <Text style={styles.configListBody}>Premium users: zero ads</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Forbidden contexts</Text>
+                <Text style={styles.configListBody}>No ads inside active LiveKit rooms</Text>
+                <Text style={styles.configListBody}>No ads during active video playback</Text>
+                <Text style={styles.configListBody}>No ads while typing/commenting</Text>
+                <Text style={styles.configListBody}>No ads during upload</Text>
+                <Text style={styles.configListBody}>No ads on subscribe/payment screens</Text>
+                <Text style={styles.configListBody}>No ads immediately at app launch</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "revenue" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>REVENUE</Text>
+              <Text style={styles.configTitle}>Revenue</Text>
+              <Text style={styles.configBody}>
+                Money totals are not shown unless real revenue data is backed.
+              </Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Foundation only</Text>
+            </View>
+          </View>
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Premium entitlement counts</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.premiumActiveCount === null
+                    ? "Entitlement counts are not connected yet."
+                    : `${adminV1ReadModel.premiumActiveCount} active Premium entitlement${adminV1ReadModel.premiumActiveCount === 1 ? "" : "s"} found.`}
+                </Text>
+              </View>
+            </View>
+            {[
+              "Subscription money is not connected yet.",
+              "Ads revenue is not connected yet.",
+              "Creator revenue is not active yet.",
+              "Sponsor revenue is not active yet.",
+              "Network revenue is not active yet.",
+            ].map((copy) => (
+              <View key={copy} style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>{copy}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "payouts" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>PAYOUTS</Text>
+              <Text style={styles.configTitle}>Payouts</Text>
+              <Text style={styles.configBody}>Creator payouts are not active yet.</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Not active yet</Text>
+            </View>
+          </View>
+          <View style={styles.configList}>
+            {[
+              "Future requirements: payout account, KYC, tax forms, fraud review.",
+              "Planned hold period: 7-30 days.",
+              "Minimum payout: undecided.",
+            ].map((copy) => (
+              <View key={copy} style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>{copy}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "networks" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>NETWORK PLANS</Text>
+              <Text style={styles.configTitle}>Network Plans</Text>
+              <Text style={styles.configBody}>Network plans are not active yet.</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Foundation only</Text>
+            </View>
+          </View>
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Future model</Text>
+                <Text style={styles.configListBody}>Monthly platform fee + included quotas + overages.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Planned tiers</Text>
+                <Text style={styles.configListBody}>Network Starter · Network Pro · Enterprise custom</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Planned usage types</Text>
+                <Text style={styles.configListBody}>storage · bandwidth · live participant-minutes · team seats</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "sponsors" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>SPONSOR DEALS</Text>
+              <Text style={styles.configTitle}>Sponsor Deals</Text>
+              <Text style={styles.configBody}>Sponsor tools are not active yet.</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Foundation only</Text>
+            </View>
+          </View>
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Future workflow</Text>
+                <Text style={styles.configListBody}>Creator submits sponsor/deal</Text>
+                <Text style={styles.configListBody}>Brand pays Chi'llywood</Text>
+                <Text style={styles.configListBody}>Chi'llywood approves/runs placement</Text>
+                <Text style={styles.configListBody}>Chi'llywood keeps platform cut</Text>
+                <Text style={styles.configListBody}>Creator is paid after hold/review</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Revenue share truth</Text>
+                <Text style={styles.configListBody}>Creator-sold sponsor slots: creator 80% net / Chi'llywood 20% net</Text>
+                <Text style={styles.configListBody}>Platform-served creator-page ads: creator 70% net / Chi'llywood 30% net</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "fraud" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>FRAUD HOLDS</Text>
+              <Text style={styles.configTitle}>Fraud Holds</Text>
+              <Text style={styles.configBody}>Fraud holds are not connected yet.</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>Foundation only</Text>
+            </View>
+          </View>
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Planned hold reasons</Text>
+                <Text style={styles.configListBody}>
+                  fraud · invalid traffic · fake engagement · scams · undisclosed sponsorship · stolen content · chargebacks · refund abuse · policy violation · illegal conduct
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Planned future actions</Text>
+                <Text style={styles.configListBody}>pause payouts · disable monetization · restrict uploads/live · admin notes/audit log</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "system" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>SYSTEM</Text>
+              <Text style={styles.configTitle}>System</Text>
+              <Text style={styles.configBody}>
+                Read-only setup status only. Missing health checks stay labeled Not connected yet.
+              </Text>
+            </View>
+            <View style={[styles.badge, styles.badgeScheduled]}>
+              <Text style={styles.badgeText}>Read-only</Text>
+            </View>
+          </View>
+          <View style={styles.dashboardGrid}>
+            {systemStatusCards.map((card) => (
+              <View
+                key={card.label}
+                style={[
+                  styles.dashboardMetricCard,
+                  card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
+                ]}
+              >
+                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+              </View>
+            ))}
           </View>
         </View>
         ) : null}
@@ -4024,6 +4911,7 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     borderRadius: 14,
     borderWidth: 1,
@@ -4032,7 +4920,8 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   tabButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 92,
     minHeight: 40,
     borderRadius: 10,
     alignItems: "center",
