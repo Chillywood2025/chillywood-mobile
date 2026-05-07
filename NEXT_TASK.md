@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Audit/spec Admin V1B2I-C `chat_enabled` room-native text comment scope before implementation.
+Audit/spec Admin V1B runtime-controls closeout before choosing the next enforcement candidate.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -27,6 +27,7 @@ Product direction:
 - Admin V1B2H room attachment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` read normalized `runtimeControls.chat_attachments_enabled` and block only selected room attachments before `sendPartyMessageRecord` and before `createSocialAttachmentForSurface` when false. Text-only room comments remain allowed. Existing room layouts, LiveKit behavior, Premium gates, message reads, room routes, attachment picker selection, `_lib/watchParty.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat Attachments copy is read-only `Enforced on chat and room attachments`; no working Admin toggle was added.
 - Admin V1B2I-A standalone Chi'lly Chat enforcement is pushed. `app/chat/[threadId].tsx` reads normalized `runtimeControls.chat_enabled` and blocks only standalone message send before optimistic insertion and `sendChatMessage`, and standalone thread call start before `startChatThreadCall`, when false. `app/chat/index.tsx` blocks only the Rachi official starter thread before `getOrCreateDirectThread`, and `app/profile/[userId].tsx` blocks only non-self Profile-to-chat entry before direct thread creation. `/chat` and `/chat/[threadId]` remain readable. Existing inbox reads, thread reads, realtime refresh, mark-read, reports, profile opens, signed-in/thread gates, attachment picker selection, `chat_attachments_enabled`, room comments, room invites, `_lib/chat.ts`, `_lib/watchParty.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on standalone chat`; no working Admin toggle was added.
 - Admin V1B2I-B chat invite enforcement is pushed. `components/chat/internal-invite-sheet.tsx` reads normalized `runtimeControls.chat_enabled` and blocks only room invite direct-message sends before `sendDirectInviteMessage` when false. System share fallback remains available. Existing room text comments, room layouts, LiveKit behavior, Premium gates, invite sheet search, `chat_attachments_enabled`, `_lib/chat.ts`, `_lib/watchParty.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on chat and invites`; no working Admin toggle was added.
+- Admin V1B2I-C room comment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` read normalized `runtimeControls.chat_enabled` and block only room-native text/comment submits before `sendPartyMessageRecord` when false. Existing room message reads, room layouts, LiveKit behavior, Premium gates, invite behavior/system share, `chat_attachments_enabled`, attachment picker behavior, `_lib/watchParty.ts`, `_lib/chat.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on chat, invites, and room comments`; no working Admin toggle was added.
 
 Required proof before the next Admin V1B2 runtime-control enforcement:
 
@@ -39,12 +40,11 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Admin V1B2I-C Chat Kill Switch Audit/Spec:
-   - audit before implementation because V1B2I-A enforced `chat_enabled` only on standalone Chi'lly Chat send/call/profile-entry/starter-thread paths, and V1B2I-B enforced it only on room invite direct-message sends
-   - map Watch-Party room text comments and Live Stage room text comments separately
-   - decide whether room-native text comments should read `chat_enabled`, `comments_enabled`, a future room-specific runtime control, or remain unaffected; do not assume standalone Chat enforcement automatically owns room-native communication
-   - recommend a phased implementation that preserves room layouts, LiveKit behavior, Premium gates, existing message reads, `chat_attachments_enabled`, room invite behavior, RLS, migrations, generated types, and Supabase remote state
-   - do not add room comment blocking without exact copy, proof, and fallback behavior
+1. Admin V1B Runtime Controls Closeout Audit/Spec:
+   - inventory remaining configured controls and identify which ones are already enforced, foundation-only, or require a dedicated future plan
+   - do not enforce more live-room, watch-party, ads, upload-size, posting, or messaging behavior without a scoped app-surface read/proof plan
+   - preserve room layouts, LiveKit behavior, Premium gates, existing message reads, `chat_attachments_enabled`, room invite behavior, RLS, migrations, generated types, and Supabase remote state
+   - record whether remaining controls need runtime app reads, schema/admin write work, or should remain foundation-only
    - keep Admin toggles read-only unless a separate backed write-control prompt is provided
 2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
@@ -92,6 +92,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Admin V1B2F social attachment enforcement is pushed. `app/profile/[userId].tsx` and `app/player/[id].tsx` block selected non-chat social attachments when `runtimeControls.attachments_enabled` is false, before parent post/comment create and before attachment upload. Text-only posts/comments remain allowed where existing controls allow them. Admin marks Attachments as read-only `Enforced on social attachments`; no working toggle was added.
 - Admin V1B2G standalone Chi'lly Chat attachment enforcement is pushed. `app/chat/[threadId].tsx` blocks selected attachments when `runtimeControls.chat_attachments_enabled` is false, before optimistic message insertion and before `sendChatMessage`. Text-only messages remain allowed. Admin marks Chat Attachments as read-only `Enforced on chat attachments`; no working toggle was added.
 - Admin V1B2H room attachment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` block selected room attachments when `runtimeControls.chat_attachments_enabled` is false, before room message insert and before attachment upload. Text-only room comments remain allowed. Admin marks Chat Attachments as read-only `Enforced on chat and room attachments`; no working toggle was added.
+- Admin V1B2I-C room comment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` block room-native text/comment submits when `runtimeControls.chat_enabled` is false, before `sendPartyMessageRecord`. Existing room reads, layouts, LiveKit, Premium gates, invite behavior/system share, attachment controls, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin marks Chat as read-only `Enforced on chat, invites, and room comments`; no working toggle was added.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
