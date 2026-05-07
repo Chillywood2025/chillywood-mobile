@@ -3,6 +3,14 @@ import { supabase } from "./supabase";
 
 export const PLATFORM_USAGE_METERING_EVENTS_TABLE = "platform_usage_metering_events";
 export const PLATFORM_USAGE_DAILY_ROLLUPS_TABLE = "platform_usage_daily_rollups";
+export const USAGE_METER_EVENTS_TABLE = "usage_meter_events";
+export const USAGE_DAILY_SUMMARIES_TABLE = "usage_daily_summaries";
+export const USAGE_MONTHLY_SUMMARIES_TABLE = "usage_monthly_summaries";
+export const PROVIDER_ACCOUNTS_TABLE = "provider_accounts";
+export const PROVIDER_USAGE_IMPORTS_TABLE = "provider_usage_imports";
+export const PROVIDER_USAGE_DAILY_TABLE = "provider_usage_daily";
+export const PROVIDER_BILLING_SNAPSHOTS_TABLE = "provider_billing_snapshots";
+export const PROVIDER_USAGE_RECONCILIATION_TABLE = "provider_usage_reconciliation";
 
 export type PlatformUsageMetricKey = "bandwidth_bytes" | "participant_minutes" | "storage_bytes";
 
@@ -17,6 +25,16 @@ export type AdminUsageReadModel = {
   participantMembershipRowsRead: number | null;
   bandwidthMeteringBytes: number | null;
   bandwidthMeteringRowsRead: number | null;
+  internalUsageSchemaConnected: boolean;
+  usageMeterEventsCount: number | null;
+  usageDailySummariesCount: number | null;
+  usageMonthlySummariesCount: number | null;
+  providerUsageSchemaConnected: boolean;
+  providerAccountsCount: number | null;
+  providerUsageImportsCount: number | null;
+  providerUsageDailyCount: number | null;
+  providerBillingSnapshotsCount: number | null;
+  providerUsageReconciliationCount: number | null;
   generatedAt: string;
 };
 
@@ -72,6 +90,18 @@ const readCount = async (query: PromiseLike<CountQueryResult>) => {
   if (error) throw error;
   return Number(count ?? 0);
 };
+
+const adminUsageFoundationClient = supabase as unknown as {
+  from: (table: string) => any;
+};
+
+const readTableCount = async (table: string) => (
+  readCount(
+    adminUsageFoundationClient
+      .from(table)
+      .select("id", { count: "exact", head: true }),
+  )
+);
 
 const sumRows = <T>(rows: T[] | null | undefined, pick: (row: T) => unknown) => (
   (rows ?? []).reduce((total, row) => total + toPositiveNumber(pick(row)), 0)
@@ -157,10 +187,7 @@ async function readParticipantMinuteEstimate(startIso: string) {
 }
 
 async function readBandwidthMeteringEvents(startIso: string) {
-  const client = supabase as unknown as {
-    from: (table: string) => any;
-  };
-  const { data, error, count } = await client
+  const { data, error, count } = await adminUsageFoundationClient
     .from(PLATFORM_USAGE_METERING_EVENTS_TABLE)
     .select("quantity", { count: "exact" })
     .eq("metric_key", "bandwidth_bytes")
@@ -172,6 +199,39 @@ async function readBandwidthMeteringEvents(startIso: string) {
   return {
     bytes: sumRows(rows, (row) => row.quantity),
     rowsRead: Math.min(Number(count ?? rows.length), rows.length),
+  };
+}
+
+async function readUsageFoundationCounts() {
+  const [
+    usageMeterEventsCount,
+    usageDailySummariesCount,
+    usageMonthlySummariesCount,
+    providerAccountsCount,
+    providerUsageImportsCount,
+    providerUsageDailyCount,
+    providerBillingSnapshotsCount,
+    providerUsageReconciliationCount,
+  ] = await Promise.all([
+    safeRead(() => readTableCount(USAGE_METER_EVENTS_TABLE)),
+    safeRead(() => readTableCount(USAGE_DAILY_SUMMARIES_TABLE)),
+    safeRead(() => readTableCount(USAGE_MONTHLY_SUMMARIES_TABLE)),
+    safeRead(() => readTableCount(PROVIDER_ACCOUNTS_TABLE)),
+    safeRead(() => readTableCount(PROVIDER_USAGE_IMPORTS_TABLE)),
+    safeRead(() => readTableCount(PROVIDER_USAGE_DAILY_TABLE)),
+    safeRead(() => readTableCount(PROVIDER_BILLING_SNAPSHOTS_TABLE)),
+    safeRead(() => readTableCount(PROVIDER_USAGE_RECONCILIATION_TABLE)),
+  ]);
+
+  return {
+    usageMeterEventsCount,
+    usageDailySummariesCount,
+    usageMonthlySummariesCount,
+    providerAccountsCount,
+    providerUsageImportsCount,
+    providerUsageDailyCount,
+    providerBillingSnapshotsCount,
+    providerUsageReconciliationCount,
   };
 }
 
@@ -200,6 +260,7 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     storageMetadataEstimate,
     participantMinuteEstimate,
     bandwidthMetering,
+    usageFoundationCounts,
   ] = await Promise.all([
     safeRead(() =>
       readCount(
@@ -239,7 +300,21 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     safeRead(readStorageMetadataEstimate),
     safeRead(() => readParticipantMinuteEstimate(startOfToday)),
     safeRead(() => readBandwidthMeteringEvents(startOfToday)),
+    safeRead(readUsageFoundationCounts),
   ]);
+
+  const internalUsageCounts = [
+    usageFoundationCounts?.usageMeterEventsCount,
+    usageFoundationCounts?.usageDailySummariesCount,
+    usageFoundationCounts?.usageMonthlySummariesCount,
+  ];
+  const providerUsageCounts = [
+    usageFoundationCounts?.providerAccountsCount,
+    usageFoundationCounts?.providerUsageImportsCount,
+    usageFoundationCounts?.providerUsageDailyCount,
+    usageFoundationCounts?.providerBillingSnapshotsCount,
+    usageFoundationCounts?.providerUsageReconciliationCount,
+  ];
 
   return {
     premiumActiveCount,
@@ -252,6 +327,16 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     participantMembershipRowsRead: participantMinuteEstimate?.rowsRead ?? null,
     bandwidthMeteringBytes: bandwidthMetering && bandwidthMetering.rowsRead > 0 ? bandwidthMetering.bytes : null,
     bandwidthMeteringRowsRead: bandwidthMetering?.rowsRead ?? null,
+    internalUsageSchemaConnected: internalUsageCounts.every((count) => typeof count === "number"),
+    usageMeterEventsCount: usageFoundationCounts?.usageMeterEventsCount ?? null,
+    usageDailySummariesCount: usageFoundationCounts?.usageDailySummariesCount ?? null,
+    usageMonthlySummariesCount: usageFoundationCounts?.usageMonthlySummariesCount ?? null,
+    providerUsageSchemaConnected: providerUsageCounts.every((count) => typeof count === "number"),
+    providerAccountsCount: usageFoundationCounts?.providerAccountsCount ?? null,
+    providerUsageImportsCount: usageFoundationCounts?.providerUsageImportsCount ?? null,
+    providerUsageDailyCount: usageFoundationCounts?.providerUsageDailyCount ?? null,
+    providerBillingSnapshotsCount: usageFoundationCounts?.providerBillingSnapshotsCount ?? null,
+    providerUsageReconciliationCount: usageFoundationCounts?.providerUsageReconciliationCount ?? null,
     generatedAt: new Date().toISOString(),
   };
 }

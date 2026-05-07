@@ -997,6 +997,259 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_accounts: {
+        Row: {
+          account_reference: string | null
+          created_at: string
+          display_name: string
+          id: string
+          metadata: Json
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_reference?: string | null
+          created_at?: string
+          display_name: string
+          id?: string
+          metadata?: Json
+          provider: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_reference?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          metadata?: Json
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      provider_billing_snapshots: {
+        Row: {
+          amount: number | null
+          billing_month: string
+          created_at: string
+          currency: string
+          id: string
+          metadata: Json
+          provider: string
+          provider_account_id: string | null
+          source_reference: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          billing_month: string
+          created_at?: string
+          currency?: string
+          id?: string
+          metadata?: Json
+          provider: string
+          provider_account_id?: string | null
+          source_reference?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          billing_month?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_account_id?: string | null
+          source_reference?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_billing_snapshots_provider_account_fkey"
+            columns: ["provider_account_id"]
+            isOneToOne: false
+            referencedRelation: "provider_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_usage_daily: {
+        Row: {
+          created_at: string
+          id: string
+          import_id: string | null
+          metadata: Json
+          metric_key: string
+          provider: string
+          provider_account_id: string | null
+          quantity: number
+          resource_name: string | null
+          resource_type: string
+          unit: string
+          updated_at: string
+          usage_date: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          import_id?: string | null
+          metadata?: Json
+          metric_key: string
+          provider: string
+          provider_account_id?: string | null
+          quantity?: number
+          resource_name?: string | null
+          resource_type: string
+          unit: string
+          updated_at?: string
+          usage_date: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          import_id?: string | null
+          metadata?: Json
+          metric_key?: string
+          provider?: string
+          provider_account_id?: string | null
+          quantity?: number
+          resource_name?: string | null
+          resource_type?: string
+          unit?: string
+          updated_at?: string
+          usage_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_usage_daily_import_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "provider_usage_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_usage_daily_provider_account_fkey"
+            columns: ["provider_account_id"]
+            isOneToOne: false
+            referencedRelation: "provider_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_usage_imports: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          import_type: string
+          metadata: Json
+          period_end: string
+          period_start: string
+          provider: string
+          provider_account_id: string | null
+          records_imported: number
+          source_reference: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          import_type: string
+          metadata?: Json
+          period_end: string
+          period_start: string
+          provider: string
+          provider_account_id?: string | null
+          records_imported?: number
+          source_reference?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          import_type?: string
+          metadata?: Json
+          period_end?: string
+          period_start?: string
+          provider?: string
+          provider_account_id?: string | null
+          records_imported?: number
+          source_reference?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_usage_imports_provider_account_fkey"
+            columns: ["provider_account_id"]
+            isOneToOne: false
+            referencedRelation: "provider_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_usage_reconciliation: {
+        Row: {
+          created_at: string
+          id: string
+          internal_quantity: number | null
+          metadata: Json
+          notes: string | null
+          period_end: string
+          period_start: string
+          provider: string
+          provider_quantity: number | null
+          status: string
+          unit: string
+          updated_at: string
+          usage_class: string
+          variance_quantity: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          internal_quantity?: number | null
+          metadata?: Json
+          notes?: string | null
+          period_end: string
+          period_start: string
+          provider: string
+          provider_quantity?: number | null
+          status?: string
+          unit: string
+          updated_at?: string
+          usage_class: string
+          variance_quantity?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          internal_quantity?: number | null
+          metadata?: Json
+          notes?: string | null
+          period_end?: string
+          period_start?: string
+          provider?: string
+          provider_quantity?: number | null
+          status?: string
+          unit?: string
+          updated_at?: string
+          usage_class?: string
+          variance_quantity?: number | null
+        }
+        Relationships: []
+      }
       safety_reports: {
         Row: {
           category: string
@@ -1180,6 +1433,161 @@ export type Database = {
           trending?: boolean | null
           video_url?: string | null
           year?: number | null
+        }
+        Relationships: []
+      }
+      usage_daily_summaries: {
+        Row: {
+          channel_user_id: string | null
+          created_at: string
+          id: string
+          media_id: string | null
+          metadata: Json
+          metric_key: string
+          quantity: number
+          room_id: string | null
+          unit: string
+          updated_at: string
+          usage_class: string
+          usage_date: string
+          user_id: string | null
+        }
+        Insert: {
+          channel_user_id?: string | null
+          created_at?: string
+          id?: string
+          media_id?: string | null
+          metadata?: Json
+          metric_key: string
+          quantity?: number
+          room_id?: string | null
+          unit: string
+          updated_at?: string
+          usage_class: string
+          usage_date: string
+          user_id?: string | null
+        }
+        Update: {
+          channel_user_id?: string | null
+          created_at?: string
+          id?: string
+          media_id?: string | null
+          metadata?: Json
+          metric_key?: string
+          quantity?: number
+          room_id?: string | null
+          unit?: string
+          updated_at?: string
+          usage_class?: string
+          usage_date?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      usage_meter_events: {
+        Row: {
+          channel_user_id: string | null
+          created_at: string
+          event_source: string
+          event_type: string
+          id: string
+          media_id: string | null
+          metadata: Json
+          provider_account_id: string | null
+          quantity: number
+          room_id: string | null
+          storage_provider: string | null
+          unit: string
+          usage_class: string
+          user_id: string | null
+        }
+        Insert: {
+          channel_user_id?: string | null
+          created_at?: string
+          event_source?: string
+          event_type: string
+          id?: string
+          media_id?: string | null
+          metadata?: Json
+          provider_account_id?: string | null
+          quantity?: number
+          room_id?: string | null
+          storage_provider?: string | null
+          unit: string
+          usage_class: string
+          user_id?: string | null
+        }
+        Update: {
+          channel_user_id?: string | null
+          created_at?: string
+          event_source?: string
+          event_type?: string
+          id?: string
+          media_id?: string | null
+          metadata?: Json
+          provider_account_id?: string | null
+          quantity?: number
+          room_id?: string | null
+          storage_provider?: string | null
+          unit?: string
+          usage_class?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_meter_events_provider_account_fkey"
+            columns: ["provider_account_id"]
+            isOneToOne: false
+            referencedRelation: "provider_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_monthly_summaries: {
+        Row: {
+          channel_user_id: string | null
+          created_at: string
+          id: string
+          media_id: string | null
+          metadata: Json
+          metric_key: string
+          quantity: number
+          room_id: string | null
+          unit: string
+          updated_at: string
+          usage_class: string
+          usage_month: string
+          user_id: string | null
+        }
+        Insert: {
+          channel_user_id?: string | null
+          created_at?: string
+          id?: string
+          media_id?: string | null
+          metadata?: Json
+          metric_key: string
+          quantity?: number
+          room_id?: string | null
+          unit: string
+          updated_at?: string
+          usage_class: string
+          usage_month: string
+          user_id?: string | null
+        }
+        Update: {
+          channel_user_id?: string | null
+          created_at?: string
+          id?: string
+          media_id?: string | null
+          metadata?: Json
+          metric_key?: string
+          quantity?: number
+          room_id?: string | null
+          unit?: string
+          updated_at?: string
+          usage_class?: string
+          usage_month?: string
+          user_id?: string | null
         }
         Relationships: []
       }

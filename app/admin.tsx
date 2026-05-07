@@ -231,6 +231,16 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   participantMembershipRowsRead: null,
   bandwidthMeteringBytes: null,
   bandwidthMeteringRowsRead: null,
+  internalUsageSchemaConnected: false,
+  usageMeterEventsCount: null,
+  usageDailySummariesCount: null,
+  usageMonthlySummariesCount: null,
+  providerUsageSchemaConnected: false,
+  providerAccountsCount: null,
+  providerUsageImportsCount: null,
+  providerUsageDailyCount: null,
+  providerBillingSnapshotsCount: null,
+  providerUsageReconciliationCount: null,
   generatedAt: new Date(0).toISOString(),
 };
 const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
@@ -3065,6 +3075,43 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Internal Usage Metering</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.internalUsageSchemaConnected
+                    ? `Schema connected. ${adminV1ReadModel.usageMeterEventsCount ?? 0} raw event row${adminV1ReadModel.usageMeterEventsCount === 1 ? "" : "s"}, ${adminV1ReadModel.usageDailySummariesCount ?? 0} daily summary row${adminV1ReadModel.usageDailySummariesCount === 1 ? "" : "s"}, ${adminV1ReadModel.usageMonthlySummariesCount ?? 0} monthly summary row${adminV1ReadModel.usageMonthlySummariesCount === 1 ? "" : "s"}.`
+                    : "Schema added, admin read not connected yet."}
+                </Text>
+                <Text style={styles.configListBody}>Read-only foundation. App usage event writers are not active yet.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Provider Usage Imports</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.providerUsageSchemaConnected
+                    ? `Schema connected. ${adminV1ReadModel.providerUsageImportsCount ?? 0} import record${adminV1ReadModel.providerUsageImportsCount === 1 ? "" : "s"} and ${adminV1ReadModel.providerUsageDailyCount ?? 0} provider usage row${adminV1ReadModel.providerUsageDailyCount === 1 ? "" : "s"} are readable.`
+                    : "Provider import schema is not connected yet."}
+                </Text>
+                <Text style={styles.configListBody}>Cloudflare R2: Not connected yet.</Text>
+                <Text style={styles.configListBody}>Hetzner Object Storage: Not connected yet.</Text>
+                <Text style={styles.configListBody}>Hetzner Servers: Not connected yet.</Text>
+                <Text style={styles.configListBody}>OVH Object Storage: Not connected yet.</Text>
+                <Text style={styles.configListBody}>OVH Servers: Not connected yet.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Reconciliation</Text>
+                <Text style={styles.configListBody}>Provider reconciliation is not active yet.</Text>
+                {adminV1ReadModel.providerUsageReconciliationCount !== null ? (
+                  <Text style={styles.configListBody}>
+                    {`${adminV1ReadModel.providerUsageReconciliationCount} reconciliation foundation row${adminV1ReadModel.providerUsageReconciliationCount === 1 ? "" : "s"} readable. No overage or customer billing logic is active.`}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Live Now</Text>
