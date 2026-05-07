@@ -43,9 +43,10 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - compliance-sensitive design choices must be called out before implementation decisions are made
 - app-store billing decisions and creator payout decisions must be evaluated together, but they must not be collapsed into the same system
 - Launch is planned as 18+. Public V1 Hardening H1A is pushed as a signup-only, no-migration confirmation: new signup shows `Chi'llywood is for users 18 and older.`, requires `I confirm I am 18 or older.`, and blocks account creation before `supabase.auth.signUp` if unchecked.
-- Public V1 Hardening H1B1 is pushed as private legal acceptance schema foundation: local migration `supabase/migrations/202605070001_user_account_legal_acceptances.sql` defines `public.user_account_legal_acceptances`, and `_lib/accountLegalAcceptance.ts` defines pure helper constants/payload building.
+- Public V1 Hardening H1B1 is pushed as private legal acceptance schema foundation: migration `supabase/migrations/202605070001_user_account_legal_acceptances.sql` defines `public.user_account_legal_acceptances`, and `_lib/accountLegalAcceptance.ts` defines legal acceptance constants/payload/write helpers.
 - H1B1 intentionally keeps age/terms/privacy acceptance timestamps out of `user_profiles`; this data belongs in a private account legal acceptance table with owner-only authenticated RLS.
-- H1B1 does not make durable acceptance live. Do not claim account-level persisted age acceptance until H1B2 applies/proves the migration in the target Supabase environment, regenerates database types from the real schema, wires runtime writes, and proves the flow.
+- H1B2 legal acceptance storage is pushed. Remote migrations `202605070001` and `202605070002` are applied, generated database types are regenerated from the linked remote schema, signup writes age/terms/privacy acceptance timestamps plus versions after account creation succeeds with an authenticated session, and anon access to the table is denied.
+- H1B2 does not use `user_profiles`, AsyncStorage, or auth metadata for legal acceptance, does not collect full birthdate or ID verification, does not add first-use enforcement, and does not block existing users.
 
 ## Payout Direction
 - standard scheduled creator payouts remain free
@@ -137,11 +138,11 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - Any future destructive admin action must require confirmation and reason or audit context where appropriate.
 
 ## Public Product Phasing
-- Launch is planned as 18+. H1A no-migration signup confirmation is pushed. H1B1 private legal acceptance schema foundation is pushed locally, but H1B2 remote/typegen/runtime wiring remains the next compliance-hardening lane before claiming durable account-level acceptance.
+- Launch is planned as 18+. H1A no-migration signup confirmation and H1B2 legal acceptance storage are pushed.
 - Public v1 should focus on the core social streaming experience, not the full long-term platform vision
 - Public v1 includes login/settings/logout, home/discovery, customizable basic profiles, standalone player, Watch-Party Live core flow, Live Watch-Party / Live Stage core flow, comments/reactions/basic social interaction, basic Chi'lly Chat or simple direct messaging, Premium subscription gating, moderation basics, and analytics/error monitoring/admin visibility
 - Admin Command Center V1A is pushed on `/admin`; future Admin V1B kill switches require dedicated schema/config/enforcement planning and real app-surface reads.
-- Ads Launch Foundation V1A/V1B is pushed as no-SDK, no-real-rendering, provider-neutral infrastructure; Ads V1C Interstitial controller remains the next ad lane before real AppLovin MAX integration after the current H1B compliance-storage lane.
+- Ads Launch Foundation V1A/V1B is pushed as no-SDK, no-real-rendering, provider-neutral infrastructure; Ads V1C Interstitial controller remains a later ad lane before real AppLovin MAX integration.
 - Public v1 should keep room-scale truth honest: `500+` joined presence can be a valid product target, but Public v1 does not assume `500+` equal live camera feeds.
 - Post-v1 can expand into Ads V1C controller work, heavier creator monetization rollout, a fuller creator mini-platform builder, deeper room personalization, request/promote room controls, premium/ticketed room tooling, and instant payout lane foundations
 - Later phase holds Game Live rollout beyond the Public v1 window, Game Watch-Party after Game Live, larger premium stages, higher simultaneous live-seat capacity as infrastructure improves, advanced payouts and tax automation, overseas creator payouts, and broader ad systems

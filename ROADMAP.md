@@ -25,16 +25,15 @@
 - Premium subscription gate
 - Admin Command Center V1A on the canonical `/admin` route, protected by signed-in plus beta/platform-role/backend permission checks
 - Ads Launch Foundation V1A/V1B as provider-neutral, no-SDK, no-real-rendering infrastructure; the Home native/feed placeholder foundation exists but normal runtime keeps it hidden while `ads_enabled=false`, and real ad SDK integration is not live yet
-- 18+ launch posture with H1A no-migration signup confirmation pushed and H1B1 private legal acceptance schema foundation pushed locally; H1B2 remote/typegen/runtime wiring remains separate before durable acceptance is live
+- 18+ launch posture with H1A signup confirmation and H1B2 legal acceptance storage pushed
 - moderation basics
 - analytics, error monitoring, and admin visibility
 - layered room participation truth with limited active live seats, scalable participant browsing, and a clear distinction between joined presence and true live-seat media
 - Public v1 should stay focused on the core social streaming experience instead of the full long-term platform vision
 
 ## Post-v1
-- H1B2 legal acceptance remote/typegen/runtime wiring after the pushed H1B1 local private-table foundation
-- Ads V1C Interstitial controller with placeholder interstitial first, safe transitions only, no app-launch ad, 180-second first delay, 600-second spacing, session/daily caps, and no forbidden contexts
 - upload/content lifecycle polish
+- Ads V1C Interstitial controller with placeholder interstitial first, safe transitions only, no app-launch ad, 180-second first delay, 600-second spacing, session/daily caps, and no forbidden contexts
 - security/compliance/moderation pass
 - Real AppLovin MAX integration later only after external account/app/ad-unit setup is ready, keeping the provider wrapper architecture and avoiding an AdMob-only path
 - Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan; switches must be real and read by affected app surfaces
@@ -64,8 +63,8 @@
 - Public V1 Hardening H1A 18+ Signup Confirmation is pushed in `app/(auth)/signup.tsx`: new signup shows the 18+ copy, requires an active checkbox confirmation, blocks before `supabase.auth.signUp` if unchecked, preserves legal links and Sign In handoff, and does not persist age confirmation yet.
 - H1B1 private legal acceptance schema foundation is pushed with local migration `supabase/migrations/202605070001_user_account_legal_acceptances.sql` and pure helper `_lib/accountLegalAcceptance.ts`.
 - H1B1 defines private table `public.user_account_legal_acceptances` for `age_confirmed_at`, age version, terms/privacy acceptance timestamps, and versions. The table is intentionally separate from `user_profiles` and uses owner-only authenticated RLS.
-- H1B1 did not apply the migration to remote Supabase, regenerate or hand-edit `supabase/database.types.ts`, wire runtime writes, use AsyncStorage/auth metadata, add first-use enforcement, or block existing users.
-- Durable 18+ / legal acceptance storage still needs H1B2 remote migration proof, generated type regeneration from the real schema, and runtime write proof. Do not claim persisted age confirmation is live until H1B2 is complete.
+- H1B2 legal acceptance storage is pushed: remote migrations `202605070001` and `202605070002` are applied, generated database types are regenerated from the linked remote schema, signup writes legal acceptance after account creation succeeds with an authenticated session, and anon reads to the legal acceptance table are denied.
+- H1B2 does not write legal acceptance to `user_profiles`, AsyncStorage, or auth metadata; does not collect full birthdate or ID verification; does not add first-use enforcement; and does not block existing users.
 - Ads Launch Foundation V1A is pushed with `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`; `app/admin.tsx` only shows read-only/foundation Admin Ads status.
 - Ads Launch Foundation V1B is pushed with `components/ads/NativeAdSlot.tsx`, one Home native/feed placeholder foundation in `app/(tabs)/index.tsx`, native/feed long-use cap proof support in `_lib/ads/adSession.ts`, and read-only Admin Ads status copy in `app/admin.tsx`.
 - Ads V1A defaults `ads_enabled` to false, uses `placeholder` as the default provider, and has a placeholder provider that reports not connected and calls no SDK.

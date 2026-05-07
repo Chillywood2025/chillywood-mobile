@@ -55,7 +55,7 @@ Result: the CLI reached the remote database host but failed authentication for t
 
 ## Migration Alignment Status
 
-`supabase migration list` was executed after linking and showed local and remote aligned through `202604280001`. Later repo truth adds local pending migrations that must not be applied remotely without a dedicated prompt and sanitized proof plan, including `202605070001_user_account_legal_acceptances.sql` for H1B1 private legal acceptance storage.
+`supabase migration list` now shows local and remote aligned through `202605070002`. H1B2 applied the private legal acceptance migrations and regenerated `supabase/database.types.ts` from the linked remote schema.
 
 | Version | Local | Remote | Purpose |
 | --- | --- | --- | --- |
@@ -75,13 +75,15 @@ Result: the CLI reached the remote database host but failed authentication for t
 | `202604260004` | Present | Present | Tighten Watch-Party room RLS |
 | `202604270001` | Present | Present | Open Chicago Streets title |
 | `202604280001` | Present | Present | Raise creator-video movie upload limit |
+| `202605070001` | Present | Present | User account legal acceptances |
+| `202605070002` | Present | Present | Harden user account legal acceptance grants |
 
 Status: Partial / Proof Pending.
 
 What this proves:
 
-- The remote migration history is aligned with the repo migration history through `202604280001`.
-- H1B1 local migration `202605070001_user_account_legal_acceptances.sql` is not applied remotely yet and must be handled in H1B2 before durable legal acceptance storage is claimed live.
+- The remote migration history is aligned with the repo migration history through `202605070002`.
+- H1B2 legal acceptance migrations are applied remotely.
 - Linked remote bucket proof shows `creator-videos.file_size_limit = 5368709120` with the expected video MIME allowlist.
 - There are no remote-applied migration versions in the displayed history that are absent locally.
 
@@ -116,7 +118,7 @@ This checklist combines actual remote migration alignment with local migration/g
 | `chat_threads`, `chat_thread_members`, `chat_messages` | Present by baseline | `202604190004` plus legacy source history | `_lib/chat.ts`, `app/chat/index.tsx`, `app/chat/[threadId].tsx` | Yes for Chi'lly Chat |
 | `app_configurations` | Present by baseline | `202604190004` plus legacy hardening source history | `_lib/appConfig.ts`, `app/admin.tsx` | Yes for admin/app config |
 | `creator_permissions` | Present by baseline | `202604190004` plus legacy hardening source history | `_lib/monetization.ts`, `_lib/channelReadModels.ts`, `app/channel-settings.tsx` | V1 feature-dependent |
-| `user_account_legal_acceptances` | Local pending only; not applied remotely yet | `202605070001` | `_lib/accountLegalAcceptance.ts`, future H1B2 signup write path | Yes before claiming durable age/legal acceptance storage |
+| `user_account_legal_acceptances` | Present remotely with anon table access denied and owner-only authenticated RLS | `202605070001`, `202605070002` | `_lib/accountLegalAcceptance.ts`, `app/(auth)/signup.tsx` | Yes for durable age/legal acceptance storage |
 
 Unknown / proof-pending:
 
@@ -183,8 +185,8 @@ Do not commit `.env`, service-role secrets, database passwords, or Edge Function
 
 1. Confirm Supabase project ref is `bmkkhihfbmsnnmcqkoly`.
 2. Confirm the project is the intended production/Public v1 project.
-3. Confirm migration history in the Supabase dashboard matches `supabase migration list` through `202604280001`.
-4. Confirm pending local migrations, including `202605070001_user_account_legal_acceptances.sql`, are audited before any future remote application.
+3. Confirm migration history in the Supabase dashboard matches `supabase migration list` through `202605070002`.
+4. Confirm no unexpected pending local migrations exist before any future remote application.
 5. Confirm `creator-videos` bucket exists, is private, has `file_size_limit = 5368709120`, and the Supabase Storage global file-size limit is at least that high.
 6. Confirm RLS is enabled on v1 tables:
    - `videos`
@@ -243,7 +245,8 @@ Proof should separate:
 | Area | Status | Reason | Next action |
 | --- | --- | --- | --- |
 | Project link | Partial | Link now points to `bmkkhihfbmsnnmcqkoly`, but local `supabase/.temp/` metadata is uncommitted and should stay that way | Leave `.temp` uncommitted; relink if a future clean checkout needs it |
-| Migration alignment | Partial / Proof Pending | `supabase migration list` previously showed local and remote aligned through `202604280001`; H1B1 now adds local pending `202605070001_user_account_legal_acceptances.sql` that is not applied remotely | Do not push migrations unless a future pending list is audited and explicitly authorized |
+| Migration alignment | Done for migration history / Proof Pending for full schema behavior | `supabase migration list` shows local and remote aligned through `202605070002` | Do not push future migrations unless a future pending list is audited and explicitly authorized |
+| Legal acceptance storage | Partial / Proof Pending | H1B2 remote migrations are applied, generated types include `user_account_legal_acceptances`, and anon REST reads return permission denied; runtime insert proof with a safe signup account is still pending | Run safe signup insert proof and owner-only read proof without exposing credentials |
 | Remote schema readiness | Partial | Applied migrations and generated types show required tables/columns, but remote lint/schema dump was blocked by DB login auth | Run linked lint/schema inspection with approved credentials |
 | Storage readiness | Partial / Proof Pending | Remote bucket row is proved private with 5 GiB limit and expected MIME allowlist, but project global file-size setting and Storage API owner/non-owner proof are not complete | Prove global file-size limit and Storage API owner/non-owner behavior |
 | RLS/security readiness | Proof Pending | Migration intent and prior local/remote focused proof exist; full live RLS proof is still required | Run live anon/owner/non-owner/operator proof |
@@ -254,7 +257,7 @@ Proof should separate:
 
 Run the next Supabase proof lane only after the backend/release owner provides an approved remote DB login path or runs the database checks from a configured environment:
 
-1. Confirm `supabase migration list` and identify any local pending migrations, including `202605070001_user_account_legal_acceptances.sql`.
+1. Confirm `supabase migration list` still aligns through the latest local migration.
 2. Run `supabase db lint --linked --schema public --fail-on none` without exposing the database password.
 3. Verify dashboard bucket settings for `creator-videos`, including `file_size_limit = 5368709120` and matching project Storage global file-size limit.
 4. Run focused live API/RLS proof for creator video public/draft/non-owner behavior.

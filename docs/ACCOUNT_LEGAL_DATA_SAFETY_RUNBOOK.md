@@ -28,7 +28,7 @@ Use current official docs during final setup because requirements can change:
 
 | Surface | Route / config | Reachable from Settings | Reachable from Support | Current status | External URL/domain need |
 | --- | --- | --- | --- | --- | --- |
-| Signup acceptance | `app/(auth)/signup.tsx`; local schema foundation `supabase/migrations/202605070001_user_account_legal_acceptances.sql`; helper `_lib/accountLegalAcceptance.ts` | N/A | N/A | Signup now shows visible 18+ copy, requires the user to check `I confirm I am 18 or older.` before account creation is attempted, and shows Terms of Service, Privacy Policy, and Community Guidelines acceptance copy with links before account creation. H1A current-build Android proof passed. H1B1 local private-table schema foundation is pushed for future durable age/terms/privacy acceptance storage, but no runtime write or remote migration has been applied yet. | Final wording needs attorney/legal approval before launch; H1B2 must explicitly apply/prove the schema, regenerate types, and wire runtime writes before claiming durable acceptance storage |
+| Signup acceptance | `app/(auth)/signup.tsx`; `supabase/migrations/202605070001_user_account_legal_acceptances.sql`; `supabase/migrations/202605070002_harden_user_account_legal_acceptance_grants.sql`; helper `_lib/accountLegalAcceptance.ts` | N/A | N/A | Signup now shows visible 18+ copy, requires the user to check `I confirm I am 18 or older.` before account creation is attempted, and shows Terms of Service, Privacy Policy, and Community Guidelines acceptance copy with links before account creation. H1B2 legal acceptance storage is pushed: remote schema is applied, generated types are regenerated, signup writes age/terms/privacy acceptance after account creation succeeds with an authenticated session, and anon table access is denied. | Final wording needs attorney/legal approval before launch; runtime signup write proof with a safe disposable account and release smoke remain pending |
 | Privacy Policy | `app/privacy.tsx`; runtime env `EXPO_PUBLIC_PRIVACY_POLICY_URL`; fallback `https://live.chillywoodstream.com/privacy` | Yes; Settings opens configured external URL first, otherwise bundled `/privacy` | Yes | Expanded route exists with account/profile/channel, uploads, chat, room, billing, diagnostics, provider, retention, deletion, and safety/legal data categories; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Privacy Policy URL must be approved and entered in Play Console |
 | Terms of Service | `app/terms.tsx`; runtime env `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`; fallback `https://live.chillywoodstream.com/terms` | Yes; Settings opens configured external URL first, otherwise bundled `/terms` | Yes | Expanded route exists with acceptance, Profile/Channel, UGC, creator upload, Watch-Party/Live/Chat, Premium, moderation, liability/indemnification placeholders, and legal-review notices; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Terms URL must be approved and available without login |
 | Account Deletion | `app/account-deletion.tsx`; runtime env `EXPO_PUBLIC_ACCOUNT_DELETION_URL`; fallback `https://live.chillywoodstream.com/account-deletion` | Yes; Settings opens configured external URL first, otherwise bundled `/account-deletion` | Yes; signed-in support can start request/help | Expanded request-based page exists; no destructive deletion runs in app; configured fallback returned HTTP 200 during this audit; final backend/support process pending | Final public account deletion URL must be approved, reachable without login where Play requires it, and entered in Play Console |
@@ -60,7 +60,7 @@ Implemented in this lane:
 Still pending:
 
 - Attorney/legal approval of final Terms, Privacy, Community Guidelines, Copyright/DMCA, account deletion, and signup acceptance wording.
-- Durable storage runtime wiring for 18+ confirmation and, if required, terms/privacy acceptance timestamps. H1B1 added the local private-table schema foundation, but it does not write Supabase data at runtime, does not apply remote migrations, does not regenerate generated database types, and does not make persisted acceptance live.
+- Runtime signup proof with a safe disposable account. H1B2 wires storage for authenticated signup sessions, but the implementation/proof pass did not create a real account.
 - Final hosted public URLs for legal/support pages, especially Community Guidelines and Copyright/DMCA if Play listing links to them.
 - Final DMCA agent/contact decision and any required U.S. Copyright Office designated-agent registration.
 - Final backend deletion/de-identification and retention runbook.
@@ -118,7 +118,7 @@ This table is a preparation aid for manual Google Play Console entry. Use Google
 Current repo-ready posture:
 
 - Signup now presents Terms, Privacy Policy, and Community Guidelines acceptance copy with links before account creation.
-- Signup now presents the H1A 18+ checkbox confirmation before account creation. H1B1 adds the local private-table foundation for durable acceptance, but the confirmation is not written to the backend at runtime yet.
+- Signup now presents the H1A 18+ checkbox confirmation before account creation. H1B2 writes backed age/terms/privacy acceptance after account creation succeeds with an authenticated session. If signup returns no session because email confirmation is required, the app does not fake the write.
 - Community Guidelines route exists and covers creator uploads, profiles, Chi'lly Chat, Watch-Party rooms, Live Stage, reports, and enforcement.
 - Copyright/DMCA route exists and explains takedown notice information, review, removal, counter-notice posture, repeat-infringer posture, and pending DMCA agent/legal approval.
 - Creator-video reports exist through Player/report sheet ownership.
@@ -134,7 +134,7 @@ Still proof-pending:
 - Hidden/removed creator videos are absent from public Profile/Channel and Player routes in Android/runtime proof.
 - Support/account deletion feedback reaches the expected support queue.
 - Public hosted Community Guidelines and Copyright/DMCA pages are reachable without login if Play Store listing links to them.
-- H1B2 applies/proves the `user_account_legal_acceptances` table remotely, regenerates generated database types from the real schema, wires signup acceptance writes after account creation succeeds, and proves existing users/admin/test accounts are not unexpectedly blocked.
+- Runtime signup proof with a safe disposable account confirms a real `user_account_legal_acceptances` row is written after account creation succeeds with an authenticated session.
 
 ## Manual Play Console Steps
 
@@ -178,6 +178,7 @@ Done:
 - Signup acceptance copy now links Terms, Privacy Policy, and Community Guidelines before account creation.
 - H1A 18+ signup confirmation is pushed and current-build Android-proved: unchecked signup shows the 18+ required alert before account creation, checked signup falls through to the existing signup validation path, and the signup legal links plus Sign In handoff still work.
 - H1B1 private legal acceptance schema foundation is pushed locally: `public.user_account_legal_acceptances` is defined with owner-only authenticated RLS, and `_lib/accountLegalAcceptance.ts` provides pure version/payload helpers. The foundation intentionally avoids `user_profiles` for private legal timestamps.
+- H1B2 legal acceptance storage is pushed: remote migrations `202605070001` and `202605070002` are applied, generated database types are regenerated, signup writes backed age/terms/privacy acceptance for authenticated signup sessions, and anon reads to the table return permission denied.
 - Bundled legal routes exist for Privacy, Terms, Account Deletion, Community Guidelines, and Copyright/DMCA.
 - Privacy, Terms, Account Deletion, Community Guidelines, Copyright/DMCA, and Support are expanded beyond placeholder pages and now contain structured, launch-ready draft content.
 - Settings links to privacy, terms, community guidelines, copyright/DMCA, and account deletion.
@@ -190,7 +191,7 @@ External Setup Pending:
 
 - Final legal review and approval of Privacy, Terms, Community Guidelines, Copyright/DMCA, and account deletion copy.
 - Final legal review and approval of signup acceptance wording.
-- H1B2 durable age/legal acceptance storage runtime wiring if the launch owner needs persisted account-level confirmation before release. H1B2 must apply/prove the H1B1 migration remotely, regenerate types from the actual schema, and wire runtime writes before persisted acceptance can be claimed.
+- Runtime signup acceptance write proof with a safe disposable account, plus release-build proof.
 - Final DMCA agent/contact process and any required designated-agent registration.
 - Final public support email/URL and account deletion support process/SLA.
 - Final backend deletion/de-identification and retention runbook.
@@ -201,7 +202,7 @@ External Setup Pending:
 Proof Pending:
 
 - Signup H1A route smoke passed on the current Android dev-client build for legal links, 18+ unchecked blocking, checked fallback to existing validation, and Sign In handoff; release-build proof and real existing-account login proof remain pending.
-- H1B1 schema foundation was typecheck/diff-check validated before commit, but remote migration application, generated type regeneration, runtime signup write proof, and release proof remain pending.
+- H1B2 schema/type/runtime wiring was typecheck/diff-check validated before commit, remote migration alignment was proved, and anon REST denial was proved. Runtime signup write proof with a safe disposable account and release proof remain pending.
 - Android Settings legal/support/account deletion route smoke.
 - Release build opens configured URLs correctly.
 - Support/account deletion request lands in expected backend/support queue.
@@ -210,4 +211,4 @@ Proof Pending:
 
 ## Exact Next Action
 
-Legal/support owner should finalize the signup acceptance wording, account deletion process, DMCA agent/contact process, and public URL set, then manually complete Google Play Data Safety, UGC, copyright, and account deletion entries using this runbook. Engineering should handle H1B2 legal acceptance remote/typegen/runtime wiring as a separate explicitly authorized pass before claiming durable account-level acceptance. Engineering should not implement destructive account deletion until the backend deletion/de-identification and retention plan is explicitly approved.
+Legal/support owner should finalize the signup acceptance wording, account deletion process, DMCA agent/contact process, and public URL set, then manually complete Google Play Data Safety, UGC, copyright, and account deletion entries using this runbook. Engineering should run a safe disposable-account runtime proof for H1B2 legal acceptance writes before marking signup persistence fully runtime-proved. Engineering should not implement destructive account deletion until the backend deletion/de-identification and retention plan is explicitly approved.
