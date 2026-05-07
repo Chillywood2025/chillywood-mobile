@@ -64,19 +64,20 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - free users see ads at launch
 - Premium users see zero ads
 - ads support free browsing
-- Ads Launch Foundation V1A/V1B/V1C and Ads Config V1D1 are pushed as provider-neutral foundation only
+- Ads Launch Foundation V1A/V1B/V1C and Ads Config V1D1/V1D2 are pushed as provider-neutral foundation only
 - no real ads render by default; Ads V1B adds a Home native/feed placeholder foundation and Ads V1C adds a placeholder interstitial controller foundation that both stay hidden in normal runtime while `ads_enabled` is false
 - Ads Config V1D1 adds optional normalized `app_configurations.config.adsLaunch` foundation under `_lib/appConfig.ts`, defaulting through code-owned `ADS_LAUNCH_CONFIG_DEFAULTS`; Admin Ads reads it only for read-only status copy
-- Admin `runtimeControls.ads_enabled` is not currently the Ads Launch source of truth; Ads V1A/V1B/V1C runtime owners still read `ADS_LAUNCH_CONFIG_DEFAULTS` unless a future scoped runtime-read pass explicitly wires normalized app-config reads
+- Ads V1D2 wires Native/feed and Interstitial runtime fallback reads to normalized `app_configurations.config.adsLaunch` through `hooks/useAdsLaunchConfig.ts`; default runtime still hides ads because `ads_enabled=false` and the placeholder provider is not connected
+- Admin `runtimeControls.ads_enabled` is not currently the Ads Launch source of truth and must not be layered into Ads Launch runtime without a separate source-of-truth decision
 - no AppLovin SDK, Unity LevelPlay SDK, Unity Ads SDK, or AdMob SDK is installed for ads
-- no real ad IDs, real provider initialization, CTV inventory, fake ad revenue, sponsor revenue, creator earnings, payout balances, invoices, or CTV revenue were added by Ads V1A/V1B/V1C/V1D1
+- no real ad IDs, real provider initialization, CTV inventory, fake ad revenue, sponsor revenue, creator earnings, payout balances, invoices, or CTV revenue were added by Ads V1A/V1B/V1C/V1D1/V1D2
 - Ads V1A defaults `ads_enabled` to false and uses a placeholder provider that reports not connected and does not call any SDK
 - Ads V1A added central config, eligibility, provider, placeholder provider, session/daily cap, active browsing time, and read-only/foundation Admin Ads status
 - Ads V1B added one native/feed placeholder placement on Home through `NativeAdSlot`
 - Ads V1B native/feed placement renders only after V1A eligibility passes, Premium/ad-free users never see it, eligible placeholder shows record only once per placement, base native/feed session cap is 1, long-use unlock allows a second native/feed placement after 120 active browsing minutes, and daily native/feed cap is 3
 - Ads V1C added a null-rendering placeholder interstitial controller through `components/ads/InterstitialController.tsx` and `app/_layout.tsx`
 - Ads V1C ignores first route mount, considers route transitions only, calls central eligibility with `placementKind: "interstitial"`, records placeholder interstitial shows only after eligibility and placeholder-provider success, and preserves Premium zero ads, 180-second first delay, 600-second spacing, session cap 3 plus long-use +2, daily cap 6, and forbidden route/context blocking
-- Ads V1D1 did not change normal runtime ad behavior, did not add working Admin ad toggles, did not use Admin `runtimeControls.ads_enabled`, and did not wire Home `NativeAdSlot` or root `InterstitialController` to app config yet
+- Ads V1D2 did not add working Admin ad toggles, did not use Admin `runtimeControls.ads_enabled`, and did not change the default hidden runtime; it only lets `NativeAdSlot` and `InterstitialController` read normalized `app_config.adsLaunch` when no explicit proof/test config override is provided
 - AppLovin MAX is the primary ad mediation direction
 - Unity LevelPlay / Unity Ads may be added through AppLovin MAX later
 - do not build an AdMob-only ad system

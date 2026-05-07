@@ -143,12 +143,12 @@ Admin V1B2I-B is pushed as the tenth real runtime control enforcement. Room invi
 
 Admin V1B2I-C is pushed as the eleventh real runtime control enforcement. Watch-Party and Live Stage room-native text/comment submits in `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` read `runtimeControls.chat_enabled` before `sendPartyMessageRecord`; when false, only new room-native text/comment writes are paused. Existing room message reads, room layouts, LiveKit behavior, Premium gates, invite behavior/system share, `chat_attachments_enabled`, attachment picker behavior, `_lib/watchParty.ts`, `_lib/chat.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state remain unchanged. Admin may label Chat as `Enforced on chat, invites, and room comments`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
 
-Admin V1B runtimeControls closeout truth is recorded. `new_accounts_enabled`, `uploads_enabled`, `comments_enabled`, `attachments_enabled`, `chat_enabled`, `chat_attachments_enabled`, `creator_posting_enabled`, and `profile_posting_enabled` are enforced only on the scoped pushed surfaces listed above. `live_first_enabled`, `live_watch_party_enabled`, `watch_party_live_enabled`, and `max_upload_size_mb` are configured foundation-only and must not be described as enforced. Admin `runtimeControls.ads_enabled` is not the current Ads Launch source of truth; Ads V1A/V1B/V1C read the Ads Launch config foundation and remain disabled by default. `premium_required_for_live` and `premium_required_for_watch_party` are not runtime switches; Premium access remains enforced by the Premium helper layer and must not be weakened.
+Admin V1B runtimeControls closeout truth is recorded. `new_accounts_enabled`, `uploads_enabled`, `comments_enabled`, `attachments_enabled`, `chat_enabled`, `chat_attachments_enabled`, `creator_posting_enabled`, and `profile_posting_enabled` are enforced only on the scoped pushed surfaces listed above. `live_first_enabled`, `live_watch_party_enabled`, `watch_party_live_enabled`, and `max_upload_size_mb` are configured foundation-only and must not be described as enforced. Admin `runtimeControls.ads_enabled` is not the current Ads Launch source of truth; Ads V1D2 runtime owners read normalized `app_config.adsLaunch` and remain disabled by default while `ads_enabled=false`. `premium_required_for_live` and `premium_required_for_watch_party` are not runtime switches; Premium access remains enforced by the Premium helper layer and must not be weakened.
 
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Ads Launch Foundation Rule
-Ads Launch Foundation V1A/V1B/V1C and Ads Config V1D1 are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+Ads Launch Foundation V1A/V1B/V1C and Ads Config V1D1/V1D2 are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
 
 Current Ads V1A owners:
 - `_lib/ads/adConfig.ts`
@@ -175,9 +175,15 @@ Current Ads Config V1D1 owners:
 - `_lib/appConfig.ts` for optional normalized `app_configurations.config.adsLaunch` under existing app config JSON
 - `app/admin.tsx` for read-only/foundation Admin Ads source/status copy only
 
+Current Ads V1D2 owners:
+- `hooks/useAdsLaunchConfig.ts` for cached/default-first normalized `adsLaunch` runtime reads
+- `components/ads/NativeAdSlot.tsx` for Native/feed fallback to normalized app-config Ads Launch settings when no explicit proof/test config is passed
+- `components/ads/InterstitialController.tsx` for Interstitial fallback to normalized app-config Ads Launch settings when no explicit proof/test config is passed
+- `app/admin.tsx` for read-only/foundation Admin Ads source/status copy only
+
 Ads V1A defaults `ads_enabled` to false and `ads_provider` to `placeholder`. The placeholder provider reports not connected and must not call any SDK, use real ad unit IDs, initialize providers, or render real ads.
 
-Ads Config V1D1 normalizes `config.adsLaunch` through code-owned `ADS_LAUNCH_CONFIG_DEFAULTS` and does not wire runtime ad owners to app config yet. Home `NativeAdSlot` and root `InterstitialController` still use defaults unless a future scoped pass explicitly provides normalized app-config reads. Admin `runtimeControls.ads_enabled` is not the current Ads Launch runtime source.
+Ads Config V1D1 normalizes `config.adsLaunch` through code-owned `ADS_LAUNCH_CONFIG_DEFAULTS`. Ads V1D2 wires `NativeAdSlot` and `InterstitialController` fallback runtime reads to normalized `app_config.adsLaunch` through `hooks/useAdsLaunchConfig.ts`. Normal runtime must still stay hidden by default because `ads_enabled` defaults false and the placeholder provider is not connected. Admin `runtimeControls.ads_enabled` is not the Ads Launch runtime source.
 
 Ads V1B adds one native/feed placeholder foundation slot on Home. Normal runtime still hides it because `ads_enabled` defaults false. `NativeAdSlot` may render only after central eligibility passes, Premium/ad-free users must never see it or increment counters, native/feed base session cap is 1, long-use unlock allows a second native/feed placement after 120 active browsing minutes, daily native/feed cap is 3, and forbidden routes/contexts stay blocked.
 

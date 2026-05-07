@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Ads V1D2 runtime-read implementation/proof.
+Next launch lane selection after Ads V1D2.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -16,9 +16,10 @@ Product direction:
 - Ads V1A/V1B/V1C are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
 - Ads V1C added only placeholder interstitial decision/controller foundation. It did not install SDKs, add real IDs, initialize AppLovin/Unity/AdMob, render real ads, add CTV inventory, show fake ad revenue, or change forbidden surfaces.
 - Ads Config V1D1 app-config `adsLaunch` resolver foundation is pushed. `_lib/appConfig.ts` now normalizes optional `app_configurations.config.adsLaunch` through code-owned `ADS_LAUNCH_CONFIG_DEFAULTS`, and `app/admin.tsx` reads `experienceConfig.adsLaunch` for read-only Admin Ads status copy.
+- Ads V1D2 runtime-read foundation is pushed. `hooks/useAdsLaunchConfig.ts` reads cached/default app config first, then safely reads `readAppConfig()` and returns normalized `adsLaunch`; `NativeAdSlot` and `InterstitialController` use that source when no explicit proof/test config override is passed.
 - Admin Command Center sign-in entry is pushed. `app/(auth)/login.tsx` supports a normal admin-intent sign-in state with `redirectTo=/admin`, stores no credentials, hard-codes no account, adds no bypass, and still relies on canonical `/admin` signed-in plus backend platform-role checks after sign-in.
 - Normal runtime must remain honest: ads stay disabled by default because `ads_enabled=false`.
-- Runtime ad owners are not wired to app config yet: Home `NativeAdSlot` and root `InterstitialController` still use `ADS_LAUNCH_CONFIG_DEFAULTS` when no explicit override is provided.
+- Runtime ad owners now read normalized `app_config.adsLaunch` with default-disabled fallback; normal runtime must remain hidden because normalized `ads_enabled=false` and the placeholder provider is not connected.
 - Admin V1B1 runtime controls config foundation is pushed. Typed defaults live under `app_configurations.config.runtimeControls`; Admin Kill Switches shows read-only `Configured foundation` and `Not enforced yet`; no working toggles or runtime enforcement were added.
 - Admin V1B2A new-account enforcement is pushed. Signup reads `runtimeControls.new_accounts_enabled` after email/password and 18+ confirmation pass, blocks before `supabase.auth.signUp` when false, preserves default true behavior, and updates Admin New Accounts copy as read-only `Enforced on signup`.
 - Admin V1B2B upload enforcement is pushed. Channel Studio compatibility route `app/channel-settings.tsx` reads normalized `runtimeControls.uploads_enabled` from existing app config and blocks only new creator-video upload submit before storage/upload work when false. Default true and config-read fallback true preserve normal uploads. Existing video metadata edit, publish/unpublish/delete, Open Player, picker behavior, storage helpers, RLS, migrations, generated types, and the single `Video Upload` form remain unchanged. Admin Uploads copy is read-only `Enforced on upload`; no working Admin toggle was added.
@@ -31,7 +32,7 @@ Product direction:
 - Admin V1B2I-A standalone Chi'lly Chat enforcement is pushed. `app/chat/[threadId].tsx` reads normalized `runtimeControls.chat_enabled` and blocks only standalone message send before optimistic insertion and `sendChatMessage`, and standalone thread call start before `startChatThreadCall`, when false. `app/chat/index.tsx` blocks only the Rachi official starter thread before `getOrCreateDirectThread`, and `app/profile/[userId].tsx` blocks only non-self Profile-to-chat entry before direct thread creation. `/chat` and `/chat/[threadId]` remain readable. Existing inbox reads, thread reads, realtime refresh, mark-read, reports, profile opens, signed-in/thread gates, attachment picker selection, `chat_attachments_enabled`, room comments, room invites, `_lib/chat.ts`, `_lib/watchParty.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on standalone chat`; no working Admin toggle was added.
 - Admin V1B2I-B chat invite enforcement is pushed. `components/chat/internal-invite-sheet.tsx` reads normalized `runtimeControls.chat_enabled` and blocks only room invite direct-message sends before `sendDirectInviteMessage` when false. System share fallback remains available. Existing room text comments, room layouts, LiveKit behavior, Premium gates, invite sheet search, `chat_attachments_enabled`, `_lib/chat.ts`, `_lib/watchParty.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on chat and invites`; no working Admin toggle was added.
 - Admin V1B2I-C room comment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` read normalized `runtimeControls.chat_enabled` and block only room-native text/comment submits before `sendPartyMessageRecord` when false. Existing room message reads, room layouts, LiveKit behavior, Premium gates, invite behavior/system share, `chat_attachments_enabled`, attachment picker behavior, `_lib/watchParty.ts`, `_lib/chat.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on chat, invites, and room comments`; no working Admin toggle was added.
-- Admin V1B runtimeControls closeout truth is recorded. Enforced controls are limited to pushed scoped surfaces: `new_accounts_enabled`, `uploads_enabled`, `comments_enabled`, `attachments_enabled`, `chat_enabled`, `chat_attachments_enabled`, `creator_posting_enabled`, and `profile_posting_enabled`. `live_first_enabled`, `live_watch_party_enabled`, `watch_party_live_enabled`, and `max_upload_size_mb` are configured foundation-only and not enforced. Admin `runtimeControls.ads_enabled` is not the same source as Ads Launch config; Ads V1 reads `ADS_LAUNCH_CONFIG_DEFAULTS`/Ads config foundation and remains disabled by default. `premium_required_for_live` and `premium_required_for_watch_party` are not runtime switches; Premium gates are enforced separately through Premium access helpers and must not be weakened.
+- Admin V1B runtimeControls closeout truth is recorded. Enforced controls are limited to pushed scoped surfaces: `new_accounts_enabled`, `uploads_enabled`, `comments_enabled`, `attachments_enabled`, `chat_enabled`, `chat_attachments_enabled`, `creator_posting_enabled`, and `profile_posting_enabled`. `live_first_enabled`, `live_watch_party_enabled`, `watch_party_live_enabled`, and `max_upload_size_mb` are configured foundation-only and not enforced. Admin `runtimeControls.ads_enabled` is not the same source as Ads Launch config; Ads V1D2 runtime owners read normalized `app_config.adsLaunch` and remain disabled by default while `ads_enabled=false`. `premium_required_for_live` and `premium_required_for_watch_party` are not runtime switches; Premium gates are enforced separately through Premium access helpers and must not be weakened.
 
 Required proof before the next Admin V1B2 runtime-control enforcement:
 
@@ -44,13 +45,11 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Ads V1D2 Runtime Read:
-   - implement the next no-SDK/no-real-rendering pass to read normalized `app_config.adsLaunch` into ad runtime owners
-   - default runtime must stay disabled because normalized `ads_enabled` remains false
-   - do not layer Admin `runtimeControls.ads_enabled` into Ads Launch runtime
-   - preserve Premium/ad-free zero ads and forbidden route/context blocking
-   - do not add AppLovin, Unity, AdMob, real ad IDs, provider initialization, real rendering, CTV inventory, fake revenue, or working Admin toggles
-   - keep Admin Kill Switches read-only unless a separate backed write-control prompt is provided
+1. Public V1 current-build release proof / launch readiness audit:
+   - prove the current pushed app opens core surfaces on device
+   - verify login/admin entry, Home, Explore, Channel Studio, Profile, Player, Watch-Party gate, Settings Support/legal links, and `/admin` foundation tabs
+   - verify default ads remain hidden while `ads_enabled=false`
+   - do not implement new behavior during the proof pass
 2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
    - keep provider wrapper architecture
@@ -112,7 +111,8 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Ads V1C did not add real ad rendering, SDKs, real IDs, provider initialization, CTV inventory, fake revenue, or payout/sponsor/creator earnings systems.
 - Ads Config V1D1 is pushed.
 - Ads Config V1D1 added optional normalized `adsLaunch` under `app_configurations.config`, defaulting through `ADS_LAUNCH_CONFIG_DEFAULTS`, and changed only Admin Ads read-only status copy to display the normalized source/values.
-- Ads Config V1D1 did not wire runtime ad slots/controllers to app config yet, did not use Admin `runtimeControls.ads_enabled`, did not add working Admin ad toggles, and did not add SDKs, real IDs, provider initialization, real rendering, CTV inventory, fake revenue, migrations, generated database types, RLS changes, package/native config, or Supabase remote changes.
+- Ads V1D2 is pushed.
+- Ads V1D2 added `hooks/useAdsLaunchConfig.ts` and wired `NativeAdSlot` plus `InterstitialController` fallback runtime reads to normalized `app_config.adsLaunch`. It did not use Admin `runtimeControls.ads_enabled`, did not add working Admin ad toggles, and did not add SDKs, real IDs, provider initialization, real rendering, CTV inventory, fake revenue, migrations, generated database types, RLS changes, package/native config, or Supabase remote changes.
 - Public V1 Hardening H1A 18+ Signup Confirmation is pushed.
 - H1A added a no-migration checkbox gate to `app/(auth)/signup.tsx`: signup shows `Chi'llywood is for users 18 and older.`, requires `I confirm I am 18 or older.`, blocks before `supabase.auth.signUp` with the required alert if unchecked, and preserves legal links plus Sign In handoff.
 - H1B2 legal acceptance storage is pushed.
