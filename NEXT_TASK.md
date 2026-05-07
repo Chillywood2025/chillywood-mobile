@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Audit/spec Admin V1B2F `attachments_enabled` kill switch enforcement after exact attachment-surface mapping.
+Implement Admin V1B2G `chat_attachments_enabled` kill switch enforcement for standalone Chi'lly Chat attachments only.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -22,6 +22,7 @@ Product direction:
 - Admin V1B2C comments enforcement is pushed. Profile post comment/reply submit and creator-video comment/reply submit read normalized `runtimeControls.comments_enabled` after existing validation and before backed comment create or comment attachment upload. Default true preserves normal comments. Existing comment reads, deletes, reports, attachment picker selection, Watch-Party comments, Live Stage comments, Chi'lly Chat messages, Chi'lly Circle, profile privacy, Player controls/layout, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Comments copy is read-only `Enforced on comments`; no working Admin toggle was added.
 - Admin V1B2D profile posting enforcement is pushed. Profile post creation submit reads normalized `runtimeControls.profile_posting_enabled` after owner/busy, empty-body, and length checks and before backed Profile post create or post attachment upload. Default true preserves normal Profile posting. Existing Profile post reads, comments/replies, likes, deletes, reports, attachment picker selection, Chi'lly Circle, profile privacy, creator video upload, Channel Studio, Public Channel, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Profile Posting copy is read-only `Enforced on profile posts`; no working Admin toggle was added.
 - Admin V1B2E creator posting enforcement is pushed. Channel Studio compatibility route `app/channel-settings.tsx` reads normalized `runtimeControls.creator_posting_enabled` from existing app config and blocks only new creator event creation before `createCreatorEvent` when false. Default true preserves normal creator event creation. Existing creator event edits through `updateCreatorEvent`, creator-video upload, video metadata edit, publish/unpublish/delete, Profile posts, comments/replies, attachments, Channel Studio layout, Public Channel, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Creator Posting copy is read-only `Enforced on creator events`; no working Admin toggle was added.
+- Admin V1B2F social attachment enforcement is pushed. `app/profile/[userId].tsx` and `app/player/[id].tsx` read normalized `runtimeControls.attachments_enabled` and block only selected non-chat social attachments before parent post/comment create and before attachment upload. Profile post attachments, Profile post comment/reply attachments, and creator-video comment/reply attachments are enforced. Text-only Profile posts/comments and creator-video comments remain governed by their existing posting/comment controls. Chat attachments, room attachments, `_lib/socialAttachments.ts`, `_lib/profilePosts.ts`, `_lib/creatorVideoComments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Attachments copy is read-only `Enforced on social attachments`; no working Admin toggle was added.
 
 Required proof before the next Admin V1B2 runtime-control enforcement:
 
@@ -34,12 +35,11 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Admin V1B2F Attachments Kill Switch Enforcement Audit/Spec:
-   - audit/spec first, then implement only one narrowly scoped real runtime read
-   - map every backed attachment submit path before implementation: Profile post attachments, Profile comment attachments, creator-video comment attachments, Chat attachments, and any other `_lib/socialAttachments.ts` owner
-   - decide whether broad `attachments_enabled` should control non-chat social attachments only while `chat_attachments_enabled` controls Chat, or whether a future prompt intentionally makes `attachments_enabled` global
-   - prove where blocking can happen before storage/upload work and before parent post/comment/message insert side effects, or document why helper-level enforcement would be unsafe
-   - preserve comments/posts/videos/chat reads, deletes, reports, privacy gates, RLS, migrations, generated types, Supabase remote state, and storage helpers unless a dedicated scoped prompt maps and proves that behavior
+1. Admin V1B2G Standalone Chi'lly Chat Attachment Kill Switch Enforcement:
+   - implement only `chat_attachments_enabled` in `/chat/[threadId]`
+   - block selected attachment sends before optimistic message insertion and before `sendChatMessage`
+   - preserve text-only sends, signed-in/thread gates, reads, realtime updates, mark-read, attachment picker selection, `_lib/chat.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state
+   - do not touch Watch-Party or Live Stage room attachments in this lane
    - keep Admin toggles read-only unless a separate backed write-control prompt is provided
 2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
@@ -84,6 +84,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Admin V1B2C comments enforcement is pushed. `app/profile/[userId].tsx` blocks only Profile post comment/reply submit when `runtimeControls.comments_enabled` is false, after signed-in, engageable-post, empty-body, and length checks and before `createProfilePostComment` or comment attachment upload. `app/player/[id].tsx` blocks only creator-video comment/reply submit when the same control is false, after creator-video route/source, signed-in, empty-body, and length checks and before `createCreatorVideoComment` or comment attachment upload. Admin marks Comments as read-only `Enforced on comments`; no working toggle was added.
 - Admin V1B2D profile posting enforcement is pushed. `app/profile/[userId].tsx` blocks only Profile post creation submit when `runtimeControls.profile_posting_enabled` is false, after owner/busy, empty-body, and length checks and before `createProfilePost` or post attachment upload. Admin marks Profile Posting as read-only `Enforced on profile posts`; no working toggle was added.
 - Admin V1B2E creator posting enforcement is pushed. `app/channel-settings.tsx` blocks only new creator event creation when `runtimeControls.creator_posting_enabled` is false, before `createCreatorEvent`. Existing `updateCreatorEvent` edits, creator-video upload, metadata edit, publish/unpublish/delete, Profile posts, comments/replies, attachments, Channel Studio layout, Public Channel, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin marks Creator Posting as read-only `Enforced on creator events`; no working toggle was added.
+- Admin V1B2F social attachment enforcement is pushed. `app/profile/[userId].tsx` and `app/player/[id].tsx` block selected non-chat social attachments when `runtimeControls.attachments_enabled` is false, before parent post/comment create and before attachment upload. Text-only posts/comments remain allowed where existing controls allow them. Admin marks Attachments as read-only `Enforced on social attachments`; no working toggle was added.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
