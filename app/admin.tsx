@@ -67,6 +67,11 @@ import {
   readAdminUsageReadModel,
   type AdminUsageReadModel,
 } from "../_lib/platformUsage";
+import {
+  formatFinanceFoundationCount,
+  readAdminFinanceReadModel,
+  type AdminFinanceReadModel,
+} from "../_lib/platformFinance";
 import { supabase } from "../_lib/supabase";
 import { moderateCreatorVideo, type CreatorVideoModerationStatus } from "../_lib/creatorVideos";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
@@ -190,6 +195,10 @@ type AdminV1ReadModel = AdminUsageReadModel & {
   loading: boolean;
 };
 
+type AdminFinanceReadModelWithLoading = AdminFinanceReadModel & {
+  loading: boolean;
+};
+
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
 const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "home", label: "Home" },
@@ -222,6 +231,16 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   participantMembershipRowsRead: null,
   bandwidthMeteringBytes: null,
   bandwidthMeteringRowsRead: null,
+  generatedAt: new Date(0).toISOString(),
+};
+const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
+  loading: false,
+  financeLedgerEventCount: null,
+  creatorPayoutLedgerEntryCount: null,
+  networkBillingAccountCount: null,
+  networkInvoiceRecordCount: null,
+  sponsorDealRecordCount: null,
+  platformFraudHoldCount: null,
   generatedAt: new Date(0).toISOString(),
 };
 type PlannedKillSwitchRow = {
@@ -672,6 +691,11 @@ const formatAdminV1Count = (value: number | null, loading: boolean) => {
   return value === null ? "Not connected yet" : String(value);
 };
 
+const formatAdminFinanceCount = (value: number | null, loading: boolean, singular: string, plural: string) => {
+  if (loading) return "Loading";
+  return formatFinanceFoundationCount(value, singular, plural);
+};
+
 const getCreatorVideoModerationActionLabel = (status: CreatorVideoModerationStatus) => {
   if (status === "hidden") return "Hide From Public";
   if (status === "removed") return "Remove From Public";
@@ -759,6 +783,8 @@ export default function AdminStudioScreen() {
     useState<PendingCreatorVideoModerationAction | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
+  const [adminFinanceReadModel, setAdminFinanceReadModel] =
+    useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
   const [form, setForm] = useState<EditorForm>({
     title: "",
     category: "",
@@ -821,6 +847,7 @@ export default function AdminStudioScreen() {
       setPendingCreatorVideoModeration(null);
       setAdminOpsNotice(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
+      setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       return;
     }
     void loadPlatformRoles();
@@ -841,11 +868,13 @@ export default function AdminStudioScreen() {
       setSafetyReports([]);
       setSafetyReportsLoading(false);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
+      setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       return;
     }
     loadTitles();
     loadExperienceConfig();
     void loadAdminV1ReadModel();
+    void loadAdminFinanceReadModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessAdmin]);
 
@@ -1063,6 +1092,31 @@ export default function AdminStudioScreen() {
     const activeLiveValue = formatAdminV1Count(adminV1ReadModel.activeLiveRoomCount, adminV1ReadModel.loading);
     const activeWatchPartyValue = formatAdminV1Count(adminV1ReadModel.activeWatchPartyCount, adminV1ReadModel.loading);
     const uploadsTodayValue = formatAdminV1Count(adminV1ReadModel.uploadsTodayCount, adminV1ReadModel.loading);
+    const financeLedgerValue = adminFinanceReadModel.loading
+      ? "Loading"
+      : adminFinanceReadModel.financeLedgerEventCount === null
+        ? "Money not connected yet"
+        : `${adminFinanceReadModel.financeLedgerEventCount} ledger event${adminFinanceReadModel.financeLedgerEventCount === 1 ? "" : "s"}`;
+    const payoutLedgerValue = adminFinanceReadModel.loading
+      ? "Loading"
+      : adminFinanceReadModel.creatorPayoutLedgerEntryCount === null
+        ? "Not active yet"
+        : `${adminFinanceReadModel.creatorPayoutLedgerEntryCount} ledger entr${adminFinanceReadModel.creatorPayoutLedgerEntryCount === 1 ? "y" : "ies"}`;
+    const networkLedgerValue = adminFinanceReadModel.loading
+      ? "Loading"
+      : adminFinanceReadModel.networkBillingAccountCount === null
+        ? "Not active yet"
+        : `${adminFinanceReadModel.networkBillingAccountCount} account foundation record${adminFinanceReadModel.networkBillingAccountCount === 1 ? "" : "s"}`;
+    const sponsorLedgerValue = adminFinanceReadModel.loading
+      ? "Loading"
+      : adminFinanceReadModel.sponsorDealRecordCount === null
+        ? "Not active yet"
+        : `${adminFinanceReadModel.sponsorDealRecordCount} sponsor deal record${adminFinanceReadModel.sponsorDealRecordCount === 1 ? "" : "s"}`;
+    const fraudHoldValue = adminFinanceReadModel.loading
+      ? "Loading"
+      : adminFinanceReadModel.platformFraudHoldCount === null
+        ? "Not connected yet"
+        : `${adminFinanceReadModel.platformFraudHoldCount} hold record${adminFinanceReadModel.platformFraudHoldCount === 1 ? "" : "s"}`;
 
     return [
       {
@@ -1143,41 +1197,49 @@ export default function AdminStudioScreen() {
       },
       {
         label: "Revenue",
-        value: "Money not connected yet",
-        body: "Premium entitlement counts may be visible, but subscription money and ad money are not backed here.",
-        tone: "unavailable",
+        value: financeLedgerValue,
+        body: adminFinanceReadModel.financeLedgerEventCount === null
+          ? "Premium entitlement counts may be visible, but subscription money and ad money are not backed here."
+          : "Finance ledger foundation can be read. Admin still shows counts only, not money totals.",
+        tone: adminFinanceReadModel.financeLedgerEventCount === null ? "unavailable" : "default",
         destination: "revenue",
       },
       {
         label: "Payouts",
-        value: "Not active yet",
-        body: "Creator payouts are not active yet.",
-        tone: "unavailable",
+        value: payoutLedgerValue,
+        body: "Creator payouts are not active yet. Ledger rows are not payout execution.",
+        tone: adminFinanceReadModel.creatorPayoutLedgerEntryCount === null ? "unavailable" : "default",
         destination: "payouts",
       },
       {
         label: "Networks",
-        value: "Not active yet",
-        body: "Network plans are not active yet.",
-        tone: "unavailable",
+        value: networkLedgerValue,
+        body: "Network plans are not active yet. Billing account records are foundation only.",
+        tone: adminFinanceReadModel.networkBillingAccountCount === null ? "unavailable" : "default",
         destination: "networks",
       },
       {
         label: "Sponsors",
-        value: "Not active yet",
-        body: "Sponsor tools are not active yet.",
-        tone: "unavailable",
+        value: sponsorLedgerValue,
+        body: "Sponsor tools are not active yet. Sponsor records do not create checkout or payouts.",
+        tone: adminFinanceReadModel.sponsorDealRecordCount === null ? "unavailable" : "default",
         destination: "sponsors",
       },
       {
         label: "Fraud",
-        value: "Not connected yet",
-        body: "Fraud holds are not connected yet.",
-        tone: "unavailable",
+        value: fraudHoldValue,
+        body: "Fraud hold records do not enforce account, monetization, upload, live, or payout restrictions.",
+        tone: adminFinanceReadModel.platformFraudHoldCount === null ? "unavailable" : "default",
         destination: "fraud",
       },
     ];
   }, [
+    adminFinanceReadModel.creatorPayoutLedgerEntryCount,
+    adminFinanceReadModel.financeLedgerEventCount,
+    adminFinanceReadModel.loading,
+    adminFinanceReadModel.networkBillingAccountCount,
+    adminFinanceReadModel.platformFraudHoldCount,
+    adminFinanceReadModel.sponsorDealRecordCount,
     adminV1ReadModel.activeLiveRoomCount,
     adminV1ReadModel.activeWatchPartyCount,
     adminV1ReadModel.loading,
@@ -1573,6 +1635,13 @@ export default function AdminStudioScreen() {
 
     const usageReadModel = await readAdminUsageReadModel();
     setAdminV1ReadModel({ ...usageReadModel, loading: false });
+  }, []);
+
+  const loadAdminFinanceReadModel = useCallback(async () => {
+    setAdminFinanceReadModel((current) => ({ ...current, loading: true }));
+
+    const financeReadModel = await readAdminFinanceReadModel();
+    setAdminFinanceReadModel({ ...financeReadModel, loading: false });
   }, []);
 
   const queueCreatorVideoModeration = useCallback((status: CreatorVideoModerationStatus) => {
@@ -3210,7 +3279,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>REVENUE</Text>
               <Text style={styles.configTitle}>Revenue</Text>
               <Text style={styles.configBody}>
-                Money totals are not shown unless real revenue data is backed.
+                Finance ledger foundation is read-only. Money totals are not shown unless real provider-backed ledger data is reconciled.
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
@@ -3218,6 +3287,22 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Finance ledger events</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.financeLedgerEventCount,
+                    adminFinanceReadModel.loading,
+                    "foundation event",
+                    "foundation events",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Counts only. This is not a live revenue total, ad money, sponsor money, or creator-facing money total.
+                </Text>
+              </View>
+            </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Premium entitlement counts</Text>
@@ -3229,7 +3314,7 @@ export default function AdminStudioScreen() {
               </View>
             </View>
             {[
-              "Subscription money is not connected yet.",
+              "Subscription money is not connected yet unless real finance ledger rows exist.",
               "Ads revenue is not connected yet.",
               "Creator revenue is not active yet.",
               "Sponsor revenue is not active yet.",
@@ -3251,13 +3336,29 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>PAYOUTS</Text>
               <Text style={styles.configTitle}>Payouts</Text>
-              <Text style={styles.configBody}>Creator payouts are not active yet.</Text>
+              <Text style={styles.configBody}>Creator payouts are not active yet. Ledger foundation rows do not move money.</Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Not active yet</Text>
             </View>
           </View>
           <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Creator payout ledger entries</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutLedgerEntryCount,
+                    adminFinanceReadModel.loading,
+                    "foundation entry",
+                    "foundation entries",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  No withdrawal button, payout approval, payout provider, KYC flow, or creator-facing balance is active.
+                </Text>
+              </View>
+            </View>
             {[
               "Future requirements: payout account, KYC, tax forms, fraud review.",
               "Planned hold period: 7-30 days.",
@@ -3286,6 +3387,33 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Network billing accounts</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkBillingAccountCount,
+                    adminFinanceReadModel.loading,
+                    "foundation account",
+                    "foundation accounts",
+                  )}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Network invoice records</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkInvoiceRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation record",
+                    "foundation records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>No invoice totals, billing actions, plan assignment, or overage calculation is active.</Text>
+              </View>
+            </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Future model</Text>
@@ -3323,6 +3451,22 @@ export default function AdminStudioScreen() {
           <View style={styles.configList}>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Sponsor deal records</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorDealRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation record",
+                    "foundation records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  No sponsor checkout, sponsor upload, approval action, payout split execution, or live sponsor money is active.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Future workflow</Text>
                 <Text style={styles.configListBody}>Creator submits sponsor/deal</Text>
                 <Text style={styles.configListBody}>Brand pays Chi'llywood</Text>
@@ -3348,13 +3492,29 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>FRAUD HOLDS</Text>
               <Text style={styles.configTitle}>Fraud Holds</Text>
-              <Text style={styles.configBody}>Fraud holds are not connected yet.</Text>
+              <Text style={styles.configBody}>Fraud hold foundation is read-only and does not enforce account or money restrictions.</Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
             </View>
           </View>
           <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Fraud hold records</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.platformFraudHoldCount,
+                    adminFinanceReadModel.loading,
+                    "foundation record",
+                    "foundation records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  No payout pause, monetization disable, upload/live restriction, or risk score is active.
+                </Text>
+              </View>
+            </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Planned hold reasons</Text>

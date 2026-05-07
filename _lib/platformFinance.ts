@@ -1,0 +1,81 @@
+import { supabase } from "./supabase";
+
+export const PLATFORM_FINANCE_LEDGER_EVENTS_TABLE = "platform_finance_ledger_events";
+export const CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE = "creator_payout_ledger_entries";
+export const NETWORK_BILLING_ACCOUNTS_TABLE = "network_billing_accounts";
+export const NETWORK_INVOICE_RECORDS_TABLE = "network_invoice_records";
+export const SPONSOR_DEAL_RECORDS_TABLE = "sponsor_deal_records";
+export const PLATFORM_FRAUD_HOLDS_TABLE = "platform_fraud_holds";
+
+export type AdminFinanceReadModel = {
+  financeLedgerEventCount: number | null;
+  creatorPayoutLedgerEntryCount: number | null;
+  networkBillingAccountCount: number | null;
+  networkInvoiceRecordCount: number | null;
+  sponsorDealRecordCount: number | null;
+  platformFraudHoldCount: number | null;
+  generatedAt: string;
+};
+
+type CountQueryResult = {
+  count: number | null;
+  error: unknown;
+};
+
+const financeClient = supabase as unknown as {
+  from: (table: string) => {
+    select: (
+      columns: string,
+      options?: { count?: "exact"; head?: boolean },
+    ) => PromiseLike<CountQueryResult>;
+  };
+};
+
+const safeRead = async <T>(loader: () => Promise<T>): Promise<T | null> => {
+  try {
+    return await loader();
+  } catch {
+    return null;
+  }
+};
+
+async function readTableCount(table: string) {
+  const { count, error } = await financeClient
+    .from(table)
+    .select("id", { count: "exact", head: true });
+  if (error) throw error;
+  return Number(count ?? 0);
+}
+
+export const formatFinanceFoundationCount = (value: number | null, singular: string, plural: string) => {
+  if (value === null) return "Not connected yet";
+  return `${value} ${value === 1 ? singular : plural} found.`;
+};
+
+export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel> {
+  const [
+    financeLedgerEventCount,
+    creatorPayoutLedgerEntryCount,
+    networkBillingAccountCount,
+    networkInvoiceRecordCount,
+    sponsorDealRecordCount,
+    platformFraudHoldCount,
+  ] = await Promise.all([
+    safeRead(() => readTableCount(PLATFORM_FINANCE_LEDGER_EVENTS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE)),
+    safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
+    safeRead(() => readTableCount(NETWORK_INVOICE_RECORDS_TABLE)),
+    safeRead(() => readTableCount(SPONSOR_DEAL_RECORDS_TABLE)),
+    safeRead(() => readTableCount(PLATFORM_FRAUD_HOLDS_TABLE)),
+  ]);
+
+  return {
+    financeLedgerEventCount,
+    creatorPayoutLedgerEntryCount,
+    networkBillingAccountCount,
+    networkInvoiceRecordCount,
+    sponsorDealRecordCount,
+    platformFraudHoldCount,
+    generatedAt: new Date().toISOString(),
+  };
+}
