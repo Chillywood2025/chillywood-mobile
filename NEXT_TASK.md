@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Audit/spec Admin V1B runtime-controls closeout before choosing the next enforcement candidate.
+Audit/spec Admin Ads `ads_enabled` source-of-truth before any Admin-to-Ads runtime wiring.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -28,6 +28,7 @@ Product direction:
 - Admin V1B2I-A standalone Chi'lly Chat enforcement is pushed. `app/chat/[threadId].tsx` reads normalized `runtimeControls.chat_enabled` and blocks only standalone message send before optimistic insertion and `sendChatMessage`, and standalone thread call start before `startChatThreadCall`, when false. `app/chat/index.tsx` blocks only the Rachi official starter thread before `getOrCreateDirectThread`, and `app/profile/[userId].tsx` blocks only non-self Profile-to-chat entry before direct thread creation. `/chat` and `/chat/[threadId]` remain readable. Existing inbox reads, thread reads, realtime refresh, mark-read, reports, profile opens, signed-in/thread gates, attachment picker selection, `chat_attachments_enabled`, room comments, room invites, `_lib/chat.ts`, `_lib/watchParty.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on standalone chat`; no working Admin toggle was added.
 - Admin V1B2I-B chat invite enforcement is pushed. `components/chat/internal-invite-sheet.tsx` reads normalized `runtimeControls.chat_enabled` and blocks only room invite direct-message sends before `sendDirectInviteMessage` when false. System share fallback remains available. Existing room text comments, room layouts, LiveKit behavior, Premium gates, invite sheet search, `chat_attachments_enabled`, `_lib/chat.ts`, `_lib/watchParty.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on chat and invites`; no working Admin toggle was added.
 - Admin V1B2I-C room comment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` read normalized `runtimeControls.chat_enabled` and block only room-native text/comment submits before `sendPartyMessageRecord` when false. Existing room message reads, room layouts, LiveKit behavior, Premium gates, invite behavior/system share, `chat_attachments_enabled`, attachment picker behavior, `_lib/watchParty.ts`, `_lib/chat.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat copy is read-only `Enforced on chat, invites, and room comments`; no working Admin toggle was added.
+- Admin V1B runtimeControls closeout truth is recorded. Enforced controls are limited to pushed scoped surfaces: `new_accounts_enabled`, `uploads_enabled`, `comments_enabled`, `attachments_enabled`, `chat_enabled`, `chat_attachments_enabled`, `creator_posting_enabled`, and `profile_posting_enabled`. `live_first_enabled`, `live_watch_party_enabled`, `watch_party_live_enabled`, and `max_upload_size_mb` are configured foundation-only and not enforced. Admin `runtimeControls.ads_enabled` is not the same source as Ads Launch config; Ads V1 reads `ADS_LAUNCH_CONFIG_DEFAULTS`/Ads config foundation and remains disabled by default. `premium_required_for_live` and `premium_required_for_watch_party` are not runtime switches; Premium gates are enforced separately through Premium access helpers and must not be weakened.
 
 Required proof before the next Admin V1B2 runtime-control enforcement:
 
@@ -40,12 +41,13 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Admin V1B Runtime Controls Closeout Audit/Spec:
-   - inventory remaining configured controls and identify which ones are already enforced, foundation-only, or require a dedicated future plan
-   - do not enforce more live-room, watch-party, ads, upload-size, posting, or messaging behavior without a scoped app-surface read/proof plan
-   - preserve room layouts, LiveKit behavior, Premium gates, existing message reads, `chat_attachments_enabled`, room invite behavior, RLS, migrations, generated types, and Supabase remote state
-   - record whether remaining controls need runtime app reads, schema/admin write work, or should remain foundation-only
-   - keep Admin toggles read-only unless a separate backed write-control prompt is provided
+1. Admin Ads `ads_enabled` Source-of-Truth Audit/Spec:
+   - audit Admin `runtimeControls.ads_enabled` versus Ads Launch config before any code wiring
+   - decide whether Ads Launch config should remain code/default-owned, become app_config-owned, or layer Admin runtimeControls as an override later
+   - preserve Ads V1A/V1B/V1C no-SDK/no-real-ad/no-real-revenue behavior
+   - preserve Premium/ad-free zero ads and forbidden route/context blocking
+   - do not add AppLovin, Unity, AdMob, real ad IDs, provider initialization, real rendering, CTV inventory, fake revenue, or working Admin toggles
+   - keep Admin Kill Switches read-only unless a separate backed write-control prompt is provided
 2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
    - keep provider wrapper architecture
@@ -93,6 +95,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Admin V1B2G standalone Chi'lly Chat attachment enforcement is pushed. `app/chat/[threadId].tsx` blocks selected attachments when `runtimeControls.chat_attachments_enabled` is false, before optimistic message insertion and before `sendChatMessage`. Text-only messages remain allowed. Admin marks Chat Attachments as read-only `Enforced on chat attachments`; no working toggle was added.
 - Admin V1B2H room attachment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` block selected room attachments when `runtimeControls.chat_attachments_enabled` is false, before room message insert and before attachment upload. Text-only room comments remain allowed. Admin marks Chat Attachments as read-only `Enforced on chat and room attachments`; no working toggle was added.
 - Admin V1B2I-C room comment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` block room-native text/comment submits when `runtimeControls.chat_enabled` is false, before `sendPartyMessageRecord`. Existing room reads, layouts, LiveKit, Premium gates, invite behavior/system share, attachment controls, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin marks Chat as read-only `Enforced on chat, invites, and room comments`; no working toggle was added.
+- Admin V1B runtimeControls closeout truth is recorded. The remaining configured controls are not free-floating permission to implement: `live_first_enabled`, `live_watch_party_enabled`, `watch_party_live_enabled`, and `max_upload_size_mb` are foundation-only; Admin `runtimeControls.ads_enabled` requires source-of-truth reconciliation with Ads Launch config; `premium_required_for_live` and `premium_required_for_watch_party` are separate Premium gate truth, not runtime switches.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
