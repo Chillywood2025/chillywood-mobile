@@ -26,11 +26,20 @@ export default function Signup() {
   const redirectTo = String(params.redirectTo ?? "").trim() || "/(tabs)";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const signUp = async () => {
     if (!email || !password) {
       Alert.alert("Error", "Enter email and password");
+      return;
+    }
+
+    if (!ageConfirmed) {
+      Alert.alert(
+        "18+ confirmation required",
+        "Confirm you are 18 or older before creating a Chi'llywood account.",
+      );
       return;
     }
 
@@ -101,6 +110,21 @@ export default function Signup() {
             ? "Sign up with the invited email for this small Chi'llywood beta. Accounts that are not on the invite list will stay blocked from invite-only flows."
             : "Create an account so you can join rooms, manage your channel, and send in-app support feedback."}
         </Text>
+        <View style={styles.ageGateCard}>
+          <Text style={styles.ageGateTitle}>Chi&apos;llywood is for users 18 and older.</Text>
+          <Pressable
+            style={styles.ageGateRow}
+            onPress={() => setAgeConfirmed((current) => !current)}
+            disabled={loading}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: ageConfirmed, disabled: loading }}
+          >
+            <View style={[styles.checkbox, ageConfirmed && styles.checkboxChecked]}>
+              {ageConfirmed ? <View style={styles.checkboxDot} /> : null}
+            </View>
+            <Text style={styles.ageGateLabel}>I confirm I am 18 or older.</Text>
+          </Pressable>
+        </View>
         <Text style={styles.legalNotice}>
           By creating an account, you agree to Chi&apos;llywood&apos;s{" "}
           <Link href="/terms" style={styles.legalLink}>
@@ -187,6 +211,54 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "600",
     marginBottom: 20,
+  },
+  ageGateCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 14,
+    gap: 10,
+    marginBottom: 14,
+  },
+  ageGateTitle: {
+    color: "#F4F7FC",
+    fontSize: 13.5,
+    lineHeight: 19,
+    fontWeight: "800",
+  },
+  ageGateRow: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.36)",
+    backgroundColor: "rgba(0,0,0,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    borderColor: "#FF5A76",
+    backgroundColor: "rgba(220,20,60,0.28)",
+  },
+  checkboxDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 4,
+    backgroundColor: "#FFFFFF",
+  },
+  ageGateLabel: {
+    flex: 1,
+    color: "#D9E3F9",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   legalLink: {
     color: "#FF5A76",
