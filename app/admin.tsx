@@ -3060,6 +3060,13 @@ export default function AdminStudioScreen() {
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Interstitial placement</Text>
+                <Text style={styles.configListBody}>Interstitial placement: placeholder controller foundation</Text>
+                <Text style={styles.configListBody}>No real interstitial ads are live.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Launch caps</Text>
                 <Text style={styles.configListBody}>
                   {`Base active session: ${adsLaunchConfig.session_interstitial_base_cap} interstitial + ${adsLaunchConfig.session_native_base_cap} native/feed`}

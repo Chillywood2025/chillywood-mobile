@@ -28,6 +28,7 @@ import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
 import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
+import InterstitialController from "../components/ads/InterstitialController";
 
 const PUBLIC_LEGAL_PATHS = new Set([
   "/privacy",
@@ -154,6 +155,7 @@ function RootNavigator() {
   return (
     <>
       <RouteAnalyticsBridge />
+      <InterstitialController />
       <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
