@@ -23,8 +23,8 @@ type CreatorVideoCardProps = {
   onShare?: () => void;
 };
 
-const formatVisibilityLabel = (video: CreatorVideo) => (
-  video.visibility === "public" ? "Public" : "Draft"
+const formatVisibilityLabel = (video: CreatorVideo, ownerMode: boolean) => (
+  video.visibility === "public" ? (ownerMode ? "Published" : "Public") : "Draft"
 );
 
 const formatModerationLabel = (video: CreatorVideo) => {
@@ -140,7 +140,10 @@ export function CreatorVideoCard({
         </View>
         <View style={styles.badgeRow}>
           <View style={[styles.badge, video.visibility === "public" ? styles.badgePublic : styles.badgeDraft]}>
-            <Text style={styles.badgeText}>{formatVisibilityLabel(video)}</Text>
+            <Text style={styles.badgeText}>{formatVisibilityLabel(video, ownerMode)}</Text>
+          </View>
+          <View style={[styles.badge, playable ? styles.badgeMediaReady : styles.badgeMediaUnavailable]}>
+            <Text style={styles.badgeText}>{playable ? "Media Ready" : "Media Unavailable"}</Text>
           </View>
           {moderationLabel ? (
             <View style={[styles.badge, styles.badgeModeration]}>
@@ -159,7 +162,7 @@ export function CreatorVideoCard({
           <Text style={styles.meta} numberOfLines={1}>{meta.join(" · ")}</Text>
         ) : null}
         {!playable ? (
-          <Text style={styles.warning}>This upload is missing a playable source.</Text>
+          <Text style={styles.warning}>Media unavailable: this upload is missing a playable source.</Text>
         ) : null}
         {moderationBlocked ? (
           <Text style={styles.warning}>This video is unavailable publicly until moderation restores it.</Text>
@@ -301,6 +304,12 @@ const styles = StyleSheet.create({
   },
   badgeDraft: {
     borderColor: "rgba(115,134,255,0.42)",
+  },
+  badgeMediaReady: {
+    borderColor: "rgba(45,153,92,0.42)",
+  },
+  badgeMediaUnavailable: {
+    borderColor: "rgba(255,116,116,0.4)",
   },
   badgeModeration: {
     borderColor: "rgba(242,194,91,0.5)",

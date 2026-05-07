@@ -61,6 +61,7 @@ import {
 } from "../_lib/liveEvents";
 import {
   deleteCreatorVideo,
+  formatCreatorVideoFileSize,
   getCreatorVideoStorageLimitMessage,
   getCreatorVideoTooLargeMessage,
   isCreatorVideoFileOverChannelMovieLimit,
@@ -113,6 +114,7 @@ type StudioTabId = "home" | "content" | "live" | "audience" | "insights" | "bran
 type ContentStatusFilter = "all" | "published" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
+type VideoLifecycleState = "idle" | "file_selected" | "uploading" | "succeeded" | "failed";
 
 type ChannelEventEditorState = {
   editingEventId: string | null;
@@ -479,6 +481,73 @@ const getCreatorVideoCreatedTimestamp = (video: CreatorVideo) => {
 
 const hasPlayableCreatorVideoSource = (video: CreatorVideo) => !!(video.playbackUrl || video.storagePath);
 
+const getVideoLifecycleCopy = (input: {
+  editingVideoId: string | null;
+  selectedFile: CreatorVideoFile | null;
+  titleReady: boolean;
+  saving: boolean;
+  lifecycleState: VideoLifecycleState;
+  notice: string | null;
+}) => {
+  if (input.saving && input.editingVideoId) {
+    return {
+      label: "Saving Metadata",
+      body: "Updating backed title, description, thumbnail URL, or visibility.",
+      tone: "active" as const,
+    };
+  }
+
+  if (input.saving) {
+    return {
+      label: "Uploading...",
+      body: "Saving the selected file to creator storage. Percent progress is not backed yet.",
+      tone: "active" as const,
+    };
+  }
+
+  if (input.editingVideoId) {
+    return {
+      label: "Editing Metadata",
+      body: "Existing media stays in place. This edits backed metadata and visibility only.",
+      tone: "ready" as const,
+    };
+  }
+
+  if (input.lifecycleState === "succeeded") {
+    return {
+      label: "Upload Succeeded",
+      body: "The video was saved to creator storage and added to your channel library.",
+      tone: "success" as const,
+    };
+  }
+
+  if (input.lifecycleState === "failed") {
+    return {
+      label: "Upload Failed",
+      body: input.notice || "The last file or upload action failed locally. Nothing was published automatically.",
+      tone: "error" as const,
+    };
+  }
+
+  if (input.selectedFile) {
+    const sizeLabel = formatCreatorVideoFileSize(input.selectedFile.size);
+    const fileLabel = input.selectedFile.name || "video file";
+    return {
+      label: input.titleReady ? "Ready To Upload" : "File Selected",
+      body: input.titleReady
+        ? `${fileLabel}${sizeLabel ? ` (${sizeLabel})` : ""} is selected. Upload will use the visibility you choose below.`
+        : `${fileLabel}${sizeLabel ? ` (${sizeLabel})` : ""} is selected. Add a title before uploading.`,
+      tone: input.titleReady ? "ready" as const : "idle" as const,
+    };
+  }
+
+  return {
+    label: "No File Selected",
+    body: "Choose an MP4, MOV, WebM, or M4V file before uploading.",
+    tone: "idle" as const,
+  };
+};
+
 export function ChannelStudioScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ tab?: string; focus?: string; action?: string }>();
@@ -524,6 +593,7 @@ export function ChannelStudioScreen() {
   const [videoNotice, setVideoNotice] = useState<string | null>(null);
   const [videoEditor, setVideoEditor] = useState<ChannelVideoEditorState>(createEmptyVideoEditorState);
   const [selectedVideoFile, setSelectedVideoFile] = useState<CreatorVideoFile | null>(null);
+  const [videoLifecycleState, setVideoLifecycleState] = useState<VideoLifecycleState>("idle");
   const videoTitleReady = videoEditor.title.trim().length > 0;
   const videoSubmitRequirement = videoEditor.editingVideoId
     ? videoTitleReady
@@ -700,6 +770,7 @@ export function ChannelStudioScreen() {
 
   const updateVideoEditor = (patch: Partial<ChannelVideoEditorState>) => {
     setVideoEditor((prev) => ({ ...prev, ...patch }));
+    setVideoLifecycleState((current) => current === "succeeded" ? "idle" : current);
     setVideoNotice(null);
   };
 
@@ -796,9 +867,10 @@ export function ChannelStudioScreen() {
     }
   };
 
-  const resetVideoEditor = () => {
+  const resetVideoEditor = (nextLifecycleState: VideoLifecycleState = "idle") => {
     setVideoEditor(createEmptyVideoEditorState());
     setSelectedVideoFile(null);
+    setVideoLifecycleState(nextLifecycleState);
   };
 
   const onPickVideoFile = async () => {
@@ -814,12 +886,14 @@ export function ChannelStudioScreen() {
       if (result.canceled) {
         logCreatorVideoUploadUi("picker_canceled");
         setVideoNotice("No video selected. Choose Video File when you're ready to upload.");
+        setVideoLifecycleState("idle");
         return;
       }
       const asset = result.assets[0];
       if (!asset?.uri) {
         logCreatorVideoUploadUi("picker_missing_asset");
         setVideoNotice("Choose a video file before uploading.");
+        setVideoLifecycleState("failed");
         return;
       }
 
@@ -837,6 +911,7 @@ export function ChannelStudioScreen() {
         });
         setSelectedVideoFile(null);
         setVideoNotice("Choose an MP4, MOV, WebM, or M4V video file.");
+        setVideoLifecycleState("failed");
         return;
       }
 
@@ -847,10 +922,12 @@ export function ChannelStudioScreen() {
         });
         setSelectedVideoFile(null);
         setVideoNotice(getCreatorVideoTooLargeMessage(pickedFile.size));
+        setVideoLifecycleState("failed");
         return;
       }
 
       setSelectedVideoFile(pickedFile);
+      setVideoLifecycleState("file_selected");
       logCreatorVideoUploadUi("picker_selected", {
         name: pickedFile.name ?? "unnamed",
         mimeType: pickedFile.mimeType ?? null,
@@ -865,6 +942,7 @@ export function ChannelStudioScreen() {
         message: error instanceof Error ? error.message : "unknown",
       });
       setVideoNotice("Unable to open the video picker right now.");
+      setVideoLifecycleState("failed");
     }
   };
 
@@ -877,6 +955,7 @@ export function ChannelStudioScreen() {
       visibility: video.visibility,
     });
     setSelectedVideoFile(null);
+    setVideoLifecycleState("idle");
     setVideoNotice(null);
   };
 
@@ -906,6 +985,7 @@ export function ChannelStudioScreen() {
 
     try {
       setVideoSaving(true);
+      setVideoLifecycleState(videoEditor.editingVideoId ? "idle" : "uploading");
       setVideoNotice(videoEditor.editingVideoId ? "Saving creator video..." : "Uploading creator video...");
       logCreatorVideoUploadUi("submit_start", {
         mode: videoEditor.editingVideoId ? "edit" : "upload",
@@ -934,11 +1014,12 @@ export function ChannelStudioScreen() {
       }
 
       await loadCreatorVideos();
-      resetVideoEditor();
+      resetVideoEditor(videoEditor.editingVideoId ? "idle" : "succeeded");
     } catch (error) {
       logCreatorVideoUploadUi("submit_failed", {
         message: error instanceof Error ? error.message : "unknown",
       });
+      setVideoLifecycleState("failed");
       setVideoNotice(
         formatCreatorVideoUiError(
           error,
@@ -949,6 +1030,55 @@ export function ChannelStudioScreen() {
     } finally {
       setVideoSaving(false);
     }
+  };
+
+  const runVideoVisibilityUpdate = async (video: CreatorVideo) => {
+    const nextVisibility = video.visibility === "public" ? "draft" : "public";
+    try {
+      setVideoSaving(true);
+      setVideoNotice(nextVisibility === "public" ? "Publishing video..." : "Moving video to draft...");
+      await updateCreatorVideoMetadata(video.id, { visibility: nextVisibility });
+      await loadCreatorVideos();
+      setVideoNotice(nextVisibility === "public" ? "Video published." : "Video moved to draft.");
+    } catch (error) {
+      setVideoNotice(formatCreatorVideoUiError(error, "Unable to update video visibility right now."));
+    } finally {
+      setVideoSaving(false);
+    }
+  };
+
+  const onToggleVideoVisibility = (video: CreatorVideo) => {
+    if (video.visibility === "public") {
+      Alert.alert(
+        "Unpublish Video",
+        `Move "${video.title}" back to draft? It will stop appearing publicly but stays in your channel library.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Unpublish",
+            style: "destructive",
+            onPress: () => {
+              void runVideoVisibilityUpdate(video);
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Publish Video",
+      `Publish "${video.title}" to your public channel? Public videos can appear on your Profile/Channel and open in Player.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Publish",
+          onPress: () => {
+            void runVideoVisibilityUpdate(video);
+          },
+        },
+      ],
+    );
   };
 
   const onDeleteVideo = (video: CreatorVideo) => {
@@ -1530,6 +1660,14 @@ export function ChannelStudioScreen() {
         return contentSort === "oldest" ? diff : -diff;
       });
   }, [contentSearchQuery, contentSort, contentStatusFilter, creatorVideos]);
+  const videoLifecycleCopy = getVideoLifecycleCopy({
+    editingVideoId: videoEditor.editingVideoId,
+    selectedFile: selectedVideoFile,
+    titleReady: videoTitleReady,
+    saving: videoSaving,
+    lifecycleState: videoLifecycleState,
+    notice: videoNotice,
+  });
   const audienceFollowerCount = typeof audienceSummary?.followerCount === "number" ? audienceSummary.followerCount : null;
   const audienceSubscriberCount = typeof audienceSummary?.subscriberCount === "number" ? audienceSummary.subscriberCount : null;
   const pendingAudienceRequestCount = typeof audienceSummary?.pendingRequestCount === "number" ? audienceSummary.pendingRequestCount : null;
@@ -1773,17 +1911,7 @@ export function ChannelStudioScreen() {
               busy={videoSaving}
               onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
               onEdit={() => onEditVideo(video)}
-              onToggleVisibility={() => {
-                void updateCreatorVideoMetadata(video.id, {
-                  visibility: video.visibility === "public" ? "draft" : "public",
-                })
-                  .then(() => loadCreatorVideos())
-                  .then(() => setVideoNotice(video.visibility === "public" ? "Video moved to draft." : "Video published."))
-                  .catch((error) => setVideoNotice(formatCreatorVideoUiError(
-                    error,
-                    "Unable to update video visibility right now.",
-                  )));
-              }}
+              onToggleVisibility={() => onToggleVideoVisibility(video)}
               onDelete={() => onDeleteVideo(video)}
             />
           ))}
@@ -1811,6 +1939,31 @@ export function ChannelStudioScreen() {
       <Text style={styles.sectionLabel}>
         {videoEditor.editingVideoId ? "Edit Video" : "Upload Video"}
       </Text>
+      <View
+        style={[
+          styles.uploadLifecycleCard,
+          videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleCardReady,
+          videoLifecycleCopy.tone === "active" && styles.uploadLifecycleCardActive,
+          videoLifecycleCopy.tone === "success" && styles.uploadLifecycleCardSuccess,
+          videoLifecycleCopy.tone === "error" && styles.uploadLifecycleCardError,
+        ]}
+      >
+        <View style={styles.uploadLifecycleHeader}>
+          <Text style={styles.uploadLifecycleLabel}>Upload Status</Text>
+          <Text
+            style={[
+              styles.uploadLifecycleStatus,
+              videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleStatusReady,
+              videoLifecycleCopy.tone === "active" && styles.uploadLifecycleStatusActive,
+              videoLifecycleCopy.tone === "success" && styles.uploadLifecycleStatusSuccess,
+              videoLifecycleCopy.tone === "error" && styles.uploadLifecycleStatusError,
+            ]}
+          >
+            {videoLifecycleCopy.label}
+          </Text>
+        </View>
+        <Text style={styles.uploadLifecycleBody}>{videoLifecycleCopy.body}</Text>
+      </View>
       {!videoEditor.editingVideoId ? (
         <TouchableOpacity
           style={styles.eventSecondaryButton}
@@ -1891,7 +2044,7 @@ export function ChannelStudioScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.eventSecondaryButton}
-          onPress={resetVideoEditor}
+          onPress={() => resetVideoEditor()}
           activeOpacity={0.88}
           disabled={videoSaving}
         >
@@ -4223,6 +4376,69 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     textAlign: "center",
+  },
+  uploadLifecycleCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 7,
+    marginBottom: 10,
+  },
+  uploadLifecycleCardReady: {
+    borderColor: "rgba(115,134,255,0.34)",
+    backgroundColor: "rgba(115,134,255,0.12)",
+  },
+  uploadLifecycleCardActive: {
+    borderColor: "rgba(242,194,91,0.38)",
+    backgroundColor: "rgba(242,194,91,0.12)",
+  },
+  uploadLifecycleCardSuccess: {
+    borderColor: "rgba(45,153,92,0.42)",
+    backgroundColor: "rgba(45,153,92,0.14)",
+  },
+  uploadLifecycleCardError: {
+    borderColor: "rgba(255,116,116,0.38)",
+    backgroundColor: "rgba(255,116,116,0.1)",
+  },
+  uploadLifecycleHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  uploadLifecycleLabel: {
+    color: "#8793AA",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  uploadLifecycleStatus: {
+    color: "#DDE5F5",
+    fontSize: 11.5,
+    fontWeight: "900",
+    textAlign: "right",
+    flexShrink: 1,
+  },
+  uploadLifecycleStatusReady: {
+    color: "#E1E7FF",
+  },
+  uploadLifecycleStatusActive: {
+    color: "#FFE8B7",
+  },
+  uploadLifecycleStatusSuccess: {
+    color: "#D9FFE6",
+  },
+  uploadLifecycleStatusError: {
+    color: "#FFD4D4",
+  },
+  uploadLifecycleBody: {
+    color: "#B7C1D6",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
   },
   videoSelectedFileText: {
     color: "#ACB5C9",
