@@ -45,6 +45,7 @@ Do not:
 - `Profile`: Chi'llywood's social identity hub for creator identity, community activity, and public/private content relationships.
 - `Channel`: the public mini streaming platform/network for a user's creator uploads, public videos, events, live/watch-party context, and backed shelves.
 - `Channel Studio`: the owner-only creator operating system for running a Channel. The preferred owner route is `/channel-studio`; `/channel-settings` remains compatibility.
+- `Admin Command Center`: the platform owner/operator command center on `/admin`, separate from Channel Studio, Profile Settings, Public Channel, Chi'lly Circle, and future Room Control.
 - `Follow`: a one-way channel audience relationship, not personal friendship.
 - `Chi'lly Circle`: a mutual personal connection/friendship layer, separate from Follow and separate from channel subscribers.
 - `Subscriber`: a later monetized channel supporter/member relationship, separate from account-tier Premium and separate from Chi'lly Circle.
@@ -78,6 +79,7 @@ These meanings are intentionally distinct and must not be blurred together.
 - `/chat` owns standalone Chi'lly Chat inbox, direct threads, and thread-based calls
 - Party Room and Live Room own embedded room-linked Chi'lly Chat behavior
 - Profile owns social identity, public/private relationship visibility, and creator/community presentation
+- Admin Command Center owns platform owner/operator operations on `/admin`; it must stay backend-authorized and must not become a duplicate Channel Studio, Profile Settings, Public Channel, Chi'lly Circle, or Room Control surface
 - Title and player own reusable rights-aware content actions
 
 ## Communication Direction

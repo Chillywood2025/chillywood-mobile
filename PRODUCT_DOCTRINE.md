@@ -63,6 +63,7 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - Unity LevelPlay / Unity Ads may be added through AppLovin MAX later
 - do not build an AdMob-only ad system
 - launch ad cap: base active session allows 3 interstitial plus 1 native/feed; after 2 active browsing hours allow +2 interstitial plus +1 native/feed; daily cap is 6 interstitial plus 3 native/feed
+- ads must not appear inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, or immediately at app launch
 - rewarded ads and carefully integrated native ads are preferred over disruptive formats
 - aggressive or unexpected full-screen interstitials are not approved doctrine
 - room-specific ad cautions belong in `ROOM_BLUEPRINT.md`, not here
@@ -102,10 +103,22 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - if product language uses `Rachi as your first friend`, that currently means official starter presence on the canonical profile/chat system, not a backed friend-graph relationship.
 - when a native friend system lands, it should be a mutual person-to-person social relationship with privacy-aware visibility rules instead of a rename of follower, subscriber, or admin truth.
 
+## Admin Operations Truth
+- `/admin` is the canonical Admin Command Center route for platform owner/operator operations.
+- Admin is separate from Channel Studio, Profile Settings, Public Channel, Chi'lly Circle, and future Room Control.
+- Admin must remain protected by signed-in plus beta/platform-role/backend permission checks, including separate route access, report visibility, and privileged-write boundaries.
+- Admin V1A is pushed with Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System sections.
+- Admin V1A preserves backed Reports, Content, Roles, Audit, and Rachi behavior. Audit is a summary, not a full immutable audit-log system, and Rachi does not grant operator permissions.
+- Admin V1A foundation areas must stay honest: user search, runtime kill switches, ad provider state, money, payouts, network billing, sponsor tools, fraud holds, bandwidth metering, LiveKit metering, participant-minute metering, and deeper ledgers are not active unless separately backed.
+- RevenueCat remains Premium truth. Admin must not add manual Premium toggles or subscription editing unless a future scoped proof adds safe backing.
+- Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
+- Any future destructive admin action must require confirmation and reason or audit context where appropriate.
+
 ## Public Product Phasing
 - Launch is planned as 18+.
 - Public v1 should focus on the core social streaming experience, not the full long-term platform vision
 - Public v1 includes login/settings/logout, home/discovery, customizable basic profiles, standalone player, Watch-Party Live core flow, Live Watch-Party / Live Stage core flow, comments/reactions/basic social interaction, basic Chi'lly Chat or simple direct messaging, Premium subscription gating, moderation basics, and analytics/error monitoring/admin visibility
+- Admin Command Center V1A is pushed on `/admin`; future Admin V1B kill switches require dedicated schema/config/enforcement planning and real app-surface reads.
 - Public v1 should keep room-scale truth honest: `500+` joined presence can be a valid product target, but Public v1 does not assume `500+` equal live camera feeds.
 - Post-v1 can expand into heavier creator monetization rollout, a fuller creator mini-platform builder, deeper room personalization, request/promote room controls, premium/ticketed room tooling, instant payout lane foundations, and light compliant ad systems
 - Later phase holds Game Live rollout beyond the Public v1 window, Game Watch-Party after Game Live, larger premium stages, higher simultaneous live-seat capacity as infrastructure improves, advanced payouts and tax automation, overseas creator payouts, and broader ad systems

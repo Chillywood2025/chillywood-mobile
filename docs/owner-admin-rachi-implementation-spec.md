@@ -1,6 +1,6 @@
 # Chi'llywood Owner Admin + Rachi Control Implementation Spec
 
-2026-05-06 current-route note: creator owner controls live in Channel Studio on `/channel-studio`; `/channel-settings` remains compatibility. Platform/operator controls remain in `/admin`.
+2026-05-06 current-route note: creator owner controls live in Channel Studio on `/channel-studio`; `/channel-settings` remains compatibility. Platform/operator controls live in Admin Command Center on `/admin`.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's owner-admin / admin-workflow / Rachi-control chapter.
@@ -25,7 +25,7 @@ This chapter does not:
 ### 2.1 Locked Route Truth
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
-| `/admin` | `app/admin.tsx` | Canonical bounded admin/operator owner. |
+| `/admin` | `app/admin.tsx` | Canonical platform owner/operator Admin Command Center. |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator control center, not the platform admin console. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route, including official-platform identities like Rachi. |
@@ -41,6 +41,7 @@ Do not create route proliferation in this chapter.
 - Owner-only controls must not leak to general admins or creators.
 - Meaningful admin and Rachi actions should remain auditable where current truth supports it.
 - `/admin` stays bounded; deeper sections should remain current-route-compatible if added later.
+- Do not create duplicate admin routes such as `/admin-command-center`.
 
 ### 2.3 Three-Mode Structure
 Chi'llywood should preserve three distinct modes:
@@ -62,7 +63,7 @@ Chi'llywood should preserve three distinct modes:
 ## 3. Current Owner / Admin / Rachi Truth Already In Repo
 
 ### 3.1 Current Admin Truth
-Current repo truth already supports a bounded admin/operator layer through:
+Current repo truth supports Admin Command Center V1A through:
 - `app/admin.tsx`
 - `_lib/moderation.ts`
 - `platform_role_memberships`
@@ -74,6 +75,22 @@ Currently real:
 - privileged admin writes gated more tightly than simple admin visibility
 - content/programming/config management already living on `/admin`
 - creator monetization grant controls already living on `/admin`
+- Admin Command Center presentation on the canonical `/admin` route
+- Admin Home with Platform Snapshot and Needs Attention
+- section tabs for Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System
+- Reports, Content, Roles, Audit, and Rachi backed behavior preserved
+- Users, Premium, Kill Switches, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and portions of Usage/System presented as read-only or foundation-only where backing is not connected
+
+Currently not real:
+- full immutable admin audit logs
+- user search, ban, suspend, restrict, upload-disable, live-disable, or entitlement-edit tools
+- manual Premium toggles or subscription editing
+- working runtime kill switches beyond current Premium access logic labels
+- ad SDKs, ad IDs, ad provider initialization, ad rendering, or ad revenue
+- fake MRR, ARR, creator earnings, sponsor revenue, payout balances, invoices, network billing, or payout execution
+- sponsor checkout/upload/approval or payout split execution
+- working fraud holds, payout pauses, account restrictions, or risk scores
+- bandwidth, LiveKit, participant-minute, storage billing, revenue-ledger, payout-ledger, network-invoice, sponsor-deal, or fraud-hold ledgers
 
 ### 3.2 Current Creator-Side Safety/Admin Truth
 Current creator-side summary truth already exists in:
@@ -202,18 +219,22 @@ Current doctrine:
 - `app/profile/[userId].tsx` and `app/chat/*` for canonical official-platform route continuity
 - `platform_role_memberships` for current staff-role membership truth
 - `_lib/channelReadModels.ts` and Channel Studio (`app/channel-settings.tsx` implementation, `app/channel-studio/index.tsx` route) for creator-side admin/safety summary truth
+- `app/admin.tsx` for Admin Command Center V1A section structure and foundation-only copy
 
 ## 9. Missing Truth That Still Needs To Be Built
 - explicit owner / super-admin role truth
 - safe owner bootstrap path
 - owner-only gate truth
-- bounded owner/admin section structure inside `/admin`
+- Admin V1B kill switches backed by schema/config/enforcement and real reads from affected app surfaces
 - audit-log structure beyond current moderation/report context
 - real Rachi-control state and domain controls
 - real emergency/system controls
+- real user search and user restriction tools
+- real revenue, payout, network billing, sponsor-deal, fraud-hold, bandwidth, storage, LiveKit, and participant-minute ledger systems
 
 ## 10. Safe Owner Bootstrap Doctrine
 - raw owner credentials must not be committed to source, docs, screenshots, or client code
+- test admin credentials may remain active for future proof sessions, but must never be stored, printed, logged, hard-coded, or committed
 - bootstrap must happen only through:
   - a safe server-side/admin bootstrap path
   - or a clearly isolated local setup path that reads credentials from ephemeral input or environment
@@ -238,42 +259,46 @@ These must not become admin consoles.
 `/admin` should grow in bounded sections, not into an undifferentiated all-powerful page.
 
 Target section families for phased rollout:
-- Admin Dashboard
-- Users
-- Creators
-- Content
-- Live & Rooms
+- Home
 - Reports
-- Support
-- Monetization
-- Analytics
-- Audit Logs
-- Staff & Roles
-- Rachi Control
-- System / Emergency
+- Content
+- Roles
+- Audit
+- Rachi
+- Users
+- Premium
+- Kill Switches
+- Usage
+- Ads
+- Revenue
+- Payouts
+- Networks
+- Sponsors
+- Fraud
+- System
 
-Current doctrine does not imply all of these are already backed.
+Admin V1A already presents these sections, but many are foundation-only. Current doctrine does not imply every section is active or backed.
 
 ## 12. Exact Phased Implementation Order
-1. Owner-admin / Rachi doctrine-spec pass.
-2. Current admin/moderation/owner truth audit.
-3. Minimum owner / super-admin foundation only if safe and honest.
-4. Smallest honest admin-surface expansion.
-5. Smallest honest Rachi-control surface.
-6. Business / ops admin expansion only where real truth already supports it.
-7. Advanced owner controls only if justified by real backing.
-8. Chapter closeout audit.
-9. One final narrow owner/admin batch only if clearly justified.
-10. Chapter closeout / next-chapter handoff.
+1. Admin Command Center V1A is pushed: canonical `/admin`, backed admin behavior preserved, and missing business systems shown honestly as foundation-only.
+2. Ads Launch Foundation is the next recommended lane.
+3. Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan.
+4. Usage metering and ledger systems later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
+5. Real Rachi-control state and domain controls later only when backed.
+6. Advanced owner/super-admin controls only if justified by real backing and proof.
 
 ## 13. What Not To Do
 - do not build a messy god-panel
 - do not let Rachi outrank owner authority
 - do not fake queue processing, rule-engine powers, or emergency switches
 - do not hardcode raw owner credentials into code or docs
+- do not store, print, log, hard-code, or commit test admin credentials
+- do not expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, or any other secret
+- do not bypass RLS or weaken `platform_role_memberships`
 - do not expose owner-only controls to ordinary admins
 - do not collapse creator routes into admin routes
 - do not create `/studio*` or other route sprawl
+- do not create duplicate admin routes such as `/admin-command-center`
 
 ## 14. Current Doctrine Vs Later-Phase Ideas
 

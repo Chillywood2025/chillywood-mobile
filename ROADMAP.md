@@ -23,6 +23,7 @@
 - basic Chi'lly Chat or simple direct messaging
 - preserved Rachi official seeded-account foundation on the canonical profile and Chi'lly Chat surfaces
 - Premium subscription gate
+- Admin Command Center V1A on the canonical `/admin` route, protected by signed-in plus beta/platform-role/backend permission checks
 - 18+ launch posture
 - moderation basics
 - analytics, error monitoring, and admin visibility
@@ -30,11 +31,12 @@
 - Public v1 should stay focused on the core social streaming experience instead of the full long-term platform vision
 
 ## Post-v1
-- Admin Command Center V1 with Revenue, Usage, Ads, payout/network-plan/sponsor-deal foundations, Fraud Holds, and Kill Switches
-- Ads launch foundation with AppLovin MAX wrapper, placeholder provider, Unity LevelPlay / Unity Ads later through AppLovin MAX, no AdMob-only system, admin on/off, session/daily caps, and Premium no-ads enforcement
+- Ads launch foundation with AppLovin MAX wrapper, placeholder provider, Unity LevelPlay / Unity Ads later through AppLovin MAX, no AdMob-only system, real admin on/off config, session/daily caps, forbidden-context suppression, and Premium no-ads enforcement
 - 18+ age gate implementation
 - upload/content lifecycle polish
 - security/compliance/moderation pass
+- Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan; switches must be real and read by affected app surfaces
+- usage metering and ledger foundations later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds
 - heavier creator monetization rollout
 - fuller creator mini-platform builder
 - deeper room personalization
@@ -59,6 +61,8 @@
 - RevenueCat remains Premium subscription truth
 - AppLovin MAX is the primary ad mediation direction; do not build AdMob-only ads
 - launch ad caps: base active session 3 interstitial + 1 native/feed; after 2 active browsing hours +2 interstitial + 1 native/feed; daily cap 6 interstitial + 3 native/feed; Premium sees zero ads
+- Ads must not appear inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, or immediately at app launch.
+- Admin Command Center V1A is foundation-honest: no fake revenue, payout balances, invoices, sponsor revenue, network billing, fraud holds, ad provider state, or fake kill switches.
 - storage doctrine: Cloudflare R2 for public/high-download media; Hetzner Object Storage for source/original uploads/drafts/backups/archive/private-held-deleted media; Hetzner/OVH boxes for LiveKit and real-time live/watch-party traffic
 - Stripe Connect or equivalent marketplace payout layer for creator cash-out
 - creator payout operations and reconciliation from net receipts, not gross sticker price

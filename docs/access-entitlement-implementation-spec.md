@@ -1,6 +1,6 @@
 # Chi'llywood Access / Entitlement Implementation Spec
 
-2026-05-06 current-route note: Profile is `/profile/[userId]`, public Channel is `/channel/[userId]`, owner Channel Studio is `/channel-studio`, and `/channel-settings` remains compatibility. The next access lane should make all full live/watch-party access Premium.
+2026-05-06 current-route note: Profile is `/profile/[userId]`, public Channel is `/channel/[userId]`, owner Channel Studio is `/channel-studio`, and `/channel-settings` remains compatibility. All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Admin Command Center V1A is pushed on `/admin` and must preserve RevenueCat as Premium truth without manual Premium toggles.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's current access and entitlement architecture.

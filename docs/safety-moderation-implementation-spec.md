@@ -98,13 +98,15 @@ These surfaces must not:
 - pretend report resolution exists on-device when it does not
 
 ### 3.3 Operator / Admin Surface
-`/admin` is the canonical operator/admin moderation surface today.
+`/admin` is the canonical Admin Command Center and operator/admin moderation surface today.
 
 Current doctrine allows it to show:
 - current moderation actor role
 - current platform-role memberships
 - whether safety review is enabled
 - recent safety reports when the signed-in identity can review them
+- Admin V1A Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System sections
+- foundation-only states for unbacked admin systems
 
 Current doctrine does not yet allow it to claim:
 - report state mutation
@@ -112,6 +114,7 @@ Current doctrine does not yet allow it to claim:
 - strike workflow
 - appeal/dispute workflow
 - creator-visible enforcement history
+- real fraud holds, payout pauses, sponsor enforcement, network billing actions, ad provider state, or runtime kill switches unless those systems are separately backed
 
 ## 4. Current Source-Of-Truth Already In Repo
 
@@ -192,6 +195,9 @@ These owners already preserve:
 - platform-role membership visibility
 - recent safety-report queue visibility
 - locked-state messaging when review access is absent
+- Admin Command Center V1A section structure
+- audit summary copy that does not claim full immutable audit logs
+- Rachi identity/admin display while preserving that Rachi does not grant operator permissions
 
 This is a real read surface, not yet a resolution workflow.
 

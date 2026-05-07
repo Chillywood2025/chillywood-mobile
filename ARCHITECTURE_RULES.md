@@ -27,6 +27,7 @@ If an older monetization, compliance, product-phase, or profile/channel-platform
 - Public Channel surface: `/channel/[userId]`
 - Owner Channel Studio surface: `/channel-studio`
 - Channel Settings compatibility surface: `/channel-settings`
+- Platform owner/operator Admin Command Center: `/admin`
 - Chi'lly Chat inbox lives on `/chat`
 - Chi'lly Chat direct threads live on `/chat/[threadId]`
 
@@ -97,9 +98,26 @@ These labels are locked and are not runtime-branding experiments.
 - Profile controls social identity and public/private social relationship visibility
 - Channel controls the public creator/network viewing experience on `/channel/[userId]`
 - Channel Studio controls owner-only creator operations on `/channel-studio`
+- Admin Command Center controls platform owner/operator operations on `/admin`; do not create duplicate admin routes such as `/admin-command-center`
 - Title and player control reusable rights-aware content actions
 
 If duplicate files or shared constants exist, prove which active surface owns the label before editing.
+
+## Admin Command Center Rule
+`/admin` is the canonical platform owner/operator route.
+
+Admin is separate from:
+- Channel Studio
+- Profile Settings
+- Public Channel
+- Chi'lly Circle
+- Room Control
+
+Admin must remain protected by signed-in plus beta/platform-role/backend permission checks. Future admin work must not weaken route access, report visibility, privileged-write boundaries, RLS, platform_role_memberships, confirmation prompts, reason/audit requirements, or secret handling.
+
+Admin V1A is pushed and includes Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System. Foundation sections must remain honest and must not show fake revenue, fake usage, fake payouts, fake sponsor money, fake network invoices, fake fraud holds, fake ad provider state, or fake kill switches.
+
+Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Branded Background Rule
 - `assets/images/chillywood-branded-background.png` is the exact source-of-truth Chi'llywood branded-background asset for the current nighttime city direction
