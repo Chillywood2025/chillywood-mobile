@@ -275,12 +275,14 @@ export const recordPlaceholderAdShow = async (
     config?: AdsLaunchConfig;
     userId?: string | null;
     now?: Date;
+    activeBrowsingSeconds?: number;
   },
 ): Promise<RecordPlaceholderAdShowResult> => {
   const cap = await getAdCapSnapshot(placementKind, {
     config: options.config,
     userId: options.userId,
     now: options.now,
+    activeBrowsingSeconds: options.activeBrowsingSeconds,
   });
 
   if (!options.eligible) {
@@ -320,8 +322,8 @@ export const recordPlaceholderAdShow = async (
     config: options.config,
     userId: options.userId,
     now: options.now,
+    activeBrowsingSeconds: options.activeBrowsingSeconds,
   });
 
   return { ...nextCap, recorded: true, reason: "placeholder_show_recorded" };
 };
-

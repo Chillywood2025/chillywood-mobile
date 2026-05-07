@@ -48,6 +48,7 @@ import { readCreatorVideosForOwners, type CreatorVideo } from "../../_lib/creato
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { AccessSheet } from "../../components/monetization/access-sheet";
+import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
 
 type TitleRow = Omit<
   Pick<
@@ -89,6 +90,15 @@ type WatchPartyRoomMessageRow = Pick<Tables<"watch_party_room_messages">, "party
 
 const LIVE_ACTIVITY_WINDOW_MILLIS = 15 * 60 * 1000;
 const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
+const HOME_NATIVE_AD_FORBIDDEN_CONTEXTS = {
+  activeVideoPlayback: false,
+  activeLiveKitRoom: false,
+  typingOrCommenting: false,
+  uploadActive: false,
+  paymentOrSubscriptionScreenActive: false,
+  adminSurfaceActive: false,
+  channelStudioSurfaceActive: false,
+};
 
 const formatAddedDate = (value?: string | null) => {
   if (!value) return "Added recently";
@@ -881,6 +891,12 @@ export default function HomeScreen() {
           ) : null}
 
           {renderFollowingFeed()}
+
+          <NativeAdSlot
+            surface="home"
+            routePath="/"
+            forbiddenContexts={HOME_NATIVE_AD_FORBIDDEN_CONTEXTS}
+          />
 
           {homeConfig.railOrder.map((railKey) => {
             if (!homeConfig.enabledRails[railKey]) return null;

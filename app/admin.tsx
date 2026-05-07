@@ -3017,7 +3017,7 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>ADS</Text>
               <Text style={styles.configTitle}>Ads</Text>
-              <Text style={styles.configBody}>Provider: placeholder / not connected. No real ads render in V1A.</Text>
+              <Text style={styles.configBody}>Provider: placeholder / not connected. No real ads are live.</Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
@@ -3049,6 +3049,13 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListBody}>{`interstitial_enabled: ${String(adsLaunchConfig.interstitial_enabled)}`}</Text>
                 <Text style={styles.configListBody}>{`native_feed_enabled: ${String(adsLaunchConfig.native_feed_enabled)}`}</Text>
                 <Text style={styles.configListBody}>{`premium_users_ad_free: ${String(adsLaunchConfig.premium_users_ad_free)}`}</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Native/feed placement</Text>
+                <Text style={styles.configListBody}>Native/feed placement: Home placeholder foundation</Text>
+                <Text style={styles.configListBody}>This is read-only foundation copy; real ads are not serving.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
