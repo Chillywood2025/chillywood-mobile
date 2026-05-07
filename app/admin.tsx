@@ -236,7 +236,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Uploads",
     controlKey: "uploads_enabled",
-    body: "Creator upload surfaces do not read this runtime control yet. Not enforced yet.",
+    body: "Creator video upload submit reads this runtime control before storage work. Enforced on upload.",
+    badgeLabel: "Enforced on upload",
   },
   {
     label: "Comments",

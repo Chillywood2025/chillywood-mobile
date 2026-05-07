@@ -568,6 +568,7 @@ export function ChannelStudioScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsEnabled, setSettingsEnabled] = useState(true);
   const [appDisplayName, setAppDisplayName] = useState(DEFAULT_APP_CONFIG.branding.appDisplayName);
+  const [uploadsEnabled, setUploadsEnabled] = useState(DEFAULT_APP_CONFIG.runtimeControls.uploads_enabled);
   const [creatorPermissions, setCreatorPermissions] = useState<CreatorPermissionSet | null>(null);
   const [audienceSummary, setAudienceSummary] = useState<ChannelAudienceReadModel | null>(null);
   const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
@@ -645,6 +646,7 @@ export function ChannelStudioScreen() {
         setProfile(normalizeUserProfile(resolvedProfile));
         setSettingsEnabled(resolveFeatureConfig(resolvedConfig).creatorSettingsEnabled);
         setAppDisplayName(resolveBrandingConfig(resolvedConfig).appDisplayName);
+        setUploadsEnabled(resolvedConfig.runtimeControls.uploads_enabled);
         setCreatorPermissions(resolvedPermissions);
         setAudienceSummary(resolvedAudienceSummary);
         setSafetyAdminSummary(resolvedSafetyAdminSummary);
@@ -654,6 +656,7 @@ export function ChannelStudioScreen() {
       .catch(() => {
         if (!active) return;
         setProfile(normalizeUserProfile({ username: "", avatarIndex: 0 }));
+        setUploadsEnabled(DEFAULT_APP_CONFIG.runtimeControls.uploads_enabled);
         setAudienceSummary(null);
         setSafetyAdminSummary(null);
         setCreatorAnalyticsSummary(null);
@@ -978,6 +981,13 @@ export function ChannelStudioScreen() {
         fileSize: selectedVideoFile.size ?? null,
       });
       setVideoNotice(getCreatorVideoTooLargeMessage(selectedVideoFile.size));
+      return;
+    }
+
+    if (!videoEditor.editingVideoId && !uploadsEnabled) {
+      logCreatorVideoUploadUi("submit_blocked", { reason: "uploads_paused" });
+      setVideoLifecycleState("idle");
+      setVideoNotice("Creator video uploads are temporarily paused. Existing videos can still be managed.");
       return;
     }
 
