@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
 import { sendDirectInviteMessage, searchChatPeople, type ChatThreadSummary, type ChatUserSearchResult } from "../../_lib/chat";
 
 const logInviteDebug = (..._args: unknown[]) => {};
@@ -84,6 +85,23 @@ export function InternalInviteSheet({
   const [loading, setLoading] = useState(false);
   const [sendingUserId, setSendingUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
+
+  useEffect(() => {
+    let active = true;
+
+    readAppConfig()
+      .then((config) => {
+        if (active) setAppConfig(config);
+      })
+      .catch(() => {
+        if (active) setAppConfig(DEFAULT_APP_CONFIG);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (visible && __DEV__) {
@@ -181,9 +199,14 @@ export function InternalInviteSheet({
     [matchedSuggestedTargets, results],
   );
 
-  const visibleError = displayResults.length > 0 ? null : error;
+  const visibleError = error;
 
   const handleSendInvite = useCallback(async (target: ChatUserSearchResult) => {
+    if (!appConfig.runtimeControls.chat_enabled) {
+      setError("Chi'lly Chat invites are temporarily paused. You can still use system share.");
+      return;
+    }
+
     setSendingUserId(target.userId);
     setError(null);
     try {
@@ -217,7 +240,7 @@ export function InternalInviteSheet({
     } finally {
       setSendingUserId("");
     }
-  }, [inviteMessage, onClose, onInviteSent]);
+  }, [appConfig.runtimeControls.chat_enabled, inviteMessage, onClose, onInviteSent]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
