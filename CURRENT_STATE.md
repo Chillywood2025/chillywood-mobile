@@ -11,6 +11,7 @@ Current `main` is production-grade Public v1 hardening with Admin Command Center
 Ads Config V1D1 app-config `adsLaunch` resolver foundation is pushed at `e7b8ecb3fbe39d5625edb29edf95315999d79678`.
 Ads V1D2 runtime-read foundation is pushed at `92818cf0bd6b9c073408ab0a432df1ea35532e06`.
 Admin Command Center sign-in entry is pushed at `91c1f7b978d32814266a9b83b1f95d864ab8696a`.
+Public V1 current-build release proof is complete as of May 7, 2026. No release-proof blockers were found, and no runtime code fixes were needed.
 
 Already pushed and to be preserved:
 
@@ -133,7 +134,7 @@ Do not accept vague prompts such as "modernize", "polish", "add filters", "add r
 ## Current Next Action
 Recommended next lanes, in order:
 
-1. Public V1 current-build release proof / launch readiness audit: prove the current pushed app opens core surfaces on device, verify default ads remain hidden while `ads_enabled=false`, and do not implement new behavior during the proof pass.
+1. Store/external launch readiness audit: review App Store / Google Play account readiness, package/bundle identifier truth, public legal/support URLs, Data Safety and privacy disclosure inputs, RevenueCat public setup, and AppLovin readiness gaps without installing SDKs, adding real IDs, touching dashboards from code, or changing runtime behavior.
 2. Real AppLovin MAX readiness/integration planning later: only after external AppLovin account/app/ad units are ready; keep provider wrapper architecture, use Unity LevelPlay / Unity Ads later through AppLovin MAX if needed, and do not create an AdMob-only path.
 3. Later usage metering and ledger systems: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.
 
@@ -175,6 +176,8 @@ Ads Config V1D1 app-config `adsLaunch` resolver foundation was checked with `npm
 Ads V1D2 runtime-read foundation was checked with `npm run typecheck`, `git diff --check`, scoped forbidden-file/dependency scans, Android current-build Home proof for default hidden ads, and Android `/admin` Ads tab proof for normalized-source read-only copy. It wires `NativeAdSlot` and `InterstitialController` to normalized `app_config.adsLaunch` through `hooks/useAdsLaunchConfig.ts` while keeping explicit config overrides for proof harnesses. Normal runtime remains hidden by default because `ads_enabled=false` and the placeholder provider is not connected.
 
 Admin Command Center sign-in entry was checked with `npm run typecheck`, `git diff --check`, current-build Android dev-client proof, and live `/admin` proof with an operator account. Runtime proof confirmed the Login screen can enter `Admin Command Center Sign In`, routes to `/admin` after normal sign-in, preserves backend platform-role denial/allow behavior, and does not store, print, or hard-code credentials.
+
+Public V1 current-build release proof was completed on an attached Android Samsung SM-N986U1 through the Expo dev client on Metro 8081. Proof opened Home, Explore, Settings, Support, Terms, Privacy, Community Guidelines, Channel Studio, `/channel-settings` compatibility, Rachi Profile, Rachi public Channel, Player `t1`, Watch-Party waiting room, and `/admin`. Home showed no visible ad placeholder while `ads_enabled=false`; `/admin` showed the Admin Command Center tabs; Settings showed legal/support entries; Player and Watch-Party opened without crash. The signed-in auth state redirected away from the Login screen, so the Admin sign-in entry was source-proved in `app/(auth)/login.tsx` rather than logging out or printing credentials. No runtime files were changed during proof.
 
 Public V1 Hardening H1A 18+ Signup Confirmation was checked with `npm run typecheck`, `git diff --check`, and current-build Android dev-client proof. Runtime proof confirmed the signup screen shows the 18+ copy and unchecked checkbox, pressing Sign Up while unchecked shows the required 18+ alert before account creation, checking the box falls through to the existing signup validation path, Terms/Privacy/Community Guidelines links still open, and the Sign In handoff still returns to Login. Real existing-account login proof and release-build signup proof remain pending.
 

@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Next launch lane selection after Ads V1D2.
+Store/external launch readiness audit after completed Public V1 current-build release proof.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -18,6 +18,7 @@ Product direction:
 - Ads Config V1D1 app-config `adsLaunch` resolver foundation is pushed. `_lib/appConfig.ts` now normalizes optional `app_configurations.config.adsLaunch` through code-owned `ADS_LAUNCH_CONFIG_DEFAULTS`, and `app/admin.tsx` reads `experienceConfig.adsLaunch` for read-only Admin Ads status copy.
 - Ads V1D2 runtime-read foundation is pushed. `hooks/useAdsLaunchConfig.ts` reads cached/default app config first, then safely reads `readAppConfig()` and returns normalized `adsLaunch`; `NativeAdSlot` and `InterstitialController` use that source when no explicit proof/test config override is passed.
 - Admin Command Center sign-in entry is pushed. `app/(auth)/login.tsx` supports a normal admin-intent sign-in state with `redirectTo=/admin`, stores no credentials, hard-codes no account, adds no bypass, and still relies on canonical `/admin` signed-in plus backend platform-role checks after sign-in.
+- Public V1 current-build release proof is complete. The attached Android current build opened Home, Explore, Settings, Support, Terms, Privacy, Community Guidelines, Channel Studio, `/channel-settings` compatibility, Rachi Profile, Rachi public Channel, Player `t1`, Watch-Party waiting room, and `/admin`; Home stayed free of visible ad placeholders while `ads_enabled=false`; no runtime fixes were needed.
 - Normal runtime must remain honest: ads stay disabled by default because `ads_enabled=false`.
 - Runtime ad owners now read normalized `app_config.adsLaunch` with default-disabled fallback; normal runtime must remain hidden because normalized `ads_enabled=false` and the placeholder provider is not connected.
 - Admin V1B1 runtime controls config foundation is pushed. Typed defaults live under `app_configurations.config.runtimeControls`; Admin Kill Switches shows read-only `Configured foundation` and `Not enforced yet`; no working toggles or runtime enforcement were added.
@@ -45,11 +46,11 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Public V1 current-build release proof / launch readiness audit:
-   - prove the current pushed app opens core surfaces on device
-   - verify login/admin entry, Home, Explore, Channel Studio, Profile, Player, Watch-Party gate, Settings Support/legal links, and `/admin` foundation tabs
-   - verify default ads remain hidden while `ads_enabled=false`
-   - do not implement new behavior during the proof pass
+1. Store/external launch readiness audit:
+   - audit App Store / Google Play readiness without changing runtime code
+   - verify Android package `com.chillywood.mobile` and iOS bundle identifier truth before store work
+   - verify public legal URLs, support/account-deletion links, Data Safety and privacy disclosure inputs, RevenueCat public setup, and AppLovin readiness gaps
+   - do not install SDKs, add real ad IDs, change package/native config, or touch store dashboards from code unless a later exact prompt scopes it
 2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
    - keep provider wrapper architecture
@@ -113,6 +114,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Ads Config V1D1 added optional normalized `adsLaunch` under `app_configurations.config`, defaulting through `ADS_LAUNCH_CONFIG_DEFAULTS`, and changed only Admin Ads read-only status copy to display the normalized source/values.
 - Ads V1D2 is pushed.
 - Ads V1D2 added `hooks/useAdsLaunchConfig.ts` and wired `NativeAdSlot` plus `InterstitialController` fallback runtime reads to normalized `app_config.adsLaunch`. It did not use Admin `runtimeControls.ads_enabled`, did not add working Admin ad toggles, and did not add SDKs, real IDs, provider initialization, real rendering, CTV inventory, fake revenue, migrations, generated database types, RLS changes, package/native config, or Supabase remote changes.
+- Public V1 current-build release proof is complete. Do not redo it unless a new runtime/code change lands or an explicit prompt asks for a new current-build proof.
 - Public V1 Hardening H1A 18+ Signup Confirmation is pushed.
 - H1A added a no-migration checkbox gate to `app/(auth)/signup.tsx`: signup shows `Chi'llywood is for users 18 and older.`, requires `I confirm I am 18 or older.`, blocks before `supabase.auth.signUp` with the required alert if unchecked, and preserves legal links plus Sign In handoff.
 - H1B2 legal acceptance storage is pushed.

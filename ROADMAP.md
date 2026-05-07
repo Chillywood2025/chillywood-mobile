@@ -29,6 +29,7 @@
 - 18+ launch posture with H1A signup confirmation and H1B2 legal acceptance storage pushed
 - Public V1 Hardening H2 upload/content lifecycle polish in Channel Studio Content, with one clear `Video Upload` form, honest no-file/selected/ready/uploading/succeeded/failed local states, and backed draft/published/media-ready labels
 - Public V1 Hardening H3 security/compliance/moderation hardening: Settings Support entry, Support sponsorship/ad/scam concern copy, and backed Report Sheet category guidance without new schema/actions
+- Public V1 current-build release proof completed on Android current build with core launch surfaces opening and default ads hidden
 - moderation basics
 - analytics, error monitoring, and admin visibility
 - layered room participation truth with limited active live seats, scalable participant browsing, and a clear distinction between joined presence and true live-seat media
