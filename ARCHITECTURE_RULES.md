@@ -117,6 +117,8 @@ Admin must remain protected by signed-in plus beta/platform-role/backend permiss
 
 Admin V1A is pushed and includes Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System. Foundation sections must remain honest and must not show fake revenue, fake usage, fake payouts, fake sponsor money, fake network invoices, fake fraud holds, fake live ad provider state, or fake kill switches.
 
+Admin V1B1 runtime controls config foundation is pushed. Runtime controls are typed defaults stored under the existing `app_configurations.config.runtimeControls` JSON shape, with `_lib/featureFlags.ts` owning defaults/normalization, `_lib/appConfig.ts` owning normalized app-config storage, and `app/admin.tsx` owning read-only Kill Switches status copy only. Admin Kill Switches may show `Configured foundation` and `Not enforced yet`, but must not show working toggles or imply enforcement until affected app surfaces actually read the controls.
+
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Ads Launch Foundation Rule

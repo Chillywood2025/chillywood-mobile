@@ -1,7 +1,9 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Audit/spec the Real AppLovin MAX readiness and integration lane without installing SDKs until external AppLovin app/ad-unit setup is ready.
+Audit/spec Admin V1B2 kill switch enforcement for the first runtime control that should affect real app behavior.
+
+AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
 Product direction:
 
@@ -14,27 +16,27 @@ Product direction:
 - Ads V1A/V1B/V1C are pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
 - Ads V1C added only placeholder interstitial decision/controller foundation. It did not install SDKs, add real IDs, initialize AppLovin/Unity/AdMob, render real ads, add CTV inventory, show fake ad revenue, or change forbidden surfaces.
 - Normal runtime must remain honest: ads stay disabled by default because `ads_enabled=false`.
+- Admin V1B1 runtime controls config foundation is pushed. Typed defaults live under `app_configurations.config.runtimeControls`; Admin Kill Switches shows read-only `Configured foundation` and `Not enforced yet`; no working toggles or runtime enforcement were added.
 
-Required proof before any real AppLovin integration lane:
+Required proof before any Admin V1B2 enforcement lane:
 
-- external AppLovin account/app/ad-unit IDs are ready and approved for use
-- the repo lane explicitly decides which SDK/package/native config changes are allowed
-- provider wrapper architecture remains the only path to real provider calls
-- Premium/ad-free users remain zero ads and do not increment counters
-- `/admin`, `/channel-studio`, `/channel-settings`, `/profile`, `/player`, `/watch-party`, `/subscribe`, and `/chat` remain ad-ineligible
-- active video playback, active LiveKit room, typing/commenting, upload, payment/subscription surface, Admin surface, Studio surface, inactive/background app, and unknown context all block eligibility
-- native/feed and interstitial caps remain enforced by existing Ads V1A/V1B/V1C truth
-- no fake ad revenue, creator earnings, sponsor revenue, payout balance, invoice, or CTV inventory is added
+- choose exactly one switch or a tightly related pair for first enforcement
+- prove the affected app surface reads normalized `runtimeControls`
+- preserve existing signed-in, beta, platform-role, RLS, Premium, privacy, and route gates
+- do not expose working Admin write controls unless the prompt also scopes backed config save permissions and manual proof
+- do not change migrations, generated database types, RLS, Supabase remote state, storage, LiveKit config, ads SDKs, RevenueCat setup, or forbidden surfaces
+- if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Real AppLovin MAX readiness/integration planning:
-   - only after external AppLovin setup is ready
+1. Admin V1B2 Kill Switch Enforcement:
+   - audit/spec first, then implement one narrowly scoped real runtime read
+   - recommended first candidates: `new_accounts_enabled` on signup or `uploads_enabled` on existing upload action
+   - keep Admin toggles read-only unless a separate backed write-control prompt is provided
+2. Real AppLovin MAX readiness/integration planning:
+   - later only after external AppLovin/store setup is ready
    - keep provider wrapper architecture
    - Unity LevelPlay / Unity Ads later through AppLovin MAX if needed
    - no AdMob-only path
-2. Admin V1B Kill Switches:
-   - only after a dedicated schema/config/enforcement plan
-   - switches must be real and read by affected app surfaces
 3. Usage metering / ledger systems later:
    - bandwidth
    - participant-minutes
@@ -67,6 +69,7 @@ Required proof before any real AppLovin integration lane:
 - Admin V1A sections are Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System.
 - Admin V1A keeps Reports, Content, Roles, Audit, and Rachi backed behavior working. Users, Premium, Kill Switches, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and parts of Usage/System are foundation or read-only where not backed.
 - Admin V1A must not be expanded with fake money, fake usage, fake payouts, fake sponsor revenue, fake network invoices, fake fraud holds, fake live ad provider state, fake kill switches, or hard-coded credentials.
+- Admin V1B1 runtime controls config foundation is pushed. `_lib/featureFlags.ts` owns typed defaults and normalization, `_lib/appConfig.ts` persists normalized `runtimeControls` under existing `app_configurations.config`, and `app/admin.tsx` updates Kill Switches copy only as read-only `Configured foundation` / `Not enforced yet`. No runtime behavior, Premium gate, migration, generated type, RLS, storage, Supabase remote, or Admin permission boundary changed.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.

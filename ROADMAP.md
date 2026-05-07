@@ -35,7 +35,7 @@
 
 ## Post-v1
 - Real AppLovin MAX integration later only after external account/app/ad-unit setup is ready, keeping the provider wrapper architecture and avoiding an AdMob-only path
-- Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan; switches must be real and read by affected app surfaces
+- Admin V1B1 runtime controls config foundation is pushed; Admin V1B2 kill switch enforcement should come only after each switch has a dedicated app-surface read/proof plan, with no fake toggles
 - usage metering and ledger foundations later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds
 - heavier creator monetization rollout
 - fuller creator mini-platform builder
@@ -84,6 +84,7 @@
 - Creator-page ad revenue share is later at creator 70% net / Chi'llywood 30% net; creator-sold sponsor slots are later with brand paying Chi'llywood first and creator 80% net / Chi'llywood 20% net. No creator ad revenue ledger, payout ledger, sponsor deal system, or CTV revenue system exists yet.
 - CTV ads are future-only for Chi'llywood Originals and network-style content and are not active now.
 - Admin Command Center V1A is foundation-honest: no fake revenue, payout balances, invoices, sponsor revenue, network billing, fraud holds, fake live ad provider state, or fake kill switches.
+- Admin V1B1 runtime controls config foundation is pushed in `_lib/featureFlags.ts`, `_lib/appConfig.ts`, and read-only `app/admin.tsx` Kill Switches copy. The typed defaults live under `app_configurations.config.runtimeControls`; Admin shows `Configured foundation` and `Not enforced yet`; no runtime enforcement, working toggles, migrations, generated database type edits, RLS changes, Supabase remote changes, or Premium gate weakening were added.
 - storage doctrine: Cloudflare R2 for public/high-download media; Hetzner Object Storage for source/original uploads/drafts/backups/archive/private-held-deleted media; Hetzner/OVH boxes for LiveKit and real-time live/watch-party traffic
 - Stripe Connect or equivalent marketplace payout layer for creator cash-out
 - creator payout operations and reconciliation from net receipts, not gross sticker price
