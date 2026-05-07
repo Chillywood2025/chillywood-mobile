@@ -80,7 +80,7 @@ Currently real:
 - section tabs for Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System
 - Reports, Content, Roles, Audit, and Rachi backed behavior preserved
 - Users, Premium, Kill Switches, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and portions of Usage/System presented as read-only or foundation-only where backing is not connected
-- Ads Launch Foundation V1A status in Admin Ads as read-only/foundation: placeholder/not-connected provider, launch caps, forbidden contexts, AppLovin MAX future direction, Unity through AppLovin MAX future direction, no AdMob-only doctrine, and CTV future-only copy
+- Ads Launch Foundation V1A/V1B status in Admin Ads as read-only/foundation: placeholder/not-connected provider, Home native/feed placeholder foundation, launch caps, forbidden contexts, AppLovin MAX future direction, Unity through AppLovin MAX future direction, no AdMob-only doctrine, and CTV future-only copy
 
 Currently not real:
 - full immutable admin audit logs
@@ -222,6 +222,7 @@ Current doctrine:
 - `_lib/channelReadModels.ts` and Channel Studio (`app/channel-settings.tsx` implementation, `app/channel-studio/index.tsx` route) for creator-side admin/safety summary truth
 - `app/admin.tsx` for Admin Command Center V1A section structure and foundation-only copy
 - Ads V1A foundation source files: `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`
+- Ads V1B source files: `components/ads/NativeAdSlot.tsx`, Home placement in `app/(tabs)/index.tsx`, native/feed cap proof support in `_lib/ads/adSession.ts`, and read-only/foundation Admin Ads copy in `app/admin.tsx`
 
 ## 9. Missing Truth That Still Needs To Be Built
 - explicit owner / super-admin role truth
@@ -286,8 +287,8 @@ Admin V1A already presents these sections, but many are foundation-only. Current
 ## 12. Exact Phased Implementation Order
 1. Admin Command Center V1A is pushed: canonical `/admin`, backed admin behavior preserved, and missing business systems shown honestly as foundation-only.
 2. Ads Launch Foundation V1A is pushed: provider-neutral config, eligibility, placeholder provider, active browsing time, session/daily caps, and read-only/foundation Admin Ads status; no SDK, real ad IDs, provider initialization, real rendering, CTV inventory, or fake revenue.
-3. Ads V1B Native/feed placeholder placement is the next ads lane: one labeled placeholder/native slot on safe free-user browsing surfaces only, likely Home and/or Explore, respecting Premium no ads, V1A eligibility/caps, and forbidden contexts.
-4. Ads V1C Interstitial controller later: placeholder interstitial first, safe transitions only, no app-launch ad, 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts.
+3. Ads V1B Native/feed placeholder placement is pushed: one labeled placeholder/native slot on Home only, respecting Premium no ads, V1A eligibility/caps, and forbidden contexts, with normal runtime hidden because `ads_enabled=false`.
+4. Ads V1C Interstitial controller is next: placeholder interstitial first, safe transitions only, no app-launch ad, 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts.
 5. Real AppLovin MAX integration later only after external setup is ready; keep provider wrapper architecture and no AdMob-only path.
 6. Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan.
 7. Usage metering and ledger systems later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds.

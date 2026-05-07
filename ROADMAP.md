@@ -24,7 +24,7 @@
 - preserved Rachi official seeded-account foundation on the canonical profile and Chi'lly Chat surfaces
 - Premium subscription gate
 - Admin Command Center V1A on the canonical `/admin` route, protected by signed-in plus beta/platform-role/backend permission checks
-- Ads Launch Foundation V1A as provider-neutral, no-SDK, no-real-rendering infrastructure; real ad placements and real ad SDK integration are not live yet
+- Ads Launch Foundation V1A/V1B as provider-neutral, no-SDK, no-real-rendering infrastructure; the Home native/feed placeholder foundation exists but normal runtime keeps it hidden while `ads_enabled=false`, and real ad SDK integration is not live yet
 - 18+ launch posture
 - moderation basics
 - analytics, error monitoring, and admin visibility
@@ -32,12 +32,11 @@
 - Public v1 should stay focused on the core social streaming experience instead of the full long-term platform vision
 
 ## Post-v1
-- Ads V1B Native/feed placeholder placement on safe free-user browsing surfaces only, likely Home and/or Explore, with Premium no ads, V1A eligibility/caps, no forbidden contexts, no SDK, and no real ad IDs
 - Ads V1C Interstitial controller with placeholder interstitial first, safe transitions only, no app-launch ad, 180-second first delay, 600-second spacing, session/daily caps, and no forbidden contexts
-- Real AppLovin MAX integration later only after external account/app/ad-unit setup is ready, keeping the provider wrapper architecture and avoiding an AdMob-only path
 - 18+ age gate implementation
 - upload/content lifecycle polish
 - security/compliance/moderation pass
+- Real AppLovin MAX integration later only after external account/app/ad-unit setup is ready, keeping the provider wrapper architecture and avoiding an AdMob-only path
 - Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan; switches must be real and read by affected app surfaces
 - usage metering and ledger foundations later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds
 - heavier creator monetization rollout
@@ -63,7 +62,9 @@
 - Apple and Google billing constraints
 - RevenueCat remains Premium subscription truth
 - Ads Launch Foundation V1A is pushed with `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`; `app/admin.tsx` only shows read-only/foundation Admin Ads status.
+- Ads Launch Foundation V1B is pushed with `components/ads/NativeAdSlot.tsx`, one Home native/feed placeholder foundation in `app/(tabs)/index.tsx`, native/feed long-use cap proof support in `_lib/ads/adSession.ts`, and read-only Admin Ads status copy in `app/admin.tsx`.
 - Ads V1A defaults `ads_enabled` to false, uses `placeholder` as the default provider, and has a placeholder provider that reports not connected and calls no SDK.
+- Ads V1B default runtime remains hidden because `ads_enabled=false`; NativeAdSlot renders only after V1A eligibility passes, Premium/ad-free users never see it or increment counters, base native/feed session cap is 1, long-use unlock allows a second placement after 120 active browsing minutes, daily native/feed cap is 3, and forbidden routes/contexts stay blocked.
 - No AppLovin, Unity LevelPlay, Unity Ads, or AdMob SDK dependency is installed for ads; no real ad IDs, real provider initialization, real ad rendering, CTV inventory, fake ad revenue, sponsor revenue, creator earnings, payout balances, invoices, or CTV revenue exist.
 - AppLovin MAX is the primary ad mediation direction; Unity LevelPlay / Unity Ads may be added later through AppLovin MAX; do not build AdMob-only ads.
 - All future real ad providers must go through the provider-neutral Chi'llywood ad wrapper; do not make direct screen-level SDK calls.

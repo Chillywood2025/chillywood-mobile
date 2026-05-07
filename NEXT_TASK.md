@@ -1,13 +1,16 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement Ads V1B Native/feed placeholder placement.
+Implement Ads V1C Interstitial controller.
 
 Product direction:
 
 - Ads Launch Foundation V1A is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+- Ads Launch Foundation V1B is pushed as native/feed placeholder placement foundation on Home only.
 - V1A added central ad config defaults, placeholder provider, eligibility, active browsing time, session caps, daily caps, AsyncStorage daily persistence, and read-only/foundation Admin Ads status.
-- V1A did not add real ad rendering, real ad IDs, AppLovin/Unity/AdMob SDKs, provider initialization, CTV inventory, or fake ad revenue.
+- V1B added `components/ads/NativeAdSlot.tsx`, one Home native/feed placeholder slot, read-only Admin Ads status copy, and native/feed long-use cap proof support.
+- Default runtime still hides ads because `ads_enabled` defaults false.
+- V1B did not add real ad rendering, real ad IDs, AppLovin/Unity/AdMob SDKs, provider initialization, interstitials, CTV inventory, or fake ad revenue.
 - AppLovin MAX is the primary ad mediation direction.
 - Use a placeholder provider until AppLovin IDs are ready.
 - Unity LevelPlay / Unity Ads may be added through AppLovin MAX later.
@@ -19,56 +22,51 @@ Product direction:
 
 Required proof for that lane:
 
-- one labeled placeholder/native slot appears only on safe free-user browsing surfaces, likely Home and/or Explore
-- Premium users see no native/feed placeholder slot and do not increment counters
-- free-user native/feed eligibility respects existing V1A ad config, active browsing time, session cap, daily cap, and forbidden-context helper behavior
-- no native/feed slot appears in Player, Watch-Party, Live Stage, Profile composer, Chat, Admin, Channel Studio, or Subscribe/payment surfaces
+- placeholder interstitial is controlled by the central V1A/V1B ad config, eligibility, provider, session, daily cap, and forbidden-context helpers
+- no interstitial appears immediately at app launch
+- first interstitial remains blocked before 180 active browsing seconds
+- repeat interstitial remains blocked until 600 seconds after the previous eligible placeholder interstitial show
+- session and daily interstitial caps are enforced
+- Premium users see no interstitial and do not increment counters
+- no interstitial appears in Player, Watch-Party, Live Stage, Profile composer, Chat, Admin, Channel Studio, Subscribe/payment, upload, typing/commenting, active playback, or active LiveKit contexts
 - no SDK IDs, secret keys, or provider credentials are committed
 - no AdMob-only system is introduced
 - no real ad rendering, real provider initialization, fake ad revenue, fake sponsor revenue, fake creator earnings, payout balances, invoices, or CTV inventory is added
 - existing `/admin`, `/channel-studio`, `/channel-settings`, `/channel/[userId]`, Profile, Player, Watch-Party, and Live Stage behavior remains intact
 
 ## Current Product Lane Order
-1. Ads V1B Native/feed placeholder placement:
-   - one labeled placeholder/native slot on safe free-user browsing surfaces only
-   - likely Home and/or Explore
-   - respects Premium no ads
-   - respects V1A eligibility and caps
-   - no Player, Watch-Party, Live Stage, Profile composer, Chat, Admin, Channel Studio, Subscribe/payment
-   - no real SDK
-   - no real ad IDs
-2. Ads V1C Interstitial controller:
+1. Ads V1C Interstitial controller:
    - placeholder interstitial first
    - safe transitions only
    - no app-launch ad
    - respects 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts
    - no real SDK
    - no real ad IDs
-3. Real AppLovin MAX integration:
-   - only after external AppLovin setup is ready
-   - keep provider wrapper architecture
-   - Unity LevelPlay / Unity Ads later through AppLovin MAX if needed
-   - no AdMob-only path
-4. 18+ age gate:
+2. 18+ age gate:
    - account creation confirms user is 18 or older
    - store confirmation safely
-5. Upload/content lifecycle polish:
+3. Upload/content lifecycle polish:
    - upload progress
    - processing/failed states if backed
    - thumbnail handling
    - draft/published status clarity
    - retry only if backed
-6. Security/compliance/moderation pass:
+4. Security/compliance/moderation pass:
    - Terms
    - Privacy Policy
    - Community Guidelines
    - DMCA/copyright policy
    - sponsorship disclosure rules
    - UGC moderation/admin review hardening
-7. Admin V1B Kill Switches:
+5. Real AppLovin MAX integration:
+   - only after external AppLovin setup is ready
+   - keep provider wrapper architecture
+   - Unity LevelPlay / Unity Ads later through AppLovin MAX if needed
+   - no AdMob-only path
+6. Admin V1B Kill Switches:
    - only after a dedicated schema/config/enforcement plan
    - switches must be real and read by affected app surfaces
-8. Usage metering / ledger systems later:
+7. Usage metering / ledger systems later:
    - bandwidth
    - participant-minutes
    - storage
@@ -104,6 +102,10 @@ Required proof for that lane:
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A added `_lib/ads/adConfig.ts`, `_lib/ads/adEligibility.ts`, `_lib/ads/adProvider.ts`, `_lib/ads/providers/placeholder.ts`, `_lib/ads/adSession.ts`, `hooks/useAdEligibility.ts`, and `hooks/useActiveBrowsingTime.ts`. `app/admin.tsx` was updated only for read-only/foundation Admin Ads status.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
+- Ads V1B is pushed.
+- Ads V1B added one native/feed placeholder placement on Home through `components/ads/NativeAdSlot.tsx` and `app/(tabs)/index.tsx`.
+- Ads V1B behavior to preserve: normal runtime hides the placeholder because `ads_enabled=false`; `NativeAdSlot` renders only after V1A eligibility passes; Premium/ad-free users never see it and do not increment counters; placeholder native/feed records only when eligible; base native/feed session cap is 1; long-use unlock allows a second placement after 120 active browsing minutes; daily native/feed cap is 3; forbidden routes/contexts remain blocked; Admin Ads stays read-only/foundation.
+- Ads V1B did not add real ad rendering, SDKs, real IDs, provider initialization, interstitials, CTV inventory, fake revenue, or payout/sponsor/creator earnings systems.
 
 ## Product Truth To Preserve
 - Profile = person/social identity.

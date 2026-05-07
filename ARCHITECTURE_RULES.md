@@ -120,7 +120,7 @@ Admin V1A is pushed and includes Home, Reports, Content, Roles, Audit, Rachi, Us
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Ads Launch Foundation Rule
-Ads Launch Foundation V1A is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
+Ads Launch Foundation V1A/V1B is pushed as provider-neutral, no-SDK, no-real-rendering infrastructure.
 
 Current Ads V1A owners:
 - `_lib/ads/adConfig.ts`
@@ -132,7 +132,15 @@ Current Ads V1A owners:
 - `hooks/useActiveBrowsingTime.ts`
 - `app/admin.tsx` for read-only/foundation Admin Ads status only
 
+Current Ads V1B owners:
+- `components/ads/NativeAdSlot.tsx`
+- `app/(tabs)/index.tsx` for the Home native/feed placeholder placement only
+- `_lib/ads/adSession.ts` for explicit active-browsing seconds in placeholder cap recording
+- `app/admin.tsx` for read-only/foundation Admin Ads status copy only
+
 Ads V1A defaults `ads_enabled` to false and `ads_provider` to `placeholder`. The placeholder provider reports not connected and must not call any SDK, use real ad unit IDs, initialize providers, or render real ads.
+
+Ads V1B adds one native/feed placeholder foundation slot on Home. Normal runtime still hides it because `ads_enabled` defaults false. `NativeAdSlot` may render only after central eligibility passes, Premium/ad-free users must never see it or increment counters, native/feed base session cap is 1, long-use unlock allows a second native/feed placement after 120 active browsing minutes, daily native/feed cap is 3, and forbidden routes/contexts stay blocked.
 
 Premium/ad-free users must always be ineligible for ads and must not increment ad counters. Future ad placements must call the central ad config, eligibility, session/cap, and provider wrapper layers instead of making direct screen-level SDK calls.
 
