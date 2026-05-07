@@ -2166,6 +2166,10 @@ export type Database = {
         Args: { required_roles: string[] }
         Returns: boolean
       }
+      record_creator_video_upload_usage: {
+        Args: { target_video_id: string }
+        Returns: Json
+      }
       request_friendship: {
         Args: { target_user_id: string }
         Returns: {
