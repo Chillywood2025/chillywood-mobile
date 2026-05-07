@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Audit/spec Admin V1B2C kill switch enforcement for the next real runtime control only after exact affected-surface mapping.
+Audit/spec Admin V1B2D `profile_posting_enabled` kill switch enforcement for backed Profile post creation submit only, after exact affected-surface mapping.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -19,6 +19,7 @@ Product direction:
 - Admin V1B1 runtime controls config foundation is pushed. Typed defaults live under `app_configurations.config.runtimeControls`; Admin Kill Switches shows read-only `Configured foundation` and `Not enforced yet`; no working toggles or runtime enforcement were added.
 - Admin V1B2A new-account enforcement is pushed. Signup reads `runtimeControls.new_accounts_enabled` after email/password and 18+ confirmation pass, blocks before `supabase.auth.signUp` when false, preserves default true behavior, and updates Admin New Accounts copy as read-only `Enforced on signup`.
 - Admin V1B2B upload enforcement is pushed. Channel Studio compatibility route `app/channel-settings.tsx` reads normalized `runtimeControls.uploads_enabled` from existing app config and blocks only new creator-video upload submit before storage/upload work when false. Default true and config-read fallback true preserve normal uploads. Existing video metadata edit, publish/unpublish/delete, Open Player, picker behavior, storage helpers, RLS, migrations, generated types, and the single `Video Upload` form remain unchanged. Admin Uploads copy is read-only `Enforced on upload`; no working Admin toggle was added.
+- Admin V1B2C comments enforcement is pushed. Profile post comment/reply submit and creator-video comment/reply submit read normalized `runtimeControls.comments_enabled` after existing validation and before backed comment create or comment attachment upload. Default true preserves normal comments. Existing comment reads, deletes, reports, attachment picker selection, Watch-Party comments, Live Stage comments, Chi'lly Chat messages, Chi'lly Circle, profile privacy, Player controls/layout, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Comments copy is read-only `Enforced on comments`; no working Admin toggle was added.
 
 Required proof before the next Admin V1B2 runtime-control enforcement:
 
@@ -31,10 +32,10 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Admin V1B2C Next Kill Switch Enforcement Audit/Spec:
+1. Admin V1B2D Profile Posting Kill Switch Enforcement Audit/Spec:
    - audit/spec first, then implement only one narrowly scoped real runtime read
-   - likely candidates include `comments_enabled`, `creator_posting_enabled`, or `profile_posting_enabled`, but only after exact surface ownership is proved
-   - do not touch comment/profile/privacy behavior without a dedicated scoped prompt and proof plan
+   - target candidate is `profile_posting_enabled` for backed Profile post creation submit only
+   - do not block Profile post comments/replies, creator-video comments, Chi'lly Circle, profile privacy, attachments, or Channel creator-video upload unless a dedicated scoped prompt maps and proves that behavior
    - keep Admin toggles read-only unless a separate backed write-control prompt is provided
 2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
@@ -76,6 +77,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Admin V1B1 runtime controls config foundation is pushed. `_lib/featureFlags.ts` owns typed defaults and normalization, `_lib/appConfig.ts` persists normalized `runtimeControls` under existing `app_configurations.config`, and `app/admin.tsx` updates Kill Switches copy only as read-only `Configured foundation` / `Not enforced yet`. No runtime behavior, Premium gate, migration, generated type, RLS, storage, Supabase remote, or Admin permission boundary changed.
 - Admin V1B2A new-account enforcement is pushed. `app/(auth)/signup.tsx` blocks before `supabase.auth.signUp` if `runtimeControls.new_accounts_enabled` is false, after existing email/password and 18+ checks. Admin marks New Accounts as read-only `Enforced on signup`; no working toggle, login change, legal acceptance storage change, migration, generated type edit, RLS/storage change, Supabase remote change, or Premium gate change was added.
 - Admin V1B2B upload enforcement is pushed. `app/channel-settings.tsx` blocks only new creator-video upload submit when `runtimeControls.uploads_enabled` is false, after existing missing-title, missing-file, and file-size checks and before `uploadCreatorVideo` or storage work. Existing video metadata edits, publish/unpublish/delete, Open Player, picker behavior, storage helpers, RLS, migrations, generated types, and one clear Channel Studio `Video Upload` form are unchanged. Admin marks Uploads as read-only `Enforced on upload`; no working toggle was added.
+- Admin V1B2C comments enforcement is pushed. `app/profile/[userId].tsx` blocks only Profile post comment/reply submit when `runtimeControls.comments_enabled` is false, after signed-in, engageable-post, empty-body, and length checks and before `createProfilePostComment` or comment attachment upload. `app/player/[id].tsx` blocks only creator-video comment/reply submit when the same control is false, after creator-video route/source, signed-in, empty-body, and length checks and before `createCreatorVideoComment` or comment attachment upload. Admin marks Comments as read-only `Enforced on comments`; no working toggle was added.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
