@@ -1798,14 +1798,6 @@ export function ChannelStudioScreen() {
           <Text style={styles.panelTitle}>Content</Text>
           <Text style={styles.panelSubtitle}>Manage your channel videos, drafts, and published uploads.</Text>
         </View>
-        <TouchableOpacity
-          style={styles.panelHeaderButton}
-          activeOpacity={0.86}
-          onPress={onPickVideoFile}
-          disabled={videoSaving}
-        >
-          <Text style={styles.panelHeaderButtonText}>Upload</Text>
-        </TouchableOpacity>
       </View>
       <Text style={styles.permissionCopy}>
         Upload playable videos to your public channel. Drafts stay visible only to you; public videos can appear on your Profile/Channel and open in Player.
@@ -1924,28 +1916,20 @@ export function ChannelStudioScreen() {
       ) : (
         <View style={styles.eventEmptyCard}>
           <Text style={styles.eventEmptyTitle}>No channel videos yet</Text>
-          <Text style={styles.eventEmptyBody}>No channel videos yet. Upload your first video.</Text>
-          <TouchableOpacity
-            style={styles.eventSecondaryButton}
-            activeOpacity={0.86}
-            onPress={onPickVideoFile}
-            disabled={videoSaving}
-          >
-            <Text style={styles.eventSecondaryButtonText}>Upload</Text>
-          </TouchableOpacity>
+          <Text style={styles.eventEmptyBody}>No channel videos yet. Use the Video Upload form below when you're ready.</Text>
         </View>
       )}
 
       <Text style={styles.sectionLabel}>
-        {videoEditor.editingVideoId ? "Edit Video" : "Upload Video"}
+        {videoEditor.editingVideoId ? "Edit Video" : "Video Upload"}
       </Text>
       <View
         style={[
-          styles.uploadLifecycleCard,
-          videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleCardReady,
-          videoLifecycleCopy.tone === "active" && styles.uploadLifecycleCardActive,
-          videoLifecycleCopy.tone === "success" && styles.uploadLifecycleCardSuccess,
-          videoLifecycleCopy.tone === "error" && styles.uploadLifecycleCardError,
+          styles.uploadLifecycleInline,
+          videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleInlineReady,
+          videoLifecycleCopy.tone === "active" && styles.uploadLifecycleInlineActive,
+          videoLifecycleCopy.tone === "success" && styles.uploadLifecycleInlineSuccess,
+          videoLifecycleCopy.tone === "error" && styles.uploadLifecycleInlineError,
         ]}
       >
         <View style={styles.uploadLifecycleHeader}>
@@ -3802,19 +3786,6 @@ const styles = StyleSheet.create({
   brandActionRow: {
     gap: 10,
   },
-  panelHeaderButton: {
-    borderRadius: 999,
-    backgroundColor: "#DC143C",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  panelHeaderButtonText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "900",
-  },
   segmentRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -4377,31 +4348,31 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
   },
-  uploadLifecycleCard: {
-    borderRadius: 14,
+  uploadLifecycleInline: {
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.045)",
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     gap: 7,
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  uploadLifecycleCardReady: {
-    borderColor: "rgba(115,134,255,0.34)",
-    backgroundColor: "rgba(115,134,255,0.12)",
+  uploadLifecycleInlineReady: {
+    borderColor: "rgba(115,134,255,0.24)",
+    backgroundColor: "rgba(115,134,255,0.08)",
   },
-  uploadLifecycleCardActive: {
-    borderColor: "rgba(242,194,91,0.38)",
-    backgroundColor: "rgba(242,194,91,0.12)",
+  uploadLifecycleInlineActive: {
+    borderColor: "rgba(242,194,91,0.3)",
+    backgroundColor: "rgba(242,194,91,0.08)",
   },
-  uploadLifecycleCardSuccess: {
-    borderColor: "rgba(45,153,92,0.42)",
-    backgroundColor: "rgba(45,153,92,0.14)",
+  uploadLifecycleInlineSuccess: {
+    borderColor: "rgba(45,153,92,0.32)",
+    backgroundColor: "rgba(45,153,92,0.1)",
   },
-  uploadLifecycleCardError: {
-    borderColor: "rgba(255,116,116,0.38)",
-    backgroundColor: "rgba(255,116,116,0.1)",
+  uploadLifecycleInlineError: {
+    borderColor: "rgba(255,116,116,0.3)",
+    backgroundColor: "rgba(255,116,116,0.08)",
   },
   uploadLifecycleHeader: {
     flexDirection: "row",
