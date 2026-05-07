@@ -61,6 +61,12 @@ import {
   type SponsorPlacement,
   type TitleAccessRule,
 } from "../_lib/monetization";
+import {
+  formatUsageBytes,
+  formatUsageMinutes,
+  readAdminUsageReadModel,
+  type AdminUsageReadModel,
+} from "../_lib/platformUsage";
 import { supabase } from "../_lib/supabase";
 import { moderateCreatorVideo, type CreatorVideoModerationStatus } from "../_lib/creatorVideos";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
@@ -180,13 +186,8 @@ type PendingCreatorVideoModerationAction = {
   reason: string;
 };
 
-type AdminV1ReadModel = {
+type AdminV1ReadModel = AdminUsageReadModel & {
   loading: boolean;
-  premiumActiveCount: number | null;
-  activeLiveRoomCount: number | null;
-  activeWatchPartyCount: number | null;
-  uploadsTodayCount: number | null;
-  generatedAt: string | null;
 };
 
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
@@ -215,9 +216,14 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   activeLiveRoomCount: null,
   activeWatchPartyCount: null,
   uploadsTodayCount: null,
-  generatedAt: null,
+  storageMetadataEstimateBytes: null,
+  storageMetadataRowsRead: null,
+  participantMinutesEstimate: null,
+  participantMembershipRowsRead: null,
+  bandwidthMeteringBytes: null,
+  bandwidthMeteringRowsRead: null,
+  generatedAt: new Date(0).toISOString(),
 };
-const ACTIVE_PREMIUM_ENTITLEMENT_STATUSES = ["active", "trialing", "grace_period"] as const;
 type PlannedKillSwitchRow = {
   label: string;
   controlKey?: keyof AppRuntimeControls;
@@ -1563,75 +1569,10 @@ export default function AdminStudioScreen() {
   }, []);
 
   const loadAdminV1ReadModel = useCallback(async () => {
-    const readCount = async (query: PromiseLike<{ count: number | null; error: any }>) => {
-      const { count, error } = await query;
-      if (error) throw error;
-      return Number(count ?? 0);
-    };
-    const safeCount = async (loader: () => Promise<number>) => {
-      try {
-        return await loader();
-      } catch {
-        return null;
-      }
-    };
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startOfToday = today.toISOString();
-
     setAdminV1ReadModel((current) => ({ ...current, loading: true }));
 
-    const [
-      premiumActiveCount,
-      activeLiveRoomCount,
-      activeWatchPartyCount,
-      uploadsTodayCount,
-    ] = await Promise.all([
-      safeCount(() =>
-        readCount(
-          supabase
-            .from("user_entitlements")
-            .select("user_id", { count: "exact", head: true })
-            .eq("entitlement_key", "premium")
-            .in("status", [...ACTIVE_PREMIUM_ENTITLEMENT_STATUSES]),
-        ),
-      ),
-      safeCount(() =>
-        readCount(
-          supabase
-            .from("watch_party_rooms")
-            .select("party_id", { count: "exact", head: true })
-            .eq("is_active", true)
-            .eq("room_type", "live"),
-        ),
-      ),
-      safeCount(() =>
-        readCount(
-          supabase
-            .from("watch_party_rooms")
-            .select("party_id", { count: "exact", head: true })
-            .eq("is_active", true)
-            .eq("room_type", "title"),
-        ),
-      ),
-      safeCount(() =>
-        readCount(
-          supabase
-            .from("videos")
-            .select("id", { count: "exact", head: true })
-            .gte("created_at", startOfToday),
-        ),
-      ),
-    ]);
-
-    setAdminV1ReadModel({
-      loading: false,
-      premiumActiveCount,
-      activeLiveRoomCount,
-      activeWatchPartyCount,
-      uploadsTodayCount,
-      generatedAt: new Date().toISOString(),
-    });
+    const usageReadModel = await readAdminUsageReadModel();
+    setAdminV1ReadModel({ ...usageReadModel, loading: false });
   }, []);
 
   const queueCreatorVideoModeration = useCallback((status: CreatorVideoModerationStatus) => {
@@ -3047,7 +2988,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>USAGE</Text>
               <Text style={styles.configTitle}>Usage</Text>
               <Text style={styles.configBody}>
-                Usage in V1A is limited to safe DB estimates from existing room and creator-video records.
+                Usage combines existing room/upload DB estimates with 37-39 metering foundations. No value here is billing or cost truth.
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeScheduled]}>
@@ -3083,15 +3024,58 @@ export default function AdminStudioScreen() {
                     ? "Upload counts are not connected yet."
                     : `${adminV1ReadModel.uploadsTodayCount} creator video upload record${adminV1ReadModel.uploadsTodayCount === 1 ? "" : "s"} created today.`}
                 </Text>
-                <Text style={styles.configListBody}>Storage estimate is not connected yet.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Storage Metadata Estimate</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.storageMetadataEstimateBytes === null
+                    ? "Storage metadata estimate is not connected yet."
+                    : `${formatUsageBytes(adminV1ReadModel.storageMetadataEstimateBytes)} · Metadata estimate from creator-video and social-attachment records.`}
+                </Text>
+                {adminV1ReadModel.storageMetadataRowsRead !== null ? (
+                  <Text style={styles.configListBody}>
+                    {`${adminV1ReadModel.storageMetadataRowsRead} metadata row${adminV1ReadModel.storageMetadataRowsRead === 1 ? "" : "s"} read. This is not storage billing truth.`}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Participant-Minutes DB Estimate</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.participantMinutesEstimate === null
+                    ? "Participant-minute estimate is not connected yet."
+                    : `${formatUsageMinutes(adminV1ReadModel.participantMinutesEstimate)} today · DB estimate from room membership records.`}
+                </Text>
+                {adminV1ReadModel.participantMembershipRowsRead !== null ? (
+                  <Text style={styles.configListBody}>
+                    {`${adminV1ReadModel.participantMembershipRowsRead} membership row${adminV1ReadModel.participantMembershipRowsRead === 1 ? "" : "s"} read. This is not LiveKit billing truth.`}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Bandwidth Metering</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.bandwidthMeteringBytes === null
+                    ? "Bandwidth metering is not connected yet."
+                    : `${formatUsageBytes(adminV1ReadModel.bandwidthMeteringBytes)} today · Backed metering-event foundation.`}
+                </Text>
+                {adminV1ReadModel.bandwidthMeteringRowsRead !== null && adminV1ReadModel.bandwidthMeteringRowsRead > 0 ? (
+                  <Text style={styles.configListBody}>
+                    {`${adminV1ReadModel.bandwidthMeteringRowsRead} bandwidth event row${adminV1ReadModel.bandwidthMeteringRowsRead === 1 ? "" : "s"} read. This is not ad, payout, or creator revenue truth.`}
+                  </Text>
+                ) : null}
               </View>
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Cost Risk Flags</Text>
-                <Text style={styles.configListBody}>Bandwidth metering is not connected yet.</Text>
                 <Text style={styles.configListBody}>LiveKit metering is not connected yet.</Text>
-                <Text style={styles.configListBody}>Participant-minute metering is not connected yet.</Text>
+                <Text style={styles.configListBody}>Provider-side storage and bandwidth billing are not connected yet.</Text>
               </View>
             </View>
           </View>
