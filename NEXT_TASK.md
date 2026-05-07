@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement Admin V1B2H room attachment kill switch enforcement for Watch-Party and Live Stage room comment attachments only.
+Audit/spec Admin V1B2I `chat_enabled` before implementation.
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -24,6 +24,7 @@ Product direction:
 - Admin V1B2E creator posting enforcement is pushed. Channel Studio compatibility route `app/channel-settings.tsx` reads normalized `runtimeControls.creator_posting_enabled` from existing app config and blocks only new creator event creation before `createCreatorEvent` when false. Default true preserves normal creator event creation. Existing creator event edits through `updateCreatorEvent`, creator-video upload, video metadata edit, publish/unpublish/delete, Profile posts, comments/replies, attachments, Channel Studio layout, Public Channel, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Creator Posting copy is read-only `Enforced on creator events`; no working Admin toggle was added.
 - Admin V1B2F social attachment enforcement is pushed. `app/profile/[userId].tsx` and `app/player/[id].tsx` read normalized `runtimeControls.attachments_enabled` and block only selected non-chat social attachments before parent post/comment create and before attachment upload. Profile post attachments, Profile post comment/reply attachments, and creator-video comment/reply attachments are enforced. Text-only Profile posts/comments and creator-video comments remain governed by their existing posting/comment controls. Chat attachments, room attachments, `_lib/socialAttachments.ts`, `_lib/profilePosts.ts`, `_lib/creatorVideoComments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Attachments copy is read-only `Enforced on social attachments`; no working Admin toggle was added.
 - Admin V1B2G standalone Chi'lly Chat attachment enforcement is pushed. `app/chat/[threadId].tsx` reads normalized `runtimeControls.chat_attachments_enabled` and blocks only selected attachments before optimistic message insertion and before `sendChatMessage` when false. Text-only Chi'lly Chat messages remain allowed. Existing signed-in/thread gates, reads, realtime updates, mark-read behavior, attachment picker selection, room attachments, `_lib/chat.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat Attachments copy is read-only `Enforced on chat attachments`; no working Admin toggle was added.
+- Admin V1B2H room attachment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` read normalized `runtimeControls.chat_attachments_enabled` and block only selected room attachments before `sendPartyMessageRecord` and before `createSocialAttachmentForSurface` when false. Text-only room comments remain allowed. Existing room layouts, LiveKit behavior, Premium gates, message reads, room routes, attachment picker selection, `_lib/watchParty.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin Chat Attachments copy is read-only `Enforced on chat and room attachments`; no working Admin toggle was added.
 
 Required proof before the next Admin V1B2 runtime-control enforcement:
 
@@ -36,11 +37,11 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - if a runtime control cannot be read safely, leave it as `Configured foundation` / `Not enforced yet`
 
 ## Current Product Lane Order
-1. Admin V1B2H Room Attachment Kill Switch Enforcement:
-   - implement only room attachment submit blocking in `/watch-party/[partyId]` and `/watch-party/live-stage/[partyId]`
-   - use the existing normalized app config already loaded by those room routes
-   - block selected room attachments before `sendPartyMessageRecord` and before `createSocialAttachmentForSurface`
-   - preserve text-only room comments, message reads, room routes, Watch-Party layout, Live Stage layout, LiveKit behavior, Premium gates, attachment picker selection, `_lib/watchParty.ts`, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state
+1. Admin V1B2I Chat Kill Switch Audit/Spec:
+   - audit before implementation because `chat_enabled` could mean route access, send-only blocking, profile-to-chat entry blocking, room comment blocking, or some combination
+   - map standalone `/chat`, `/chat/[threadId]`, profile-to-chat entry points, Watch-Party room comments, and Live Stage room comments separately
+   - recommend a phased implementation that preserves room layouts, LiveKit behavior, Premium gates, existing comments/messages reads, attachments controls, RLS, migrations, generated types, and Supabase remote state
+   - do not add route blocking or message send blocking without exact copy, proof, and fallback behavior
    - keep Admin toggles read-only unless a separate backed write-control prompt is provided
 2. Real AppLovin MAX readiness/integration planning:
    - later only after external AppLovin/store setup is ready
@@ -87,6 +88,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Admin V1B2E creator posting enforcement is pushed. `app/channel-settings.tsx` blocks only new creator event creation when `runtimeControls.creator_posting_enabled` is false, before `createCreatorEvent`. Existing `updateCreatorEvent` edits, creator-video upload, metadata edit, publish/unpublish/delete, Profile posts, comments/replies, attachments, Channel Studio layout, Public Channel, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state are unchanged. Admin marks Creator Posting as read-only `Enforced on creator events`; no working toggle was added.
 - Admin V1B2F social attachment enforcement is pushed. `app/profile/[userId].tsx` and `app/player/[id].tsx` block selected non-chat social attachments when `runtimeControls.attachments_enabled` is false, before parent post/comment create and before attachment upload. Text-only posts/comments remain allowed where existing controls allow them. Admin marks Attachments as read-only `Enforced on social attachments`; no working toggle was added.
 - Admin V1B2G standalone Chi'lly Chat attachment enforcement is pushed. `app/chat/[threadId].tsx` blocks selected attachments when `runtimeControls.chat_attachments_enabled` is false, before optimistic message insertion and before `sendChatMessage`. Text-only messages remain allowed. Admin marks Chat Attachments as read-only `Enforced on chat attachments`; no working toggle was added.
+- Admin V1B2H room attachment enforcement is pushed. `app/watch-party/[partyId].tsx` and `app/watch-party/live-stage/[partyId].tsx` block selected room attachments when `runtimeControls.chat_attachments_enabled` is false, before room message insert and before attachment upload. Text-only room comments remain allowed. Admin marks Chat Attachments as read-only `Enforced on chat and room attachments`; no working toggle was added.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
