@@ -569,6 +569,9 @@ export function ChannelStudioScreen() {
   const [settingsEnabled, setSettingsEnabled] = useState(true);
   const [appDisplayName, setAppDisplayName] = useState(DEFAULT_APP_CONFIG.branding.appDisplayName);
   const [uploadsEnabled, setUploadsEnabled] = useState(DEFAULT_APP_CONFIG.runtimeControls.uploads_enabled);
+  const [creatorPostingEnabled, setCreatorPostingEnabled] = useState(
+    DEFAULT_APP_CONFIG.runtimeControls.creator_posting_enabled,
+  );
   const [creatorPermissions, setCreatorPermissions] = useState<CreatorPermissionSet | null>(null);
   const [audienceSummary, setAudienceSummary] = useState<ChannelAudienceReadModel | null>(null);
   const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
@@ -647,6 +650,7 @@ export function ChannelStudioScreen() {
         setSettingsEnabled(resolveFeatureConfig(resolvedConfig).creatorSettingsEnabled);
         setAppDisplayName(resolveBrandingConfig(resolvedConfig).appDisplayName);
         setUploadsEnabled(resolvedConfig.runtimeControls.uploads_enabled);
+        setCreatorPostingEnabled(resolvedConfig.runtimeControls.creator_posting_enabled);
         setCreatorPermissions(resolvedPermissions);
         setAudienceSummary(resolvedAudienceSummary);
         setSafetyAdminSummary(resolvedSafetyAdminSummary);
@@ -657,6 +661,7 @@ export function ChannelStudioScreen() {
         if (!active) return;
         setProfile(normalizeUserProfile({ username: "", avatarIndex: 0 }));
         setUploadsEnabled(DEFAULT_APP_CONFIG.runtimeControls.uploads_enabled);
+        setCreatorPostingEnabled(DEFAULT_APP_CONFIG.runtimeControls.creator_posting_enabled);
         setAudienceSummary(null);
         setSafetyAdminSummary(null);
         setCreatorAnalyticsSummary(null);
@@ -1140,6 +1145,11 @@ export function ChannelStudioScreen() {
 
   const onSaveEvent = async () => {
     if (!user?.id) return;
+
+    if (!eventEditor.editingEventId && !creatorPostingEnabled) {
+      setEventNotice("Creator event creation is temporarily paused. Existing events can still be managed.");
+      return;
+    }
 
     try {
       setEventSaving(true);

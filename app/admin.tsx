@@ -283,7 +283,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Creator Posting",
     controlKey: "creator_posting_enabled",
-    body: "Creator posting surfaces do not read this runtime control yet. Not enforced yet.",
+    body: "Creator event creation reads this runtime control before creating a new creator event. Existing event edits are still managed separately. Enforced on creator events.",
+    badgeLabel: "Enforced on creator events",
   },
   {
     label: "Profile Posting",
