@@ -1639,6 +1639,10 @@ export default function WatchPartyRoomScreen() {
       setChatError("Sign in before sending room comments.");
       return;
     }
+    if (!appConfig.runtimeControls.chat_enabled) {
+      setChatError("Room comments are temporarily paused. You can still read existing comments.");
+      return;
+    }
     if (chatAttachmentFile && !appConfig.runtimeControls.chat_attachments_enabled) {
       setChatError("Room attachments are temporarily paused. You can still send text comments.");
       return;
@@ -1686,7 +1690,14 @@ export default function WatchPartyRoomScreen() {
     } finally {
       setChatSending(false);
     }
-  }, [appConfig.runtimeControls.chat_attachments_enabled, chatAttachmentFile, chatDraft, chatSending, partyId]);
+  }, [
+    appConfig.runtimeControls.chat_attachments_enabled,
+    appConfig.runtimeControls.chat_enabled,
+    chatAttachmentFile,
+    chatDraft,
+    chatSending,
+    partyId,
+  ]);
 
   // ── Connection display helpers ───────────────────────────────────────────────
   const connLabel: Record<ConnState, string> = {

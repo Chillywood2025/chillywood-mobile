@@ -254,8 +254,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Chat",
     controlKey: "chat_enabled",
-    body: "Standalone Chi'lly Chat send, call-start, official starter, Profile-to-chat entry, and room invite direct-message paths read this runtime control before new chat writes or starts. Enforced on standalone chat and invites.",
-    badgeLabel: "Enforced on chat and invites",
+    body: "Standalone Chi'lly Chat send, call-start, official starter, Profile-to-chat entry, room invite direct-message, Watch-Party room comment, and Live Stage room comment paths read this runtime control before new chat writes or starts. Enforced on chat, invites, and room comments.",
+    badgeLabel: "Enforced on chat, invites, and room comments",
   },
   {
     label: "Chat Attachments",

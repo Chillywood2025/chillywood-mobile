@@ -2597,6 +2597,10 @@ export default function WatchPartyLiveStageScreen() {
     const safeBody = hybridCommentDraft.trim();
     const hasAttachment = !!hybridCommentAttachmentFile;
     if ((!safeBody && !hasAttachment) || !partyId || hybridCommentSending) return;
+    if (!appConfig.runtimeControls.chat_enabled) {
+      setHybridCommentError("Room comments are temporarily paused. You can still read existing comments.");
+      return;
+    }
     if (hybridCommentAttachmentFile && !appConfig.runtimeControls.chat_attachments_enabled) {
       setHybridCommentError("Room attachments are temporarily paused. You can still send text comments.");
       return;
@@ -2669,6 +2673,7 @@ export default function WatchPartyLiveStageScreen() {
     }
   }, [
     appConfig.runtimeControls.chat_attachments_enabled,
+    appConfig.runtimeControls.chat_enabled,
     fetchHybridComments,
     hybridCommentAttachmentFile,
     hybridCommentDraft,
