@@ -1,3 +1,7 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import type { Database } from "../supabase/database.types";
+
 export const USER_ACCOUNT_LEGAL_ACCEPTANCES_TABLE = "user_account_legal_acceptances";
 
 export const CURRENT_LEGAL_ACCEPTANCE_VERSION = "public_v1_h1b";
@@ -56,4 +60,29 @@ export function buildAccountLegalAcceptancePayload(
     privacy_accepted_version: CURRENT_LEGAL_ACCEPTANCE_VERSION,
     updated_at: timestamp,
   };
+}
+
+export type AccountLegalAcceptanceWriteResult =
+  | { ok: true }
+  | { ok: false; errorMessage: string; code?: string };
+
+export async function recordAccountLegalAcceptance(
+  client: SupabaseClient<Database>,
+  userId: string,
+  acceptedAt?: string | number | Date,
+): Promise<AccountLegalAcceptanceWriteResult> {
+  const payload = buildAccountLegalAcceptancePayload(userId, acceptedAt);
+  const { error } = await client
+    .from(USER_ACCOUNT_LEGAL_ACCEPTANCES_TABLE)
+    .upsert(payload, { onConflict: "user_id" });
+
+  if (error) {
+    return {
+      ok: false,
+      errorMessage: error.message,
+      code: error.code,
+    };
+  }
+
+  return { ok: true };
 }

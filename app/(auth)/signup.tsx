@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { recordAccountLegalAcceptance } from "../../_lib/accountLegalAcceptance";
 import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
@@ -62,6 +63,39 @@ export default function Signup() {
       trackEvent("auth_sign_up_success", {
         hasSession: !!data.session,
       });
+
+      if (data.session?.user?.id) {
+        const acceptanceResult = await recordAccountLegalAcceptance(
+          supabase,
+          data.session.user.id,
+        );
+
+        if (!acceptanceResult.ok) {
+          reportRuntimeError(
+            "auth-signup-legal-acceptance",
+            new Error(acceptanceResult.errorMessage),
+            {
+              code: acceptanceResult.code ?? "unknown",
+            },
+          );
+          trackEvent("auth_legal_acceptance_failure", {
+            reason: acceptanceResult.code ?? "write_failed",
+          });
+          Alert.alert(
+            "Signup Error",
+            "Your account was created, but Chi'llywood could not store the required 18+ and legal acceptance. Sign in and contact support if this continues.",
+          );
+          return;
+        }
+
+        trackEvent("auth_legal_acceptance_recorded", {
+          source: "signup",
+        });
+      } else if (data.user?.id) {
+        trackEvent("auth_legal_acceptance_deferred", {
+          reason: "signup_session_unavailable",
+        });
+      }
 
       if (data.session?.user) {
         router.replace(redirectTo as Parameters<typeof router.replace>[0]);

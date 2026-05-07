@@ -77,39 +77,6 @@ export type Database = {
         }
         Relationships: []
       }
-      billing_events: {
-        Row: {
-          entitlement_key: string | null
-          event_type: string
-          id: number
-          metadata: Json
-          occurred_at: string
-          provider: string
-          status: string | null
-          user_id: string | null
-        }
-        Insert: {
-          entitlement_key?: string | null
-          event_type: string
-          id?: number
-          metadata?: Json
-          occurred_at?: string
-          provider?: string
-          status?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          entitlement_key?: string | null
-          event_type?: string
-          id?: number
-          metadata?: Json
-          occurred_at?: string
-          provider?: string
-          status?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       beta_feedback_items: {
         Row: {
           category: string
@@ -167,6 +134,156 @@ export type Database = {
           status?: string
           summary?: string
           title_id?: string | null
+        }
+        Relationships: []
+      }
+      billing_events: {
+        Row: {
+          entitlement_key: string | null
+          event_type: string
+          id: number
+          metadata: Json
+          occurred_at: string
+          provider: string
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          entitlement_key?: string | null
+          event_type: string
+          id?: number
+          metadata?: Json
+          occurred_at?: string
+          provider?: string
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          entitlement_key?: string | null
+          event_type?: string
+          id?: number
+          metadata?: Json
+          occurred_at?: string
+          provider?: string
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      channel_audience_blocks: {
+        Row: {
+          blocked_at: string
+          blocked_by_user_id: string
+          blocked_user_id: string
+          channel_user_id: string
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocked_at?: string
+          blocked_by_user_id: string
+          blocked_user_id: string
+          channel_user_id: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocked_at?: string
+          blocked_by_user_id?: string
+          blocked_user_id?: string
+          channel_user_id?: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_audience_requests: {
+        Row: {
+          channel_user_id: string
+          created_at: string
+          id: number
+          note: string | null
+          request_kind: string
+          requester_user_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel_user_id: string
+          created_at?: string
+          id?: number
+          note?: string | null
+          request_kind?: string
+          requester_user_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel_user_id?: string
+          created_at?: string
+          id?: number
+          note?: string | null
+          request_kind?: string
+          requester_user_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_followers: {
+        Row: {
+          channel_user_id: string
+          followed_at: string
+          follower_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel_user_id: string
+          followed_at?: string
+          follower_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel_user_id?: string
+          followed_at?: string
+          follower_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_subscribers: {
+        Row: {
+          channel_user_id: string
+          expires_at: string | null
+          source: string
+          started_at: string
+          status: string
+          subscriber_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel_user_id: string
+          expires_at?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          subscriber_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel_user_id?: string
+          expires_at?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          subscriber_user_id?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -293,123 +410,6 @@ export type Database = {
           },
         ]
       }
-      channel_audience_blocks: {
-        Row: {
-          blocked_at: string
-          blocked_by_user_id: string
-          blocked_user_id: string
-          channel_user_id: string
-          reason: string | null
-          updated_at: string
-        }
-        Insert: {
-          blocked_at?: string
-          blocked_by_user_id: string
-          blocked_user_id: string
-          channel_user_id: string
-          reason?: string | null
-          updated_at?: string
-        }
-        Update: {
-          blocked_at?: string
-          blocked_by_user_id?: string
-          blocked_user_id?: string
-          channel_user_id?: string
-          reason?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      channel_audience_requests: {
-        Row: {
-          channel_user_id: string
-          created_at: string
-          id: number
-          note: string | null
-          request_kind: string
-          requester_user_id: string
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          channel_user_id: string
-          created_at?: string
-          id?: number
-          note?: string | null
-          request_kind?: string
-          requester_user_id: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          channel_user_id?: string
-          created_at?: string
-          id?: number
-          note?: string | null
-          request_kind?: string
-          requester_user_id?: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      channel_followers: {
-        Row: {
-          channel_user_id: string
-          followed_at: string
-          follower_user_id: string
-          updated_at: string
-        }
-        Insert: {
-          channel_user_id: string
-          followed_at?: string
-          follower_user_id: string
-          updated_at?: string
-        }
-        Update: {
-          channel_user_id?: string
-          followed_at?: string
-          follower_user_id?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      channel_subscribers: {
-        Row: {
-          channel_user_id: string
-          expires_at: string | null
-          source: string
-          started_at: string
-          status: string
-          subscriber_user_id: string
-          updated_at: string
-        }
-        Insert: {
-          channel_user_id: string
-          expires_at?: string | null
-          source?: string
-          started_at?: string
-          status?: string
-          subscriber_user_id: string
-          updated_at?: string
-        }
-        Update: {
-          channel_user_id?: string
-          expires_at?: string | null
-          source?: string
-          started_at?: string
-          status?: string
-          subscriber_user_id?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       communication_room_memberships: {
         Row: {
           avatar_url: string | null
@@ -508,6 +508,65 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_events: {
+        Row: {
+          created_at: string
+          ends_at: string | null
+          event_title: string
+          event_type: string
+          host_user_id: string
+          id: string
+          linked_title_id: string | null
+          reminder_ready: boolean
+          replay_available_at: string | null
+          replay_expires_at: string | null
+          replay_policy: string
+          starts_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at?: string | null
+          event_title: string
+          event_type: string
+          host_user_id: string
+          id?: string
+          linked_title_id?: string | null
+          reminder_ready?: boolean
+          replay_available_at?: string | null
+          replay_expires_at?: string | null
+          replay_policy?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string | null
+          event_title?: string
+          event_type?: string
+          host_user_id?: string
+          id?: string
+          linked_title_id?: string | null
+          reminder_ready?: boolean
+          replay_available_at?: string | null
+          replay_expires_at?: string | null
+          replay_policy?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_events_linked_title_id_fkey"
+            columns: ["linked_title_id"]
+            isOneToOne: false
+            referencedRelation: "titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_permissions: {
         Row: {
           can_publish_premium_titles: boolean
@@ -583,69 +642,17 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "creator_video_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "creator_video_comments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "creator_video_comments_video_id_fkey"
             columns: ["video_id"]
             isOneToOne: false
             referencedRelation: "videos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      creator_events: {
-        Row: {
-          created_at: string
-          ends_at: string | null
-          event_title: string
-          event_type: string
-          host_user_id: string
-          id: string
-          linked_title_id: string | null
-          reminder_ready: boolean
-          replay_available_at: string | null
-          replay_expires_at: string | null
-          replay_policy: string
-          starts_at: string | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          ends_at?: string | null
-          event_title: string
-          event_type: string
-          host_user_id: string
-          id?: string
-          linked_title_id?: string | null
-          reminder_ready?: boolean
-          replay_available_at?: string | null
-          replay_expires_at?: string | null
-          replay_policy?: string
-          starts_at?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          ends_at?: string | null
-          event_title?: string
-          event_type?: string
-          host_user_id?: string
-          id?: string
-          linked_title_id?: string | null
-          reminder_ready?: boolean
-          replay_available_at?: string | null
-          replay_expires_at?: string | null
-          replay_policy?: string
-          starts_at?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "creator_events_linked_title_id_fkey"
-            columns: ["linked_title_id"]
-            isOneToOne: false
-            referencedRelation: "titles"
             referencedColumns: ["id"]
           },
         ]
@@ -760,27 +767,6 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles: {
-        Row: {
-          avatar_ur1: string | null
-          bio: string | null
-          display_name: string
-          id: string
-        }
-        Insert: {
-          avatar_ur1?: string | null
-          bio?: string | null
-          display_name: string
-          id?: string
-        }
-        Update: {
-          avatar_ur1?: string | null
-          bio?: string | null
-          display_name?: string
-          id?: string
-        }
-        Relationships: []
-      }
       profile_post_comments: {
         Row: {
           body: string
@@ -825,6 +811,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "profile_post_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "profile_post_comments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profile_post_comments_post_id_fkey"
             columns: ["post_id"]
@@ -902,6 +895,66 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_ur1: string | null
+          bio: string | null
+          display_name: string
+          id: string
+        }
+        Insert: {
+          avatar_ur1?: string | null
+          bio?: string | null
+          display_name: string
+          id?: string
+        }
+        Update: {
+          avatar_ur1?: string | null
+          bio?: string | null
+          display_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      safety_reports: {
+        Row: {
+          category: string
+          context: Json
+          created_at: string
+          id: number
+          note: string | null
+          reporter_user_id: string
+          room_id: string | null
+          target_id: string
+          target_type: string
+          title_id: string | null
+        }
+        Insert: {
+          category: string
+          context?: Json
+          created_at?: string
+          id?: number
+          note?: string | null
+          reporter_user_id: string
+          room_id?: string | null
+          target_id: string
+          target_type: string
+          title_id?: string | null
+        }
+        Update: {
+          category?: string
+          context?: Json
+          created_at?: string
+          id?: number
+          note?: string | null
+          reporter_user_id?: string
+          room_id?: string | null
+          target_id?: string
+          target_type?: string
+          title_id?: string | null
+        }
+        Relationships: []
+      }
       social_attachments: {
         Row: {
           created_at: string
@@ -962,45 +1015,6 @@ export type Database = {
           surface_id?: string
           surface_type?: string
           updated_at?: string
-        }
-        Relationships: []
-      }
-      safety_reports: {
-        Row: {
-          category: string
-          context: Json
-          created_at: string
-          id: number
-          note: string | null
-          reporter_user_id: string
-          room_id: string | null
-          target_id: string
-          target_type: string
-          title_id: string | null
-        }
-        Insert: {
-          category: string
-          context?: Json
-          created_at?: string
-          id?: number
-          note?: string | null
-          reporter_user_id: string
-          room_id?: string | null
-          target_id: string
-          target_type: string
-          title_id?: string | null
-        }
-        Update: {
-          category?: string
-          context?: Json
-          created_at?: string
-          id?: number
-          note?: string | null
-          reporter_user_id?: string
-          room_id?: string | null
-          target_id?: string
-          target_type?: string
-          title_id?: string | null
         }
         Relationships: []
       }
@@ -1088,6 +1102,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_account_legal_acceptances: {
+        Row: {
+          age_confirmed_at: string | null
+          age_confirmed_version: string | null
+          created_at: string
+          privacy_accepted_at: string | null
+          privacy_accepted_version: string | null
+          terms_accepted_at: string | null
+          terms_accepted_version: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          age_confirmed_at?: string | null
+          age_confirmed_version?: string | null
+          created_at?: string
+          privacy_accepted_at?: string | null
+          privacy_accepted_version?: string | null
+          terms_accepted_at?: string | null
+          terms_accepted_version?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          age_confirmed_at?: string | null
+          age_confirmed_version?: string | null
+          created_at?: string
+          privacy_accepted_at?: string | null
+          privacy_accepted_version?: string | null
+          terms_accepted_at?: string | null
+          terms_accepted_version?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_content_relationships: {
         Row: {
           relationship_type: string
@@ -1104,6 +1154,42 @@ export type Database = {
         Update: {
           relationship_type?: string
           title_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_entitlements: {
+        Row: {
+          entitlement_key: string
+          expires_at: string | null
+          metadata: Json
+          revoked_at: string | null
+          source: string
+          starts_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          entitlement_key: string
+          expires_at?: string | null
+          metadata?: Json
+          revoked_at?: string | null
+          source?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          entitlement_key?: string
+          expires_at?: string | null
+          metadata?: Json
+          revoked_at?: string | null
+          source?: string
+          starts_at?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
         }
@@ -1229,42 +1315,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string
-        }
-        Relationships: []
-      }
-      user_entitlements: {
-        Row: {
-          entitlement_key: string
-          expires_at: string | null
-          metadata: Json
-          revoked_at: string | null
-          source: string
-          starts_at: string | null
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          entitlement_key: string
-          expires_at?: string | null
-          metadata?: Json
-          revoked_at?: string | null
-          source?: string
-          starts_at?: string | null
-          status?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          entitlement_key?: string
-          expires_at?: string | null
-          metadata?: Json
-          revoked_at?: string | null
-          source?: string
-          starts_at?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
         }
         Relationships: []
       }
@@ -1614,6 +1664,10 @@ export type Database = {
         Args: { target_thread_id: string }
         Returns: boolean
       }
+      can_view_profile_content: {
+        Args: { profile_user_id: string }
+        Returns: boolean
+      }
       communication_room_join_allowed: {
         Args: { joining_user_id: string; target_room_id: string }
         Returns: boolean
@@ -1635,6 +1689,12 @@ export type Database = {
           user_high_id: string
           user_low_id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "user_friendships"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       respond_to_friendship: {
         Args: { next_action: string; target_user_id: string }
@@ -1648,10 +1708,20 @@ export type Database = {
           user_high_id: string
           user_low_id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "user_friendships"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       sanitize_app_configuration: {
         Args: { input_config: Json }
         Returns: Json
+      }
+      user_has_active_entitlement: {
+        Args: { required_entitlement_keys: string[]; target_user_id: string }
+        Returns: boolean
       }
     }
     Enums: {
