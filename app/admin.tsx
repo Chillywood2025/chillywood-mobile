@@ -223,13 +223,15 @@ type PlannedKillSwitchRow = {
   label: string;
   controlKey?: keyof AppRuntimeControls;
   body: string;
+  badgeLabel?: string;
 };
 
 const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "New Accounts",
     controlKey: "new_accounts_enabled",
-    body: "Signup and onboarding do not read this runtime control yet. Not enforced yet.",
+    body: "Signup reads this runtime control before account creation. Enforced on signup.",
+    badgeLabel: "Enforced on signup",
   },
   {
     label: "Uploads",
@@ -3022,7 +3024,7 @@ export default function AdminStudioScreen() {
                     isConfiguredFoundation ? styles.badgeScheduled : styles.badgeOff,
                   ]}>
                     <Text style={styles.badgeText}>
-                      {isConfiguredFoundation ? "Configured foundation" : "Not connected yet"}
+                      {isConfiguredFoundation ? row.badgeLabel ?? "Configured foundation" : "Not connected yet"}
                     </Text>
                   </View>
                 </View>

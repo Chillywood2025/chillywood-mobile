@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { recordAccountLegalAcceptance } from "../../_lib/accountLegalAcceptance";
 import { trackEvent } from "../../_lib/analytics";
+import { readAppConfig } from "../../_lib/appConfig";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { supabase } from "../../_lib/supabase";
@@ -47,6 +48,19 @@ export default function Signup() {
     setLoading(true);
 
     try {
+      const appConfig = await readAppConfig();
+
+      if (appConfig.runtimeControls.new_accounts_enabled === false) {
+        trackEvent("auth_sign_up_blocked", {
+          reason: "new_accounts_paused",
+        });
+        Alert.alert(
+          "New accounts are paused",
+          "Chi'llywood account creation is temporarily paused. Please try again later.",
+        );
+        return;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
