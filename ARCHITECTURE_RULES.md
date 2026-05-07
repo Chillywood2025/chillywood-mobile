@@ -121,6 +121,8 @@ Admin V1B1 runtime controls config foundation is pushed. Runtime controls are ty
 
 Admin V1B2A is pushed as the first real runtime control enforcement. Signup reads `runtimeControls.new_accounts_enabled` after email/password and 18+ confirmation pass and before `supabase.auth.signUp`; when false, account creation is paused before a Supabase auth account is created. Admin may label New Accounts as `Enforced on signup`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
 
+Admin V1B2B is pushed as the second real runtime control enforcement. Channel Studio's compatibility implementation in `app/channel-settings.tsx` reads `runtimeControls.uploads_enabled` from the existing normalized app-config load and blocks only new creator-video upload submit before `uploadCreatorVideo`, storage upload, or metadata insert when false. Existing video metadata edit, publish/unpublish/delete, Open Player, picker behavior, storage helpers, RLS, migrations, generated types, and the single `Video Upload` form remain unchanged. Admin may label Uploads as `Enforced on upload`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
+
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
 
 ## Ads Launch Foundation Rule

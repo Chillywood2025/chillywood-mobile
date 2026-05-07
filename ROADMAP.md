@@ -35,7 +35,7 @@
 
 ## Post-v1
 - Real AppLovin MAX integration later only after external account/app/ad-unit setup is ready, keeping the provider wrapper architecture and avoiding an AdMob-only path
-- Admin V1B1 runtime controls config foundation is pushed; Admin V1B2A enforces `new_accounts_enabled` on signup only; additional kill switch enforcement should come only after each switch has a dedicated app-surface read/proof plan, with no fake toggles
+- Admin V1B1 runtime controls config foundation is pushed; Admin V1B2A enforces `new_accounts_enabled` on signup only; Admin V1B2B enforces `uploads_enabled` on new creator-video upload submit only; additional kill switch enforcement should come only after each switch has a dedicated app-surface read/proof plan, with no fake toggles
 - usage metering and ledger foundations later: bandwidth, participant-minutes, storage, revenue ledger, payout ledger, network invoices, sponsor deals, and fraud holds
 - heavier creator monetization rollout
 - fuller creator mini-platform builder
@@ -86,6 +86,7 @@
 - Admin Command Center V1A is foundation-honest: no fake revenue, payout balances, invoices, sponsor revenue, network billing, fraud holds, fake live ad provider state, or fake kill switches.
 - Admin V1B1 runtime controls config foundation is pushed in `_lib/featureFlags.ts`, `_lib/appConfig.ts`, and read-only `app/admin.tsx` Kill Switches copy. The typed defaults live under `app_configurations.config.runtimeControls`; Admin shows `Configured foundation` and `Not enforced yet`; no runtime enforcement, working toggles, migrations, generated database type edits, RLS changes, Supabase remote changes, or Premium gate weakening were added.
 - Admin V1B2A is pushed in `app/(auth)/signup.tsx` and read-only `app/admin.tsx` copy. Signup now reads `runtimeControls.new_accounts_enabled` after email/password and 18+ confirmation and blocks before `supabase.auth.signUp` when false; default true preserves normal signup. No Admin write toggle, migration, generated database type edit, RLS/storage change, Supabase remote change, login/session change, or Premium gate change was added.
+- Admin V1B2B is pushed in `app/channel-settings.tsx` and read-only `app/admin.tsx` copy. New creator-video upload submit now reads `runtimeControls.uploads_enabled` after existing missing-title, missing-file, and file-size checks and blocks before `uploadCreatorVideo` or storage work when false; default true preserves normal uploads. Existing video metadata edit, publish/unpublish/delete, Open Player, picker behavior, storage helpers, RLS, migrations, generated types, and one clear Channel Studio `Video Upload` form are unchanged.
 - storage doctrine: Cloudflare R2 for public/high-download media; Hetzner Object Storage for source/original uploads/drafts/backups/archive/private-held-deleted media; Hetzner/OVH boxes for LiveKit and real-time live/watch-party traffic
 - Stripe Connect or equivalent marketplace payout layer for creator cash-out
 - creator payout operations and reconciliation from net receipts, not gross sticker price
