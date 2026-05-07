@@ -1631,6 +1631,10 @@ export default function ProfileScreen() {
       setProfilePostsNotice(`Profile updates can be ${PROFILE_POST_BODY_LIMIT} characters or fewer.`);
       return;
     }
+    if (!appConfig.runtimeControls.profile_posting_enabled) {
+      setProfilePostsNotice("Profile posting is temporarily paused. You can still read existing posts.");
+      return;
+    }
 
     try {
       setProfilePostBusy(true);

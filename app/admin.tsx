@@ -288,7 +288,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Profile Posting",
     controlKey: "profile_posting_enabled",
-    body: "Profile posting surfaces do not read this runtime control yet. Not enforced yet.",
+    body: "Profile post creation submit reads this runtime control before creating a post or uploading a post attachment. Enforced on profile posts.",
+    badgeLabel: "Enforced on profile posts",
   },
   {
     label: "Max Live Room Minutes",
