@@ -157,7 +157,13 @@ Public V1 Hardening H1A is pushed as a no-migration signup-only confirmation in 
 
 H1A must preserve existing signup email/password validation, closed-beta copy, loading state, Terms of Service link, Privacy Policy link, Community Guidelines link, and Sign In handoff.
 
-H1A does not durably store age confirmation. Do not claim persisted account-level age acceptance until a later H1B schema-backed pass adds and proves durable storage such as `age_confirmed_at` / acceptance-version fields. Do not collect full birthdate or sensitive ID verification for V1 unless a future exact legal/compliance prompt explicitly changes that product decision.
+H1A does not durably store age confirmation. Do not claim persisted account-level age acceptance until H1B2 applies/proves the H1B1 schema, regenerates types from the real schema, wires runtime writes, and proves durable storage such as `age_confirmed_at` / acceptance-version fields. Do not collect full birthdate or sensitive ID verification for V1 unless a future exact legal/compliance prompt explicitly changes that product decision.
+
+Public V1 Hardening H1B1 is pushed as private legal acceptance schema foundation only. It owns local migration `supabase/migrations/202605070001_user_account_legal_acceptances.sql` and pure helper `_lib/accountLegalAcceptance.ts`.
+
+The intended durable storage owner is `public.user_account_legal_acceptances`, not `user_profiles`. Legal acceptance timestamps are private account/compliance data, not social profile data. The table uses owner-only authenticated RLS for select, insert, and update, and must not gain public read policies.
+
+H1B1 did not apply the migration to Supabase remote state, did not regenerate or hand-edit `supabase/database.types.ts`, did not wire signup/login/session runtime writes, did not use AsyncStorage or auth metadata, did not add first-use enforcement, and did not block existing users. Future H1B2 work must explicitly authorize remote migration/typegen/runtime wiring before claiming account-level age/legal acceptance is persisted.
 
 ## Branded Background Rule
 - `assets/images/chillywood-branded-background.png` is the exact source-of-truth Chi'llywood branded-background asset for the current nighttime city direction

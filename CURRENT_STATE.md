@@ -6,7 +6,7 @@ This file is intentionally compact. Keep current truth here, keep detailed proof
 Full checkpoint history through April 24, 2026 is preserved at `docs/archive/current-state-history-through-2026-04-24.md`. Later detailed proof history is available in git history and task artifacts; this hot-path file should carry only the current governing facts future sessions must not undo.
 
 ## Current Checkpoint
-Current `main` is production-grade Public v1 hardening with Admin Command Center V1A, Ads Launch Foundation V1A/V1B, and Public V1 Hardening H1A 18+ Signup Confirmation pushed. The Admin V1A checkpoint is committed at `2690367912e4f10309d09d08433be25662028ed3`; the Ads V1A checkpoint is committed at `3bfe82328b4200e86ff15955c95bac7a1e218013`; the Ads V1B native/feed placeholder checkpoint is committed at `c8a21b93d01f8af5d6ed5b229f03a594b9a59832`; the H1A 18+ signup confirmation checkpoint is committed at `b7f9c53a2e505375aa8c04ec4669acf310d78233`.
+Current `main` is production-grade Public v1 hardening with Admin Command Center V1A, Ads Launch Foundation V1A/V1B, Public V1 Hardening H1A 18+ Signup Confirmation, and H1B1 private legal acceptance schema foundation pushed. The Admin V1A checkpoint is committed at `2690367912e4f10309d09d08433be25662028ed3`; the Ads V1A checkpoint is committed at `3bfe82328b4200e86ff15955c95bac7a1e218013`; the Ads V1B native/feed placeholder checkpoint is committed at `c8a21b93d01f8af5d6ed5b229f03a594b9a59832`; the H1A 18+ signup confirmation checkpoint is committed at `b7f9c53a2e505375aa8c04ec4669acf310d78233`; the H1B1 legal acceptance schema foundation checkpoint is committed at `e052dc816c12f58d056e01f93867199304bca467`.
 
 Already pushed and to be preserved:
 
@@ -33,7 +33,10 @@ Already pushed and to be preserved:
 - Ads V1B did not add real ad rendering, AppLovin/Unity/AdMob SDKs, real ad IDs, provider initialization, interstitials, CTV inventory, fake ad revenue, sponsor revenue, creator earnings, payout balances, invoices, or CTV revenue.
 - Public V1 Hardening H1A 18+ Signup Confirmation is pushed as a no-migration signup-only gate in `app/(auth)/signup.tsx`. New account creation now shows `Chi'llywood is for users 18 and older.` and requires the user to actively check `I confirm I am 18 or older.` before `supabase.auth.signUp` is called.
 - H1A preserves existing email/password validation order, loading state, closed-beta copy, Terms of Service link, Privacy Policy link, Community Guidelines link, and existing Sign In handoff. If the checkbox is not confirmed, signup shows `18+ confirmation required` with `Confirm you are 18 or older before creating a Chi'llywood account.` and does not call account creation.
-- H1A does not persist age confirmation. It does not write to Supabase, AsyncStorage, auth metadata, migrations, generated database types, RLS, or Supabase remote state. Existing signed-in users, login behavior, admin/test accounts, and first-use enforcement are not changed. Durable `age_confirmed_at` / terms/privacy acceptance storage still requires a later schema-backed H1B pass.
+- H1A does not persist age confirmation. It does not write to Supabase, AsyncStorage, auth metadata, migrations, generated database types, RLS, or Supabase remote state. Existing signed-in users, login behavior, admin/test accounts, and first-use enforcement are not changed. Durable `age_confirmed_at` / terms/privacy acceptance storage is not live until H1B2 applies/proves the H1B1 schema and wires runtime writes in a separately authorized pass.
+- Public V1 Hardening H1B1 private legal acceptance schema foundation is pushed. It adds local migration `supabase/migrations/202605070001_user_account_legal_acceptances.sql` and pure helper `_lib/accountLegalAcceptance.ts`.
+- H1B1 creates the intended private table `public.user_account_legal_acceptances` with `user_id`, nullable age/terms/privacy acceptance timestamps and versions, and created/updated timestamps. RLS is enabled with authenticated users allowed to select, insert, and update only their own row. There is no public read, and the table is intentionally separate from `user_profiles` because profile rows are broader social/profile data and are not the right owner for private legal acceptance timestamps.
+- H1B1 is local schema foundation only. It did not apply the migration to Supabase remote state, did not regenerate or hand-edit `supabase/database.types.ts`, did not wire signup/login/session runtime writes, did not write AsyncStorage or auth metadata, did not add first-use enforcement, and did not block existing users, admin users, or test accounts. Do not claim durable account-level acceptance is live until H1B2 applies/proves the schema and wires runtime writes in a separately authorized pass.
 
 ## Product Truth
 - Chi'llywood is production-grade now; future Codex prompts must be exact and scoped, not vague.
@@ -54,7 +57,8 @@ Already pushed and to be preserved:
 
 ## Locked Business Decisions
 - Launch is planned as 18+.
-- H1A no-migration signup confirmation is pushed: new signup requires an explicit 18+ checkbox before account creation is attempted, but the confirmation is not durably stored yet.
+- H1A no-migration signup confirmation is pushed: new signup requires an explicit 18+ checkbox before account creation is attempted.
+- H1B1 private legal acceptance schema foundation is pushed as a local migration plus pure helper only. The durable acceptance table is not applied to remote Supabase and runtime writes are not wired yet.
 - Free users see ads at launch.
 - Premium users see no ads.
 - Planned Premium price is `$9.99/month` and `$99/year`.
@@ -96,7 +100,7 @@ Do not accept vague prompts such as "modernize", "polish", "add filters", "add r
 ## Current Next Action
 Recommended next lanes, in order:
 
-1. H1B persisted 18+ / legal acceptance storage: add a dedicated schema-backed plan for `age_confirmed_at` and, if needed, terms/privacy acceptance timestamps without blocking existing users unexpectedly.
+1. H1B2 legal acceptance remote/typegen/runtime wiring: only with an explicit prompt, apply/prove the H1B1 migration, regenerate database types from the real schema without hand edits, then wire signup acceptance writes after account creation succeeds. Decide any first-use gate separately so existing users/admin/test accounts are not surprise-blocked.
 2. Upload/content lifecycle polish: upload progress, backed processing/failed states, thumbnail handling, draft/published clarity, and retry only where backed.
 3. Security/compliance/moderation pass: Terms, Privacy Policy, Community Guidelines, DMCA/copyright policy, sponsorship disclosure rules, and UGC moderation/admin review hardening.
 4. Ads V1C Interstitial controller: placeholder interstitial first, safe transitions only, no app-launch ad, respect 180-second first delay, 600-second spacing, session/daily caps, and forbidden contexts; no real SDK or real ad IDs yet.
@@ -114,6 +118,8 @@ Ads Launch Foundation V1A was checked with `npm run typecheck` and `git diff --c
 Ads Launch Foundation V1B was checked with `npm run typecheck`, `git diff --check`, helper-level native/feed eligibility/cap proof, current-build Android runtime proof for default Home hidden state, Admin Ads read-only/foundation status, and route smoke for Channel Studio, Channel Settings, public Channel, Profile, Player, Watch-Party, and Live Stage. It remains no-SDK, no-real-ad, no-real-provider, no-real-revenue foundation only.
 
 Public V1 Hardening H1A 18+ Signup Confirmation was checked with `npm run typecheck`, `git diff --check`, and current-build Android dev-client proof. Runtime proof confirmed the signup screen shows the 18+ copy and unchecked checkbox, pressing Sign Up while unchecked shows the required 18+ alert before account creation, checking the box falls through to the existing signup validation path, Terms/Privacy/Community Guidelines links still open, and the Sign In handoff still returns to Login. Real existing-account login proof and release-build signup proof remain pending.
+
+Public V1 Hardening H1B1 private legal acceptance schema foundation was checked with `npm run typecheck` and `git diff --check` before commit/push. It added only the local migration and pure helper, did not apply remote migrations, did not hand-edit generated database types, and did not change runtime app behavior.
 
 ## Staging Discipline
 - Work on current `main` only.

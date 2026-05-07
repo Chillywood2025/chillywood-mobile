@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Implement Public V1 Hardening H1B persisted 18+ / legal acceptance storage.
+Implement Public V1 Hardening H1B2 legal acceptance remote/typegen/runtime wiring only with an explicit, scoped prompt.
 
 Product direction:
 
@@ -10,29 +10,37 @@ Product direction:
 - H1A preserves email/password validation, closed-beta copy, loading state, Terms of Service link, Privacy Policy link, Community Guidelines link, and existing Sign In handoff.
 - H1A does not durably store the age confirmation. It does not write Supabase data, AsyncStorage, auth metadata, migrations, generated database types, RLS, or Supabase remote state.
 - Launch remains 18+, but durable confirmation requires a schema-backed pass before claiming account-level age acceptance is stored.
-- H1B should decide the exact backed storage owner before implementation. Preferred fields are `age_confirmed_at timestamptz nullable`, `age_confirmed_version text nullable`, and, only if not already backed elsewhere, `terms_accepted_at timestamptz nullable` and `privacy_accepted_at timestamptz nullable`.
-- H1B must not block existing signed-in/admin/test users unexpectedly without a migration/backfill/first-use plan.
-- H1B must not collect full birthdate or sensitive ID verification for V1.
-- H1B must not fake storing acceptance if schema/storage is missing.
+- H1B1 private legal acceptance schema foundation is pushed at `e052dc816c12f58d056e01f93867199304bca467`.
+- H1B1 added local migration `supabase/migrations/202605070001_user_account_legal_acceptances.sql` and pure helper `_lib/accountLegalAcceptance.ts`.
+- The intended storage owner is the private `public.user_account_legal_acceptances` table, not `user_profiles`.
+- H1B1 enabled owner-only RLS for authenticated users to select, insert, and update only their own legal acceptance row.
+- H1B1 did not apply the migration to remote Supabase, did not regenerate or hand-edit `supabase/database.types.ts`, did not wire runtime writes, did not use AsyncStorage, did not use auth metadata, did not create a first-use gate, and did not block existing signed-in/admin/test users.
+- H1B2 must not claim persisted account-level acceptance is live until the migration is applied/proved in the target Supabase environment, generated types are regenerated from the real schema, and runtime writes are wired and proved.
+- H1B2 must not collect full birthdate or sensitive ID verification for V1.
+- H1B2 must not fake storing acceptance if schema/storage is unavailable.
 
 Required proof for that lane:
 
 - signup still blocks before account creation when the 18+ checkbox is unchecked
-- signup stores backed age confirmation only after the user actively checks the confirmation and account creation succeeds, if the schema-backed write is implemented
-- stored fields are not written to AsyncStorage or hard-coded auth metadata unless the dedicated prompt explicitly approves that storage owner
+- the H1B1 migration is applied only if a dedicated prompt explicitly authorizes touching Supabase remote state
+- generated database types are regenerated from the actual schema and are not hand-edited
+- signup stores backed age/terms/privacy acceptance only after the user actively checks the confirmation and account creation succeeds
+- stored fields are written to `user_account_legal_acceptances`, not AsyncStorage or auth metadata
 - Terms, Privacy Policy, Community Guidelines, and Sign In handoff remain intact
 - existing account login and signed-in sessions are not interrupted unexpectedly
 - admin/test accounts are not blocked by a new production bypass or brittle local-only rule
-- no migrations are applied to remote Supabase during local implementation/proof unless a separate migration-application prompt explicitly authorizes it
+- no migrations are applied to remote Supabase unless the H1B2 prompt explicitly authorizes it
 - generated database types are not edited by hand
 - no credentials or secrets are committed
 - no unrelated Profile, Channel Studio, Public Channel, Player, Watch-Party, Live Stage, Ads, RevenueCat, storage, RLS, or admin behavior changes are made
 
 ## Current Product Lane Order
-1. H1B persisted 18+ / legal acceptance storage:
-   - add schema-backed storage for age confirmation
-   - decide whether terms/privacy acceptance timestamps are needed in the same schema pass
-   - do not fake persistence if the schema is missing
+1. H1B2 legal acceptance remote/typegen/runtime wiring:
+   - apply/prove the H1B1 private table migration only with explicit remote authorization
+   - regenerate database types from the actual schema, never by hand
+   - wire signup to write `age_confirmed_at`, `terms_accepted_at`, `privacy_accepted_at`, and their versions only after successful account creation
+   - keep first-use enforcement for existing accounts as a separate decision
+   - do not fake persistence if the schema is missing or unavailable
    - do not collect full birthdate or ID verification in V1
 2. Upload/content lifecycle polish:
    - upload progress
@@ -105,6 +113,10 @@ Required proof for that lane:
 - Public V1 Hardening H1A 18+ Signup Confirmation is pushed.
 - H1A added a no-migration checkbox gate to `app/(auth)/signup.tsx`: signup shows `Chi'llywood is for users 18 and older.`, requires `I confirm I am 18 or older.`, blocks before `supabase.auth.signUp` with the required alert if unchecked, and preserves legal links plus Sign In handoff.
 - H1A did not persist age confirmation, add migrations, edit generated types, touch Supabase remote state, write AsyncStorage, use auth metadata, block existing signed-in users, or change login behavior.
+- Public V1 Hardening H1B1 private legal acceptance schema foundation is pushed.
+- H1B1 added local migration `supabase/migrations/202605070001_user_account_legal_acceptances.sql` and pure helper `_lib/accountLegalAcceptance.ts`.
+- H1B1 keeps legal acceptance data out of `user_profiles`, uses a dedicated private table with owner-only authenticated RLS, and does not expose public legal acceptance rows.
+- H1B1 did not apply remote migrations, regenerate or hand-edit database types, wire runtime writes, change signup/login/session behavior, write AsyncStorage/auth metadata, or block existing users.
 
 ## Product Truth To Preserve
 - Profile = person/social identity.
@@ -123,7 +135,8 @@ Required proof for that lane:
 
 ## Locked Business Decisions
 - Launch planned as 18+.
-- H1A no-migration signup confirmation is pushed, but durable age confirmation storage is not backed yet.
+- H1A no-migration signup confirmation is pushed.
+- H1B1 private legal acceptance schema foundation is pushed locally, but durable acceptance is not live until H1B2 applies/proves the schema and runtime writes in a separately authorized pass.
 - Free users see ads at launch.
 - Premium users see no ads.
 - Planned Premium price: `$9.99/month` and `$99/year`.
