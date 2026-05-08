@@ -261,6 +261,9 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
 const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   loading: false,
   financeLedgerEventCount: null,
+  creatorRevenueShareRuleCount: null,
+  creatorRevenueShareLedgerEntryCount: null,
+  creatorRevenueShareLedgerFoundationCount: null,
   creatorPayoutLedgerEntryCount: null,
   creatorPayoutAccountCount: null,
   creatorPayoutReviewRecordCount: null,
@@ -307,6 +310,9 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   fraudReasonRecordCount: null,
   fraudEvidenceRecordCount: null,
   fraudActionRecordCount: null,
+  fraudEnforcementPolicyCount: null,
+  fraudEnforcementPolicyFoundationCount: null,
+  fraudActionNotExecutableCount: null,
   fraudReviewNoteCount: null,
   fraudAppealRecordCount: null,
   fraudAuditLogCount: null,
@@ -3661,6 +3667,40 @@ export default function AdminStudioScreen() {
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Creator Revenue Share Foundation</Text>
+                <Text style={styles.configListBody}>
+                  Rules: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorRevenueShareRuleCount,
+                    adminFinanceReadModel.loading,
+                    "foundation rule",
+                    "foundation rules",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Ledger rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorRevenueShareLedgerEntryCount,
+                    adminFinanceReadModel.loading,
+                    "foundation row",
+                    "foundation rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Foundation-only rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorRevenueShareLedgerFoundationCount,
+                    adminFinanceReadModel.loading,
+                    "foundation row",
+                    "foundation rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Creator revenue sharing is not active yet.</Text>
+                <Text style={styles.configListBody}>Ledger rows are foundation-only.</Text>
+                <Text style={styles.configListBody}>No source money has been imported.</Text>
+                <Text style={styles.configListBody}>No creator earnings are payable.</Text>
+                <Text style={styles.configListBody}>No payout ledger entries are created from these rows.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Premium entitlement counts</Text>
                 <Text style={styles.configListBody}>
                   {adminV1ReadModel.premiumActiveCount === null
@@ -4350,7 +4390,7 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>FRAUD</Text>
               <Text style={styles.configTitle}>Fraud Enforcement Foundation</Text>
-              <Text style={styles.configBody}>Fraud holds are not connected yet. Foundation rows are proof-only.</Text>
+              <Text style={styles.configBody}>Fraud enforcement is not active yet. Foundation rows are proof-only and runtime hooks are not connected.</Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
@@ -4414,6 +4454,75 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>Planned-action rows are not executable controls.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Fraud Enforcement Foundation</Text>
+                <Text style={styles.configListBody}>
+                  Policies: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudEnforcementPolicyCount,
+                    adminFinanceReadModel.loading,
+                    "foundation policy",
+                    "foundation policies",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Foundation policies: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudEnforcementPolicyFoundationCount,
+                    adminFinanceReadModel.loading,
+                    "foundation policy",
+                    "foundation policies",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Planned enforcement actions: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudActionRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation action",
+                    "foundation actions",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Non-executable proof actions: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudActionNotExecutableCount,
+                    adminFinanceReadModel.loading,
+                    "proof action",
+                    "proof actions",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Fraud enforcement policies/actions are foundation-only.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Enforcement Readiness</Text>
+                <Text style={styles.configListBody}>
+                  {`Audit log: ${adminImmutableAuditReadModel.connected ? "connected" : "not connected yet"}`}
+                </Text>
+                <Text style={styles.configListBody}>
+                  {`Fraud review: ${adminFinanceReadModel.fraudReviewNoteCount === null ? "not connected yet" : "connected"}`}
+                </Text>
+                <Text style={styles.configListBody}>
+                  {`Appeal placeholder: ${adminFinanceReadModel.fraudAppealRecordCount === null ? "not connected yet" : "connected"}`}
+                </Text>
+                <Text style={styles.configListBody}>
+                  {`Payout review: ${adminFinanceReadModel.creatorPayoutReviewRecordCount === null ? "not connected yet" : "connected"}`}
+                </Text>
+                <Text style={styles.configListBody}>Runtime enforcement hooks: not connected</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Enforcement Guardrails</Text>
+                <Text style={styles.configListBody}>Fraud enforcement is not active yet.</Text>
+                <Text style={styles.configListBody}>No payouts are paused.</Text>
+                <Text style={styles.configListBody}>No monetization is disabled.</Text>
+                <Text style={styles.configListBody}>No uploads are restricted.</Text>
+                <Text style={styles.configListBody}>No live access is restricted.</Text>
+                <Text style={styles.configListBody}>No sponsor deals are restricted.</Text>
+                <Text style={styles.configListBody}>No account restrictions are active.</Text>
+                <Text style={styles.configListBody}>Runtime hooks are not connected.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>

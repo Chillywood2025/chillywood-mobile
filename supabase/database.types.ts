@@ -1471,6 +1471,139 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_revenue_share_ledger_entries: {
+        Row: {
+          channel_user_id: string | null
+          created_at: string
+          creator_share_bps: number | null
+          creator_share_cents: number
+          creator_user_id: string | null
+          currency: string
+          gross_amount_cents: number
+          id: string
+          metadata: Json
+          net_amount_cents: number
+          payable_status: string
+          payout_ledger_entry_id: number | null
+          platform_share_bps: number | null
+          platform_share_cents: number
+          source_id: string | null
+          source_provider: string | null
+          source_type: string
+          sponsor_deal_id: number | null
+          sponsor_payment_record_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel_user_id?: string | null
+          created_at?: string
+          creator_share_bps?: number | null
+          creator_share_cents?: number
+          creator_user_id?: string | null
+          currency?: string
+          gross_amount_cents?: number
+          id?: string
+          metadata?: Json
+          net_amount_cents?: number
+          payable_status?: string
+          payout_ledger_entry_id?: number | null
+          platform_share_bps?: number | null
+          platform_share_cents?: number
+          source_id?: string | null
+          source_provider?: string | null
+          source_type: string
+          sponsor_deal_id?: number | null
+          sponsor_payment_record_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel_user_id?: string | null
+          created_at?: string
+          creator_share_bps?: number | null
+          creator_share_cents?: number
+          creator_user_id?: string | null
+          currency?: string
+          gross_amount_cents?: number
+          id?: string
+          metadata?: Json
+          net_amount_cents?: number
+          payable_status?: string
+          payout_ledger_entry_id?: number | null
+          platform_share_bps?: number | null
+          platform_share_cents?: number
+          source_id?: string | null
+          source_provider?: string | null
+          source_type?: string
+          sponsor_deal_id?: number | null
+          sponsor_payment_record_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_revenue_share_ledger_ent_sponsor_payment_record_id_fkey"
+            columns: ["sponsor_payment_record_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_payment_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_revenue_share_ledger_entrie_payout_ledger_entry_id_fkey"
+            columns: ["payout_ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_revenue_share_ledger_entries_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_revenue_share_rules: {
+        Row: {
+          created_at: string
+          creator_share_bps: number
+          display_name: string
+          id: string
+          metadata: Json
+          platform_share_bps: number
+          rule_key: string
+          source_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_share_bps: number
+          display_name: string
+          id?: string
+          metadata?: Json
+          platform_share_bps: number
+          rule_key: string
+          source_type: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_share_bps?: number
+          display_name?: string
+          id?: string
+          metadata?: Json
+          platform_share_bps?: number
+          rule_key?: string
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       creator_video_comments: {
         Row: {
           body: string
@@ -1570,34 +1703,53 @@ export type Database = {
         Row: {
           action_type: string
           created_at: string
+          enforcement_policy_id: string | null
+          executed_at: string | null
+          execution_status: string
           fraud_hold_id: number
           id: string
           metadata: Json
           reason: string | null
           status: string
+          target_area: string
           updated_at: string
         }
         Insert: {
           action_type: string
           created_at?: string
+          enforcement_policy_id?: string | null
+          executed_at?: string | null
+          execution_status?: string
           fraud_hold_id: number
           id?: string
           metadata?: Json
           reason?: string | null
           status?: string
+          target_area?: string
           updated_at?: string
         }
         Update: {
           action_type?: string
           created_at?: string
+          enforcement_policy_id?: string | null
+          executed_at?: string | null
+          execution_status?: string
           fraud_hold_id?: number
           id?: string
           metadata?: Json
           reason?: string | null
           status?: string
+          target_area?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fraud_action_records_enforcement_policy_fkey"
+            columns: ["enforcement_policy_id"]
+            isOneToOne: false
+            referencedRelation: "fraud_enforcement_policy_records"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fraud_action_records_hold_fkey"
             columns: ["fraud_hold_id"]
@@ -1691,6 +1843,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fraud_enforcement_policy_records: {
+        Row: {
+          action_type: string
+          created_at: string
+          display_name: string
+          id: string
+          metadata: Json
+          policy_key: string
+          requires_admin_reason: boolean
+          requires_appeal_path: boolean
+          requires_audit_log: boolean
+          requires_review: boolean
+          status: string
+          target_area: string
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          display_name: string
+          id?: string
+          metadata?: Json
+          policy_key: string
+          requires_admin_reason?: boolean
+          requires_appeal_path?: boolean
+          requires_audit_log?: boolean
+          requires_review?: boolean
+          status?: string
+          target_area: string
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          metadata?: Json
+          policy_key?: string
+          requires_admin_reason?: boolean
+          requires_appeal_path?: boolean
+          requires_audit_log?: boolean
+          requires_review?: boolean
+          status?: string
+          target_area?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       fraud_evidence_records: {
         Row: {

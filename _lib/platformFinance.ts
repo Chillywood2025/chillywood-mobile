@@ -1,6 +1,8 @@
 import { supabase } from "./supabase";
 
 export const PLATFORM_FINANCE_LEDGER_EVENTS_TABLE = "platform_finance_ledger_events";
+export const CREATOR_REVENUE_SHARE_RULES_TABLE = "creator_revenue_share_rules";
+export const CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE = "creator_revenue_share_ledger_entries";
 export const CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE = "creator_payout_ledger_entries";
 export const NETWORK_BILLING_ACCOUNTS_TABLE = "network_billing_accounts";
 export const NETWORK_INVOICE_RECORDS_TABLE = "network_invoice_records";
@@ -24,6 +26,7 @@ export const PLATFORM_FRAUD_HOLDS_TABLE = "platform_fraud_holds";
 export const FRAUD_REASON_RECORDS_TABLE = "fraud_reason_records";
 export const FRAUD_EVIDENCE_RECORDS_TABLE = "fraud_evidence_records";
 export const FRAUD_ACTION_RECORDS_TABLE = "fraud_action_records";
+export const FRAUD_ENFORCEMENT_POLICY_RECORDS_TABLE = "fraud_enforcement_policy_records";
 export const FRAUD_REVIEW_NOTES_TABLE = "fraud_review_notes";
 export const FRAUD_APPEAL_RECORDS_TABLE = "fraud_appeal_records";
 export const FRAUD_AUDIT_LOGS_TABLE = "fraud_audit_logs";
@@ -38,6 +41,9 @@ export const CREATOR_PAYOUT_BATCH_ITEMS_TABLE = "creator_payout_batch_items";
 
 export type AdminFinanceReadModel = {
   financeLedgerEventCount: number | null;
+  creatorRevenueShareRuleCount: number | null;
+  creatorRevenueShareLedgerEntryCount: number | null;
+  creatorRevenueShareLedgerFoundationCount: number | null;
   creatorPayoutLedgerEntryCount: number | null;
   creatorPayoutAccountCount: number | null;
   creatorPayoutReviewRecordCount: number | null;
@@ -84,6 +90,9 @@ export type AdminFinanceReadModel = {
   fraudReasonRecordCount: number | null;
   fraudEvidenceRecordCount: number | null;
   fraudActionRecordCount: number | null;
+  fraudEnforcementPolicyCount: number | null;
+  fraudEnforcementPolicyFoundationCount: number | null;
+  fraudActionNotExecutableCount: number | null;
   fraudReviewNoteCount: number | null;
   fraudAppealRecordCount: number | null;
   fraudAuditLogCount: number | null;
@@ -141,6 +150,9 @@ export const formatFinanceFoundationCount = (value: number | null, singular: str
 export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel> {
   const [
     financeLedgerEventCount,
+    creatorRevenueShareRuleCount,
+    creatorRevenueShareLedgerEntryCount,
+    creatorRevenueShareLedgerFoundationCount,
     creatorPayoutLedgerEntryCount,
     creatorPayoutAccountCount,
     creatorPayoutReviewRecordCount,
@@ -187,11 +199,17 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     fraudReasonRecordCount,
     fraudEvidenceRecordCount,
     fraudActionRecordCount,
+    fraudEnforcementPolicyCount,
+    fraudEnforcementPolicyFoundationCount,
+    fraudActionNotExecutableCount,
     fraudReviewNoteCount,
     fraudAppealRecordCount,
     fraudAuditLogCount,
   ] = await Promise.all([
     safeRead(() => readTableCount(PLATFORM_FINANCE_LEDGER_EVENTS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_REVENUE_SHARE_RULES_TABLE)),
+    safeRead(() => readTableCount(CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE)),
+    safeRead(() => readTableCountWhereEq(CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE, "status", "foundation")),
     safeRead(() => readTableCount(CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_ACCOUNTS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_REVIEW_RECORDS_TABLE)),
@@ -238,6 +256,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(FRAUD_REASON_RECORDS_TABLE)),
     safeRead(() => readTableCount(FRAUD_EVIDENCE_RECORDS_TABLE)),
     safeRead(() => readTableCount(FRAUD_ACTION_RECORDS_TABLE)),
+    safeRead(() => readTableCount(FRAUD_ENFORCEMENT_POLICY_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(FRAUD_ENFORCEMENT_POLICY_RECORDS_TABLE, "status", "foundation")),
+    safeRead(() => readTableCountWhereEq(FRAUD_ACTION_RECORDS_TABLE, "execution_status", "not_executable")),
     safeRead(() => readTableCount(FRAUD_REVIEW_NOTES_TABLE)),
     safeRead(() => readTableCount(FRAUD_APPEAL_RECORDS_TABLE)),
     safeRead(() => readTableCount(FRAUD_AUDIT_LOGS_TABLE)),
@@ -245,6 +266,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
 
   return {
     financeLedgerEventCount,
+    creatorRevenueShareRuleCount,
+    creatorRevenueShareLedgerEntryCount,
+    creatorRevenueShareLedgerFoundationCount,
     creatorPayoutLedgerEntryCount,
     creatorPayoutAccountCount,
     creatorPayoutReviewRecordCount,
@@ -291,6 +315,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     fraudReasonRecordCount,
     fraudEvidenceRecordCount,
     fraudActionRecordCount,
+    fraudEnforcementPolicyCount,
+    fraudEnforcementPolicyFoundationCount,
+    fraudActionNotExecutableCount,
     fraudReviewNoteCount,
     fraudAppealRecordCount,
     fraudAuditLogCount,
