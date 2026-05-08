@@ -92,7 +92,7 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - Google Play does not take a subscription fee from AppLovin ad payouts
 - creator-page ad revenue share is later: creator 70% net and Chi'llywood 30% net
 - creator-sold sponsor slots are later: brand pays Chi'llywood first, creator 80% net, and Chi'llywood 20% net
-- Ledger Systems 4A-4D finance foundation is pushed as schema/helper/Admin read-only foundation only. The finance migration is now applied to Supabase remote, generated database types include the finance foundation tables, and no provider-backed creator ad revenue ledger, payout execution, sponsor deal execution, invoice action, fraud enforcement, or CTV revenue system is active.
+- Ledger Systems 4A-4D finance foundation is pushed as schema/helper/Admin read-only foundation only. The finance migration is now applied to Supabase remote, generated database types include the finance foundation tables, current-build Admin proof shows the finance panels as read-only/foundation counts only, and no provider-backed creator ad revenue ledger, payout execution, sponsor deal execution, invoice action, fraud enforcement, or CTV revenue system is active.
 - CTV ads are future-only for Chi'llywood Originals and network-style content and are not active now
 - room-specific ad cautions belong in `ROOM_BLUEPRINT.md`, not here
 

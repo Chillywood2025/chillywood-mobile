@@ -1,19 +1,19 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Finance Foundation Remote Proof.
+Store / External Launch Readiness Audit.
 
-Ledger Systems 4A-4D finance schema was applied remotely only as foundation while unblocking ordered usage migration inclusion. It now needs a proof-only pass before anyone relies on those tables operationally:
+Finance Foundation Remote Proof is complete. Migration history is aligned through `202605070011`, generated database types include the finance foundation tables, current-build Android Admin proved Revenue/Payouts/Networks/Sponsors/Fraud open as read-only/foundation with zero foundation rows, and non-platform/anon insert attempts into the finance ledger were denied by RLS. The proof did not insert money rows, did not add provider imports, did not add payout/invoice/sponsor/fraud actions, and did not change app runtime code, migrations, generated database types, RLS, Supabase storage, LiveKit, ads, RevenueCat, billing execution, payout execution, sponsor execution, Player, Watch-Party, Live Stage, Channel Studio, Profile, or Public Channel.
 
-- confirm migration history is aligned through `202605070011`
-- confirm generated database types include finance foundation tables
-- confirm owner/operator can read safe foundation counts for finance ledger, payout ledger, network billing, sponsor deals, and fraud holds
-- confirm moderator can read fraud hold safety context only if policy allows it, without expanding policy
-- confirm anon/non-platform users do not get broad finance table access if safely testable
-- confirm Admin Revenue/Payouts/Networks/Sponsors/Fraud remain read-only/foundation and show counts or honest not-connected/foundation states only
-- do not insert money rows unless the proof explicitly uses safe no-money foundation rows and cleans up or reports them
-- do not add provider imports, payout provider integration, payout buttons, invoice actions, sponsor checkout, payout split execution, fraud enforcement, live money totals, fake revenue, fake balances, fake invoices, SDKs, provider keys, or secrets
-- do not change app runtime code, migrations, generated database types, RLS, Supabase storage, LiveKit, ads, RevenueCat, billing execution, payout execution, sponsor execution, Player, Watch-Party, Live Stage, Channel Studio, Profile, or Public Channel during this proof
+The next lane is an audit/spec pass only:
+
+- audit App Store / Google Play readiness without changing runtime code
+- verify Android package `com.chillywood.mobile` and iOS bundle identifier truth before store work
+- verify public Terms, Privacy, Community Guidelines, Support, DMCA/Copyright, and account-deletion surfaces/URLs
+- verify Data Safety and privacy disclosure inputs from existing product behavior
+- verify RevenueCat public setup readiness without changing RevenueCat config
+- verify AppLovin readiness gaps without installing SDKs or adding ad IDs
+- do not install SDKs, add real IDs, change package/native config, touch store dashboards from code, apply migrations, or touch Supabase remote state unless a later exact prompt scopes it
 
 AppLovin MAX SDK integration is intentionally paused until external store/AppLovin account/app/ad-unit setup is ready.
 
@@ -82,7 +82,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - keep Admin Usage read-only and honest: DB estimate, Metadata estimate, Schema connected, Not connected yet, or Not active yet
 4. Finance proof and later writers:
    - finance foundation migration `supabase/migrations/202605070005_platform_finance_ledger_foundation.sql` is now applied remotely and generated database types include the finance tables
-   - prove owner/operator RLS and fraud moderator visibility before relying on the new tables operationally
+   - Finance Foundation Remote Proof is complete for current read-only/foundation Admin behavior; broader non-empty row visibility and moderator fraud-row proof still require a later safe seed/test lane before operational reliance
    - add provider imports, payout provider integration, network billing actions, sponsor checkout, or fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
 
