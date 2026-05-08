@@ -112,6 +112,7 @@
 - storage doctrine: Cloudflare R2 for public/high-download media; Hetzner Object Storage for source/original uploads/drafts/backups/archive/private-held-deleted media; Hetzner/OVH boxes for LiveKit and real-time live/watch-party traffic
 - Stripe Connect or equivalent marketplace payout layer for creator cash-out
 - creator payout operations and reconciliation from net receipts, not gross sticker price
+- Finance F2 payout-provider foundation is closed out as schema/read-only Admin counts/non-live proof rows only; Stripe Connect onboarding, payout provider writes, creator payout dashboards, and live payouts remain later.
 - tax reporting and finance operations
 - moderation, abuse handling, and auditability for monetized surfaces
 - country rollout and geography-specific constraints

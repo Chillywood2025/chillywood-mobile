@@ -13,7 +13,7 @@ Finance F2C payout-provider schema/RLS proof is complete. Remote migration histo
 
 Finance F2D payout provider Admin foundation readout is pushed. `_lib/platformFinance.ts` reads safe counts for payout accounts, batches, provider transfers, holds, and audit rows, and `/admin` Payouts shows those counts as read-only foundation status only. No live payout action, payout button, withdrawal button, Stripe onboarding, provider sync, provider call, KYC flow, or creator-facing balance exists.
 
-Finance F2E payout provider foundation proof rows are pushed and applied. Migration `supabase/migrations/202605080002_creator_payout_provider_proof_rows.sql` inserts deterministic `not_active` proof/foundation rows marked `finance_foundation_proof: true`, `created_by: codex_finance_f2e_proof`, and `not_live_money: true` with zero amounts and no real creator, bank, card, provider, invoice, sponsor, or payment data. Anonymous reads see zero proof rows and anonymous insert remains denied.
+Finance F2E payout provider foundation proof rows are pushed and applied. Migration `supabase/migrations/202605080002_creator_payout_provider_proof_rows.sql` inserts deterministic `not_active` proof/foundation rows marked `finance_foundation_proof: true`, `created_by: codex_finance_f2e_proof`, and `not_live_money: true` with zero amounts and no real creator, bank, card, provider, invoice, sponsor, or payment data. Anonymous reads see zero proof rows and anonymous insert remains denied. Finance F2 payout-provider closeout is complete and must remain foundation-only until a later Stripe Connect/provider integration lane is explicitly scoped.
 
 The next lane is an audit/spec pass only:
 
@@ -99,7 +99,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - Finance F2C schema/RLS proof is complete for migration/type alignment and anonymous insert denial
    - Finance F2D Admin payout-provider readout is pushed as read-only foundation counts only
    - Finance F2E proof rows are pushed as non-live `not_active` foundation data only
-   - Finance Foundation Remote Proof is complete for current read-only/foundation Admin behavior; broader non-empty row visibility and moderator fraud-row proof still require a later safe seed/test lane before operational reliance
+   - Finance F2 payout-provider closeout is complete for foundation-only schema/readout/proof rows; moderator visibility proof still requires a later safe lane before operational reliance
    - add provider imports, Stripe Connect onboarding/integration, creator payout reads, payout provider writes, network billing actions, sponsor checkout, or fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
 
