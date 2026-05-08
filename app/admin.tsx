@@ -274,6 +274,12 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   sponsorPaymentRecordCount: null,
   sponsorPayoutSplitRecordCount: null,
   platformFraudHoldCount: null,
+  fraudReasonRecordCount: null,
+  fraudEvidenceRecordCount: null,
+  fraudActionRecordCount: null,
+  fraudReviewNoteCount: null,
+  fraudAppealRecordCount: null,
+  fraudAuditLogCount: null,
   generatedAt: new Date(0).toISOString(),
 };
 type PlannedKillSwitchRow = {
@@ -1181,11 +1187,11 @@ export default function AdminStudioScreen() {
       : adminFinanceReadModel.sponsorBrandRecordCount === null || adminFinanceReadModel.sponsorDealRecordCount === null
         ? "Not active yet"
         : `${adminFinanceReadModel.sponsorBrandRecordCount} brand${adminFinanceReadModel.sponsorBrandRecordCount === 1 ? "" : "s"} / ${adminFinanceReadModel.sponsorDealRecordCount} deal${adminFinanceReadModel.sponsorDealRecordCount === 1 ? "" : "s"}`;
-    const fraudHoldValue = adminFinanceReadModel.loading
+    const fraudFoundationValue = adminFinanceReadModel.loading
       ? "Loading"
       : adminFinanceReadModel.platformFraudHoldCount === null
         ? "Not connected yet"
-        : `${adminFinanceReadModel.platformFraudHoldCount} hold record${adminFinanceReadModel.platformFraudHoldCount === 1 ? "" : "s"}`;
+        : `${adminFinanceReadModel.platformFraudHoldCount} hold${adminFinanceReadModel.platformFraudHoldCount === 1 ? "" : "s"} / ${adminFinanceReadModel.fraudReasonRecordCount ?? 0} reason${adminFinanceReadModel.fraudReasonRecordCount === 1 ? "" : "s"}`;
 
     return [
       {
@@ -1296,8 +1302,8 @@ export default function AdminStudioScreen() {
       },
       {
         label: "Fraud",
-        value: fraudHoldValue,
-        body: "Fraud hold records do not enforce account, monetization, upload, live, or payout restrictions.",
+        value: fraudFoundationValue,
+        body: "Fraud holds are not connected yet. Counts are foundation-only and do not enforce account, monetization, upload, live, or payout restrictions.",
         tone: adminFinanceReadModel.platformFraudHoldCount === null ? "unavailable" : "default",
         destination: "fraud",
       },
@@ -1308,6 +1314,7 @@ export default function AdminStudioScreen() {
     adminFinanceReadModel.loading,
     adminFinanceReadModel.networkBillingAccountCount,
     adminFinanceReadModel.networkPlanRecordCount,
+    adminFinanceReadModel.fraudReasonRecordCount,
     adminFinanceReadModel.platformFraudHoldCount,
     adminFinanceReadModel.sponsorBrandRecordCount,
     adminFinanceReadModel.sponsorDealRecordCount,
@@ -3922,9 +3929,9 @@ export default function AdminStudioScreen() {
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>FRAUD HOLDS</Text>
-              <Text style={styles.configTitle}>Fraud Holds</Text>
-              <Text style={styles.configBody}>Fraud hold foundation is read-only and does not enforce account or money restrictions.</Text>
+              <Text style={styles.configKicker}>FRAUD</Text>
+              <Text style={styles.configTitle}>Fraud Enforcement Foundation</Text>
+              <Text style={styles.configBody}>Fraud holds are not connected yet. Foundation rows are proof-only.</Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
@@ -3933,32 +3940,117 @@ export default function AdminStudioScreen() {
           <View style={styles.configList}>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Fraud hold records</Text>
+                <Text style={styles.configListTitle}>Fraud Holds</Text>
                 <Text style={styles.configListBody}>
                   {formatAdminFinanceCount(
                     adminFinanceReadModel.platformFraudHoldCount,
                     adminFinanceReadModel.loading,
-                    "foundation record",
-                    "foundation records",
+                    "foundation hold",
+                    "foundation holds",
                   )}
                 </Text>
+                <Text style={styles.configListBody}>No payout pause is active.</Text>
+                <Text style={styles.configListBody}>No account restriction is active.</Text>
+                <Text style={styles.configListBody}>No upload or live restriction is active.</Text>
+                <Text style={styles.configListBody}>No monetization disable is active.</Text>
+                <Text style={styles.configListBody}>No fraud risk score exists.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Fraud Reasons</Text>
                 <Text style={styles.configListBody}>
-                  No payout pause, monetization disable, upload/live restriction, or risk score is active.
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudReasonRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation reason",
+                    "foundation reasons",
+                  )}
                 </Text>
               </View>
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Planned hold reasons</Text>
+                <Text style={styles.configListTitle}>Evidence Records</Text>
                 <Text style={styles.configListBody}>
-                  fraud · invalid traffic · fake engagement · scams · undisclosed sponsorship · stolen content · chargebacks · refund abuse · policy violation · illegal conduct
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudEvidenceRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation evidence record",
+                    "foundation evidence records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Evidence metadata only. No sensitive raw evidence or secrets are stored here.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Planned Actions</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudActionRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation planned-action row",
+                    "foundation planned-action rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Planned-action rows are not executable controls.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Review Notes</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudReviewNoteCount,
+                    adminFinanceReadModel.loading,
+                    "foundation review note",
+                    "foundation review notes",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Review workflow is not active yet.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Appeals</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudAppealRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation appeal placeholder",
+                    "foundation appeal placeholders",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Appeal UI and appeal workflow are not active yet.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Fraud Audit Logs</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudAuditLogCount,
+                    adminFinanceReadModel.loading,
+                    "foundation audit log",
+                    "foundation audit logs",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Audit rows are foundation-only; immutable admin audit logs are still a separate future lane.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Planned reasons list</Text>
+                <Text style={styles.configListBody}>
+                  invalid traffic · fake engagement · fake followers · fake views · fake ad activity · scams · undisclosed sponsorship · stolen content · chargebacks · refund abuse · policy violation · illegal conduct · suspicious payout behavior · network overage abuse
                 </Text>
               </View>
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Planned future actions</Text>
-                <Text style={styles.configListBody}>pause payouts · disable monetization · restrict uploads/live · admin notes/audit log</Text>
+                <Text style={styles.configListTitle}>Future requirements</Text>
+                <Text style={styles.configListBody}>Fraud enforcement must require reason, evidence, admin notes, audit trail, review state, confirmation for dangerous actions, and an appeal/review path later.</Text>
               </View>
             </View>
           </View>

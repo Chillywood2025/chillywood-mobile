@@ -1070,6 +1070,247 @@ export type Database = {
           },
         ]
       }
+      fraud_action_records: {
+        Row: {
+          action_type: string
+          created_at: string
+          fraud_hold_id: number
+          id: string
+          metadata: Json
+          reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          fraud_hold_id: number
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          fraud_hold_id?: number
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fraud_action_records_hold_fkey"
+            columns: ["fraud_hold_id"]
+            isOneToOne: false
+            referencedRelation: "platform_fraud_holds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fraud_appeal_records: {
+        Row: {
+          created_at: string
+          fraud_hold_id: number
+          id: string
+          message: string | null
+          metadata: Json
+          status: string
+          submitted_by_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fraud_hold_id: number
+          id?: string
+          message?: string | null
+          metadata?: Json
+          status?: string
+          submitted_by_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fraud_hold_id?: number
+          id?: string
+          message?: string | null
+          metadata?: Json
+          status?: string
+          submitted_by_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fraud_appeal_records_hold_fkey"
+            columns: ["fraud_hold_id"]
+            isOneToOne: false
+            referencedRelation: "platform_fraud_holds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fraud_audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          fraud_hold_id: number | null
+          id: string
+          metadata: Json
+          reason: string | null
+          target_id: string | null
+          target_table: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          fraud_hold_id?: number | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          fraud_hold_id?: number | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fraud_audit_logs_hold_fkey"
+            columns: ["fraud_hold_id"]
+            isOneToOne: false
+            referencedRelation: "platform_fraud_holds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fraud_evidence_records: {
+        Row: {
+          created_at: string
+          description: string | null
+          evidence_type: string
+          fraud_hold_id: number
+          id: string
+          metadata: Json
+          source_id: string | null
+          source_table: string | null
+          title: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          evidence_type: string
+          fraud_hold_id: number
+          id?: string
+          metadata?: Json
+          source_id?: string | null
+          source_table?: string | null
+          title?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          evidence_type?: string
+          fraud_hold_id?: number
+          id?: string
+          metadata?: Json
+          source_id?: string | null
+          source_table?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fraud_evidence_records_hold_fkey"
+            columns: ["fraud_hold_id"]
+            isOneToOne: false
+            referencedRelation: "platform_fraud_holds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fraud_reason_records: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_name: string
+          id: string
+          metadata: Json
+          reason_key: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_name: string
+          id?: string
+          metadata?: Json
+          reason_key: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          id?: string
+          metadata?: Json
+          reason_key?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fraud_review_notes: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          fraud_hold_id: number
+          id: string
+          metadata: Json
+          note: string
+          review_status: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          fraud_hold_id: number
+          id?: string
+          metadata?: Json
+          note: string
+          review_status?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          fraud_hold_id?: number
+          id?: string
+          metadata?: Json
+          note?: string
+          review_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fraud_review_notes_hold_fkey"
+            columns: ["fraud_hold_id"]
+            isOneToOne: false
+            referencedRelation: "platform_fraud_holds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       network_account_plan_assignments: {
         Row: {
           created_at: string
@@ -1610,12 +1851,17 @@ export type Database = {
           enforcement_scope: string
           id: number
           metadata: Json
+          notes: string | null
+          primary_reason: string
           reason: string
           released_at: string | null
           released_by_user_id: string | null
+          severity: string
           status: string
+          target_channel_user_id: string | null
           target_id: string | null
           target_type: string
+          target_user_id: string | null
           updated_at: string
           user_id: string | null
         }
@@ -1625,12 +1871,17 @@ export type Database = {
           enforcement_scope?: string
           id?: number
           metadata?: Json
+          notes?: string | null
+          primary_reason?: string
           reason: string
           released_at?: string | null
           released_by_user_id?: string | null
+          severity?: string
           status?: string
+          target_channel_user_id?: string | null
           target_id?: string | null
           target_type?: string
+          target_user_id?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -1640,12 +1891,17 @@ export type Database = {
           enforcement_scope?: string
           id?: number
           metadata?: Json
+          notes?: string | null
+          primary_reason?: string
           reason?: string
           released_at?: string | null
           released_by_user_id?: string | null
+          severity?: string
           status?: string
+          target_channel_user_id?: string | null
           target_id?: string | null
           target_type?: string
+          target_user_id?: string | null
           updated_at?: string
           user_id?: string | null
         }

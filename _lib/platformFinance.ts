@@ -19,6 +19,12 @@ export const SPONSOR_REVIEW_LOGS_TABLE = "sponsor_review_logs";
 export const SPONSOR_PAYMENT_RECORDS_TABLE = "sponsor_payment_records";
 export const SPONSOR_PAYOUT_SPLIT_RECORDS_TABLE = "sponsor_payout_split_records";
 export const PLATFORM_FRAUD_HOLDS_TABLE = "platform_fraud_holds";
+export const FRAUD_REASON_RECORDS_TABLE = "fraud_reason_records";
+export const FRAUD_EVIDENCE_RECORDS_TABLE = "fraud_evidence_records";
+export const FRAUD_ACTION_RECORDS_TABLE = "fraud_action_records";
+export const FRAUD_REVIEW_NOTES_TABLE = "fraud_review_notes";
+export const FRAUD_APPEAL_RECORDS_TABLE = "fraud_appeal_records";
+export const FRAUD_AUDIT_LOGS_TABLE = "fraud_audit_logs";
 export const CREATOR_PAYOUT_ACCOUNTS_TABLE = "creator_payout_accounts";
 export const CREATOR_PAYOUT_BATCHES_TABLE = "creator_payout_batches";
 export const CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE = "creator_payout_provider_transfers";
@@ -50,6 +56,12 @@ export type AdminFinanceReadModel = {
   sponsorPaymentRecordCount: number | null;
   sponsorPayoutSplitRecordCount: number | null;
   platformFraudHoldCount: number | null;
+  fraudReasonRecordCount: number | null;
+  fraudEvidenceRecordCount: number | null;
+  fraudActionRecordCount: number | null;
+  fraudReviewNoteCount: number | null;
+  fraudAppealRecordCount: number | null;
+  fraudAuditLogCount: number | null;
   generatedAt: string;
 };
 
@@ -114,6 +126,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     sponsorPaymentRecordCount,
     sponsorPayoutSplitRecordCount,
     platformFraudHoldCount,
+    fraudReasonRecordCount,
+    fraudEvidenceRecordCount,
+    fraudActionRecordCount,
+    fraudReviewNoteCount,
+    fraudAppealRecordCount,
+    fraudAuditLogCount,
   ] = await Promise.all([
     safeRead(() => readTableCount(PLATFORM_FINANCE_LEDGER_EVENTS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE)),
@@ -139,6 +157,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(SPONSOR_PAYMENT_RECORDS_TABLE)),
     safeRead(() => readTableCount(SPONSOR_PAYOUT_SPLIT_RECORDS_TABLE)),
     safeRead(() => readTableCount(PLATFORM_FRAUD_HOLDS_TABLE)),
+    safeRead(() => readTableCount(FRAUD_REASON_RECORDS_TABLE)),
+    safeRead(() => readTableCount(FRAUD_EVIDENCE_RECORDS_TABLE)),
+    safeRead(() => readTableCount(FRAUD_ACTION_RECORDS_TABLE)),
+    safeRead(() => readTableCount(FRAUD_REVIEW_NOTES_TABLE)),
+    safeRead(() => readTableCount(FRAUD_APPEAL_RECORDS_TABLE)),
+    safeRead(() => readTableCount(FRAUD_AUDIT_LOGS_TABLE)),
   ]);
 
   return {
@@ -166,6 +190,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     sponsorPaymentRecordCount,
     sponsorPayoutSplitRecordCount,
     platformFraudHoldCount,
+    fraudReasonRecordCount,
+    fraudEvidenceRecordCount,
+    fraudActionRecordCount,
+    fraudReviewNoteCount,
+    fraudAppealRecordCount,
+    fraudAuditLogCount,
     generatedAt: new Date().toISOString(),
   };
 }
