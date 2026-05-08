@@ -15,6 +15,27 @@ export const RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC = "record_creator_video_uploa
 export const ROLLUP_CREATOR_VIDEO_UPLOAD_USAGE_DAILY_RPC = "rollup_creator_video_upload_usage_daily";
 
 export type PlatformUsageMetricKey = "bandwidth_bytes" | "participant_minutes" | "storage_bytes";
+export type ProviderUsageKey =
+  | "cloudflare_r2"
+  | "hetzner_object_storage"
+  | "hetzner_server"
+  | "ovh_object_storage"
+  | "ovh_server";
+export type ProviderUsageImportConnectionStatus = "connected" | "not_connected" | "failed" | "partial";
+
+export type AdminProviderUsageImportStatus = {
+  provider: ProviderUsageKey;
+  label: string;
+  status: ProviderUsageImportConnectionStatus;
+  latestImportStatus: string | null;
+  latestImportAt: string | null;
+  latestImportRecords: number | null;
+  usageRowsCount: number | null;
+  last7DaysRowsCount: number | null;
+  storageBytesLast7Days: number | null;
+  requestCountLast7Days: number | null;
+  providerMetricCountLast7Days: number | null;
+};
 
 export type CreatorVideoUploadUsageResult = {
   status: string;
@@ -52,6 +73,10 @@ export type AdminUsageReadModel = {
   providerUsageDailyCount: number | null;
   providerBillingSnapshotsCount: number | null;
   providerUsageReconciliationCount: number | null;
+  providerImportStatuses: AdminProviderUsageImportStatus[];
+  providerImportedStorageBytes: number | null;
+  providerImportedRequestCount: number | null;
+  providerImportedNetworkMetricCount: number | null;
   generatedAt: string;
 };
 
@@ -73,15 +98,35 @@ type CommunicationMembershipUsageRow = Pick<
 type BandwidthUsageEventRow = {
   quantity?: number | string | null;
 };
+type ProviderUsageDailyReadRow = Pick<Tables<"provider_usage_daily">, "metric_key" | "quantity" | "unit" | "usage_date">;
+type ProviderUsageImportReadRow = Pick<
+  Tables<"provider_usage_imports">,
+  "status" | "created_at" | "records_imported" | "error_message"
+>;
 
 const ACTIVE_PREMIUM_ENTITLEMENT_STATUSES = ["active", "trialing", "grace_period"] as const;
 const MAX_METADATA_ROWS = 1000;
 const MS_PER_MINUTE = 60 * 1000;
+const PROVIDER_USAGE_IMPORT_STATUS_DEFAULTS: Array<{ provider: ProviderUsageKey; label: string }> = [
+  { provider: "cloudflare_r2", label: "Cloudflare R2" },
+  { provider: "hetzner_object_storage", label: "Hetzner Object Storage" },
+  { provider: "hetzner_server", label: "Hetzner Servers" },
+  { provider: "ovh_object_storage", label: "OVH Object Storage" },
+  { provider: "ovh_server", label: "OVH Servers" },
+];
+const ACTIVE_PROVIDER_IMPORT_KEYS = new Set<ProviderUsageKey>(["cloudflare_r2", "hetzner_server"]);
 
 const startOfTodayIso = () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return today.toISOString();
+};
+
+const startOfLast7DaysIsoDate = () => {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 6);
+  return start.toISOString().slice(0, 10);
 };
 
 const toPositiveNumber = (value: unknown) => {
@@ -282,6 +327,114 @@ async function readUsageFoundationCounts() {
   };
 }
 
+const emptyProviderImportStatus = (
+  provider: ProviderUsageKey,
+  label: string,
+): AdminProviderUsageImportStatus => ({
+  provider,
+  label,
+  status: "not_connected",
+  latestImportStatus: null,
+  latestImportAt: null,
+  latestImportRecords: null,
+  usageRowsCount: null,
+  last7DaysRowsCount: null,
+  storageBytesLast7Days: null,
+  requestCountLast7Days: null,
+  providerMetricCountLast7Days: null,
+});
+
+const resolveProviderImportConnectionStatus = (
+  latestImportStatus: string | null,
+  usageRowsCount: number | null,
+): ProviderUsageImportConnectionStatus => {
+  const hasRows = typeof usageRowsCount === "number" && usageRowsCount > 0;
+  if (latestImportStatus === "failed") return hasRows ? "partial" : "failed";
+  if (latestImportStatus === "completed" || hasRows) return "connected";
+  return "not_connected";
+};
+
+async function readProviderUsageImportStatus(
+  provider: ProviderUsageKey,
+  label: string,
+  last7DaysDate: string,
+): Promise<AdminProviderUsageImportStatus> {
+  if (!ACTIVE_PROVIDER_IMPORT_KEYS.has(provider)) {
+    return emptyProviderImportStatus(provider, label);
+  }
+
+  const [
+    latestImportResult,
+    usageRowsCount,
+    last7DaysRowsResult,
+  ] = await Promise.all([
+    adminUsageFoundationClient
+      .from(PROVIDER_USAGE_IMPORTS_TABLE)
+      .select("status,created_at,records_imported,error_message")
+      .eq("provider", provider)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    readTableCountForProvider(PROVIDER_USAGE_DAILY_TABLE, provider),
+    adminUsageFoundationClient
+      .from(PROVIDER_USAGE_DAILY_TABLE)
+      .select("metric_key,quantity,unit,usage_date", { count: "exact" })
+      .eq("provider", provider)
+      .gte("usage_date", last7DaysDate)
+      .limit(MAX_METADATA_ROWS),
+  ]);
+
+  if (latestImportResult.error && latestImportResult.error.code !== "PGRST116") throw latestImportResult.error;
+  if (last7DaysRowsResult.error) throw last7DaysRowsResult.error;
+
+  const latestImport = (latestImportResult.data ?? null) as ProviderUsageImportReadRow | null;
+  const last7DaysRows = (Array.isArray(last7DaysRowsResult.data) ? last7DaysRowsResult.data : []) as ProviderUsageDailyReadRow[];
+  const storageBytesLast7Days = sumRows(last7DaysRows, (row) => (
+    row.unit === "bytes" && ["storage_payload_bytes", "storage_metadata_bytes"].includes(row.metric_key)
+      ? row.quantity
+      : 0
+  ));
+  const requestCountLast7Days = sumRows(last7DaysRows, (row) => (
+    row.unit === "request" && row.metric_key === "operation_requests" ? row.quantity : 0
+  ));
+  const providerMetricCountLast7Days = sumRows(last7DaysRows, (row) => (
+    row.unit === "provider_metric" ? row.quantity : 0
+  ));
+
+  return {
+    provider,
+    label,
+    status: resolveProviderImportConnectionStatus(latestImport?.status ?? null, usageRowsCount),
+    latestImportStatus: latestImport?.status ?? null,
+    latestImportAt: latestImport?.created_at ?? null,
+    latestImportRecords: typeof latestImport?.records_imported === "number" ? latestImport.records_imported : null,
+    usageRowsCount,
+    last7DaysRowsCount: Number(last7DaysRowsResult.count ?? last7DaysRows.length),
+    storageBytesLast7Days: storageBytesLast7Days > 0 ? storageBytesLast7Days : null,
+    requestCountLast7Days: requestCountLast7Days > 0 ? requestCountLast7Days : null,
+    providerMetricCountLast7Days: providerMetricCountLast7Days > 0 ? providerMetricCountLast7Days : null,
+  };
+}
+
+async function readTableCountForProvider(table: string, provider: ProviderUsageKey) {
+  return readCount(
+    adminUsageFoundationClient
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .eq("provider", provider),
+  );
+}
+
+async function readProviderUsageImportStatuses(): Promise<AdminProviderUsageImportStatus[]> {
+  const last7DaysDate = startOfLast7DaysIsoDate();
+  return Promise.all(
+    PROVIDER_USAGE_IMPORT_STATUS_DEFAULTS.map(async ({ provider, label }) => (
+      await safeRead(() => readProviderUsageImportStatus(provider, label, last7DaysDate))
+        ?? emptyProviderImportStatus(provider, label)
+    )),
+  );
+}
+
 export const formatUsageBytes = (bytes?: number | null) => {
   if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) return "Not connected yet";
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -339,6 +492,7 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     participantMinuteEstimate,
     bandwidthMetering,
     usageFoundationCounts,
+    providerImportStatuses,
   ] = await Promise.all([
     safeRead(() =>
       readCount(
@@ -379,6 +533,7 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     safeRead(() => readParticipantMinuteEstimate(startOfToday)),
     safeRead(() => readBandwidthMeteringEvents(startOfToday)),
     safeRead(readUsageFoundationCounts),
+    safeRead(readProviderUsageImportStatuses),
   ]);
 
   const internalUsageCounts = [
@@ -393,6 +548,12 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     usageFoundationCounts?.providerBillingSnapshotsCount,
     usageFoundationCounts?.providerUsageReconciliationCount,
   ];
+  const providerStatuses = providerImportStatuses ?? PROVIDER_USAGE_IMPORT_STATUS_DEFAULTS.map(({ provider, label }) => (
+    emptyProviderImportStatus(provider, label)
+  ));
+  const providerImportedStorageBytes = sumRows(providerStatuses, (status) => status.storageBytesLast7Days);
+  const providerImportedRequestCount = sumRows(providerStatuses, (status) => status.requestCountLast7Days);
+  const providerImportedNetworkMetricCount = sumRows(providerStatuses, (status) => status.providerMetricCountLast7Days);
 
   return {
     premiumActiveCount,
@@ -415,6 +576,10 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     providerUsageDailyCount: usageFoundationCounts?.providerUsageDailyCount ?? null,
     providerBillingSnapshotsCount: usageFoundationCounts?.providerBillingSnapshotsCount ?? null,
     providerUsageReconciliationCount: usageFoundationCounts?.providerUsageReconciliationCount ?? null,
+    providerImportStatuses: providerStatuses,
+    providerImportedStorageBytes: providerImportedStorageBytes > 0 ? providerImportedStorageBytes : null,
+    providerImportedRequestCount: providerImportedRequestCount > 0 ? providerImportedRequestCount : null,
+    providerImportedNetworkMetricCount: providerImportedNetworkMetricCount > 0 ? providerImportedNetworkMetricCount : null,
     generatedAt: new Date().toISOString(),
   };
 }

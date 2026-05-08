@@ -65,6 +65,7 @@ import {
   formatUsageBytes,
   formatUsageMinutes,
   readAdminUsageReadModel,
+  type AdminProviderUsageImportStatus,
   type AdminUsageReadModel,
 } from "../_lib/platformUsage";
 import {
@@ -241,6 +242,10 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   providerUsageDailyCount: null,
   providerBillingSnapshotsCount: null,
   providerUsageReconciliationCount: null,
+  providerImportStatuses: [],
+  providerImportedStorageBytes: null,
+  providerImportedRequestCount: null,
+  providerImportedNetworkMetricCount: null,
   generatedAt: new Date(0).toISOString(),
 };
 const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
@@ -699,6 +704,42 @@ const formatCreatorVideoModerationFailure = (error: any) => {
 const formatAdminV1Count = (value: number | null, loading: boolean) => {
   if (loading) return "Loading";
   return value === null ? "Not connected yet" : String(value);
+};
+
+const formatProviderUsageStatusLabel = (status: AdminProviderUsageImportStatus["status"]) => {
+  if (status === "connected") return "Connected";
+  if (status === "partial") return "Partial";
+  if (status === "failed") return "Failed";
+  return "Not connected yet";
+};
+
+const getProviderUsageStatusStyle = (status: AdminProviderUsageImportStatus["status"]) => {
+  if (status === "connected") return styles.badgeOn;
+  if (status === "partial") return styles.badgeScheduled;
+  if (status === "failed") return styles.badgeDraft;
+  return styles.badgeOff;
+};
+
+const formatProviderUsageRows = (count: number | null) => (
+  count === null ? "usage rows not readable" : `${count} provider usage row${count === 1 ? "" : "s"}`
+);
+
+const formatProviderImportDate = (value: string | null) => {
+  if (!value) return "No completed import yet";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+};
+
+const formatProviderUsageSummary = (status: AdminProviderUsageImportStatus) => {
+  if (status.status === "not_connected") return "Not connected yet.";
+  if (status.status === "failed") {
+    return `Last import failed. ${formatProviderUsageRows(status.usageRowsCount)} remain readable if any previous import succeeded.`;
+  }
+  if (status.status === "partial") {
+    return `Previous provider rows are readable, but the latest import did not complete. ${formatProviderUsageRows(status.usageRowsCount)}.`;
+  }
+  return `Provider import connected. ${formatProviderUsageRows(status.usageRowsCount)} readable.`;
 };
 
 const formatAdminFinanceCount = (value: number | null, loading: boolean, singular: string, plural: string) => {
@@ -3096,11 +3137,75 @@ export default function AdminStudioScreen() {
                     ? `Schema connected. ${adminV1ReadModel.providerUsageImportsCount ?? 0} import record${adminV1ReadModel.providerUsageImportsCount === 1 ? "" : "s"} and ${adminV1ReadModel.providerUsageDailyCount ?? 0} provider usage row${adminV1ReadModel.providerUsageDailyCount === 1 ? "" : "s"} are readable.`
                     : "Provider import schema is not connected yet."}
                 </Text>
-                <Text style={styles.configListBody}>Cloudflare R2: Not connected yet.</Text>
-                <Text style={styles.configListBody}>Hetzner Object Storage: Not connected yet.</Text>
-                <Text style={styles.configListBody}>Hetzner Servers: Not connected yet.</Text>
-                <Text style={styles.configListBody}>OVH Object Storage: Not connected yet.</Text>
-                <Text style={styles.configListBody}>OVH Servers: Not connected yet.</Text>
+                <Text style={styles.configListBody}>Provider imports are server-side only.</Text>
+                <Text style={styles.configListBody}>
+                  Provider imports are not customer billing, overage, payout, revenue, or invoice truth.
+                </Text>
+                <Text style={styles.configListBody}>Cloudflare R2 import uses provider analytics when configured.</Text>
+                <Text style={styles.configListBody}>Hetzner server import uses provider server metrics when configured.</Text>
+                <Text style={styles.configListBody}>
+                  OVH and Hetzner Object Storage imports need a later exact provider API lane.
+                </Text>
+                <View style={styles.providerUsageGrid}>
+                  {adminV1ReadModel.providerImportStatuses.map((providerStatus) => (
+                    <View key={providerStatus.provider} style={styles.providerUsageCard}>
+                      <View style={styles.providerUsageHeader}>
+                        <View style={styles.providerUsageTitleCopy}>
+                          <Text style={styles.configListTitle}>{providerStatus.label}</Text>
+                          <Text style={styles.configListBody}>{formatProviderUsageSummary(providerStatus)}</Text>
+                        </View>
+                        <View style={[styles.badge, getProviderUsageStatusStyle(providerStatus.status)]}>
+                          <Text style={styles.badgeText}>
+                            {formatProviderUsageStatusLabel(providerStatus.status)}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.configListBody}>
+                        {`Latest import: ${providerStatus.latestImportStatus ?? "none"} · ${formatProviderImportDate(providerStatus.latestImportAt)}`}
+                      </Text>
+                      {providerStatus.latestImportRecords !== null ? (
+                        <Text style={styles.configListBody}>
+                          {`Latest import records: ${providerStatus.latestImportRecords}`}
+                        </Text>
+                      ) : null}
+                      {providerStatus.last7DaysRowsCount !== null ? (
+                        <Text style={styles.configListBody}>
+                          {`Last 7 days rows: ${providerStatus.last7DaysRowsCount} · Provider import`}
+                        </Text>
+                      ) : null}
+                      {providerStatus.storageBytesLast7Days !== null ? (
+                        <Text style={styles.configListBody}>
+                          {`Last 7 days storage: ${formatUsageBytes(providerStatus.storageBytesLast7Days)} · Provider import, not billing truth`}
+                        </Text>
+                      ) : null}
+                      {providerStatus.requestCountLast7Days !== null ? (
+                        <Text style={styles.configListBody}>
+                          {`Last 7 days requests: ${providerStatus.requestCountLast7Days} · Provider import`}
+                        </Text>
+                      ) : null}
+                      {providerStatus.providerMetricCountLast7Days !== null ? (
+                        <Text style={styles.configListBody}>
+                          {`Last 7 days network metric: ${providerStatus.providerMetricCountLast7Days} · Provider import, not billing truth`}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+                {adminV1ReadModel.providerImportedStorageBytes !== null ? (
+                  <Text style={styles.configListBody}>
+                    {`Provider imported storage, last 7 days: ${formatUsageBytes(adminV1ReadModel.providerImportedStorageBytes)}. This is provider import data only.`}
+                  </Text>
+                ) : null}
+                {adminV1ReadModel.providerImportedRequestCount !== null ? (
+                  <Text style={styles.configListBody}>
+                    {`Provider imported requests, last 7 days: ${adminV1ReadModel.providerImportedRequestCount}. This is not billing or revenue truth.`}
+                  </Text>
+                ) : null}
+                {adminV1ReadModel.providerImportedNetworkMetricCount !== null ? (
+                  <Text style={styles.configListBody}>
+                    {`Provider imported network metrics, last 7 days: ${adminV1ReadModel.providerImportedNetworkMetricCount}. Units remain provider metrics unless normalized later.`}
+                  </Text>
+                ) : null}
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -5357,6 +5462,28 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.06)",
     backgroundColor: "rgba(255,255,255,0.025)",
     padding: 10,
+  },
+  providerUsageGrid: {
+    gap: 8,
+    marginTop: 8,
+  },
+  providerUsageCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(5,8,12,0.42)",
+    padding: 9,
+    gap: 5,
+  },
+  providerUsageHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  providerUsageTitleCopy: {
+    flex: 1,
+    gap: 2,
   },
   configListCopy: {
     gap: 2,
