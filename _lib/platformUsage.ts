@@ -12,6 +12,7 @@ export const PROVIDER_USAGE_DAILY_TABLE = "provider_usage_daily";
 export const PROVIDER_BILLING_SNAPSHOTS_TABLE = "provider_billing_snapshots";
 export const PROVIDER_USAGE_RECONCILIATION_TABLE = "provider_usage_reconciliation";
 export const RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC = "record_creator_video_upload_usage";
+export const ROLLUP_CREATOR_VIDEO_UPLOAD_USAGE_DAILY_RPC = "rollup_creator_video_upload_usage_daily";
 
 export type PlatformUsageMetricKey = "bandwidth_bytes" | "participant_minutes" | "storage_bytes";
 
@@ -20,6 +21,14 @@ export type CreatorVideoUploadUsageResult = {
   videoId: string | null;
   usageEventRecorded: boolean;
   storageEventRecorded: boolean;
+};
+
+export type CreatorVideoUploadDailyRollupResult = {
+  status: string;
+  usageDate: string | null;
+  rolledUp: boolean;
+  uploadSummaryRowsUpserted: number;
+  storageSummaryRowsUpserted: number;
 };
 
 export type AdminUsageReadModel = {
@@ -97,6 +106,17 @@ const normalizeCreatorVideoUploadUsageResult = (value: unknown, fallbackVideoId:
   };
 };
 
+const normalizeCreatorVideoUploadDailyRollupResult = (value: unknown): CreatorVideoUploadDailyRollupResult => {
+  const result = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    status: toUsageText(result.status) || "unknown",
+    usageDate: toUsageText(result.usage_date) || null,
+    rolledUp: result.rolled_up === true,
+    uploadSummaryRowsUpserted: Math.trunc(toPositiveNumber(result.upload_summary_rows_upserted)),
+    storageSummaryRowsUpserted: Math.trunc(toPositiveNumber(result.storage_summary_rows_upserted)),
+  };
+};
+
 const safeRead = async <T>(loader: () => Promise<T>): Promise<T | null> => {
   try {
     return await loader();
@@ -113,6 +133,13 @@ const readCount = async (query: PromiseLike<CountQueryResult>) => {
 
 const adminUsageFoundationClient = supabase as unknown as {
   from: (table: string) => any;
+};
+
+const usageRpcClient = supabase as unknown as {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: unknown }>;
 };
 
 const readTableCount = async (table: string) => (
@@ -286,6 +313,18 @@ export async function recordCreatorVideoUploadUsage(videoId: string): Promise<Cr
   if (error) throw error;
 
   return normalizeCreatorVideoUploadUsageResult(data, targetVideoId);
+}
+
+export async function rollupCreatorVideoUploadUsageDaily(
+  usageDate?: string | null,
+): Promise<CreatorVideoUploadDailyRollupResult> {
+  const normalizedDate = toUsageText(usageDate);
+  const { data, error } = await usageRpcClient.rpc(ROLLUP_CREATOR_VIDEO_UPLOAD_USAGE_DAILY_RPC, {
+    target_usage_date: normalizedDate || null,
+  });
+  if (error) throw error;
+
+  return normalizeCreatorVideoUploadDailyRollupResult(data);
 }
 
 export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {

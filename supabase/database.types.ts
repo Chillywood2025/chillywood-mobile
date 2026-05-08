@@ -567,6 +567,65 @@ export type Database = {
           },
         ]
       }
+      creator_payout_ledger_entries: {
+        Row: {
+          amount_minor: number
+          created_at: string
+          creator_user_id: string
+          currency: string
+          entry_type: string
+          hold_reason: string | null
+          hold_until: string | null
+          id: number
+          metadata: Json
+          payout_provider: string | null
+          payout_provider_reference: string | null
+          source_ledger_event_id: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_minor?: number
+          created_at?: string
+          creator_user_id: string
+          currency?: string
+          entry_type?: string
+          hold_reason?: string | null
+          hold_until?: string | null
+          id?: number
+          metadata?: Json
+          payout_provider?: string | null
+          payout_provider_reference?: string | null
+          source_ledger_event_id?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_minor?: number
+          created_at?: string
+          creator_user_id?: string
+          currency?: string
+          entry_type?: string
+          hold_reason?: string | null
+          hold_until?: string | null
+          id?: number
+          metadata?: Json
+          payout_provider?: string | null
+          payout_provider_reference?: string | null
+          source_ledger_event_id?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_ledger_entries_source_event_fkey"
+            columns: ["source_ledger_event_id"]
+            isOneToOne: false
+            referencedRelation: "platform_finance_ledger_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_permissions: {
         Row: {
           can_publish_premium_titles: boolean
@@ -692,6 +751,101 @@ export type Database = {
           },
         ]
       }
+      network_billing_accounts: {
+        Row: {
+          billing_provider: string | null
+          billing_provider_customer_id: string | null
+          created_at: string
+          id: number
+          metadata: Json
+          network_name: string | null
+          network_owner_user_id: string | null
+          plan_key: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          billing_provider?: string | null
+          billing_provider_customer_id?: string | null
+          created_at?: string
+          id?: number
+          metadata?: Json
+          network_name?: string | null
+          network_owner_user_id?: string | null
+          plan_key?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          billing_provider?: string | null
+          billing_provider_customer_id?: string | null
+          created_at?: string
+          id?: number
+          metadata?: Json
+          network_name?: string | null
+          network_owner_user_id?: string | null
+          plan_key?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      network_invoice_records: {
+        Row: {
+          amount_minor: number
+          billing_provider: string | null
+          billing_provider_invoice_id: string | null
+          created_at: string
+          currency: string
+          id: number
+          invoice_number: string | null
+          invoice_period_end: string | null
+          invoice_period_start: string | null
+          metadata: Json
+          network_billing_account_id: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_minor?: number
+          billing_provider?: string | null
+          billing_provider_invoice_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: number
+          invoice_number?: string | null
+          invoice_period_end?: string | null
+          invoice_period_start?: string | null
+          metadata?: Json
+          network_billing_account_id?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_minor?: number
+          billing_provider?: string | null
+          billing_provider_invoice_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: number
+          invoice_number?: string | null
+          invoice_period_end?: string | null
+          invoice_period_start?: string | null
+          metadata?: Json
+          network_billing_account_id?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_invoice_records_account_fkey"
+            columns: ["network_billing_account_id"]
+            isOneToOne: false
+            referencedRelation: "network_billing_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -731,6 +885,102 @@ export type Database = {
           target_route?: string
           title?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      platform_finance_ledger_events: {
+        Row: {
+          amount_minor: number
+          currency: string
+          direction: string
+          event_type: string
+          id: number
+          metadata: Json
+          occurred_at: string
+          owner_user_id: string | null
+          recorded_at: string
+          source_id: string | null
+          source_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_minor?: number
+          currency?: string
+          direction?: string
+          event_type: string
+          id?: number
+          metadata?: Json
+          occurred_at?: string
+          owner_user_id?: string | null
+          recorded_at?: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_minor?: number
+          currency?: string
+          direction?: string
+          event_type?: string
+          id?: number
+          metadata?: Json
+          occurred_at?: string
+          owner_user_id?: string | null
+          recorded_at?: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      platform_fraud_holds: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          enforcement_scope: string
+          id: number
+          metadata: Json
+          reason: string
+          released_at: string | null
+          released_by_user_id: string | null
+          status: string
+          target_id: string | null
+          target_type: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          enforcement_scope?: string
+          id?: number
+          metadata?: Json
+          reason: string
+          released_at?: string | null
+          released_by_user_id?: string | null
+          status?: string
+          target_id?: string | null
+          target_type?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          enforcement_scope?: string
+          id?: number
+          metadata?: Json
+          reason?: string
+          released_at?: string | null
+          released_by_user_id?: string | null
+          status?: string
+          target_id?: string | null
+          target_type?: string
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1348,6 +1598,51 @@ export type Database = {
           storage_provider?: string
           surface_id?: string
           surface_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sponsor_deal_records: {
+        Row: {
+          brand_name: string | null
+          created_at: string
+          creator_user_id: string | null
+          currency: string
+          deal_title: string | null
+          deal_type: string
+          disclosure_required: boolean
+          gross_amount_minor: number | null
+          id: number
+          metadata: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          brand_name?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          deal_title?: string | null
+          deal_type?: string
+          disclosure_required?: boolean
+          gross_amount_minor?: number | null
+          id?: number
+          metadata?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_name?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          deal_title?: string | null
+          deal_type?: string
+          disclosure_required?: boolean
+          gross_amount_minor?: number | null
+          id?: number
+          metadata?: Json
+          status?: string
           updated_at?: string
         }
         Relationships: []
@@ -2207,6 +2502,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      rollup_creator_video_upload_usage_daily: {
+        Args: { target_usage_date?: string }
+        Returns: Json
       }
       sanitize_app_configuration: {
         Args: { input_config: Json }
