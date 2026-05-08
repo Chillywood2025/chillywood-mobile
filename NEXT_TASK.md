@@ -11,6 +11,8 @@ Finance F2B creator payout provider schema foundation is pushed and applied. Mig
 
 Finance F2C payout-provider schema/RLS proof is complete. Remote migration history includes `202605080001`, linked schema lint is clean, generated types include the payout-provider tables, and anonymous insert into `creator_payout_accounts` is denied. Non-empty read-denial and owner/operator visibility proof are still reserved for the safe proof-row lane.
 
+Finance F2D payout provider Admin foundation readout is pushed. `_lib/platformFinance.ts` reads safe counts for payout accounts, batches, provider transfers, holds, and audit rows, and `/admin` Payouts shows those counts as read-only foundation status only. No live payout action, payout button, withdrawal button, Stripe onboarding, provider sync, provider call, KYC flow, or creator-facing balance exists.
+
 The next lane is an audit/spec pass only:
 
 - audit App Store / Google Play readiness without changing runtime code
@@ -93,6 +95,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - finance foundation migration `supabase/migrations/202605070005_platform_finance_ledger_foundation.sql` is now applied remotely and generated database types include the finance tables
    - Finance F2B creator payout provider schema migration `supabase/migrations/202605080001_creator_payout_provider_foundation.sql` is applied remotely and generated database types include payout-provider foundation tables
    - Finance F2C schema/RLS proof is complete for migration/type alignment and anonymous insert denial
+   - Finance F2D Admin payout-provider readout is pushed as read-only foundation counts only
    - Finance Foundation Remote Proof is complete for current read-only/foundation Admin behavior; broader non-empty row visibility and moderator fraud-row proof still require a later safe seed/test lane before operational reliance
    - add provider imports, Stripe Connect onboarding/integration, creator payout reads, payout provider writes, network billing actions, sponsor checkout, or fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
