@@ -85,6 +85,62 @@ export type StripeProviderEvent = {
   type?: string;
 };
 
+export type StripeConnectTransferSyncPayload = {
+  provider_payout_id?: unknown;
+  provider_transfer_id?: unknown;
+  provider_transfer_record_id?: unknown;
+  providerPayoutId?: unknown;
+  providerTransferId?: unknown;
+  providerTransferRecordId?: unknown;
+};
+
+export type CreatorPayoutProviderTransferRow = {
+  amount_minor?: number | null;
+  created_at?: string | null;
+  creator_user_id?: string | null;
+  currency?: string | null;
+  failure_code?: string | null;
+  failure_message?: string | null;
+  id: string;
+  last_provider_sync_at?: string | null;
+  metadata?: unknown;
+  payout_account_id?: string | null;
+  payout_entry_id?: number | null;
+  platform_admin_audit_log_id?: string | null;
+  provider?: string | null;
+  provider_environment?: string | null;
+  provider_payout_id?: string | null;
+  provider_status?: string | null;
+  provider_transfer_id?: string | null;
+  status?: string | null;
+};
+
+export type StripeTransferObject = {
+  amount?: number;
+  created?: number;
+  currency?: string;
+  destination?: string | null;
+  id?: string;
+  livemode?: boolean;
+  metadata?: Record<string, unknown>;
+  object?: string;
+  reversed?: boolean;
+};
+
+export type StripePayoutObject = {
+  amount?: number;
+  arrival_date?: number;
+  created?: number;
+  currency?: string;
+  failure_code?: string | null;
+  failure_message?: string | null;
+  id?: string;
+  livemode?: boolean;
+  metadata?: Record<string, unknown>;
+  object?: string;
+  status?: string;
+};
+
 export const DB_PROVIDER = "stripe_connect";
 export const RESPONSE_PROVIDER = "stripe";
 export const PROVIDER_ENVIRONMENT = "test";
@@ -262,6 +318,38 @@ export const authenticateRequest = async (
       id: userId,
     },
   };
+};
+
+export const userHasPlatformRole = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  roles: string[],
+) => {
+  const normalizedEmail = toText(user.email).toLowerCase();
+  const userQuery = await adminClient
+    .from("platform_role_memberships")
+    .select("id")
+    .eq("status", "active")
+    .in("role", roles)
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (userQuery.error) throw new Error(`Platform role lookup failed: ${userQuery.error.message}`);
+  if ((userQuery.data as { id?: unknown } | null)?.id) return true;
+  if (!normalizedEmail) return false;
+
+  const emailQuery = await adminClient
+    .from("platform_role_memberships")
+    .select("id")
+    .eq("status", "active")
+    .in("role", roles)
+    .ilike("email", normalizedEmail)
+    .limit(1)
+    .maybeSingle();
+
+  if (emailQuery.error) throw new Error(`Platform role email lookup failed: ${emailQuery.error.message}`);
+  return !!(emailQuery.data as { id?: unknown } | null)?.id;
 };
 
 export const requestedCreatorUserId = (payload: StripeConnectAccountPayload) =>
@@ -712,6 +800,149 @@ export const retrieveStripeConnectAccount = async (secret: string, providerAccou
   stripeRequest<StripeAccountObject>(secret, `/accounts/${encodeURIComponent(providerAccountId)}`, {
     method: "GET",
   });
+
+export const retrieveStripeTransfer = async (secret: string, providerTransferId: string) =>
+  stripeRequest<StripeTransferObject>(secret, `/transfers/${encodeURIComponent(providerTransferId)}`, {
+    method: "GET",
+  });
+
+export const retrieveStripePayout = async (secret: string, providerPayoutId: string) =>
+  stripeRequest<StripePayoutObject>(secret, `/payouts/${encodeURIComponent(providerPayoutId)}`, {
+    method: "GET",
+  });
+
+export const requestedProviderTransferRecordId = (payload: StripeConnectTransferSyncPayload) =>
+  toText(payload.provider_transfer_record_id ?? payload.providerTransferRecordId);
+
+export const hasClientProviderTransferReference = (payload: StripeConnectTransferSyncPayload) =>
+  !!toText(
+    payload.provider_transfer_id ?? payload.providerTransferId ?? payload.provider_payout_id ?? payload.providerPayoutId,
+  );
+
+export const readProviderTransferRecord = async (
+  adminClient: SupabaseClientLike,
+  providerTransferRecordId: string,
+) => {
+  const { data, error } = await adminClient
+    .from("creator_payout_provider_transfers")
+    .select("*")
+    .eq("id", providerTransferRecordId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Provider transfer record read failed: ${error.message}`);
+  return (data ?? null) as CreatorPayoutProviderTransferRow | null;
+};
+
+const stripeUnixSecondsToIso = (value: unknown) => {
+  const seconds = typeof value === "number" && Number.isFinite(value) ? value : null;
+  if (!seconds) return null;
+  return new Date(seconds * 1000).toISOString();
+};
+
+export const safeTransferStatusPayload = (row: CreatorPayoutProviderTransferRow) => ({
+  amount_is_payable: false,
+  checkout_created: false,
+  creator_user_id: row.creator_user_id ?? null,
+  currency: row.currency ?? "usd",
+  failure_code: row.failure_code ?? null,
+  failure_message_present: !!row.failure_message,
+  local_transfer_record_id: row.id,
+  live_money_action: false,
+  payout_created: false,
+  provider: row.provider ?? DB_PROVIDER,
+  provider_environment: row.provider_environment ?? PROVIDER_ENVIRONMENT,
+  provider_payout_id_present: !!row.provider_payout_id,
+  provider_status: row.provider_status ?? null,
+  provider_transfer_id_present: !!row.provider_transfer_id,
+  status: row.status ?? "not_active",
+  transfer_created: false,
+});
+
+export const normalizeStripeTransferStatus = (transfer: StripeTransferObject) => {
+  if (transfer.livemode === true) {
+    throw new Error("Live-mode Stripe transfer object was rejected by the test-mode sync foundation.");
+  }
+
+  const reversed = transfer.reversed === true;
+  return {
+    failureCode: null as string | null,
+    failureMessage: null as string | null,
+    localStatus: reversed ? "reversed_later" : "synced_test",
+    providerCreatedAt: stripeUnixSecondsToIso(transfer.created),
+    providerStatus: reversed ? "reversed" : "created",
+  };
+};
+
+export const normalizeStripePayoutStatus = (payout: StripePayoutObject) => {
+  if (payout.livemode === true) {
+    throw new Error("Live-mode Stripe payout object was rejected by the test-mode sync foundation.");
+  }
+
+  const providerStatus = toText(payout.status).toLowerCase() || "unknown";
+  const localStatus = (() => {
+    if (providerStatus === "pending") return "pending_later";
+    if (providerStatus === "in_transit") return "in_transit_later";
+    if (providerStatus === "paid") return "paid_later";
+    if (providerStatus === "failed") return "failed_later";
+    if (providerStatus === "canceled" || providerStatus === "cancelled") return "cancelled_later";
+    return "synced_test";
+  })();
+
+  return {
+    estimatedArrivalAt: stripeUnixSecondsToIso(payout.arrival_date),
+    failureCode: toText(payout.failure_code) || null,
+    failureMessage: toText(payout.failure_message) || null,
+    localStatus,
+    providerCreatedAt: stripeUnixSecondsToIso(payout.created),
+    providerStatus,
+  };
+};
+
+export const updateProviderTransferSyncResult = async (
+  adminClient: SupabaseClientLike,
+  row: CreatorPayoutProviderTransferRow,
+  input: {
+    auditLogId?: string | null;
+    estimatedArrivalAt?: string | null;
+    failureCode?: string | null;
+    failureMessage?: string | null;
+    providerCreatedAt?: string | null;
+    providerStatus: string;
+    source: string;
+    status: string;
+  },
+) => {
+  const now = new Date().toISOString();
+  const metadata = safeMetadata({
+    ...metadataObject(row.metadata),
+    last_provider_sync_source: input.source,
+    provider_status_imported: true,
+    status_import_only: true,
+    transfer_creation: false,
+    payout_creation: false,
+  });
+
+  const { data, error } = await adminClient
+    .from("creator_payout_provider_transfers")
+    .update({
+      estimated_arrival_at: input.estimatedArrivalAt ?? null,
+      failure_code: input.failureCode ?? null,
+      failure_message: input.failureMessage ?? null,
+      last_provider_sync_at: now,
+      metadata,
+      platform_admin_audit_log_id: input.auditLogId ?? row.platform_admin_audit_log_id ?? null,
+      provider_created_at: input.providerCreatedAt ?? null,
+      provider_status: input.providerStatus,
+      status: input.status,
+      updated_at: now,
+    })
+    .eq("id", row.id)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(`Provider transfer sync update failed: ${error.message}`);
+  return data as CreatorPayoutProviderTransferRow;
+};
 
 export const createStripeConnectOnboardingLink = async (
   secret: string,

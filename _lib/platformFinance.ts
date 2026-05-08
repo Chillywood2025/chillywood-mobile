@@ -43,6 +43,9 @@ export type AdminFinanceReadModel = {
   creatorPayoutBatchCount: number | null;
   creatorPayoutBatchItemCount: number | null;
   creatorPayoutProviderTransferCount: number | null;
+  creatorPayoutProviderTransferSyncRequiredCount: number | null;
+  creatorPayoutProviderTransferSyncedTestCount: number | null;
+  creatorPayoutProviderTransferSyncFailedCount: number | null;
   creatorPayoutHoldCount: number | null;
   creatorPayoutAuditLogCount: number | null;
   networkBillingAccountCount: number | null;
@@ -76,12 +79,16 @@ type CountQueryResult = {
   error: unknown;
 };
 
+type CountQuery = PromiseLike<CountQueryResult> & {
+  eq: (column: string, value: string) => PromiseLike<CountQueryResult>;
+};
+
 const financeClient = supabase as unknown as {
   from: (table: string) => {
     select: (
       columns: string,
       options?: { count?: "exact"; head?: boolean },
-    ) => PromiseLike<CountQueryResult>;
+    ) => CountQuery;
   };
 };
 
@@ -101,6 +108,15 @@ async function readTableCount(table: string) {
   return Number(count ?? 0);
 }
 
+async function readTableCountWhereEq(table: string, column: string, value: string) {
+  const { count, error } = await financeClient
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq(column, value);
+  if (error) throw error;
+  return Number(count ?? 0);
+}
+
 export const formatFinanceFoundationCount = (value: number | null, singular: string, plural: string) => {
   if (value === null) return "Not connected yet";
   return `${value} ${value === 1 ? singular : plural} found.`;
@@ -116,6 +132,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutBatchCount,
     creatorPayoutBatchItemCount,
     creatorPayoutProviderTransferCount,
+    creatorPayoutProviderTransferSyncRequiredCount,
+    creatorPayoutProviderTransferSyncedTestCount,
+    creatorPayoutProviderTransferSyncFailedCount,
     creatorPayoutHoldCount,
     creatorPayoutAuditLogCount,
     networkBillingAccountCount,
@@ -150,6 +169,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(CREATOR_PAYOUT_BATCHES_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_BATCH_ITEMS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE)),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE, "status", "sync_required")),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE, "status", "synced_test")),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE, "status", "sync_failed")),
     safeRead(() => readTableCount(CREATOR_PAYOUT_HOLDS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_AUDIT_LOG_TABLE)),
     safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
@@ -186,6 +208,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutBatchCount,
     creatorPayoutBatchItemCount,
     creatorPayoutProviderTransferCount,
+    creatorPayoutProviderTransferSyncRequiredCount,
+    creatorPayoutProviderTransferSyncedTestCount,
+    creatorPayoutProviderTransferSyncFailedCount,
     creatorPayoutHoldCount,
     creatorPayoutAuditLogCount,
     networkBillingAccountCount,

@@ -268,6 +268,9 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   creatorPayoutBatchCount: null,
   creatorPayoutBatchItemCount: null,
   creatorPayoutProviderTransferCount: null,
+  creatorPayoutProviderTransferSyncRequiredCount: null,
+  creatorPayoutProviderTransferSyncedTestCount: null,
+  creatorPayoutProviderTransferSyncFailedCount: null,
   creatorPayoutHoldCount: null,
   creatorPayoutAuditLogCount: null,
   networkBillingAccountCount: null,
@@ -3792,7 +3795,34 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  Read-only records only. Provider transfer records are not active, and no provider API call or live transfer action is connected.
+                  Provider transfer sync is test/foundation only. Provider status imports do not move money.
+                </Text>
+                <Text style={styles.configListBody}>
+                  Sync required: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutProviderTransferSyncRequiredCount,
+                    adminFinanceReadModel.loading,
+                    "foundation transfer",
+                    "foundation transfers",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Synced/test: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutProviderTransferSyncedTestCount,
+                    adminFinanceReadModel.loading,
+                    "foundation transfer",
+                    "foundation transfers",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Failed sync: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutProviderTransferSyncFailedCount,
+                    adminFinanceReadModel.loading,
+                    "foundation transfer",
+                    "foundation transfers",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  No transfers can be created from Admin. No payouts can be released. No manual money movement is available.
                 </Text>
               </View>
             </View>

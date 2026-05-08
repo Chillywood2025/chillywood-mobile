@@ -1167,6 +1167,7 @@ export type Database = {
           failure_message: string | null
           id: string
           idempotency_key: string | null
+          last_provider_sync_at: string | null
           metadata: Json
           payout_account_id: string | null
           payout_entry_id: number | null
@@ -1175,6 +1176,7 @@ export type Database = {
           provider_created_at: string | null
           provider_environment: string
           provider_payout_id: string | null
+          provider_status: string | null
           provider_transfer_id: string | null
           status: string
           updated_at: string
@@ -1190,6 +1192,7 @@ export type Database = {
           failure_message?: string | null
           id?: string
           idempotency_key?: string | null
+          last_provider_sync_at?: string | null
           metadata?: Json
           payout_account_id?: string | null
           payout_entry_id?: number | null
@@ -1198,6 +1201,7 @@ export type Database = {
           provider_created_at?: string | null
           provider_environment?: string
           provider_payout_id?: string | null
+          provider_status?: string | null
           provider_transfer_id?: string | null
           status?: string
           updated_at?: string
@@ -1213,6 +1217,7 @@ export type Database = {
           failure_message?: string | null
           id?: string
           idempotency_key?: string | null
+          last_provider_sync_at?: string | null
           metadata?: Json
           payout_account_id?: string | null
           payout_entry_id?: number | null
@@ -1221,6 +1226,7 @@ export type Database = {
           provider_created_at?: string | null
           provider_environment?: string
           provider_payout_id?: string | null
+          provider_status?: string | null
           provider_transfer_id?: string | null
           status?: string
           updated_at?: string
