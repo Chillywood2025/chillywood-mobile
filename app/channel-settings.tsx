@@ -1,11 +1,12 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   ImageBackground,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -36,10 +37,13 @@ import {
 } from "../_lib/channelReadModels";
 import {
   CREATOR_PAYOUT_REQUIREMENTS,
+  createCreatorPayoutOnboardingLink,
   createEmptyCreatorPayoutDashboardReadModel,
+  createOrReuseCreatorPayoutProviderAccount,
   formatCreatorPayoutFoundationAmount,
   formatCreatorPayoutLedgerCount,
   readCreatorPayoutDashboardSummary,
+  syncCreatorPayoutProviderStatus,
   type CreatorPayoutDashboardReadModel,
 } from "../_lib/creatorPayouts";
 import {
@@ -123,6 +127,10 @@ type ContentStatusFilter = "all" | "published" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 type VideoLifecycleState = "idle" | "file_selected" | "uploading" | "succeeded" | "failed";
+
+const createPayoutSetupRedirectUrl = (status: "return" | "refresh") => (
+  `chillywoodmobile://channel-studio?tab=payouts&payout_setup=${status}`
+);
 
 type ChannelEventEditorState = {
   editingEventId: string | null;
@@ -589,6 +597,8 @@ export function ChannelStudioScreen() {
   const [creatorPayoutSummary, setCreatorPayoutSummary] = useState<CreatorPayoutDashboardReadModel>(
     createEmptyCreatorPayoutDashboardReadModel,
   );
+  const [payoutSetupBusy, setPayoutSetupBusy] = useState<"setup" | "sync" | null>(null);
+  const [payoutSetupNotice, setPayoutSetupNotice] = useState<string | null>(null);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
@@ -638,6 +648,7 @@ export function ChannelStudioScreen() {
   useEffect(() => {
     if (!canUseChannelSettings) {
       setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
+      setPayoutSetupNotice(null);
       setLoading(false);
       return;
     }
@@ -690,6 +701,91 @@ export function ChannelStudioScreen() {
       active = false;
     };
   }, [canUseChannelSettings, user?.id]);
+
+  const refreshCreatorPayouts = useCallback(async () => {
+    if (!user?.id) {
+      setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
+      return;
+    }
+
+    const nextSummary = await readCreatorPayoutDashboardSummary({
+      creatorUserId: String(user.id),
+      limit: 5,
+    });
+    setCreatorPayoutSummary(nextSummary);
+  }, [user?.id]);
+
+  const handleStartPayoutProviderSetup = useCallback(async () => {
+    const creatorUserId = String(user?.id ?? "").trim();
+    if (!creatorUserId || payoutSetupBusy) return;
+
+    setPayoutSetupBusy("setup");
+    setPayoutSetupNotice(null);
+
+    try {
+      const accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
+      if (accountPayload.status === "not_configured") {
+        setPayoutSetupNotice(accountPayload.message || "Stripe Connect test-mode setup is not configured yet.");
+        await refreshCreatorPayouts();
+        return;
+      }
+
+      const linkPayload = await createCreatorPayoutOnboardingLink({
+        creatorUserId,
+        refreshUrl: createPayoutSetupRedirectUrl("refresh"),
+        returnUrl: createPayoutSetupRedirectUrl("return"),
+      });
+
+      if (linkPayload.status === "not_configured" || linkPayload.status === "setup_required") {
+        setPayoutSetupNotice(linkPayload.message || "Payout provider setup is not available yet.");
+        await refreshCreatorPayouts();
+        return;
+      }
+
+      const onboardingUrl = String(linkPayload.onboarding_url ?? "").trim();
+      if (!onboardingUrl) {
+        setPayoutSetupNotice("Payout setup did not return an onboarding link. Try again later.");
+        await refreshCreatorPayouts();
+        return;
+      }
+
+      const canOpen = await Linking.canOpenURL(onboardingUrl).catch(() => true);
+      if (!canOpen) {
+        setPayoutSetupNotice("Payout setup link could not be opened on this device.");
+        await refreshCreatorPayouts();
+        return;
+      }
+
+      await Linking.openURL(onboardingUrl);
+      setPayoutSetupNotice("Test-mode payout setup opened. Withdrawals are not active yet.");
+      await refreshCreatorPayouts();
+    } catch {
+      setPayoutSetupNotice("Payout setup could not be started. No payout or transfer was created.");
+    } finally {
+      setPayoutSetupBusy(null);
+    }
+  }, [payoutSetupBusy, refreshCreatorPayouts, user?.id]);
+
+  const handleRefreshPayoutProviderStatus = useCallback(async () => {
+    const creatorUserId = String(user?.id ?? "").trim();
+    if (!creatorUserId || payoutSetupBusy) return;
+
+    setPayoutSetupBusy("sync");
+    setPayoutSetupNotice(null);
+
+    try {
+      const syncPayload = await syncCreatorPayoutProviderStatus(creatorUserId);
+      setPayoutSetupNotice(
+        syncPayload.message || "Payout provider status was checked. Withdrawals are not active yet.",
+      );
+      await refreshCreatorPayouts();
+    } catch {
+      setPayoutSetupNotice("Payout provider status could not be refreshed. No money action was created.");
+    } finally {
+      setPayoutSetupBusy(null);
+    }
+  }, [payoutSetupBusy, refreshCreatorPayouts, user?.id]);
+
   useEffect(() => {
     let active = true;
 
@@ -2460,14 +2556,70 @@ export function ChannelStudioScreen() {
       <View style={styles.panel}>
         <View style={styles.panelHeader}>
           <Text style={styles.panelTitle}>Payout setup</Text>
-          <Text style={styles.panelStatusMuted}>Not active yet</Text>
+          <Text style={styles.panelStatusMuted}>{creatorPayoutSummary.setupStatusLabel}</Text>
         </View>
         <View style={styles.eventSnapshotCard}>
           <Text style={styles.accessSummaryKicker}>PAYOUT SETUP</Text>
-          <Text style={styles.accessSummaryTitle}>Not active yet</Text>
+          <Text style={styles.accessSummaryTitle}>{creatorPayoutSummary.setupStatusLabel}</Text>
           <Text style={styles.accessSummaryBody}>
-            Future payouts will require payout account setup, KYC, tax forms, fraud review, and admin approval.
+            {creatorPayoutSummary.setupStatusBody}
           </Text>
+          <Text style={styles.accessSummaryBody}>
+            This is backend-only Stripe Connect test-mode setup. Withdrawals, payout release, transfers, checkout, KYC UI, and payable balances are not active.
+          </Text>
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Provider readiness</Text>
+              <Text style={styles.summaryValue}>{creatorPayoutSummary.providerReady ? "Ready later" : "Not ready"}</Text>
+              <Text style={styles.summaryBody}>Provider readiness does not make creator payouts active.</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>KYC / Tax</Text>
+              <Text style={styles.summaryValue}>
+                {creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Provider ready" : "Not connected"}
+              </Text>
+              <Text style={styles.summaryBody}>No Chi'llywood KYC or tax form flow exists in the app.</Text>
+            </View>
+            <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
+              <Text style={styles.summaryLabel}>Payout execution</Text>
+              <Text style={styles.summaryValue}>Inactive</Text>
+              <Text style={styles.summaryBody}>No withdrawal, approval, release, transfer, or cash-out action exists.</Text>
+            </View>
+          </View>
+          <View style={styles.eventActionRow}>
+            {creatorPayoutSummary.setupActionLabel ? (
+              <TouchableOpacity
+                style={[styles.eventPrimaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
+                activeOpacity={0.88}
+                disabled={payoutSetupBusy !== null}
+                onPress={handleStartPayoutProviderSetup}
+              >
+                {payoutSetupBusy === "setup" ? (
+                  <View style={styles.eventPrimaryButtonBusyRow}>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.eventPrimaryButtonText}>Opening setup</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel}</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
+              activeOpacity={0.88}
+              disabled={payoutSetupBusy !== null}
+              onPress={handleRefreshPayoutProviderStatus}
+            >
+              {payoutSetupBusy === "sync" ? (
+                <ActivityIndicator color="#3F2D20" />
+              ) : (
+                <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          {payoutSetupNotice ? (
+            <Text style={styles.noticeText}>{payoutSetupNotice}</Text>
+          ) : null}
         </View>
       </View>
 
