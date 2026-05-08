@@ -157,6 +157,8 @@ Finance F2B creator payout provider schema foundation is pushed, remote-applied,
 
 Finance F2D payout provider Admin foundation readout is pushed. Current owners are `_lib/platformFinance.ts` and the `/admin` Payouts tab. Admin may show safe row counts for payout-provider foundation tables, but those counts are not payout balances, payable balances, KYC readiness, provider status, withdrawal eligibility, or transfer execution. The Payouts tab must remain read-only/foundation until a separate Stripe Connect/provider and audit-log lane is scoped and proved.
 
+Finance F2E payout provider foundation proof rows are pushed. Current owner is migration `supabase/migrations/202605080002_creator_payout_provider_proof_rows.sql`. These rows are deterministic `not_active` proof/foundation rows with zero amounts and explicit metadata markers. They must not be used as real creator, payout, bank, card, provider, invoice, sponsor, KYC, earnings, payable balance, or live money truth.
+
 Admin finance doctrine: Admin may show safe foundation row counts only. Counts are not live money totals, payout balances, invoice totals, sponsor revenue, creator earnings, fraud risk scores, or provider reconciliation truth. Do not add payout buttons, invoice actions, sponsor checkout, payout split execution, fraud enforcement, provider imports, SDKs, or provider keys without a separately scoped implementation and proof.
 
 Admin must never expose Supabase service-role keys, LiveKit secrets, RevenueCat secrets, app-store keys, provider secret keys, hard-coded credentials, or test-account credentials.
