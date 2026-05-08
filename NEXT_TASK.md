@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Stripe Connect onboarding planning.
+Payout S3 - Stripe Connect test-mode backend functions, with no transfers and no live money movement.
 
 Admin Usage Provider Imports V1D3/V1D4 are pushed and proofed. The server-side `provider-usage-import` Supabase Edge Function is deployed, migration `202605070012_provider_usage_import_idempotency.sql` is applied, Admin Usage reads provider import status rows, missing auth returns `401`, and owner/operator proof completed Cloudflare R2, Hetzner Object Storage, and Hetzner Server import paths with the existing signed-in device session token in memory only. Hetzner Object Storage imports only S3-compatible bucket inventory metadata (`s3_inventory_storage_bytes` and `s3_inventory_object_count`) through server-side secrets, not traffic, billing, overage, invoice, revenue, payout, or storage-billing truth. No mobile provider API calls, provider secrets in repo, fake bandwidth, fake bills, overages, invoices, revenue, payouts, sponsor money, or Admin import buttons were added.
 
@@ -25,18 +25,21 @@ Immutable Admin Audit Log Foundation is pushed and applied. Migration `supabase/
 
 Creator Payout Read-Only Dashboard Foundation is pushed and applied. Migration `supabase/migrations/202605080007_creator_payout_dashboard_read_policy.sql` is policy-only and adds narrow creator read access to `creator_payout_ledger_entries` where `creator_user_id = auth.uid()::text`; regular creators can read only their own payout ledger rows and cannot insert/update/delete payout rows, anon cannot insert payout rows, and no broad payout access was added. No generated database type change was needed. `_lib/creatorPayouts.ts` is read-only with no writes, no service-role usage, no Stripe/provider calls, and no payout calculations implying payable balance. Channel Studio now has a read-only Payouts tab after Insights and before Brand, plus a Home Payouts card that switches to the Payouts tab. `/channel-settings` compatibility remains and `/channel-studio` remains the owner Studio route. Creator payouts are not active yet: no Withdraw, Cash Out, Connect Stripe, KYC live flow, tax form flow, payout approval, payout release, transfer creation, fake payable balance, fake earnings, or live money movement exists. Runtime visual proof should be rerun later on a current signed-in build; source/helper/DB/typecheck proof passed.
 
+Stripe Connect Schema Foundation (Payout S2) is pushed and applied. Migration `supabase/migrations/202605080008_stripe_connect_schema_foundation.sql` adds only additive schema for future Stripe Connect-style onboarding: payout account provider environment/configuration/capability/readiness fields, onboarding session records without storing long-term onboarding URLs, provider webhook event records with provider/environment/event id uniqueness, creator payout eligibility/readiness records, and immutable admin audit linkage fields. Generated database types are refreshed. Creators may read only their own eligibility/readiness rows and cannot insert/update/delete payout-provider rows; anon has no access; owner/operator access follows platform-role policies. No Stripe SDK, Stripe keys, provider calls, Stripe accounts, onboarding links, transfers, payouts, Connect Stripe UI, Withdraw/Cash Out, KYC/tax live flow, payout approval/release, fake payable balance, fake earnings, or live money movement exists.
+
 The next finance/admin lanes are:
 
-1. Stripe Connect onboarding planning.
-2. Stripe Connect test-mode foundation.
-3. Payout review queue.
-4. Payout batch draft workflow.
-5. Payout approval/release only after audit logs, fraud review, KYC/tax, provider proof, and explicit product approval.
-6. Network invoice draft workflow, still no send/charge.
-7. Sponsor review queue, still no checkout.
-8. Fraud review queue, still no enforcement.
+1. Stripe Connect test-mode backend functions, with no transfers.
+2. Creator payout setup UI only after backend/provider config exists, still no withdrawal.
+3. Admin payout provider dashboard.
+4. Payout review queue.
+5. Payout batch draft workflow.
+6. Payout approval/release only after audit logs, fraud review, KYC/tax, provider proof, and explicit product approval.
+7. Network invoice draft workflow, still no send/charge.
+8. Sponsor review queue, still no checkout.
+9. Fraud review queue, still no enforcement.
 
-The store/external readiness audit remains a valid launch-readiness lane, but the next finance/admin follow-up after Creator Payout Read-Only Dashboard Foundation should start with Stripe Connect onboarding planning. Keep all payout work read-only until backed write permissions, dangerous-action confirmation, reason capture, RLS, fraud review, KYC/tax, provider proof, and immutable audit proof are explicitly designed.
+The store/external readiness audit remains a valid launch-readiness lane, but the next finance/admin follow-up after Stripe Connect Schema Foundation should start with Payout S3 test-mode backend functions. Keep all payout work non-production and non-transfer until backed write permissions, dangerous-action confirmation, reason capture, RLS, fraud review, KYC/tax, provider proof, and immutable audit proof are explicitly designed and proved.
 
 Store / External Launch Readiness Audit remains an audit/spec lane only when selected:
 
@@ -129,9 +132,10 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - Fraud Enforcement Foundation migration `supabase/migrations/202605080005_fraud_enforcement_foundation.sql` is applied remotely and generated database types include fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs
    - Immutable Admin Audit Log Foundation migration `supabase/migrations/202605080006_immutable_admin_audit_log_foundation.sql` is applied remotely and generated database types include `platform_admin_audit_logs`
    - Creator Payout Read-Only Dashboard Foundation migration `supabase/migrations/202605080007_creator_payout_dashboard_read_policy.sql` is applied remotely as a policy-only migration; no generated database type change was needed
-   - Finance F2 payout-provider, Network Billing, Sponsor Checkout, Fraud Enforcement, Immutable Admin Audit Log, and Creator Payout Read-Only Dashboard closeouts are complete for foundation-only schema/readout/proof rows or creator read-only dashboard proof; moderator visibility proof still requires a later safe lane before operational reliance
-   - next recommended finance/admin lanes are Stripe Connect onboarding planning, Stripe Connect test-mode foundation, Payout review queue, Payout batch draft workflow, Payout approval/release only after audit logs, fraud review, KYC/tax, provider proof, and explicit product approval, Network invoice draft workflow still no send/charge, Sponsor review queue still no checkout, and Fraud review queue still no enforcement
-   - add provider billing imports, Stripe Connect onboarding/integration, payout provider writes, live payout actions, live network billing actions, sponsor checkout, or live fraud enforcement only in separate scoped lanes
+   - Stripe Connect Schema Foundation migration `supabase/migrations/202605080008_stripe_connect_schema_foundation.sql` is applied remotely and generated database types include future payout account provider/config/capability/readiness fields, onboarding session records, provider webhook event records, creator payout eligibility/readiness records, and immutable audit linkage fields
+   - Finance F2 payout-provider, Network Billing, Sponsor Checkout, Fraud Enforcement, Immutable Admin Audit Log, Creator Payout Read-Only Dashboard, and Stripe Connect Schema Foundation closeouts are complete for foundation-only schema/readout/proof rows, creator read-only dashboard proof, or additive provider-readiness schema only; moderator visibility proof still requires a later safe lane before operational reliance
+   - next recommended finance/admin lanes are Stripe Connect test-mode backend functions with no transfers, Creator payout setup UI only after backend/provider config exists and still no withdrawal, Admin payout provider dashboard, Payout review queue, Payout batch draft workflow, Payout approval/release only after audit logs, fraud review, KYC/tax, provider proof, and explicit product approval, Network invoice draft workflow still no send/charge, Sponsor review queue still no checkout, and Fraud review queue still no enforcement
+   - add provider billing imports, Stripe Connect live integration, payout provider production writes, live payout actions, live network billing actions, sponsor checkout, or live fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
 
 ## Current Pushed Truth To Preserve
@@ -175,6 +179,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Fraud Enforcement Foundation is pushed in migration `supabase/migrations/202605080005_fraud_enforcement_foundation.sql`, generated database types, `_lib/platformFinance.ts`, and read-only `app/admin.tsx` Fraud copy. It includes fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs with foundation-only proof rows. No payout pause, account restriction, upload restriction, live restriction, monetization disable, fraud risk score, or active enforcement action exists.
 - Immutable Admin Audit Log Foundation is pushed in migration `supabase/migrations/202605080006_immutable_admin_audit_log_foundation.sql`, generated database types, `_lib/platformAudit.ts`, and read-only `app/admin.tsx` Audit copy. It adds append-only `platform_admin_audit_logs` and proof rows only. No audit row edit/delete/clear UI, payout approval/release, invoice send/charge, sponsor checkout/approval, fraud enforcement, account restriction, upload/live restriction, monetization disable, or admin role write exists.
 - Creator Payout Read-Only Dashboard Foundation is pushed in `app/channel-settings.tsx`, `_lib/creatorPayouts.ts`, and policy-only migration `supabase/migrations/202605080007_creator_payout_dashboard_read_policy.sql`. Payouts live in Channel Studio after Insights and before Brand, the Home Payouts card switches to that tab, `/channel-settings` compatibility remains, and `/channel-studio` remains the owner Studio route. Creator payouts are not active yet: no Withdraw, Cash Out, Connect Stripe, KYC live flow, tax form flow, payout approval, payout release, transfer creation, fake payable balance, fake earnings, or live money movement exists. Regular creators can read only their own payout ledger rows and cannot insert/update/delete payout rows; anon cannot insert payout rows; no broad payout access or generated type change was added.
+- Stripe Connect Schema Foundation (Payout S2) is pushed in migration `supabase/migrations/202605080008_stripe_connect_schema_foundation.sql` and generated database types. It adds provider/config/capability/readiness fields, onboarding session records without long-term onboarding URL storage, provider webhook event records with idempotent uniqueness, creator payout eligibility/readiness records, and immutable audit linkage fields only. No Stripe SDK, Stripe keys, provider calls, account creation, onboarding link creation, transfer creation, payout execution, Connect Stripe UI, Withdraw/Cash Out, KYC/tax live flow, fake payable balance, fake earnings, or live money movement exists.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.
