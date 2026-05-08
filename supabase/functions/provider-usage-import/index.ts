@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-type ImportProvider = "cloudflare_r2" | "hetzner_server";
+type ImportProvider = "cloudflare_r2" | "hetzner_object_storage" | "hetzner_server";
 type RequestedProvider = ImportProvider | "all_configured";
 type ImportResultStatus = "completed" | "failed" | "not_configured";
 type ImportResponseStatus = "completed" | "partial" | "not_configured" | "failed";
@@ -47,6 +47,7 @@ const JSON_HEADERS = {
 
 const PROVIDER_LABELS: Record<ImportProvider, string> = {
   cloudflare_r2: "Cloudflare R2",
+  hetzner_object_storage: "Hetzner Object Storage",
   hetzner_server: "Hetzner Servers",
 };
 
@@ -54,6 +55,10 @@ const MAX_IMPORT_WINDOW_MS = 31 * 24 * 60 * 60 * 1000;
 const FUTURE_SKEW_MS = 10 * 60 * 1000;
 const CLOUDFLARE_GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 const HETZNER_API_BASE = "https://api.hetzner.cloud/v1";
+const DEFAULT_HETZNER_OBJECT_STORAGE_ENDPOINT = "nbg1.your-objectstorage.com";
+const HETZNER_OBJECT_STORAGE_SERVICE = "s3";
+const HETZNER_OBJECT_STORAGE_MAX_PAGES = 100;
+const EMPTY_BODY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 const json = (status: number, payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), {
@@ -92,7 +97,12 @@ const toPositiveNumber = (value: unknown) => {
 
 const normalizeProvider = (value: unknown): RequestedProvider | null => {
   const normalized = toText(value).toLowerCase();
-  if (normalized === "cloudflare_r2" || normalized === "hetzner_server" || normalized === "all_configured") {
+  if (
+    normalized === "cloudflare_r2"
+    || normalized === "hetzner_object_storage"
+    || normalized === "hetzner_server"
+    || normalized === "all_configured"
+  ) {
     return normalized;
   }
   return null;
@@ -107,6 +117,14 @@ const parseImportDate = (value: unknown) => {
 };
 
 const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+
+const toAmzDateParts = (date: Date) => {
+  const iso = date.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  return {
+    amzDate: iso,
+    dateStamp: iso.slice(0, 8),
+  };
+};
 
 const toDateFromTimestamp = (value: unknown) => {
   if (typeof value === "number") {
@@ -124,6 +142,32 @@ const parseCommaList = (value: string) => value
   .map((entry) => entry.trim())
   .filter(Boolean);
 
+const normalizeHetznerObjectStorageEndpoint = () => {
+  const raw = readOptionalEnv("HETZNER_OBJECT_STORAGE_ENDPOINT")
+    || readOptionalEnv("S3_ENDPOINT")
+    || DEFAULT_HETZNER_OBJECT_STORAGE_ENDPOINT;
+  return raw.replace(/^https?:\/\//i, "").replace(/\/+$/g, "").toLowerCase();
+};
+
+const normalizeHetznerObjectStorageRegion = (endpoint: string) => {
+  const configured = readOptionalEnv("HETZNER_OBJECT_STORAGE_REGION") || readOptionalEnv("S3_REGION");
+  if (configured) return configured;
+  const [region] = endpoint.split(".");
+  return region || "nbg1";
+};
+
+const readHetznerObjectStorageAccessKeyId = () => (
+  readOptionalEnv("HETZNER_OBJECT_STORAGE_ACCESS_KEY_ID") || readOptionalEnv("S3_ACCESS_KEY_ID")
+);
+
+const readHetznerObjectStorageSecretAccessKey = () => (
+  readOptionalEnv("HETZNER_OBJECT_STORAGE_SECRET_ACCESS_KEY") || readOptionalEnv("S3_SECRET_ACCESS_KEY")
+);
+
+const readHetznerObjectStorageBuckets = () => parseCommaList(
+  readOptionalEnv("HETZNER_OBJECT_STORAGE_BUCKETS") || readOptionalEnv("S3_BUCKET"),
+);
+
 const parsePayload = (payload: ProviderUsageImportPayload | null) => {
   if (!payload || typeof payload !== "object") {
     return { error: json(400, { error: "invalid_body", message: "Request body must be a JSON object." }) };
@@ -131,7 +175,12 @@ const parsePayload = (payload: ProviderUsageImportPayload | null) => {
 
   const provider = normalizeProvider(payload.provider);
   if (!provider) {
-    return { error: json(400, { error: "invalid_provider", message: "Provider must be cloudflare_r2, hetzner_server, or all_configured." }) };
+    return {
+      error: json(400, {
+        error: "invalid_provider",
+        message: "Provider must be cloudflare_r2, hetzner_object_storage, hetzner_server, or all_configured.",
+      }),
+    };
   }
 
   const periodStart = parseImportDate(payload.periodStart);
@@ -224,6 +273,9 @@ const providerAccountReference = (provider: ImportProvider) => {
   if (provider === "cloudflare_r2") {
     const accountId = readOptionalEnv("CLOUDFLARE_ACCOUNT_ID");
     return accountId ? `cloudflare:${accountId.slice(-4)}` : "cloudflare:r2";
+  }
+  if (provider === "hetzner_object_storage") {
+    return `hetzner-object-storage:${normalizeHetznerObjectStorageEndpoint()}`;
   }
   return "hetzner:cloud";
 };
@@ -600,6 +652,247 @@ const fetchCloudflareRows = async (
   return { status: "completed" as const, rows };
 };
 
+const hex = (bytes: Uint8Array) => Array.from(bytes)
+  .map((byte) => byte.toString(16).padStart(2, "0"))
+  .join("");
+
+const hmacSha256 = async (key: Uint8Array, data: string) => {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    key,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(data)));
+};
+
+const sha256Hex = async (value: string) => {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return hex(new Uint8Array(digest));
+};
+
+const rfc3986Encode = (value: string) => encodeURIComponent(value)
+  .replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+
+const canonicalQueryString = (params: Record<string, string>) => Object.entries(params)
+  .sort(([left], [right]) => left.localeCompare(right))
+  .map(([key, value]) => `${rfc3986Encode(key)}=${rfc3986Encode(value)}`)
+  .join("&");
+
+const getAwsSignatureKey = async (
+  secretAccessKey: string,
+  dateStamp: string,
+  region: string,
+  service: string,
+) => {
+  const kDate = await hmacSha256(new TextEncoder().encode(`AWS4${secretAccessKey}`), dateStamp);
+  const kRegion = await hmacSha256(kDate, region);
+  const kService = await hmacSha256(kRegion, service);
+  return hmacSha256(kService, "aws4_request");
+};
+
+const createS3SignedHeaders = async (
+  method: "GET",
+  host: string,
+  queryParams: Record<string, string>,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+) => {
+  const now = new Date();
+  const { amzDate, dateStamp } = toAmzDateParts(now);
+  const canonicalQuery = canonicalQueryString(queryParams);
+  const canonicalHeaders = [
+    `host:${host}`,
+    `x-amz-content-sha256:${EMPTY_BODY_SHA256}`,
+    `x-amz-date:${amzDate}`,
+    "",
+  ].join("\n");
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalRequest = [
+    method,
+    "/",
+    canonicalQuery,
+    canonicalHeaders,
+    signedHeaders,
+    EMPTY_BODY_SHA256,
+  ].join("\n");
+  const credentialScope = `${dateStamp}/${region}/${HETZNER_OBJECT_STORAGE_SERVICE}/aws4_request`;
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    await sha256Hex(canonicalRequest),
+  ].join("\n");
+  const signingKey = await getAwsSignatureKey(
+    secretAccessKey,
+    dateStamp,
+    region,
+    HETZNER_OBJECT_STORAGE_SERVICE,
+  );
+  const signature = hex(await hmacSha256(signingKey, stringToSign));
+
+  return {
+    Authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+    "x-amz-content-sha256": EMPTY_BODY_SHA256,
+    "x-amz-date": amzDate,
+  };
+};
+
+const decodeXmlText = (value: string) => value
+  .replace(/&lt;/g, "<")
+  .replace(/&gt;/g, ">")
+  .replace(/&quot;/g, "\"")
+  .replace(/&apos;/g, "'")
+  .replace(/&amp;/g, "&");
+
+const readXmlTag = (xml: string, tag: string) => {
+  const match = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
+  return match ? decodeXmlText(match[1].trim()) : "";
+};
+
+const parseListObjectsV2Xml = (xml: string) => {
+  const contents = [...xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/gi)];
+  const objects = contents.map((match) => ({
+    key: readXmlTag(match[1], "Key"),
+    size: toPositiveNumber(readXmlTag(match[1], "Size")),
+    lastModified: readXmlTag(match[1], "LastModified"),
+  }));
+  return {
+    objects,
+    isTruncated: /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(xml),
+    nextContinuationToken: readXmlTag(xml, "NextContinuationToken"),
+  };
+};
+
+const listHetznerObjectStorageBucket = async (
+  bucket: string,
+  endpoint: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+) => {
+  const host = `${bucket}.${endpoint}`;
+  let continuationToken = "";
+  let pagesScanned = 0;
+  let objectCount = 0;
+  let storageBytes = 0;
+  let latestObjectModifiedAt: string | null = null;
+  let truncated = false;
+
+  do {
+    const queryParams: Record<string, string> = {
+      "list-type": "2",
+      "max-keys": "1000",
+    };
+    if (continuationToken) queryParams["continuation-token"] = continuationToken;
+
+    const url = `https://${host}/?${canonicalQueryString(queryParams)}`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: await createS3SignedHeaders(
+        "GET",
+        host,
+        queryParams,
+        accessKeyId,
+        secretAccessKey,
+        region,
+      ),
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(`Hetzner Object Storage inventory request failed with status ${response.status}.`);
+    }
+
+    const page = parseListObjectsV2Xml(body);
+    pagesScanned += 1;
+    objectCount += page.objects.length;
+    storageBytes += page.objects.reduce((sum, object) => sum + object.size, 0);
+    for (const object of page.objects) {
+      if (!object.lastModified) continue;
+      if (!latestObjectModifiedAt || Date.parse(object.lastModified) > Date.parse(latestObjectModifiedAt)) {
+        latestObjectModifiedAt = object.lastModified;
+      }
+    }
+    continuationToken = page.nextContinuationToken;
+    truncated = page.isTruncated && !!continuationToken;
+  } while (truncated && pagesScanned < HETZNER_OBJECT_STORAGE_MAX_PAGES);
+
+  return {
+    bucket,
+    endpoint,
+    objectCount,
+    storageBytes,
+    pagesScanned,
+    truncated,
+    latestObjectModifiedAt,
+  };
+};
+
+const fetchHetznerObjectStorageRows = async (
+  providerAccountId: string,
+  periodEnd: Date,
+  importId: string | null,
+) => {
+  const accessKeyId = readHetznerObjectStorageAccessKeyId();
+  const secretAccessKey = readHetznerObjectStorageSecretAccessKey();
+  const buckets = readHetznerObjectStorageBuckets();
+  if (!accessKeyId || !secretAccessKey || buckets.length === 0) {
+    return { status: "not_configured" as const, rows: [] as ProviderUsageDailyRow[] };
+  }
+
+  const endpoint = normalizeHetznerObjectStorageEndpoint();
+  const region = normalizeHetznerObjectStorageRegion(endpoint);
+  const usageDate = toIsoDate(periodEnd);
+  const rows: ProviderUsageDailyRow[] = [];
+  for (const bucket of buckets) {
+    const inventory = await listHetznerObjectStorageBucket(
+      bucket,
+      endpoint,
+      accessKeyId,
+      secretAccessKey,
+      region,
+    );
+    const sharedMetadata = {
+      source: "hetzner_object_storage_s3_inventory",
+      inventory_kind: "s3_list_objects_v2",
+      endpoint,
+      bucket: inventory.bucket,
+      pages_scanned: inventory.pagesScanned,
+      truncated: inventory.truncated,
+      latest_object_modified_at: inventory.latestObjectModifiedAt,
+      value_truth: "provider_metadata_estimate_not_billing_or_traffic_truth",
+    };
+    rows.push({
+      provider: "hetzner_object_storage",
+      provider_account_id: providerAccountId,
+      import_id: importId,
+      usage_date: usageDate,
+      resource_type: "hetzner_object_storage_bucket",
+      resource_name: bucket,
+      metric_key: "s3_inventory_storage_bytes",
+      quantity: inventory.storageBytes,
+      unit: "bytes",
+      metadata: sharedMetadata,
+    });
+    rows.push({
+      provider: "hetzner_object_storage",
+      provider_account_id: providerAccountId,
+      import_id: importId,
+      usage_date: usageDate,
+      resource_type: "hetzner_object_storage_bucket",
+      resource_name: bucket,
+      metric_key: "s3_inventory_object_count",
+      quantity: inventory.objectCount,
+      unit: "object",
+      metadata: sharedMetadata,
+    });
+  }
+
+  return { status: "completed" as const, rows };
+};
+
 const normalizeHetznerSeriesKey = (key: string) => {
   const normalized = key.toLowerCase();
   if (normalized.includes("in") || normalized.includes("rx")) return "server_network_rx";
@@ -761,7 +1054,11 @@ const runProviderImport = async (
 ): Promise<ProviderImportResult> => {
   const configured = provider === "cloudflare_r2"
     ? !!readOptionalEnv("CLOUDFLARE_API_TOKEN") && !!readOptionalEnv("CLOUDFLARE_ACCOUNT_ID")
-    : !!readOptionalEnv("HETZNER_CLOUD_API_TOKEN") && parseCommaList(readOptionalEnv("HETZNER_SERVER_IDS")).length > 0;
+    : provider === "hetzner_object_storage"
+      ? !!readHetznerObjectStorageAccessKeyId()
+        && !!readHetznerObjectStorageSecretAccessKey()
+        && readHetznerObjectStorageBuckets().length > 0
+      : !!readOptionalEnv("HETZNER_CLOUD_API_TOKEN") && parseCommaList(readOptionalEnv("HETZNER_SERVER_IDS")).length > 0;
 
   if (!configured) return markNotConfigured(adminClient, provider, dryRun);
 
@@ -779,7 +1076,9 @@ const runProviderImport = async (
 
     const fetchResult = provider === "cloudflare_r2"
       ? await fetchCloudflareRows(providerAccountId, periodStart, periodEnd, importId)
-      : await fetchHetznerRows(providerAccountId, periodStart, periodEnd, importId);
+      : provider === "hetzner_object_storage"
+        ? await fetchHetznerObjectStorageRows(providerAccountId, periodEnd, importId)
+        : await fetchHetznerRows(providerAccountId, periodStart, periodEnd, importId);
 
     if (fetchResult.status === "not_configured") return markNotConfigured(adminClient, provider, dryRun);
 
@@ -851,7 +1150,9 @@ Deno.serve(async (req) => {
     if ("error" in parsed) return parsed.error;
 
     const { provider, periodStart, periodEnd, dryRun } = parsed.value;
-    const providers: ImportProvider[] = provider === "all_configured" ? ["cloudflare_r2", "hetzner_server"] : [provider];
+    const providers: ImportProvider[] = provider === "all_configured"
+      ? ["cloudflare_r2", "hetzner_object_storage", "hetzner_server"]
+      : [provider];
     const results: ProviderImportResult[] = [];
     for (const targetProvider of providers) {
       results.push(await runProviderImport(adminClient, targetProvider, periodStart, periodEnd, dryRun));

@@ -114,7 +114,11 @@ const PROVIDER_USAGE_IMPORT_STATUS_DEFAULTS: Array<{ provider: ProviderUsageKey;
   { provider: "ovh_object_storage", label: "OVH Object Storage" },
   { provider: "ovh_server", label: "OVH Servers" },
 ];
-const ACTIVE_PROVIDER_IMPORT_KEYS = new Set<ProviderUsageKey>(["cloudflare_r2", "hetzner_server"]);
+const ACTIVE_PROVIDER_IMPORT_KEYS = new Set<ProviderUsageKey>([
+  "cloudflare_r2",
+  "hetzner_object_storage",
+  "hetzner_server",
+]);
 
 const startOfTodayIso = () => {
   const today = new Date();
@@ -390,7 +394,11 @@ async function readProviderUsageImportStatus(
   const latestImport = (latestImportResult.data ?? null) as ProviderUsageImportReadRow | null;
   const last7DaysRows = (Array.isArray(last7DaysRowsResult.data) ? last7DaysRowsResult.data : []) as ProviderUsageDailyReadRow[];
   const storageBytesLast7Days = sumRows(last7DaysRows, (row) => (
-    row.unit === "bytes" && ["storage_payload_bytes", "storage_metadata_bytes"].includes(row.metric_key)
+    row.unit === "bytes" && [
+      "storage_payload_bytes",
+      "storage_metadata_bytes",
+      "s3_inventory_storage_bytes",
+    ].includes(row.metric_key)
       ? row.quantity
       : 0
   ));

@@ -3142,9 +3142,15 @@ export default function AdminStudioScreen() {
                   Provider imports are not customer billing, overage, payout, revenue, or invoice truth.
                 </Text>
                 <Text style={styles.configListBody}>Cloudflare R2 import uses provider analytics when configured.</Text>
+                <Text style={styles.configListBody}>
+                  Hetzner Object Storage import uses S3 bucket inventory metadata when configured.
+                </Text>
                 <Text style={styles.configListBody}>Hetzner server import uses provider server metrics when configured.</Text>
                 <Text style={styles.configListBody}>
-                  OVH and Hetzner Object Storage imports need a later exact provider API lane.
+                  Hetzner Object Storage storage values are metadata estimates, not Hetzner traffic or billing truth.
+                </Text>
+                <Text style={styles.configListBody}>
+                  OVH imports need a later exact provider API lane.
                 </Text>
                 <View style={styles.providerUsageGrid}>
                   {adminV1ReadModel.providerImportStatuses.map((providerStatus) => (
