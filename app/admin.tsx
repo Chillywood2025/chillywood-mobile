@@ -290,8 +290,18 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   sponsorCreativeRecordCount: null,
   sponsorPlacementRecordCount: null,
   sponsorDisclosureRecordCount: null,
+  sponsorDisclosureRequiredCount: null,
   sponsorReviewLogCount: null,
+  sponsorReviewQueueRecordCount: null,
+  sponsorReviewQueueFoundationCount: null,
+  sponsorReviewQueueDisclosureRequiredCount: null,
+  sponsorReviewQueueSafetyRequiredCount: null,
+  sponsorReviewQueuePaymentReadinessCount: null,
+  sponsorSafetyReviewRecordCount: null,
+  sponsorSafetyReviewUnsafeProductCount: null,
+  sponsorSafetyReviewScamCount: null,
   sponsorPaymentRecordCount: null,
+  sponsorPaymentTestModePlannedCount: null,
   sponsorPayoutSplitRecordCount: null,
   platformFraudHoldCount: null,
   fraudReasonRecordCount: null,
@@ -4089,9 +4099,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>SPONSORS</Text>
-              <Text style={styles.configTitle}>Sponsor Checkout Foundation</Text>
+              <Text style={styles.configTitle}>Sponsor Monetization Foundations</Text>
               <Text style={styles.configBody}>
-                Sponsor tools are not active yet. Foundation rows are proof-only. No sponsor checkout exists. No brand can pay yet. No creator payout split can execute.
+                Sponsor tools are not active yet. Review, disclosure, moderation, and payment rows are foundation-only. No sponsor checkout exists, no brand can pay, and no creator payout split can execute.
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
@@ -4099,6 +4109,90 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Sponsor Review Queue</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorReviewQueueRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation queue record",
+                    "foundation queue records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Foundation/pending rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorReviewQueueFoundationCount,
+                    adminFinanceReadModel.loading,
+                    "foundation review",
+                    "foundation reviews",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Disclosure review required: {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorReviewQueueDisclosureRequiredCount,
+                    adminFinanceReadModel.loading,
+                    "foundation row",
+                    "foundation rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Safety/scam review required: {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorReviewQueueSafetyRequiredCount,
+                    adminFinanceReadModel.loading,
+                    "foundation row",
+                    "foundation rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Payment readiness review: {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorReviewQueuePaymentReadinessCount,
+                    adminFinanceReadModel.loading,
+                    "foundation row",
+                    "foundation rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Review queue is read-only. No sponsor can be approved, activated, charged, or run from Admin.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Sponsor Disclosure / Moderation</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorSafetyReviewRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation safety review",
+                    "foundation safety reviews",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Required disclosures: {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorDisclosureRequiredCount,
+                    adminFinanceReadModel.loading,
+                    "foundation disclosure",
+                    "foundation disclosures",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Unsafe product review rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorSafetyReviewUnsafeProductCount,
+                    adminFinanceReadModel.loading,
+                    "foundation row",
+                    "foundation rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Scam review rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorSafetyReviewScamCount,
+                    adminFinanceReadModel.loading,
+                    "foundation row",
+                    "foundation rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Disclosure and safety review are required before sponsor deals can go live later. No enforcement action is active.</Text>
+              </View>
+            </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Sponsor Brands</Text>
@@ -4198,7 +4292,15 @@ export default function AdminStudioScreen() {
                     "foundation payment records",
                   )}
                 </Text>
-                <Text style={styles.configListBody}>No Stripe Checkout, payment link, provider API call, card data, paid status, or receivable is active.</Text>
+                <Text style={styles.configListBody}>
+                  Test-mode foundation records: {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorPaymentTestModePlannedCount,
+                    adminFinanceReadModel.loading,
+                    "foundation payment record",
+                    "foundation payment records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Sponsor payment foundation is not checkout. No Stripe Checkout, payment link, provider API call, card data, paid status, or receivable is active.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -4213,6 +4315,20 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>Split rows are calculation foundation only. No payable creator balance or payout execution can happen here.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Sponsor Guardrails</Text>
+                <Text style={styles.configListBody}>Sponsor tools are not active yet.</Text>
+                <Text style={styles.configListBody}>Sponsor review is foundation-only.</Text>
+                <Text style={styles.configListBody}>No sponsor can be approved.</Text>
+                <Text style={styles.configListBody}>No sponsor can be activated.</Text>
+                <Text style={styles.configListBody}>No brand can be charged.</Text>
+                <Text style={styles.configListBody}>No checkout exists.</Text>
+                <Text style={styles.configListBody}>No payment link exists.</Text>
+                <Text style={styles.configListBody}>No creator payout split can execute.</Text>
+                <Text style={styles.configListBody}>Disclosure and safety review are required before sponsor deals can go live later.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>

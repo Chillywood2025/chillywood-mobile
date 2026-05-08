@@ -16,6 +16,8 @@ export const SPONSOR_CREATIVE_RECORDS_TABLE = "sponsor_creative_records";
 export const SPONSOR_PLACEMENT_RECORDS_TABLE = "sponsor_placement_records";
 export const SPONSOR_DISCLOSURE_RECORDS_TABLE = "sponsor_disclosure_records";
 export const SPONSOR_REVIEW_LOGS_TABLE = "sponsor_review_logs";
+export const SPONSOR_REVIEW_QUEUE_RECORDS_TABLE = "sponsor_review_queue_records";
+export const SPONSOR_SAFETY_REVIEW_RECORDS_TABLE = "sponsor_safety_review_records";
 export const SPONSOR_PAYMENT_RECORDS_TABLE = "sponsor_payment_records";
 export const SPONSOR_PAYOUT_SPLIT_RECORDS_TABLE = "sponsor_payout_split_records";
 export const PLATFORM_FRAUD_HOLDS_TABLE = "platform_fraud_holds";
@@ -65,8 +67,18 @@ export type AdminFinanceReadModel = {
   sponsorCreativeRecordCount: number | null;
   sponsorPlacementRecordCount: number | null;
   sponsorDisclosureRecordCount: number | null;
+  sponsorDisclosureRequiredCount: number | null;
   sponsorReviewLogCount: number | null;
+  sponsorReviewQueueRecordCount: number | null;
+  sponsorReviewQueueFoundationCount: number | null;
+  sponsorReviewQueueDisclosureRequiredCount: number | null;
+  sponsorReviewQueueSafetyRequiredCount: number | null;
+  sponsorReviewQueuePaymentReadinessCount: number | null;
+  sponsorSafetyReviewRecordCount: number | null;
+  sponsorSafetyReviewUnsafeProductCount: number | null;
+  sponsorSafetyReviewScamCount: number | null;
   sponsorPaymentRecordCount: number | null;
+  sponsorPaymentTestModePlannedCount: number | null;
   sponsorPayoutSplitRecordCount: number | null;
   platformFraudHoldCount: number | null;
   fraudReasonRecordCount: number | null;
@@ -158,8 +170,18 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     sponsorCreativeRecordCount,
     sponsorPlacementRecordCount,
     sponsorDisclosureRecordCount,
+    sponsorDisclosureRequiredCount,
     sponsorReviewLogCount,
+    sponsorReviewQueueRecordCount,
+    sponsorReviewQueueFoundationCount,
+    sponsorReviewQueueDisclosureRequiredCount,
+    sponsorReviewQueueSafetyRequiredCount,
+    sponsorReviewQueuePaymentReadinessCount,
+    sponsorSafetyReviewRecordCount,
+    sponsorSafetyReviewUnsafeProductCount,
+    sponsorSafetyReviewScamCount,
     sponsorPaymentRecordCount,
+    sponsorPaymentTestModePlannedCount,
     sponsorPayoutSplitRecordCount,
     platformFraudHoldCount,
     fraudReasonRecordCount,
@@ -199,8 +221,18 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(SPONSOR_CREATIVE_RECORDS_TABLE)),
     safeRead(() => readTableCount(SPONSOR_PLACEMENT_RECORDS_TABLE)),
     safeRead(() => readTableCount(SPONSOR_DISCLOSURE_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(SPONSOR_DISCLOSURE_RECORDS_TABLE, "status", "required_later")),
     safeRead(() => readTableCount(SPONSOR_REVIEW_LOGS_TABLE)),
+    safeRead(() => readTableCount(SPONSOR_REVIEW_QUEUE_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(SPONSOR_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "foundation")),
+    safeRead(() => readTableCountWhereEq(SPONSOR_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "needs_disclosure_review_later")),
+    safeRead(() => readTableCountWhereEq(SPONSOR_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "needs_safety_review_later")),
+    safeRead(() => readTableCountWhereEq(SPONSOR_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "needs_payment_review_later")),
+    safeRead(() => readTableCount(SPONSOR_SAFETY_REVIEW_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(SPONSOR_SAFETY_REVIEW_RECORDS_TABLE, "risk_category", "unsafe_product")),
+    safeRead(() => readTableCountWhereEq(SPONSOR_SAFETY_REVIEW_RECORDS_TABLE, "risk_category", "scam_promotion")),
     safeRead(() => readTableCount(SPONSOR_PAYMENT_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(SPONSOR_PAYMENT_RECORDS_TABLE, "status", "test_mode_planned")),
     safeRead(() => readTableCount(SPONSOR_PAYOUT_SPLIT_RECORDS_TABLE)),
     safeRead(() => readTableCount(PLATFORM_FRAUD_HOLDS_TABLE)),
     safeRead(() => readTableCount(FRAUD_REASON_RECORDS_TABLE)),
@@ -242,8 +274,18 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     sponsorCreativeRecordCount,
     sponsorPlacementRecordCount,
     sponsorDisclosureRecordCount,
+    sponsorDisclosureRequiredCount,
     sponsorReviewLogCount,
+    sponsorReviewQueueRecordCount,
+    sponsorReviewQueueFoundationCount,
+    sponsorReviewQueueDisclosureRequiredCount,
+    sponsorReviewQueueSafetyRequiredCount,
+    sponsorReviewQueuePaymentReadinessCount,
+    sponsorSafetyReviewRecordCount,
+    sponsorSafetyReviewUnsafeProductCount,
+    sponsorSafetyReviewScamCount,
     sponsorPaymentRecordCount,
+    sponsorPaymentTestModePlannedCount,
     sponsorPayoutSplitRecordCount,
     platformFraudHoldCount,
     fraudReasonRecordCount,

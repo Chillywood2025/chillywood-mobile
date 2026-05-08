@@ -3244,6 +3244,7 @@ export type Database = {
           disclosure_text: string
           id: string
           metadata: Json
+          required_before_live: boolean
           sponsor_deal_id: number
           status: string
           updated_at: string
@@ -3253,6 +3254,7 @@ export type Database = {
           disclosure_text: string
           id?: string
           metadata?: Json
+          required_before_live?: boolean
           sponsor_deal_id: number
           status?: string
           updated_at?: string
@@ -3262,6 +3264,7 @@ export type Database = {
           disclosure_text?: string
           id?: string
           metadata?: Json
+          required_before_live?: boolean
           sponsor_deal_id?: number
           status?: string
           updated_at?: string
@@ -3278,6 +3281,8 @@ export type Database = {
       }
       sponsor_payment_records: {
         Row: {
+          checkout_provider: string | null
+          checkout_session_reference: string | null
           created_at: string
           creator_share_cents: number | null
           currency: string
@@ -3285,14 +3290,18 @@ export type Database = {
           id: string
           metadata: Json
           net_amount_cents: number | null
+          payment_mode: string
           platform_fee_cents: number | null
           provider: string | null
           provider_reference: string | null
           sponsor_deal_id: number
           status: string
+          test_mode_enabled: boolean
           updated_at: string
         }
         Insert: {
+          checkout_provider?: string | null
+          checkout_session_reference?: string | null
           created_at?: string
           creator_share_cents?: number | null
           currency?: string
@@ -3300,14 +3309,18 @@ export type Database = {
           id?: string
           metadata?: Json
           net_amount_cents?: number | null
+          payment_mode?: string
           platform_fee_cents?: number | null
           provider?: string | null
           provider_reference?: string | null
           sponsor_deal_id: number
           status?: string
+          test_mode_enabled?: boolean
           updated_at?: string
         }
         Update: {
+          checkout_provider?: string | null
+          checkout_session_reference?: string | null
           created_at?: string
           creator_share_cents?: number | null
           currency?: string
@@ -3315,11 +3328,13 @@ export type Database = {
           id?: string
           metadata?: Json
           net_amount_cents?: number | null
+          payment_mode?: string
           platform_fee_cents?: number | null
           provider?: string | null
           provider_reference?: string | null
           sponsor_deal_id?: number
           status?: string
+          test_mode_enabled?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -3476,6 +3491,126 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sponsor_review_logs_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsor_review_queue_records: {
+        Row: {
+          assigned_to_user_id: string | null
+          brand_id: string | null
+          channel_user_id: string | null
+          created_at: string
+          creator_user_id: string | null
+          id: string
+          metadata: Json
+          priority: string
+          review_notes: string | null
+          review_reason: string | null
+          review_status: string
+          review_type: string
+          sponsor_deal_id: number | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_to_user_id?: string | null
+          brand_id?: string | null
+          channel_user_id?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          id?: string
+          metadata?: Json
+          priority?: string
+          review_notes?: string | null
+          review_reason?: string | null
+          review_status?: string
+          review_type?: string
+          sponsor_deal_id?: number | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_to_user_id?: string | null
+          brand_id?: string | null
+          channel_user_id?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          id?: string
+          metadata?: Json
+          priority?: string
+          review_notes?: string | null
+          review_reason?: string | null
+          review_status?: string
+          review_type?: string
+          sponsor_deal_id?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_review_queue_records_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_brand_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_review_queue_records_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsor_safety_review_records: {
+        Row: {
+          brand_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          review_status: string
+          review_type: string
+          risk_category: string | null
+          risk_notes: string | null
+          sponsor_deal_id: number | null
+          updated_at: string
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          review_status?: string
+          review_type: string
+          risk_category?: string | null
+          risk_notes?: string | null
+          sponsor_deal_id?: number | null
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          review_status?: string
+          review_type?: string
+          risk_category?: string | null
+          risk_notes?: string | null
+          sponsor_deal_id?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_safety_review_records_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_brand_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_safety_review_records_sponsor_deal_id_fkey"
             columns: ["sponsor_deal_id"]
             isOneToOne: false
             referencedRelation: "sponsor_deal_records"
