@@ -1070,11 +1070,65 @@ export type Database = {
           },
         ]
       }
+      network_account_plan_assignments: {
+        Row: {
+          created_at: string
+          ends_at: string | null
+          id: string
+          metadata: Json
+          network_account_id: number
+          plan_id: string | null
+          starts_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          metadata?: Json
+          network_account_id: number
+          plan_id?: string | null
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          metadata?: Json
+          network_account_id?: number
+          plan_id?: string | null
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_account_plan_assignments_account_fkey"
+            columns: ["network_account_id"]
+            isOneToOne: false
+            referencedRelation: "network_billing_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "network_account_plan_assignments_plan_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "network_plan_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       network_billing_accounts: {
         Row: {
+          billing_email: string | null
           billing_provider: string | null
           billing_provider_customer_id: string | null
           created_at: string
+          display_name: string | null
+          external_customer_reference: string | null
           id: number
           metadata: Json
           network_name: string | null
@@ -1084,9 +1138,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          billing_email?: string | null
           billing_provider?: string | null
           billing_provider_customer_id?: string | null
           created_at?: string
+          display_name?: string | null
+          external_customer_reference?: string | null
           id?: number
           metadata?: Json
           network_name?: string | null
@@ -1096,9 +1153,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          billing_email?: string | null
           billing_provider?: string | null
           billing_provider_customer_id?: string | null
           created_at?: string
+          display_name?: string | null
+          external_customer_reference?: string | null
           id?: number
           metadata?: Json
           network_name?: string | null
@@ -1109,6 +1169,103 @@ export type Database = {
         }
         Relationships: []
       }
+      network_billing_audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          network_account_id: number | null
+          reason: string | null
+          target_id: string | null
+          target_table: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          network_account_id?: number | null
+          reason?: string | null
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          network_account_id?: number | null
+          reason?: string | null
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_billing_audit_logs_account_fkey"
+            columns: ["network_account_id"]
+            isOneToOne: false
+            referencedRelation: "network_billing_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      network_invoice_line_items: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          description: string
+          id: string
+          invoice_id: number
+          line_type: string
+          metadata: Json
+          quantity: number
+          status: string
+          unit: string
+          unit_amount_cents: number | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: number
+          line_type: string
+          metadata?: Json
+          quantity?: number
+          status?: string
+          unit: string
+          unit_amount_cents?: number | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: number
+          line_type?: string
+          metadata?: Json
+          quantity?: number
+          status?: string
+          unit?: string
+          unit_amount_cents?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_invoice_line_items_invoice_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "network_invoice_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       network_invoice_records: {
         Row: {
           amount_minor: number
@@ -1117,12 +1274,15 @@ export type Database = {
           created_at: string
           currency: string
           id: number
+          invoice_month: string | null
           invoice_number: string | null
           invoice_period_end: string | null
           invoice_period_start: string | null
           metadata: Json
           network_billing_account_id: number | null
           status: string
+          subtotal_cents: number
+          total_cents: number
           updated_at: string
         }
         Insert: {
@@ -1132,12 +1292,15 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: number
+          invoice_month?: string | null
           invoice_number?: string | null
           invoice_period_end?: string | null
           invoice_period_start?: string | null
           metadata?: Json
           network_billing_account_id?: number | null
           status?: string
+          subtotal_cents?: number
+          total_cents?: number
           updated_at?: string
         }
         Update: {
@@ -1147,12 +1310,15 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: number
+          invoice_month?: string | null
           invoice_number?: string | null
           invoice_period_end?: string | null
           invoice_period_start?: string | null
           metadata?: Json
           network_billing_account_id?: number | null
           status?: string
+          subtotal_cents?: number
+          total_cents?: number
           updated_at?: string
         }
         Relationships: [
@@ -1161,6 +1327,188 @@ export type Database = {
             columns: ["network_billing_account_id"]
             isOneToOne: false
             referencedRelation: "network_billing_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      network_overage_events: {
+        Row: {
+          actual_quantity: number | null
+          created_at: string
+          estimated_amount_cents: number | null
+          id: string
+          included_quantity: number | null
+          metadata: Json
+          network_account_id: number
+          overage_quantity: number | null
+          rate_cents_per_unit: number | null
+          source: string
+          status: string
+          unit: string
+          updated_at: string
+          usage_key: string
+          usage_period_end: string
+          usage_period_start: string
+        }
+        Insert: {
+          actual_quantity?: number | null
+          created_at?: string
+          estimated_amount_cents?: number | null
+          id?: string
+          included_quantity?: number | null
+          metadata?: Json
+          network_account_id: number
+          overage_quantity?: number | null
+          rate_cents_per_unit?: number | null
+          source?: string
+          status?: string
+          unit: string
+          updated_at?: string
+          usage_key: string
+          usage_period_end: string
+          usage_period_start: string
+        }
+        Update: {
+          actual_quantity?: number | null
+          created_at?: string
+          estimated_amount_cents?: number | null
+          id?: string
+          included_quantity?: number | null
+          metadata?: Json
+          network_account_id?: number
+          overage_quantity?: number | null
+          rate_cents_per_unit?: number | null
+          source?: string
+          status?: string
+          unit?: string
+          updated_at?: string
+          usage_key?: string
+          usage_period_end?: string
+          usage_period_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_overage_events_account_fkey"
+            columns: ["network_account_id"]
+            isOneToOne: false
+            referencedRelation: "network_billing_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      network_plan_records: {
+        Row: {
+          created_at: string
+          currency: string
+          display_name: string
+          id: string
+          included_bandwidth_tb: number | null
+          included_live_participant_minutes: number | null
+          included_storage_gb: number | null
+          included_team_seats: number | null
+          metadata: Json
+          monthly_platform_fee_cents: number | null
+          overage_bandwidth_cents_per_tb: number | null
+          overage_participant_minute_cents: number | null
+          overage_storage_cents_per_gb_month: number | null
+          plan_key: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          display_name: string
+          id?: string
+          included_bandwidth_tb?: number | null
+          included_live_participant_minutes?: number | null
+          included_storage_gb?: number | null
+          included_team_seats?: number | null
+          metadata?: Json
+          monthly_platform_fee_cents?: number | null
+          overage_bandwidth_cents_per_tb?: number | null
+          overage_participant_minute_cents?: number | null
+          overage_storage_cents_per_gb_month?: number | null
+          plan_key: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          display_name?: string
+          id?: string
+          included_bandwidth_tb?: number | null
+          included_live_participant_minutes?: number | null
+          included_storage_gb?: number | null
+          included_team_seats?: number | null
+          metadata?: Json
+          monthly_platform_fee_cents?: number | null
+          overage_bandwidth_cents_per_tb?: number | null
+          overage_participant_minute_cents?: number | null
+          overage_storage_cents_per_gb_month?: number | null
+          plan_key?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      network_quota_records: {
+        Row: {
+          created_at: string
+          id: string
+          metadata: Json
+          network_account_id: number
+          period_end: string | null
+          period_start: string | null
+          plan_assignment_id: string | null
+          quota_key: string
+          quota_value: number
+          status: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          network_account_id: number
+          period_end?: string | null
+          period_start?: string | null
+          plan_assignment_id?: string | null
+          quota_key: string
+          quota_value?: number
+          status?: string
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          network_account_id?: number
+          period_end?: string | null
+          period_start?: string | null
+          plan_assignment_id?: string | null
+          quota_key?: string
+          quota_value?: number
+          status?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_quota_records_account_fkey"
+            columns: ["network_account_id"]
+            isOneToOne: false
+            referencedRelation: "network_billing_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "network_quota_records_assignment_fkey"
+            columns: ["plan_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "network_account_plan_assignments"
             referencedColumns: ["id"]
           },
         ]

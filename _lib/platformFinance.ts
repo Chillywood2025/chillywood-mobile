@@ -4,6 +4,12 @@ export const PLATFORM_FINANCE_LEDGER_EVENTS_TABLE = "platform_finance_ledger_eve
 export const CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE = "creator_payout_ledger_entries";
 export const NETWORK_BILLING_ACCOUNTS_TABLE = "network_billing_accounts";
 export const NETWORK_INVOICE_RECORDS_TABLE = "network_invoice_records";
+export const NETWORK_PLAN_RECORDS_TABLE = "network_plan_records";
+export const NETWORK_ACCOUNT_PLAN_ASSIGNMENTS_TABLE = "network_account_plan_assignments";
+export const NETWORK_QUOTA_RECORDS_TABLE = "network_quota_records";
+export const NETWORK_INVOICE_LINE_ITEMS_TABLE = "network_invoice_line_items";
+export const NETWORK_OVERAGE_EVENTS_TABLE = "network_overage_events";
+export const NETWORK_BILLING_AUDIT_LOGS_TABLE = "network_billing_audit_logs";
 export const SPONSOR_DEAL_RECORDS_TABLE = "sponsor_deal_records";
 export const PLATFORM_FRAUD_HOLDS_TABLE = "platform_fraud_holds";
 export const CREATOR_PAYOUT_ACCOUNTS_TABLE = "creator_payout_accounts";
@@ -22,6 +28,12 @@ export type AdminFinanceReadModel = {
   creatorPayoutAuditLogCount: number | null;
   networkBillingAccountCount: number | null;
   networkInvoiceRecordCount: number | null;
+  networkPlanRecordCount: number | null;
+  networkAccountPlanAssignmentCount: number | null;
+  networkQuotaRecordCount: number | null;
+  networkInvoiceLineItemCount: number | null;
+  networkOverageEventCount: number | null;
+  networkBillingAuditLogCount: number | null;
   sponsorDealRecordCount: number | null;
   platformFraudHoldCount: number | null;
   generatedAt: string;
@@ -73,6 +85,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutAuditLogCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
+    networkPlanRecordCount,
+    networkAccountPlanAssignmentCount,
+    networkQuotaRecordCount,
+    networkInvoiceLineItemCount,
+    networkOverageEventCount,
+    networkBillingAuditLogCount,
     sponsorDealRecordCount,
     platformFraudHoldCount,
   ] = await Promise.all([
@@ -85,6 +103,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(CREATOR_PAYOUT_AUDIT_LOG_TABLE)),
     safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
     safeRead(() => readTableCount(NETWORK_INVOICE_RECORDS_TABLE)),
+    safeRead(() => readTableCount(NETWORK_PLAN_RECORDS_TABLE)),
+    safeRead(() => readTableCount(NETWORK_ACCOUNT_PLAN_ASSIGNMENTS_TABLE)),
+    safeRead(() => readTableCount(NETWORK_QUOTA_RECORDS_TABLE)),
+    safeRead(() => readTableCount(NETWORK_INVOICE_LINE_ITEMS_TABLE)),
+    safeRead(() => readTableCount(NETWORK_OVERAGE_EVENTS_TABLE)),
+    safeRead(() => readTableCount(NETWORK_BILLING_AUDIT_LOGS_TABLE)),
     safeRead(() => readTableCount(SPONSOR_DEAL_RECORDS_TABLE)),
     safeRead(() => readTableCount(PLATFORM_FRAUD_HOLDS_TABLE)),
   ]);
@@ -99,6 +123,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutAuditLogCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
+    networkPlanRecordCount,
+    networkAccountPlanAssignmentCount,
+    networkQuotaRecordCount,
+    networkInvoiceLineItemCount,
+    networkOverageEventCount,
+    networkBillingAuditLogCount,
     sponsorDealRecordCount,
     platformFraudHoldCount,
     generatedAt: new Date().toISOString(),

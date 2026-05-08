@@ -259,6 +259,12 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   creatorPayoutAuditLogCount: null,
   networkBillingAccountCount: null,
   networkInvoiceRecordCount: null,
+  networkPlanRecordCount: null,
+  networkAccountPlanAssignmentCount: null,
+  networkQuotaRecordCount: null,
+  networkInvoiceLineItemCount: null,
+  networkOverageEventCount: null,
+  networkBillingAuditLogCount: null,
   sponsorDealRecordCount: null,
   platformFraudHoldCount: null,
   generatedAt: new Date(0).toISOString(),
@@ -1162,7 +1168,7 @@ export default function AdminStudioScreen() {
       ? "Loading"
       : adminFinanceReadModel.networkBillingAccountCount === null
         ? "Not active yet"
-        : `${adminFinanceReadModel.networkBillingAccountCount} account foundation record${adminFinanceReadModel.networkBillingAccountCount === 1 ? "" : "s"}`;
+        : `${adminFinanceReadModel.networkBillingAccountCount} account / ${adminFinanceReadModel.networkPlanRecordCount ?? 0} plan foundation`;
     const sponsorLedgerValue = adminFinanceReadModel.loading
       ? "Loading"
       : adminFinanceReadModel.sponsorDealRecordCount === null
@@ -1294,6 +1300,7 @@ export default function AdminStudioScreen() {
     adminFinanceReadModel.financeLedgerEventCount,
     adminFinanceReadModel.loading,
     adminFinanceReadModel.networkBillingAccountCount,
+    adminFinanceReadModel.networkPlanRecordCount,
     adminFinanceReadModel.platformFraudHoldCount,
     adminFinanceReadModel.sponsorDealRecordCount,
     adminV1ReadModel.activeLiveRoomCount,
@@ -3627,7 +3634,9 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>NETWORK PLANS</Text>
               <Text style={styles.configTitle}>Network Plans</Text>
-              <Text style={styles.configBody}>Network plans are not active yet.</Text>
+              <Text style={styles.configBody}>
+                Network billing is not active yet. Foundation rows are proof-only; no invoices can be sent and no customers can be charged.
+              </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
@@ -3645,38 +3654,112 @@ export default function AdminStudioScreen() {
                     "foundation accounts",
                   )}
                 </Text>
+                <Text style={styles.configListBody}>Read-only customer/network account foundation. No billing action is connected.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Network invoice records</Text>
+                <Text style={styles.configListTitle}>Plan records</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkPlanRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation plan",
+                    "foundation plans",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Network Starter, Network Pro, and Enterprise remain planning tiers only.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Plan assignments</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkAccountPlanAssignmentCount,
+                    adminFinanceReadModel.loading,
+                    "foundation assignment",
+                    "foundation assignments",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Assignment rows do not activate billing, quotas, or invoices.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Quota records</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkQuotaRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation quota",
+                    "foundation quotas",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Planned quota types: storage, bandwidth, live participant-minutes, team seats.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Invoice drafts</Text>
                 <Text style={styles.configListBody}>
                   {formatAdminFinanceCount(
                     adminFinanceReadModel.networkInvoiceRecordCount,
                     adminFinanceReadModel.loading,
-                    "foundation record",
-                    "foundation records",
+                    "foundation invoice draft",
+                    "foundation invoice drafts",
                   )}
                 </Text>
-                <Text style={styles.configListBody}>No invoice totals, billing actions, plan assignment, or overage calculation is active.</Text>
+                <Text style={styles.configListBody}>No invoice totals, send action, payment link, or Stripe billing action is active.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Invoice line items</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkInvoiceLineItemCount,
+                    adminFinanceReadModel.loading,
+                    "foundation line item",
+                    "foundation line items",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Line items are proof-only and do not create a payable balance.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Overage events</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkOverageEventCount,
+                    adminFinanceReadModel.loading,
+                    "foundation overage event",
+                    "foundation overage events",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Overages are not calculated from provider usage yet and cannot be approved or billed.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Billing audit logs</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkBillingAuditLogCount,
+                    adminFinanceReadModel.loading,
+                    "foundation audit row",
+                    "foundation audit rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Audit rows are read-only foundation; no charge, invoice, or plan activation writes are exposed.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Future model</Text>
-                <Text style={styles.configListBody}>Monthly platform fee + included quotas + overages.</Text>
-              </View>
-            </View>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Planned tiers</Text>
-                <Text style={styles.configListBody}>Network Starter · Network Pro · Enterprise custom</Text>
-              </View>
-            </View>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Planned usage types</Text>
-                <Text style={styles.configListBody}>storage · bandwidth · live participant-minutes · team seats</Text>
+                <Text style={styles.configListBody}>Monthly platform fee + included quotas + reviewed overages.</Text>
+                <Text style={styles.configListBody}>Stripe Billing or Checkout is later and is not connected in this build.</Text>
               </View>
             </View>
           </View>
