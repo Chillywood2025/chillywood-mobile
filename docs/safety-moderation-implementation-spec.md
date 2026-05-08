@@ -112,6 +112,7 @@ Current doctrine allows it to show:
 - Creator Payout Read-Only Dashboard Foundation is a Channel Studio read-only surface, not an Admin enforcement workflow; future payout release still requires fraud review and immutable audit before any dangerous action
 - Stripe Connect Test-Mode Backend Functions are deployed backend-only/test-mode and do not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior; backend Stripe secret names are configured by digest only, provider proof is pending, and future payout release still requires fraud review plus immutable audit rows before dangerous actions
 - Payout Review Queue + Batch Draft Workflow Foundation is Admin read-only/draft-only and does not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior; future payout approval/release/batch processing still requires fraud review, KYC/tax readiness, provider proof, admin reason/approval, and immutable audit rows before dangerous actions
+- Provider Transfer Records Sync Foundation is backend-only/admin-operator/test-mode status import for existing local provider transfer records; it does not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior, and future transfer creation/payout release still requires fraud review, KYC/tax readiness, provider proof, admin reason/approval, and immutable audit rows before dangerous actions
 
 Current doctrine does not yet allow it to claim:
 - report state mutation
