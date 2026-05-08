@@ -111,6 +111,7 @@ Current doctrine allows it to show:
 - Immutable Admin Audit Log Foundation latest rows in Audit, as read-only append-only foundation rows only
 - Creator Payout Read-Only Dashboard Foundation is a Channel Studio read-only surface, not an Admin enforcement workflow; future payout release still requires fraud review and immutable audit before any dangerous action
 - Stripe Connect Test-Mode Backend Functions are deployed backend-only/test-mode and do not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior; backend Stripe secret names are configured by digest only, provider proof is pending, and future payout release still requires fraud review plus immutable audit rows before dangerous actions
+- Payout Review Queue + Batch Draft Workflow Foundation is Admin read-only/draft-only and does not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior; future payout approval/release/batch processing still requires fraud review, KYC/tax readiness, provider proof, admin reason/approval, and immutable audit rows before dangerous actions
 
 Current doctrine does not yet allow it to claim:
 - report state mutation
@@ -119,7 +120,7 @@ Current doctrine does not yet allow it to claim:
 - appeal/dispute workflow
 - creator-visible enforcement history
 - live fraud enforcement, payout pauses, account restrictions, upload restrictions, live restrictions, monetization disables, sponsor enforcement, network billing actions, live ad provider state, runtime kill switches, or fraud risk scores unless those systems are separately backed
-- audit row edit/delete/clear controls or dangerous-action audit execution unless those systems are separately backed
+- audit row edit/delete/clear controls, payout review approval/release, payout batch processing, transfer creation, or dangerous-action audit execution unless those systems are separately backed
 
 ## 4. Current Source-Of-Truth Already In Repo
 
