@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Store / External Launch Readiness Audit.
+Immutable Admin Audit Log.
 
 Admin Usage Provider Imports V1D3/V1D4 are pushed and proofed. The server-side `provider-usage-import` Supabase Edge Function is deployed, migration `202605070012_provider_usage_import_idempotency.sql` is applied, Admin Usage reads provider import status rows, missing auth returns `401`, and owner/operator proof completed Cloudflare R2, Hetzner Object Storage, and Hetzner Server import paths with the existing signed-in device session token in memory only. Hetzner Object Storage imports only S3-compatible bucket inventory metadata (`s3_inventory_storage_bytes` and `s3_inventory_object_count`) through server-side secrets, not traffic, billing, overage, invoice, revenue, payout, or storage-billing truth. No mobile provider API calls, provider secrets in repo, fake bandwidth, fake bills, overages, invoices, revenue, payouts, sponsor money, or Admin import buttons were added.
 
@@ -19,7 +19,20 @@ Network Billing Foundation is pushed and applied. Migration `supabase/migrations
 
 Sponsor Checkout Foundation is pushed and applied. Migration `supabase/migrations/202605080004_sponsor_checkout_foundation.sql` extends sponsor deals and adds sponsor brand, creative, placement, disclosure, review log, payment record, and payout split record foundation tables. Generated database types are refreshed, `_lib/platformFinance.ts` reads sponsor foundation counts, and `/admin` Sponsors is read-only/foundation only. Proof rows are foundation-only with zero money action markers. Sponsor checkout is not live: no checkout URL, payment link, Stripe Checkout, brand payment, sponsor approval action, fake sponsor revenue, payable balance, or creator payout split execution exists. Later sponsor money requires platform review, disclosure rules, safe product/scam review, fraud/abuse review, payout hold/review, and audit trail. Future model remains: brand pays Chi'llywood first; creator-sold sponsor slots pay creator 80% net / Chi'llywood 20% net; platform-served creator-page ads pay creator 70% net / Chi'llywood 30% net.
 
-The next lane is an audit/spec pass only:
+Fraud Enforcement Foundation is pushed and applied. Migration `supabase/migrations/202605080005_fraud_enforcement_foundation.sql` expands `platform_fraud_holds` and adds fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs. Generated database types are refreshed, `_lib/platformFinance.ts` reads fraud foundation counts, and `/admin` Fraud is read-only/foundation only. Proof rows are foundation-only and have no live enforcement action markers. Fraud enforcement is not live: no payout pause, account restriction, upload restriction, live restriction, monetization disable, fraud risk score, or enforcement action exists. Future fraud enforcement requires immutable admin audit logs, review workflow, confirmation/reason, appeal path, and legal/compliance review. Future fraud reasons include invalid traffic, fake engagement, fake followers, fake views, fake ad activity, scams, undisclosed sponsorship, stolen content, chargebacks, refund abuse, policy violation, illegal conduct, suspicious payout behavior, and network overage abuse.
+
+The next finance/admin lanes are:
+
+1. Immutable Admin Audit Log.
+2. Creator Payout read-only creator dashboard.
+3. Stripe Connect onboarding planning.
+4. Stripe Connect test-mode foundation.
+5. Payout review queue.
+6. Payout batch draft workflow.
+
+The store/external readiness audit remains a valid launch-readiness lane, but the next finance/admin follow-up after Fraud Enforcement Foundation should start with immutable admin audit logs. Keep it docs/spec/schema scoped until backed write permissions, dangerous-action confirmation, reason capture, RLS, and proof are explicitly designed.
+
+Store / External Launch Readiness Audit remains an audit/spec lane only when selected:
 
 - audit App Store / Google Play readiness without changing runtime code
 - verify Android package `com.chillywood.mobile` and iOS bundle identifier truth before store work
@@ -105,9 +118,11 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - Finance F2D Admin payout-provider readout is pushed as read-only foundation counts only
    - Finance F2E proof rows are pushed as non-live `not_active` foundation data only
    - Network Billing Foundation migration `supabase/migrations/202605080003_network_billing_foundation.sql` is applied remotely and generated database types include network plans, assignments, quotas, invoice line items, overage events, and billing audit logs
-   - Finance F2 payout-provider, Network Billing, and Sponsor Checkout closeouts are complete for foundation-only schema/readout/proof rows; moderator visibility proof still requires a later safe lane before operational reliance
-   - next recommended finance lanes are Fraud Enforcement schema/spec, Fraud Enforcement foundation implementation, Immutable Admin Audit Log, Creator Payout read-only creator dashboard, Stripe Connect onboarding planning, Stripe Connect test-mode foundation, Payout review queue, and Payout batch draft workflow
-   - add provider billing imports, Stripe Connect onboarding/integration, creator payout reads, payout provider writes, live network billing actions, sponsor checkout, or fraud enforcement only in separate scoped lanes
+   - Sponsor Checkout Foundation migration `supabase/migrations/202605080004_sponsor_checkout_foundation.sql` is applied remotely and generated database types include sponsor brands, deals, creatives, placements, disclosures, review logs, payment records, and payout split records
+   - Fraud Enforcement Foundation migration `supabase/migrations/202605080005_fraud_enforcement_foundation.sql` is applied remotely and generated database types include fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs
+   - Finance F2 payout-provider, Network Billing, Sponsor Checkout, and Fraud Enforcement closeouts are complete for foundation-only schema/readout/proof rows; moderator visibility proof still requires a later safe lane before operational reliance
+   - next recommended finance/admin lanes are Immutable Admin Audit Log, Creator Payout read-only creator dashboard, Stripe Connect onboarding planning, Stripe Connect test-mode foundation, Payout review queue, and Payout batch draft workflow
+   - add provider billing imports, Stripe Connect onboarding/integration, creator payout reads, payout provider writes, live network billing actions, sponsor checkout, or live fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
 
 ## Current Pushed Truth To Preserve
@@ -147,6 +162,8 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Ledger Systems 4A-4D finance foundation is pushed in `_lib/platformFinance.ts`, `app/admin.tsx`, and migration `supabase/migrations/202605070005_platform_finance_ledger_foundation.sql`. The migration is now applied remotely, and generated database types include the finance foundation tables. Admin finance panels may show safe foundation row counts only; no live money totals, payout execution, invoices, sponsor checkout, payout split execution, fraud enforcement, provider integrations, or fake revenue exists.
 - Finance F2B creator payout provider schema foundation is pushed in migration `supabase/migrations/202605080001_creator_payout_provider_foundation.sql` and generated database types. It is remote-applied/type-refreshed schema only for future payout accounts, payout batches, provider transfers, payout holds, and immutable payout audit logs. No Stripe integration, payout buttons, withdrawal buttons, creator-facing payout dashboard, or live payout action exists.
 - Network Billing Foundation is pushed in migration `supabase/migrations/202605080003_network_billing_foundation.sql`, generated database types, `_lib/platformFinance.ts`, and read-only `app/admin.tsx` Networks copy. It adds/expands network billing account display/contact fields, invoice month/subtotal/total fields, network plan records, account plan assignments, quota records, invoice line items, overage events, and billing audit logs. Admin Networks may show foundation counts only and must clearly preserve no invoice send, no customer charge, no payment link, no Stripe call, no live overage approval, no fake revenue, no unpaid balance, and no real customer obligation.
+- Sponsor Checkout Foundation is pushed in migration `supabase/migrations/202605080004_sponsor_checkout_foundation.sql`, generated database types, `_lib/platformFinance.ts`, and read-only `app/admin.tsx` Sponsors copy. It includes sponsor brands, sponsor deals, creatives, placements, disclosures, review logs, payment records, and payout split records with foundation-only proof rows. No sponsor checkout, brand payment, payment link, Stripe Checkout, sponsor approval action, fake sponsor revenue, payable balance, or payout split execution exists.
+- Fraud Enforcement Foundation is pushed in migration `supabase/migrations/202605080005_fraud_enforcement_foundation.sql`, generated database types, `_lib/platformFinance.ts`, and read-only `app/admin.tsx` Fraud copy. It includes fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs with foundation-only proof rows. No payout pause, account restriction, upload restriction, live restriction, monetization disable, fraud risk score, or active enforcement action exists.
 - Ads Launch Foundation V1A is pushed.
 - Ads V1A is provider-neutral foundation only. No real ads render yet, no AppLovin SDK was installed, no Unity LevelPlay SDK was installed, no Unity Ads SDK was installed, no AdMob SDK was installed, no real ad IDs were added, no real provider initialization was added, and no CTV inventory was added.
 - Ads V1A behavior to preserve: central defaults, `ads_enabled: false`, `ads_provider: placeholder`, placeholder provider not connected/no SDK calls, Premium/ad-free always ineligible, Premium/ad-free counters do not increment, forbidden routes/contexts block eligibility, active browsing time tracking exists, session caps exist, daily caps persist through AsyncStorage, and Admin Ads remains read-only/foundation.

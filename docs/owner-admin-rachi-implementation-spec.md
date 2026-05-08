@@ -81,6 +81,7 @@ Currently real:
 - Reports, Content, Roles, Audit, and Rachi backed behavior preserved
 - Users, Premium, Kill Switches, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and portions of Usage/System presented as read-only or foundation-only where backing is not connected
 - Ads Launch Foundation V1A/V1B/V1C status in Admin Ads as read-only/foundation: placeholder/not-connected provider, Home native/feed placeholder foundation, placeholder interstitial controller foundation, launch caps, forbidden contexts, AppLovin MAX future direction, Unity through AppLovin MAX future direction, no AdMob-only doctrine, and CTV future-only copy
+- Fraud Enforcement Foundation status in Admin Fraud as read-only/foundation: fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs are visible as counts only, with no active enforcement or risk score
 
 Currently not real:
 - full immutable admin audit logs
@@ -90,8 +91,8 @@ Currently not real:
 - real ad SDKs, real ad IDs, real ad provider initialization, real ad rendering, CTV inventory, or ad revenue
 - fake MRR, ARR, creator earnings, sponsor revenue, payout balances, invoices, network billing, or payout execution
 - sponsor checkout/upload/approval or payout split execution
-- working fraud holds, payout pauses, account restrictions, or risk scores
-- bandwidth, LiveKit, participant-minute, storage billing, revenue-ledger, payout-ledger, network-invoice, sponsor-deal, or fraud-hold ledgers
+- working/live fraud enforcement, payout pauses, account restrictions, upload restrictions, live restrictions, monetization disables, or risk scores
+- bandwidth, LiveKit, participant-minute, storage billing, live revenue-ledger, live payout-ledger, live network-invoice, live sponsor-deal, or live fraud-enforcement systems
 
 ### 3.2 Current Creator-Side Safety/Admin Truth
 Current creator-side summary truth already exists in:
@@ -227,6 +228,8 @@ Current doctrine:
 - Admin Usage Metering Foundations 37-39 plus Admin Usage Metering Foundation V1 source files: `_lib/platformUsage.ts`, read-only Admin Usage copy in `app/admin.tsx`, remote-applied migrations `supabase/migrations/202605070003_platform_usage_metering_foundation.sql` and `supabase/migrations/202605070004_admin_usage_metering_v1.sql`, and generated usage/provider table types in `supabase/database.types.ts`
 - Ledger Systems 4A-4D finance foundation source files: `_lib/platformFinance.ts`, read-only Admin Revenue/Payouts/Networks/Sponsors/Fraud copy in `app/admin.tsx`, and migration `supabase/migrations/202605070005_platform_finance_ledger_foundation.sql`
 - Network Billing Foundation source files: `_lib/platformFinance.ts`, read-only Admin Networks copy in `app/admin.tsx`, generated database types, and migration `supabase/migrations/202605080003_network_billing_foundation.sql`
+- Sponsor Checkout Foundation source files: `_lib/platformFinance.ts`, read-only Admin Sponsors copy in `app/admin.tsx`, generated database types, and migration `supabase/migrations/202605080004_sponsor_checkout_foundation.sql`
+- Fraud Enforcement Foundation source files: `_lib/platformFinance.ts`, read-only Admin Fraud copy in `app/admin.tsx`, generated database types, and migration `supabase/migrations/202605080005_fraud_enforcement_foundation.sql`
 - Admin V1B2A source files: `app/(auth)/signup.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; New Accounts is enforced on signup only
 - Admin V1B2B source files: `app/channel-settings.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; Uploads is enforced on new creator-video upload submit only
 
@@ -299,7 +302,7 @@ Admin V1A already presents these sections, but many are foundation-only. Current
 6. Admin V1B Kill Switches only after a dedicated schema/config/enforcement plan.
 7. Admin Usage Metering Foundations 37-39 plus Admin Usage Metering Foundation V1 are pushed and applied remotely: schema/helper/read-only Admin Usage foundation for future `bandwidth_bytes`, `participant_minutes`, `storage_bytes`, internal usage events/summaries, provider usage imports, provider billing snapshots, and future reconciliation. Storage must show only as metadata estimate, participant-minutes only as DB estimate, provider imports/reconciliation only as schema/foundation, and bandwidth still `Not connected yet` unless future real metering rows exist.
 8. Usage event writers, provider import jobs, provider billing imports, and reconciliation jobs later only under a separately authorized Supabase/app-surface/backend prompt.
-9. Ledger Systems 4A-4D finance foundation is pushed: schema/helper/read-only Admin foundation for future finance ledger events, creator payout ledger entries, network billing accounts, network invoice records, sponsor deal records, and platform fraud holds. Its migration is `supabase/migrations/202605070005_platform_finance_ledger_foundation.sql`. Network Billing Foundation is also pushed through `supabase/migrations/202605080003_network_billing_foundation.sql` with read-only Admin Networks counts for accounts, plans, assignments, quotas, invoice drafts, line items, overage events, and audit logs. No provider integration, payout execution, invoice send, customer charge, payment link, sponsor checkout, payout split execution, fraud enforcement, fake revenue, or fake unpaid balance is active.
+9. Ledger Systems 4A-4D finance foundation is pushed: schema/helper/read-only Admin foundation for future finance ledger events, creator payout ledger entries, network billing accounts, network invoice records, sponsor deal records, and platform fraud holds. Its migration is `supabase/migrations/202605070005_platform_finance_ledger_foundation.sql`. Network Billing Foundation, Sponsor Checkout Foundation, and Fraud Enforcement Foundation are also pushed through migrations `supabase/migrations/202605080003_network_billing_foundation.sql`, `supabase/migrations/202605080004_sponsor_checkout_foundation.sql`, and `supabase/migrations/202605080005_fraud_enforcement_foundation.sql`. Admin Networks, Sponsors, and Fraud show read-only counts only. No provider integration, payout execution, invoice send, customer charge, payment link, sponsor checkout, payout split execution, fraud enforcement action, payout pause, account restriction, upload restriction, live restriction, monetization disable, fake risk score, fake revenue, or fake unpaid balance is active.
 10. Finance remote migration/type refresh and provider/event writers later only under a separately authorized Supabase/provider prompt.
 11. Real Rachi-control state and domain controls later only when backed.
 12. Advanced owner/super-admin controls only if justified by real backing and proof.

@@ -107,6 +107,7 @@ Current doctrine allows it to show:
 - recent safety reports when the signed-in identity can review them
 - Admin V1A Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System sections
 - foundation-only states for unbacked admin systems
+- Fraud Enforcement Foundation counts for fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs, as read-only/foundation rows only
 
 Current doctrine does not yet allow it to claim:
 - report state mutation
@@ -114,7 +115,7 @@ Current doctrine does not yet allow it to claim:
 - strike workflow
 - appeal/dispute workflow
 - creator-visible enforcement history
-- real fraud holds, payout pauses, sponsor enforcement, network billing actions, live ad provider state, or runtime kill switches unless those systems are separately backed
+- live fraud enforcement, payout pauses, account restrictions, upload restrictions, live restrictions, monetization disables, sponsor enforcement, network billing actions, live ad provider state, runtime kill switches, or fraud risk scores unless those systems are separately backed
 
 ## 4. Current Source-Of-Truth Already In Repo
 
