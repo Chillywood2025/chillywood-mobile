@@ -6,3 +6,15 @@ verify_jwt = false
 
 [functions.provider-usage-import]
 verify_jwt = false
+
+[functions.stripe-connect-account]
+verify_jwt = false
+
+[functions.stripe-connect-onboarding-link]
+verify_jwt = false
+
+[functions.stripe-connect-account-sync]
+verify_jwt = false
+
+[functions.stripe-connect-webhook]
+verify_jwt = false
