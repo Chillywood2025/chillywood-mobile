@@ -21,7 +21,7 @@ Status key:
 - Profile is personal/social identity; Channel is the public mini streaming platform/network on `/channel/[userId]`; Channel Studio is owner-only on `/channel-studio`; `/channel-settings` remains compatibility.
 - Public Channel must not show owner-only controls to non-owners or drafts/private/unpublished content.
 - Launch is planned as 18+. H1A signup confirmation and H1B2 legal acceptance storage are pushed: signup shows the 18+ copy, requires an active checkbox confirmation before account creation is attempted, preserves legal links plus Sign In handoff, and writes backed age/terms/privacy acceptance after account creation succeeds with an authenticated session. Free users see ads at launch, Premium users see zero ads, and all full Live First, Live Watch-Party, and Watch-Party Live access is Premium.
-- Native game streaming, paid creator videos, subscriber-only videos, tips/coins, live payouts, media comments, full Friends, close friends, friend-only privacy, full VIP/moderator roster, advanced creator studio, and automatic transcoding remain later. Creator Payout Read-Only Dashboard Foundation is pushed in Channel Studio as foundation-only readiness/ledger visibility with no Withdraw, Cash Out, Connect Stripe, KYC/tax live flow, payout approval/release, fake payable balance, fake earnings, or live money movement. Ads Launch Foundation V1A/V1B/V1C is pushed as no-SDK/no-real-rendering infrastructure. Home native/feed placeholder foundation and placeholder interstitial controller foundation exist but normal runtime hides them while `ads_enabled=false`; real ad serving and real AppLovin MAX integration remain separate lanes.
+- Native game streaming, paid creator videos, subscriber-only videos, tips/coins, live payouts, media comments, full Friends, close friends, friend-only privacy, full VIP/moderator roster, advanced creator studio, and automatic transcoding remain later. Creator Payout Read-Only Dashboard Foundation is pushed in Channel Studio as foundation-only readiness/ledger visibility with no Withdraw, Cash Out, Connect Stripe, KYC/tax live flow, payout approval/release, fake payable balance, fake earnings, or live money movement. Stripe Connect Edge Function Skeletons are source-only/not deployed and add no Stripe SDK, Stripe keys, provider calls, onboarding links, transfers, payouts, checkout sessions, Connect Stripe UI, or live money movement. Ads Launch Foundation V1A/V1B/V1C is pushed as no-SDK/no-real-rendering infrastructure. Home native/feed placeholder foundation and placeholder interstitial controller foundation exist but normal runtime hides them while `ads_enabled=false`; real ad serving and real AppLovin MAX integration remain separate lanes.
 - Real Chi’llyfects AR processing remains post-v1. Do not add Snap Camera Kit, DeepAR, MediaPipe processing, custom WebRTC frame processors, or native AR SDKs before Public v1.
 
 ## Checklist
@@ -97,7 +97,7 @@ Category D, later phase by product decision:
 - Push notification delivery and a full notification center.
 - Native game/video streaming.
 - Real Chi’llyfects AR processing, including Snap Camera Kit, DeepAR, MediaPipe processing, custom WebRTC frame processors, and native AR SDK work.
-- Paid creator videos, subscriber-only media, tips, coins, live creator payouts, tax/KYC, and earnings ledgers. The Channel Studio payout dashboard is read-only/foundation only and must not be treated as live payout availability.
+- Paid creator videos, subscriber-only media, tips, coins, live creator payouts, tax/KYC, and earnings ledgers. The Channel Studio payout dashboard is read-only/foundation only and must not be treated as live payout availability; Stripe Connect Edge Function skeletons are not deployed provider behavior.
 - Real ad SDK integration, ad revenue imports, creator ad revenue share, CTV ads, and sponsor/ledger systems.
 - Full Audience Role Roster, VIPs, channel moderators, creator teams, and durable co-host roles.
 - Comment media upload, advanced creator studio, and automatic transcoding.
@@ -136,7 +136,7 @@ Category D, later phase by product decision:
 
 - Native game/video streaming.
 - Paid creator videos and subscriber-only media.
-- Tips, coins, live creator payouts, tax/KYC, and earnings ledgers. The pushed Channel Studio payout dashboard is read-only/foundation only, with no payable balance or payout action.
+- Tips, coins, live creator payouts, tax/KYC, and earnings ledgers. The pushed Channel Studio payout dashboard is read-only/foundation only, with no payable balance or payout action; Stripe Connect Edge Function skeletons are source-only/not deployed and do not add payout setup or provider actions.
 - Real ad SDK integration, ad revenue imports, creator ad revenue share, CTV ads, and sponsor/ledger systems.
 - Full Audience Role Roster, VIPs, channel moderators, creator teams, and durable co-host roles.
 - Media comments and media Profile posts.

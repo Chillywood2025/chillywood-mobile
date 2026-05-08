@@ -95,7 +95,7 @@ Processed: 2026-04-26
 Scope for this lane only:
 
 - Prepare Google Play Billing / RevenueCat / Premium external setup.
-- Do not configure paid creator videos, subscriber-only videos, tips, coins, live payouts, ads, or paid title access. The Channel Studio payout dashboard foundation is read-only and must not be configured or described as active payouts.
+- Do not configure paid creator videos, subscriber-only videos, tips, coins, live payouts, ads, or paid title access. The Channel Studio payout dashboard foundation is read-only and must not be configured or described as active payouts; Stripe Connect Edge Function skeletons are source-only/not deployed and must not be described as active Stripe payout support.
 - Do not run live store actions from Codex.
 - Do not put Play service account JSON, RevenueCat API keys, receipts, purchase tokens, or screenshots containing sensitive account details in the repo.
 
@@ -557,7 +557,7 @@ Repo-ready facts:
 - `docs/ANDROID_RELEASE_EAS_RUNBOOK.md` already maps preview/production build and signing proof.
 - Current asset inspection found launcher/splash/source art but no Play feature graphic and no dedicated store screenshot set.
 - Current feature truth includes Profile, Channel, creator uploads, Player, Watch-Party, Live Stage, Chi'lly Chat, Premium/access foundations, and safety/reporting basics.
-- Later-phase truth remains excluded from store copy: native game streaming, paid creator videos, subscriber-only media, tips, coins, live payouts, ads, VIPs, comment media uploads, advanced creator studio, and automatic transcoding. The pushed Channel Studio payout dashboard is foundation-only readiness/ledger visibility and must not be marketed as Withdraw, Cash Out, Stripe Connect, KYC/tax, earnings, payable balance, or active payout support.
+- Later-phase truth remains excluded from store copy: native game streaming, paid creator videos, subscriber-only media, tips, coins, live payouts, ads, VIPs, comment media uploads, advanced creator studio, and automatic transcoding. The pushed Channel Studio payout dashboard is foundation-only readiness/ledger visibility and Stripe Connect Edge Function skeletons are source-only/not deployed; neither must be marketed as Withdraw, Cash Out, Stripe Connect, KYC/tax, earnings, payable balance, onboarding, transfers, payouts, or active payout support.
 - The signup route does not visibly show Terms/Privacy/Community Guidelines acceptance copy in the inspected code, so UGC/store policy readiness has a decision gap before final submission.
 
 Manual actions before marking Done:
