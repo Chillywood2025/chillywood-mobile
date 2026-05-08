@@ -266,6 +266,19 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   creatorRevenueShareLedgerFoundationCount: null,
   creatorPayoutLedgerEntryCount: null,
   creatorPayoutAccountCount: null,
+  creatorPayoutAccountTestModeCount: null,
+  creatorPayoutAccountReadyLaterCount: null,
+  creatorPayoutAccountActionRequiredCount: null,
+  creatorPayoutAccountPayoutsEnabledCount: null,
+  creatorPayoutOnboardingSessionCount: null,
+  creatorPayoutOnboardingLinkCreatedCount: null,
+  creatorPayoutEligibilityRecordCount: null,
+  creatorPayoutEligibilityProviderReadyCount: null,
+  creatorPayoutEligibilityEligibleCount: null,
+  creatorPayoutProviderWebhookEventCount: null,
+  creatorPayoutProviderWebhookProcessedCount: null,
+  creatorPayoutProviderWebhookIgnoredCount: null,
+  creatorPayoutProviderWebhookFailedCount: null,
   creatorPayoutReviewRecordCount: null,
   creatorPayoutReviewNoteCount: null,
   creatorPayoutBatchCount: null,
@@ -3769,7 +3782,132 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  Foundation only. No Stripe onboarding, provider sync, or creator-facing payout setup is active.
+                  Backend test-mode proof is read-only here. No creator-facing Connect Stripe setup, payout release, or money movement is active.
+                </Text>
+                <Text style={styles.configListBody}>
+                  Test-mode accounts: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutAccountTestModeCount,
+                    adminFinanceReadModel.loading,
+                    "account",
+                    "accounts",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Action required: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutAccountActionRequiredCount,
+                    adminFinanceReadModel.loading,
+                    "account",
+                    "accounts",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Provider-ready later: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutAccountReadyLaterCount,
+                    adminFinanceReadModel.loading,
+                    "account",
+                    "accounts",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Payouts enabled at provider: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutAccountPayoutsEnabledCount,
+                    adminFinanceReadModel.loading,
+                    "account",
+                    "accounts",
+                  )}. This still does not make creator payouts active.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Provider onboarding sessions</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutOnboardingSessionCount,
+                    adminFinanceReadModel.loading,
+                    "foundation session",
+                    "foundation sessions",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Links created: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutOnboardingLinkCreatedCount,
+                    adminFinanceReadModel.loading,
+                    "session",
+                    "sessions",
+                  )}. Admin cannot create onboarding links from this panel.
+                </Text>
+                <Text style={styles.configListBody}>
+                  Onboarding URLs are short-lived backend outputs only and are not stored long-term here.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout eligibility readiness</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutEligibilityRecordCount,
+                    adminFinanceReadModel.loading,
+                    "readiness record",
+                    "readiness records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Provider ready: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutEligibilityProviderReadyCount,
+                    adminFinanceReadModel.loading,
+                    "record",
+                    "records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Eligible for payouts: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutEligibilityEligibleCount,
+                    adminFinanceReadModel.loading,
+                    "record",
+                    "records",
+                  )}. Eligibility rows are not payable balances and do not release money.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Stripe Connect webhook events</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutProviderWebhookEventCount,
+                    adminFinanceReadModel.loading,
+                    "provider event",
+                    "provider events",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Processed: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutProviderWebhookProcessedCount,
+                    adminFinanceReadModel.loading,
+                    "event",
+                    "events",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Ignored safely: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutProviderWebhookIgnoredCount,
+                    adminFinanceReadModel.loading,
+                    "event",
+                    "events",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Failed: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutProviderWebhookFailedCount,
+                    adminFinanceReadModel.loading,
+                    "event",
+                    "events",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Webhooks are backend-only and test-mode proved. Transfer, payout, and checkout events do not move money in this build.
                 </Text>
               </View>
             </View>

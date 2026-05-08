@@ -31,6 +31,9 @@ export const FRAUD_REVIEW_NOTES_TABLE = "fraud_review_notes";
 export const FRAUD_APPEAL_RECORDS_TABLE = "fraud_appeal_records";
 export const FRAUD_AUDIT_LOGS_TABLE = "fraud_audit_logs";
 export const CREATOR_PAYOUT_ACCOUNTS_TABLE = "creator_payout_accounts";
+export const CREATOR_PAYOUT_ELIGIBILITY_RECORDS_TABLE = "creator_payout_eligibility_records";
+export const CREATOR_PAYOUT_ONBOARDING_SESSIONS_TABLE = "creator_payout_onboarding_sessions";
+export const CREATOR_PAYOUT_PROVIDER_WEBHOOK_EVENTS_TABLE = "creator_payout_provider_webhook_events";
 export const CREATOR_PAYOUT_BATCHES_TABLE = "creator_payout_batches";
 export const CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE = "creator_payout_provider_transfers";
 export const CREATOR_PAYOUT_HOLDS_TABLE = "creator_payout_holds";
@@ -46,6 +49,19 @@ export type AdminFinanceReadModel = {
   creatorRevenueShareLedgerFoundationCount: number | null;
   creatorPayoutLedgerEntryCount: number | null;
   creatorPayoutAccountCount: number | null;
+  creatorPayoutAccountTestModeCount: number | null;
+  creatorPayoutAccountReadyLaterCount: number | null;
+  creatorPayoutAccountActionRequiredCount: number | null;
+  creatorPayoutAccountPayoutsEnabledCount: number | null;
+  creatorPayoutOnboardingSessionCount: number | null;
+  creatorPayoutOnboardingLinkCreatedCount: number | null;
+  creatorPayoutEligibilityRecordCount: number | null;
+  creatorPayoutEligibilityProviderReadyCount: number | null;
+  creatorPayoutEligibilityEligibleCount: number | null;
+  creatorPayoutProviderWebhookEventCount: number | null;
+  creatorPayoutProviderWebhookProcessedCount: number | null;
+  creatorPayoutProviderWebhookIgnoredCount: number | null;
+  creatorPayoutProviderWebhookFailedCount: number | null;
   creatorPayoutReviewRecordCount: number | null;
   creatorPayoutReviewNoteCount: number | null;
   creatorPayoutBatchCount: number | null;
@@ -105,7 +121,7 @@ type CountQueryResult = {
 };
 
 type CountQuery = PromiseLike<CountQueryResult> & {
-  eq: (column: string, value: string) => PromiseLike<CountQueryResult>;
+  eq: (column: string, value: string | number | boolean) => PromiseLike<CountQueryResult>;
 };
 
 const financeClient = supabase as unknown as {
@@ -133,7 +149,7 @@ async function readTableCount(table: string) {
   return Number(count ?? 0);
 }
 
-async function readTableCountWhereEq(table: string, column: string, value: string) {
+async function readTableCountWhereEq(table: string, column: string, value: string | number | boolean) {
   const { count, error } = await financeClient
     .from(table)
     .select("id", { count: "exact", head: true })
@@ -155,6 +171,19 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorRevenueShareLedgerFoundationCount,
     creatorPayoutLedgerEntryCount,
     creatorPayoutAccountCount,
+    creatorPayoutAccountTestModeCount,
+    creatorPayoutAccountReadyLaterCount,
+    creatorPayoutAccountActionRequiredCount,
+    creatorPayoutAccountPayoutsEnabledCount,
+    creatorPayoutOnboardingSessionCount,
+    creatorPayoutOnboardingLinkCreatedCount,
+    creatorPayoutEligibilityRecordCount,
+    creatorPayoutEligibilityProviderReadyCount,
+    creatorPayoutEligibilityEligibleCount,
+    creatorPayoutProviderWebhookEventCount,
+    creatorPayoutProviderWebhookProcessedCount,
+    creatorPayoutProviderWebhookIgnoredCount,
+    creatorPayoutProviderWebhookFailedCount,
     creatorPayoutReviewRecordCount,
     creatorPayoutReviewNoteCount,
     creatorPayoutBatchCount,
@@ -212,6 +241,19 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCountWhereEq(CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE, "status", "foundation")),
     safeRead(() => readTableCount(CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_ACCOUNTS_TABLE)),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_ACCOUNTS_TABLE, "provider_environment", "test")),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_ACCOUNTS_TABLE, "onboarding_status", "ready_for_payouts")),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_ACCOUNTS_TABLE, "onboarding_status", "action_required")),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_ACCOUNTS_TABLE, "payouts_enabled", true)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_ONBOARDING_SESSIONS_TABLE)),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_ONBOARDING_SESSIONS_TABLE, "status", "link_created")),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_ELIGIBILITY_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_ELIGIBILITY_RECORDS_TABLE, "provider_ready", true)),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_ELIGIBILITY_RECORDS_TABLE, "eligible_for_payouts", true)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_PROVIDER_WEBHOOK_EVENTS_TABLE)),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_PROVIDER_WEBHOOK_EVENTS_TABLE, "status", "processed")),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_PROVIDER_WEBHOOK_EVENTS_TABLE, "status", "ignored")),
+    safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_PROVIDER_WEBHOOK_EVENTS_TABLE, "status", "failed")),
     safeRead(() => readTableCount(CREATOR_PAYOUT_REVIEW_RECORDS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_REVIEW_NOTES_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_BATCHES_TABLE)),
@@ -271,6 +313,19 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorRevenueShareLedgerFoundationCount,
     creatorPayoutLedgerEntryCount,
     creatorPayoutAccountCount,
+    creatorPayoutAccountTestModeCount,
+    creatorPayoutAccountReadyLaterCount,
+    creatorPayoutAccountActionRequiredCount,
+    creatorPayoutAccountPayoutsEnabledCount,
+    creatorPayoutOnboardingSessionCount,
+    creatorPayoutOnboardingLinkCreatedCount,
+    creatorPayoutEligibilityRecordCount,
+    creatorPayoutEligibilityProviderReadyCount,
+    creatorPayoutEligibilityEligibleCount,
+    creatorPayoutProviderWebhookEventCount,
+    creatorPayoutProviderWebhookProcessedCount,
+    creatorPayoutProviderWebhookIgnoredCount,
+    creatorPayoutProviderWebhookFailedCount,
     creatorPayoutReviewRecordCount,
     creatorPayoutReviewNoteCount,
     creatorPayoutBatchCount,
