@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Creator-facing revenue share dashboard planning/spec. Planning/spec only: do not show fake earnings, payable balances, ad revenue, sponsor revenue, tips, paid-content revenue, or payout status until real source money imports exist, creator-read RLS is scoped, fraud/hold review states are backed, and no-payable copy is proved.
+Creator-facing Connect Stripe setup button implementation only if the separate exact implementation prompt accepts the recorded setup-button spec. If not explicitly scoped, continue to provider billing import planning/spec. Any setup button lane must still have no Withdraw, no Cash Out, no payout approval/release, no transfers, no payouts, no checkout, no KYC/tax UI, no fake balance, and no live money movement.
 
 Admin Usage Provider Imports V1D3/V1D4 are pushed and proofed. The server-side `provider-usage-import` Supabase Edge Function is deployed, migration `202605070012_provider_usage_import_idempotency.sql` is applied, Admin Usage reads provider import status rows, missing auth returns `401`, and owner/operator proof completed Cloudflare R2, Hetzner Object Storage, and Hetzner Server import paths with the existing signed-in device session token in memory only. Hetzner Object Storage imports only S3-compatible bucket inventory metadata (`s3_inventory_storage_bytes` and `s3_inventory_object_count`) through server-side secrets, not traffic, billing, overage, invoice, revenue, payout, or storage-billing truth. No mobile provider API calls, provider secrets in repo, fake bandwidth, fake bills, overages, invoices, revenue, payouts, sponsor money, or Admin import buttons were added.
 
@@ -29,6 +29,8 @@ Creator Revenue Share Ledger Foundation and Fraud Hold Enforcement Foundation ar
 
 Real Source Revenue Import Planning/Spec is recorded, with no imports or provider calls implemented. Future revenue imports must be provider-backed and idempotent before they can feed creator revenue share: AppLovin/ad revenue import later after provider reports exist; Stripe sponsor payment import later after sponsor checkout test-mode proof and signed payment events; tips and paid-content import later only after those product flows exist; network billing import later only for platform finance/reconciliation, not creator earnings unless product explicitly defines it. Every import must record provider event/import ids, source period, gross/net/fee fields, reconciliation status, immutable audit rows, and duplicate-protection proof before any creator ledger entry can leave `source_money_required` / `not_payable`. Current state remains no real source money, no fake revenue, no creator earnings, no payout ledger writes from revenue-share rows, no payable balances, and no live money movement.
 
+Creator-Facing Revenue Share Dashboard Planning/Spec is recorded, with no creator dashboard implementation. A future Channel Studio revenue dashboard may only read creator-owned revenue share rows after real source money imports exist and creator-read RLS is scoped. Required future sections are source connection status, imported source-money history, revenue-share ledger rows, fraud/hold/review state, payout readiness, and help/rules. Required empty states are revenue not active yet, source not connected, no imported source money, under review, held, not payable, payable later, and paid later. It must never show fake earnings, fake payable balances, ad revenue without AppLovin/provider import, sponsor revenue without Stripe/sponsor payment import, tips/paid content without those product flows, raw provider payloads, Withdraw/Cash Out, or payout release.
+
 Fraud Runtime Hook Planning/Spec is recorded, with no runtime enforcement implemented. Future enforcement hooks must be built in this order: payout pause gate first because payout execution is not active; monetization disable gate second; sponsor deal restriction third; network billing hold fourth; upload restriction and live restriction last because they affect core creator/live surfaces. Every future hook requires a linked `platform_fraud_holds` row, `fraud_action_records` action, immutable `platform_admin_audit_logs` row, admin reason, review status, reversible state, appeal/review path, and affected-surface bypass proof. Current app behavior remains unchanged: no payouts are paused, no monetization is disabled, no uploads are restricted, no live access is restricted, no sponsor deals are restricted, no invoices are held, no account restrictions are active, and no fake risk score exists.
 
 Immutable Admin Audit Log Foundation is pushed and applied. Migration `supabase/migrations/202605080006_immutable_admin_audit_log_foundation.sql` adds append-only `platform_admin_audit_logs`, generated database types are refreshed, `_lib/platformAudit.ts` reads counts/latest rows only, and `/admin` Audit is read-only/foundation with latest immutable rows plus the existing derived audit summary. Proof rows are foundation-only and record finance, network billing, sponsor checkout, fraud enforcement, and audit-foundation readiness only. Audit rows must not contain secrets, raw passwords, provider tokens, card data, or bank data. No audit row edit/delete/clear UI exists. Dangerous admin actions remain disabled: no payout approval/release, invoice send/charge, sponsor checkout/approval, fraud enforcement, account restriction, upload/live restriction, monetization disable, or admin role write is active. Future dangerous finance/fraud/admin writes must write immutable audit rows.
@@ -51,15 +53,14 @@ Provider Transfer Records Sync Foundation is pushed and applied. Migration `supa
 
 The next finance/admin lanes are:
 
-1. Creator-facing revenue share dashboard only after real source money exists.
-2. Creator-facing Connect Stripe setup button implementation only after a separate exact implementation prompt accepts the recorded setup-button spec; still no Withdraw/Cash Out/payout release.
-3. Test-mode payout transfer creation only after provider/fraud/KYC/tax/audit proof.
-4. Production payout release only after legal/accounting/provider approval.
-5. Provider billing import planning and usage/reconciliation proof, still no send/charge.
-6. Sponsor checkout test-mode only after review/disclosure/fraud/audit proof and explicit product approval, still no live checkout.
-7. Brand payment through Stripe only after explicit product approval; creator payout release only after provider payout proof and hold/review requirements.
-8. Sponsor reporting/imports later and sponsor enforcement/fraud integration later.
-9. Fraud review queue, still no enforcement.
+1. Creator-facing Connect Stripe setup button implementation only after a separate exact implementation prompt accepts the recorded setup-button spec; still no Withdraw/Cash Out/payout release.
+2. Test-mode payout transfer creation only after provider/fraud/KYC/tax/audit proof.
+3. Production payout release only after legal/accounting/provider approval.
+4. Provider billing import planning and usage/reconciliation proof, still no send/charge.
+5. Sponsor checkout test-mode only after review/disclosure/fraud/audit proof and explicit product approval, still no live checkout.
+6. Brand payment through Stripe only after explicit product approval; creator payout release only after provider payout proof and hold/review requirements.
+7. Sponsor reporting/imports later and sponsor enforcement/fraud integration later.
+8. Fraud review queue, still no enforcement.
 
 The store/external readiness audit remains a valid launch-readiness lane, but payout work must stay non-production and non-transfer until backed write permissions, dangerous-action confirmation, reason capture, RLS, fraud review, KYC/tax, provider proof, immutable audit proof, and explicit product approval are all designed and proved.
 
@@ -164,7 +165,8 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - Creator-facing Connect Stripe Setup Button Planning/Spec is recorded; future implementation needs a separate exact implementation prompt and must stay no Withdraw/Cash Out/payout release/transfer/payout/checkout/fake balance/live money
    - Fraud Runtime Hook Planning/Spec is recorded; no runtime enforcement hook is connected, and future hooks require fraud hold/action records, immutable audit, admin reason, reversible state, appeal/review path, and affected-surface proof
    - Real Source Revenue Import Planning/Spec is recorded; no provider import, fake revenue, creator earnings, payable balance, or payout ledger write from revenue-share rows exists
-   - next recommended finance/admin lanes are creator-facing revenue share dashboard only after real source money exists, test-mode transfer creation foundation only after fraud/KYC/tax/admin review/audit requirements are proved, provider billing import planning and usage/reconciliation proof still no send/charge, sponsor checkout test-mode only after review/disclosure/fraud/audit proof, sponsor reporting/imports later, and Fraud review queue still no enforcement
+   - Creator-Facing Revenue Share Dashboard Planning/Spec is recorded; no creator revenue dashboard implementation exists and no fake earnings/payable balances may be shown
+   - next recommended finance/admin lanes are creator-facing Connect Stripe setup button implementation only under a separate exact prompt, test-mode transfer creation foundation only after fraud/KYC/tax/admin review/audit requirements are proved, provider billing import planning and usage/reconciliation proof still no send/charge, sponsor checkout test-mode only after review/disclosure/fraud/audit proof, sponsor reporting/imports later, and Fraud review queue still no enforcement
    - add provider billing imports, Stripe Connect live integration, payout provider production writes, live payout actions, live network billing actions, sponsor checkout, or live fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
 
