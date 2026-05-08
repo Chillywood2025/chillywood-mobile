@@ -265,7 +265,14 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   networkInvoiceLineItemCount: null,
   networkOverageEventCount: null,
   networkBillingAuditLogCount: null,
+  sponsorBrandRecordCount: null,
   sponsorDealRecordCount: null,
+  sponsorCreativeRecordCount: null,
+  sponsorPlacementRecordCount: null,
+  sponsorDisclosureRecordCount: null,
+  sponsorReviewLogCount: null,
+  sponsorPaymentRecordCount: null,
+  sponsorPayoutSplitRecordCount: null,
   platformFraudHoldCount: null,
   generatedAt: new Date(0).toISOString(),
 };
@@ -1171,9 +1178,9 @@ export default function AdminStudioScreen() {
         : `${adminFinanceReadModel.networkBillingAccountCount} account / ${adminFinanceReadModel.networkPlanRecordCount ?? 0} plan foundation`;
     const sponsorLedgerValue = adminFinanceReadModel.loading
       ? "Loading"
-      : adminFinanceReadModel.sponsorDealRecordCount === null
+      : adminFinanceReadModel.sponsorBrandRecordCount === null || adminFinanceReadModel.sponsorDealRecordCount === null
         ? "Not active yet"
-        : `${adminFinanceReadModel.sponsorDealRecordCount} sponsor deal record${adminFinanceReadModel.sponsorDealRecordCount === 1 ? "" : "s"}`;
+        : `${adminFinanceReadModel.sponsorBrandRecordCount} brand${adminFinanceReadModel.sponsorBrandRecordCount === 1 ? "" : "s"} / ${adminFinanceReadModel.sponsorDealRecordCount} deal${adminFinanceReadModel.sponsorDealRecordCount === 1 ? "" : "s"}`;
     const fraudHoldValue = adminFinanceReadModel.loading
       ? "Loading"
       : adminFinanceReadModel.platformFraudHoldCount === null
@@ -1283,8 +1290,8 @@ export default function AdminStudioScreen() {
       {
         label: "Sponsors",
         value: sponsorLedgerValue,
-        body: "Sponsor tools are not active yet. Sponsor records do not create checkout or payouts.",
-        tone: adminFinanceReadModel.sponsorDealRecordCount === null ? "unavailable" : "default",
+        body: "Sponsor tools are not active yet. Sponsor records do not create checkout, payment links, approvals, or payouts.",
+        tone: adminFinanceReadModel.sponsorBrandRecordCount === null || adminFinanceReadModel.sponsorDealRecordCount === null ? "unavailable" : "default",
         destination: "sponsors",
       },
       {
@@ -1302,6 +1309,7 @@ export default function AdminStudioScreen() {
     adminFinanceReadModel.networkBillingAccountCount,
     adminFinanceReadModel.networkPlanRecordCount,
     adminFinanceReadModel.platformFraudHoldCount,
+    adminFinanceReadModel.sponsorBrandRecordCount,
     adminFinanceReadModel.sponsorDealRecordCount,
     adminV1ReadModel.activeLiveRoomCount,
     adminV1ReadModel.activeWatchPartyCount,
@@ -3770,9 +3778,11 @@ export default function AdminStudioScreen() {
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>SPONSOR DEALS</Text>
-              <Text style={styles.configTitle}>Sponsor Deals</Text>
-              <Text style={styles.configBody}>Sponsor tools are not active yet.</Text>
+              <Text style={styles.configKicker}>SPONSORS</Text>
+              <Text style={styles.configTitle}>Sponsor Checkout Foundation</Text>
+              <Text style={styles.configBody}>
+                Sponsor tools are not active yet. Foundation rows are proof-only. No sponsor checkout exists. No brand can pay yet. No creator payout split can execute.
+              </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
@@ -3781,7 +3791,23 @@ export default function AdminStudioScreen() {
           <View style={styles.configList}>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Sponsor deal records</Text>
+                <Text style={styles.configListTitle}>Sponsor Brands</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorBrandRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation brand",
+                    "foundation brands",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Brand/customer records only. No card, bank, checkout, payment-method, or provider-secret data is stored.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Sponsor Deals</Text>
                 <Text style={styles.configListBody}>
                   {formatAdminFinanceCount(
                     adminFinanceReadModel.sponsorDealRecordCount,
@@ -3791,25 +3817,101 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  No sponsor checkout, sponsor upload, approval action, payout split execution, or live sponsor money is active.
+                  Planned/foundation deals only. No sponsor approval action, checkout URL, payment link, paid status, or live sponsor money is active.
                 </Text>
               </View>
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Future workflow</Text>
-                <Text style={styles.configListBody}>Creator submits sponsor/deal</Text>
-                <Text style={styles.configListBody}>Brand pays Chi'llywood</Text>
-                <Text style={styles.configListBody}>Chi'llywood approves/runs placement</Text>
-                <Text style={styles.configListBody}>Chi'llywood keeps platform cut</Text>
-                <Text style={styles.configListBody}>Creator is paid after hold/review</Text>
+                <Text style={styles.configListTitle}>Creatives</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorCreativeRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation creative",
+                    "foundation creatives",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Metadata rows only. No sponsor asset upload or storage path is connected.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Revenue share truth</Text>
+                <Text style={styles.configListTitle}>Placements</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorPlacementRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation placement",
+                    "foundation placements",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Placement planning only. No ads system, CTV, native feed, or public rendering is connected.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Disclosures</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorDisclosureRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation disclosure",
+                    "foundation disclosures",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Paid partnership disclosure required before this sponsor deal can go live.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Review Logs</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorReviewLogCount,
+                    adminFinanceReadModel.loading,
+                    "foundation review log",
+                    "foundation review logs",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Audit trail foundation only. Review notes do not approve, reject, activate, or run sponsors.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payment Records</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorPaymentRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation payment record",
+                    "foundation payment records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>No Stripe Checkout, payment link, provider API call, card data, paid status, or receivable is active.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout Splits</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.sponsorPayoutSplitRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation split",
+                    "foundation splits",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Split rows are calculation foundation only. No payable creator balance or payout execution can happen here.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Future sponsor model</Text>
+                <Text style={styles.configListBody}>Brand pays Chi'llywood first.</Text>
                 <Text style={styles.configListBody}>Creator-sold sponsor slots: creator 80% net / Chi'llywood 20% net</Text>
                 <Text style={styles.configListBody}>Platform-served creator-page ads: creator 70% net / Chi'llywood 30% net</Text>
+                <Text style={styles.configListBody}>Platform review, disclosure review, safe product review, scam/fraud review, payout hold/review, and audit trail are required later.</Text>
               </View>
             </View>
           </View>

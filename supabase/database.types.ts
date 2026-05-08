@@ -2269,50 +2269,401 @@ export type Database = {
         }
         Relationships: []
       }
+      sponsor_brand_records: {
+        Row: {
+          contact_email: string | null
+          created_at: string
+          display_name: string
+          external_customer_reference: string | null
+          id: string
+          metadata: Json
+          status: string
+          updated_at: string
+          website_url: string | null
+        }
+        Insert: {
+          contact_email?: string | null
+          created_at?: string
+          display_name: string
+          external_customer_reference?: string | null
+          id?: string
+          metadata?: Json
+          status?: string
+          updated_at?: string
+          website_url?: string | null
+        }
+        Update: {
+          contact_email?: string | null
+          created_at?: string
+          display_name?: string
+          external_customer_reference?: string | null
+          id?: string
+          metadata?: Json
+          status?: string
+          updated_at?: string
+          website_url?: string | null
+        }
+        Relationships: []
+      }
+      sponsor_creative_records: {
+        Row: {
+          asset_url: string | null
+          created_at: string
+          creative_type: string
+          destination_url: string | null
+          id: string
+          metadata: Json
+          sponsor_deal_id: number
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_url?: string | null
+          created_at?: string
+          creative_type: string
+          destination_url?: string | null
+          id?: string
+          metadata?: Json
+          sponsor_deal_id: number
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_url?: string | null
+          created_at?: string
+          creative_type?: string
+          destination_url?: string | null
+          id?: string
+          metadata?: Json
+          sponsor_deal_id?: number
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_creative_records_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sponsor_deal_records: {
         Row: {
+          brand_id: string | null
           brand_name: string | null
+          channel_user_id: string | null
           created_at: string
+          creator_share_bps: number
           creator_user_id: string | null
           currency: string
           deal_title: string | null
           deal_type: string
           disclosure_required: boolean
+          gross_amount_cents: number
           gross_amount_minor: number | null
           id: number
           metadata: Json
+          platform_share_bps: number
           status: string
           updated_at: string
         }
         Insert: {
+          brand_id?: string | null
           brand_name?: string | null
+          channel_user_id?: string | null
           created_at?: string
+          creator_share_bps?: number
           creator_user_id?: string | null
           currency?: string
           deal_title?: string | null
           deal_type?: string
           disclosure_required?: boolean
+          gross_amount_cents?: number
           gross_amount_minor?: number | null
           id?: number
           metadata?: Json
+          platform_share_bps?: number
           status?: string
           updated_at?: string
         }
         Update: {
+          brand_id?: string | null
           brand_name?: string | null
+          channel_user_id?: string | null
           created_at?: string
+          creator_share_bps?: number
           creator_user_id?: string | null
           currency?: string
           deal_title?: string | null
           deal_type?: string
           disclosure_required?: boolean
+          gross_amount_cents?: number
           gross_amount_minor?: number | null
           id?: number
           metadata?: Json
+          platform_share_bps?: number
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_deal_records_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_brand_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsor_disclosure_records: {
+        Row: {
+          created_at: string
+          disclosure_text: string
+          id: string
+          metadata: Json
+          sponsor_deal_id: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          disclosure_text: string
+          id?: string
+          metadata?: Json
+          sponsor_deal_id: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          disclosure_text?: string
+          id?: string
+          metadata?: Json
+          sponsor_deal_id?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_disclosure_records_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsor_payment_records: {
+        Row: {
+          created_at: string
+          creator_share_cents: number | null
+          currency: string
+          gross_amount_cents: number
+          id: string
+          metadata: Json
+          net_amount_cents: number | null
+          platform_fee_cents: number | null
+          provider: string | null
+          provider_reference: string | null
+          sponsor_deal_id: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_share_cents?: number | null
+          currency?: string
+          gross_amount_cents?: number
+          id?: string
+          metadata?: Json
+          net_amount_cents?: number | null
+          platform_fee_cents?: number | null
+          provider?: string | null
+          provider_reference?: string | null
+          sponsor_deal_id: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_share_cents?: number | null
+          currency?: string
+          gross_amount_cents?: number
+          id?: string
+          metadata?: Json
+          net_amount_cents?: number | null
+          platform_fee_cents?: number | null
+          provider?: string | null
+          provider_reference?: string | null
+          sponsor_deal_id?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_payment_records_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsor_payout_split_records: {
+        Row: {
+          created_at: string
+          creator_share_bps: number
+          creator_share_cents: number
+          creator_user_id: string | null
+          gross_amount_cents: number
+          id: string
+          metadata: Json
+          payment_record_id: string | null
+          platform_share_bps: number
+          platform_share_cents: number
+          sponsor_deal_id: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_share_bps?: number
+          creator_share_cents?: number
+          creator_user_id?: string | null
+          gross_amount_cents?: number
+          id?: string
+          metadata?: Json
+          payment_record_id?: string | null
+          platform_share_bps?: number
+          platform_share_cents?: number
+          sponsor_deal_id: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_share_bps?: number
+          creator_share_cents?: number
+          creator_user_id?: string | null
+          gross_amount_cents?: number
+          id?: string
+          metadata?: Json
+          payment_record_id?: string | null
+          platform_share_bps?: number
+          platform_share_cents?: number
+          sponsor_deal_id?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_payout_split_records_payment_record_id_fkey"
+            columns: ["payment_record_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_payment_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_payout_split_records_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsor_placement_records: {
+        Row: {
+          created_at: string
+          id: string
+          metadata: Json
+          placement_type: string
+          scheduled_end_at: string | null
+          scheduled_start_at: string | null
+          sponsor_deal_id: number
+          status: string
+          target_id: string | null
+          target_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          placement_type: string
+          scheduled_end_at?: string | null
+          scheduled_start_at?: string | null
+          sponsor_deal_id: number
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          placement_type?: string
+          scheduled_end_at?: string | null
+          scheduled_start_at?: string | null
+          sponsor_deal_id?: number
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_placement_records_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsor_review_logs: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          reason: string | null
+          review_action: string
+          sponsor_deal_id: number
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          review_action: string
+          sponsor_deal_id: number
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          review_action?: string
+          sponsor_deal_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_review_logs_sponsor_deal_id_fkey"
+            columns: ["sponsor_deal_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       titles: {
         Row: {
