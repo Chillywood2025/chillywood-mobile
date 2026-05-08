@@ -251,7 +251,13 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   providerUsageImportsCount: null,
   providerUsageDailyCount: null,
   providerBillingSnapshotsCount: null,
+  providerBillingSnapshotImportedCount: null,
   providerUsageReconciliationCount: null,
+  providerUsageReconciliationPendingCount: null,
+  providerUsageReconciliationMatchedCount: null,
+  providerUsageReconciliationVarianceCount: null,
+  latestProviderUsageReconciliationStatus: null,
+  latestProviderUsageReconciliationAt: null,
   providerImportStatuses: [],
   providerImportedStorageBytes: null,
   providerImportedRequestCount: null,
@@ -3432,12 +3438,23 @@ export default function AdminStudioScreen() {
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Reconciliation</Text>
-                <Text style={styles.configListBody}>Provider reconciliation is not active yet.</Text>
+                <Text style={styles.configListBody}>
+                  Provider billing reconciliation is backend-only foundation. It compares already-backed provider usage rows with internal summaries; it does not import provider bills.
+                </Text>
                 {adminV1ReadModel.providerUsageReconciliationCount !== null ? (
                   <Text style={styles.configListBody}>
-                    {`${adminV1ReadModel.providerUsageReconciliationCount} reconciliation foundation row${adminV1ReadModel.providerUsageReconciliationCount === 1 ? "" : "s"} readable. No overage or customer billing logic is active.`}
+                    {`${adminV1ReadModel.providerUsageReconciliationCount} reconciliation foundation row${adminV1ReadModel.providerUsageReconciliationCount === 1 ? "" : "s"} readable. Pending: ${adminV1ReadModel.providerUsageReconciliationPendingCount ?? 0}; matched: ${adminV1ReadModel.providerUsageReconciliationMatchedCount ?? 0}; variance: ${adminV1ReadModel.providerUsageReconciliationVarianceCount ?? 0}.`}
                   </Text>
                 ) : null}
+                {adminV1ReadModel.latestProviderUsageReconciliationStatus ? (
+                  <Text style={styles.configListBody}>
+                    {`Latest reconciliation: ${adminV1ReadModel.latestProviderUsageReconciliationStatus} · ${formatProviderImportDate(adminV1ReadModel.latestProviderUsageReconciliationAt)}`}
+                  </Text>
+                ) : null}
+                <Text style={styles.configListBody}>
+                  Imported provider billing snapshots: {adminV1ReadModel.providerBillingSnapshotImportedCount ?? 0}. No provider billing total is customer billing truth.
+                </Text>
+                <Text style={styles.configListBody}>No invoice send, customer charge, payment link, overage billing, or fake provider bill is active.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -4242,8 +4259,14 @@ export default function AdminStudioScreen() {
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Provider Reconciliation</Text>
-                <Text style={styles.configListBody}>Provider reconciliation is not active yet.</Text>
+                <Text style={styles.configListBody}>Provider reconciliation is backend-only foundation and may read already-imported provider usage rows.</Text>
+                <Text style={styles.configListBody}>
+                  {adminV1ReadModel.providerUsageReconciliationCount === null
+                    ? "Provider reconciliation rows are not connected yet."
+                    : `${adminV1ReadModel.providerUsageReconciliationCount} reconciliation row${adminV1ReadModel.providerUsageReconciliationCount === 1 ? "" : "s"} readable. Pending: ${adminV1ReadModel.providerUsageReconciliationPendingCount ?? 0}; matched: ${adminV1ReadModel.providerUsageReconciliationMatchedCount ?? 0}; variance: ${adminV1ReadModel.providerUsageReconciliationVarianceCount ?? 0}.`}
+                </Text>
                 <Text style={styles.configListBody}>No provider billing totals are shown as customer billing truth.</Text>
+                <Text style={styles.configListBody}>No invoices can be sent, no customers can be charged, and no payment links exist.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>

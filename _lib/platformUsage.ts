@@ -72,7 +72,13 @@ export type AdminUsageReadModel = {
   providerUsageImportsCount: number | null;
   providerUsageDailyCount: number | null;
   providerBillingSnapshotsCount: number | null;
+  providerBillingSnapshotImportedCount: number | null;
   providerUsageReconciliationCount: number | null;
+  providerUsageReconciliationPendingCount: number | null;
+  providerUsageReconciliationMatchedCount: number | null;
+  providerUsageReconciliationVarianceCount: number | null;
+  latestProviderUsageReconciliationStatus: string | null;
+  latestProviderUsageReconciliationAt: string | null;
   providerImportStatuses: AdminProviderUsageImportStatus[];
   providerImportedStorageBytes: number | null;
   providerImportedRequestCount: number | null;
@@ -103,6 +109,7 @@ type ProviderUsageImportReadRow = Pick<
   Tables<"provider_usage_imports">,
   "status" | "created_at" | "records_imported" | "error_message"
 >;
+type ProviderUsageReconciliationReadRow = Pick<Tables<"provider_usage_reconciliation">, "status" | "updated_at" | "created_at">;
 
 const ACTIVE_PREMIUM_ENTITLEMENT_STATUSES = ["active", "trialing", "grace_period"] as const;
 const MAX_METADATA_ROWS = 1000;
@@ -196,6 +203,15 @@ const readTableCount = async (table: string) => (
     adminUsageFoundationClient
       .from(table)
       .select("id", { count: "exact", head: true }),
+  )
+);
+
+const readTableCountWhereEq = async (table: string, column: string, value: string | number | boolean) => (
+  readCount(
+    adminUsageFoundationClient
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .eq(column, value),
   )
 );
 
@@ -328,6 +344,40 @@ async function readUsageFoundationCounts() {
     providerUsageDailyCount,
     providerBillingSnapshotsCount,
     providerUsageReconciliationCount,
+  };
+}
+
+async function readProviderBillingReconciliationSummary() {
+  const [
+    providerBillingSnapshotImportedCount,
+    providerUsageReconciliationPendingCount,
+    providerUsageReconciliationMatchedCount,
+    providerUsageReconciliationVarianceCount,
+    latestReconciliationResult,
+  ] = await Promise.all([
+    safeRead(() => readTableCountWhereEq(PROVIDER_BILLING_SNAPSHOTS_TABLE, "status", "imported")),
+    safeRead(() => readTableCountWhereEq(PROVIDER_USAGE_RECONCILIATION_TABLE, "status", "pending")),
+    safeRead(() => readTableCountWhereEq(PROVIDER_USAGE_RECONCILIATION_TABLE, "status", "matched")),
+    safeRead(() => readTableCountWhereEq(PROVIDER_USAGE_RECONCILIATION_TABLE, "status", "variance")),
+    safeRead(async () => {
+      const { data, error } = await adminUsageFoundationClient
+        .from(PROVIDER_USAGE_RECONCILIATION_TABLE)
+        .select("status,updated_at,created_at")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error && error.code !== "PGRST116") throw error;
+      return (data ?? null) as ProviderUsageReconciliationReadRow | null;
+    }),
+  ]);
+
+  return {
+    providerBillingSnapshotImportedCount,
+    providerUsageReconciliationPendingCount,
+    providerUsageReconciliationMatchedCount,
+    providerUsageReconciliationVarianceCount,
+    latestProviderUsageReconciliationStatus: latestReconciliationResult?.status ?? null,
+    latestProviderUsageReconciliationAt: latestReconciliationResult?.updated_at ?? latestReconciliationResult?.created_at ?? null,
   };
 }
 
@@ -501,6 +551,7 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     bandwidthMetering,
     usageFoundationCounts,
     providerImportStatuses,
+    providerBillingReconciliationSummary,
   ] = await Promise.all([
     safeRead(() =>
       readCount(
@@ -542,6 +593,7 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     safeRead(() => readBandwidthMeteringEvents(startOfToday)),
     safeRead(readUsageFoundationCounts),
     safeRead(readProviderUsageImportStatuses),
+    safeRead(readProviderBillingReconciliationSummary),
   ]);
 
   const internalUsageCounts = [
@@ -583,7 +635,13 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
     providerUsageImportsCount: usageFoundationCounts?.providerUsageImportsCount ?? null,
     providerUsageDailyCount: usageFoundationCounts?.providerUsageDailyCount ?? null,
     providerBillingSnapshotsCount: usageFoundationCounts?.providerBillingSnapshotsCount ?? null,
+    providerBillingSnapshotImportedCount: providerBillingReconciliationSummary?.providerBillingSnapshotImportedCount ?? null,
     providerUsageReconciliationCount: usageFoundationCounts?.providerUsageReconciliationCount ?? null,
+    providerUsageReconciliationPendingCount: providerBillingReconciliationSummary?.providerUsageReconciliationPendingCount ?? null,
+    providerUsageReconciliationMatchedCount: providerBillingReconciliationSummary?.providerUsageReconciliationMatchedCount ?? null,
+    providerUsageReconciliationVarianceCount: providerBillingReconciliationSummary?.providerUsageReconciliationVarianceCount ?? null,
+    latestProviderUsageReconciliationStatus: providerBillingReconciliationSummary?.latestProviderUsageReconciliationStatus ?? null,
+    latestProviderUsageReconciliationAt: providerBillingReconciliationSummary?.latestProviderUsageReconciliationAt ?? null,
     providerImportStatuses: providerStatuses,
     providerImportedStorageBytes: providerImportedStorageBytes > 0 ? providerImportedStorageBytes : null,
     providerImportedRequestCount: providerImportedRequestCount > 0 ? providerImportedRequestCount : null,

@@ -7,6 +7,9 @@ verify_jwt = false
 [functions.provider-usage-import]
 verify_jwt = false
 
+[functions.provider-billing-reconciliation]
+verify_jwt = false
+
 [functions.stripe-connect-account]
 verify_jwt = false
 
