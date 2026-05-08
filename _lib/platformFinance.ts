@@ -6,10 +6,20 @@ export const NETWORK_BILLING_ACCOUNTS_TABLE = "network_billing_accounts";
 export const NETWORK_INVOICE_RECORDS_TABLE = "network_invoice_records";
 export const SPONSOR_DEAL_RECORDS_TABLE = "sponsor_deal_records";
 export const PLATFORM_FRAUD_HOLDS_TABLE = "platform_fraud_holds";
+export const CREATOR_PAYOUT_ACCOUNTS_TABLE = "creator_payout_accounts";
+export const CREATOR_PAYOUT_BATCHES_TABLE = "creator_payout_batches";
+export const CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE = "creator_payout_provider_transfers";
+export const CREATOR_PAYOUT_HOLDS_TABLE = "creator_payout_holds";
+export const CREATOR_PAYOUT_AUDIT_LOG_TABLE = "creator_payout_audit_log";
 
 export type AdminFinanceReadModel = {
   financeLedgerEventCount: number | null;
   creatorPayoutLedgerEntryCount: number | null;
+  creatorPayoutAccountCount: number | null;
+  creatorPayoutBatchCount: number | null;
+  creatorPayoutProviderTransferCount: number | null;
+  creatorPayoutHoldCount: number | null;
+  creatorPayoutAuditLogCount: number | null;
   networkBillingAccountCount: number | null;
   networkInvoiceRecordCount: number | null;
   sponsorDealRecordCount: number | null;
@@ -56,6 +66,11 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
   const [
     financeLedgerEventCount,
     creatorPayoutLedgerEntryCount,
+    creatorPayoutAccountCount,
+    creatorPayoutBatchCount,
+    creatorPayoutProviderTransferCount,
+    creatorPayoutHoldCount,
+    creatorPayoutAuditLogCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
     sponsorDealRecordCount,
@@ -63,6 +78,11 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
   ] = await Promise.all([
     safeRead(() => readTableCount(PLATFORM_FINANCE_LEDGER_EVENTS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_ACCOUNTS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_BATCHES_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_HOLDS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_AUDIT_LOG_TABLE)),
     safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
     safeRead(() => readTableCount(NETWORK_INVOICE_RECORDS_TABLE)),
     safeRead(() => readTableCount(SPONSOR_DEAL_RECORDS_TABLE)),
@@ -72,6 +92,11 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
   return {
     financeLedgerEventCount,
     creatorPayoutLedgerEntryCount,
+    creatorPayoutAccountCount,
+    creatorPayoutBatchCount,
+    creatorPayoutProviderTransferCount,
+    creatorPayoutHoldCount,
+    creatorPayoutAuditLogCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
     sponsorDealRecordCount,

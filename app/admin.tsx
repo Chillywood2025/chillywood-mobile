@@ -252,6 +252,11 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   loading: false,
   financeLedgerEventCount: null,
   creatorPayoutLedgerEntryCount: null,
+  creatorPayoutAccountCount: null,
+  creatorPayoutBatchCount: null,
+  creatorPayoutProviderTransferCount: null,
+  creatorPayoutHoldCount: null,
+  creatorPayoutAuditLogCount: null,
   networkBillingAccountCount: null,
   networkInvoiceRecordCount: null,
   sponsorDealRecordCount: null,
@@ -3496,7 +3501,9 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>PAYOUTS</Text>
               <Text style={styles.configTitle}>Payouts</Text>
-              <Text style={styles.configBody}>Creator payouts are not active yet. Ledger foundation rows do not move money.</Text>
+              <Text style={styles.configBody}>
+                Creator payouts are not active yet. Ledger and provider foundation rows do not move money.
+              </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Not active yet</Text>
@@ -3515,7 +3522,87 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  No withdrawal button, payout approval, payout provider, KYC flow, or creator-facing balance is active.
+                  No withdrawal button, payout approval, payout provider integration, KYC flow, or creator-facing balance is active.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout provider accounts</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutAccountCount,
+                    adminFinanceReadModel.loading,
+                    "foundation account",
+                    "foundation accounts",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Foundation only. No Stripe onboarding, provider sync, or creator-facing payout setup is active.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout batches</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutBatchCount,
+                    adminFinanceReadModel.loading,
+                    "foundation batch",
+                    "foundation batches",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Draft batch foundation only. No approval, processing, transfer, or payout execution is active.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Provider transfer records</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutProviderTransferCount,
+                    adminFinanceReadModel.loading,
+                    "foundation transfer",
+                    "foundation transfers",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Read-only records only. No provider API call or live transfer action is connected.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout holds</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutHoldCount,
+                    adminFinanceReadModel.loading,
+                    "foundation hold",
+                    "foundation holds",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Hold records are foundation only and do not pause payouts, uploads, live access, or monetization.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout audit log</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutAuditLogCount,
+                    adminFinanceReadModel.loading,
+                    "foundation audit row",
+                    "foundation audit rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Immutable audit foundation only. Dangerous payout writes still require a later dedicated lane.
                 </Text>
               </View>
             </View>
