@@ -9,6 +9,8 @@ Finance Foundation Remote Proof is also complete. Migration history is aligned t
 
 Finance F2B creator payout provider schema foundation is pushed and applied. Migration `supabase/migrations/202605080001_creator_payout_provider_foundation.sql` and generated database types now define future `creator_payout_accounts`, `creator_payout_batches`, `creator_payout_provider_transfers`, `creator_payout_holds`, and `creator_payout_audit_log`. This is schema-only for future Stripe Connect or equivalent payout-provider work: no runtime UI changed, no creator self-read exists, no moderator access exists, no Stripe SDK/keys/provider calls were added, and no payout/withdrawal/live money action is active.
 
+Finance F2C payout-provider schema/RLS proof is complete. Remote migration history includes `202605080001`, linked schema lint is clean, generated types include the payout-provider tables, and anonymous insert into `creator_payout_accounts` is denied. Non-empty read-denial and owner/operator visibility proof are still reserved for the safe proof-row lane.
+
 The next lane is an audit/spec pass only:
 
 - audit App Store / Google Play readiness without changing runtime code
@@ -90,6 +92,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 4. Finance proof and later writers:
    - finance foundation migration `supabase/migrations/202605070005_platform_finance_ledger_foundation.sql` is now applied remotely and generated database types include the finance tables
    - Finance F2B creator payout provider schema migration `supabase/migrations/202605080001_creator_payout_provider_foundation.sql` is applied remotely and generated database types include payout-provider foundation tables
+   - Finance F2C schema/RLS proof is complete for migration/type alignment and anonymous insert denial
    - Finance Foundation Remote Proof is complete for current read-only/foundation Admin behavior; broader non-empty row visibility and moderator fraud-row proof still require a later safe seed/test lane before operational reliance
    - add provider imports, Stripe Connect onboarding/integration, creator payout reads, payout provider writes, network billing actions, sponsor checkout, or fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
