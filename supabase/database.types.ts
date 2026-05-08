@@ -1796,6 +1796,72 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_admin_audit_logs: {
+        Row: {
+          action: string
+          action_category: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          id: string
+          ip_hash: string | null
+          metadata: Json
+          reason: string | null
+          request_id: string | null
+          severity: string
+          target_channel_user_id: string | null
+          target_id: string | null
+          target_type: string | null
+          target_user_id: string | null
+          user_agent_hash: string | null
+        }
+        Insert: {
+          action: string
+          action_category: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          metadata?: Json
+          reason?: string | null
+          request_id?: string | null
+          severity?: string
+          target_channel_user_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+          target_user_id?: string | null
+          user_agent_hash?: string | null
+        }
+        Update: {
+          action?: string
+          action_category?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          metadata?: Json
+          reason?: string | null
+          request_id?: string | null
+          severity?: string
+          target_channel_user_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+          target_user_id?: string | null
+          user_agent_hash?: string | null
+        }
+        Relationships: []
+      }
       platform_finance_ledger_events: {
         Row: {
           amount_minor: number

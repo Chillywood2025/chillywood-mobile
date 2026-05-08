@@ -73,6 +73,12 @@ import {
   readAdminFinanceReadModel,
   type AdminFinanceReadModel,
 } from "../_lib/platformFinance";
+import {
+  formatAdminAuditFoundationCount,
+  readAdminImmutableAuditReadModel,
+  type AdminImmutableAuditReadModel,
+  type PlatformAdminAuditLogRow,
+} from "../_lib/platformAudit";
 import { supabase } from "../_lib/supabase";
 import { moderateCreatorVideo, type CreatorVideoModerationStatus } from "../_lib/creatorVideos";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
@@ -200,6 +206,10 @@ type AdminFinanceReadModelWithLoading = AdminFinanceReadModel & {
   loading: boolean;
 };
 
+type AdminImmutableAuditReadModelWithLoading = AdminImmutableAuditReadModel & {
+  loading: boolean;
+};
+
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
 const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "home", label: "Home" },
@@ -280,6 +290,13 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   fraudReviewNoteCount: null,
   fraudAppealRecordCount: null,
   fraudAuditLogCount: null,
+  generatedAt: new Date(0).toISOString(),
+};
+const EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL: AdminImmutableAuditReadModelWithLoading = {
+  loading: false,
+  auditLogCount: null,
+  latestRows: [],
+  connected: false,
   generatedAt: new Date(0).toISOString(),
 };
 type PlannedKillSwitchRow = {
@@ -771,6 +788,24 @@ const formatAdminFinanceCount = (value: number | null, loading: boolean, singula
   return formatFinanceFoundationCount(value, singular, plural);
 };
 
+const formatImmutableAuditCount = (value: number | null, loading: boolean) => {
+  if (loading) return "Loading";
+  return formatAdminAuditFoundationCount(value);
+};
+
+const formatImmutableAuditActor = (entry: PlatformAdminAuditLogRow) => {
+  if (entry.actorEmail) return maskOperatorIdentity(entry.actorEmail);
+  if (entry.actorUserId) return `User ${formatCompactIdentifier(entry.actorUserId)}`;
+  if (entry.actorRole) return formatModerationToken(entry.actorRole);
+  return "Actor not captured";
+};
+
+const formatImmutableAuditTarget = (entry: PlatformAdminAuditLogRow) => {
+  if (!entry.targetType && !entry.targetId) return "Target not set";
+  const targetType = entry.targetType ? formatModerationToken(entry.targetType) : "Target";
+  return entry.targetId ? `${targetType} ${formatCompactIdentifier(entry.targetId)}` : targetType;
+};
+
 const getCreatorVideoModerationActionLabel = (status: CreatorVideoModerationStatus) => {
   if (status === "hidden") return "Hide From Public";
   if (status === "removed") return "Remove From Public";
@@ -860,6 +895,8 @@ export default function AdminStudioScreen() {
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
+  const [adminImmutableAuditReadModel, setAdminImmutableAuditReadModel] =
+    useState<AdminImmutableAuditReadModelWithLoading>(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
   const [form, setForm] = useState<EditorForm>({
     title: "",
     category: "",
@@ -923,6 +960,7 @@ export default function AdminStudioScreen() {
       setAdminOpsNotice(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
+      setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
       return;
     }
     void loadPlatformRoles();
@@ -944,12 +982,14 @@ export default function AdminStudioScreen() {
       setSafetyReportsLoading(false);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
+      setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
       return;
     }
     loadTitles();
     loadExperienceConfig();
     void loadAdminV1ReadModel();
     void loadAdminFinanceReadModel();
+    void loadAdminImmutableAuditReadModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessAdmin]);
 
@@ -1167,6 +1207,11 @@ export default function AdminStudioScreen() {
     const activeLiveValue = formatAdminV1Count(adminV1ReadModel.activeLiveRoomCount, adminV1ReadModel.loading);
     const activeWatchPartyValue = formatAdminV1Count(adminV1ReadModel.activeWatchPartyCount, adminV1ReadModel.loading);
     const uploadsTodayValue = formatAdminV1Count(adminV1ReadModel.uploadsTodayCount, adminV1ReadModel.loading);
+    const immutableAuditValue = adminImmutableAuditReadModel.loading
+      ? "Loading"
+      : adminImmutableAuditReadModel.connected
+        ? "Connected"
+        : "Not connected yet";
     const financeLedgerValue = adminFinanceReadModel.loading
       ? "Loading"
       : adminFinanceReadModel.financeLedgerEventCount === null
@@ -1217,6 +1262,15 @@ export default function AdminStudioScreen() {
         value: activeRoleLabels,
         body: "This surface requires backend platform-role membership. Local helper state never unlocks operator controls.",
         destination: "roles",
+      },
+      {
+        label: "Immutable Audit",
+        value: immutableAuditValue,
+        body: adminImmutableAuditReadModel.connected
+          ? "Immutable admin audit log foundation is connected. Audit rows are append-only and dangerous money/fraud actions remain inactive."
+          : "Immutable admin audit logs are not connected yet.",
+        tone: adminImmutableAuditReadModel.connected ? "default" : "unavailable",
+        destination: "audit",
       },
       {
         label: "App Config",
@@ -1318,6 +1372,8 @@ export default function AdminStudioScreen() {
     adminFinanceReadModel.platformFraudHoldCount,
     adminFinanceReadModel.sponsorBrandRecordCount,
     adminFinanceReadModel.sponsorDealRecordCount,
+    adminImmutableAuditReadModel.connected,
+    adminImmutableAuditReadModel.loading,
     adminV1ReadModel.activeLiveRoomCount,
     adminV1ReadModel.activeWatchPartyCount,
     adminV1ReadModel.loading,
@@ -1439,6 +1495,18 @@ export default function AdminStudioScreen() {
         tone: runtimeConfig.supabaseUrl && runtimeConfig.supabaseAnonKey ? "default" : "unavailable",
       },
       {
+        label: "Immutable Audit",
+        value: adminImmutableAuditReadModel.loading
+          ? "Loading"
+          : adminImmutableAuditReadModel.connected
+            ? "Connected"
+            : "Not connected yet",
+        body: adminImmutableAuditReadModel.connected
+          ? "Read-only append-only audit log foundation is readable from Admin."
+          : "Immutable admin audit logs are not connected yet.",
+        tone: adminImmutableAuditReadModel.connected ? "default" : "unavailable",
+      },
+      {
         label: "RevenueCat Public Setup",
         value: hasRevenueCatPublicKey ? "Ready" : "Not connected yet",
         body: "Public SDK-key presence only. RevenueCat dashboard/setup is not changed here.",
@@ -1463,6 +1531,8 @@ export default function AdminStudioScreen() {
       },
     ];
   }, [
+    adminImmutableAuditReadModel.connected,
+    adminImmutableAuditReadModel.loading,
     appConfigConnected,
     configLoading,
     liveKitConfigured,
@@ -1720,6 +1790,13 @@ export default function AdminStudioScreen() {
 
     const financeReadModel = await readAdminFinanceReadModel();
     setAdminFinanceReadModel({ ...financeReadModel, loading: false });
+  }, []);
+
+  const loadAdminImmutableAuditReadModel = useCallback(async () => {
+    setAdminImmutableAuditReadModel((current) => ({ ...current, loading: true }));
+
+    const immutableAuditReadModel = await readAdminImmutableAuditReadModel({ limit: 8 });
+    setAdminImmutableAuditReadModel({ ...immutableAuditReadModel, loading: false });
   }, []);
 
   const queueCreatorVideoModeration = useCallback((status: CreatorVideoModerationStatus) => {
@@ -2749,12 +2826,14 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>{operatorTab === "roles" ? "ROLES" : "AUDIT"}</Text>
               <Text style={styles.configTitle}>
-                {operatorTab === "roles" ? "Platform role visibility" : "Audit summary"}
+                {operatorTab === "roles" ? "Platform role visibility" : "Immutable admin audit log"}
               </Text>
               <Text style={styles.configBody}>
                 {operatorTab === "roles"
                   ? "Platform role records are backend operator truth. Channel ownership and audience roles are separate."
-                  : "Full immutable admin audit logs are not connected yet. This summary is limited to current role-record metadata and safety-report audit context."}
+                  : adminImmutableAuditReadModel.connected
+                    ? "Immutable admin audit log foundation is connected. The derived role/safety summary stays separate below."
+                    : "Immutable admin audit logs are not connected yet. The derived role/safety summary stays separate below where permitted."}
               </Text>
             </View>
           </View>
@@ -2868,21 +2947,91 @@ export default function AdminStudioScreen() {
             ) : null}
 
             {operatorTab === "audit" ? (
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Audit Visibility</Text>
-                <Text style={styles.configListBody}>
-                  Full immutable admin audit logs are not connected yet. Audit visibility is bounded to current role-record metadata and safety-report audit context.
-                </Text>
+            <>
+              <View style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>Immutable admin audit log foundation</Text>
+                  <Text style={styles.configListBody}>
+                    {adminImmutableAuditReadModel.connected
+                      ? "Immutable admin audit log foundation is connected."
+                      : "Immutable admin audit logs are not connected yet."}
+                  </Text>
+                  <Text style={styles.configListBody}>
+                    {formatImmutableAuditCount(
+                      adminImmutableAuditReadModel.auditLogCount,
+                      adminImmutableAuditReadModel.loading,
+                    )}
+                  </Text>
+                  <Text style={styles.configListBody}>Audit rows are append-only.</Text>
+                  <Text style={styles.configListBody}>Dangerous money/fraud actions are still not active.</Text>
+                </View>
+                <View style={[styles.badge, adminImmutableAuditReadModel.connected ? styles.badgeOn : styles.badgeOff]}>
+                  <Text style={styles.badgeText}>
+                    {adminImmutableAuditReadModel.connected ? "Connected" : "Not connected"}
+                  </Text>
+                </View>
               </View>
-            </View>
+
+              {adminImmutableAuditReadModel.loading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading immutable audit rows…</Text>
+                </View>
+              ) : adminImmutableAuditReadModel.connected && adminImmutableAuditReadModel.latestRows.length ? (
+                adminImmutableAuditReadModel.latestRows.map((entry) => (
+                  <View key={`immutable-audit-${entry.id}`} style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>{formatModerationToken(entry.action)}</Text>
+                      <Text style={styles.configListBody}>
+                        {entry.createdAt ? formatModerationTimestamp(entry.createdAt) : "Audit timestamp unavailable"}
+                      </Text>
+                      <Text style={styles.configListBody}>{`Category ${formatModerationToken(entry.actionCategory)}`}</Text>
+                      <Text style={styles.configListBody}>{`Actor ${formatImmutableAuditActor(entry)}`}</Text>
+                      <Text style={styles.configListBody}>{`Target ${formatImmutableAuditTarget(entry)}`}</Text>
+                      {entry.reason ? (
+                        <Text style={styles.configListBody}>{formatAuditDisplayText(entry.reason)}</Text>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.badgesRow}>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{formatModerationToken(entry.severity)}</Text>
+                      </View>
+                      {entry.foundationProof ? (
+                        <View style={[styles.badge, styles.badgeDraft]}>
+                          <Text style={styles.badgeText}>Proof-only</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                ))
+              ) : adminImmutableAuditReadModel.connected ? (
+                <View style={styles.configListRow}>
+                  <View style={styles.configListCopy}>
+                    <Text style={styles.configListTitle}>No immutable audit rows visible</Text>
+                    <Text style={styles.configListBody}>
+                      The immutable audit table is readable, but no rows are visible in the latest slice yet.
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>Derived audit summary</Text>
+                  <Text style={styles.configListBody}>
+                    This summary is separate from immutable audit logs. It is limited to current role-record metadata and safety-report audit context.
+                  </Text>
+                </View>
+              </View>
+            </>
             ) : null}
 
             {operatorTab === "audit" && (canManagePrivilegedWrites || canReviewSafetyReports) ? (
               adminAuditLogLoading ? (
                 <View style={styles.configLoadingRow}>
                   <ActivityIndicator color="#fff" />
-                  <Text style={styles.configLoadingText}>Loading recent admin audit visibility…</Text>
+                  <Text style={styles.configLoadingText}>Loading derived audit summary…</Text>
                 </View>
               ) : adminAuditLog.length ? (
 	                adminAuditLog.map((entry) => (
@@ -2914,7 +3063,7 @@ export default function AdminStudioScreen() {
               ) : (
                 <View style={styles.configListRow}>
                   <View style={styles.configListCopy}>
-                    <Text style={styles.configListTitle}>No recent audit visibility records</Text>
+                    <Text style={styles.configListTitle}>No recent derived audit visibility records</Text>
                     <Text style={styles.configListBody}>
                       Current bounded audit visibility is ready, but there are no recent role-record or safety-report audit entries in this slice yet.
                     </Text>
