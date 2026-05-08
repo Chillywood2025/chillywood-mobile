@@ -1,180 +1,186 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  authenticateRequest,
+  createAdminClient,
+  createAuthClient,
+  createStripeConnectOnboardingLink,
+  hasClientProviderAccountId,
+  insertOnboardingSession,
+  jsonResponse,
+  markOnboardingStarted,
+  notConfiguredPayload,
+  onboardingLinkExpiresAt,
+  optionsResponse,
+  parseJsonPayload,
+  readCreatorPayoutAccount,
+  readStripeTestSecret,
+  resolveRedirectUrls,
+  safeUrlOrigin,
+  safeWriteAuditLog,
+  sanitizeErrorMessage,
+  toText,
+  type AuthenticatedUser,
+  type StripeConnectOnboardingPayload,
+  type SupabaseClientLike,
+  writeAuditLog,
+} from "../_shared/stripe-connect.ts";
 
-type StripeConnectOnboardingSkeletonPayload = {
-  creator_user_id?: unknown;
-  creatorUserId?: unknown;
-  provider_account_id?: unknown;
-  providerAccountId?: unknown;
-  return_url?: unknown;
-  returnUrl?: unknown;
-  refresh_url?: unknown;
-  refreshUrl?: unknown;
-};
-
-type AuthResult = { user: { id: string } } | { error: Response };
-type ParsePayloadResult = { value: StripeConnectOnboardingSkeletonPayload } | { error: Response };
-
-const JSON_HEADERS = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Origin": "*",
-  "Content-Type": "application/json",
-} as const;
-
-const PROVIDER = "stripe_connect";
-const MODE = "test";
-
-const json = (status: number, payload: Record<string, unknown>) =>
-  new Response(JSON.stringify(payload), {
-    headers: JSON_HEADERS,
-    status,
-  });
-
-const toText = (value: unknown) => String(value ?? "").trim();
-
-const readRequiredEnv = (key: string) => {
-  const value = toText(Deno.env.get(key));
-  if (!value) throw new Error(`Missing required environment variable: ${key}`);
-  return value;
-};
-
-const sanitizeErrorMessage = (error: unknown) => {
-  const raw = error instanceof Error ? error.message : String(error ?? "Unknown Stripe Connect skeleton error.");
-  return raw
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
-    .replace(/[A-Za-z0-9._~+/=-]{24,}/g, "[redacted]")
-    .slice(0, 240);
-};
-
-const parseJsonPayload = async (req: Request): Promise<ParsePayloadResult> => {
-  const rawBody = await req.text();
-  if (!rawBody.trim()) return { value: {} as StripeConnectOnboardingSkeletonPayload };
-
-  try {
-    const parsed = JSON.parse(rawBody) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { error: json(400, { error: "invalid_body", message: "Request body must be a JSON object." }) };
-    }
-
-    return { value: parsed as StripeConnectOnboardingSkeletonPayload };
-  } catch {
-    return { error: json(400, { error: "invalid_json", message: "Request body must be valid JSON." }) };
-  }
-};
-
-const authenticateRequest = async (req: Request, supabaseUrl: string, supabaseAnonKey: string): Promise<AuthResult> => {
-  const authorization = toText(req.headers.get("Authorization"));
-  if (!authorization.toLowerCase().startsWith("bearer ")) {
-    return { error: json(401, { error: "missing_authorization", message: "Bearer authorization is required." }) };
-  }
-
-  const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    global: {
-      headers: {
-        Authorization: authorization,
-      },
-    },
-  });
-
-  const { data, error } = await authClient.auth.getUser();
-  const userId = toText(data.user?.id);
-  if (error || !userId) {
-    return { error: json(401, { error: "invalid_session", message: "Supabase could not verify the current user session." }) };
-  }
-
-  return { user: { id: userId } };
-};
-
-const requestedCreatorUserId = (payload: StripeConnectOnboardingSkeletonPayload) =>
-  toText(payload.creator_user_id ?? payload.creatorUserId);
-
-const hasClientProviderAccountId = (payload: StripeConnectOnboardingSkeletonPayload) =>
-  !!toText(payload.provider_account_id ?? payload.providerAccountId);
-
-const validateOptionalUrl = (value: unknown, fieldName: string) => {
-  const raw = toText(value);
-  if (!raw) return null;
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return `${fieldName} must use http or https.`;
-    }
-    if (parsed.username || parsed.password) {
-      return `${fieldName} must not include credentials.`;
-    }
-    return null;
-  } catch {
-    return `${fieldName} must be a valid URL.`;
-  }
-};
+const FUNCTION_NAME = "stripe-connect-onboarding-link";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: JSON_HEADERS, status: 200 });
+  if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") {
-    return json(405, { error: "method_not_allowed", message: "Use POST for Stripe Connect onboarding-link skeleton requests." });
+    return jsonResponse(405, { error: "method_not_allowed", message: "Use POST for Stripe Connect onboarding-link requests." });
   }
 
+  let adminClient: SupabaseClientLike | null = null;
+  let currentUser: AuthenticatedUser | null = null;
+
   try {
-    const supabaseUrl = readRequiredEnv("SUPABASE_URL");
-    const supabaseAnonKey = readRequiredEnv("SUPABASE_ANON_KEY");
+    const { supabaseAnonKey, supabaseUrl } = createAuthClient();
     const authResult = await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
     if ("error" in authResult) return authResult.error;
+    currentUser = authResult.user;
 
-    const parsed = await parseJsonPayload(req);
+    const parsed = await parseJsonPayload<StripeConnectOnboardingPayload>(req);
     if ("error" in parsed) return parsed.error;
 
     if (hasClientProviderAccountId(parsed.value)) {
-      return json(400, {
+      return jsonResponse(400, {
         error: "provider_account_id_not_allowed",
         message: "Provider account ids are backend-owned and are not accepted from the client.",
       });
     }
 
-    const requestedCreatorId = requestedCreatorUserId(parsed.value);
-    if (requestedCreatorId && requestedCreatorId !== authResult.user.id) {
-      return json(403, {
+    const requestedCreatorId = toText(parsed.value.creator_user_id ?? parsed.value.creatorUserId);
+    if (requestedCreatorId && requestedCreatorId !== currentUser.id) {
+      return jsonResponse(403, {
         error: "creator_mismatch",
         message: "Creator payout setup can only be requested for the current authenticated creator.",
       });
     }
 
-    const returnUrlError = validateOptionalUrl(parsed.value.return_url ?? parsed.value.returnUrl, "return_url");
-    const refreshUrlError = validateOptionalUrl(parsed.value.refresh_url ?? parsed.value.refreshUrl, "refresh_url");
-    if (returnUrlError || refreshUrlError) {
-      return json(400, {
-        error: "invalid_redirect_url",
-        message: returnUrlError ?? refreshUrlError,
+    const redirectUrls = resolveRedirectUrls(parsed.value);
+    if ("error" in redirectUrls) return redirectUrls.error;
+
+    const adminConfig = createAdminClient();
+    if (!adminConfig.configured) {
+      return jsonResponse(200, notConfiguredPayload(adminConfig.reason, adminConfig.message, { creatorUserId: currentUser.id }));
+    }
+    adminClient = adminConfig.client;
+
+    const payoutAccount = await readCreatorPayoutAccount(adminClient, currentUser.id);
+    if (!payoutAccount?.provider_account_id) {
+      return jsonResponse(200, {
+        status: "setup_required",
+        provider: "stripe",
+        providerKey: "stripe_connect",
+        mode: "test",
+        liveMoneyAction: false,
+        creatorUserId: currentUser.id,
+        providerAccountPresent: false,
+        providerCall: false,
+        providerWrite: false,
+        onboardingUrlCreated: false,
+        message: "A Stripe Connect test-mode account must be created before an onboarding link can be requested.",
       });
     }
 
-    return json(200, {
-      status: "not_configured",
-      provider: PROVIDER,
-      mode: MODE,
-      liveMoneyAction: false,
-      creatorUserId: authResult.user.id,
-      providerCall: false,
-      providerWrite: false,
-      onboardingUrlCreated: false,
-      onboardingUrlStored: false,
-      onboardingUrl: null,
-      audit: {
-        written: false,
-        requiredLater: true,
+    const stripeSecret = readStripeTestSecret();
+    if (!stripeSecret.configured) {
+      return jsonResponse(
+        200,
+        notConfiguredPayload(stripeSecret.reason, stripeSecret.message, {
+          creatorUserId: currentUser.id,
+          onboardingUrlCreated: false,
+          providerAccountPresent: true,
+        }),
+      );
+    }
+
+    const link = await createStripeConnectOnboardingLink(
+      stripeSecret.secret,
+      payoutAccount.provider_account_id,
+      redirectUrls.value.returnUrl,
+      redirectUrls.value.refreshUrl,
+    );
+    const onboardingUrl = toText(link.url);
+    if (!onboardingUrl) throw new Error("Stripe onboarding link response did not include a URL.");
+
+    const expiresAt = onboardingLinkExpiresAt(link.expires_at);
+    const auditLogId = await writeAuditLog(adminClient, {
+      action: "stripe_connect_onboarding_link_created",
+      actorEmail: currentUser.email,
+      actorUserId: currentUser.id,
+      metadata: {
+        expires_at: expiresAt,
+        function_name: FUNCTION_NAME,
+        onboarding_url_returned: true,
+        onboarding_url_stored: false,
+        provider_account_id: payoutAccount.provider_account_id,
+        refresh_url_origin: safeUrlOrigin(redirectUrls.value.refreshUrl),
+        return_url_origin: safeUrlOrigin(redirectUrls.value.returnUrl),
       },
-      message: "Stripe Connect onboarding links are skeleton-only in this foundation pass. No link was created.",
+      targetId: payoutAccount.id,
+      targetType: "creator_payout_account",
+      targetUserId: currentUser.id,
+    });
+
+    await insertOnboardingSession(adminClient, {
+      account: payoutAccount,
+      auditLogId,
+      createdByUserId: currentUser.id,
+      expiresAt,
+      refreshUrl: redirectUrls.value.refreshUrl,
+      returnUrl: redirectUrls.value.returnUrl,
+    });
+    await markOnboardingStarted(adminClient, payoutAccount, auditLogId);
+
+    return jsonResponse(200, {
+      status: "link_created",
+      provider: "stripe",
+      providerKey: "stripe_connect",
+      mode: "test",
+      liveMoneyAction: false,
+      creatorUserId: currentUser.id,
+      providerAccountPresent: true,
+      providerCall: true,
+      providerWrite: true,
+      onboardingUrlCreated: true,
+      onboardingUrlStored: false,
+      onboarding_url: onboardingUrl,
+      expires_at: expiresAt,
+      payoutCreated: false,
+      transferCreated: false,
+      checkoutCreated: false,
+      audit: {
+        linkCreated: true,
+        auditLogId,
+      },
+      message: "Stripe Connect test-mode onboarding link was created. Payout execution remains inactive.",
     });
   } catch (error) {
-    return json(500, {
-      error: "stripe_connect_onboarding_link_skeleton_failed",
+    await safeWriteAuditLog(adminClient, {
+      action: "stripe_connect_error",
+      actorEmail: currentUser?.email ?? null,
+      actorUserId: currentUser?.id ?? null,
+      metadata: {
+        error: sanitizeErrorMessage(error),
+        function_name: FUNCTION_NAME,
+      },
+      severity: "warning",
+      targetType: "creator_payout_account",
+      targetUserId: currentUser?.id ?? null,
+    });
+
+    return jsonResponse(500, {
+      error: "stripe_connect_onboarding_link_failed",
+      liveMoneyAction: false,
       message: sanitizeErrorMessage(error),
+      mode: "test",
+      provider: "stripe",
+      providerKey: "stripe_connect",
     });
   }
 });
