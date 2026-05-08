@@ -275,11 +275,15 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   creatorPayoutAuditLogCount: null,
   networkBillingAccountCount: null,
   networkInvoiceRecordCount: null,
+  networkInvoiceDraftCount: null,
   networkPlanRecordCount: null,
   networkAccountPlanAssignmentCount: null,
   networkQuotaRecordCount: null,
   networkInvoiceLineItemCount: null,
+  networkInvoiceLineItemDraftCount: null,
   networkOverageEventCount: null,
+  networkOverageWarningOnlyCount: null,
+  networkOverageReviewRequiredCount: null,
   networkBillingAuditLogCount: null,
   sponsorBrandRecordCount: null,
   sponsorDealRecordCount: null,
@@ -3881,10 +3885,10 @@ export default function AdminStudioScreen() {
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>NETWORK PLANS</Text>
-              <Text style={styles.configTitle}>Network Plans</Text>
+              <Text style={styles.configKicker}>NETWORKS</Text>
+              <Text style={styles.configTitle}>Network Billing Foundation</Text>
               <Text style={styles.configBody}>
-                Network billing is not active yet. Foundation rows are proof-only; no invoices can be sent and no customers can be charged.
+                Network billing is not active yet. Foundation rows are proof-only; draft invoices are internal and overage warnings are read-only.
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
@@ -3892,6 +3896,12 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Network Billing Foundation</Text>
+                <Text style={styles.configListBody}>No invoice can be sent, no customer can be charged, and no payment links exist.</Text>
+              </View>
+            </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Network billing accounts</Text>
@@ -3959,7 +3969,15 @@ export default function AdminStudioScreen() {
                     "foundation invoice drafts",
                   )}
                 </Text>
-                <Text style={styles.configListBody}>No invoice totals, send action, payment link, or Stripe billing action is active.</Text>
+                <Text style={styles.configListBody}>
+                  Draft rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkInvoiceDraftCount,
+                    adminFinanceReadModel.loading,
+                    "internal draft",
+                    "internal drafts",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Draft invoices are internal only. No invoices can be sent.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -3973,7 +3991,24 @@ export default function AdminStudioScreen() {
                     "foundation line items",
                   )}
                 </Text>
-                <Text style={styles.configListBody}>Line items are proof-only and do not create a payable balance.</Text>
+                <Text style={styles.configListBody}>
+                  Draft line items: {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkInvoiceLineItemDraftCount,
+                    adminFinanceReadModel.loading,
+                    "internal draft line",
+                    "internal draft lines",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Line items are proof-only and do not create a payable balance or customer obligation.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Invoice Draft Workflow</Text>
+                <Text style={styles.configListBody}>Draft invoices are internal only.</Text>
+                <Text style={styles.configListBody}>No invoices can be sent.</Text>
+                <Text style={styles.configListBody}>No customers can be charged.</Text>
+                <Text style={styles.configListBody}>No payment links exist.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -3987,7 +4022,40 @@ export default function AdminStudioScreen() {
                     "foundation overage events",
                   )}
                 </Text>
-                <Text style={styles.configListBody}>Overages are not calculated from provider usage yet and cannot be approved or billed.</Text>
+                <Text style={styles.configListBody}>
+                  Quota-risk warnings: {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkOverageWarningOnlyCount,
+                    adminFinanceReadModel.loading,
+                    "warning-only row",
+                    "warning-only rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Review-required rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.networkOverageReviewRequiredCount,
+                    adminFinanceReadModel.loading,
+                    "review row",
+                    "review rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Overages are warning/foundation only and cannot be approved or billed.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Overage Warning Readout</Text>
+                <Text style={styles.configListBody}>Warning thresholds: 50% · 75% · 90% · 100%.</Text>
+                <Text style={styles.configListBody}>Overage warnings are read-only.</Text>
+                <Text style={styles.configListBody}>Billing execution is not active.</Text>
+                <Text style={styles.configListBody}>Provider reconciliation is required before real billing.</Text>
+                <Text style={styles.configListBody}>Usage metering must be trusted before charging.</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Provider Reconciliation</Text>
+                <Text style={styles.configListBody}>Provider reconciliation is not active yet.</Text>
+                <Text style={styles.configListBody}>No provider billing totals are shown as customer billing truth.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -4009,6 +4077,7 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListTitle}>Future model</Text>
                 <Text style={styles.configListBody}>Monthly platform fee + included quotas + reviewed overages.</Text>
                 <Text style={styles.configListBody}>Stripe Billing or Checkout is later and is not connected in this build.</Text>
+                <Text style={styles.configListBody}>No fake revenue, unpaid balance, or real customer obligation is shown.</Text>
               </View>
             </View>
           </View>

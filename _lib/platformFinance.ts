@@ -50,11 +50,15 @@ export type AdminFinanceReadModel = {
   creatorPayoutAuditLogCount: number | null;
   networkBillingAccountCount: number | null;
   networkInvoiceRecordCount: number | null;
+  networkInvoiceDraftCount: number | null;
   networkPlanRecordCount: number | null;
   networkAccountPlanAssignmentCount: number | null;
   networkQuotaRecordCount: number | null;
   networkInvoiceLineItemCount: number | null;
+  networkInvoiceLineItemDraftCount: number | null;
   networkOverageEventCount: number | null;
+  networkOverageWarningOnlyCount: number | null;
+  networkOverageReviewRequiredCount: number | null;
   networkBillingAuditLogCount: number | null;
   sponsorBrandRecordCount: number | null;
   sponsorDealRecordCount: number | null;
@@ -139,11 +143,15 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutAuditLogCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
+    networkInvoiceDraftCount,
     networkPlanRecordCount,
     networkAccountPlanAssignmentCount,
     networkQuotaRecordCount,
     networkInvoiceLineItemCount,
+    networkInvoiceLineItemDraftCount,
     networkOverageEventCount,
+    networkOverageWarningOnlyCount,
+    networkOverageReviewRequiredCount,
     networkBillingAuditLogCount,
     sponsorBrandRecordCount,
     sponsorDealRecordCount,
@@ -176,11 +184,15 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(CREATOR_PAYOUT_AUDIT_LOG_TABLE)),
     safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
     safeRead(() => readTableCount(NETWORK_INVOICE_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(NETWORK_INVOICE_RECORDS_TABLE, "status", "draft")),
     safeRead(() => readTableCount(NETWORK_PLAN_RECORDS_TABLE)),
     safeRead(() => readTableCount(NETWORK_ACCOUNT_PLAN_ASSIGNMENTS_TABLE)),
     safeRead(() => readTableCount(NETWORK_QUOTA_RECORDS_TABLE)),
     safeRead(() => readTableCount(NETWORK_INVOICE_LINE_ITEMS_TABLE)),
+    safeRead(() => readTableCountWhereEq(NETWORK_INVOICE_LINE_ITEMS_TABLE, "status", "draft")),
     safeRead(() => readTableCount(NETWORK_OVERAGE_EVENTS_TABLE)),
+    safeRead(() => readTableCountWhereEq(NETWORK_OVERAGE_EVENTS_TABLE, "status", "warning_only")),
+    safeRead(() => readTableCountWhereEq(NETWORK_OVERAGE_EVENTS_TABLE, "status", "review_required")),
     safeRead(() => readTableCount(NETWORK_BILLING_AUDIT_LOGS_TABLE)),
     safeRead(() => readTableCount(SPONSOR_BRAND_RECORDS_TABLE)),
     safeRead(() => readTableCount(SPONSOR_DEAL_RECORDS_TABLE)),
@@ -215,11 +227,15 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutAuditLogCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
+    networkInvoiceDraftCount,
     networkPlanRecordCount,
     networkAccountPlanAssignmentCount,
     networkQuotaRecordCount,
     networkInvoiceLineItemCount,
+    networkInvoiceLineItemDraftCount,
     networkOverageEventCount,
+    networkOverageWarningOnlyCount,
+    networkOverageReviewRequiredCount,
     networkBillingAuditLogCount,
     sponsorBrandRecordCount,
     sponsorDealRecordCount,
