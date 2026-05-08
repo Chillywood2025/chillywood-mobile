@@ -567,6 +567,240 @@ export type Database = {
           },
         ]
       }
+      creator_payout_accounts: {
+        Row: {
+          charges_enabled: boolean
+          country: string | null
+          created_at: string
+          creator_user_id: string
+          default_currency: string
+          details_submitted: boolean
+          disabled_reason: string | null
+          id: string
+          last_provider_sync_at: string | null
+          metadata: Json
+          onboarding_completed_at: string | null
+          onboarding_started_at: string | null
+          payouts_enabled: boolean
+          provider: string
+          provider_account_id: string | null
+          requirements_currently_due: Json
+          requirements_eventually_due: Json
+          requirements_past_due: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          charges_enabled?: boolean
+          country?: string | null
+          created_at?: string
+          creator_user_id: string
+          default_currency?: string
+          details_submitted?: boolean
+          disabled_reason?: string | null
+          id?: string
+          last_provider_sync_at?: string | null
+          metadata?: Json
+          onboarding_completed_at?: string | null
+          onboarding_started_at?: string | null
+          payouts_enabled?: boolean
+          provider?: string
+          provider_account_id?: string | null
+          requirements_currently_due?: Json
+          requirements_eventually_due?: Json
+          requirements_past_due?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          charges_enabled?: boolean
+          country?: string | null
+          created_at?: string
+          creator_user_id?: string
+          default_currency?: string
+          details_submitted?: boolean
+          disabled_reason?: string | null
+          id?: string
+          last_provider_sync_at?: string | null
+          metadata?: Json
+          onboarding_completed_at?: string | null
+          onboarding_started_at?: string | null
+          payouts_enabled?: boolean
+          provider?: string
+          provider_account_id?: string | null
+          requirements_currently_due?: Json
+          requirements_eventually_due?: Json
+          requirements_past_due?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      creator_payout_audit_log: {
+        Row: {
+          action: string
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          creator_user_id: string | null
+          id: string
+          metadata: Json
+          next_status: string | null
+          previous_status: string | null
+          reason: string | null
+          target_id: string
+          target_table: string
+        }
+        Insert: {
+          action: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          id?: string
+          metadata?: Json
+          next_status?: string | null
+          previous_status?: string | null
+          reason?: string | null
+          target_id: string
+          target_table: string
+        }
+        Update: {
+          action?: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          id?: string
+          metadata?: Json
+          next_status?: string | null
+          previous_status?: string | null
+          reason?: string | null
+          target_id?: string
+          target_table?: string
+        }
+        Relationships: []
+      }
+      creator_payout_batches: {
+        Row: {
+          approved_at: string | null
+          approved_by_user_id: string | null
+          batch_reference: string | null
+          created_at: string
+          currency: string
+          entry_count: number
+          id: string
+          metadata: Json
+          period_end: string | null
+          period_start: string | null
+          processed_at: string | null
+          status: string
+          total_amount_minor: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_user_id?: string | null
+          batch_reference?: string | null
+          created_at?: string
+          currency?: string
+          entry_count?: number
+          id?: string
+          metadata?: Json
+          period_end?: string | null
+          period_start?: string | null
+          processed_at?: string | null
+          status?: string
+          total_amount_minor?: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_user_id?: string | null
+          batch_reference?: string | null
+          created_at?: string
+          currency?: string
+          entry_count?: number
+          id?: string
+          metadata?: Json
+          period_end?: string | null
+          period_start?: string | null
+          processed_at?: string | null
+          status?: string
+          total_amount_minor?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      creator_payout_holds: {
+        Row: {
+          admin_note: string | null
+          batch_id: string | null
+          created_at: string
+          created_by_user_id: string | null
+          creator_user_id: string
+          hold_started_at: string
+          hold_until: string | null
+          id: string
+          metadata: Json
+          payout_entry_id: number | null
+          reason: string
+          released_at: string | null
+          released_by_user_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_note?: string | null
+          batch_id?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          creator_user_id: string
+          hold_started_at?: string
+          hold_until?: string | null
+          id?: string
+          metadata?: Json
+          payout_entry_id?: number | null
+          reason: string
+          released_at?: string | null
+          released_by_user_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_note?: string | null
+          batch_id?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          creator_user_id?: string
+          hold_started_at?: string
+          hold_until?: string | null
+          id?: string
+          metadata?: Json
+          payout_entry_id?: number | null
+          reason?: string
+          released_at?: string | null
+          released_by_user_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_holds_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_holds_payout_entry_id_fkey"
+            columns: ["payout_entry_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_ledger_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_payout_ledger_entries: {
         Row: {
           amount_minor: number
@@ -622,6 +856,91 @@ export type Database = {
             columns: ["source_ledger_event_id"]
             isOneToOne: false
             referencedRelation: "platform_finance_ledger_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_payout_provider_transfers: {
+        Row: {
+          amount_minor: number
+          batch_id: string | null
+          created_at: string
+          creator_user_id: string
+          currency: string
+          estimated_arrival_at: string | null
+          failure_code: string | null
+          failure_message: string | null
+          id: string
+          metadata: Json
+          payout_account_id: string | null
+          payout_entry_id: number | null
+          provider: string
+          provider_created_at: string | null
+          provider_payout_id: string | null
+          provider_transfer_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_minor?: number
+          batch_id?: string | null
+          created_at?: string
+          creator_user_id: string
+          currency?: string
+          estimated_arrival_at?: string | null
+          failure_code?: string | null
+          failure_message?: string | null
+          id?: string
+          metadata?: Json
+          payout_account_id?: string | null
+          payout_entry_id?: number | null
+          provider?: string
+          provider_created_at?: string | null
+          provider_payout_id?: string | null
+          provider_transfer_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_minor?: number
+          batch_id?: string | null
+          created_at?: string
+          creator_user_id?: string
+          currency?: string
+          estimated_arrival_at?: string | null
+          failure_code?: string | null
+          failure_message?: string | null
+          id?: string
+          metadata?: Json
+          payout_account_id?: string | null
+          payout_entry_id?: number | null
+          provider?: string
+          provider_created_at?: string | null
+          provider_payout_id?: string | null
+          provider_transfer_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_provider_transfers_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_provider_transfers_payout_account_id_fkey"
+            columns: ["payout_account_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_provider_transfers_payout_entry_id_fkey"
+            columns: ["payout_entry_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_ledger_entries"
             referencedColumns: ["id"]
           },
         ]
