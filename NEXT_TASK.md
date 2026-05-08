@@ -1,7 +1,7 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Await a separate exact implementation prompt for the next active lane. Safest candidates are: creator-facing Connect Stripe setup UI using the recorded spec, or provider billing import/reconciliation proof. Do not implement either from a broad batch request. Still no Withdraw/Cash Out, payout approval/release, transfers, payouts, checkout, invoice send, customer charge, KYC/tax UI, fake balances, live fraud enforcement, or live money movement.
+Provider billing import/reconciliation proof is the safest next active lane. It must be server-side/import-only and must not send invoices, charge customers, create payment links, fake provider bills, fake revenue, or trigger network billing execution. Still no Withdraw/Cash Out, payout approval/release, transfers, payouts, checkout, invoice send, customer charge, KYC/tax UI, fake balances, live fraud enforcement, or live money movement.
 
 Admin Usage Provider Imports V1D3/V1D4 are pushed and proofed. The server-side `provider-usage-import` Supabase Edge Function is deployed, migration `202605070012_provider_usage_import_idempotency.sql` is applied, Admin Usage reads provider import status rows, missing auth returns `401`, and owner/operator proof completed Cloudflare R2, Hetzner Object Storage, and Hetzner Server import paths with the existing signed-in device session token in memory only. Hetzner Object Storage imports only S3-compatible bucket inventory metadata (`s3_inventory_storage_bytes` and `s3_inventory_object_count`) through server-side secrets, not traffic, billing, overage, invoice, revenue, payout, or storage-billing truth. No mobile provider API calls, provider secrets in repo, fake bandwidth, fake bills, overages, invoices, revenue, payouts, sponsor money, or Admin import buttons were added.
 
@@ -47,7 +47,7 @@ Payout S3C - Stripe Connect test-mode backend functions is pushed and deployed. 
 
 Admin Payout Provider Dashboard is pushed. `_lib/platformFinance.ts` now reads existing payout-provider account, onboarding-session, eligibility-readiness, and webhook-event counts; `/admin` Payouts shows these as read-only provider-status rows. It adds no provider calls, no migrations, no generated type changes, no app UI outside Admin, no Connect Stripe button, no onboarding link creation, no transfers, no payouts, no checkout, no approval/release, no fake payable balances, and no live money movement.
 
-Creator-facing Connect Stripe Setup Button Planning/Spec is recorded. The future Channel Studio Payouts setup entry must stay separate from Premium/RevenueCat, appear only after backend test-mode provider proof is accepted and provider configuration is available, call only backend Edge Functions, validate creator self-service account ownership, use allowlisted return/refresh URLs, and show safe states only: not active yet, provider not configured, setup required, opening setup link, onboarding in progress, action required, under review, provider ready but payouts not active, on hold, and disabled. The future implementation must not add Withdraw, Cash Out, available balance, payable balance, payout approval/release, transfer creation, payout creation, checkout session, KYC/tax UI, raw Stripe account ids, raw provider requirement JSON, fake earnings, fake payable balances, live mode, or live money movement.
+Creator-facing payout setup UI is pushed. Channel Studio Payouts can show setup/readiness states, create/reuse a Stripe Connect test-mode payout account through backend Edge Functions, request/open a short-lived backend-created onboarding link, and refresh provider status through the backend. It stays separate from Premium/RevenueCat, validates creator self-service ownership through the Edge Functions, uses allowlisted return/refresh URLs, hides raw provider ids and raw provider requirement JSON, and keeps payouts inactive. It does not add Withdraw, Cash Out, available balance, payable balance, payout approval/release, transfer creation, payout creation, checkout session, KYC/tax UI, fake earnings, fake payable balances, live mode, or live money movement.
 
 Payout Review Queue Foundation and Payout Batch Draft Workflow Foundation are pushed and applied. Migration `supabase/migrations/202605080009_payout_review_batch_foundation.sql` adds `creator_payout_review_records`, `creator_payout_review_notes`, and `creator_payout_batch_items`, extends `creator_payout_batches` with `batch_status`, `batch_type`, and `total_amount_cents`, refreshes generated database types, and inserts only zero-cent foundation proof rows marked `live_money_action: false`. `/admin` Payouts remains read-only/foundation and may show counts for review records, review notes, batches, batch items, provider transfers, holds, accounts, ledger entries, and audit rows. Payout review is foundation-only, payout batch workflow is draft-only, and no payout can be approved, rejected, released, processed, marked paid, transferred, or treated as payable. No Stripe payout, Connect Stripe button, fake payable balance, fake earnings, provider secret, payment credential, transfer creation, payout execution, KYC/tax live flow, or live money movement exists.
 
@@ -55,12 +55,11 @@ Provider Transfer Records Sync Foundation is pushed and applied. Migration `supa
 
 The next finance/admin lanes are:
 
-1. Creator-facing Connect Stripe setup button implementation only after a separate exact implementation prompt accepts the recorded setup-button spec; still no Withdraw/Cash Out/payout release.
-2. Provider billing import/reconciliation proof as server-side read/import only, still no invoice send/customer charge.
-3. Sponsor checkout test-mode only after review/disclosure/fraud/audit proof and explicit product approval, still no live checkout.
-4. Fraud review queue foundation, still no enforcement.
-5. Test-mode payout transfer creation only after provider/fraud/KYC/tax/audit proof and explicit transfer-lane approval.
-6. Production payout release only after legal/accounting/provider approval.
+1. Provider billing import/reconciliation proof as server-side read/import only, still no invoice send/customer charge.
+2. Sponsor checkout test-mode only after review/disclosure/fraud/audit proof and explicit product approval, still no live checkout.
+3. Fraud review queue foundation, still no enforcement.
+4. Test-mode payout transfer creation only after provider/fraud/KYC/tax/audit proof and explicit transfer-lane approval.
+5. Production payout release only after legal/accounting/provider approval.
 
 The store/external readiness audit remains a valid launch-readiness lane, but payout work must stay non-production and non-transfer until backed write permissions, dangerous-action confirmation, reason capture, RLS, fraud review, KYC/tax, provider proof, immutable audit proof, and explicit product approval are all designed and proved.
 
@@ -167,7 +166,8 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - Real Source Revenue Import Planning/Spec is recorded; no provider import, fake revenue, creator earnings, payable balance, or payout ledger write from revenue-share rows exists
    - Creator-Facing Revenue Share Dashboard Planning/Spec is recorded; no creator revenue dashboard implementation exists and no fake earnings/payable balances may be shown
    - Remaining Finance/Admin Lane Planning is recorded for test-mode transfer creation, production payout release, provider billing import/reconciliation, sponsor checkout test-mode, brand payment through Stripe, sponsor reporting/fraud integration, and Fraud review queue
-   - next recommended finance/admin implementation lanes require separate exact prompts; safest candidates are creator-facing Connect Stripe setup UI from the recorded spec or provider billing import/reconciliation proof, while transfer creation, production payout release, live sponsor checkout, brand charging, and fraud enforcement remain blocked
+   - Creator-facing payout setup UI is pushed as backend-only/test-mode setup/onboarding/status refresh in Channel Studio, with no payout execution, fake balance, KYC/tax UI, checkout, transfer, payout, or live money movement
+   - next recommended finance/admin implementation lane is provider billing import/reconciliation proof, while transfer creation, production payout release, live sponsor checkout, brand charging, and fraud enforcement remain blocked
    - add provider billing imports, Stripe Connect live integration, payout provider production writes, live payout actions, live network billing actions, sponsor checkout, or live fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
 
