@@ -54,6 +54,7 @@ Do not mix `Watch-Party Live` and `Live Watch-Party`.
 - Access must not become a scattered mix of per-screen guesses.
 - Official presence is not a creator paywall.
 - Room access, content access, and future event access may share language, but they are not the same source-of-truth today.
+- Creator Payout Read-Only Dashboard Foundation is not an entitlement or payout activation system. It lives in Channel Studio as read-only/foundation payout readiness and own-ledger visibility only; it does not add Withdraw, Cash Out, Connect Stripe, KYC/tax, payout approval/release, fake payable balance, fake earnings, or live money movement.
 
 ## 3. Canonical Access Levels And Meanings
 The table below defines the platform vocabulary this chapter should use.

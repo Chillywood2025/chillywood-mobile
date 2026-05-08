@@ -109,6 +109,7 @@ Current doctrine allows it to show:
 - foundation-only states for unbacked admin systems
 - Fraud Enforcement Foundation counts for fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs, as read-only/foundation rows only
 - Immutable Admin Audit Log Foundation latest rows in Audit, as read-only append-only foundation rows only
+- Creator Payout Read-Only Dashboard Foundation is a Channel Studio read-only surface, not an Admin enforcement workflow; future payout release still requires fraud review and immutable audit before any dangerous action
 
 Current doctrine does not yet allow it to claim:
 - report state mutation
