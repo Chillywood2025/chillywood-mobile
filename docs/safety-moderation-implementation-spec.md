@@ -108,6 +108,7 @@ Current doctrine allows it to show:
 - Admin V1A Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System sections
 - foundation-only states for unbacked admin systems
 - Fraud Enforcement Foundation counts for fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs, as read-only/foundation rows only
+- Immutable Admin Audit Log Foundation latest rows in Audit, as read-only append-only foundation rows only
 
 Current doctrine does not yet allow it to claim:
 - report state mutation
@@ -116,6 +117,7 @@ Current doctrine does not yet allow it to claim:
 - appeal/dispute workflow
 - creator-visible enforcement history
 - live fraud enforcement, payout pauses, account restrictions, upload restrictions, live restrictions, monetization disables, sponsor enforcement, network billing actions, live ad provider state, runtime kill switches, or fraud risk scores unless those systems are separately backed
+- audit row edit/delete/clear controls or dangerous-action audit execution unless those systems are separately backed
 
 ## 4. Current Source-Of-Truth Already In Repo
 
@@ -197,7 +199,7 @@ These owners already preserve:
 - recent safety-report queue visibility
 - locked-state messaging when review access is absent
 - Admin Command Center V1A section structure
-- audit summary copy that does not claim full immutable audit logs
+- Immutable Admin Audit Log Foundation readout plus derived role/safety audit summary copy
 - Rachi identity/admin display while preserving that Rachi does not grant operator permissions
 
 This is a real read surface, not yet a resolution workflow.
