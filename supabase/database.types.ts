@@ -569,6 +569,7 @@ export type Database = {
       }
       creator_payout_accounts: {
         Row: {
+          card_payments_capability_status: string
           charges_enabled: boolean
           country: string | null
           created_at: string
@@ -577,20 +578,33 @@ export type Database = {
           details_submitted: boolean
           disabled_reason: string | null
           id: string
+          kyc_status: string
+          last_platform_admin_audit_log_id: string | null
           last_provider_sync_at: string | null
           metadata: Json
           onboarding_completed_at: string | null
           onboarding_started_at: string | null
+          onboarding_status: string
           payouts_enabled: boolean
           provider: string
           provider_account_id: string | null
+          provider_account_type: string
+          provider_configuration_key: string | null
+          provider_dashboard_type: string
+          provider_environment: string
+          provider_fees_payer: string
+          provider_losses_collector: string
+          provider_requirements_collection: string
           requirements_currently_due: Json
           requirements_eventually_due: Json
           requirements_past_due: Json
           status: string
+          tax_status: string
+          transfers_capability_status: string
           updated_at: string
         }
         Insert: {
+          card_payments_capability_status?: string
           charges_enabled?: boolean
           country?: string | null
           created_at?: string
@@ -599,20 +613,33 @@ export type Database = {
           details_submitted?: boolean
           disabled_reason?: string | null
           id?: string
+          kyc_status?: string
+          last_platform_admin_audit_log_id?: string | null
           last_provider_sync_at?: string | null
           metadata?: Json
           onboarding_completed_at?: string | null
           onboarding_started_at?: string | null
+          onboarding_status?: string
           payouts_enabled?: boolean
           provider?: string
           provider_account_id?: string | null
+          provider_account_type?: string
+          provider_configuration_key?: string | null
+          provider_dashboard_type?: string
+          provider_environment?: string
+          provider_fees_payer?: string
+          provider_losses_collector?: string
+          provider_requirements_collection?: string
           requirements_currently_due?: Json
           requirements_eventually_due?: Json
           requirements_past_due?: Json
           status?: string
+          tax_status?: string
+          transfers_capability_status?: string
           updated_at?: string
         }
         Update: {
+          card_payments_capability_status?: string
           charges_enabled?: boolean
           country?: string | null
           created_at?: string
@@ -621,20 +648,40 @@ export type Database = {
           details_submitted?: boolean
           disabled_reason?: string | null
           id?: string
+          kyc_status?: string
+          last_platform_admin_audit_log_id?: string | null
           last_provider_sync_at?: string | null
           metadata?: Json
           onboarding_completed_at?: string | null
           onboarding_started_at?: string | null
+          onboarding_status?: string
           payouts_enabled?: boolean
           provider?: string
           provider_account_id?: string | null
+          provider_account_type?: string
+          provider_configuration_key?: string | null
+          provider_dashboard_type?: string
+          provider_environment?: string
+          provider_fees_payer?: string
+          provider_losses_collector?: string
+          provider_requirements_collection?: string
           requirements_currently_due?: Json
           requirements_eventually_due?: Json
           requirements_past_due?: Json
           status?: string
+          tax_status?: string
+          transfers_capability_status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_accounts_last_platform_admin_audit_log_id_fkey"
+            columns: ["last_platform_admin_audit_log_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admin_audit_logs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       creator_payout_audit_log: {
         Row: {
@@ -646,6 +693,7 @@ export type Database = {
           id: string
           metadata: Json
           next_status: string | null
+          platform_admin_audit_log_id: string | null
           previous_status: string | null
           reason: string | null
           target_id: string
@@ -660,6 +708,7 @@ export type Database = {
           id?: string
           metadata?: Json
           next_status?: string | null
+          platform_admin_audit_log_id?: string | null
           previous_status?: string | null
           reason?: string | null
           target_id: string
@@ -674,12 +723,21 @@ export type Database = {
           id?: string
           metadata?: Json
           next_status?: string | null
+          platform_admin_audit_log_id?: string | null
           previous_status?: string | null
           reason?: string | null
           target_id?: string
           target_table?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_audit_log_platform_admin_audit_log_id_fkey"
+            columns: ["platform_admin_audit_log_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admin_audit_logs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       creator_payout_batches: {
         Row: {
@@ -693,6 +751,7 @@ export type Database = {
           metadata: Json
           period_end: string | null
           period_start: string | null
+          platform_admin_audit_log_id: string | null
           processed_at: string | null
           status: string
           total_amount_minor: number
@@ -709,6 +768,7 @@ export type Database = {
           metadata?: Json
           period_end?: string | null
           period_start?: string | null
+          platform_admin_audit_log_id?: string | null
           processed_at?: string | null
           status?: string
           total_amount_minor?: number
@@ -725,12 +785,102 @@ export type Database = {
           metadata?: Json
           period_end?: string | null
           period_start?: string | null
+          platform_admin_audit_log_id?: string | null
           processed_at?: string | null
           status?: string
           total_amount_minor?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_batches_platform_admin_audit_log_id_fkey"
+            columns: ["platform_admin_audit_log_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admin_audit_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_payout_eligibility_records: {
+        Row: {
+          admin_review_status: string
+          created_at: string
+          creator_user_id: string
+          eligibility_reason: string | null
+          eligibility_status: string
+          eligible_for_payouts: boolean
+          fraud_hold_active: boolean
+          hold_period_cleared: boolean
+          id: string
+          kyc_ready: boolean
+          last_evaluated_at: string | null
+          metadata: Json
+          minimum_payout_met: boolean
+          payout_account_id: string | null
+          payout_account_ready: boolean
+          platform_admin_audit_log_id: string | null
+          provider_ready: boolean
+          tax_ready: boolean
+          updated_at: string
+        }
+        Insert: {
+          admin_review_status?: string
+          created_at?: string
+          creator_user_id: string
+          eligibility_reason?: string | null
+          eligibility_status?: string
+          eligible_for_payouts?: boolean
+          fraud_hold_active?: boolean
+          hold_period_cleared?: boolean
+          id?: string
+          kyc_ready?: boolean
+          last_evaluated_at?: string | null
+          metadata?: Json
+          minimum_payout_met?: boolean
+          payout_account_id?: string | null
+          payout_account_ready?: boolean
+          platform_admin_audit_log_id?: string | null
+          provider_ready?: boolean
+          tax_ready?: boolean
+          updated_at?: string
+        }
+        Update: {
+          admin_review_status?: string
+          created_at?: string
+          creator_user_id?: string
+          eligibility_reason?: string | null
+          eligibility_status?: string
+          eligible_for_payouts?: boolean
+          fraud_hold_active?: boolean
+          hold_period_cleared?: boolean
+          id?: string
+          kyc_ready?: boolean
+          last_evaluated_at?: string | null
+          metadata?: Json
+          minimum_payout_met?: boolean
+          payout_account_id?: string | null
+          payout_account_ready?: boolean
+          platform_admin_audit_log_id?: string | null
+          provider_ready?: boolean
+          tax_ready?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_eligibility_rec_platform_admin_audit_log_id_fkey"
+            columns: ["platform_admin_audit_log_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admin_audit_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_eligibility_records_payout_account_id_fkey"
+            columns: ["payout_account_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       creator_payout_holds: {
         Row: {
@@ -744,6 +894,7 @@ export type Database = {
           id: string
           metadata: Json
           payout_entry_id: number | null
+          platform_admin_audit_log_id: string | null
           reason: string
           released_at: string | null
           released_by_user_id: string | null
@@ -761,6 +912,7 @@ export type Database = {
           id?: string
           metadata?: Json
           payout_entry_id?: number | null
+          platform_admin_audit_log_id?: string | null
           reason: string
           released_at?: string | null
           released_by_user_id?: string | null
@@ -778,6 +930,7 @@ export type Database = {
           id?: string
           metadata?: Json
           payout_entry_id?: number | null
+          platform_admin_audit_log_id?: string | null
           reason?: string
           released_at?: string | null
           released_by_user_id?: string | null
@@ -797,6 +950,13 @@ export type Database = {
             columns: ["payout_entry_id"]
             isOneToOne: false
             referencedRelation: "creator_payout_ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_holds_platform_admin_audit_log_id_fkey"
+            columns: ["platform_admin_audit_log_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admin_audit_logs"
             referencedColumns: ["id"]
           },
         ]
@@ -860,6 +1020,81 @@ export type Database = {
           },
         ]
       }
+      creator_payout_onboarding_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          creator_user_id: string
+          expires_at: string | null
+          id: string
+          metadata: Json
+          onboarding_url_created_at: string | null
+          payout_account_id: string | null
+          platform_admin_audit_log_id: string | null
+          provider: string
+          provider_account_id: string | null
+          provider_environment: string
+          refresh_url: string | null
+          return_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          creator_user_id: string
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          onboarding_url_created_at?: string | null
+          payout_account_id?: string | null
+          platform_admin_audit_log_id?: string | null
+          provider?: string
+          provider_account_id?: string | null
+          provider_environment?: string
+          refresh_url?: string | null
+          return_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          creator_user_id?: string
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          onboarding_url_created_at?: string | null
+          payout_account_id?: string | null
+          platform_admin_audit_log_id?: string | null
+          provider?: string
+          provider_account_id?: string | null
+          provider_environment?: string
+          refresh_url?: string | null
+          return_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_onboarding_sess_platform_admin_audit_log_id_fkey"
+            columns: ["platform_admin_audit_log_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admin_audit_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_onboarding_sessions_payout_account_id_fkey"
+            columns: ["payout_account_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_payout_provider_transfers: {
         Row: {
           amount_minor: number
@@ -871,11 +1106,14 @@ export type Database = {
           failure_code: string | null
           failure_message: string | null
           id: string
+          idempotency_key: string | null
           metadata: Json
           payout_account_id: string | null
           payout_entry_id: number | null
+          platform_admin_audit_log_id: string | null
           provider: string
           provider_created_at: string | null
+          provider_environment: string
           provider_payout_id: string | null
           provider_transfer_id: string | null
           status: string
@@ -891,11 +1129,14 @@ export type Database = {
           failure_code?: string | null
           failure_message?: string | null
           id?: string
+          idempotency_key?: string | null
           metadata?: Json
           payout_account_id?: string | null
           payout_entry_id?: number | null
+          platform_admin_audit_log_id?: string | null
           provider?: string
           provider_created_at?: string | null
+          provider_environment?: string
           provider_payout_id?: string | null
           provider_transfer_id?: string | null
           status?: string
@@ -911,17 +1152,27 @@ export type Database = {
           failure_code?: string | null
           failure_message?: string | null
           id?: string
+          idempotency_key?: string | null
           metadata?: Json
           payout_account_id?: string | null
           payout_entry_id?: number | null
+          platform_admin_audit_log_id?: string | null
           provider?: string
           provider_created_at?: string | null
+          provider_environment?: string
           provider_payout_id?: string | null
           provider_transfer_id?: string | null
           status?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "creator_payout_provider_transf_platform_admin_audit_log_id_fkey"
+            columns: ["platform_admin_audit_log_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admin_audit_logs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "creator_payout_provider_transfers_batch_id_fkey"
             columns: ["batch_id"]
@@ -941,6 +1192,74 @@ export type Database = {
             columns: ["payout_entry_id"]
             isOneToOne: false
             referencedRelation: "creator_payout_ledger_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_payout_provider_webhook_events: {
+        Row: {
+          connected_account_id: string | null
+          created_at: string
+          event_id: string
+          event_type: string
+          failure_reason: string | null
+          id: string
+          idempotency_key: string | null
+          livemode: boolean
+          metadata: Json
+          platform_admin_audit_log_id: string | null
+          processed_at: string | null
+          provider: string
+          provider_account_id: string | null
+          provider_environment: string
+          retry_count: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connected_account_id?: string | null
+          created_at?: string
+          event_id: string
+          event_type: string
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          livemode?: boolean
+          metadata?: Json
+          platform_admin_audit_log_id?: string | null
+          processed_at?: string | null
+          provider?: string
+          provider_account_id?: string | null
+          provider_environment?: string
+          retry_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connected_account_id?: string | null
+          created_at?: string
+          event_id?: string
+          event_type?: string
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          livemode?: boolean
+          metadata?: Json
+          platform_admin_audit_log_id?: string | null
+          processed_at?: string | null
+          provider?: string
+          provider_account_id?: string | null
+          provider_environment?: string
+          retry_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_provider_webhoo_platform_admin_audit_log_id_fkey"
+            columns: ["platform_admin_audit_log_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admin_audit_logs"
             referencedColumns: ["id"]
           },
         ]
