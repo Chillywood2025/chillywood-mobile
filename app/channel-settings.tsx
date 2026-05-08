@@ -35,6 +35,14 @@ import {
   type CreatorAnalyticsReadModel,
 } from "../_lib/channelReadModels";
 import {
+  CREATOR_PAYOUT_REQUIREMENTS,
+  createEmptyCreatorPayoutDashboardReadModel,
+  formatCreatorPayoutFoundationAmount,
+  formatCreatorPayoutLedgerCount,
+  readCreatorPayoutDashboardSummary,
+  type CreatorPayoutDashboardReadModel,
+} from "../_lib/creatorPayouts";
+import {
   approveChannelAudienceRequest,
   blockChannelAudienceMember,
   cancelChannelAudienceRequest,
@@ -110,7 +118,7 @@ type SummaryMetricCard = {
   tone?: "default" | "unavailable";
 };
 
-type StudioTabId = "home" | "content" | "live" | "audience" | "insights" | "brand";
+type StudioTabId = "home" | "content" | "live" | "audience" | "insights" | "payouts" | "brand";
 type ContentStatusFilter = "all" | "published" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
@@ -445,6 +453,7 @@ const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
   { id: "live", label: "Live" },
   { id: "audience", label: "Audience" },
   { id: "insights", label: "Insights" },
+  { id: "payouts", label: "Payouts" },
   { id: "brand", label: "Brand" },
 ];
 
@@ -467,6 +476,7 @@ const normalizeStudioTabId = (value: unknown): StudioTabId | null => {
     || normalized === "live"
     || normalized === "audience"
     || normalized === "insights"
+    || normalized === "payouts"
     || normalized === "brand"
   ) {
     return normalized;
@@ -576,6 +586,9 @@ export function ChannelStudioScreen() {
   const [audienceSummary, setAudienceSummary] = useState<ChannelAudienceReadModel | null>(null);
   const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
   const [creatorAnalyticsSummary, setCreatorAnalyticsSummary] = useState<CreatorAnalyticsReadModel | null>(null);
+  const [creatorPayoutSummary, setCreatorPayoutSummary] = useState<CreatorPayoutDashboardReadModel>(
+    createEmptyCreatorPayoutDashboardReadModel,
+  );
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
@@ -624,6 +637,7 @@ export function ChannelStudioScreen() {
 
   useEffect(() => {
     if (!canUseChannelSettings) {
+      setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
       setLoading(false);
       return;
     }
@@ -636,6 +650,7 @@ export function ChannelStudioScreen() {
       readChannelAudienceSummary(String(user?.id ?? "")).catch(() => null),
       readChannelSafetyAdminSummary(String(user?.id ?? "")).catch(() => null),
       readCreatorAnalyticsSummary(String(user?.id ?? "")).catch(() => null),
+      readCreatorPayoutDashboardSummary({ creatorUserId: String(user?.id ?? ""), limit: 5 }),
     ])
       .then(([
         resolvedProfile,
@@ -644,6 +659,7 @@ export function ChannelStudioScreen() {
         resolvedAudienceSummary,
         resolvedSafetyAdminSummary,
         resolvedCreatorAnalyticsSummary,
+        resolvedCreatorPayoutSummary,
       ]) => {
         if (!active) return;
         setProfile(normalizeUserProfile(resolvedProfile));
@@ -655,6 +671,7 @@ export function ChannelStudioScreen() {
         setAudienceSummary(resolvedAudienceSummary);
         setSafetyAdminSummary(resolvedSafetyAdminSummary);
         setCreatorAnalyticsSummary(resolvedCreatorAnalyticsSummary);
+        setCreatorPayoutSummary(resolvedCreatorPayoutSummary);
         setLoading(false);
       })
       .catch(() => {
@@ -665,6 +682,7 @@ export function ChannelStudioScreen() {
         setAudienceSummary(null);
         setSafetyAdminSummary(null);
         setCreatorAnalyticsSummary(null);
+        setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
         setLoading(false);
       });
 
@@ -1302,6 +1320,17 @@ export function ChannelStudioScreen() {
       ],
     },
     {
+      title: "Payouts",
+      body: "Read-only payout readiness and foundation ledger status.",
+      sections: [
+        {
+          title: "Payout Dashboard",
+          status: "current",
+          body: "Creator payouts are not active yet; this shows foundation status only.",
+        },
+      ],
+    },
+    {
       title: "Safety",
       body: "Role and report context without replacing the Admin surface.",
       sections: [
@@ -1555,6 +1584,34 @@ export function ChannelStudioScreen() {
       tone: safetyAdminSummary?.recentPlatformOwnedTargetCount == null ? "unavailable" : "default",
     },
   ];
+  const payoutRequirementCards: readonly SummaryMetricCard[] = CREATOR_PAYOUT_REQUIREMENTS.map((requirement) => ({
+    label: requirement.label,
+    value: requirement.value,
+    body: "Future requirement",
+  }));
+  const payoutLedgerSummaryCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Status",
+      value: "Not active yet",
+      body: "Creator payouts are read-only foundation only.",
+    },
+    {
+      label: "Ledger Rows",
+      value: creatorPayoutSummary.ledgerConnected
+        ? formatCreatorPayoutLedgerCount(creatorPayoutSummary.ledgerRowCount)
+        : "Not connected",
+      body: creatorPayoutSummary.ledgerConnected
+        ? "Rows are read-only and not payable."
+        : "Payout ledger is not connected for creators yet.",
+      tone: creatorPayoutSummary.ledgerConnected ? "default" : "unavailable",
+    },
+    {
+      label: "Money Movement",
+      value: "Blocked",
+      body: "No withdrawal, transfer, approval, or payout release exists.",
+      tone: "unavailable",
+    },
+  ];
   const upcomingEvents = useMemo(
     () => creatorEvents.filter((event) => event.isUpcoming),
     [creatorEvents],
@@ -1719,6 +1776,14 @@ export function ChannelStudioScreen() {
       value: eventsLoading ? "..." : String(upcomingEvents.length),
       body: upcomingEvents.length ? "Upcoming" : "None scheduled",
       tab: "live",
+    },
+    {
+      label: "Payouts",
+      value: "Not active yet",
+      body: creatorPayoutSummary.ledgerConnected
+        ? formatCreatorPayoutLedgerCount(creatorPayoutSummary.ledgerRowCount)
+        : "Foundation only",
+      tab: "payouts",
     },
     ...(audienceFollowerCount == null ? [] : [{
       label: "Followers",
@@ -2314,6 +2379,11 @@ export function ChannelStudioScreen() {
             onPress: () => setActiveStudioTab("insights"),
           })}
           {renderHomeActionCard({
+            title: "Payouts",
+            body: "Not active yet",
+            onPress: () => setActiveStudioTab("payouts"),
+          })}
+          {renderHomeActionCard({
             title: "Brand",
             body: "Identity",
             onPress: () => setActiveStudioTab("brand"),
@@ -2368,6 +2438,116 @@ export function ChannelStudioScreen() {
           <Text style={styles.roadmapItem}>Playlists / Shelves — Coming later</Text>
           <Text style={styles.roadmapItem}>Channel IQ / Rachi Studio Assistant — Coming later</Text>
         </View>
+      </View>
+    </>
+  );
+
+  const renderPayoutsTab = () => (
+    <>
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Payouts</Text>
+            <Text style={styles.panelSubtitle}>Creator payouts are not active yet.</Text>
+          </View>
+          <Text style={styles.panelStatusMuted}>READ-ONLY</Text>
+        </View>
+        <Text style={styles.permissionCopy}>
+          This dashboard is foundation-only. It does not create a balance, payout account, withdrawal, provider onboarding, KYC, tax form, approval, transfer, or payable obligation.
+        </Text>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Payout setup</Text>
+          <Text style={styles.panelStatusMuted}>Not active yet</Text>
+        </View>
+        <View style={styles.eventSnapshotCard}>
+          <Text style={styles.accessSummaryKicker}>PAYOUT SETUP</Text>
+          <Text style={styles.accessSummaryTitle}>Not active yet</Text>
+          <Text style={styles.accessSummaryBody}>
+            Future payouts will require payout account setup, KYC, tax forms, fraud review, and admin approval.
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Future payout requirements</Text>
+          <Text style={styles.panelStatusMuted}>Future requirement</Text>
+        </View>
+        <View style={styles.summaryGrid}>
+          {payoutRequirementCards.map((card) => (
+            <View key={card.label} style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>{card.label}</Text>
+              <Text style={styles.summaryValue}>{card.value}</Text>
+              <Text style={styles.summaryBody}>{card.body}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Payout ledger foundation</Text>
+          <Text style={styles.panelStatusMuted}>Read-only</Text>
+        </View>
+        <Text style={styles.permissionCopy}>
+          Counts and rows here are not available balance, earnings, paid status, or withdrawal eligibility.
+        </Text>
+        <View style={styles.summaryGrid}>
+          {payoutLedgerSummaryCards.map((card) => (
+            <View
+              key={card.label}
+              style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
+            >
+              <Text style={styles.summaryLabel}>{card.label}</Text>
+              <Text style={styles.summaryValue}>{card.value}</Text>
+              <Text style={styles.summaryBody}>{card.body}</Text>
+            </View>
+          ))}
+        </View>
+
+        {!creatorPayoutSummary.ledgerConnected ? (
+          <View style={styles.eventEmptyCard}>
+            <Text style={styles.eventEmptyTitle}>Payout ledger is not connected for creators yet.</Text>
+            <Text style={styles.eventEmptyBody}>No payout ledger rows are exposed to this creator dashboard.</Text>
+          </View>
+        ) : creatorPayoutSummary.latestRows.length ? (
+          <View style={styles.eventList}>
+            {creatorPayoutSummary.latestRows.map((row) => (
+              <View key={row.id} style={styles.eventCard}>
+                <View style={styles.eventCardHeader}>
+                  <View style={styles.eventCardCopy}>
+                    <Text style={styles.eventCardTitle}>{row.statusLabel}</Text>
+                    <Text style={styles.eventCardMeta}>
+                      {row.entryTypeLabel} · {formatIsoDate(row.createdAt)}
+                    </Text>
+                  </View>
+                  <View style={[styles.contentStatusChip, styles.contentStatusChipUnavailable]}>
+                    <Text style={styles.contentStatusChipText}>Not payable</Text>
+                  </View>
+                </View>
+                <Text style={styles.eventCardBody}>
+                  Foundation amount: {formatCreatorPayoutFoundationAmount(row.amountMinor, row.currency)} · Not payable.
+                </Text>
+                {row.holdReason || row.holdUntil ? (
+                  <Text style={styles.eventCardBody}>
+                    Hold status: {row.holdReason || "Foundation hold"}{row.holdUntil ? ` until ${formatIsoDate(row.holdUntil)}` : ""}.
+                  </Text>
+                ) : null}
+                <Text style={styles.eventCardBody}>
+                  Foundation only. This row does not create a creator payable balance.
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.eventEmptyCard}>
+            <Text style={styles.eventEmptyTitle}>No payout ledger rows yet.</Text>
+            <Text style={styles.eventEmptyBody}>Creator payouts are not active yet, and there are no read-only foundation rows for this creator.</Text>
+          </View>
+        )}
       </View>
     </>
   );
@@ -2500,6 +2680,7 @@ export function ChannelStudioScreen() {
             {renderStudioTabBar()}
             {activeStudioTab === "home" ? renderStudioHomeTab() : null}
             {activeStudioTab === "content" ? renderContentPanel() : null}
+            {activeStudioTab === "payouts" ? renderPayoutsTab() : null}
 
             {activeStudioTab === "brand" ? (
               <>
