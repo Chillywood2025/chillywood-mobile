@@ -108,6 +108,7 @@ Current doctrine allows it to show:
 - Admin V1A Home, Reports, Content, Roles, Audit, Rachi, Users, Premium, Kill Switches, Usage, Ads, Revenue, Payouts, Networks, Sponsors, Fraud, and System sections
 - foundation-only states for unbacked admin systems
 - Fraud Enforcement Foundation counts for fraud holds, fraud reasons, evidence records, planned actions, review notes, appeal placeholders, and fraud audit logs, as read-only/foundation rows only
+- Fraud Hold Enforcement Foundation counts for fraud enforcement policies and non-executable planned action readiness, as read-only/foundation rows only; runtime hooks are not connected and no payout pause, monetization disable, upload restriction, live restriction, sponsor restriction, account restriction, or fake risk score is active
 - Immutable Admin Audit Log Foundation latest rows in Audit, as read-only append-only foundation rows only
 - Creator Payout Read-Only Dashboard Foundation is a Channel Studio read-only surface, not an Admin enforcement workflow; future payout release still requires fraud review and immutable audit before any dangerous action
 - Stripe Connect Test-Mode Backend Functions are deployed backend-only/test-mode and do not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior; backend Stripe secret names are configured by digest only, provider proof is pending, and future payout release still requires fraud review plus immutable audit rows before dangerous actions
