@@ -263,7 +263,10 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   financeLedgerEventCount: null,
   creatorPayoutLedgerEntryCount: null,
   creatorPayoutAccountCount: null,
+  creatorPayoutReviewRecordCount: null,
+  creatorPayoutReviewNoteCount: null,
   creatorPayoutBatchCount: null,
+  creatorPayoutBatchItemCount: null,
   creatorPayoutProviderTransferCount: null,
   creatorPayoutHoldCount: null,
   creatorPayoutAuditLogCount: null,
@@ -3673,7 +3676,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>PAYOUTS</Text>
               <Text style={styles.configTitle}>Payouts</Text>
               <Text style={styles.configBody}>
-                Creator payouts are not active yet. Ledger and provider foundation rows do not move money.
+                Creator payouts are not active yet. Payout review queue is foundation-only. Payout batch workflow is draft-only. No payout can be approved. No payout can be processed. No transfers can be created.
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
@@ -3693,7 +3696,7 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  No withdrawal button, payout approval, payout provider integration, KYC flow, or creator-facing balance is active.
+                  No withdrawal button, payout approval, payout provider integration, KYC flow, creator-facing balance, fake payable balance, or fake earnings are active.
                 </Text>
               </View>
             </View>
@@ -3715,6 +3718,38 @@ export default function AdminStudioScreen() {
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout review records</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutReviewRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation review record",
+                    "foundation review records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Payout review queue is foundation-only. No approve, reject, release, or payable-balance action exists.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout review notes</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutReviewNoteCount,
+                    adminFinanceReadModel.loading,
+                    "foundation review note",
+                    "foundation review notes",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Notes are read-only foundation context. They do not approve, reject, or release payouts.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Payout batches</Text>
                 <Text style={styles.configListBody}>
                   {formatAdminFinanceCount(
@@ -3731,6 +3766,22 @@ export default function AdminStudioScreen() {
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Payout batch items</Text>
+                <Text style={styles.configListBody}>
+                  {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutBatchItemCount,
+                    adminFinanceReadModel.loading,
+                    "foundation batch item",
+                    "foundation batch items",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Batch items group draft foundation rows only. No provider transfer ID or Stripe payout is created here.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Provider transfer records</Text>
                 <Text style={styles.configListBody}>
                   {formatAdminFinanceCount(
@@ -3741,7 +3792,7 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  Read-only records only. No provider API call or live transfer action is connected.
+                  Read-only records only. Provider transfer records are not active, and no provider API call or live transfer action is connected.
                 </Text>
               </View>
             </View>
@@ -3778,6 +3829,10 @@ export default function AdminStudioScreen() {
               </View>
             </View>
             {[
+              "Payout batch workflow is draft-only.",
+              "No payout can be approved.",
+              "No payout can be processed.",
+              "No transfers can be created.",
               "Future requirements: payout account, KYC, tax forms, fraud review.",
               "Planned hold period: 7-30 days.",
               "Minimum payout: undecided.",

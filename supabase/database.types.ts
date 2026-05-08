@@ -739,11 +739,64 @@ export type Database = {
           },
         ]
       }
+      creator_payout_batch_items: {
+        Row: {
+          amount_cents: number
+          batch_id: string
+          created_at: string
+          creator_user_id: string | null
+          currency: string
+          id: string
+          metadata: Json
+          payout_ledger_entry_id: number | null
+          status: string
+        }
+        Insert: {
+          amount_cents?: number
+          batch_id: string
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          id?: string
+          metadata?: Json
+          payout_ledger_entry_id?: number | null
+          status?: string
+        }
+        Update: {
+          amount_cents?: number
+          batch_id?: string
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          id?: string
+          metadata?: Json
+          payout_ledger_entry_id?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_batch_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_batch_items_payout_ledger_entry_id_fkey"
+            columns: ["payout_ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_ledger_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_payout_batches: {
         Row: {
           approved_at: string | null
           approved_by_user_id: string | null
           batch_reference: string | null
+          batch_status: string
+          batch_type: string
           created_at: string
           currency: string
           entry_count: number
@@ -754,6 +807,7 @@ export type Database = {
           platform_admin_audit_log_id: string | null
           processed_at: string | null
           status: string
+          total_amount_cents: number
           total_amount_minor: number
           updated_at: string
         }
@@ -761,6 +815,8 @@ export type Database = {
           approved_at?: string | null
           approved_by_user_id?: string | null
           batch_reference?: string | null
+          batch_status?: string
+          batch_type?: string
           created_at?: string
           currency?: string
           entry_count?: number
@@ -771,6 +827,7 @@ export type Database = {
           platform_admin_audit_log_id?: string | null
           processed_at?: string | null
           status?: string
+          total_amount_cents?: number
           total_amount_minor?: number
           updated_at?: string
         }
@@ -778,6 +835,8 @@ export type Database = {
           approved_at?: string | null
           approved_by_user_id?: string | null
           batch_reference?: string | null
+          batch_status?: string
+          batch_type?: string
           created_at?: string
           currency?: string
           entry_count?: number
@@ -788,6 +847,7 @@ export type Database = {
           platform_admin_audit_log_id?: string | null
           processed_at?: string | null
           status?: string
+          total_amount_cents?: number
           total_amount_minor?: number
           updated_at?: string
         }
@@ -1260,6 +1320,117 @@ export type Database = {
             columns: ["platform_admin_audit_log_id"]
             isOneToOne: false
             referencedRelation: "platform_admin_audit_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_payout_review_notes: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          note: string
+          note_type: string
+          review_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          note: string
+          note_type?: string
+          review_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          note?: string
+          note_type?: string
+          review_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_review_notes_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_review_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_payout_review_records: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          creator_user_id: string | null
+          currency: string
+          fraud_hold_id: number | null
+          id: string
+          metadata: Json
+          payout_account_id: string | null
+          payout_ledger_entry_id: number | null
+          review_notes: string | null
+          review_reason: string | null
+          review_status: string
+          risk_status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          fraud_hold_id?: number | null
+          id?: string
+          metadata?: Json
+          payout_account_id?: string | null
+          payout_ledger_entry_id?: number | null
+          review_notes?: string | null
+          review_reason?: string | null
+          review_status?: string
+          risk_status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          fraud_hold_id?: number | null
+          id?: string
+          metadata?: Json
+          payout_account_id?: string | null
+          payout_ledger_entry_id?: number | null
+          review_notes?: string | null
+          review_reason?: string | null
+          review_status?: string
+          risk_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_review_records_fraud_hold_id_fkey"
+            columns: ["fraud_hold_id"]
+            isOneToOne: false
+            referencedRelation: "platform_fraud_holds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_review_records_payout_account_id_fkey"
+            columns: ["payout_account_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_review_records_payout_ledger_entry_id_fkey"
+            columns: ["payout_ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_ledger_entries"
             referencedColumns: ["id"]
           },
         ]

@@ -30,12 +30,18 @@ export const CREATOR_PAYOUT_BATCHES_TABLE = "creator_payout_batches";
 export const CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE = "creator_payout_provider_transfers";
 export const CREATOR_PAYOUT_HOLDS_TABLE = "creator_payout_holds";
 export const CREATOR_PAYOUT_AUDIT_LOG_TABLE = "creator_payout_audit_log";
+export const CREATOR_PAYOUT_REVIEW_RECORDS_TABLE = "creator_payout_review_records";
+export const CREATOR_PAYOUT_REVIEW_NOTES_TABLE = "creator_payout_review_notes";
+export const CREATOR_PAYOUT_BATCH_ITEMS_TABLE = "creator_payout_batch_items";
 
 export type AdminFinanceReadModel = {
   financeLedgerEventCount: number | null;
   creatorPayoutLedgerEntryCount: number | null;
   creatorPayoutAccountCount: number | null;
+  creatorPayoutReviewRecordCount: number | null;
+  creatorPayoutReviewNoteCount: number | null;
   creatorPayoutBatchCount: number | null;
+  creatorPayoutBatchItemCount: number | null;
   creatorPayoutProviderTransferCount: number | null;
   creatorPayoutHoldCount: number | null;
   creatorPayoutAuditLogCount: number | null;
@@ -105,7 +111,10 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     financeLedgerEventCount,
     creatorPayoutLedgerEntryCount,
     creatorPayoutAccountCount,
+    creatorPayoutReviewRecordCount,
+    creatorPayoutReviewNoteCount,
     creatorPayoutBatchCount,
+    creatorPayoutBatchItemCount,
     creatorPayoutProviderTransferCount,
     creatorPayoutHoldCount,
     creatorPayoutAuditLogCount,
@@ -136,7 +145,10 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(PLATFORM_FINANCE_LEDGER_EVENTS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_ACCOUNTS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_REVIEW_RECORDS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_REVIEW_NOTES_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_BATCHES_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_BATCH_ITEMS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_HOLDS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_AUDIT_LOG_TABLE)),
@@ -169,7 +181,10 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     financeLedgerEventCount,
     creatorPayoutLedgerEntryCount,
     creatorPayoutAccountCount,
+    creatorPayoutReviewRecordCount,
+    creatorPayoutReviewNoteCount,
     creatorPayoutBatchCount,
+    creatorPayoutBatchItemCount,
     creatorPayoutProviderTransferCount,
     creatorPayoutHoldCount,
     creatorPayoutAuditLogCount,
