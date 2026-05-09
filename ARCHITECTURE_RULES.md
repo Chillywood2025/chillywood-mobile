@@ -44,6 +44,7 @@ Discovery/Spectator D3-D10 foundation is pushed:
 - spectator eligibility and ranking helpers are read-only/foundation
 - notification/activity trigger foundation sends no pushes
 - D7B `room_broadcast_sessions` schema foundation is pushed as admin/operator-owned foundation only; it stores no active playback, constrains public watchability and spectator playback false, and constrains HLS URLs and Egress ids null
+- D7C spectator broadcast backend skeletons are pushed as admin/operator-only `spectator-broadcast-start`, `spectator-broadcast-stop`, and `spectator-broadcast-status`; they return `not_configured` until real Egress/HLS is connected and must not call Egress, generate HLS URLs, enable playback, or return spectator LiveKit tokens
 
 Forbidden until a later explicit proof lane:
 - spectator playback
