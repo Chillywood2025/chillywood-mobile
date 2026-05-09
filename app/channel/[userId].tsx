@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   followChannel,
@@ -46,6 +47,11 @@ const formatRoleLabel = (value?: UserChannelProfile["role"] | null) => {
 const formatCountLabel = (value: number, singular: string, plural: string) => {
   const normalized = Math.max(0, Math.floor(Number(value) || 0));
   return `${normalized} ${normalized === 1 ? singular : plural}`;
+};
+
+const formatStatValue = (value: number | null) => {
+  if (value === null) return "—";
+  return String(Math.max(0, Math.floor(Number(value) || 0)));
 };
 
 const formatDate = (value?: string | null) => {
@@ -83,6 +89,7 @@ const hasPlayableVideo = (video: CreatorVideo) => !!(video.playbackUrl || video.
 
 export default function PublicChannelScreen() {
   const router = useRouter();
+  const safeAreaInsets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ userId?: string | string[] }>();
   const routeUserId = normalizeRouteParam(params.userId);
   const { isLoading: sessionLoading, user } = useSession();
@@ -169,23 +176,18 @@ export default function PublicChannelScreen() {
   const followerCount = audienceState?.followerCount ?? null;
   const viewerFollowState = audienceState?.viewerFollowState ?? "unavailable";
   const visibleStats = useMemo(() => {
-    const stats: { label: string; value: string }[] = [
+    return [
+      { label: "Followers", value: formatStatValue(followerCount) },
       { label: "Videos", value: String(videos.length) },
       { label: "Events", value: String(events.length) },
     ];
-    if (followerCount !== null) {
-      stats.unshift({ label: "Followers", value: String(followerCount) });
-    }
-    return stats;
   }, [events.length, followerCount, videos.length]);
   const channelPulseCards = useMemo(() => {
     const cards: { label: string; value: string }[] = [
+      { label: "Followers", value: formatStatValue(followerCount) },
       { label: "Videos", value: String(videos.length) },
       { label: "Events", value: String(events.length) },
     ];
-    if (followerCount !== null) {
-      cards.unshift({ label: "Followers", value: String(followerCount) });
-    }
     if (featuredVideo) {
       cards.push({
         label: formatDate(featuredVideo.createdAt) || "Published",
@@ -340,7 +342,7 @@ export default function PublicChannelScreen() {
   };
 
   const renderBackHeader = () => (
-    <View style={styles.navBar}>
+    <View style={[styles.navBar, { paddingTop: Math.max(28, safeAreaInsets.top + 12) }]}>
       <TouchableOpacity style={styles.navButton} activeOpacity={0.82} onPress={() => router.back()}>
         <Text style={styles.navButtonText}>←</Text>
       </TouchableOpacity>
@@ -624,7 +626,10 @@ export default function PublicChannelScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: 40 + safeAreaInsets.bottom }]}
+        showsVerticalScrollIndicator={false}
+      >
         {renderBackHeader()}
         {renderHero()}
         {renderChannelPulse()}
