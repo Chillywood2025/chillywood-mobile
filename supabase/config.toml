@@ -30,3 +30,6 @@ verify_jwt = false
 
 [functions.stripe-connect-transfer-create]
 verify_jwt = false
+
+[functions.payout-release-preflight]
+verify_jwt = false
