@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import {
   authenticateRequest,
+  createD7DTestBroadcastSession,
   createAdminClient,
   createAuthClient,
   hasForbiddenBroadcastInput,
@@ -10,11 +11,14 @@ import {
   optionsResponse,
   parseJsonPayload,
   readBroadcastSession,
+  readD7DTestEgressReadiness,
   readSpectatorBroadcastOutputConfigStatus,
   requestedBroadcastSessionId,
   safeBroadcastStatus,
   safeWriteAuditLog,
   sanitizeErrorMessage,
+  shouldCreateD7DTestSession,
+  startD7DTestEgress,
   type AuthenticatedUser,
   type SpectatorBroadcastPayload,
   type SupabaseClientLike,
@@ -91,7 +95,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const session = broadcastSessionId ? await readBroadcastSession(adminClient, broadcastSessionId) : null;
+    let session = broadcastSessionId ? await readBroadcastSession(adminClient, broadcastSessionId) : null;
     if (broadcastSessionId && !session) {
       return jsonResponse(404, {
         error: "not_found",
@@ -104,8 +108,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (!session && shouldCreateD7DTestSession(parsed.value)) {
+      session = await createD7DTestBroadcastSession(adminClient, parsed.value, currentUser.id);
+      broadcastSessionId = session?.id ?? null;
+    }
+
     const safeStatus = safeBroadcastStatus(session);
     const outputConfig = readSpectatorBroadcastOutputConfigStatus();
+    const readiness = readD7DTestEgressReadiness();
 
     requestedAuditLogId = await writeAuditLog(adminClient, FUNCTION_NAME, {
       action: "spectator_broadcast_start_requested",
@@ -114,6 +124,7 @@ Deno.serve(async (req) => {
       afterState: notConfiguredPayload({
         auditWritten: false,
         broadcastSession: safeStatus,
+        d7dReadiness: readiness,
         outputConfig,
         started: false,
       }),
@@ -129,6 +140,64 @@ Deno.serve(async (req) => {
       targetType: broadcastSessionId ? "room_broadcast_session" : "spectator_broadcast_start",
     });
 
+    const d7dStart = session ? await startD7DTestEgress(adminClient, session) : {
+      result: null,
+      status: "not_configured" as const,
+      readiness,
+    };
+
+    if (d7dStart.status === "started") {
+      const startedAuditLogId = await writeAuditLog(adminClient, FUNCTION_NAME, {
+        action: "spectator_broadcast_started",
+        actorEmail: currentUser.email,
+        actorUserId: currentUser.id,
+        beforeState: {
+          requested_audit_log_id: requestedAuditLogId,
+        },
+        afterState: {
+          ...d7dStart.result,
+          fullRoomTokenForSpectators: false,
+          hlsUrlReturned: false,
+          publicPlaybackEnabled: false,
+          spectatorPlaybackEnabled: false,
+        },
+        metadata: {
+          broadcast_session_id: broadcastSessionId,
+          egress_connected: true,
+          egress_id_written: true,
+          foundation_only: false,
+          hls_enabled: true,
+          hls_url_generated: false,
+          livekit_api_called: true,
+          requested_audit_log_id: requestedAuditLogId,
+        },
+        reason: "D7D test Egress start was called for a private proof session; public spectator playback remains disabled.",
+        targetId: broadcastSessionId,
+        targetType: "room_broadcast_session",
+      });
+
+      return jsonResponse(200, {
+        audit: {
+          requested: true,
+          requestedAuditLogId,
+          startedAuditLogId,
+          written: true,
+        },
+        broadcastSessionId,
+        d7dReadiness: d7dStart.readiness,
+        egressIdPresent: true,
+        fullRoomTokenForSpectators: false,
+        hlsEnabled: true,
+        hlsUrlReturned: false,
+        livekitApiCalled: true,
+        playbackEnabled: false,
+        publicPlaybackEnabled: false,
+        spectatorPlaybackEnabled: false,
+        started: true,
+        status: "test_started",
+      });
+    }
+
     const blockedAuditLogId = await writeAuditLog(adminClient, FUNCTION_NAME, {
       action: "spectator_broadcast_start_blocked_not_configured",
       actorEmail: currentUser.email,
@@ -139,6 +208,7 @@ Deno.serve(async (req) => {
       afterState: notConfiguredPayload({
         auditWritten: true,
         broadcastSession: safeStatus,
+        d7dReadiness: d7dStart.readiness,
         outputConfig,
         started: false,
       }),
@@ -167,6 +237,7 @@ Deno.serve(async (req) => {
         },
         broadcastSession: safeStatus,
         broadcastSessionId,
+        d7dReadiness: d7dStart.readiness,
         outputConfig,
         started: false,
       }),

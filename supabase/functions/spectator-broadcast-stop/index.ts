@@ -10,11 +10,13 @@ import {
   optionsResponse,
   parseJsonPayload,
   readBroadcastSession,
+  readD7DTestEgressReadiness,
   readSpectatorBroadcastOutputConfigStatus,
   requestedBroadcastSessionId,
   safeBroadcastStatus,
   safeWriteAuditLog,
   sanitizeErrorMessage,
+  stopD7DTestEgress,
   type AuthenticatedUser,
   type SpectatorBroadcastPayload,
   type SupabaseClientLike,
@@ -106,6 +108,7 @@ Deno.serve(async (req) => {
 
     const safeStatus = safeBroadcastStatus(session);
     const outputConfig = readSpectatorBroadcastOutputConfigStatus();
+    const readiness = readD7DTestEgressReadiness();
 
     requestedAuditLogId = await writeAuditLog(adminClient, FUNCTION_NAME, {
       action: "spectator_broadcast_stop_requested",
@@ -114,6 +117,7 @@ Deno.serve(async (req) => {
       afterState: notConfiguredPayload({
         auditWritten: false,
         broadcastSession: safeStatus,
+        d7dReadiness: readiness,
         outputConfig,
         reason: "egress_not_connected",
         stopped: false,
@@ -130,6 +134,64 @@ Deno.serve(async (req) => {
       targetType: broadcastSessionId ? "room_broadcast_session" : "spectator_broadcast_stop",
     });
 
+    const d7dStop = session ? await stopD7DTestEgress(adminClient, session) : {
+      result: null,
+      status: "not_configured" as const,
+      readiness,
+    };
+
+    if (d7dStop.status === "stopped") {
+      const stoppedAuditLogId = await writeAuditLog(adminClient, FUNCTION_NAME, {
+        action: "spectator_broadcast_stopped",
+        actorEmail: currentUser.email,
+        actorUserId: currentUser.id,
+        beforeState: {
+          requested_audit_log_id: requestedAuditLogId,
+        },
+        afterState: {
+          ...d7dStop.result,
+          fullRoomTokenForSpectators: false,
+          hlsUrlReturned: false,
+          publicPlaybackEnabled: false,
+          spectatorPlaybackEnabled: false,
+        },
+        metadata: {
+          broadcast_session_id: broadcastSessionId,
+          egress_connected: false,
+          egress_id_written: true,
+          foundation_only: false,
+          hls_enabled: false,
+          hls_url_generated: false,
+          livekit_api_called: true,
+          requested_audit_log_id: requestedAuditLogId,
+        },
+        reason: "D7D test Egress stop was called for a private proof session; public spectator playback remains disabled.",
+        targetId: broadcastSessionId,
+        targetType: "room_broadcast_session",
+      });
+
+      return jsonResponse(200, {
+        audit: {
+          requested: true,
+          requestedAuditLogId,
+          stoppedAuditLogId,
+          written: true,
+        },
+        broadcastSessionId,
+        d7dReadiness: d7dStop.readiness,
+        egressIdPresent: true,
+        fullRoomTokenForSpectators: false,
+        hlsEnabled: false,
+        hlsUrlReturned: false,
+        livekitApiCalled: true,
+        playbackEnabled: false,
+        publicPlaybackEnabled: false,
+        spectatorPlaybackEnabled: false,
+        status: "test_stopped",
+        stopped: true,
+      });
+    }
+
     const blockedAuditLogId = await writeAuditLog(adminClient, FUNCTION_NAME, {
       action: "spectator_broadcast_stop_blocked_not_configured",
       actorEmail: currentUser.email,
@@ -140,6 +202,7 @@ Deno.serve(async (req) => {
       afterState: notConfiguredPayload({
         auditWritten: true,
         broadcastSession: safeStatus,
+        d7dReadiness: d7dStop.readiness,
         outputConfig,
         reason: "egress_not_connected",
         stopped: false,
@@ -169,6 +232,7 @@ Deno.serve(async (req) => {
         },
         broadcastSession: safeStatus,
         broadcastSessionId,
+        d7dReadiness: d7dStop.readiness,
         outputConfig,
         reason: "egress_not_connected",
         stopped: false,

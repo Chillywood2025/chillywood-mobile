@@ -10,6 +10,7 @@ import {
   optionsResponse,
   parseJsonPayload,
   readBroadcastSession,
+  readD7DTestEgressReadiness,
   readSpectatorBroadcastOutputConfigStatus,
   requestedBroadcastSessionId,
   safeBroadcastStatus,
@@ -90,6 +91,7 @@ Deno.serve(async (req) => {
       ...notConfiguredPayload({
         broadcastSession: safeBroadcastStatus(session),
         broadcastSessionId,
+        d7dReadiness: readD7DTestEgressReadiness(),
         outputConfig: readSpectatorBroadcastOutputConfigStatus(),
       }),
       statusRead: true,
