@@ -141,6 +141,7 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - profiles remain social identity hubs even when creator-platform mode grows deeper
 - Public Channel must never show owner-only controls to non-owners
 - Public Channel must never show drafts, private videos, or unpublished content
+- Profile route params may provide fallback presentation, but backed profile identity must win once loaded. Creator-video Player deep links must enforce public-or-owner visibility and must not expose drafts/private/unpublished videos to non-owners, even when another role can read broader moderation data elsewhere.
 - Creator payout readiness belongs in Channel Studio only. Test-mode provider setup UI may route through backend Edge Functions, but payout execution must stay inactive until KYC, tax forms, fraud review, admin approval, 7-30 day hold, minimum payout decision, immutable admin audit, and explicit payout-release requirements are separately scoped and proved.
 
 ## Official Presence And Social Graph Truth

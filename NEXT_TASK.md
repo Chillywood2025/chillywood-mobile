@@ -208,6 +208,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Channel Studio Home dashboard correction is pushed.
 - Public Channel Phase 2B is pushed at `/channel/[userId]`.
 - Public Channel visual polish and streaming-network correction are pushed.
+- Role Visibility Compatibility fix is pushed: Profile backed identity now wins over route display params after load, and direct creator-video Player lookup now enforces public-or-owner visibility before returning non-public videos. No migrations, generated database types, RLS/storage policies, Supabase remote state, package/native config, LiveKit config, forbidden app surfaces, Admin bypass, money actions, fake balances, or Premium gate changes were added. Runtime visual proof for the full role matrix should still be run on a current build.
 - Profile View Channel routes to `/channel/[userId]`.
 - Studio Preview Channel routes to `/channel/[ownUserId]`.
 - Admin Command Center V1A is pushed at `/admin`.
@@ -281,6 +282,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Subscribers = monetized channel supporters later.
 - Public Channel must not leak owner-only controls to non-owners.
 - Public Channel must not show drafts/private/unpublished content.
+- Profile deep-link route params must remain fallback-only once backed identity loads. Creator-video Player deep links must remain public-or-owner; non-public creator videos must not resolve for non-owners.
 - Channel Studio is owner-only.
 - Admin is platform/operator authority, not creator/channel owner authority.
 - `/admin` is the only Admin Command Center route.
