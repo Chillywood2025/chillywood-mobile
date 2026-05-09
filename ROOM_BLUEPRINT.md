@@ -585,6 +585,7 @@ Relationship to other rooms: Party Room is the canonical watch-together room on 
 
 ### D. Core controls
 - Required quick actions: react, comment, inspect participants, invite, report, and understand who is hosting the room.
+- Current Party Room chrome may expose a compact Player / Invite / Report / Leave action dock when it keeps shared viewing, social presence, comments, and safety controls understandable without turning Party Room into Live Stage.
 - Host controls: synchronized playback authority, room lock/open state, participant policy, and party-state management.
 - Viewer/user controls: react, comment, follow the shared experience, inspect who is present, leave, and adjust local-only layout or visibility preferences on their own screen without changing host authority.
 - Creator controls: when a creator is hosting, present the room as a creator-led social watch without turning it into Live Room.
@@ -617,6 +618,7 @@ Relationship to other rooms: Party Room is the canonical watch-together room on 
 - invite/share continuity
 - report flow and role-aware moderation hooks
 - visible participant presence
+- compact access to shared Player, invite/share, report, and safe leave behavior
 - simple late-join or sync-recovery assistance
 
 ### H. Future expansion features
