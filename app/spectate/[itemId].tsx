@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+  getDiscoveryAdPolicyLabel,
   getDiscoveryAccessLabel,
   getDiscoveryLiveLabel,
   readPublicDiscoveryFeedItem,
@@ -184,6 +185,7 @@ export default function SpectatorMetadataScreen() {
             <Text style={styles.guardrailItem}>No mic or camera controls</Text>
             <Text style={styles.guardrailItem}>No full LiveKit room token</Text>
             <Text style={styles.guardrailItem}>No HLS or Egress playback URL</Text>
+            <Text style={styles.guardrailItem}>No real ad playback or CTV inventory</Text>
             <Text style={styles.guardrailItem}>No host controls or room mutation</Text>
           </View>
         </View>
@@ -196,6 +198,10 @@ export default function SpectatorMetadataScreen() {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Rights</Text>
             <Text style={styles.detailValue}>{decision.rightsStatus.replaceAll("_", " ")}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Ad policy</Text>
+            <Text style={styles.detailValue}>{getDiscoveryAdPolicyLabel(item)}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Full room</Text>

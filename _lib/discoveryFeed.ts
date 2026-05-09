@@ -122,6 +122,23 @@ export function getDiscoveryLiveLabel(item: Pick<DiscoveryFeedItem, "live_state"
   return "Public";
 }
 
+export function getDiscoveryAdPolicyLabel(item: Pick<DiscoveryFeedItem, "ad_policy">) {
+  switch (item.ad_policy) {
+    case "free_with_ads":
+      return "Free with ads later";
+    case "premium_ad_free":
+      return "Premium ad-free";
+    case "no_ads":
+      return "No ads";
+    case "sponsor_breaks_only_later":
+      return "Sponsor breaks later";
+    case "ctv_ads_allowed_later":
+      return "CTV ads later";
+    default:
+      return "Ads not allowed";
+  }
+}
+
 export function resolveDiscoveryRankingReason(
   item: Pick<
     DiscoveryFeedItem,
