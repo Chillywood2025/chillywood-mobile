@@ -43,6 +43,7 @@ Discovery/Spectator D3-D10 foundation is pushed:
 - `/spectate/[itemId]` is metadata-only
 - spectator eligibility and ranking helpers are read-only/foundation
 - notification/activity trigger foundation sends no pushes
+- D7B `room_broadcast_sessions` schema foundation is pushed as admin/operator-owned foundation only; it stores no active playback, constrains public watchability and spectator playback false, and constrains HLS URLs and Egress ids null
 
 Forbidden until a later explicit proof lane:
 - spectator playback
