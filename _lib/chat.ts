@@ -201,12 +201,17 @@ function parseChatThreadMember(row: ChatThreadMemberRow): ChatThreadMember | nul
   };
 }
 
-function parseChatThread(row: ChatThreadRow, currentUserId: string): ChatThreadSummary | null {
+function parseChatThread(
+  row: ChatThreadRow,
+  currentUserId: string,
+  options?: { requireCurrentMember?: boolean },
+): ChatThreadSummary | null {
   const threadId = toText(row.id);
   const participantPairKey = toText(row.participant_pair_key);
   const createdBy = toText(row.created_by);
   if (!threadId || !participantPairKey || !createdBy) return null;
 
+  const requireCurrentMember = options?.requireCurrentMember ?? true;
   const members = (row.members ?? [])
     .map(parseChatThreadMember)
     .filter(isDefined);
@@ -218,6 +223,7 @@ function parseChatThread(row: ChatThreadRow, currentUserId: string): ChatThreadS
   });
   const currentMember = orderedMembers.find((member) => member.userId === currentUserId) ?? null;
   const otherMember = orderedMembers.find((member) => member.userId !== currentUserId) ?? null;
+  if (requireCurrentMember && !currentMember) return null;
 
   return {
     threadId,
@@ -309,6 +315,9 @@ export async function listChatMessages(threadId: string): Promise<ChatMessage[]>
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return [];
 
+  const thread = await getChatThread(normalizedThreadId);
+  if (!thread?.currentMember) return [];
+
   const { data, error } = await supabase
     .from(CHAT_MESSAGES_TABLE)
     .select(CHAT_MESSAGE_SELECT)
@@ -363,7 +372,7 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
   const existingRow: ChatThreadRow | null = !existing.error && existing.data ? existing.data : null;
 
   if (existingRow) {
-    const thread = parseChatThread(existingRow, currentUserId);
+    const thread = parseChatThread(existingRow, currentUserId, { requireCurrentMember: false });
     if (thread?.currentMember && thread.otherMember) {
       logChatThread("direct_thread_existing", {
         threadId: thread.threadId,
@@ -557,6 +566,10 @@ export async function sendChatMessage(
   if (!normalizedThreadId || !bodyForInsert) {
     throw new Error("Message text is required.");
   }
+  const thread = await getChatThread(normalizedThreadId);
+  if (!thread?.currentMember) {
+    throw new Error("This Chi'lly Chat thread is unavailable.");
+  }
 
   logChatInvite("send_message_start", {
     currentUserId,
@@ -665,6 +678,8 @@ export async function markChatThreadRead(threadId: string): Promise<void> {
 export async function clearEndedChatThreadCall(threadId: string): Promise<void> {
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return;
+  const thread = await getChatThread(normalizedThreadId);
+  if (!thread?.currentMember) return;
 
   const clearCallUpdate: ChatThreadUpdate = {
     active_communication_room_id: null,
