@@ -3456,6 +3456,105 @@ export type Database = {
         }
         Relationships: []
       }
+      room_broadcast_sessions: {
+        Row: {
+          access_type: string
+          ad_policy: string
+          broadcast_status: string
+          channel_user_id: string | null
+          cost_guard_status: string
+          created_at: string
+          creator_event_id: string | null
+          egress_id: string | null
+          egress_provider: string
+          egress_status: string
+          ended_at: string | null
+          hls_playback_url: string | null
+          host_user_id: string | null
+          id: string
+          is_publicly_watchable: boolean
+          is_spectator_playback_enabled: boolean
+          last_health_checked_at: string | null
+          max_broadcast_minutes: number | null
+          max_concurrent_spectators: number | null
+          metadata: Json
+          playback_url_status: string
+          requires_premium: boolean
+          requires_ticket: boolean
+          rights_status: string
+          source_room_id: string | null
+          source_type: string
+          started_at: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          watch_party_room_id: string | null
+        }
+        Insert: {
+          access_type?: string
+          ad_policy?: string
+          broadcast_status?: string
+          channel_user_id?: string | null
+          cost_guard_status?: string
+          created_at?: string
+          creator_event_id?: string | null
+          egress_id?: string | null
+          egress_provider?: string
+          egress_status?: string
+          ended_at?: string | null
+          hls_playback_url?: string | null
+          host_user_id?: string | null
+          id?: string
+          is_publicly_watchable?: boolean
+          is_spectator_playback_enabled?: boolean
+          last_health_checked_at?: string | null
+          max_broadcast_minutes?: number | null
+          max_concurrent_spectators?: number | null
+          metadata?: Json
+          playback_url_status?: string
+          requires_premium?: boolean
+          requires_ticket?: boolean
+          rights_status?: string
+          source_room_id?: string | null
+          source_type?: string
+          started_at?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          watch_party_room_id?: string | null
+        }
+        Update: {
+          access_type?: string
+          ad_policy?: string
+          broadcast_status?: string
+          channel_user_id?: string | null
+          cost_guard_status?: string
+          created_at?: string
+          creator_event_id?: string | null
+          egress_id?: string | null
+          egress_provider?: string
+          egress_status?: string
+          ended_at?: string | null
+          hls_playback_url?: string | null
+          host_user_id?: string | null
+          id?: string
+          is_publicly_watchable?: boolean
+          is_spectator_playback_enabled?: boolean
+          last_health_checked_at?: string | null
+          max_broadcast_minutes?: number | null
+          max_concurrent_spectators?: number | null
+          metadata?: Json
+          playback_url_status?: string
+          requires_premium?: boolean
+          requires_ticket?: boolean
+          rights_status?: string
+          source_room_id?: string | null
+          source_type?: string
+          started_at?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          watch_party_room_id?: string | null
+        }
+        Relationships: []
+      }
       safety_reports: {
         Row: {
           category: string
