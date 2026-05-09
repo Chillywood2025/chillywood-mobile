@@ -302,6 +302,8 @@ Locked meanings:
 - `Live Watch-Party` = social live-viewing mode in Live Room
 - `Watch-Party Live` = title/player watch-together flow
 
+Live Stage role/access hardening is pushed at `4b90e09`. Mode switching is host-only, non-host route-param attempts must not mutate mode, Live First viewers cannot self-promote into camera/speaker seats on stage entry, and shared participant-state writes that affect speaker/camera/mute/remove state require the authenticated room host. Watch-Party Live remains title/player-based and separate from Live Stage.
+
 ## Premium Live Access Rule
 Full `Live First`, `Live Watch-Party`, and `Watch-Party Live` access is Premium.
 

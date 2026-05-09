@@ -48,6 +48,11 @@ Do not create extra studio route drift beyond pushed `/channel-studio` inside th
 
 Do not mix `Watch-Party Live` and `Live Watch-Party`.
 
+Current live/watch-party role truth:
+- Live Stage / Live Room mode switching is host-only; non-host route-param attempts must resolve back to non-mutating viewer state.
+- Live First viewers cannot self-promote into camera/speaker seats on stage entry.
+- Shared participant-state writes that affect speaker/camera/mute/remove state require the authenticated room host.
+
 ### 2.3 Current Product Rules To Preserve
 - Profile/channel stays closed as an implementation chapter unless a real regression is proved.
 - Content Studio stays closed enough to move on; this chapter must not reopen content programming work.

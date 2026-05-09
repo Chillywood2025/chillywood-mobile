@@ -294,7 +294,9 @@ Relationship to other rooms: Live Room is the canonical live-session shell on `/
 
 ### E. Permissions / visibility / roles
 - Host authority governs live state, mode transitions, and room policy.
+- Mode transitions are host-only. Non-host route params or local controls must not mutate `Live First` / `Live Watch-Party` state.
 - Viewers can see and do only what the active room mode permits.
+- Participant state writes that affect speaker/camera/mute/remove authority must be backed by the authenticated room host.
 - Co-host or speaker-style roles can exist later, but role boundaries must stay visible and explicit.
 - Public/private/gated visibility must remain clear before and during entry.
 - Moderation roles can observe or act through the established platform-role and safety-report foundation.
@@ -396,6 +398,7 @@ Relationship to other rooms: Live Stage is the in-room presentation layer inside
 
 ### E. Permissions / visibility / roles
 - Host authority governs stage mode.
+- `Live First` viewers cannot self-promote into a camera/speaker seat on stage entry; host-granted role/state must back that access.
 - Viewers should always know which mode they are seeing and why.
 - Participant visibility can differ by mode, feature state, or role.
 - Official or moderator actions should be rare, explicit, and auditable.
