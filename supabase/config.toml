@@ -42,3 +42,6 @@ verify_jwt = false
 
 [functions.sponsor-brand-payment-preflight]
 verify_jwt = false
+
+[functions.sponsor-reporting-fraud-preflight]
+verify_jwt = false
