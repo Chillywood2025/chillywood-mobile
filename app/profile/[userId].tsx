@@ -48,6 +48,8 @@ import {
   type CreatorPermissionSet,
 } from "../../_lib/monetization";
 import {
+  getRuntimeControlBlockedCopy,
+  isRuntimeControlBlockedAccess,
   WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
   requireWatchPartyLivePremium,
   type PremiumWatchPartyFeatureAccessDecision,
@@ -1392,6 +1394,18 @@ export default function ProfileScreen() {
     if (hasLiveRouteContext) {
       const access = await requireWatchPartyLivePremium({ accessKey: partyIdParam }).catch(() => null);
       if (!access?.allowed) {
+        if (isRuntimeControlBlockedAccess(access)) {
+          const blockedCopy = getRuntimeControlBlockedCopy(access);
+          setWatchPartyPremiumGate(null);
+          setWatchPartyPremiumSheetVisible(false);
+          Alert.alert(blockedCopy.title, blockedCopy.message);
+          trackEvent("runtime_control_blocked", {
+            surface: "profile-watch-party-live",
+            controlKey: access?.runtimeControlKey ?? "watch_party_live_enabled",
+            roomId: partyIdParam || "linked-room",
+          });
+          return;
+        }
         if (access) setWatchPartyPremiumGate(access);
         setWatchPartyPremiumSheetVisible(true);
         trackEvent("monetization_gate_shown", {
@@ -1417,6 +1431,18 @@ export default function ProfileScreen() {
     if (!scheduledWatchPartyTitleId) return;
     const access = await requireWatchPartyLivePremium({ accessKey: scheduledWatchPartyTitleId }).catch(() => null);
     if (!access?.allowed) {
+      if (isRuntimeControlBlockedAccess(access)) {
+        const blockedCopy = getRuntimeControlBlockedCopy(access);
+        setWatchPartyPremiumGate(null);
+        setWatchPartyPremiumSheetVisible(false);
+        Alert.alert(blockedCopy.title, blockedCopy.message);
+        trackEvent("runtime_control_blocked", {
+          surface: "profile-watch-party-live",
+          controlKey: access?.runtimeControlKey ?? "watch_party_live_enabled",
+          titleId: scheduledWatchPartyTitleId,
+        });
+        return;
+      }
       if (access) setWatchPartyPremiumGate(access);
       setWatchPartyPremiumSheetVisible(true);
       trackEvent("monetization_gate_shown", {

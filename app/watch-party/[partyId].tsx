@@ -69,6 +69,8 @@ import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
 import {
+    getRuntimeControlBlockedCopy,
+    isRuntimeControlBlockedAccess,
     LIVE_FIRST_PREMIUM_UPSELL_COPY,
     WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
     requireLiveFirstPremium,
@@ -228,21 +230,29 @@ const getRoomAccessGateBody = (access: Pick<RoomAccessResolution, "label"> | nul
     : "This room stays locked because premium room access is not currently available for this device or account."
 );
 
-const getAccessGateTitle = (gate: MonetizationGate) => (
-  gate.source === "live_first"
-    ? LIVE_FIRST_PREMIUM_UPSELL_COPY.title
-    : gate.source === "watch_party_live"
-      ? WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.title
-      : getRoomAccessGateTitle(gate.access)
-);
+const getAccessGateTitle = (gate: MonetizationGate) => {
+  if (gate.source === "live_first" || gate.source === "watch_party_live") {
+    if (isRuntimeControlBlockedAccess(gate.access)) {
+      return getRuntimeControlBlockedCopy(gate.access).title;
+    }
+    return gate.source === "live_first"
+      ? LIVE_FIRST_PREMIUM_UPSELL_COPY.title
+      : WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.title;
+  }
+  return getRoomAccessGateTitle(gate.access);
+};
 
-const getAccessGateBody = (gate: MonetizationGate) => (
-  gate.source === "live_first"
-    ? LIVE_FIRST_PREMIUM_UPSELL_COPY.message
-    : gate.source === "watch_party_live"
-      ? WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message
-      : getRoomAccessGateBody(gate.access)
-);
+const getAccessGateBody = (gate: MonetizationGate) => {
+  if (gate.source === "live_first" || gate.source === "watch_party_live") {
+    if (isRuntimeControlBlockedAccess(gate.access)) {
+      return getRuntimeControlBlockedCopy(gate.access).message;
+    }
+    return gate.source === "live_first"
+      ? LIVE_FIRST_PREMIUM_UPSELL_COPY.message
+      : WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message;
+  }
+  return getRoomAccessGateBody(gate.access);
+};
 
 const getRoomAccessMessage = (access: Pick<RoomAccessResolution, "reason" | "label"> | null | undefined) => {
   if (access?.reason === "room_locked") return "This room is locked right now. Ask the host to reopen it.";
@@ -656,14 +666,24 @@ export default function WatchPartyRoomScreen() {
               accessKey: premiumAccessKey || snapshot.room.partyId,
             });
           }
-          setAccessSheetVisible(true);
+          setAccessSheetVisible(!isRuntimeControlBlockedAccess(premiumAccess));
           setRoom(snapshot.room);
           setLoading(false);
-          trackEvent("monetization_gate_shown", {
-            surface: "watch-party-room",
-            reason: premiumAccess?.reason ?? "premium_required",
-            roomId: snapshot.room.partyId,
-          });
+          if (isRuntimeControlBlockedAccess(premiumAccess)) {
+            trackEvent("runtime_control_blocked", {
+              surface: "watch-party-room",
+              controlKey: premiumAccess?.runtimeControlKey ?? (
+                premiumAccessSource === "live_first" ? "live_first_enabled" : "watch_party_live_enabled"
+              ),
+              roomId: snapshot.room.partyId,
+            });
+          } else {
+            trackEvent("monetization_gate_shown", {
+              surface: "watch-party-room",
+              reason: premiumAccess?.reason ?? "premium_required",
+              roomId: snapshot.room.partyId,
+            });
+          }
           return;
         }
 
@@ -1524,6 +1544,18 @@ export default function WatchPartyRoomScreen() {
 
     const premiumAccess = await requireWatchPartyLivePremium({ accessKey: targetSourceId || nextPartyId }).catch(() => null);
     if (!premiumAccess?.allowed) {
+      if (isRuntimeControlBlockedAccess(premiumAccess)) {
+        const blockedCopy = getRuntimeControlBlockedCopy(premiumAccess);
+        Alert.alert(blockedCopy.title, blockedCopy.message);
+        setAccessGate(null);
+        setAccessSheetVisible(false);
+        trackEvent("runtime_control_blocked", {
+          surface: "party-room-watch-party-live",
+          controlKey: premiumAccess?.runtimeControlKey ?? "watch_party_live_enabled",
+          roomId: nextPartyId,
+        });
+        return;
+      }
       if (premiumAccess) {
         setAccessGate({
           source: "watch_party_live",
@@ -2006,6 +2038,9 @@ export default function WatchPartyRoomScreen() {
   }
 
   if (accessGate && room) {
+    const accessGateSheetReason = isAccessSheetReason(accessGate.access.reason)
+      ? accessGate.access.reason
+      : null;
     const accessGatePresentation = getMonetizationAccessSheetPresentation({
       gate: accessGate.access,
       appDisplayName: branding.appDisplayName,
@@ -2032,63 +2067,67 @@ export default function WatchPartyRoomScreen() {
               capturePolicy: room.capturePolicy,
             })}
           />
-          <TouchableOpacity
-            style={[styles.secondaryBtn, styles.accessPrimaryButton]}
-            onPress={() => setAccessSheetVisible(true)}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-              Review Access
-            </Text>
-          </TouchableOpacity>
+          {accessGateSheetReason ? (
+            <TouchableOpacity
+              style={[styles.secondaryBtn, styles.accessPrimaryButton]}
+              onPress={() => setAccessSheetVisible(true)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
+                Review Access
+              </Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>← Go Back</Text>
           </TouchableOpacity>
         </View>
-        <AccessSheet
-          visible={accessSheetVisible}
-          reason={accessGate.access.reason as AccessSheetReason}
-          gate={accessGate.access}
-          appDisplayName={branding.appDisplayName}
-          premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
-          premiumUpsellBody={monetizationConfig.premiumUpsellBody}
-          deferredMonetization
-          kickerOverride={accessGatePresentation.kicker}
-          titleOverride={accessGateUpsellCopy?.title ?? accessGatePresentation.title}
-          bodyOverride={accessGateUpsellCopy?.message ?? accessGatePresentation.body}
-          actionLabelOverride={accessGatePresentation.actionLabel}
-          onPurchaseResult={(result) => {
-            if (!result.ok) {
-              trackEvent("monetization_unlock_failure", {
-                action: "purchase",
-                surface: "watch-party-room",
-                reason: accessGate.access.reason,
-                roomId: accessGate.accessKey,
-              });
-              return {
-                message: result.message,
-                tone: "error" as const,
-              };
-            }
-            return onResolveAccessGate("purchase");
-          }}
-          onRestoreResult={(result) => {
-            if (!result.ok) {
-              trackEvent("monetization_unlock_failure", {
-                action: "restore",
-                surface: "watch-party-room",
-                reason: accessGate.access.reason,
-                roomId: accessGate.accessKey,
-              });
-              return {
-                message: result.message,
-                tone: "error" as const,
-              };
-            }
-            return onResolveAccessGate("restore");
-          }}
-          onClose={() => setAccessSheetVisible(false)}
-        />
+        {accessGateSheetReason ? (
+          <AccessSheet
+            visible={accessSheetVisible}
+            reason={accessGateSheetReason}
+            gate={accessGate.access}
+            appDisplayName={branding.appDisplayName}
+            premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+            premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+            deferredMonetization
+            kickerOverride={accessGatePresentation.kicker}
+            titleOverride={accessGateUpsellCopy?.title ?? accessGatePresentation.title}
+            bodyOverride={accessGateUpsellCopy?.message ?? accessGatePresentation.body}
+            actionLabelOverride={accessGatePresentation.actionLabel}
+            onPurchaseResult={(result) => {
+              if (!result.ok) {
+                trackEvent("monetization_unlock_failure", {
+                  action: "purchase",
+                  surface: "watch-party-room",
+                  reason: accessGate.access.reason,
+                  roomId: accessGate.accessKey,
+                });
+                return {
+                  message: result.message,
+                  tone: "error" as const,
+                };
+              }
+              return onResolveAccessGate("purchase");
+            }}
+            onRestoreResult={(result) => {
+              if (!result.ok) {
+                trackEvent("monetization_unlock_failure", {
+                  action: "restore",
+                  surface: "watch-party-room",
+                  reason: accessGate.access.reason,
+                  roomId: accessGate.accessKey,
+                });
+                return {
+                  message: result.message,
+                  tone: "error" as const,
+                };
+              }
+              return onResolveAccessGate("restore");
+            }}
+            onClose={() => setAccessSheetVisible(false)}
+          />
+        ) : null}
       </View>
     );
   }
@@ -2981,7 +3020,7 @@ export default function WatchPartyRoomScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {accessGate ? (
+      {accessGate && isAccessSheetReason(accessGate.access.reason) ? (
         <AccessSheet
           visible={accessSheetVisible}
           reason={accessGate.access.reason as AccessSheetReason}

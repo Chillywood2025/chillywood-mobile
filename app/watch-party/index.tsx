@@ -33,6 +33,8 @@ import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
 import {
+  getRuntimeControlBlockedCopy,
+  isRuntimeControlBlockedAccess,
   LIVE_FIRST_PREMIUM_UPSELL_COPY,
   WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
   requireLiveFirstPremium,
@@ -279,6 +281,23 @@ export default function WatchPartyIndexScreen() {
     if (access?.allowed) {
       setWatchPartyPremiumGate(null);
       return true;
+    }
+
+    if (isRuntimeControlBlockedAccess(access)) {
+      const blockedCopy = getRuntimeControlBlockedCopy(access);
+      setWatchPartyPremiumGate(null);
+      setWatchPartyPremiumSheetVisible(false);
+      if (isLiveRoom) {
+        setCreateError(blockedCopy.message);
+      } else {
+        setJoinError(blockedCopy.message);
+      }
+      trackEvent("runtime_control_blocked", {
+        surface: "watch-party-waiting-room",
+        controlKey: access?.runtimeControlKey ?? (isLiveRoom ? "live_first_enabled" : "watch_party_live_enabled"),
+        accessKey: safeAccessKey || (isLiveRoom ? "live-first" : "watch-party-live"),
+      });
+      return false;
     }
 
     if (access) setWatchPartyPremiumGate(access);

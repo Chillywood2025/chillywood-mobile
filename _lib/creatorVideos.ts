@@ -1,5 +1,9 @@
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 import {
+  DEFAULT_APP_CONFIG,
+  readAppConfig,
+} from "./appConfig";
+import {
   createSignedMediaDownload,
   deleteStoredMediaObject,
   getMediaStorageProviderBucket,
@@ -78,14 +82,27 @@ export const formatCreatorVideoFileSize = (size?: number | null) => {
 export const getCreatorVideoUploadLimitLabel = () =>
   formatCreatorVideoFileSize(CREATOR_VIDEO_CHANNEL_MOVIE_UPLOAD_LIMIT_BYTES) || "5 GB";
 
-export const isCreatorVideoFileOverChannelMovieLimit = (file: CreatorVideoFile) =>
+export const getCreatorVideoUploadLimitBytes = (maxUploadSizeMb?: number | null) => {
+  const normalizedMb = typeof maxUploadSizeMb === "number" && Number.isFinite(maxUploadSizeMb) && maxUploadSizeMb > 0
+    ? Math.floor(maxUploadSizeMb)
+    : DEFAULT_APP_CONFIG.runtimeControls.max_upload_size_mb;
+  return normalizedMb * 1024 * 1024;
+};
+
+export const getCreatorVideoRuntimeUploadLimitLabel = (maxUploadSizeMb?: number | null) =>
+  formatCreatorVideoFileSize(getCreatorVideoUploadLimitBytes(maxUploadSizeMb)) || getCreatorVideoUploadLimitLabel();
+
+export const isCreatorVideoFileOverChannelMovieLimit = (
+  file: CreatorVideoFile,
+  maxUploadSizeMb?: number | null,
+) =>
   typeof file.size === "number"
     && Number.isFinite(file.size)
-    && file.size > CREATOR_VIDEO_CHANNEL_MOVIE_UPLOAD_LIMIT_BYTES;
+    && file.size > getCreatorVideoUploadLimitBytes(maxUploadSizeMb);
 
-export const getCreatorVideoTooLargeMessage = (size?: number | null) => {
+export const getCreatorVideoTooLargeMessage = (size?: number | null, maxUploadSizeMb?: number | null) => {
   const fileSize = formatCreatorVideoFileSize(size);
-  const limit = getCreatorVideoUploadLimitLabel();
+  const limit = getCreatorVideoRuntimeUploadLimitLabel(maxUploadSizeMb);
   return fileSize
     ? `This video is ${fileSize}. Channel uploads support movies up to ${limit}.`
     : `Channel uploads support movies up to ${limit}.`;
@@ -275,14 +292,18 @@ export async function uploadCreatorVideo(input: {
   description?: string;
   thumbUrl?: string;
   visibility: CreatorVideoVisibility;
+  maxUploadSizeMb?: number | null;
 }): Promise<CreatorVideo> {
   const ownerId = await getRequiredUserId();
   const title = toText(input.title);
   const fileUri = toText(input.file.uri);
   if (!title) throw new Error("Video title is required.");
   if (!fileUri) throw new Error("Choose a video file before uploading.");
-  if (isCreatorVideoFileOverChannelMovieLimit(input.file)) {
-    throw new Error(getCreatorVideoTooLargeMessage(input.file.size));
+  const runtimeUploadLimitMb = typeof input.maxUploadSizeMb === "number" && Number.isFinite(input.maxUploadSizeMb)
+    ? input.maxUploadSizeMb
+    : (await readAppConfig().catch(() => DEFAULT_APP_CONFIG)).runtimeControls.max_upload_size_mb;
+  if (isCreatorVideoFileOverChannelMovieLimit(input.file, runtimeUploadLimitMb)) {
+    throw new Error(getCreatorVideoTooLargeMessage(input.file.size, runtimeUploadLimitMb));
   }
 
   const id = createClientId();

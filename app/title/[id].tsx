@@ -19,6 +19,8 @@ import {
   type TitleAccessRule,
 } from "../../_lib/monetization";
 import {
+  getRuntimeControlBlockedCopy,
+  isRuntimeControlBlockedAccess,
   WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
   requireWatchPartyLivePremium,
   type PremiumWatchPartyFeatureAccessDecision,
@@ -511,6 +513,21 @@ export default function TitleDetails() {
       };
     }
 
+    if (isRuntimeControlBlockedAccess(refreshed)) {
+      const blockedCopy = getRuntimeControlBlockedCopy(refreshed);
+      setWatchPartyPremiumGate(null);
+      setWatchPartyAccessSheetVisible(false);
+      trackEvent("runtime_control_blocked", {
+        surface: "title-detail-watch-party-live",
+        controlKey: refreshed?.runtimeControlKey ?? "watch_party_live_enabled",
+        titleId: nextTitleId,
+      });
+      return {
+        message: blockedCopy.message,
+        tone: "error" as const,
+      };
+    }
+
     if (refreshed) setWatchPartyPremiumGate(refreshed);
     const message = refreshed?.monetization.issues[0] ?? "Watch-Party Live still needs Premium access on this account.";
     trackEvent("monetization_unlock_failure", {
@@ -530,6 +547,18 @@ export default function TitleDetails() {
 
     const access = await requireWatchPartyLivePremium({ accessKey: nextTitleId }).catch(() => null);
     if (!access?.allowed) {
+      if (isRuntimeControlBlockedAccess(access)) {
+        const blockedCopy = getRuntimeControlBlockedCopy(access);
+        setWatchPartyPremiumGate(null);
+        setWatchPartyAccessSheetVisible(false);
+        Alert.alert(blockedCopy.title, blockedCopy.message);
+        trackEvent("runtime_control_blocked", {
+          surface: "title-detail-watch-party-live",
+          controlKey: access?.runtimeControlKey ?? "watch_party_live_enabled",
+          titleId: nextTitleId,
+        });
+        return;
+      }
       const gate = access ?? watchPartyPremiumGate;
       if (gate) setWatchPartyPremiumGate(gate);
       trackEvent("monetization_gate_shown", {

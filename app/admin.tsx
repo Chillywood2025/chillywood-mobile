@@ -401,17 +401,20 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Live First",
     controlKey: "live_first_enabled",
-    body: "Live First entry points do not read this runtime control yet. Not enforced yet.",
+    body: "Live First entry gates read this runtime control through the central Premium live helper before room entry or Live Stage route access. Premium remains required when enabled.",
+    badgeLabel: "Enforced on Live First entry",
   },
   {
     label: "Live Watch-Party",
     controlKey: "live_watch_party_enabled",
-    body: "Live Watch-Party entry points do not read this runtime control yet. Not enforced yet.",
+    body: "Live Watch-Party hybrid Live Stage gates read this runtime control through the central Premium live helper before route access or mode toggle. Premium remains required when enabled.",
+    badgeLabel: "Enforced on Live Watch-Party entry",
   },
   {
     label: "Watch-Party Live",
     controlKey: "watch_party_live_enabled",
-    body: "Watch-Party Live entry points do not read this runtime control yet. Not enforced yet.",
+    body: "Watch-Party Live title, player, profile, waiting-room, and direct-room entry gates read this runtime control through the central Premium watch-party helper. Premium remains required when enabled.",
+    badgeLabel: "Enforced on Watch-Party Live entry",
   },
   {
     label: "Ads",
@@ -441,7 +444,8 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   {
     label: "Max Upload Size",
     controlKey: "max_upload_size_mb",
-    body: "Upload validation does not read this runtime control yet. Not enforced yet.",
+    body: "Creator video upload validation reads this runtime control before storage upload. Default 5120 MB preserves the existing 5 GB limit when config is missing.",
+    badgeLabel: "Enforced before creator-video upload",
   },
   {
     label: "Premium Required For Live",

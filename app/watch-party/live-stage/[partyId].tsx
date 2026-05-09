@@ -8,6 +8,7 @@ import { Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     AppState,
     FlatList,
@@ -46,6 +47,8 @@ import {
   getMonetizationAccessSheetPresentation,
 } from "../../../_lib/monetization";
 import {
+    getRuntimeControlBlockedCopy,
+    isRuntimeControlBlockedAccess,
     LIVE_FIRST_PREMIUM_UPSELL_COPY,
     LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY,
     requireLiveFirstPremium,
@@ -795,6 +798,25 @@ export default function WatchPartyLiveStageScreen() {
     if (access?.allowed) {
       setLiveWatchPartyPremiumGate(null);
       return true;
+    }
+
+    if (isRuntimeControlBlockedAccess(access)) {
+      const blockedCopy = getRuntimeControlBlockedCopy(access);
+      setLiveWatchPartyPremiumGate(null);
+      setLiveWatchPartyAccessSheetVisible(false);
+      if (surface === "route") {
+        setRoomEntryError(blockedCopy.message);
+      } else {
+        Alert.alert(blockedCopy.title, blockedCopy.message);
+      }
+      trackEvent("runtime_control_blocked", {
+        surface: surface === "route"
+          ? (feature === "live_first" ? "live-stage-route-live" : "live-stage-route-hybrid")
+          : (feature === "live_first" ? "live-stage-entry" : "live-stage-mode-toggle"),
+        controlKey: access?.runtimeControlKey ?? (feature === "live_first" ? "live_first_enabled" : "live_watch_party_enabled"),
+        roomId: partyId,
+      });
+      return false;
     }
 
     if (access) setLiveWatchPartyPremiumGate(access);

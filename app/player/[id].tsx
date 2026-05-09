@@ -55,6 +55,8 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
 import {
+    getRuntimeControlBlockedCopy,
+    isRuntimeControlBlockedAccess,
     WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
     requireWatchPartyLivePremium,
     type PremiumWatchPartyFeatureAccessDecision,
@@ -1381,6 +1383,19 @@ export default function PlayerScreen() {
       if (!active) return;
 
       if (!premiumAccess?.allowed) {
+        if (isRuntimeControlBlockedAccess(premiumAccess)) {
+          const blockedCopy = getRuntimeControlBlockedCopy(premiumAccess);
+          setWatchPartyEntryError(blockedCopy.message);
+          setWatchPartyPremiumGate(null);
+          setWatchPartyPremiumSheetVisible(false);
+          trackEvent("runtime_control_blocked", {
+            surface: "watch-party-live-player-entry",
+            controlKey: premiumAccess?.runtimeControlKey ?? "watch_party_live_enabled",
+            roomId: partyId,
+          });
+          setWatchPartyEntryLoading(false);
+          return;
+        }
         if (premiumAccess) setWatchPartyPremiumGate(premiumAccess);
         setWatchPartyPremiumSheetVisible(true);
         trackEvent("monetization_gate_shown", {
@@ -2948,6 +2963,19 @@ export default function PlayerScreen() {
       return true;
     }
 
+    if (isRuntimeControlBlockedAccess(access)) {
+      const blockedCopy = getRuntimeControlBlockedCopy(access);
+      setWatchPartyPremiumGate(null);
+      setWatchPartyPremiumSheetVisible(false);
+      Alert.alert(blockedCopy.title, blockedCopy.message);
+      trackEvent("runtime_control_blocked", {
+        surface: "standalone-player-watch-party-live",
+        controlKey: access?.runtimeControlKey ?? "watch_party_live_enabled",
+        titleId: safeAccessKey || String(titleId ?? cleanId).trim(),
+      });
+      return false;
+    }
+
     if (access) setWatchPartyPremiumGate(access);
     setWatchPartyPremiumSheetVisible(true);
     trackEvent("monetization_gate_shown", {
@@ -4386,6 +4414,22 @@ export default function PlayerScreen() {
       };
     }
 
+    if (isRuntimeControlBlockedAccess(refreshed)) {
+      const blockedCopy = getRuntimeControlBlockedCopy(refreshed);
+      setWatchPartyPremiumGate(null);
+      setWatchPartyPremiumSheetVisible(false);
+      if (inWatchParty) setWatchPartyEntryError(blockedCopy.message);
+      trackEvent("runtime_control_blocked", {
+        surface: inWatchParty ? "watch-party-live-player-entry" : "standalone-player-watch-party-live",
+        controlKey: refreshed?.runtimeControlKey ?? "watch_party_live_enabled",
+        titleId: accessKey,
+      });
+      return {
+        message: blockedCopy.message,
+        tone: "error" as const,
+      };
+    }
+
     if (refreshed) setWatchPartyPremiumGate(refreshed);
     const message = refreshed?.monetization.issues[0] ?? "Watch-Party Live still needs Premium access on this account.";
     trackEvent("monetization_unlock_failure", {
@@ -5792,17 +5836,20 @@ export default function PlayerScreen() {
   if (inWatchParty && (watchPartyEntryMissing || !!watchPartyEntryError || !!watchPartyPremiumGate || (watchPartyAccess && !watchPartyAccess.isAllowed))) {
     const blockedAccess = watchPartyAccess && !watchPartyAccess.isAllowed ? watchPartyAccess : null;
     const blockedPremiumAccess = watchPartyPremiumGate;
+    const runtimeBlockedCopy = isRuntimeControlBlockedAccess(blockedPremiumAccess)
+      ? getRuntimeControlBlockedCopy(blockedPremiumAccess)
+      : null;
     const title = watchPartyEntryMissing
       ? "Watch party unavailable"
       : blockedPremiumAccess
-        ? "Premium access required"
+        ? runtimeBlockedCopy?.title ?? "Premium access required"
       : blockedAccess
         ? getWatchPartyAccessTitle(blockedAccess)
-        : "Watch-party access unavailable";
+      : "Watch-party access unavailable";
     const body = watchPartyEntryMissing
       ? "This watch party could not be found anymore. Open the canonical Party Room route if you want to re-check the room."
       : blockedPremiumAccess
-        ? "Premium access is required before Watch-Party Live can open from this direct route."
+        ? runtimeBlockedCopy?.message ?? "Premium access is required before Watch-Party Live can open from this direct route."
       : blockedAccess
         ? getWatchPartyAccessBody(blockedAccess)
         : (watchPartyEntryError ?? "Unable to confirm watch-party access right now.");
@@ -5829,8 +5876,12 @@ export default function PlayerScreen() {
               <TouchableOpacity
                 style={styles.playerAccessPrimaryBtn}
                 onPress={() => {
-                  if (blockedPremiumAccess) {
+                  if (blockedPremiumAccess && !runtimeBlockedCopy) {
                     setWatchPartyPremiumSheetVisible(true);
+                    return;
+                  }
+                  if (runtimeBlockedCopy) {
+                    router.back();
                     return;
                   }
                   if (blockedAccess || watchPartyEntryMissing) {
@@ -5846,13 +5897,15 @@ export default function PlayerScreen() {
                 activeOpacity={0.85}
               >
                 <Text style={styles.playerAccessPrimaryText}>
-                  {blockedPremiumAccess ? "Review Premium" : blockedAccess || watchPartyEntryMissing ? "Open Party Room" : "Retry access"}
+                  {blockedPremiumAccess
+                    ? runtimeBlockedCopy ? "Back" : "Review Premium"
+                    : blockedAccess || watchPartyEntryMissing ? "Open Party Room" : "Retry access"}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
-        {blockedPremiumAccess ? (
+        {blockedPremiumAccess && !runtimeBlockedCopy ? (
           <AccessSheet
             visible={watchPartyPremiumSheetVisible}
             reason="premium_required"

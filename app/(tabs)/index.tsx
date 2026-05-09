@@ -19,6 +19,8 @@ import {
 } from "../../_lib/appConfig";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import {
+    getRuntimeControlBlockedCopy,
+    isRuntimeControlBlockedAccess,
     LIVE_FIRST_PREMIUM_UPSELL_COPY,
     requireLiveFirstPremium,
     type PremiumWatchPartyFeatureAccessDecision,
@@ -26,6 +28,7 @@ import {
 
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     Image,
     ImageBackground,
@@ -473,6 +476,13 @@ export default function HomeScreen() {
   async function openWatchParty() {
     const access = await requireLiveFirstPremium({ accessKey: "home-live-entry" }).catch(() => null);
     if (!access?.allowed) {
+      if (isRuntimeControlBlockedAccess(access)) {
+        const copy = getRuntimeControlBlockedCopy(access);
+        Alert.alert(copy.title, copy.message);
+        setLiveFirstPremiumGate(null);
+        setLiveFirstPremiumSheetVisible(false);
+        return;
+      }
       if (access) setLiveFirstPremiumGate(access);
       setLiveFirstPremiumSheetVisible(true);
       return;

@@ -9,6 +9,8 @@ import {
   sanitizeCreatorRoomAccessRule,
 } from "./monetization";
 import {
+  getRuntimeControlBlockedCopy,
+  isRuntimeControlBlockedAccess,
   LIVE_FIRST_PREMIUM_UPSELL_COPY,
   WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
   requireLiveFirstPremium,
@@ -397,19 +399,27 @@ const toPremiumRoomCreateError = (
   roomType: WatchPartyRoomType,
   access: PremiumWatchPartyFeatureAccessDecision,
   payload: Record<string, unknown>,
-): WatchPartyCreateError => ({
-  code: access.reason,
-  message: roomType === "live"
-    ? LIVE_FIRST_PREMIUM_UPSELL_COPY.message
-    : WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message,
-  details: null,
-  hint: null,
-  payload: {
-    ...payload,
-    requiresPremium: true,
-    monetizationReason: access.reason,
-  },
-});
+): WatchPartyCreateError => {
+  const runtimeBlockedCopy = isRuntimeControlBlockedAccess(access)
+    ? getRuntimeControlBlockedCopy(access)
+    : null;
+
+  return {
+    code: access.reason,
+    message: runtimeBlockedCopy?.message
+      ?? (roomType === "live"
+        ? LIVE_FIRST_PREMIUM_UPSELL_COPY.message
+        : WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY.message),
+    details: null,
+    hint: null,
+    payload: {
+      ...payload,
+      requiresPremium: !runtimeBlockedCopy,
+      monetizationReason: access.reason,
+      runtimeControlKey: access.runtimeControlKey ?? null,
+    },
+  };
+};
 
 async function getAuthBackedUserId(): Promise<string | null> {
   try {

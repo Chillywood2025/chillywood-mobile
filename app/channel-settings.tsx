@@ -592,6 +592,9 @@ export function ChannelStudioScreen() {
   const [creatorPostingEnabled, setCreatorPostingEnabled] = useState(
     DEFAULT_APP_CONFIG.runtimeControls.creator_posting_enabled,
   );
+  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState(
+    DEFAULT_APP_CONFIG.runtimeControls.max_upload_size_mb,
+  );
   const [creatorPermissions, setCreatorPermissions] = useState<CreatorPermissionSet | null>(null);
   const [audienceSummary, setAudienceSummary] = useState<ChannelAudienceReadModel | null>(null);
   const [safetyAdminSummary, setSafetyAdminSummary] = useState<ChannelSafetyAdminReadModel | null>(null);
@@ -680,6 +683,7 @@ export function ChannelStudioScreen() {
         setAppDisplayName(resolveBrandingConfig(resolvedConfig).appDisplayName);
         setUploadsEnabled(resolvedConfig.runtimeControls.uploads_enabled);
         setCreatorPostingEnabled(resolvedConfig.runtimeControls.creator_posting_enabled);
+        setMaxUploadSizeMb(resolvedConfig.runtimeControls.max_upload_size_mb);
         setCreatorPermissions(resolvedPermissions);
         setAudienceSummary(resolvedAudienceSummary);
         setSafetyAdminSummary(resolvedSafetyAdminSummary);
@@ -692,6 +696,7 @@ export function ChannelStudioScreen() {
         setProfile(normalizeUserProfile({ username: "", avatarIndex: 0 }));
         setUploadsEnabled(DEFAULT_APP_CONFIG.runtimeControls.uploads_enabled);
         setCreatorPostingEnabled(DEFAULT_APP_CONFIG.runtimeControls.creator_posting_enabled);
+        setMaxUploadSizeMb(DEFAULT_APP_CONFIG.runtimeControls.max_upload_size_mb);
         setAudienceSummary(null);
         setSafetyAdminSummary(null);
         setCreatorAnalyticsSummary(null);
@@ -1039,13 +1044,13 @@ export function ChannelStudioScreen() {
         return;
       }
 
-      if (isCreatorVideoFileOverChannelMovieLimit(pickedFile)) {
+      if (isCreatorVideoFileOverChannelMovieLimit(pickedFile, maxUploadSizeMb)) {
         logCreatorVideoUploadUi("picker_too_large", {
           name: pickedFile.name ?? "unnamed",
           size: pickedFile.size ?? null,
         });
         setSelectedVideoFile(null);
-        setVideoNotice(getCreatorVideoTooLargeMessage(pickedFile.size));
+        setVideoNotice(getCreatorVideoTooLargeMessage(pickedFile.size, maxUploadSizeMb));
         setVideoLifecycleState("failed");
         return;
       }
@@ -1096,12 +1101,12 @@ export function ChannelStudioScreen() {
       return;
     }
 
-    if (!videoEditor.editingVideoId && selectedVideoFile && isCreatorVideoFileOverChannelMovieLimit(selectedVideoFile)) {
+    if (!videoEditor.editingVideoId && selectedVideoFile && isCreatorVideoFileOverChannelMovieLimit(selectedVideoFile, maxUploadSizeMb)) {
       logCreatorVideoUploadUi("submit_blocked", {
         reason: "file_too_large",
         fileSize: selectedVideoFile.size ?? null,
       });
-      setVideoNotice(getCreatorVideoTooLargeMessage(selectedVideoFile.size));
+      setVideoNotice(getCreatorVideoTooLargeMessage(selectedVideoFile.size, maxUploadSizeMb));
       return;
     }
 
@@ -1140,6 +1145,7 @@ export function ChannelStudioScreen() {
           description: videoEditor.description,
           thumbUrl: videoEditor.thumbUrl,
           visibility: videoEditor.visibility,
+          maxUploadSizeMb,
         });
         setVideoNotice(`Creator video uploaded: ${uploadedVideo.title}.`);
       }
