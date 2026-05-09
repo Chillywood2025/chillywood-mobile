@@ -108,6 +108,104 @@ export const readRequiredEnv = (key: string) => {
 
 export const readOptionalEnv = (key: string) => toText(Deno.env.get(key)) || null;
 
+const OUTPUT_SECRET_ALIASES = [
+  { configKey: "bucket", preferredSecretName: "EGRESS_OUTPUT_BUCKET", fallbackSecretName: "S3_BUCKET" },
+  { configKey: "endpoint", preferredSecretName: "EGRESS_OUTPUT_ENDPOINT", fallbackSecretName: "S3_ENDPOINT" },
+  { configKey: "region", preferredSecretName: "EGRESS_OUTPUT_REGION", fallbackSecretName: "S3_REGION" },
+  {
+    configKey: "accessKeyId",
+    preferredSecretName: "EGRESS_OUTPUT_ACCESS_KEY_ID",
+    fallbackSecretName: "S3_ACCESS_KEY_ID",
+  },
+  {
+    configKey: "secretAccessKey",
+    preferredSecretName: "EGRESS_OUTPUT_SECRET_ACCESS_KEY",
+    fallbackSecretName: "S3_SECRET_ACCESS_KEY",
+  },
+] as const;
+
+const resolveOutputSecretAlias = (alias: (typeof OUTPUT_SECRET_ALIASES)[number]) => {
+  if (readOptionalEnv(alias.preferredSecretName)) {
+    return {
+      acceptedSecretNames: [alias.preferredSecretName, alias.fallbackSecretName],
+      configured: true,
+      configuredSecretName: alias.preferredSecretName,
+      source: "egress_output" as const,
+    };
+  }
+
+  if (readOptionalEnv(alias.fallbackSecretName)) {
+    return {
+      acceptedSecretNames: [alias.preferredSecretName, alias.fallbackSecretName],
+      configured: true,
+      configuredSecretName: alias.fallbackSecretName,
+      source: "s3_alias" as const,
+    };
+  }
+
+  return {
+    acceptedSecretNames: [alias.preferredSecretName, alias.fallbackSecretName],
+    configured: false,
+    configuredSecretName: null,
+    source: "missing" as const,
+  };
+};
+
+export const readSpectatorBroadcastOutputConfigStatus = () => {
+  const fields = Object.fromEntries(
+    OUTPUT_SECRET_ALIASES.map((alias) => [alias.configKey, resolveOutputSecretAlias(alias)]),
+  ) as Record<
+    (typeof OUTPUT_SECRET_ALIASES)[number]["configKey"],
+    ReturnType<typeof resolveOutputSecretAlias>
+  >;
+  const fieldStatuses = Object.entries(fields);
+  const outputSecretsConfigured = fieldStatuses.every(([, field]) => field.configured);
+  const configuredSecretNames = fieldStatuses
+    .map(([, field]) => field.configuredSecretName)
+    .filter((secretName): secretName is string => !!secretName);
+  const fallbackSecretNamesUsed = fieldStatuses
+    .filter(([, field]) => field.source === "s3_alias")
+    .map(([, field]) => field.configuredSecretName)
+    .filter((secretName): secretName is string => !!secretName);
+  const missingAcceptedSecretGroups = fieldStatuses
+    .filter(([, field]) => !field.configured)
+    .map(([configKey, field]) => ({
+      configKey,
+      acceptedSecretNames: field.acceptedSecretNames,
+    }));
+  const publicHlsBaseUrlConfigured = !!readOptionalEnv("PUBLIC_HLS_BASE_URL");
+  const distinctSources = new Set(fieldStatuses.map(([, field]) => field.source));
+  const outputSecretSource = !outputSecretsConfigured
+    ? "missing"
+    : distinctSources.size === 1 && distinctSources.has("egress_output")
+      ? "egress_output"
+      : distinctSources.size === 1 && distinctSources.has("s3_alias")
+        ? "s3_alias"
+        : "mixed_alias";
+
+  return {
+    status: outputSecretsConfigured ? "output_config_names_present" : "output_config_names_missing",
+    acceptedAliasPattern: "EGRESS_OUTPUT_* preferred; existing S3_* names accepted as D7D output aliases.",
+    configuredSecretNames,
+    egressOutputPreferredSecretNames: OUTPUT_SECRET_ALIASES.map((alias) => alias.preferredSecretName),
+    fallbackSecretNamesUsed,
+    fields,
+    fullRoomTokenForSpectators: false,
+    hlsEnabled: false,
+    hlsPlaybackUrlGenerated: false,
+    hlsUrlReturned: false,
+    livekitApiCalled: false,
+    missingAcceptedSecretGroups,
+    outputSecretSource,
+    outputSecretsConfigured,
+    playbackEnabled: false,
+    publicHlsBaseUrlConfigured,
+    publicHlsBaseUrlReturned: false,
+    publicHlsBaseUrlSecretName: publicHlsBaseUrlConfigured ? "PUBLIC_HLS_BASE_URL" : null,
+    spectatorPlaybackEnabled: false,
+  };
+};
+
 export const createAuthClient = () => {
   const supabaseUrl = readRequiredEnv("SUPABASE_URL");
   const supabaseAnonKey = readRequiredEnv("SUPABASE_ANON_KEY");

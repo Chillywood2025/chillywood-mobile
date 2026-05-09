@@ -10,6 +10,7 @@ import {
   optionsResponse,
   parseJsonPayload,
   readBroadcastSession,
+  readSpectatorBroadcastOutputConfigStatus,
   requestedBroadcastSessionId,
   safeBroadcastStatus,
   safeWriteAuditLog,
@@ -104,6 +105,7 @@ Deno.serve(async (req) => {
     }
 
     const safeStatus = safeBroadcastStatus(session);
+    const outputConfig = readSpectatorBroadcastOutputConfigStatus();
 
     requestedAuditLogId = await writeAuditLog(adminClient, FUNCTION_NAME, {
       action: "spectator_broadcast_stop_requested",
@@ -112,11 +114,15 @@ Deno.serve(async (req) => {
       afterState: notConfiguredPayload({
         auditWritten: false,
         broadcastSession: safeStatus,
+        outputConfig,
         reason: "egress_not_connected",
         stopped: false,
       }),
       metadata: {
         broadcast_session_id: broadcastSessionId,
+        output_config_alias_used: outputConfig.fallbackSecretNamesUsed.length > 0,
+        output_config_names_present: outputConfig.outputSecretsConfigured,
+        output_config_source: outputConfig.outputSecretSource,
         status: "requested",
       },
       reason: "Spectator broadcast stop requested; skeleton did not call Egress stop or mutate playback fields.",
@@ -134,12 +140,16 @@ Deno.serve(async (req) => {
       afterState: notConfiguredPayload({
         auditWritten: true,
         broadcastSession: safeStatus,
+        outputConfig,
         reason: "egress_not_connected",
         stopped: false,
       }),
       metadata: {
         broadcast_session_id: broadcastSessionId,
         egress_configured: false,
+        output_config_alias_used: outputConfig.fallbackSecretNamesUsed.length > 0,
+        output_config_names_present: outputConfig.outputSecretsConfigured,
+        output_config_source: outputConfig.outputSecretSource,
         reason: "egress_not_connected",
         requested_audit_log_id: requestedAuditLogId,
       },
@@ -159,6 +169,7 @@ Deno.serve(async (req) => {
         },
         broadcastSession: safeStatus,
         broadcastSessionId,
+        outputConfig,
         reason: "egress_not_connected",
         stopped: false,
       }),

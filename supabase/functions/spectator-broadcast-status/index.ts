@@ -10,6 +10,7 @@ import {
   optionsResponse,
   parseJsonPayload,
   readBroadcastSession,
+  readSpectatorBroadcastOutputConfigStatus,
   requestedBroadcastSessionId,
   safeBroadcastStatus,
   sanitizeErrorMessage,
@@ -89,6 +90,7 @@ Deno.serve(async (req) => {
       ...notConfiguredPayload({
         broadcastSession: safeBroadcastStatus(session),
         broadcastSessionId,
+        outputConfig: readSpectatorBroadcastOutputConfigStatus(),
       }),
       statusRead: true,
     });
