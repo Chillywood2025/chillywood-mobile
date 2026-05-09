@@ -4898,6 +4898,10 @@ export type Database = {
         Args: { joining_user_id: string; target_room_id: string }
         Returns: boolean
       }
+      discovery_feed_item_blocked_for_current_user: {
+        Args: { target_feed_item_id: string }
+        Returns: boolean
+      }
       has_active_beta_access: { Args: never; Returns: boolean }
       has_platform_role: {
         Args: { required_roles: string[] }

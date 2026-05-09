@@ -489,6 +489,36 @@ export async function readPublicEventSummaries(
     .map((event) => buildCreatorEventSummary(event));
 }
 
+export async function readLatestPublicEventSummaries(options?: {
+  hostUserIds?: string[];
+  limit?: number;
+}): Promise<CreatorEventSummary[]> {
+  const normalizedHostUserIds = Array.from(new Set(
+    (options?.hostUserIds ?? [])
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean),
+  )).slice(0, 100);
+  const limit = Math.max(1, Math.min(50, Math.floor(Number(options?.limit ?? 12))));
+
+  let query = supabase
+    .from(CREATOR_EVENTS_TABLE)
+    .select(CREATOR_EVENT_SELECT)
+    .neq("status", "draft")
+    .order("starts_at", { ascending: true, nullsFirst: false })
+    .limit(limit);
+
+  if (normalizedHostUserIds.length) {
+    query = query.in("host_user_id", normalizedHostUserIds);
+  }
+
+  const { data, error } = await query.returns<CreatorEventRow[]>();
+  if (error || !data) return [];
+  return data
+    .map((row) => parseCreatorEventRow(row))
+    .filter(isDefined)
+    .map((event) => buildCreatorEventSummary(event));
+}
+
 export async function readCreatorEventReplayAvailability(
   eventId: string,
 ): Promise<CreatorEventReplayAvailability | null> {

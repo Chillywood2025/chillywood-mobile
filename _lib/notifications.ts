@@ -23,8 +23,72 @@ export type NotificationCategory =
   | "moderation_notice"
   | "payment_access_confirmation";
 
+export type DiscoveryActivityTriggerKey =
+  | "followed_creator_went_live"
+  | "chilly_circle_friend_went_live"
+  | "channel_scheduled_public_event"
+  | "watch_party_starts_soon"
+  | "followed_channel_public_upload"
+  | "replay_available_later";
+
+export type DiscoveryActivityTriggerFoundation = {
+  key: DiscoveryActivityTriggerKey;
+  notificationCategory: NotificationCategory;
+  targetRoute: NotificationTargetRoute;
+  sendingConnected: false;
+  requiredFilters: readonly string[];
+};
+
+export const DISCOVERY_ACTIVITY_TRIGGER_FOUNDATION: readonly DiscoveryActivityTriggerFoundation[] = [
+  {
+    key: "followed_creator_went_live",
+    notificationCategory: "creator_went_live",
+    targetRoute: "/channel/[userId]",
+    sendingConnected: false,
+    requiredFilters: ["follow_relationship", "blocked_relationships", "room_visibility", "moderation_status"],
+  },
+  {
+    key: "chilly_circle_friend_went_live",
+    notificationCategory: "creator_went_live",
+    targetRoute: "/profile/[userId]",
+    sendingConnected: false,
+    requiredFilters: ["mutual_chilly_circle", "profile_privacy", "blocked_relationships", "room_visibility"],
+  },
+  {
+    key: "channel_scheduled_public_event",
+    notificationCategory: "upcoming_event_reminder",
+    targetRoute: "/channel/[userId]",
+    sendingConnected: false,
+    requiredFilters: ["follow_relationship", "event_public_status", "blocked_relationships", "notification_permission"],
+  },
+  {
+    key: "watch_party_starts_soon",
+    notificationCategory: "upcoming_event_reminder",
+    targetRoute: "/watch-party/[partyId]",
+    sendingConnected: false,
+    requiredFilters: ["room_visibility", "premium_or_ticket_access", "blocked_relationships", "notification_permission"],
+  },
+  {
+    key: "followed_channel_public_upload",
+    notificationCategory: "content_dropped",
+    targetRoute: "/player/[id]",
+    sendingConnected: false,
+    requiredFilters: ["follow_relationship", "public_video", "moderation_status", "blocked_relationships"],
+  },
+  {
+    key: "replay_available_later",
+    notificationCategory: "content_dropped",
+    targetRoute: "/channel/[userId]",
+    sendingConnected: false,
+    requiredFilters: ["replay_rights", "public_visibility", "blocked_relationships", "notification_permission"],
+  },
+] as const;
+
+export const readDiscoveryActivityTriggerFoundation = () => DISCOVERY_ACTIVITY_TRIGGER_FOUNDATION;
+
 export type NotificationTargetRoute =
   | "/profile/[userId]"
+  | "/channel/[userId]"
   | "/channel-settings"
   | "/chat"
   | "/chat/[threadId]"
@@ -157,6 +221,7 @@ const normalizeTargetRoute = (value: unknown): NotificationTargetRoute | "unknow
   const normalized = normalizeText(value);
   if (
     normalized === "/profile/[userId]"
+    || normalized === "/channel/[userId]"
     || normalized === "/channel-settings"
     || normalized === "/chat"
     || normalized === "/chat/[threadId]"

@@ -47,8 +47,21 @@ import { titles as localTitles } from "../../_data/titles";
 import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../../_lib/supabase";
 import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
-import { readCreatorVideosForOwners, type CreatorVideo } from "../../_lib/creatorVideos";
+import {
+    readCreatorVideosForOwners,
+    readLatestPublicCreatorVideos,
+    type CreatorVideo,
+} from "../../_lib/creatorVideos";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import {
+    getDiscoveryAccessLabel,
+    getDiscoveryLiveLabel,
+    rankDiscoveryFeedItems,
+    readPublicDiscoveryFeedItems,
+    type DiscoveryFeedItem,
+} from "../../_lib/discoveryFeed";
+import { readActiveFriendUserIds } from "../../_lib/friendGraph";
+import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { AccessSheet } from "../../components/monetization/access-sheet";
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
@@ -136,6 +149,20 @@ const buildDiscoveryInfoLine = (item: TitleRow) => {
   return segments.join(" • ");
 };
 
+const formatFeedDate = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "Time TBD";
+  const date = new Date(normalized);
+  if (!Number.isFinite(date.getTime())) return "Time TBD";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+};
+
+const formatCreatorEventMode = (event: CreatorEventSummary) => {
+  if (event.eventType === "live_watch_party") return "Live Watch-Party";
+  if (event.eventType === "watch_party_live") return "Watch-Party Live";
+  return "Live First";
+};
+
 export default function HomeScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
@@ -153,6 +180,13 @@ export default function HomeScreen() {
   const [followingVideos, setFollowingVideos] = useState<CreatorVideo[]>([]);
   const [followingFeedLoading, setFollowingFeedLoading] = useState(true);
   const [followingFeedError, setFollowingFeedError] = useState<string | null>(null);
+  const [homeLiveEvents, setHomeLiveEvents] = useState<CreatorEventSummary[]>([]);
+  const [homeUpcomingEvents, setHomeUpcomingEvents] = useState<CreatorEventSummary[]>([]);
+  const [circleVideos, setCircleVideos] = useState<CreatorVideo[]>([]);
+  const [latestPublicVideos, setLatestPublicVideos] = useState<CreatorVideo[]>([]);
+  const [homeDiscoveryItems, setHomeDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
+  const [homeDiscoveryLoading, setHomeDiscoveryLoading] = useState(true);
+  const [homeDiscoveryError, setHomeDiscoveryError] = useState<string | null>(null);
   const [liveFirstPremiumGate, setLiveFirstPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [liveFirstPremiumSheetVisible, setLiveFirstPremiumSheetVisible] = useState(false);
   const homeConfig = resolveHomeConfig(appConfig);
@@ -377,6 +411,39 @@ export default function HomeScreen() {
     }
   }
 
+  async function fetchDiscoveryFeedV1() {
+    setHomeDiscoveryLoading(true);
+    setHomeDiscoveryError(null);
+
+    try {
+      const [publicEvents, latestVideos, circleUserIds, discoveryRows] = await Promise.all([
+        readLatestPublicEventSummaries({ limit: 24 }),
+        readLatestPublicCreatorVideos({ limit: 12 }),
+        readActiveFriendUserIds().catch(() => [] as string[]),
+        readPublicDiscoveryFeedItems({ surface: "home", limit: 24 }).catch(() => [] as DiscoveryFeedItem[]),
+      ]);
+      const uniqueCircleUserIds = Array.from(new Set(circleUserIds.map((id) => String(id ?? "").trim()).filter(Boolean)));
+      const circleUploads = uniqueCircleUserIds.length
+        ? await readCreatorVideosForOwners(uniqueCircleUserIds, { limit: 12 }).catch(() => [] as CreatorVideo[])
+        : [];
+
+      setHomeLiveEvents(publicEvents.filter((event) => event.isLiveNow).slice(0, 8));
+      setHomeUpcomingEvents(publicEvents.filter((event) => event.isUpcoming).slice(0, 8));
+      setLatestPublicVideos(latestVideos);
+      setCircleVideos(circleUploads);
+      setHomeDiscoveryItems(rankDiscoveryFeedItems(discoveryRows, { chillyCircleUserIds: uniqueCircleUserIds }));
+    } catch {
+      setHomeLiveEvents([]);
+      setHomeUpcomingEvents([]);
+      setLatestPublicVideos([]);
+      setCircleVideos([]);
+      setHomeDiscoveryItems([]);
+      setHomeDiscoveryError("Discovery feed is unavailable right now.");
+    } finally {
+      setHomeDiscoveryLoading(false);
+    }
+  }
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -387,6 +454,7 @@ export default function HomeScreen() {
         fetchCurrentChannelProfile(),
         fetchWatchProgress(),
         fetchFollowingFeed(),
+        fetchDiscoveryFeedV1(),
       ]);
       setLoading(false);
     })();
@@ -400,6 +468,7 @@ export default function HomeScreen() {
         fetchCurrentChannelProfile(),
         fetchWatchProgress(),
         fetchFollowingFeed(),
+        fetchDiscoveryFeedV1(),
       ]).catch(() => {});
     }, []),
   );
@@ -413,6 +482,7 @@ export default function HomeScreen() {
       fetchCurrentChannelProfile(),
       fetchWatchProgress(),
       fetchFollowingFeed(),
+      fetchDiscoveryFeedV1(),
     ]);
     setRefreshing(false);
   }
@@ -451,6 +521,43 @@ export default function HomeScreen() {
         source: "creator-video",
       },
     });
+  }
+
+  function openChannel(userId?: string | null) {
+    const safeUserId = String(userId ?? "").trim();
+    if (!safeUserId) return;
+    router.push({
+      pathname: "/channel/[userId]",
+      params: { userId: safeUserId },
+    });
+  }
+
+  function openSpectatorMetadata(itemId?: string | null) {
+    const safeItemId = String(itemId ?? "").trim();
+    if (!safeItemId) return;
+    router.push(`/spectate/${encodeURIComponent(safeItemId)}` as any);
+  }
+
+  function openDiscoveryFeedItem(item: DiscoveryFeedItem) {
+    const mediaId = String(item.media_id ?? "").trim();
+    if (item.item_type === "creator_upload" && mediaId) {
+      router.push({
+        pathname: "/player/[id]",
+        params: {
+          id: mediaId,
+          source: "creator-video",
+        },
+      });
+      return;
+    }
+
+    const channelUserId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
+    if (item.item_type === "channel_update" && channelUserId) {
+      openChannel(channelUserId);
+      return;
+    }
+
+    openSpectatorMetadata(item.id);
   }
 
   async function shareCreatorVideo(video: CreatorVideo) {
@@ -614,6 +721,14 @@ export default function HomeScreen() {
       reactionsLive: liveEntries.some((entry) => entry.reactionsEnabled),
     };
   }, [titleLiveMetadataById]);
+  const liveDiscoveryItems = useMemo(
+    () => homeDiscoveryItems.filter((item) => item.live_state === "live").slice(0, 8),
+    [homeDiscoveryItems],
+  );
+  const upcomingDiscoveryItems = useMemo(
+    () => homeDiscoveryItems.filter((item) => item.live_state === "scheduled").slice(0, 8),
+    [homeDiscoveryItems],
+  );
   const homePulseTitle = livePulse.liveRoomCount
     ? `${livePulse.liveRoomCount} live room${livePulse.liveRoomCount === 1 ? "" : "s"} moving now`
     : continueWatchingTitles.length
@@ -702,11 +817,190 @@ export default function HomeScreen() {
     );
   };
 
+  function renderFeedItemCard(item: DiscoveryFeedItem) {
+    const title = String(item.title ?? "").trim() || "Public activity";
+    const subtitle = String(item.subtitle ?? "").trim();
+    const ownerId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
+    const accessLabel = getDiscoveryAccessLabel(item);
+    const liveLabel = getDiscoveryLiveLabel(item);
+    const scheduleLabel = formatFeedDate(item.starts_at ?? item.published_at ?? item.created_at);
+
+    return (
+      <TouchableOpacity
+        key={`feed-item-${item.id}`}
+        style={styles.feedActivityCard}
+        activeOpacity={0.88}
+        onPress={() => openDiscoveryFeedItem(item)}
+      >
+        <View style={styles.feedActivityThumb}>
+          {item.thumbnail_url ? (
+            <Image source={{ uri: item.thumbnail_url }} style={styles.feedActivityImage} />
+          ) : (
+            <View style={styles.feedActivityFallback}>
+              <Text style={styles.feedActivityInitial}>{title.slice(0, 1).toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={styles.feedActivityScrim} />
+          <View style={styles.feedActivityBadgeRow}>
+            <Text style={[styles.feedActivityBadge, item.live_state === "live" ? styles.feedActivityLiveBadge : null]}>
+              {liveLabel}
+            </Text>
+            <Text style={styles.feedActivityBadge}>{accessLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.feedActivityCopy}>
+          <Text style={styles.feedActivityTitle} numberOfLines={2}>{title}</Text>
+          {subtitle ? <Text style={styles.feedActivitySubtitle} numberOfLines={2}>{subtitle}</Text> : null}
+          <Text style={styles.feedActivityMeta} numberOfLines={1}>{scheduleLabel}</Text>
+          <View style={styles.feedActivityActionRow}>
+            <Text style={styles.feedActivityActionText}>
+              {item.item_type === "creator_upload" ? "Open" : "View Details"}
+            </Text>
+            {ownerId ? (
+              <TouchableOpacity
+                style={styles.feedActivityGhostButton}
+                activeOpacity={0.82}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openChannel(ownerId);
+                }}
+              >
+                <Text style={styles.feedActivityGhostText}>Channel</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  function renderEventCard(event: CreatorEventSummary) {
+    return (
+      <TouchableOpacity
+        key={`event-${event.id}`}
+        style={styles.feedEventCard}
+        activeOpacity={0.88}
+        onPress={() => openChannel(event.hostUserId)}
+      >
+        <View style={styles.feedEventBadgeRow}>
+          <Text style={[styles.feedEventBadge, event.isLiveNow ? styles.feedActivityLiveBadge : null]}>
+            {event.isLiveNow ? "Live" : "Upcoming"}
+          </Text>
+          <Text style={styles.feedEventBadge}>{formatCreatorEventMode(event)}</Text>
+          <Text style={styles.feedEventBadge}>Public</Text>
+        </View>
+        <Text style={styles.feedEventTitle} numberOfLines={2}>{event.eventTitle}</Text>
+        <Text style={styles.feedEventMeta}>{formatFeedDate(event.startsAt)}</Text>
+        <Text style={styles.feedEventCopy} numberOfLines={2}>
+          Public event metadata only. Full room entry remains gated by the room route.
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+
+  function renderHomeEventRail(input: {
+    title: string;
+    subtitle: string;
+    feedItems: DiscoveryFeedItem[];
+    events: CreatorEventSummary[];
+    emptyTitle: string;
+    emptyText: string;
+  }) {
+    const hasRows = input.feedItems.length > 0 || input.events.length > 0;
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.followingHeaderRow}>
+          <View style={styles.followingHeaderCopy}>
+            <Text style={styles.sectionTitle}>{input.title}</Text>
+            <Text style={styles.followingSubtitle}>{input.subtitle}</Text>
+          </View>
+          {homeDiscoveryLoading ? <ActivityIndicator color="#E50914" /> : null}
+        </View>
+
+        {homeDiscoveryError ? (
+          <View style={styles.followingEmptyCard}>
+            <Text style={styles.followingEmptyTitle}>Discovery unavailable</Text>
+            <Text style={styles.followingEmptyText}>{homeDiscoveryError}</Text>
+          </View>
+        ) : hasRows ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.feedActivityRow}
+          >
+            {input.feedItems.map(renderFeedItemCard)}
+            {input.events.map(renderEventCard)}
+          </ScrollView>
+        ) : (
+          <View style={styles.followingEmptyCard}>
+            <Text style={styles.followingEmptyTitle}>{input.emptyTitle}</Text>
+            <Text style={styles.followingEmptyText}>{input.emptyText}</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  function renderCreatorVideoRail(input: {
+    title: string;
+    subtitle: string;
+    videos: CreatorVideo[];
+    loading?: boolean;
+    emptyTitle: string;
+    emptyText: string;
+    keyPrefix: string;
+  }) {
+    return (
+      <View style={styles.section}>
+        <View style={styles.followingHeaderRow}>
+          <View style={styles.followingHeaderCopy}>
+            <Text style={styles.sectionTitle}>{input.title}</Text>
+            <Text style={styles.followingSubtitle}>{input.subtitle}</Text>
+          </View>
+          {input.loading ? <ActivityIndicator color="#E50914" /> : null}
+        </View>
+
+        {input.loading ? (
+          <View style={styles.followingEmptyCard}>
+            <Text style={styles.followingEmptyTitle}>Checking public uploads</Text>
+            <Text style={styles.followingEmptyText}>Only real public creator uploads appear here.</Text>
+          </View>
+        ) : input.videos.length ? (
+          <FlatList
+            horizontal
+            data={input.videos}
+            keyExtractor={(item) => `${input.keyPrefix}-${item.id}`}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.followingVideoRow}
+            renderItem={({ item }) => (
+              <View style={styles.followingVideoCardWrap}>
+                <CreatorVideoCard
+                  video={item}
+                  mode="public"
+                  onOpen={() => openCreatorVideo(item)}
+                  onShare={isCreatorVideoPubliclyShareable(item) ? () => {
+                    void shareCreatorVideo(item);
+                  } : undefined}
+                />
+              </View>
+            )}
+          />
+        ) : (
+          <View style={styles.followingEmptyCard}>
+            <Text style={styles.followingEmptyTitle}>{input.emptyTitle}</Text>
+            <Text style={styles.followingEmptyText}>{input.emptyText}</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   const renderFollowingFeed = () => (
     <View style={styles.section}>
       <View style={styles.followingHeaderRow}>
         <View style={styles.followingHeaderCopy}>
-          <Text style={styles.sectionTitle}>From People You Follow</Text>
+          <Text style={styles.sectionTitle}>Channels You Follow</Text>
           <Text style={styles.followingSubtitle}>
             {followedChannelCount
               ? "Latest public creator uploads from channels you follow."
@@ -788,11 +1082,6 @@ export default function HomeScreen() {
           <Pressable style={styles.retryBtn} onPress={onRefresh}>
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
-        </View>
-      ) : !titles.length && !followingVideos.length ? (
-        <View style={styles.center}>
-          <Text style={styles.muted}>Home is getting the lineup ready.</Text>
-          <Text style={styles.mutedSmall}>Featured titles will appear here as soon as Chi&apos;llywood programming is available.</Text>
         </View>
       ) : (
         <ScrollView
@@ -900,7 +1189,45 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
+          {renderHomeEventRail({
+            title: "Live Now",
+            subtitle: "Public, rights-safe live metadata from backed discovery rows and creator events.",
+            feedItems: liveDiscoveryItems,
+            events: homeLiveEvents,
+            emptyTitle: "No public live rooms right now",
+            emptyText: "Live rooms appear here only when a real public, clean, rights-safe source exists.",
+          })}
+
           {renderFollowingFeed()}
+
+          {renderCreatorVideoRail({
+            title: "From Your Chi'lly Circle",
+            subtitle: "Public uploads from active Circle friends when privacy allows.",
+            videos: circleVideos,
+            loading: homeDiscoveryLoading,
+            emptyTitle: "No public Circle activity yet",
+            emptyText: "Private Circle activity stays private; only public creator uploads can appear here.",
+            keyPrefix: "circle-video",
+          })}
+
+          {renderHomeEventRail({
+            title: "Upcoming Events",
+            subtitle: "Public creator events from backed event and discovery read models.",
+            feedItems: upcomingDiscoveryItems,
+            events: homeUpcomingEvents,
+            emptyTitle: "No upcoming public events yet",
+            emptyText: "Scheduled public creator events will appear here when they are backed.",
+          })}
+
+          {renderCreatorVideoRail({
+            title: "Latest Public Uploads",
+            subtitle: "Fresh public creator uploads only; no drafts, private videos, or protected playback.",
+            videos: latestPublicVideos,
+            loading: homeDiscoveryLoading,
+            emptyTitle: "No public uploads ready",
+            emptyText: "Creator uploads appear here only after they are public and moderation-safe.",
+            keyPrefix: "latest-public-video",
+          })}
 
           <NativeAdSlot
             surface="home"
@@ -1364,6 +1691,156 @@ const styles = StyleSheet.create({
     color: "#E5EAFF",
     fontSize: 12.5,
     fontWeight: "900",
+  },
+  feedActivityRow: {
+    paddingRight: 10,
+    gap: 12,
+  },
+  feedActivityCard: {
+    width: 282,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(10,12,18,0.76)",
+    overflow: "hidden",
+  },
+  feedActivityThumb: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    backgroundColor: "#151A25",
+  },
+  feedActivityImage: {
+    width: "100%",
+    height: "100%",
+  },
+  feedActivityFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#151A25",
+  },
+  feedActivityInitial: {
+    color: "#F7FAFF",
+    fontSize: 34,
+    fontWeight: "900",
+  },
+  feedActivityScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(3,5,10,0.16)",
+  },
+  feedActivityBadgeRow: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    bottom: 10,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  feedActivityBadge: {
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    color: "#F2F6FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  feedActivityLiveBadge: {
+    backgroundColor: "#E50914",
+    color: "#fff",
+  },
+  feedActivityCopy: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  feedActivityTitle: {
+    color: "#F7FAFF",
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "900",
+  },
+  feedActivitySubtitle: {
+    color: "#AAB5CA",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+  feedActivityMeta: {
+    color: "#8E99B0",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  feedActivityActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 4,
+  },
+  feedActivityActionText: {
+    color: "#FFE4EA",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  feedActivityGhostButton: {
+    minHeight: 32,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedActivityGhostText: {
+    color: "#EEF4FF",
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
+  feedEventCard: {
+    width: 282,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(126,215,255,0.18)",
+    backgroundColor: "rgba(12,18,28,0.86)",
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    gap: 9,
+  },
+  feedEventBadgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  feedEventBadge: {
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "rgba(126,215,255,0.12)",
+    color: "#D7F4FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  feedEventTitle: {
+    color: "#F7FAFF",
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  feedEventMeta: {
+    color: "#C1CCDE",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  feedEventCopy: {
+    color: "#92A0B7",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
   },
 
   continueCard: {

@@ -173,20 +173,22 @@ export default function PublicChannelScreen() {
   }, [routeUserId, sessionLoading]);
 
   const featuredVideo = videos[0] ?? null;
+  const liveNowEvents = useMemo(() => events.filter((event) => event.isLiveNow), [events]);
+  const upcomingEvents = useMemo(() => events.filter((event) => event.isUpcoming), [events]);
   const followerCount = audienceState?.followerCount ?? null;
   const viewerFollowState = audienceState?.viewerFollowState ?? "unavailable";
   const visibleStats = useMemo(() => {
     return [
       { label: "Followers", value: formatStatValue(followerCount) },
       { label: "Videos", value: String(videos.length) },
-      { label: "Events", value: String(events.length) },
+      { label: "Events", value: String(liveNowEvents.length + upcomingEvents.length) },
     ];
-  }, [events.length, followerCount, videos.length]);
+  }, [followerCount, liveNowEvents.length, upcomingEvents.length, videos.length]);
   const channelPulseCards = useMemo(() => {
     const cards: { label: string; value: string }[] = [
       { label: "Followers", value: formatStatValue(followerCount) },
       { label: "Videos", value: String(videos.length) },
-      { label: "Events", value: String(events.length) },
+      { label: "Events", value: String(liveNowEvents.length + upcomingEvents.length) },
     ];
     if (featuredVideo) {
       cards.push({
@@ -195,7 +197,7 @@ export default function PublicChannelScreen() {
       });
     }
     return cards;
-  }, [events.length, featuredVideo, followerCount, videos.length]);
+  }, [featuredVideo, followerCount, liveNowEvents.length, upcomingEvents.length, videos.length]);
 
   const aboutItems = useMemo(() => {
     if (!channel) return [];
@@ -554,21 +556,38 @@ export default function PublicChannelScreen() {
     </View>
   );
 
-  const renderEvents = () => (
+  const renderEventCard = (event: CreatorEventSummary) => (
+    <View key={event.id} style={styles.programmingCard}>
+      <Text style={styles.cardKicker}>{formatEventStatus(event)}</Text>
+      <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
+      <Text style={styles.cardBody}>{formatEventDate(event.startsAt)}</Text>
+      {event.reminder.canSetReminder ? (
+        <Text style={styles.metaText}>Reminder ready</Text>
+      ) : null}
+    </View>
+  );
+
+  const renderLiveNow = () => (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Live & Upcoming</Text>
-      {events.length ? (
+      <Text style={styles.sectionTitle}>Live Now</Text>
+      {liveNowEvents.length ? (
         <View style={styles.listStack}>
-          {events.map((event) => (
-            <View key={event.id} style={styles.programmingCard}>
-              <Text style={styles.cardKicker}>{formatEventStatus(event)}</Text>
-              <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
-              <Text style={styles.cardBody}>{formatEventDate(event.startsAt)}</Text>
-              {event.reminder.canSetReminder ? (
-                <Text style={styles.metaText}>Reminder ready</Text>
-              ) : null}
-            </View>
-          ))}
+          {liveNowEvents.map((event) => renderEventCard(event))}
+        </View>
+      ) : (
+        <View style={[styles.emptyCard, styles.programmingEmptyCard]}>
+          <Text style={styles.emptyText}>No public live room is active right now.</Text>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderUpcomingEvents = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Upcoming Events</Text>
+      {upcomingEvents.length ? (
+        <View style={styles.listStack}>
+          {upcomingEvents.map((event) => renderEventCard(event))}
         </View>
       ) : (
         <View style={[styles.emptyCard, styles.programmingEmptyCard]}>
@@ -635,7 +654,8 @@ export default function PublicChannelScreen() {
         {renderChannelPulse()}
         {renderFeatured()}
         {renderLatestUploads()}
-        {renderEvents()}
+        {renderLiveNow()}
+        {renderUpcomingEvents()}
         {renderAbout()}
       </ScrollView>
       <ReportSheet
