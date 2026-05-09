@@ -27,3 +27,6 @@ verify_jwt = false
 
 [functions.stripe-connect-transfer-sync]
 verify_jwt = false
+
+[functions.stripe-connect-transfer-create]
+verify_jwt = false
