@@ -283,7 +283,13 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
     .maybeSingle();
 
   if (error || !data) return null;
-  return parseCreatorVideo(data);
+  const parsed = await parseCreatorVideo(data);
+  if (parsed.visibility === "public") return parsed;
+
+  const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+  const viewerUserId = toText(authData.user?.id);
+  const viewerOwnsVideo = !!viewerUserId && viewerUserId === parsed.ownerId;
+  return viewerOwnsVideo ? parsed : null;
 }
 
 export async function uploadCreatorVideo(input: {

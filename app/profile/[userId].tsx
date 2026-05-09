@@ -541,13 +541,15 @@ export default function ProfileScreen() {
   const partyIdParam = String(Array.isArray(params.partyId) ? params.partyId[0] : params.partyId ?? "").trim();
   const modeParam = String(Array.isArray(params.mode) ? params.mode[0] : params.mode ?? "").trim();
   const sourceParam = String(Array.isArray(params.source) ? params.source[0] : params.source ?? "").trim();
+  const hasBackedProfileIdentity = !!channelAccessProfile;
   const officialAccount = getOfficialPlatformAccount(userId);
   const profile = buildUserChannelProfile({
     id: userId,
-    displayName: displayNameParam,
-    avatarUrl: avatarUrlParam,
-    tagline: taglineParam,
-    role: roleParam,
+    profile: channelAccessProfile,
+    displayName: hasBackedProfileIdentity ? undefined : displayNameParam,
+    avatarUrl: hasBackedProfileIdentity ? undefined : avatarUrlParam,
+    tagline: hasBackedProfileIdentity ? undefined : taglineParam,
+    role: hasBackedProfileIdentity ? undefined : roleParam,
     isLive: isLiveParam === "1" || isLiveParam === "true" || isLiveParam === "yes" || isLiveParam === "live",
     fallbackDisplayName: "Channel",
   });
