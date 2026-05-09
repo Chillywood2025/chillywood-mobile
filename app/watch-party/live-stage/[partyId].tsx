@@ -838,6 +838,8 @@ export default function WatchPartyLiveStageScreen() {
   );
 
   const updateStageMode = useCallback(async (nextMode: SharedRoomMode) => {
+    if (!isHost) return;
+
     if (nextMode === "hybrid" && !(await requireHybridModePremium("toggle"))) {
       setStageMode("live");
       if (modeParamValue && normalizeSharedRoomMode(modeParamValue, "live") === "hybrid") {
@@ -871,12 +873,20 @@ export default function WatchPartyLiveStageScreen() {
     if (modeParamValue !== nextMode) {
       router.setParams({ mode: nextMode });
     }
-  }, [modeParamValue, requireHybridModePremium, router, stageOverlayMotion]);
+  }, [isHost, modeParamValue, requireHybridModePremium, router, stageOverlayMotion]);
 
   useEffect(() => {
     const normalizedRouteMode = normalizeSharedRoomMode(modeParamValue, "live");
     if (normalizedRouteMode !== "hybrid") {
       setStageMode((currentMode) => (currentMode === normalizedRouteMode ? currentMode : normalizedRouteMode));
+      return;
+    }
+
+    if (!room || !myUserId) return;
+
+    if (!isHost) {
+      setStageMode("live");
+      router.setParams({ mode: "live" });
       return;
     }
 
@@ -900,7 +910,7 @@ export default function WatchPartyLiveStageScreen() {
     return () => {
       cancelled = true;
     };
-  }, [modeParamValue, requireHybridModePremium, router]);
+  }, [isHost, modeParamValue, myUserId, requireHybridModePremium, room?.partyId, router]);
 
   useEffect(() => {
     setLiveSurface("room");
@@ -2369,77 +2379,17 @@ export default function WatchPartyLiveStageScreen() {
       return liveKitParticipantRole;
     }
 
-    const currentState = participantStateById[trackedUserId] ?? null;
-    const seatUpdate = await setPartyParticipantState(partyId, trackedUserId, {
-      stageRole: "speaker",
-      canSpeak: true,
-      membershipState: "active",
-      cameraEnabled: true,
-      micEnabled: true,
-      displayName: resolvedCurrentUsername,
-      cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
-    }).catch((error) => {
-      reportRuntimeError("livekit-live-stage-entry-seat", error, {
-        partyId,
-        userId: trackedUserId,
-      });
-      return null;
-    });
-
-    if (!seatUpdate) {
-      debugLog("livekit", "live-stage entry seat unavailable", {
-        roomName: partyId,
-        participantRole: liveKitParticipantRole,
-        userId: trackedUserId,
-      });
-      return liveKitParticipantRole;
-    }
-
-    membershipMapRef.current = {
-      ...membershipMapRef.current,
-      [trackedUserId]: seatUpdate,
-    };
-    setParticipantStateById((prev) => ({
-      ...prev,
-      [trackedUserId]: {
-        ...(prev[trackedUserId] ?? currentState ?? createDefaultParticipantState({
-          role: "viewer",
-          isSpeaking: true,
-          isMuted: seatUpdate.isMuted,
-        })),
-        role: "speaker",
-        isMuted: seatUpdate.isMuted,
-        isRemoved: seatUpdate.membershipState === "removed",
-      },
-    }));
-    setSeatRequestsById((prev) => {
-      if (!prev[trackedUserId]) return prev;
-      const next = { ...prev };
-      delete next[trackedUserId];
-      return next;
-    });
-    broadcastSeatState(trackedUserId, {
-      role: "speaker",
-      isMuted: seatUpdate.isMuted,
-      pending: false,
-    });
-    await refreshStageSnapshot(trackedUserId).catch(() => null);
-    debugLog("livekit", "live-stage entry seat resolved", {
+    debugLog("livekit", "live-stage viewer entered without host-granted camera seat", {
       roomName: partyId,
-      participantRole: "speaker",
-      previousParticipantRole: liveKitParticipantRole,
+      participantRole: liveKitParticipantRole,
       userId: trackedUserId,
     });
-    return "speaker";
+    return liveKitParticipantRole;
   }, [
-    broadcastSeatState,
     isHost,
     isLiveFirstMode,
     liveKitParticipantRole,
-    participantStateById,
     partyId,
-    refreshStageSnapshot,
-    resolvedCurrentUsername,
     trackedUserId,
   ]);
 
@@ -3304,34 +3254,46 @@ export default function WatchPartyLiveStageScreen() {
         {/* Layout lock: visible Live Stage comments stay in this dock per docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md. */}
         <View style={[styles.modeRow, styles.modeRowHybrid]}>
           <TouchableOpacity
-            style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn]}
-            activeOpacity={0.82}
+            style={[styles.modeBtn, isLiveFirstMode && styles.modeBtnOn, !isHost && styles.modeBtnDisabled]}
+            activeOpacity={isHost ? 0.82 : 1}
             accessible
             focusable
             accessibilityRole="button"
-            accessibilityLabel="Switch to Live-First mode"
+            accessibilityLabel={isHost ? "Switch to Live-First mode" : "Live-First mode is controlled by the host"}
+            accessibilityState={{ selected: isLiveFirstMode, disabled: !isHost }}
             hitSlop={STAGE_CONTROL_HIT_SLOP}
+            disabled={!isHost}
             onPress={() => {
               void updateStageMode("live");
             }}
             testID="live-stage-mode-live"
           >
-            <Text style={[styles.modeBtnText, isLiveFirstMode && styles.modeBtnTextOn]}>Live-First</Text>
+            <Text style={[
+              styles.modeBtnText,
+              isLiveFirstMode && styles.modeBtnTextOn,
+              !isHost && styles.modeBtnTextDisabled,
+            ]}>Live-First</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.modeBtn, isHybridMode && styles.modeBtnOn]}
-            activeOpacity={0.82}
+            style={[styles.modeBtn, isHybridMode && styles.modeBtnOn, !isHost && styles.modeBtnDisabled]}
+            activeOpacity={isHost ? 0.82 : 1}
             accessible
             focusable
             accessibilityRole="button"
-            accessibilityLabel={`Switch to ${branding.watchPartyLabel} mode`}
+            accessibilityLabel={isHost ? `Switch to ${branding.watchPartyLabel} mode` : `${branding.watchPartyLabel} mode is controlled by the host`}
+            accessibilityState={{ selected: isHybridMode, disabled: !isHost }}
             hitSlop={STAGE_CONTROL_HIT_SLOP}
+            disabled={!isHost}
             onPress={() => {
               void updateStageMode("hybrid");
             }}
             testID="live-stage-mode-hybrid"
           >
-            <Text style={[styles.modeBtnText, isHybridMode && styles.modeBtnTextOn]}>{branding.watchPartyLabel}</Text>
+            <Text style={[
+              styles.modeBtnText,
+              isHybridMode && styles.modeBtnTextOn,
+              !isHost && styles.modeBtnTextDisabled,
+            ]}>{branding.watchPartyLabel}</Text>
           </TouchableOpacity>
         </View>
 
@@ -5030,8 +4992,12 @@ const styles = StyleSheet.create({
   modeBtnOn: {
     backgroundColor: "rgba(255,255,255,0.16)",
   },
+  modeBtnDisabled: {
+    opacity: 0.62,
+  },
   modeBtnText: { color: "#C8C8C8", fontSize: 11.5, fontWeight: "800" },
   modeBtnTextOn: { color: "#fff" },
+  modeBtnTextDisabled: { color: "#8B93A6" },
 
   stageCanvas: {
     flex: 1,

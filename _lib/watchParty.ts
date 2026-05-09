@@ -1161,6 +1161,14 @@ export async function setPartyParticipantState(
   if (!room) return null;
   const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
   if (!premiumAccess?.allowed) return null;
+  if (String(room.hostUserId ?? "").trim() !== writableUserId) {
+    debugLog("watch-party", "blocked non-host participant state update", {
+      partyId: normalizedPartyId,
+      targetUserId: normalizedTargetUserId,
+      writableUserId,
+    });
+    return null;
+  }
 
   const now = new Date().toISOString();
   const updates: PartyMembershipUpdate = {
