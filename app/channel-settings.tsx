@@ -122,7 +122,7 @@ type SummaryMetricCard = {
   tone?: "default" | "unavailable";
 };
 
-type StudioTabId = "home" | "content" | "live" | "audience" | "insights" | "payouts" | "brand";
+type StudioTabId = "home" | "content" | "live" | "audience" | "insights" | "payouts" | "revenue" | "brand";
 type ContentStatusFilter = "all" | "published" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
@@ -462,6 +462,7 @@ const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
   { id: "audience", label: "Audience" },
   { id: "insights", label: "Insights" },
   { id: "payouts", label: "Payouts" },
+  { id: "revenue", label: "Revenue" },
   { id: "brand", label: "Brand" },
 ];
 
@@ -485,6 +486,7 @@ const normalizeStudioTabId = (value: unknown): StudioTabId | null => {
     || normalized === "audience"
     || normalized === "insights"
     || normalized === "payouts"
+    || normalized === "revenue"
     || normalized === "brand"
   ) {
     return normalized;
@@ -1427,6 +1429,17 @@ export function ChannelStudioScreen() {
       ],
     },
     {
+      title: "Revenue",
+      body: "Read-only creator revenue-share foundation status with no earnings shown.",
+      sections: [
+        {
+          title: "Revenue Dashboard",
+          status: "near_term",
+          body: "Revenue sharing is not active yet; source money imports must exist before earnings can be shown.",
+        },
+      ],
+    },
+    {
       title: "Safety",
       body: "Role and report context without replacing the Admin surface.",
       sections: [
@@ -1706,6 +1719,48 @@ export function ChannelStudioScreen() {
       value: "Blocked",
       body: "No withdrawal, transfer, approval, or payout release exists.",
       tone: "unavailable",
+    },
+  ];
+  const creatorRevenueSummaryCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Revenue sharing",
+      value: "Not active yet",
+      body: "Creator revenue share rows are foundation-only until real source money is imported.",
+      tone: "unavailable",
+    },
+    {
+      label: "Source imports",
+      value: "Not connected",
+      body: "AppLovin, sponsor payments, tips, paid content, and network billing imports are not connected here.",
+      tone: "unavailable",
+    },
+    {
+      label: "Creator earnings",
+      value: "None shown",
+      body: "This dashboard does not show earnings, payable balance, paid status, or withdrawal eligibility.",
+      tone: "unavailable",
+    },
+  ];
+  const creatorRevenueRuleCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Creator-page ads",
+      value: "70% net later",
+      body: "Only after real provider ad revenue reports exist.",
+    },
+    {
+      label: "Creator-sold sponsors",
+      value: "80% net later",
+      body: "Only after brand payment, review, disclosure, fraud checks, and hold rules are backed.",
+    },
+    {
+      label: "Tips",
+      value: "100% less processing later",
+      body: "Only after a real tips product and provider payment proof exist.",
+    },
+    {
+      label: "Paid content",
+      value: "80% net later",
+      body: "Only after paid-content purchase, refund, tax, and provider proof exist.",
     },
   ];
   const upcomingEvents = useMemo(
@@ -2480,6 +2535,11 @@ export function ChannelStudioScreen() {
             onPress: () => setActiveStudioTab("payouts"),
           })}
           {renderHomeActionCard({
+            title: "Revenue",
+            body: "No earnings yet",
+            onPress: () => setActiveStudioTab("revenue"),
+          })}
+          {renderHomeActionCard({
             title: "Brand",
             body: "Identity",
             onPress: () => setActiveStudioTab("brand"),
@@ -2704,6 +2764,73 @@ export function ChannelStudioScreen() {
     </>
   );
 
+  const renderRevenueTab = () => (
+    <>
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Revenue</Text>
+            <Text style={styles.panelSubtitle}>Creator revenue sharing is not active yet.</Text>
+          </View>
+          <Text style={styles.panelStatusMuted}>FOUNDATION</Text>
+        </View>
+        <Text style={styles.permissionCopy}>
+          This dashboard is a read-only foundation. It does not import source money, calculate creator earnings, create payout ledger entries, show payable balances, or enable withdrawals.
+        </Text>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Source money status</Text>
+          <Text style={styles.panelStatusMuted}>Not connected</Text>
+        </View>
+        <View style={styles.summaryGrid}>
+          {creatorRevenueSummaryCards.map((card) => (
+            <View
+              key={card.label}
+              style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
+            >
+              <Text style={styles.summaryLabel}>{card.label}</Text>
+              <Text style={styles.summaryValue}>{card.value}</Text>
+              <Text style={styles.summaryBody}>{card.body}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Future revenue rules</Text>
+          <Text style={styles.panelStatusMuted}>Planned only</Text>
+        </View>
+        <Text style={styles.permissionCopy}>
+          Rules below are product planning labels only. They are not creator earnings and cannot become payable without real provider-backed source money, fraud review, payout review, tax/KYC readiness, and immutable audit proof.
+        </Text>
+        <View style={styles.summaryGrid}>
+          {creatorRevenueRuleCards.map((card) => (
+            <View key={card.label} style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>{card.label}</Text>
+              <Text style={styles.summaryValue}>{card.value}</Text>
+              <Text style={styles.summaryBody}>{card.body}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Revenue guardrails</Text>
+          <Text style={styles.panelStatusMuted}>Blocked</Text>
+        </View>
+        <View style={styles.eventEmptyCard}>
+          <Text style={styles.eventEmptyTitle}>No creator earnings are available.</Text>
+          <Text style={styles.eventEmptyBody}>No source money has been imported for this creator.</Text>
+          <Text style={styles.eventEmptyBody}>No fake earnings, payable balances, paid status, withdrawal, payout release, or creator payout obligation exists.</Text>
+        </View>
+      </View>
+    </>
+  );
+
   const renderCreatorEventCard = (event: CreatorEventSummary) => {
     const reminderSummary = creatorReminderSummaryByEventId.get(event.id);
 
@@ -2833,6 +2960,7 @@ export function ChannelStudioScreen() {
             {activeStudioTab === "home" ? renderStudioHomeTab() : null}
             {activeStudioTab === "content" ? renderContentPanel() : null}
             {activeStudioTab === "payouts" ? renderPayoutsTab() : null}
+            {activeStudioTab === "revenue" ? renderRevenueTab() : null}
 
             {activeStudioTab === "brand" ? (
               <>
