@@ -13,6 +13,7 @@
 - home and discovery
 - customizable basic profiles
 - public Channel route at `/channel/[userId]`
+- public Channel safe-area/stat polish at `4873f08`, with role-safe public layout, no fake follower counts, no non-owner Studio controls, and no draft/private/unpublished content exposure
 - owner Channel Studio at `/channel-studio` with `/channel-settings` compatibility
 - standalone player
 - Watch-Party Live core flow
