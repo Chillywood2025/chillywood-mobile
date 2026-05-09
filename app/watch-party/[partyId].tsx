@@ -88,6 +88,7 @@ import {
     getPartyRoomSnapshot,
     getSafePartyUserId,
     joinPartyRoomSession,
+    leavePartyRoomSession,
     sendPartyMessageRecord,
     setPartyRoomPolicies,
     setPartyParticipantState,
@@ -1396,6 +1397,61 @@ export default function WatchPartyRoomScreen() {
     }).catch(() => {});
   }, [branding.appDisplayName, displayRoomCode]);
 
+  const openRoomReport = useCallback(() => {
+    if (!room) return;
+    trackModerationActionUsed({
+      surface: "watch-party-room",
+      action: "open_safety_report",
+      targetType: "room",
+      targetId: room.partyId,
+      roomId: room.partyId,
+      titleId: room.titleId ?? null,
+      sourceRoute: `/watch-party/${partyId}`,
+    });
+    setReportTarget({
+      type: "room",
+      targetId: room.partyId,
+      label: roomCodeCardValue || room.partyId,
+    });
+    setReportVisible(true);
+  }, [partyId, room, roomCodeCardValue]);
+
+  const onLeavePartyRoom = useCallback(() => {
+    const currentUserId = String(myUserIdRef.current ?? "").trim();
+    const currentRole = myRoleRef.current === "host" ? "host" : "viewer";
+    const leaveRoom = () => {
+      if (!partyId || !currentUserId) {
+        router.back();
+        return;
+      }
+
+      void leavePartyRoomSession({
+        partyId,
+        userId: currentUserId,
+        role: currentRole,
+        canSpeak: false,
+        isMuted: true,
+        cameraEnabled: false,
+        micEnabled: false,
+        displayName: myProfileUsernameRef.current,
+        cameraPreviewUrl: myCameraPreviewUrlRef.current,
+      }).finally(() => {
+        router.back();
+      });
+    };
+
+    Alert.alert(
+      "Leave Party Room?",
+      currentRole === "host"
+        ? "You will leave the room view. This does not end the room for everyone."
+        : "You can rejoin later if the room is still open.",
+      [
+        { text: "Stay", style: "cancel" },
+        { text: "Leave", style: "destructive", onPress: leaveRoom },
+      ],
+    );
+  }, [partyId, router]);
+
   const onResolveAccessGate = useCallback(async (action: "purchase" | "restore") => {
     if (!accessGate) {
       return {
@@ -1809,8 +1865,8 @@ export default function WatchPartyRoomScreen() {
     ? (WATCH_PARTY_LIVE_FEED_COLUMNS - (visibleLiveBubbleParticipants.length % WATCH_PARTY_LIVE_FEED_COLUMNS)) % WATCH_PARTY_LIVE_FEED_COLUMNS
     : 0;
   const watchPartyLiveFeedCountLabel = visibleLiveBubbleParticipants.length > 0
-    ? `${visibleLiveBubbleParticipants.length} ${visibleLiveBubbleParticipants.length === 1 ? "feed" : "feeds"}`
-    : "Feeds syncing";
+    ? `${visibleLiveBubbleParticipants.length} ${visibleLiveBubbleParticipants.length === 1 ? "person" : "people"}`
+    : "People syncing";
   const currentUserBubbleId = trackedUserId;
   const inviteableRoomParticipants = useMemo(
     () => liveBubbleParticipants
@@ -2166,12 +2222,12 @@ export default function WatchPartyRoomScreen() {
   const isWaitingForHost = !isHost && !participants.some((p) => p.role === "host");
   const roleStatusTitle = isHost ? "Host Room Controls" : "Viewer Room Entry";
   const roleStatusBody = isHost
-    ? "Set access, invite people, and shape the room before playback starts."
+    ? "Invite people, keep the room safe, and open the shared Player when the party is ready."
     : isWaitingForHost
       ? "Waiting for host…"
       : isSyncUnstable
         ? "Resyncing room setup…"
-        : "You are inside the host's room setup. Playback starts when the room is ready.";
+        : "You are in the Party Room. Open the shared Player when the room is ready.";
   const accessGatePresentation = accessGate
     ? getMonetizationAccessSheetPresentation({
         gate: accessGate.access,
@@ -2207,7 +2263,7 @@ export default function WatchPartyRoomScreen() {
   const roomCardTitle = roomLabels.roomCardTitle;
   const roomCardSubtext = isLiveRoom
     ? "Control room for the live session."
-    : `Control room for ${partyRoomTitleContext} before playback.`;
+    : `Shared viewing room for ${partyRoomTitleContext}. Keep people, comments, and the Player together.`;
   const partyRoomFocusLabel = tailoredFocusParticipant
     ? (tailoredFocusParticipant.userId === currentUserBubbleId ? "You" : tailoredFocusParticipant.displayName)
     : "Host";
@@ -2338,7 +2394,7 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.watchPartyScreenCard}>
           <View style={styles.watchPartyScreenHeader}>
             <View style={styles.watchPartyScreenHeaderCopy}>
-              <Text style={styles.watchPartyScreenKicker}>SHARED SCREEN</Text>
+              <Text style={styles.watchPartyScreenKicker}>PARTY SCREEN</Text>
               <Text style={styles.watchPartyScreenTitle} numberOfLines={2}>{partyRoomTitleContext}</Text>
             </View>
             <View style={styles.watchPartySourcePill}>
@@ -2353,7 +2409,7 @@ export default function WatchPartyRoomScreen() {
             <View style={styles.watchPartyScreenOverlay}>
               <Text style={styles.watchPartyScreenOverlayTitle}>Watch-Party Live</Text>
               <Text style={styles.watchPartyScreenOverlayBody}>
-                Shared playback opens in the standalone Player while this room keeps source, people, comments, and controls together.
+                Open the shared Player for playback and camera/audio. This room keeps the code, people, comments, and safety tools together.
               </Text>
             </View>
           </View>
@@ -2371,6 +2427,52 @@ export default function WatchPartyRoomScreen() {
             <Text style={styles.watchCTAText}>Open Shared Player</Text>
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  };
+
+  const renderPartyRoomActionDock = () => {
+    if (isLiveRoom) return null;
+
+    return (
+      <View style={styles.partyRoomActionDockCard}>
+        <View style={styles.partyRoomActionDock}>
+          <TouchableOpacity
+            style={[styles.partyRoomDockButton, styles.partyRoomDockButtonPrimary]}
+            activeOpacity={0.84}
+            onPress={onWatchTogether}
+          >
+            <MaterialIcons name="play-arrow" size={20} color="#FFFFFF" />
+            <Text style={styles.partyRoomDockButtonText}>Player</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.partyRoomDockButton}
+            activeOpacity={0.84}
+            onPress={onShareCode}
+          >
+            <MaterialIcons name="group-add" size={19} color="#EAF1FF" />
+            <Text style={styles.partyRoomDockButtonText}>Invite</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.partyRoomDockButton}
+            activeOpacity={0.84}
+            onPress={openRoomReport}
+          >
+            <MaterialIcons name="flag" size={18} color="#EAF1FF" />
+            <Text style={styles.partyRoomDockButtonText}>Report</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.partyRoomDockButton, styles.partyRoomDockButtonLeave]}
+            activeOpacity={0.84}
+            onPress={onLeavePartyRoom}
+          >
+            <MaterialIcons name="logout" size={18} color="#FFE7EC" />
+            <Text style={[styles.partyRoomDockButtonText, styles.partyRoomDockButtonTextLeave]}>Leave</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.partyRoomActionDockNote}>
+          Camera and mic publishing happen in the shared Player. The Party Room keeps invites, people, comments, and safety controls close.
+        </Text>
       </View>
     );
   };
@@ -2591,31 +2693,6 @@ export default function WatchPartyRoomScreen() {
         }}
       />
 
-      <TouchableOpacity
-        style={styles.reportRoomButton}
-        activeOpacity={0.84}
-        onPress={() => {
-          if (!room) return;
-          trackModerationActionUsed({
-            surface: "watch-party-room",
-            action: "open_safety_report",
-            targetType: "room",
-            targetId: room.partyId,
-            roomId: room.partyId,
-            titleId: room.titleId ?? null,
-            sourceRoute: `/watch-party/${partyId}`,
-          });
-          setReportTarget({
-            type: "room",
-            targetId: room.partyId,
-            label: roomCodeCardValue || room.partyId,
-          });
-          setReportVisible(true);
-        }}
-      >
-        <Text style={styles.reportRoomButtonText}>Report Room</Text>
-      </TouchableOpacity>
-
       <ProtectedSessionNote
         {...getProtectedSessionCopy("party-room", {
           contentAccessRule: room.contentAccessRule,
@@ -2721,6 +2798,7 @@ export default function WatchPartyRoomScreen() {
         </View>
 
         {renderWatchPartyLiveDeck()}
+        {renderPartyRoomActionDock()}
 
         {!isLiveRoom && (
           <View style={styles.syncStatusCard}>
@@ -2740,8 +2818,8 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.liveBubblesSection}>
           <View style={styles.liveBubblesHeader}>
             <View style={styles.liveBubblesHeaderCopy}>
-              <Text style={styles.sectionKicker}>LIVE FEEDS</Text>
-              <Text style={styles.liveBubblesSubtitle}>Host and viewers stay below the screen.</Text>
+              <Text style={styles.sectionKicker}>PARTY FEEDS</Text>
+              <Text style={styles.liveBubblesSubtitle}>Camera seats stay under the shared screen. Scroll for everyone.</Text>
             </View>
             <Text style={styles.liveBubblesCount}>{watchPartyLiveFeedCountLabel}</Text>
           </View>
@@ -4120,6 +4198,60 @@ const styles = StyleSheet.create({
     backgroundColor: "#B80F31",
   },
   watchCTAText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
+  partyRoomActionDockCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(168,192,245,0.16)",
+    backgroundColor: "rgba(7,10,18,0.78)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 9,
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  partyRoomActionDock: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  partyRoomDockButton: {
+    flex: 1,
+    minWidth: 70,
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  partyRoomDockButtonPrimary: {
+    borderColor: "rgba(220,20,60,0.46)",
+    backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  partyRoomDockButtonLeave: {
+    borderColor: "rgba(255,115,140,0.34)",
+    backgroundColor: "rgba(220,20,60,0.13)",
+  },
+  partyRoomDockButtonText: {
+    color: "#EAF1FF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  partyRoomDockButtonTextLeave: {
+    color: "#FFE7EC",
+  },
+  partyRoomActionDockNote: {
+    color: "#AAB7D0",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
   partyRoomSetupShell: { gap: 14 },
   tailoredRoomCard: {
     borderRadius: 18,
