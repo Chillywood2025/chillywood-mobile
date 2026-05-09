@@ -33,3 +33,6 @@ verify_jwt = false
 
 [functions.payout-release-preflight]
 verify_jwt = false
+
+[functions.provider-billing-import-preflight]
+verify_jwt = false
