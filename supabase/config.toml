@@ -39,3 +39,6 @@ verify_jwt = false
 
 [functions.sponsor-checkout-preflight]
 verify_jwt = false
+
+[functions.sponsor-brand-payment-preflight]
+verify_jwt = false
