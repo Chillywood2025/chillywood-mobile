@@ -1,9 +1,11 @@
 # NEXT TASK
 
 ## Exact Next Recommended Lane
-Fraud review queue foundation is the safest next active lane. It must be review-state/readout only and must not pause payouts, disable monetization, restrict uploads, restrict live access, restrict sponsor deals, set fake risk scores, apply strikes, ban users, or execute enforcement. Still no Withdraw/Cash Out, payout approval/release, transfers, payouts, checkout, invoice send, customer charge, KYC/tax UI, fake balances, live fraud enforcement, or live money movement.
+Real source revenue import foundation is the safest next active lane only if it stays provider-backed/skeleton-safe and does not create fake revenue. It must not import AppLovin/ad money, Stripe sponsor money, tips, paid content, or network billing money unless real provider source records/events exist and are idempotent. Still no creator earnings, payable balances, payout ledger writes from revenue-share rows, Withdraw/Cash Out, payout approval/release, transfers, payouts, checkout, invoice send, customer charge, KYC/tax UI, fake balances, live fraud enforcement, or live money movement.
 
 Provider Billing Reconciliation Foundation is pushed and deployed. Commit `12b5ddb` adds backend-only `provider-billing-reconciliation`, registers it in `supabase/config.toml`, updates `_lib/platformUsage.ts` readouts, and updates Admin Usage/Networks copy. The function requires internal Supabase bearer auth plus owner/operator role, reads only existing `provider_usage_daily` and `usage_daily_summaries`, upserts `provider_usage_reconciliation`, and writes immutable admin audit rows. It does not read provider secrets, call provider billing APIs, import provider bills, send invoices, charge customers, create payment links, trigger overage billing, create fake provider bills, create fake revenue, or execute network billing. Deployment proof showed OPTIONS `200`, GET `405`, and no-auth POST `401`.
+
+Fraud Review Queue Foundation is pushed and applied. Migration `supabase/migrations/202605080014_fraud_review_queue_foundation.sql` adds `fraud_review_queue_records`, generated database types, owner/operator RLS, foundation proof rows, immutable admin audit proof, and read-only Admin Fraud queue counts. It is review-state only: no payout pause, monetization disable, upload restriction, live restriction, sponsor restriction, account restriction, strike, ban, fake risk score, hold release, or runtime enforcement hook exists.
 
 Admin Usage Provider Imports V1D3/V1D4 are pushed and proofed. The server-side `provider-usage-import` Supabase Edge Function is deployed, migration `202605070012_provider_usage_import_idempotency.sql` is applied, Admin Usage reads provider import status rows, missing auth returns `401`, and owner/operator proof completed Cloudflare R2, Hetzner Object Storage, and Hetzner Server import paths with the existing signed-in device session token in memory only. Hetzner Object Storage imports only S3-compatible bucket inventory metadata (`s3_inventory_storage_bytes` and `s3_inventory_object_count`) through server-side secrets, not traffic, billing, overage, invoice, revenue, payout, or storage-billing truth. No mobile provider API calls, provider secrets in repo, fake bandwidth, fake bills, overages, invoices, revenue, payouts, sponsor money, or Admin import buttons were added.
 
@@ -57,9 +59,9 @@ Provider Transfer Records Sync Foundation is pushed and applied. Migration `supa
 
 The next finance/admin lanes are:
 
-1. Fraud review queue foundation, still no enforcement.
-2. Sponsor checkout test-mode only after review/disclosure/fraud/audit proof and explicit product approval, still no live checkout.
-3. Provider billing API import proof only if real provider billing source is ready, still no invoice send/customer charge.
+1. Real source revenue import foundation, still no fake revenue or creator earnings.
+2. Creator-facing revenue share dashboard only after real source money exists.
+3. Sponsor checkout test-mode only after review/disclosure/fraud/audit proof and explicit product approval, still no live checkout.
 4. Test-mode payout transfer creation only after provider/fraud/KYC/tax/audit proof and explicit transfer-lane approval.
 5. Production payout release only after legal/accounting/provider approval.
 
@@ -169,8 +171,9 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
    - Creator-Facing Revenue Share Dashboard Planning/Spec is recorded; no creator revenue dashboard implementation exists and no fake earnings/payable balances may be shown
    - Remaining Finance/Admin Lane Planning is recorded for test-mode transfer creation, production payout release, provider billing APIs, sponsor checkout test-mode, brand payment through Stripe, sponsor reporting/fraud integration, and Fraud review queue
    - Provider Billing Reconciliation Foundation is pushed/deployed as backend-only owner/operator reconciliation over existing provider usage/internal summary rows, with no provider bill import or billing execution
+   - Fraud Review Queue Foundation is pushed/applied as review-state/readout only, with no runtime enforcement, fake risk score, strike, ban, payout pause, monetization disable, upload restriction, live restriction, sponsor restriction, or account restriction
    - Creator-facing payout setup UI is pushed as backend-only/test-mode setup/onboarding/status refresh in Channel Studio, with no payout execution, fake balance, KYC/tax UI, checkout, transfer, payout, or live money movement
-   - next recommended finance/admin implementation lane is Fraud review queue foundation, while transfer creation, production payout release, live sponsor checkout, brand charging, and fraud enforcement remain blocked
+   - next recommended finance/admin implementation lane is real source revenue import foundation, while transfer creation, production payout release, live sponsor checkout, brand charging, fake revenue, fake creator earnings, and fraud enforcement remain blocked
    - add provider billing APIs, Stripe Connect live integration, payout provider production writes, live payout actions, live network billing actions, sponsor checkout, or live fraud enforcement only in separate scoped lanes
    - keep Admin finance panels read-only and honest: counts only, Not connected yet, Foundation only, or Not active yet
 
