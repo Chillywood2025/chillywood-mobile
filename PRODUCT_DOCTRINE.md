@@ -121,6 +121,18 @@ If older active docs contain scattered cross-cutting monetization, compliance, p
 - CTV ads are future-only for Chi'llywood Originals and network-style content and are not active now
 - room-specific ad cautions belong in `ROOM_BLUEPRINT.md`, not here
 
+## Discovery / Spectator Direction
+- Discovery Feed Foundation D2 and Discovery/Spectator D3-D10 foundation are pushed as privacy-safe read-model/UI/helper groundwork.
+- Home Feed V1 may show only real backed discovery rows, followed-channel uploads, Circle-safe public uploads, public events, and latest public uploads with honest empty states.
+- Public Channel discovery shelves may show public live/upcoming events and public uploads only; Channel remains the public mini streaming platform, not Studio.
+- Profile live/activity remains person/social identity and must respect profile privacy, blocks, and Chi'lly Circle boundaries.
+- Spectator metadata exists at `/spectate/[itemId]` as metadata only: no mic, camera, playback URL, HLS/Egress, room mutation, host controls, or full LiveKit participant token.
+- Live spectator broadcast playback remains blocked until a separately scoped LiveKit Egress/HLS/CDN proof exists.
+- Watch-Party spectator eligibility must block protected/title/private/ticketed/subscriber/invite-only content from public spectator video unless rights and access are explicitly backed.
+- Ranking/personalization foundation may use real signals only: live now, followed channel, Chi'lly Circle relationship, recent public activity, upcoming event, backed category match, and moderation/access filters. Do not call it AI, Trending, popular, or personalized unless real signals/backing exist.
+- No fake feed items, fake trending, fake viewer counts, fake spectator counts, fake public rights, public protected-content playback, or full-room spectator tokens are allowed.
+- Public/free content may be ad-supported later when rights and visibility allow; Premium remains ad-free; CTV ads remain future-only for public/free TV-style inventory.
+
 ## Profile / Channel Platform Direction
 - profiles remain Chi'llywood's social identity hubs
 - Profile and Channel are connected but different product layers: Profile is personal/social identity, while Channel is the public mini streaming platform/network

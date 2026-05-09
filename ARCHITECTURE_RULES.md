@@ -25,6 +25,7 @@ If an older monetization, compliance, product-phase, or profile/channel-platform
 - Live Waiting Room routes into Live Room
 - Profile social identity surface: `/profile/[userId]`
 - Public Channel surface: `/channel/[userId]`
+- Spectator metadata surface: `/spectate/[itemId]`
 - Owner Channel Studio surface: `/channel-studio`
 - Channel Settings compatibility surface: `/channel-settings`
 - Platform owner/operator Admin Command Center: `/admin`
@@ -32,6 +33,24 @@ If an older monetization, compliance, product-phase, or profile/channel-platform
 - Chi'lly Chat direct threads live on `/chat/[threadId]`
 
 These are the approved user-facing destinations.
+
+## Discovery / Spectator Rule
+Home, Profile, and Public Channel discovery may show only real, privacy-safe, rights-safe activity from backed rows/helpers.
+
+Discovery/Spectator D3-D10 foundation is pushed:
+- Home Feed V1 shows backed Live Now, Channels You Follow, From Your Chi'lly Circle, Upcoming Events, and Latest Public Uploads rails with honest empty states
+- Public Channel has public-safe Live Now and Upcoming Events shelves
+- `/spectate/[itemId]` is metadata-only
+- spectator eligibility and ranking helpers are read-only/foundation
+- notification/activity trigger foundation sends no pushes
+
+Forbidden until a later explicit proof lane:
+- spectator playback
+- HLS/Egress/CDN playback
+- full LiveKit participant tokens for spectators
+- room mutation from spectator metadata
+- fake feed rows, fake trending, fake AI, fake viewer counts, or fake spectator counts
+- protected/title/private/ticketed/subscriber/invite-only public spectator video without backed rights and access
 
 ## Room Communication Rule
 There must not be a separate user-facing room-communication destination in normal flow.

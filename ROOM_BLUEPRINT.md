@@ -66,7 +66,7 @@ Only use these where they actually fit the room:
 
 ## Relationship Map
 - Home is the discovery layer for `Live Watch-Party`.
-- Discovery Feed Foundation D2 provides backend/read-model schema for future Home/Profile/Public Channel discovery only. It does not grant spectator playback, HLS/Egress, LiveKit participant tokens, fake ranking, fake trending, or fake counts.
+- Discovery Feed Foundation D2 plus Discovery/Spectator D3-D10 provide backend/read-model, Home/Channel metadata, metadata-only spectator, eligibility, trigger-foundation, and deterministic ranking groundwork only. `/spectate/[itemId]` is metadata-only and does not grant spectator playback, HLS/Egress, LiveKit participant tokens, room mutation, fake ranking, fake trending, fake counts, or protected-content public video.
 - Title detail and Standalone Player are the launch layer for `Watch-Party Live`.
 - `app/watch-party/index.tsx` is the current waiting-room owner and prepares handoff into either Party Room or Live Room.
 - Party Waiting Room leads into Party Room on `/watch-party/[partyId]`.
