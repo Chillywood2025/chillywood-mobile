@@ -43,11 +43,11 @@ Discovery/Spectator D3-D10 foundation is pushed:
 - `/spectate/[itemId]` is metadata-only
 - spectator eligibility and ranking helpers are read-only/foundation
 - notification/activity trigger foundation sends no pushes
-- D7B `room_broadcast_sessions` schema foundation is pushed as admin/operator-owned foundation only; it stores no active playback, constrains public watchability and spectator playback false, and constrains HLS URLs and Egress ids null
-- D7C spectator broadcast backend skeletons are pushed as admin/operator-only `spectator-broadcast-start`, `spectator-broadcast-stop`, and `spectator-broadcast-status`; they return `not_configured` until real Egress/HLS is connected and must not call Egress, generate HLS URLs, enable playback, or return spectator LiveKit tokens
+- D7B `room_broadcast_sessions` schema foundation plus the D7D test transition are pushed as admin/operator-owned foundation/test proof only; public watchability and spectator playback stay constrained false, and real Egress ids/private HLS locations are allowed only for private `D7D_TEST_` proof rows
+- D7C spectator broadcast backend functions are pushed as admin/operator-only `spectator-broadcast-start`, `spectator-broadcast-stop`, and `spectator-broadcast-status`; they can run a guarded D7D private test Egress path only when `D7D_TEST_EGRESS_ENABLED` is set, and must not enable public playback or return spectator LiveKit tokens
 - D7C source update `8ba557b` is deployed and accepts existing `S3_*` output secret names as aliases for future D7D `EGRESS_OUTPUT_*` readiness reporting, by name/status only and never values
 - D7G metadata-only ad/CTV policy labels are pushed at `1a1ddf0`; they do not add real ad playback, CTV inventory, ad SDKs, ad markers, or ad revenue
-- D7D remains blocked until a separate proof lane safely transitions the schema/backend from foundation-only to real test Egress ids/HLS URLs with cost guards and a safe test source
+- D7D still requires an admin/operator bearer-token start/stop proof before playback UI or Admin broadcast controls may be added
 
 Forbidden until a later explicit proof lane:
 - spectator playback
