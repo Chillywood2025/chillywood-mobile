@@ -267,6 +267,10 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
 const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   loading: false,
   financeLedgerEventCount: null,
+  creatorRevenueSourceImportRecordCount: null,
+  creatorRevenueSourceImportFoundationCount: null,
+  creatorRevenueSourceImportSourceNotConnectedCount: null,
+  creatorRevenueSourceImportImportedLaterCount: null,
   creatorRevenueShareRuleCount: null,
   creatorRevenueShareLedgerEntryCount: null,
   creatorRevenueShareLedgerFoundationCount: null,
@@ -3699,6 +3703,47 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListBody}>
                   Counts only. This is not a live revenue total, ad money, sponsor money, or creator-facing money total.
                 </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Real Source Revenue Imports</Text>
+                <Text style={styles.configListBody}>
+                  Import records: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorRevenueSourceImportRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation import record",
+                    "foundation import records",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Foundation-only rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorRevenueSourceImportFoundationCount,
+                    adminFinanceReadModel.loading,
+                    "foundation row",
+                    "foundation rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Source not connected rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorRevenueSourceImportSourceNotConnectedCount,
+                    adminFinanceReadModel.loading,
+                    "source-not-connected row",
+                    "source-not-connected rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Imported-later labels: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorRevenueSourceImportImportedLaterCount,
+                    adminFinanceReadModel.loading,
+                    "imported-later row",
+                    "imported-later rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Real source revenue imports are not connected yet.</Text>
+                <Text style={styles.configListBody}>AppLovin, Stripe sponsor, tips, paid content, and network billing imports remain future lanes.</Text>
+                <Text style={styles.configListBody}>No real source money has been imported.</Text>
+                <Text style={styles.configListBody}>No creator earnings, payable balances, or payout ledger entries are created from source import foundation rows.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>

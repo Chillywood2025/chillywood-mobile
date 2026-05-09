@@ -10,6 +10,9 @@ verify_jwt = false
 [functions.provider-billing-reconciliation]
 verify_jwt = false
 
+[functions.revenue-source-import]
+verify_jwt = false
+
 [functions.stripe-connect-account]
 verify_jwt = false
 

@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 
 export const PLATFORM_FINANCE_LEDGER_EVENTS_TABLE = "platform_finance_ledger_events";
+export const CREATOR_REVENUE_SOURCE_IMPORT_RECORDS_TABLE = "creator_revenue_source_import_records";
 export const CREATOR_REVENUE_SHARE_RULES_TABLE = "creator_revenue_share_rules";
 export const CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE = "creator_revenue_share_ledger_entries";
 export const CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE = "creator_payout_ledger_entries";
@@ -45,6 +46,10 @@ export const CREATOR_PAYOUT_BATCH_ITEMS_TABLE = "creator_payout_batch_items";
 
 export type AdminFinanceReadModel = {
   financeLedgerEventCount: number | null;
+  creatorRevenueSourceImportRecordCount: number | null;
+  creatorRevenueSourceImportFoundationCount: number | null;
+  creatorRevenueSourceImportSourceNotConnectedCount: number | null;
+  creatorRevenueSourceImportImportedLaterCount: number | null;
   creatorRevenueShareRuleCount: number | null;
   creatorRevenueShareLedgerEntryCount: number | null;
   creatorRevenueShareLedgerFoundationCount: number | null;
@@ -173,6 +178,10 @@ export const formatFinanceFoundationCount = (value: number | null, singular: str
 export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel> {
   const [
     financeLedgerEventCount,
+    creatorRevenueSourceImportRecordCount,
+    creatorRevenueSourceImportFoundationCount,
+    creatorRevenueSourceImportSourceNotConnectedCount,
+    creatorRevenueSourceImportImportedLaterCount,
     creatorRevenueShareRuleCount,
     creatorRevenueShareLedgerEntryCount,
     creatorRevenueShareLedgerFoundationCount,
@@ -249,6 +258,10 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     fraudAuditLogCount,
   ] = await Promise.all([
     safeRead(() => readTableCount(PLATFORM_FINANCE_LEDGER_EVENTS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_REVENUE_SOURCE_IMPORT_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(CREATOR_REVENUE_SOURCE_IMPORT_RECORDS_TABLE, "status", "foundation")),
+    safeRead(() => readTableCountWhereEq(CREATOR_REVENUE_SOURCE_IMPORT_RECORDS_TABLE, "status", "source_not_connected")),
+    safeRead(() => readTableCountWhereEq(CREATOR_REVENUE_SOURCE_IMPORT_RECORDS_TABLE, "status", "imported_later")),
     safeRead(() => readTableCount(CREATOR_REVENUE_SHARE_RULES_TABLE)),
     safeRead(() => readTableCount(CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE)),
     safeRead(() => readTableCountWhereEq(CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE, "status", "foundation")),
@@ -327,6 +340,10 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
 
   return {
     financeLedgerEventCount,
+    creatorRevenueSourceImportRecordCount,
+    creatorRevenueSourceImportFoundationCount,
+    creatorRevenueSourceImportSourceNotConnectedCount,
+    creatorRevenueSourceImportImportedLaterCount,
     creatorRevenueShareRuleCount,
     creatorRevenueShareLedgerEntryCount,
     creatorRevenueShareLedgerFoundationCount,

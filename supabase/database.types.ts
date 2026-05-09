@@ -1604,6 +1604,66 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_revenue_source_import_records: {
+        Row: {
+          created_at: string
+          currency: string
+          fee_amount_cents: number
+          gross_amount_cents: number
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          net_amount_cents: number
+          provider: string
+          provider_event_id: string | null
+          provider_reference: string | null
+          reconciliation_status: string
+          source_period_end: string | null
+          source_period_start: string | null
+          source_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          fee_amount_cents?: number
+          gross_amount_cents?: number
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          net_amount_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_reference?: string | null
+          reconciliation_status?: string
+          source_period_end?: string | null
+          source_period_start?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          fee_amount_cents?: number
+          gross_amount_cents?: number
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          net_amount_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_reference?: string | null
+          reconciliation_status?: string
+          source_period_end?: string | null
+          source_period_start?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       creator_video_comments: {
         Row: {
           body: string
