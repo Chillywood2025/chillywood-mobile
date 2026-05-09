@@ -27,6 +27,7 @@ export const FRAUD_REASON_RECORDS_TABLE = "fraud_reason_records";
 export const FRAUD_EVIDENCE_RECORDS_TABLE = "fraud_evidence_records";
 export const FRAUD_ACTION_RECORDS_TABLE = "fraud_action_records";
 export const FRAUD_ENFORCEMENT_POLICY_RECORDS_TABLE = "fraud_enforcement_policy_records";
+export const FRAUD_REVIEW_QUEUE_RECORDS_TABLE = "fraud_review_queue_records";
 export const FRAUD_REVIEW_NOTES_TABLE = "fraud_review_notes";
 export const FRAUD_APPEAL_RECORDS_TABLE = "fraud_appeal_records";
 export const FRAUD_AUDIT_LOGS_TABLE = "fraud_audit_logs";
@@ -109,6 +110,12 @@ export type AdminFinanceReadModel = {
   fraudEnforcementPolicyCount: number | null;
   fraudEnforcementPolicyFoundationCount: number | null;
   fraudActionNotExecutableCount: number | null;
+  fraudReviewQueueRecordCount: number | null;
+  fraudReviewQueuePendingCount: number | null;
+  fraudReviewQueueNeedsEvidenceCount: number | null;
+  fraudReviewQueueEscalatedCount: number | null;
+  fraudReviewQueueEnforcementPlannedCount: number | null;
+  fraudReviewQueueAppealedCount: number | null;
   fraudReviewNoteCount: number | null;
   fraudAppealRecordCount: number | null;
   fraudAuditLogCount: number | null;
@@ -231,6 +238,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     fraudEnforcementPolicyCount,
     fraudEnforcementPolicyFoundationCount,
     fraudActionNotExecutableCount,
+    fraudReviewQueueRecordCount,
+    fraudReviewQueuePendingCount,
+    fraudReviewQueueNeedsEvidenceCount,
+    fraudReviewQueueEscalatedCount,
+    fraudReviewQueueEnforcementPlannedCount,
+    fraudReviewQueueAppealedCount,
     fraudReviewNoteCount,
     fraudAppealRecordCount,
     fraudAuditLogCount,
@@ -301,6 +314,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(FRAUD_ENFORCEMENT_POLICY_RECORDS_TABLE)),
     safeRead(() => readTableCountWhereEq(FRAUD_ENFORCEMENT_POLICY_RECORDS_TABLE, "status", "foundation")),
     safeRead(() => readTableCountWhereEq(FRAUD_ACTION_RECORDS_TABLE, "execution_status", "not_executable")),
+    safeRead(() => readTableCount(FRAUD_REVIEW_QUEUE_RECORDS_TABLE)),
+    safeRead(() => readTableCountWhereEq(FRAUD_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "pending_review_later")),
+    safeRead(() => readTableCountWhereEq(FRAUD_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "needs_evidence_later")),
+    safeRead(() => readTableCountWhereEq(FRAUD_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "escalated_later")),
+    safeRead(() => readTableCountWhereEq(FRAUD_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "enforcement_planned_later")),
+    safeRead(() => readTableCountWhereEq(FRAUD_REVIEW_QUEUE_RECORDS_TABLE, "review_status", "appealed_later")),
     safeRead(() => readTableCount(FRAUD_REVIEW_NOTES_TABLE)),
     safeRead(() => readTableCount(FRAUD_APPEAL_RECORDS_TABLE)),
     safeRead(() => readTableCount(FRAUD_AUDIT_LOGS_TABLE)),
@@ -373,6 +392,12 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     fraudEnforcementPolicyCount,
     fraudEnforcementPolicyFoundationCount,
     fraudActionNotExecutableCount,
+    fraudReviewQueueRecordCount,
+    fraudReviewQueuePendingCount,
+    fraudReviewQueueNeedsEvidenceCount,
+    fraudReviewQueueEscalatedCount,
+    fraudReviewQueueEnforcementPlannedCount,
+    fraudReviewQueueAppealedCount,
     fraudReviewNoteCount,
     fraudAppealRecordCount,
     fraudAuditLogCount,

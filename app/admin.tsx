@@ -332,6 +332,12 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   fraudEnforcementPolicyCount: null,
   fraudEnforcementPolicyFoundationCount: null,
   fraudActionNotExecutableCount: null,
+  fraudReviewQueueRecordCount: null,
+  fraudReviewQueuePendingCount: null,
+  fraudReviewQueueNeedsEvidenceCount: null,
+  fraudReviewQueueEscalatedCount: null,
+  fraudReviewQueueEnforcementPlannedCount: null,
+  fraudReviewQueueAppealedCount: null,
   fraudReviewNoteCount: null,
   fraudAppealRecordCount: null,
   fraudAuditLogCount: null,
@@ -4671,6 +4677,61 @@ export default function AdminStudioScreen() {
                   {`Payout review: ${adminFinanceReadModel.creatorPayoutReviewRecordCount === null ? "not connected yet" : "connected"}`}
                 </Text>
                 <Text style={styles.configListBody}>Runtime enforcement hooks: not connected</Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Fraud Review Queue</Text>
+                <Text style={styles.configListBody}>
+                  Queue records: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudReviewQueueRecordCount,
+                    adminFinanceReadModel.loading,
+                    "foundation queue row",
+                    "foundation queue rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Pending later: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudReviewQueuePendingCount,
+                    adminFinanceReadModel.loading,
+                    "pending-later row",
+                    "pending-later rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Needs evidence later: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudReviewQueueNeedsEvidenceCount,
+                    adminFinanceReadModel.loading,
+                    "needs-evidence row",
+                    "needs-evidence rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Escalated later: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudReviewQueueEscalatedCount,
+                    adminFinanceReadModel.loading,
+                    "escalated row",
+                    "escalated rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Enforcement planned later: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudReviewQueueEnforcementPlannedCount,
+                    adminFinanceReadModel.loading,
+                    "planned row",
+                    "planned rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Appealed later: {formatAdminFinanceCount(
+                    adminFinanceReadModel.fraudReviewQueueAppealedCount,
+                    adminFinanceReadModel.loading,
+                    "appeal-linked row",
+                    "appeal-linked rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>Fraud review queue is read-only/foundation and cannot enforce restrictions.</Text>
+                <Text style={styles.configListBody}>No payout pause, monetization disable, upload restriction, live restriction, strike, ban, or fake risk score is active.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>

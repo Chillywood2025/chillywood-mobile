@@ -2007,6 +2007,62 @@ export type Database = {
           },
         ]
       }
+      fraud_review_queue_records: {
+        Row: {
+          assigned_to_user_id: string | null
+          created_at: string
+          fraud_hold_id: number | null
+          id: string
+          metadata: Json
+          priority: string
+          review_notes: string | null
+          review_reason: string | null
+          review_status: string
+          review_type: string
+          target_channel_user_id: string | null
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_to_user_id?: string | null
+          created_at?: string
+          fraud_hold_id?: number | null
+          id?: string
+          metadata?: Json
+          priority?: string
+          review_notes?: string | null
+          review_reason?: string | null
+          review_status?: string
+          review_type?: string
+          target_channel_user_id?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_to_user_id?: string | null
+          created_at?: string
+          fraud_hold_id?: number | null
+          id?: string
+          metadata?: Json
+          priority?: string
+          review_notes?: string | null
+          review_reason?: string | null
+          review_status?: string
+          review_type?: string
+          target_channel_user_id?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fraud_review_queue_records_fraud_hold_id_fkey"
+            columns: ["fraud_hold_id"]
+            isOneToOne: false
+            referencedRelation: "platform_fraud_holds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       network_account_plan_assignments: {
         Row: {
           created_at: string
