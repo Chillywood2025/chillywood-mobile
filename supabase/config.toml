@@ -45,3 +45,12 @@ verify_jwt = false
 
 [functions.sponsor-reporting-fraud-preflight]
 verify_jwt = false
+
+[functions.spectator-broadcast-start]
+verify_jwt = false
+
+[functions.spectator-broadcast-stop]
+verify_jwt = false
+
+[functions.spectator-broadcast-status]
+verify_jwt = false
