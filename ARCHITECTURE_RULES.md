@@ -77,6 +77,7 @@ Locked MVP architecture:
 - `/chat/[threadId]` is the standalone direct-thread route
 - the direct-thread MVP owns header, messages, composer, timestamps, optimistic sending, realtime updates, and mark-read on open/focus
 - the MVP data model is `chat_threads`, `chat_thread_members`, and `chat_messages`
+- chat thread helpers must treat current-user membership as required before returning thread state, messages, send access, attachments, or call cleanup; RLS remains the primary database boundary, but client helpers must not accept non-member thread rows
 - profile surfaces may open or create direct Chi'lly Chat threads
 - thread-based voice/video calls must reuse shared communication-room primitives instead of inventing a disconnected calling stack
 - MVP starts with direct messaging first and expands later into broader social/community communication

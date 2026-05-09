@@ -20,7 +20,7 @@
 - all full Live First, Live Watch-Party, and Watch-Party Live access gated by Premium
 - no free full LiveKit room/token/connect access and no free preview mode
 - comments, reactions, and basic social interaction
-- basic Chi'lly Chat or simple direct messaging
+- basic Chi'lly Chat or simple direct messaging, with helper-level current-user membership checks before normal thread/message/attachment/send/call-cleanup access
 - preserved Rachi official seeded-account foundation on the canonical profile and Chi'lly Chat surfaces
 - Premium subscription gate
 - Admin Command Center V1A on the canonical `/admin` route, protected by signed-in plus beta/platform-role/backend permission checks

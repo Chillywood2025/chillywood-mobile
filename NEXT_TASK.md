@@ -209,6 +209,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Public Channel Phase 2B is pushed at `/channel/[userId]`.
 - Public Channel visual polish and streaming-network correction are pushed.
 - Role Visibility Compatibility fix is pushed: Profile backed identity now wins over route display params after load, and direct creator-video Player lookup now enforces public-or-owner visibility before returning non-public videos. No migrations, generated database types, RLS/storage policies, Supabase remote state, package/native config, LiveKit config, forbidden app surfaces, Admin bypass, money actions, fake balances, or Premium gate changes were added. Runtime visual proof for the full role matrix should still be run on a current build.
+- Chi'lly Chat Role/Privacy Compatibility fix is pushed at `7fd4565`: chat helpers require current-user membership before returning normal thread state, message/attachment reads, sends, or stale-call cleanup. No chat UI redesign, call redesign, migrations, generated database type edits, Supabase remote/RLS/storage changes, LiveKit config changes, package changes, Stripe/payment/provider changes, admin bypass, fake data, or new messaging features were added. Direct-chat block policy after channel audience blocks remains a follow-up product decision.
 - Profile View Channel routes to `/channel/[userId]`.
 - Studio Preview Channel routes to `/channel/[ownUserId]`.
 - Admin Command Center V1A is pushed at `/admin`.
