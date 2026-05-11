@@ -1,0 +1,32 @@
+# LiveKit Egress config template for Chi'llywood D7D private proof only.
+# Copy outside git to:
+# /opt/chillywood/livekit-egress/config/egress.yaml
+#
+# Do not commit real API keys, API secrets, Redis passwords, provider
+# credentials, signed URLs, or storage secrets.
+#
+# Egress is backend/media infrastructure. It must not be installed in the
+# mobile app, and it must not enable public spectator playback by itself.
+
+log_level: info
+api_key: replace-with-livekit-api-key
+api_secret: replace-with-livekit-api-secret
+ws_url: wss://live.chillywoodstream.com
+insecure: false
+
+# Keep this Redis address aligned with the Redis configured in the production
+# LiveKit server config. The optional compose Redis binds to localhost only.
+redis:
+  address: 127.0.0.1:6379
+  # username:
+  # password:
+  # db: 0
+
+health_port: 7981
+template_port: 7980
+prometheus_port: 9090
+enable_chrome_sandbox: true
+
+# D7D StartRoomCompositeEgress requests pass private S3-compatible HLS output
+# per request from Supabase Edge Function secrets. Keep global file output
+# disabled here unless a later exact lane proves a new storage owner.

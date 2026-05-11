@@ -1,4 +1,31 @@
 services:
+  livekit-redis:
+    image: ${LIVEKIT_REDIS_IMAGE:-redis:7-alpine}
+    container_name: chillywood-livekit-redis
+    restart: unless-stopped
+    profiles:
+      - egress
+    network_mode: host
+    command:
+      - redis-server
+      - --bind
+      - ${LIVEKIT_REDIS_BIND_HOST:-127.0.0.1}
+      - --port
+      - ${LIVEKIT_REDIS_PORT:-6379}
+      - --protected-mode
+      - "yes"
+      - --appendonly
+      - "yes"
+      - --dir
+      - /data
+    volumes:
+      - ${LIVEKIT_REDIS_STATE_ROOT:-/opt/chillywood/livekit-redis}:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   livekit:
     image: ${LIVEKIT_IMAGE:?set LIVEKIT_IMAGE}
     container_name: chillywood-livekit
@@ -10,6 +37,30 @@ services:
     volumes:
       - ${LIVEKIT_CONFIG_PATH:?set LIVEKIT_CONFIG_PATH}:/etc/livekit/livekit.yaml:ro
       - ${LIVEKIT_STATE_ROOT:-/opt/chillywood/livekit}/data:/var/lib/livekit
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  livekit-egress:
+    image: ${LIVEKIT_EGRESS_IMAGE:?set LIVEKIT_EGRESS_IMAGE}
+    container_name: chillywood-livekit-egress
+    restart: unless-stopped
+    profiles:
+      - egress
+    network_mode: host
+    depends_on:
+      - livekit
+      - livekit-redis
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      EGRESS_CONFIG_FILE: /etc/livekit-egress/egress.yaml
+    volumes:
+      - ${LIVEKIT_EGRESS_CONFIG_PATH:?set LIVEKIT_EGRESS_CONFIG_PATH}:/etc/livekit-egress/egress.yaml:ro
+      - ${LIVEKIT_EGRESS_STATE_ROOT:-/opt/chillywood/livekit-egress}/tmp:/home/egress/tmp
+    shm_size: ${LIVEKIT_EGRESS_SHM_SIZE:-1gb}
     logging:
       driver: json-file
       options:

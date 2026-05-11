@@ -33,7 +33,7 @@ This runbook records current repo truth, what is only documented from previous i
 | Live Stage route owner | `app/watch-party/live-stage/[partyId].tsx` owns Live Room / Live Stage behavior. | Implemented / Proof Pending |
 | Stage media surface | `components/watch-party-live/livekit-stage-media-surface.tsx` owns LiveKit media rendering and stale signal-loop containment. | Implemented / Proof Pending |
 | Watch-Party Live camera sidecar | `app/watch-party/[partyId].tsx` prepares `surface=watch-party-live`; `app/player/[id].tsx` consumes it for Party Room shared-player camera presence. | Implemented / Proof Pending |
-| Infrastructure scaffold | `infra/hetzner/livekit.env.example`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, and `infra/hetzner/docker-compose.livekit.yml` document a self-hosted LiveKit layout without real secrets. | Partial |
+| Infrastructure scaffold | `infra/hetzner/livekit.env.example`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/docker-compose.livekit.yml`, and `infra/hetzner/livekit-egress.yaml.example` document a self-hosted LiveKit + optional Egress layout without real secrets. | Partial |
 
 Current app config is environment-aware. The public mobile runtime value is safe to ship as a public endpoint, but all API keys, API secrets, service-role keys, and TURN credentials must stay server-side or in approved external secret stores.
 
@@ -189,6 +189,36 @@ Manual server tasks:
 8. Confirm firewall rules match the intended LiveKit UDP/TCP/TURN configuration.
 9. Confirm logs are retained enough for proof but do not store participant tokens or API secrets.
 10. Confirm restart/rollback plan before any production release.
+
+## Optional LiveKit Egress Worker Scaffold
+
+Current repo-side Egress software placement:
+
+- `infra/hetzner/docker-compose.livekit.yml` now includes `livekit-egress` and `livekit-redis` services behind the explicit Docker Compose profile `egress`.
+- Running the normal LiveKit compose stack without `--profile egress` does not start Redis or Egress.
+- `infra/hetzner/livekit-egress.yaml.example` is the server-side Egress config template. Copy it outside git to `/opt/chillywood/livekit-egress/config/egress.yaml` and fill only on the production host.
+- `infra/hetzner/livekit.env.example` includes only non-secret Egress/Redis path and image placeholders.
+- Egress remains backend/media infrastructure only. It must not be added to React Native, Expo app config, app routes, mobile packages, Player, Watch-Party, Live Stage, Chat, Admin UI, or Spectator UI as client software.
+
+Why this is the right placement:
+
+- LiveKit's self-hosted Egress service is separate from the LiveKit server and communicates with the LiveKit server through the same Redis backend used by the server.
+- The D7D Supabase functions already own the admin/operator-only `StartRoomCompositeEgress` and `StopEgress` API calls for private proof rows.
+- `/spectate/[itemId]` remains metadata-only. Adding the worker scaffold does not enable HLS playback, return HLS URLs to spectators, create full spectator LiveKit tokens, or turn on public broadcast playback.
+
+Activation checklist before running `--profile egress`:
+
+1. Choose and pin a production Egress image tag in `LIVEKIT_EGRESS_IMAGE`; do not leave `latest` or an unreviewed placeholder for production.
+2. Confirm the production LiveKit server config uses Redis, and point both LiveKit server and Egress to the same Redis instance.
+3. If using the bundled `livekit-redis` compose service, keep it bound to `127.0.0.1` and verify the host firewall does not expose Redis publicly.
+4. Copy `infra/hetzner/livekit-egress.yaml.example` outside git and fill `api_key`, `api_secret`, `ws_url`, and Redis settings with server-side values only.
+5. Confirm the API key/secret match the LiveKit server and the Supabase Edge Function `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` secrets used for D7D.
+6. Confirm Supabase Edge Function output secrets are configured by name only: `EGRESS_OUTPUT_BUCKET`, `EGRESS_OUTPUT_ENDPOINT`, `EGRESS_OUTPUT_REGION`, `EGRESS_OUTPUT_ACCESS_KEY_ID`, `EGRESS_OUTPUT_SECRET_ACCESS_KEY`, or the accepted `S3_*` aliases.
+7. Keep `D7D_TEST_EGRESS_ENABLED=false` until the host Egress worker is running, healthy, and ready for a bounded private proof.
+8. Start only when ready: `docker compose --profile egress -f infra/hetzner/docker-compose.livekit.yml up -d`.
+9. Run a private `D7D_TEST_` start/stop proof through `spectator-broadcast-start` and `spectator-broadcast-stop`; verify cleanup and no public playback.
+
+Do not treat the scaffold as public launch proof. Real readiness still requires a bounded admin/operator D7D private Egress start/stop proof, private HLS cleanup verification, server health review, and a later explicit D7E/D7F lane before any spectator playback UI or Admin broadcast controls.
 
 ## Production Env Checklist
 
