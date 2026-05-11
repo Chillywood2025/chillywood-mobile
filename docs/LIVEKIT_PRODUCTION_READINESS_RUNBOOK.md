@@ -220,6 +220,21 @@ Activation checklist before running `--profile egress`:
 
 Do not treat the scaffold as public launch proof. Real readiness still requires a bounded admin/operator D7D private Egress start/stop proof, private HLS cleanup verification, server health review, and a later explicit D7E/D7F lane before any spectator playback UI or Admin broadcast controls.
 
+Latest external attempt on May 11, 2026:
+
+- SSH to `chillywood-prod-01` worked with passwordless sudo for the deploy user.
+- Docker and Docker Compose were present.
+- LiveKit, Egress, and Redis containers were already running on the host.
+- LiveKit config already had Redis configured.
+- Egress health/template ports were reachable locally.
+- Host-only Egress config permissions were tightened to `600`.
+- Host env Egress and Redis image references were pinned to the currently running image digests for the next controlled service recreate.
+- Services were not restarted.
+- A private `D7D_TEST_` LiveKit room was created successfully on the host.
+- The D7D function proof did not start Egress because `spectator-broadcast-start` returned `403 operator_required` for the local proof account.
+- The permission block is correct: rerun proof only with a real owner/operator bearer token or after the chosen proof account receives the proper platform role through the existing role process.
+- No public playback, spectator playback, HLS URL return, Egress id write, or full spectator token was enabled by this attempt.
+
 ## Production Env Checklist
 
 | Environment value | Owner | Where it belongs | Status |
