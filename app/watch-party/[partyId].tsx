@@ -2410,7 +2410,7 @@ export default function WatchPartyRoomScreen() {
             <View style={styles.watchPartyScreenOverlay}>
               <Text style={styles.watchPartyScreenOverlayTitle}>Watch-Party Live</Text>
               <Text style={styles.watchPartyScreenOverlayBody}>
-                Open the shared Player for playback and camera/audio. This room keeps the code, people, comments, and safety tools together.
+                Open the shared Player for playback. Room code, people, comments, and safety tools stay together here.
               </Text>
             </View>
           </View>
@@ -2595,11 +2595,11 @@ export default function WatchPartyRoomScreen() {
     <View style={styles.partyRoomSetupShell}>
       <View style={styles.tailoredRoomCard}>
         <Text style={styles.sectionKicker}>PARTY ROOM</Text>
-        <Text style={styles.tailoredRoomTitle}>Set the room before playback</Text>
+        <Text style={styles.tailoredRoomTitle}>Room status and people</Text>
         <Text style={styles.tailoredRoomBody}>
           {hostParticipant
-            ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Decide who appears first and what the room allows before Watch-Party Live starts.`
-            : "Decide who appears first and what the room allows before Watch-Party Live starts."}
+            ? `${hostParticipant.userId === currentUserBubbleId ? "You are" : `${hostParticipant.displayName} is`} hosting. Keep people, room status, and host-safe controls clear while shared playback stays primary.`
+            : "Keep people, room status, and host-safe controls clear while shared playback stays primary."}
         </Text>
         <View style={styles.tailoredRoomMetaRow}>
           <View style={styles.tailoredRoomMetaPill}>
@@ -4066,16 +4066,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   watchPartyScreenCard: {
-    borderRadius: 22,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.18)",
-    backgroundColor: "rgba(8,10,16,0.78)",
-    padding: 14,
-    gap: 12,
+    borderColor: "rgba(168,192,245,0.22)",
+    backgroundColor: "rgba(8,10,16,0.84)",
+    padding: 15,
+    gap: 13,
     shadowColor: "#000000",
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
   },
   watchPartyScreenHeader: {
     flexDirection: "row",
@@ -4114,10 +4114,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   watchPartyScreenSurface: {
-    height: 196,
-    borderRadius: 20,
+    height: 224,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.11)",
     backgroundColor: "rgba(10,16,27,0.92)",
     overflow: "hidden",
     alignItems: "center",
@@ -4134,16 +4134,16 @@ const styles = StyleSheet.create({
   },
   watchPartyScreenOverlay: {
     position: "absolute",
-    left: 14,
-    right: 14,
-    bottom: 14,
-    borderRadius: 16,
+    left: 13,
+    right: 13,
+    bottom: 13,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(4,8,18,0.72)",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 4,
+    borderColor: "rgba(255,255,255,0.11)",
+    backgroundColor: "rgba(4,8,18,0.8)",
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    gap: 5,
   },
   watchPartyScreenOverlayTitle: {
     color: "#FFFFFF",
@@ -4200,17 +4200,17 @@ const styles = StyleSheet.create({
   },
   watchCTAText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
   partyRoomActionDockCard: {
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.16)",
-    backgroundColor: "rgba(7,10,18,0.78)",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 9,
+    borderColor: "rgba(168,192,245,0.2)",
+    backgroundColor: "rgba(7,10,18,0.84)",
+    paddingHorizontal: 13,
+    paddingVertical: 13,
+    gap: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
   partyRoomActionDock: {
     flexDirection: "row",
@@ -4220,7 +4220,7 @@ const styles = StyleSheet.create({
   partyRoomDockButton: {
     flex: 1,
     minWidth: 70,
-    minHeight: 48,
+    minHeight: 52,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -4229,7 +4229,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 9,
   },
   partyRoomDockButtonPrimary: {
     borderColor: "rgba(220,20,60,0.46)",
@@ -4255,13 +4255,13 @@ const styles = StyleSheet.create({
   },
   partyRoomSetupShell: { gap: 14 },
   tailoredRoomCard: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(12,12,12,0.92)",
+    borderColor: "rgba(168,192,245,0.14)",
+    backgroundColor: "rgba(12,14,22,0.88)",
     paddingHorizontal: 16,
-    paddingVertical: 15,
-    gap: 8,
+    paddingVertical: 16,
+    gap: 9,
   },
   tailoredRoomTitle: {
     color: "#F5F7FB",

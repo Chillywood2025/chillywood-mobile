@@ -1380,14 +1380,18 @@ const styles = StyleSheet.create({
   },
   homePulseCard: {
     marginHorizontal: 16,
-    marginBottom: 14,
-    borderRadius: 18,
+    marginBottom: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(9,12,20,0.76)",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
+    borderColor: "rgba(168,192,245,0.16)",
+    backgroundColor: "rgba(9,12,20,0.82)",
+    paddingHorizontal: 17,
+    paddingVertical: 15,
+    gap: 9,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
   },
   homePulseKicker: {
     color: "#9AA8C4",
@@ -1512,11 +1516,17 @@ const styles = StyleSheet.create({
     height: 460,
     marginHorizontal: 16,
     marginTop: 12,
-    marginBottom: 18,
-    borderRadius: 20,
+    marginBottom: 20,
+    borderRadius: 22,
     overflow: "hidden",
     justifyContent: "flex-end",
     position: "relative",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    shadowColor: "#000",
+    shadowOpacity: 0.28,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
   },
   heroImage: {
     ...StyleSheet.absoluteFillObject,
@@ -1532,8 +1542,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.52)",
   },
   heroContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 18,
+    paddingHorizontal: 17,
+    paddingBottom: 19,
   },
   topBrand: {
     color: "#EAEAEA",
@@ -1606,6 +1616,7 @@ const styles = StyleSheet.create({
   },
   heroActionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
   watchPartyBtn: {
@@ -1625,7 +1636,7 @@ const styles = StyleSheet.create({
 
   section: {
     paddingHorizontal: 16,
-    marginBottom: 18,
+    marginBottom: 20,
   },
   sectionTitle: {
     color: "#fff",
@@ -1658,13 +1669,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   followingEmptyCard: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(10,12,18,0.72)",
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 7,
+    paddingVertical: 17,
+    gap: 8,
   },
   followingEmptyTitle: {
     color: "#F2F5FC",
@@ -1698,11 +1709,15 @@ const styles = StyleSheet.create({
   },
   feedActivityCard: {
     width: 282,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(10,12,18,0.76)",
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 7 },
   },
   feedActivityThumb: {
     width: "100%",

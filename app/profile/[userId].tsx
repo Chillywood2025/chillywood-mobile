@@ -4024,7 +4024,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.62)",
   },
   screen: { flex: 1, backgroundColor: "transparent" },
-  content: { paddingTop: 56, paddingBottom: 48, paddingHorizontal: 18, gap: 14 },
+  content: { paddingTop: 56, paddingBottom: 52, paddingHorizontal: 18, gap: 16 },
   contentKeyboardInset: { paddingBottom: 128 },
 
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -4032,13 +4032,17 @@ const styles = StyleSheet.create({
   kicker: { color: "#555", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.2 },
 
   profileCard: {
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: "rgba(168,192,245,0.14)",
     backgroundColor: "rgba(18,18,18,0.96)",
     overflow: "hidden",
     alignItems: "stretch",
     gap: 0,
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
   },
   profileCover: {
     minHeight: 88,
@@ -4849,13 +4853,13 @@ const styles = StyleSheet.create({
   viewSwitchChipText: { color: "#B5BED1", fontSize: 12.5, fontWeight: "800" },
   viewSwitchChipTextActive: { color: "#E4E9FF" },
   actionCluster: { width: "100%", gap: 10, marginTop: 6 },
-  primaryActionRow: { flexDirection: "row", gap: 10, width: "100%" },
-  secondaryActionRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10 },
+  primaryActionRow: { flexDirection: "row", gap: 9, width: "100%" },
+  secondaryActionRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
   actionBtn: {
     flex: 1,
     minWidth: 0,
-    minHeight: 40,
-    borderRadius: 12,
+    minHeight: 44,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -4891,7 +4895,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 14,
+    paddingHorizontal: 13,
     paddingVertical: 9,
   },
   actionChipConnected: {
@@ -5124,9 +5128,9 @@ const styles = StyleSheet.create({
   },
   ownerPromptActionText: { color: "#E4E9FF", fontSize: 12, fontWeight: "800" },
 
-  sectionStack: { gap: 12 },
+  sectionStack: { gap: 14 },
   sectionCard: {
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(18,18,18,0.96)",
