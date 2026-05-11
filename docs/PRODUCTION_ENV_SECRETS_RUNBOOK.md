@@ -44,7 +44,7 @@ This runbook is not proof that production env is complete. It records the curren
 | `EXPO_PUBLIC_PRIVACY_POLICY_URL` | `app.config.ts`, `_lib/runtimeConfig.ts`, legal/support routes | Legal/support | Optional env; deployed fallback exists | EAS env with final approved URL | Client-safe public URL | Yes | External Setup Pending |
 | `EXPO_PUBLIC_TERMS_OF_SERVICE_URL` | `app.config.ts`, `_lib/runtimeConfig.ts`, legal/support routes | Legal/support | Optional env; deployed fallback exists | EAS env with final approved URL | Client-safe public URL | Yes | External Setup Pending |
 | `EXPO_PUBLIC_ACCOUNT_DELETION_URL` | `app.config.ts`, `_lib/runtimeConfig.ts`, settings/account deletion | Account deletion / Play policy | Optional env; deployed fallback exists | EAS env with final approved URL | Client-safe public URL | Yes | External Setup Pending |
-| `EXPO_PUBLIC_SUPPORT_EMAIL` | `app.config.ts`, `_lib/runtimeConfig.ts`, support screens | Support | `.env.local` or shell env | EAS env with final support inbox | Client-safe public email | Yes | External Setup Pending |
+| `EXPO_PUBLIC_SUPPORT_EMAIL` | `app.config.ts`, `_lib/runtimeConfig.ts`, support screens | Support | `.env.local` or shell env; `app.config.ts` fallback is `support@chillywoodstream.com` | EAS env with final support inbox, or repo fallback when the same address remains final | Client-safe public email | Yes | Inbox Receipt Proof Pending |
 | `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV` | `app.config.ts`, `_lib/runtimeConfig.ts`, `_lib/revenuecat.ts` | Billing / Premium dev proof | `.env.local` or shell env | Optional preview/internal env | Client-safe RevenueCat public SDK key | Optional for debug/dev | External Setup Pending |
 | `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY` | `app.config.ts`, `_lib/runtimeConfig.ts`, `_lib/revenuecat.ts` | Billing / Premium production | Optional local test env | EAS production env from RevenueCat dashboard | Client-safe RevenueCat public SDK key | Yes if Premium gates ship live | External Setup Pending |
 | `EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY` | `app.config.ts`, `_lib/runtimeConfig.ts`, `_lib/revenuecat.ts` | iOS billing later | Optional local env | EAS iOS env later | Client-safe RevenueCat public SDK key | Not Android v1 | Later / External Setup Pending |
@@ -129,7 +129,7 @@ npx eas-cli env:create --environment production --name EXPO_PUBLIC_LIVEKIT_TOKEN
 npx eas-cli env:create --environment production --name EXPO_PUBLIC_PRIVACY_POLICY_URL --value <url> --visibility plain
 npx eas-cli env:create --environment production --name EXPO_PUBLIC_TERMS_OF_SERVICE_URL --value <url> --visibility plain
 npx eas-cli env:create --environment production --name EXPO_PUBLIC_ACCOUNT_DELETION_URL --value <url> --visibility plain
-npx eas-cli env:create --environment production --name EXPO_PUBLIC_SUPPORT_EMAIL --value <email> --visibility plain
+npx eas-cli env:create --environment production --name EXPO_PUBLIC_SUPPORT_EMAIL --value support@chillywoodstream.com --visibility plain
 ```
 
 Do not run `env:create` from Codex without explicit approval because it creates or changes live release configuration.
@@ -164,7 +164,7 @@ Strict mode also requires:
 - `EXPO_PUBLIC_PRIVACY_POLICY_URL`
 - `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`
 - `EXPO_PUBLIC_ACCOUNT_DELETION_URL`
-- `EXPO_PUBLIC_SUPPORT_EMAIL`
+- `EXPO_PUBLIC_SUPPORT_EMAIL` (canonical value: `support@chillywoodstream.com`; Cloudflare routing is configured and inbox receipt proof is still required)
 - `EXPO_PUBLIC_BETA_ENVIRONMENT=public-v1`
 
 Strict mode is the recommended pre-build check for release candidates. It still does not prove that store billing, LiveKit, Firebase, or Supabase dashboards are correctly configured; it only proves the build-time public config names resolve.

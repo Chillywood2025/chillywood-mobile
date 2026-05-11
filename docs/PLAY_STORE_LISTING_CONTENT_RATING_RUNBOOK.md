@@ -155,7 +155,7 @@ Avoid:
 
 | Field | Current repo truth | Store status | Exact next action |
 | --- | --- | --- | --- |
-| Support email | `EXPO_PUBLIC_SUPPORT_EMAIL` is runtime-configured; legal pages currently show `chillywood92@gmail.com` | External Setup Pending | Confirm final support email/inbox/SLA before entering in Play Console. |
+| Support email | `EXPO_PUBLIC_SUPPORT_EMAIL` is runtime-configured; legal pages and default runtime fallback use `support@chillywoodstream.com`. Cloudflare Email Routing is enabled for `chillywoodstream.com`, the destination is verified, and the forwarding rule is enabled; receipt proof is still pending. | External Setup Pending / Inbox Receipt Proof Pending | Send a real test message to `support@chillywoodstream.com`, prove receipt, and confirm support SLA before entering it in Play Console. |
 | Website URL | No final public website URL proved in this lane | External Setup Pending | Choose final public marketing/support URL. |
 | Privacy Policy URL | Fallback `https://live.chillywoodstream.com/privacy`; bundled `/privacy` route | External Setup Pending | Legal owner approves final Privacy URL and Play owner enters it. |
 | Terms URL | Fallback `https://live.chillywoodstream.com/terms`; bundled `/terms` route | External Setup Pending | Legal owner approves final Terms URL. |
