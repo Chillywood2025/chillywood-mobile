@@ -529,9 +529,9 @@ Future Codex prompts for Chi'llywood must be production-grade. They need exact p
 - immediate execution scope belongs in `NEXT_TASK.md`
 - session guardrails belong in `SESSION_START_PROTOCOL.md`
 - temporary ADB/device/emulator debugging does not belong in permanent product doctrine
-- Expo Router currently exposes helper-looking files under `app/` as routes: `app/data/titles.ts` as `/data/titles`, `app/lib/_supabase.ts` as `/lib/_supabase`, `app/watch-party/_lib/_room-shared.ts` as `/watch-party/_lib/_room-shared`, and `app/watch-party/_lib/_waiting-room-shared.ts` as `/watch-party/_lib/_waiting-room-shared`
-- `app/watch-party/_lib/_room-shared.ts` and `app/watch-party/_lib/_waiting-room-shared.ts` are active Watch-Party helpers and must be preserved until a dedicated move lane proves safe import updates and route behavior
-- route-tree utility exposure cleanup must be a dedicated follow-up lane; do not delete or move these files as generic cleanup
+- Expo Router route-tree utility exposure cleanup is pushed: the unreferenced exposed `app/data/titles.ts` and `app/lib/_supabase.ts` files were removed, and active Watch-Party helper modules were moved out of `app/` to `_lib/watch-party/room-shared.ts` and `_lib/watch-party/waiting-room-shared.ts` with import updates.
+- Active Watch-Party helpers must stay outside the Expo Router app tree unless a future route-manifest proof shows the placement is not exposed as a route.
+- Do not place helper-only modules under `app/` unless they are actual route files with a default route component.
 
 ## Proof Status Bookkeeping Rule
 - locked product truth must stay separate from current checkpoint truth

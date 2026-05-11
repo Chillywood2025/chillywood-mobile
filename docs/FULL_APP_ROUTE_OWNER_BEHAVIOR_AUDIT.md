@@ -46,7 +46,7 @@ The biggest audit findings are not broad architecture failures. They are launch-
 
 1. `app/modal.tsx` no longer renders a template modal. It redirects to the canonical tabs surface.
 2. `/communication` no longer exposes a standalone lobby/create/join surface. It redirects to `/chat`, while `/communication/[roomId]` remains for guarded call-room compatibility.
-3. `app/lib/_supabase.ts` is now only a compatibility shim that re-exports the canonical `_lib/supabase.ts` client, and active route imports were pointed at the canonical owner.
+3. Route-tree utility exposure cleanup later removed the unreferenced `app/lib/_supabase.ts` shim and the unreferenced `app/data/titles.ts` sample file; canonical runtime imports use `_lib/supabase.ts` and `_data/titles.ts`.
 4. Non-creator `/player/[id]` no longer falls back to the first local title or bundled sample media for missing platform ids. Missing platform title routes now show an honest unavailable state.
 5. Billing/premium purchase UX now includes an honest `/subscribe` account-owned Premium surface. It reads the existing RevenueCat/entitlement owners, exposes restore/manage only through real helpers, and does not grant Premium locally when store setup is unavailable.
 6. The Live Layout and Chi’llyfects System is now documented in `docs/LIVE_LAYOUT_AND_EFFECTS_SYSTEM.md`. Live Stage remains people-first with a visible Chi'lly Party Members grid; Party Room remains content-first with a shared source card; Chi’llyfects are foundation-only unless a real camera processor is built.
@@ -212,10 +212,10 @@ This addendum was static/code/docs only. Android route smoke remains pending.
 | Admin `/admin` | `app/admin.tsx` | Admin/Operator | App config, platform title programming, creator grants, role visibility, safety queue, creator-video moderation actions | Public user flow, hidden-button-only admin security | Signed-in active beta plus platform role gate | `platform_role_memberships`, `titles`, `app_configurations`, `creator_permissions`, `safety_reports`, `videos` | Direct/admin tooling | `/player/[id]` for preview | V1 core; backend-enforced roles required |
 | Settings `/settings` | `app/settings.tsx` | Account settings | Logout, Profile/Channel Studio shortcuts, support/legal links, Premium status handoff | Billing entitlement truth, creator upload execution | Signed-in; redirects to login if signed out | Supabase auth, monetization snapshot | Home/profile | `/profile/[userId]`, `/channel-studio`, `/subscribe`, `/support`, legal routes, login | V1 core |
 | Subscribe `/subscribe` | `app/subscribe.tsx` | Premium / Billing UX | Account-owned Premium status, purchase/restore/manage handoff through existing monetization owners, honest unavailable states | Backend entitlement writes, fake purchase success, store configuration | Signed-in for actions; signed-out sees sign-in prompt | RevenueCat configuration, monetization snapshot, backend entitlement truth | Settings, access-gate surfaces | Login, platform subscription manager | V1 Premium surface; store proof pending |
-| Local title data | `app/data/titles.ts` | Compatibility sample data | Legacy sample assets | Production source of truth | Not route | Bundled assets | Imported by legacy paths if any | N/A | Compatibility-only |
-| Local Supabase duplicate | `app/lib/_supabase.ts` | Data client compatibility shim | Re-exports canonical `_lib/supabase.ts` for any legacy imports | Second client creation, separate storage key, separate runtime config | Not route | Canonical `_lib/supabase.ts` | Legacy imports only | N/A | Resolved hardening item |
-| Watch-party shared helper | `app/watch-party/_lib/_room-shared.ts` | Route-local helper | UI helpers, source marker, participant display helpers | Backend session ownership | Not route | None/direct helpers | Watch-party route files | N/A | V1 helper |
-| Waiting-room shared helper | `app/watch-party/_lib/_waiting-room-shared.ts` | Route-local helper | Waiting room participant/status helpers | Backend session ownership | Not route | None/direct helpers | Waiting room/live route files | N/A | V1 helper |
+| Local title data | `_data/titles.ts` | Canonical bundled title fallback data | Bundled fallback title assets for existing platform-title screens | Production database title truth | Not route | Bundled assets | Existing title/player/discovery fallback imports | N/A | V1 fallback helper |
+| Local Supabase client | `_lib/supabase.ts` | Canonical Supabase runtime client | Shared typed Supabase client | Route ownership, duplicate storage keys | Not route | Supabase runtime config | Runtime helper imports | N/A | V1 data helper |
+| Watch-party shared helper | `_lib/watch-party/room-shared.ts` | Shared Watch-Party/Live helper | UI helpers, source marker, participant display helpers | Backend session ownership | Not route | None/direct helpers | Watch-party, Live Stage, Player, room components | N/A | V1 helper outside app tree |
+| Waiting-room shared helper | `_lib/watch-party/waiting-room-shared.ts` | Shared waiting-room helper | Waiting room participant/status helpers | Backend session ownership | Not route | None/direct helpers | room components | N/A | V1 helper outside app tree |
 
 ## 3. System Owner Map
 
@@ -439,8 +439,8 @@ Status: foundation exists; full public v1 proof still required.
    - Resolution: `/communication` redirects to `/chat`.
    - Remaining note: `/communication/[roomId]` stays as guarded compatibility for direct/thread call rooms.
 
-3. `app/lib/_supabase.ts` no longer creates a duplicate Supabase client.
-   - Resolution: active imports use `_lib/supabase.ts`, and the old file only re-exports the canonical client.
+3. `app/lib/_supabase.ts` no longer creates a duplicate Supabase client or exposed route-tree utility.
+   - Resolution: active imports use `_lib/supabase.ts`, and the old unreferenced shim was removed during route-tree utility exposure cleanup.
 
 4. Platform Player missing ids no longer fall back to a sample/local first title.
    - Resolution: unresolved platform ids show a "Title unavailable" Player state, and valid local `Chicago Streets` playback remains available by its actual local id.
@@ -609,8 +609,8 @@ Route and owner files inspected through direct reads and repository-wide route/n
 - `app/watch-party/index.tsx`
 - `app/watch-party/[partyId].tsx`
 - `app/watch-party/live-stage/[partyId].tsx`
-- `app/watch-party/_lib/_room-shared.ts`
-- `app/watch-party/_lib/_waiting-room-shared.ts`
+- `_lib/watch-party/room-shared.ts`
+- `_lib/watch-party/waiting-room-shared.ts`
 - `app/chat/index.tsx`
 - `app/chat/[threadId].tsx`
 - `app/communication/index.tsx`
@@ -623,8 +623,8 @@ Route and owner files inspected through direct reads and repository-wide route/n
 - `app/terms.tsx`
 - `app/account-deletion.tsx`
 - `app/modal.tsx`
-- `app/data/titles.ts`
-- `app/lib/_supabase.ts`
+- `_data/titles.ts`
+- `_lib/supabase.ts`
 
 Logic/helper/backend files inspected through direct reads and repository-wide ownership searches:
 

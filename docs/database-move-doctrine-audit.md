@@ -62,7 +62,6 @@ Current auth/session truth is tightly coupled to Supabase auth.
 
 Primary owners include:
 - `_lib/supabase.ts`
-- `app/lib/_supabase.ts`
 - `_lib/session.tsx`
 - `app/(auth)/login.tsx`
 - `app/(auth)/signup.tsx`
