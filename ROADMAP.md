@@ -10,7 +10,7 @@
 
 ## Public v1
 - login, settings, and logout
-- home and discovery
+- home and discovery, including Explore client-side title filtering over already loaded platform `titles` rows
 - customizable basic profiles
 - public Channel route at `/channel/[userId]`
 - public Channel safe-area/stat polish at `4873f08`, with role-safe public layout, no fake follower counts, no non-owner Studio controls, and no draft/private/unpublished content exposure
@@ -24,9 +24,9 @@
 - all full Live First, Live Watch-Party, and Watch-Party Live access gated by Premium
 - no free full LiveKit room/token/connect access and no free preview mode
 - comments, reactions, and basic social interaction
-- basic Chi'lly Chat or simple direct messaging, with helper-level current-user membership checks before normal thread/message/attachment/send/call-cleanup access
+- basic Chi'lly Chat or simple direct messaging, with helper-level current-user membership checks before normal thread/message/attachment/send/call-cleanup access; `/chat` and `/chat/[threadId]` remain canonical, and bottom-tab Chat is deferred until it can avoid duplicate route ownership
 - preserved Rachi official seeded-account foundation on the canonical profile and Chi'lly Chat surfaces
-- Premium subscription gate
+- Premium subscription gate, with RevenueCat `premium` offering preferred and a safe `premium_subscription` fallback to a purchasable RevenueCat current/default/first offering for offer display/purchase selection only
 - Admin Command Center V1A on the canonical `/admin` route, protected by signed-in plus beta/platform-role/backend permission checks
 - Login Admin Command Center sign-in entry, using normal auth plus `/admin` backend platform-role checks only, with no stored credentials or bypass
 - Ads Launch Foundation V1A/V1B/V1C and Ads Config V1D1/V1D2 as provider-neutral, no-SDK, no-real-rendering infrastructure; the Home native/feed placeholder foundation and placeholder interstitial controller foundation exist, runtime owners now read normalized `app_configurations.config.adsLaunch` with default-disabled fallback, normal runtime keeps ads hidden while `ads_enabled=false`, and real ad SDK integration is not live yet

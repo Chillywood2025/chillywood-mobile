@@ -34,6 +34,8 @@ If an older monetization, compliance, product-phase, or profile/channel-platform
 
 These are the approved user-facing destinations.
 
+Grouped/tab entries must not create duplicate normalized ownership for these canonical routes. A future bottom-tab Chat entry requires a route design that delegates without colliding with `/chat`; the deferred `app/(tabs)/chat.tsx` candidate is not production truth.
+
 ## Discovery / Spectator Rule
 Home, Profile, and Public Channel discovery may show only real, privacy-safe, rights-safe activity from backed rows/helpers.
 
@@ -99,6 +101,7 @@ It must not be treated as:
 Locked MVP architecture:
 - `/chat` is the standalone inbox route
 - `/chat/[threadId]` is the standalone direct-thread route
+- bottom-tab Chat navigation is not canonical unless it preserves those route owners without a duplicate Expo route
 - the direct-thread MVP owns header, messages, composer, timestamps, optimistic sending, realtime updates, and mark-read on open/focus
 - the MVP data model is `chat_threads`, `chat_thread_members`, and `chat_messages`
 - chat thread helpers must treat current-user membership as required before returning thread state, messages, send access, attachments, or call cleanup; RLS remains the primary database boundary, but client helpers must not accept non-member thread rows
@@ -432,6 +435,7 @@ Do not rename one relationship into another, reuse one backend truth as another,
 - app-store subscriptions and in-app billing are not the creator payout system
 - creator payout infrastructure should assume Stripe Connect or an equivalent marketplace payout layer that stays separate from app-store billing
 - RevenueCat can support subscription and entitlement behavior, but it is not the creator payout layer
+- Premium offering lookup prefers the configured RevenueCat `premium` offering. If that offering is missing or has no purchasable packages, the Premium subscription target may fall back to a RevenueCat current/default/first offering with purchasable packages for offer display and purchase selection only. Active entitlement truth still controls Premium access.
 
 ## Official Platform Account Rule
 Rachi is Chi'llywood's official platform-owned seeded account.

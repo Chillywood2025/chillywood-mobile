@@ -113,6 +113,7 @@ Product direction:
 - Ads V1D2 runtime-read foundation is pushed. `hooks/useAdsLaunchConfig.ts` reads cached/default app config first, then safely reads `readAppConfig()` and returns normalized `adsLaunch`; `NativeAdSlot` and `InterstitialController` use that source when no explicit proof/test config override is passed.
 - Admin Command Center sign-in entry is pushed. `app/(auth)/login.tsx` supports a normal admin-intent sign-in state with `redirectTo=/admin`, stores no credentials, hard-codes no account, adds no bypass, and still relies on canonical `/admin` signed-in plus backend platform-role checks after sign-in.
 - Public V1 current-build release proof is complete. The attached Android current build opened Home, Explore, Settings, Support, Terms, Privacy, Community Guidelines, Channel Studio, `/channel-settings` compatibility, Rachi Profile, Rachi public Channel, Player `t1`, Watch-Party waiting room, and `/admin`; Home stayed free of visible ad placeholders while `ads_enabled=false`; no runtime fixes were needed.
+- Candidate integration is pushed at `90ff081ff38b36165d2eb18023c018af821dc747`. RevenueCat Premium offering resolution prefers the configured `premium` offering and falls back only for `premium_subscription` to a RevenueCat current/default/first offering with purchasable packages; Premium access still requires RevenueCat/backend entitlement truth and no fake product/price/local unlock was added. Explore search is canonical as a client-side filter over loaded `titles` rows with honest empty states and no fake search data. The Chat tab candidate is deferred, not canonical, because `app/(tabs)/chat.tsx` would duplicate normalized `/chat` ownership with `app/chat/index.tsx`; `/chat` and `/chat/[threadId]` remain canonical Chi'lly Chat.
 - Normal runtime must remain honest: ads stay disabled by default because `ads_enabled=false`.
 - Runtime ad owners now read normalized `app_config.adsLaunch` with default-disabled fallback; normal runtime must remain hidden because normalized `ads_enabled=false` and the placeholder provider is not connected.
 - Admin V1B1 runtime controls config foundation is pushed. Typed defaults live under `app_configurations.config.runtimeControls`; Admin Kill Switches shows read-only `Configured foundation` and `Not enforced yet`; no working toggles or runtime enforcement were added.
@@ -310,7 +311,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Free users may only get live/watch-party preview in a separate future pass if explicitly designed safely; no preview mode exists now.
 - Ads support free browsing.
 - Premium supports expensive live usage.
-- RevenueCat remains Premium subscription truth.
+- RevenueCat remains Premium subscription truth. Premium offering lookup may use the canonical safe fallback for `premium_subscription` offer display/purchase selection, but entitlement truth still owns access and no public route may unlock Premium without a trusted active entitlement.
 - AppLovin MAX is primary ad mediation direction; Unity LevelPlay / Unity Ads may come through AppLovin MAX later.
 - Do not build AdMob-only ads.
 - Do not make direct screen-level SDK calls; future real providers must use the Chi'llywood provider-neutral ad wrapper.
