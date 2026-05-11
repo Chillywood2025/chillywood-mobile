@@ -14,6 +14,15 @@ import { getRuntimeConfig } from "./runtimeConfig";
 
 export type RevenueCatConfigurationMode = "disabled" | "android-debug" | "android-release" | "ios-release";
 
+export type RevenueCatProductionReadiness = {
+  expectedAndroidPackage: string;
+  applicationId: string;
+  androidProductionPublicKeyConfigured: boolean;
+  androidDebugPublicKeyConfigured: boolean;
+  iosPublicKeyConfigured: boolean;
+  anyPublicKeyConfigured: boolean;
+};
+
 export type RevenueCatConfigurationState = {
   mode: RevenueCatConfigurationMode;
   apiKey: string;
@@ -133,6 +142,23 @@ const installRevenueCatLogHandler = () => {
 
   logHandlerInstalled = true;
 };
+
+export function getRevenueCatProductionReadiness(): RevenueCatProductionReadiness {
+  const runtime = getRuntimeConfig();
+  const applicationId = normalizeText(Application.applicationId);
+  const androidProductionPublicKeyConfigured = !!runtime.revenueCat.androidPublicSdkKey;
+  const androidDebugPublicKeyConfigured = !!runtime.revenueCat.androidDebugPublicSdkKey;
+  const iosPublicKeyConfigured = !!runtime.revenueCat.iosPublicSdkKey;
+
+  return {
+    expectedAndroidPackage: CHILLYWOOD_ANDROID_PACKAGE,
+    applicationId,
+    androidProductionPublicKeyConfigured,
+    androidDebugPublicKeyConfigured,
+    iosPublicKeyConfigured,
+    anyPublicKeyConfigured: androidProductionPublicKeyConfigured || androidDebugPublicKeyConfigured || iosPublicKeyConfigured,
+  };
+}
 
 export function getRevenueCatConfigurationState(): RevenueCatConfigurationState {
   const runtime = getRuntimeConfig();

@@ -84,6 +84,9 @@ export type MonetizationTargetState = {
   status: "entitled" | "available" | "unavailable";
   hasEntitlement: boolean;
   offeringAvailable: boolean;
+  configuredOfferingId: string;
+  resolvedOfferingId: string | null;
+  offeringResolution: "configured" | "fallback" | "missing";
   packageCount: number;
   availablePackageIds: string[];
   recommendedPackageId?: string;
@@ -248,8 +251,6 @@ const TITLE_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["paid_title_access", "p
 const LIVE_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_live_access", "premium_subscription"];
 const WATCH_PARTY_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_watch_party_access", "premium_subscription"];
 const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
-const PREMIUM_TEST_BYPASS_ENABLED =
-  __DEV__ && String(process.env.EXPO_PUBLIC_PREMIUM_TEST_BYPASS ?? "").trim() === "1";
 
 export const createEmptyMonetizationGateResolution = (
   snapshotStatus: MonetizationGateResolution["snapshotStatus"] = "disabled",
@@ -276,6 +277,9 @@ const getDefaultMonetizationTargetState = (
   status: "unavailable",
   hasEntitlement: false,
   offeringAvailable: false,
+  configuredOfferingId: definition.offeringId,
+  resolvedOfferingId: null,
+  offeringResolution: "missing",
   packageCount: 0,
   availablePackageIds: [],
 });
@@ -425,22 +429,46 @@ const hasPurchasablePackages = (offering?: PurchasesOffering | null) => (
   !!offering && offering.availablePackages.length > 0
 );
 
-const getOfferingForTarget = (
+const resolveOfferingForTarget = (
   offerings: PurchasesOfferings | null,
   definition: MonetizationTargetDefinition,
-): PurchasesOffering | null => {
+): {
+  offering: PurchasesOffering | null;
+  resolution: MonetizationTargetState["offeringResolution"];
+} => {
   const configuredOffering = getOfferingByIdentifier(offerings, definition.offeringId);
   if (definition.id !== "premium_subscription" || hasPurchasablePackages(configuredOffering)) {
-    return configuredOffering;
+    return {
+      offering: configuredOffering,
+      resolution: configuredOffering ? "configured" : "missing",
+    };
   }
 
-  return [
+  const fallbackOffering = [
     offerings?.current,
     offerings?.all.default,
     ...Object.values(offerings?.all ?? {}),
   ].find(hasPurchasablePackages)
-    ?? configuredOffering
     ?? null;
+
+  if (fallbackOffering) {
+    return {
+      offering: fallbackOffering,
+      resolution: "fallback",
+    };
+  }
+
+  return {
+    offering: configuredOffering ?? null,
+    resolution: configuredOffering ? "configured" : "missing",
+  };
+};
+
+const getOfferingForTarget = (
+  offerings: PurchasesOfferings | null,
+  definition: MonetizationTargetDefinition,
+): PurchasesOffering | null => {
+  return resolveOfferingForTarget(offerings, definition).offering;
 };
 
 const selectRecommendedPackage = (offering: PurchasesOffering | null): PurchasesPackage | null => {
@@ -549,10 +577,12 @@ const buildMonetizationTargetState = (
   customerInfo: CustomerInfo | null,
   offerings: PurchasesOfferings | null,
 ): MonetizationTargetState => {
-  const offering = getOfferingForTarget(offerings, definition);
+  const offeringResolution = resolveOfferingForTarget(offerings, definition);
+  const offering = offeringResolution.offering;
   const recommendedPackage = selectRecommendedPackage(offering);
   const hasEntitlement = hasActiveEntitlement(customerInfo, definition.entitlementIds);
   const packageIds = offering?.availablePackages.map((entry) => String(entry.identifier ?? "").trim()).filter(Boolean) ?? [];
+  const resolvedOfferingId = String(offering?.identifier ?? "").trim() || null;
 
   if (hasEntitlement) {
     return {
@@ -560,6 +590,9 @@ const buildMonetizationTargetState = (
       status: "entitled",
       hasEntitlement: true,
       offeringAvailable: !!offering,
+      configuredOfferingId: definition.offeringId,
+      resolvedOfferingId,
+      offeringResolution: offeringResolution.resolution,
       packageCount: packageIds.length,
       availablePackageIds: packageIds,
       recommendedPackageId: recommendedPackage ? String(recommendedPackage.identifier ?? "").trim() : undefined,
@@ -572,6 +605,9 @@ const buildMonetizationTargetState = (
       status: "available",
       hasEntitlement: false,
       offeringAvailable: true,
+      configuredOfferingId: definition.offeringId,
+      resolvedOfferingId,
+      offeringResolution: offeringResolution.resolution,
       packageCount: packageIds.length,
       availablePackageIds: packageIds,
       recommendedPackageId: recommendedPackage ? String(recommendedPackage.identifier ?? "").trim() : undefined,
@@ -583,6 +619,9 @@ const buildMonetizationTargetState = (
     status: "unavailable",
     hasEntitlement: false,
     offeringAvailable: !!offering,
+    configuredOfferingId: definition.offeringId,
+    resolvedOfferingId,
+    offeringResolution: offeringResolution.resolution,
     packageCount: packageIds.length,
     availablePackageIds: packageIds,
   };
@@ -717,20 +756,6 @@ const mergeBackendEntitlementsIntoGate = (
   return {
     ...monetization,
     entitledTargetIds: Array.from(new Set([...monetization.entitledTargetIds, ...backendEntitledTargetIds])),
-  };
-};
-
-const mergePremiumTestBypassIntoGate = (
-  monetization: MonetizationGateResolution,
-  policy: MonetizationAccessPolicy,
-): MonetizationGateResolution => {
-  if (!PREMIUM_TEST_BYPASS_ENABLED || !policy.qualifyingTargetIds.includes("premium_subscription")) {
-    return monetization;
-  }
-
-  return {
-    ...monetization,
-    entitledTargetIds: Array.from(new Set([...monetization.entitledTargetIds, "premium_subscription"])),
   };
 };
 
@@ -1315,7 +1340,6 @@ export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
 export async function hasPremiumAccess(): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return true;
-  if (PREMIUM_TEST_BYPASS_ENABLED) return true;
 
   const snapshot = await readMonetizationSnapshot();
   if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
@@ -1329,7 +1353,6 @@ export async function hasPremiumAccess(): Promise<boolean> {
 export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.partyPass || !runtime.partyPassEnabled) return true;
-  if (PREMIUM_TEST_BYPASS_ENABLED) return true;
 
   const snapshot = await readMonetizationSnapshot();
   if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
@@ -1502,9 +1525,7 @@ export async function resolveMonetizationAccess(options: {
     buildMonetizationGateResolution(snapshot, policy),
     backendEntitledTargetIds,
   );
-  const monetization = options.strictEntitlementRequired
-    ? entitlementBackedGate
-    : mergePremiumTestBypassIntoGate(entitlementBackedGate, policy);
+  const monetization = entitlementBackedGate;
   const hasTrustedEntitlement = monetization.entitledTargetIds.length > 0;
   const plan: UserPlan = hasTrustedEntitlement && monetization.entitledTargetIds.includes("premium_subscription")
     ? {

@@ -5,6 +5,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import {
+  getRevenueCatProductionReadiness,
+  type RevenueCatProductionReadiness,
+} from "../_lib/revenuecat";
+import {
   getCachedMonetizationSnapshot,
   openManageSubscriptionFlow,
   purchaseMonetizationTarget,
@@ -26,9 +30,27 @@ const buildStatusLabel = (snapshot: MonetizationSnapshot) => {
 const buildOfferLabel = (snapshot: MonetizationSnapshot) => {
   const target = snapshot.targets.premium_subscription;
   if (target.hasEntitlement) return "Premium is already active for this account.";
+  if (target.offeringResolution === "fallback" && target.offeringAvailable && target.packageCount > 0) {
+    return "A fallback RevenueCat offer is available because the configured Premium offer is missing or empty.";
+  }
   if (target.offeringAvailable && target.packageCount > 0) return "A Premium subscription offer is configured.";
   if (snapshot.configuration.shouldConfigure) return "No Premium offer is available in the current store configuration.";
   return snapshot.configuration.reason ?? "Store configuration is required before purchases can run.";
+};
+
+const buildAndroidKeyLabel = (readiness: RevenueCatProductionReadiness) => (
+  readiness.androidProductionPublicKeyConfigured ? "Present" : "Missing"
+);
+
+const buildOfferSourceLabel = (snapshot: MonetizationSnapshot) => {
+  const target = snapshot.targets.premium_subscription;
+  if (target.offeringResolution === "fallback") {
+    return `Fallback offer${target.resolvedOfferingId ? `: ${target.resolvedOfferingId}` : ""}`;
+  }
+  if (target.offeringResolution === "configured" && target.resolvedOfferingId) {
+    return `Configured offer: ${target.resolvedOfferingId}`;
+  }
+  return `Configured offer missing: ${target.configuredOfferingId}`;
 };
 
 export default function SubscribeScreen() {
@@ -81,6 +103,7 @@ export default function SubscribeScreen() {
 
   const statusLabel = useMemo(() => buildStatusLabel(snapshot), [snapshot]);
   const offerLabel = useMemo(() => buildOfferLabel(snapshot), [snapshot]);
+  const revenueCatReadiness = getRevenueCatProductionReadiness();
   const activeProductLabel = useMemo(() => {
     if (!snapshot.activeProductIds.length) return "No active store product on this account.";
     return snapshot.activeProductIds.join(", ");
@@ -234,11 +257,23 @@ export default function SubscribeScreen() {
                 <Text style={styles.statusLabel}>Store</Text>
                 <Text style={styles.statusValue}>{snapshot.canMakePayments ? "Available" : "Unavailable"}</Text>
               </View>
+              <View style={styles.statusTile}>
+                <Text style={styles.statusLabel}>RevenueCat</Text>
+                <Text style={styles.statusValue}>{snapshot.configuration.shouldConfigure ? "Configured" : "Blocked"}</Text>
+              </View>
+              <View style={styles.statusTile}>
+                <Text style={styles.statusLabel}>Android key</Text>
+                <Text style={styles.statusValue}>{buildAndroidKeyLabel(revenueCatReadiness)}</Text>
+              </View>
             </View>
 
             <View style={styles.infoCard}>
               <Text style={styles.infoLabel}>Offer readiness</Text>
               <Text style={styles.infoText}>{offerLabel}</Text>
+            </View>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>Offer source</Text>
+              <Text style={styles.infoText}>{buildOfferSourceLabel(snapshot)}</Text>
             </View>
             <View style={styles.infoCard}>
               <Text style={styles.infoLabel}>Active products</Text>
@@ -397,10 +432,12 @@ const styles = StyleSheet.create({
   },
   statusGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
   statusTile: {
     flex: 1,
+    minWidth: "46%",
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
