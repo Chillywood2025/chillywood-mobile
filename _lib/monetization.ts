@@ -421,6 +421,28 @@ const getOfferingByIdentifier = (
   return offerings.all[offeringId] ?? null;
 };
 
+const hasPurchasablePackages = (offering?: PurchasesOffering | null) => (
+  !!offering && offering.availablePackages.length > 0
+);
+
+const getOfferingForTarget = (
+  offerings: PurchasesOfferings | null,
+  definition: MonetizationTargetDefinition,
+): PurchasesOffering | null => {
+  const configuredOffering = getOfferingByIdentifier(offerings, definition.offeringId);
+  if (definition.id !== "premium_subscription" || hasPurchasablePackages(configuredOffering)) {
+    return configuredOffering;
+  }
+
+  return [
+    offerings?.current,
+    offerings?.all.default,
+    ...Object.values(offerings?.all ?? {}),
+  ].find(hasPurchasablePackages)
+    ?? configuredOffering
+    ?? null;
+};
+
 const selectRecommendedPackage = (offering: PurchasesOffering | null): PurchasesPackage | null => {
   if (!offering) return null;
   return offering.monthly
@@ -439,7 +461,7 @@ const findPackageForTarget = (
   packageId?: string | null,
 ) => {
   const definition = MONETIZATION_TARGETS[targetId];
-  const offering = getOfferingByIdentifier(offerings, definition.offeringId);
+  const offering = getOfferingForTarget(offerings, definition);
   if (!offering) return null;
 
   const normalizedPackageId = String(packageId ?? "").trim();
@@ -527,7 +549,7 @@ const buildMonetizationTargetState = (
   customerInfo: CustomerInfo | null,
   offerings: PurchasesOfferings | null,
 ): MonetizationTargetState => {
-  const offering = getOfferingByIdentifier(offerings, definition.offeringId);
+  const offering = getOfferingForTarget(offerings, definition);
   const recommendedPackage = selectRecommendedPackage(offering);
   const hasEntitlement = hasActiveEntitlement(customerInfo, definition.entitlementIds);
   const packageIds = offering?.availablePackages.map((entry) => String(entry.identifier ?? "").trim()).filter(Boolean) ?? [];
@@ -899,7 +921,7 @@ export async function purchaseMonetizationTarget(
   }
 
   const offerings = await readRevenueCatOfferings();
-  const offering = getOfferingByIdentifier(offerings, target.offeringId);
+  const offering = getOfferingForTarget(offerings, target);
   const selectedPackage = offering?.availablePackages.find((entry) => {
     const packageId = String(entry.identifier ?? "").trim();
     return packageId && packageId === String(options?.packageId ?? "").trim();

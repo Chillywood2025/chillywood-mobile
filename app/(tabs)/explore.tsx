@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -89,14 +90,34 @@ const formatExploreBadgeList = (item: TitleRow, liveMetadata?: TitleLiveMetadata
   return badges;
 };
 
+const matchesExploreSearch = (item: TitleRow, rawQuery: string) => {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) return true;
+
+  return [
+    item.title,
+    item.category,
+    item.synopsis,
+    item.year,
+    item.runtime,
+  ].some((value) => String(value ?? "").toLowerCase().includes(query));
+};
+
 export default function ExploreScreen() {
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [titleLiveMetadataById, setTitleLiveMetadataById] = useState<Record<string, TitleLiveMetadata>>({});
 
   const programmedTitles = useMemo(() => sortTitlesByProgramTruth(titles), [titles]);
+  const filteredTitles = useMemo(
+    () => programmedTitles.filter((item) => matchesExploreSearch(item, searchQuery)),
+    [programmedTitles, searchQuery],
+  );
   const titlesCount = useMemo(() => programmedTitles.length, [programmedTitles]);
+  const visibleTitlesCount = filteredTitles.length;
+  const hasSearchQuery = searchQuery.trim().length > 0;
   const heroItem = useMemo(() => {
     const heroFlagItem = programmedTitles.find((item) => item.is_hero === true) ?? null;
     const featuredItem = programmedTitles.find((item) => item.featured === true) ?? null;
@@ -321,7 +342,7 @@ export default function ExploreScreen() {
           </View>
         ) : (
           <FlatList
-            data={programmedTitles}
+            data={filteredTitles}
             keyExtractor={(item) => item.id}
             style={styles.list}
             contentContainerStyle={styles.listContent}
@@ -329,10 +350,28 @@ export default function ExploreScreen() {
             ListHeaderComponent={
               <View style={styles.headerBlock}>
                 <Text style={styles.exploreTitle}>Explore</Text>
-                <Text style={styles.count}>Titles: {titlesCount}</Text>
+                <Text style={styles.count}>
+                  {hasSearchQuery ? `Showing ${visibleTitlesCount} of ${titlesCount}` : `Titles: ${titlesCount}`}
+                </Text>
                 <Text style={styles.headerBody}>
                   Browse the current Chi&apos;llywood lineup, with featured, trending, top-row, and live-now cues surfaced first.
                 </Text>
+
+                <View style={styles.searchShell}>
+                  <Text style={styles.searchLabel}>Search</Text>
+                  <TextInput
+                    testID="explore-title-search-input"
+                    accessibilityLabel="Search Chi'llywood titles"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholder="Search titles, categories, or descriptions"
+                    placeholderTextColor="#858C9D"
+                    style={styles.searchInput}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    clearButtonMode="while-editing"
+                  />
+                </View>
 
                 <View style={styles.chipRow}>
                   <View style={styles.chip}>
@@ -356,8 +395,12 @@ export default function ExploreScreen() {
             }
             ListEmptyComponent={
               <View style={styles.center}>
-                <Text style={styles.muted}>No published titles yet.</Text>
-                <Text style={styles.mutedSmall}>The Chi&apos;llywood lineup will appear here once programming is live.</Text>
+                <Text style={styles.muted}>{hasSearchQuery ? "No matching titles." : "No published titles yet."}</Text>
+                <Text style={styles.mutedSmall}>
+                  {hasSearchQuery
+                    ? "Try another title, category, year, runtime, or description."
+                    : "The Chi&apos;llywood lineup will appear here once programming is live."}
+                </Text>
               </View>
             }
           />
@@ -393,6 +436,28 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 13,
     lineHeight: 19,
+  },
+  searchShell: {
+    marginTop: 14,
+    gap: 7,
+  },
+  searchLabel: {
+    color: "#A8AFBF",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  searchInput: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(10,10,15,0.72)",
+    color: "#FFFFFF",
+    paddingHorizontal: 14,
+    fontSize: 14,
+    fontWeight: "700",
   },
   chipRow: {
     flexDirection: "row",
