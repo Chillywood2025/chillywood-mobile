@@ -182,9 +182,13 @@ export default function ChillyChatThreadScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isLoading: authLoading, isSignedIn } = useSession();
-  const { threadId: threadIdParam, startCall: startCallParam } = useLocalSearchParams<{ threadId?: string; startCall?: string }>();
+  const { threadId: threadIdParam, startCall: startCallParam, openCall: openCallParam } =
+    useLocalSearchParams<{ threadId?: string; startCall?: string; openCall?: string }>();
   const threadId = String(Array.isArray(threadIdParam) ? threadIdParam[0] : threadIdParam ?? "").trim();
   const requestedCallMode = String(Array.isArray(startCallParam) ? startCallParam[0] : startCallParam ?? "").trim().toLowerCase();
+  const requestedOpenCall = ["1", "true", "yes", "on"].includes(
+    String(Array.isArray(openCallParam) ? openCallParam[0] : openCallParam ?? "").trim().toLowerCase(),
+  );
 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -203,6 +207,7 @@ export default function ChillyChatThreadScreen() {
   const [friendLoading, setFriendLoading] = useState(true);
   const [friendBusy, setFriendBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
   const autoStartCallRef = useRef("");
+  const autoOpenCallRef = useRef("");
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
@@ -781,6 +786,19 @@ export default function ChillyChatThreadScreen() {
       });
     }
   }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, leaveRoom, loadThreadState, thread?.activeCallType, threadId]);
+
+  useEffect(() => {
+    const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";
+
+    if (!requestedOpenCall || !threadId || loading || callBusy || callPanelOpen || !activeCallRoomId) {
+      if (!requestedOpenCall) autoOpenCallRef.current = "";
+      return;
+    }
+
+    if (autoOpenCallRef.current === requestKey) return;
+    autoOpenCallRef.current = requestKey;
+    void handleJoinOrCloseCall();
+  }, [activeCallRoomId, callBusy, callPanelOpen, handleJoinOrCloseCall, loading, requestedOpenCall, threadId]);
 
   useEffect(() => {
     logChatCall("panel_state_changed", {

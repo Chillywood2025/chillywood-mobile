@@ -3,6 +3,7 @@ import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.ty
 
 import {
   createCommunicationRoom,
+  formatCommunicationRoomCode,
   getCommunicationRoomSnapshot,
   readCommunicationIdentity,
 } from "./communication";
@@ -309,6 +310,26 @@ export async function getChatThread(threadId: string): Promise<ChatThreadSummary
 
   if (error || !data) return null;
   return parseChatThread(data, currentUserId);
+}
+
+export async function getChatThreadByActiveCommunicationRoomId(roomId: string): Promise<ChatThreadSummary | null> {
+  const currentUserId = await getRequiredChatUserId();
+  const normalizedRoomId = formatCommunicationRoomCode(roomId);
+  if (!normalizedRoomId) return null;
+
+  const { data, error } = await supabase
+    .from(CHAT_THREADS_TABLE)
+    .select(CHAT_THREAD_SELECT)
+    .eq("active_communication_room_id", normalizedRoomId)
+    .order("updated_at", { ascending: false })
+    .limit(5)
+    .returns<ChatThreadRow[]>();
+
+  if (error || !data) return null;
+  return data
+    .map((row) => parseChatThread(row, currentUserId))
+    .filter(isDefined)
+    .find((thread) => toText(thread.activeCommunicationRoomId).toUpperCase() === normalizedRoomId) ?? null;
 }
 
 export async function listChatMessages(threadId: string): Promise<ChatMessage[]> {
