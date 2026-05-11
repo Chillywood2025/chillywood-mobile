@@ -19,6 +19,7 @@ import {
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
 import { resolveSpectatorAccess, type SpectatorAccessDecision } from "../../_lib/spectatorAccess";
+import { resolveSpectatorPlaybackState, type SpectatorPlaybackReadout } from "../../_lib/spectatorPlayback";
 
 type LoadState = "loading" | "ready" | "unavailable";
 
@@ -45,6 +46,7 @@ export default function SpectatorMetadataScreen() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [item, setItem] = useState<DiscoveryFeedItem | null>(null);
   const [decision, setDecision] = useState<SpectatorAccessDecision | null>(null);
+  const [playback, setPlayback] = useState<SpectatorPlaybackReadout | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -53,6 +55,7 @@ export default function SpectatorMetadataScreen() {
       setLoadState("loading");
       setItem(null);
       setDecision(null);
+      setPlayback(null);
 
       if (!itemId) {
         setLoadState("unavailable");
@@ -68,8 +71,10 @@ export default function SpectatorMetadataScreen() {
       }
 
       const nextDecision = resolveSpectatorAccess(nextItem);
+      const nextPlayback = resolveSpectatorPlaybackState(nextItem, nextDecision);
       setItem(nextItem);
       setDecision(nextDecision);
+      setPlayback(nextPlayback);
       setLoadState(nextDecision.canShowMetadata ? "ready" : "unavailable");
     };
 
@@ -128,7 +133,7 @@ export default function SpectatorMetadataScreen() {
     </View>
   );
 
-  if (loadState !== "ready" || !item || !decision) {
+  if (loadState !== "ready" || !item || !decision || !playback) {
     return renderUnavailable();
   }
 
@@ -179,14 +184,12 @@ export default function SpectatorMetadataScreen() {
         </View>
 
         <View style={styles.guardrailCard}>
-          <Text style={styles.guardrailTitle}>Spectator playback is not connected yet.</Text>
-          <Text style={styles.guardrailBody}>{decision.safeCopy}</Text>
+          <Text style={styles.guardrailTitle}>{playback.title}</Text>
+          <Text style={styles.guardrailBody}>{playback.copy}</Text>
           <View style={styles.guardrailList}>
-            <Text style={styles.guardrailItem}>No mic or camera controls</Text>
-            <Text style={styles.guardrailItem}>No full LiveKit room token</Text>
-            <Text style={styles.guardrailItem}>No HLS or Egress playback URL</Text>
-            <Text style={styles.guardrailItem}>No real ad playback or CTV inventory</Text>
-            <Text style={styles.guardrailItem}>No host controls or room mutation</Text>
+            {playback.guardrails.map((guardrail) => (
+              <Text key={guardrail} style={styles.guardrailItem}>{guardrail}</Text>
+            ))}
           </View>
         </View>
 
@@ -204,9 +207,19 @@ export default function SpectatorMetadataScreen() {
             <Text style={styles.detailValue}>{getDiscoveryAdPolicyLabel(item)}</Text>
           </View>
           <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Spectator state</Text>
+            <Text style={styles.detailValue}>{playback.state.replaceAll("_", " ")}</Text>
+          </View>
+          <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Full room</Text>
             <Text style={styles.detailValue}>
-              {decision.canJoinFullRoom ? "Use the gated room route" : "Not available from spectator metadata"}
+              {playback.fullRoomRequiresTicket
+                ? "Ticket flow required later"
+                : playback.fullRoomRequiresPremium
+                  ? "Premium required for full room"
+                  : decision.canJoinFullRoom
+                    ? "Use the gated room route"
+                    : "Not available from spectator metadata"}
             </Text>
           </View>
         </View>
