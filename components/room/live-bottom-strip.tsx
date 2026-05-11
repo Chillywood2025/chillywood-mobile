@@ -13,7 +13,7 @@ import {
     type ViewStyle,
 } from "react-native";
 
-import { getInitials, getParticipantMediaUri } from "../../app/watch-party/_lib/_room-shared";
+import { getInitials, getParticipantMediaUri } from "../../_lib/watch-party/room-shared";
 
 export type LiveBottomStripParticipant = {
   id: string;

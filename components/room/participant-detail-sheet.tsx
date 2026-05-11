@@ -13,7 +13,7 @@ import {
   getParticipantLayerLabel,
   type SharedParticipantIdentity,
   type SharedParticipantLocalState,
-} from "../../app/watch-party/_lib/_room-shared";
+} from "../../_lib/watch-party/room-shared";
 
 type ParticipantDetailSheetProps = {
   visible: boolean;

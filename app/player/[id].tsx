@@ -23,7 +23,6 @@ import {
     PanResponder,
     Platform,
     Pressable,
-    SafeAreaView,
     ScrollView,
     Share,
     StyleSheet,
@@ -106,6 +105,7 @@ import {
     toggleMyListTitle,
     writeProgressForTitle,
 } from "../../_lib/userData";
+import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
 import {
     createPartyRoom,
     emitSyncEvent,
@@ -137,7 +137,8 @@ import {
     submitSafetyReport,
     type SafetyReportCategory,
 } from "../../_lib/moderation";
-import { getInitials, getLiveParticipantStatusText, PLAYER_WATCH_PARTY_SOURCE, resolveIdentityName } from "../watch-party/_lib/_room-shared";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getInitials, getLiveParticipantStatusText, PLAYER_WATCH_PARTY_SOURCE, resolveIdentityName } from "../../_lib/watch-party/room-shared";
 
 const ACCENT = "#DC143C";
 const BG = "#0B0B10";
@@ -3971,7 +3972,7 @@ export default function PlayerScreen() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+    if (Platform.OS === "android" && !isReactNativeNewArchitecture() && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
   }, []);

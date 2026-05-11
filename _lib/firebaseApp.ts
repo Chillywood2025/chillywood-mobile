@@ -2,10 +2,14 @@ import { getApp } from "@react-native-firebase/app";
 import { Platform } from "react-native";
 
 const canUseFirebaseNative = () => Platform.OS !== "web";
+const warnedFirebaseDefaultAppMessages = new Set<string>();
 
 const maybeWarn = (scope: string, error: unknown) => {
   if (!__DEV__) return;
   const message = error instanceof Error ? error.message : String(error ?? "Unknown error");
+  const key = `${scope}:${message}`;
+  if (warnedFirebaseDefaultAppMessages.has(key)) return;
+  warnedFirebaseDefaultAppMessages.add(key);
   console.warn(`[firebase-app] ${scope}: ${message}`);
 };
 

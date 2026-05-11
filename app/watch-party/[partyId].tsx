@@ -109,6 +109,7 @@ import {
   resolveWatchPartySourceId,
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
+import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
@@ -139,7 +140,7 @@ import {
     shouldShowHostControls,
     type SharedParticipantIdentity,
     type SharedParticipantLocalState,
-} from "./_lib/_room-shared";
+} from "../../_lib/watch-party/room-shared";
 
 type ConnState = "loading" | "connecting" | "live" | "reconnecting" | "error";
 
@@ -375,7 +376,7 @@ export default function WatchPartyRoomScreen() {
   const monetizationConfig = resolveMonetizationConfig(appConfig);
 
   useEffect(() => {
-    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+    if (Platform.OS === "android" && !isReactNativeNewArchitecture() && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
   }, []);

@@ -9,8 +9,8 @@ import {
     type ViewStyle,
 } from "react-native";
 
-import { getInitials, getParticipantMediaUri } from "../../app/watch-party/_lib/_room-shared";
-import type { WaitingRoomParticipantEntry } from "../../app/watch-party/_lib/_waiting-room-shared";
+import { getInitials, getParticipantMediaUri } from "../../_lib/watch-party/room-shared";
+import type { WaitingRoomParticipantEntry } from "../../_lib/watch-party/waiting-room-shared";
 
 type ParticipantTileStyles = {
   container: StyleProp<ViewStyle>;

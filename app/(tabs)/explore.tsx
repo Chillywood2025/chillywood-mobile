@@ -8,13 +8,13 @@ import {
   type ImageSourcePropType,
   type ListRenderItem,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { titles as localTitles } from "../../_data/titles";
 import type { Tables } from "../../supabase/database.types";

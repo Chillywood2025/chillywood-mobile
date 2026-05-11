@@ -108,9 +108,6 @@ const installRevenueCatLogHandler = () => {
     if (!__DEV__) return;
 
     if (safeMessage.includes(PLAY_STORE_TEST_WARNING)) {
-      debugLog("revenuecat", safeMessage, {
-        level: String(logLevel),
-      });
       return;
     }
 

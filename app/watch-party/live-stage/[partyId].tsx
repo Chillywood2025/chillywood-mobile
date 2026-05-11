@@ -122,6 +122,7 @@ import {
   getLiveEffectStatusCopy,
   isLiveEffectAppliedToCamera,
 } from "../../../_lib/liveEffects";
+import { isReactNativeNewArchitecture } from "../../../_lib/reactNativeRuntime";
 import {
     buildOrderedParticipantsWithSelf,
     buildParticipantProfileParams,
@@ -137,7 +138,7 @@ import {
     type SharedParticipantIdentity,
     type SharedParticipantLocalState,
     type SharedRoomMode,
-} from "../_lib/_room-shared";
+} from "../../../_lib/watch-party/room-shared";
 
 type StageParticipant = SharedParticipantIdentity & {
   username: string;
@@ -227,6 +228,12 @@ const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as c
 const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
 const LIVE_STAGE_REMOTE_GRID_COLUMNS = 3;
 const LIVE_STAGE_REMOTE_GRID_VISIBLE_ROWS = 2;
+const LIVE_STAGE_VERBOSE_LOGGING = false;
+
+const debugLiveStage = (message: string, meta?: Record<string, unknown>) => {
+  if (!LIVE_STAGE_VERBOSE_LOGGING) return;
+  debugLog("live-stage", message, meta);
+};
 const LIVE_STAGE_REMOTE_GRID_GAP = 8;
 const LIVE_STAGE_REMOTE_GRID_TILE_MIN_HEIGHT = 144;
 type CommunicationRTCViewComponent = React.ComponentType<{
@@ -918,7 +925,7 @@ export default function WatchPartyLiveStageScreen() {
   }, [partyId]);
 
   useEffect(() => {
-    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+    if (Platform.OS === "android" && !isReactNativeNewArchitecture() && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
   }, []);
@@ -945,11 +952,11 @@ export default function WatchPartyLiveStageScreen() {
   })();
 
   useEffect(() => {
-    debugLog("live-stage", "mount", { partyIdParam, partyId });
+    debugLiveStage("mount", { partyIdParam, partyId });
   }, [partyIdParam, partyId]);
 
   useEffect(() => {
-    debugLog("live-stage", "loading state", { loading });
+    debugLiveStage("loading state", { loading });
   }, [loading]);
 
   useEffect(() => {
@@ -962,12 +969,12 @@ export default function WatchPartyLiveStageScreen() {
 
     const init = async () => {
       try {
-        debugLog("live-stage", "route params", { partyIdParam, partyId });
-        debugLog("live-stage", "async start", { partyId });
+        debugLiveStage("route params", { partyIdParam, partyId });
+        debugLiveStage("async start", { partyId });
 
         if (!partyId) {
-          debugLog("live-stage", "missing party id");
-          debugLog("live-stage", "set loading false", { reason: "missing-party-id" });
+          debugLiveStage("missing party id");
+          debugLiveStage("set loading false", { reason: "missing-party-id" });
           setRoomMissing(true);
           setLoading(false);
           return;
@@ -994,7 +1001,7 @@ export default function WatchPartyLiveStageScreen() {
         const username = resolveIdentityName(profile?.username, "Guest");
         const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
 
-        debugLog("live-stage", "async complete", {
+        debugLiveStage("async complete", {
           userId,
           username,
           roomFound: !!snapshot?.room,
@@ -1140,7 +1147,7 @@ export default function WatchPartyLiveStageScreen() {
       });
 
         channel.subscribe((status) => {
-          debugLog("live-stage", "channel status", { status });
+          debugLiveStage("channel status", { status });
           if (status !== "SUBSCRIBED") return;
 
           (async () => {
@@ -1160,7 +1167,7 @@ export default function WatchPartyLiveStageScreen() {
               });
             } finally {
               if (!cancelled) {
-                debugLog("live-stage", "set loading false", { reason: "subscribed" });
+                debugLiveStage("set loading false", { reason: "subscribed" });
                 setLoading(false);
               }
             }
@@ -1214,7 +1221,7 @@ export default function WatchPartyLiveStageScreen() {
 
         loadGuardTimeout = setTimeout(() => {
           if (cancelled) return;
-          debugLog("live-stage", "set loading false", { reason: "load-guard-timeout" });
+          debugLiveStage("set loading false", { reason: "load-guard-timeout" });
           setLoading(false);
         }, 3000);
       } catch (error) {
@@ -1730,7 +1737,7 @@ export default function WatchPartyLiveStageScreen() {
 
   useEffect(() => {
     if (!canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
-    debugLog("live-stage", "mic setup start");
+    debugLiveStage("mic setup start");
     const currentUserId = String(myUserId || "").trim();
 
     let cancelled = false;
@@ -1738,7 +1745,7 @@ export default function WatchPartyLiveStageScreen() {
     const startMicMetering = async () => {
       try {
         const permission = await Audio.requestPermissionsAsync();
-        debugLog("live-stage", "mic permission", { granted: permission.granted, status: permission.status, canAskAgain: permission.canAskAgain });
+        debugLiveStage("mic permission", { granted: permission.granted, status: permission.status, canAskAgain: permission.canAskAgain });
         if (!permission.granted || cancelled) return;
 
         await Audio.setAudioModeAsync({
@@ -1749,7 +1756,7 @@ export default function WatchPartyLiveStageScreen() {
           interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
         });
 
-        debugLog("live-stage", "mic recording created");
+        debugLiveStage("mic recording created");
         const recording = new Audio.Recording();
         await recording.prepareToRecordAsync({
           isMeteringEnabled: true,
@@ -1777,13 +1784,13 @@ export default function WatchPartyLiveStageScreen() {
             bitsPerSecond: 64000,
           },
         });
-        debugLog("live-stage", "mic prepare complete");
-        debugLog("live-stage", "mic start async");
+        debugLiveStage("mic prepare complete");
+        debugLiveStage("mic start async");
         await recording.startAsync();
-        debugLog("live-stage", "mic recording started");
+        debugLiveStage("mic recording started");
         recording.setProgressUpdateInterval(220);
         recording.setOnRecordingStatusUpdate((status) => {
-          debugLog("live-stage", "mic meter", { isRecording: status.isRecording, metering: status.metering });
+          debugLiveStage("mic meter", { isRecording: status.isRecording, metering: status.metering });
           if (!status.isRecording || cancelled) return;
           const metering = typeof status.metering === "number" ? status.metering : -160;
           if (!currentUserId) return;
@@ -1794,7 +1801,7 @@ export default function WatchPartyLiveStageScreen() {
               micReleaseTimeoutRef.current = null;
             }
             if (micSpeakingRef.current) return;
-            debugLog("live-stage", "speaking change", {
+            debugLiveStage("speaking change", {
               from: micSpeakingRef.current,
               to: true,
               metering,
@@ -1809,7 +1816,7 @@ export default function WatchPartyLiveStageScreen() {
           micReleaseTimeoutRef.current = setTimeout(() => {
             micReleaseTimeoutRef.current = null;
             if (!micSpeakingRef.current || cancelled) return;
-            debugLog("live-stage", "speaking change", {
+            debugLiveStage("speaking change", {
               from: true,
               to: false,
               metering,
@@ -2181,7 +2188,7 @@ export default function WatchPartyLiveStageScreen() {
 
   useEffect(() => {
     if (!__DEV__ || !canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
-    debugLog("live-stage", "stage media binding", {
+    debugLiveStage("stage media binding", {
       communicationRoomId,
       heroUserId: heroParticipant?.userId ?? "",
       heroStreamReady: !!heroMediaParticipant?.streamURL,
@@ -3539,17 +3546,6 @@ export default function WatchPartyLiveStageScreen() {
     </View>
   );
 
-  debugLog("live-stage", "render branch", {
-    route: "/watch-party/live-stage/[partyId]",
-    loading,
-    partyId,
-    roomCode: room?.roomCode ?? partyId,
-    mode: stageMode,
-    liveSurface,
-    participants: participants.length,
-    displayParticipants: displayParticipants.length,
-    liveKitRoomName: liveKitJoinContract?.roomName ?? null,
-  });
   const liveWatchPartyGatePresentation = liveWatchPartyPremiumGate
     ? getMonetizationAccessSheetPresentation({
         gate: liveWatchPartyPremiumGate,
@@ -3933,9 +3929,9 @@ export default function WatchPartyLiveStageScreen() {
                           ]}
                           onPress={() => {
                             if (isHost) {
-                              debugLog("live-stage", "host tap user", { userId: participant.userId });
+                              debugLiveStage("host tap user", { userId: participant.userId });
                             } else {
-                              debugLog("live-stage", "request mic", { userId: participant.userId });
+                              debugLiveStage("request mic", { userId: participant.userId });
                               if (isCurrentUser && canRequestSeat(participantState) && !isRequesting) {
                                 requestStageSeat(participant.userId).catch(() => {});
                               }

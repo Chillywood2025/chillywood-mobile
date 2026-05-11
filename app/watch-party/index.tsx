@@ -60,7 +60,7 @@ import {
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
-import { PLAYER_WATCH_PARTY_SOURCE } from "./_lib/_room-shared";
+import { PLAYER_WATCH_PARTY_SOURCE } from "../../_lib/watch-party/room-shared";
 
 type RoomPreview = {
   room: WatchPartyState;
