@@ -218,22 +218,28 @@ Activation checklist before running `--profile egress`:
 8. Start only when ready: `docker compose --profile egress -f infra/hetzner/docker-compose.livekit.yml up -d`.
 9. Run a private `D7D_TEST_` start/stop proof through `spectator-broadcast-start` and `spectator-broadcast-stop`; verify cleanup and no public playback.
 
-Do not treat the scaffold as public launch proof. Real readiness still requires a bounded admin/operator D7D private Egress start/stop proof, private HLS cleanup verification, server health review, and a later explicit D7E/D7F lane before any spectator playback UI or Admin broadcast controls.
+Do not treat the scaffold or D7D private proof as public playback launch approval. D7D private start/stop proof is complete, but real spectator playback still requires private HLS delivery review, server health/cost review, and a later explicit D7E/D7F lane before any spectator playback UI or Admin broadcast controls.
 
-Latest external attempt on May 11, 2026:
+External D7D proof closeout on May 11, 2026:
 
 - SSH to `chillywood-prod-01` worked with passwordless sudo for the deploy user.
 - Docker and Docker Compose were present.
 - LiveKit, Egress, and Redis containers were already running on the host.
 - LiveKit config already had Redis configured.
 - Egress health/template ports were reachable locally.
-- Host-only Egress config permissions were tightened to `600`.
+- Host-only Egress config permissions were initially too strict for the non-root Egress container after restart; the file now uses `644` and contains no API key/secret values.
 - Host env Egress and Redis image references were pinned to the currently running image digests for the next controlled service recreate.
-- Services were not restarted.
-- A private `D7D_TEST_` LiveKit room was created successfully on the host.
-- The D7D function proof did not start Egress because `spectator-broadcast-start` returned `403 operator_required` for the local proof account.
-- The permission block is correct: rerun proof only with a real owner/operator bearer token or after the chosen proof account receives the proper platform role through the existing role process.
-- No public playback, spectator playback, HLS URL return, Egress id write, or full spectator token was enabled by this attempt.
+- Supabase Edge Function `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` were synced from the host secret store without printing values.
+- The 2-vCPU host required a proof-scoped Egress admission setting in the host-only Egress YAML: `room_composite_cpu_cost: 2.0`. LiveKit's public guidance still recommends more CPU for production RoomComposite capacity.
+- Only the Egress container was restarted for proof; LiveKit server config was not changed.
+- The proof account correctly received `403 operator_required` before elevation.
+- The proof account received a temporary `operator` platform role only for this private proof, and the grant was revoked after proof.
+- Post-revoke proof confirmed the same account again receives `403 operator_required`.
+- A private `D7D_TEST_` LiveKit room with one CLI proof participant and demo publisher was active before proof.
+- `spectator-broadcast-start` returned `test_started`, called LiveKit Egress, and wrote a real private Egress id for the test row.
+- `spectator-broadcast-stop` returned `test_stopped`, called LiveKit Egress stop, and LiveKit listed the Egress as `EGRESS_COMPLETE`.
+- No public playback, spectator playback, HLS URL return, full spectator token, D7E playback UI, or D7F Admin broadcast control was enabled.
+- Proof artifacts are under `/tmp/chillywood-proof-2026-05-11T20-59-14-038Z-livekit-egress-d7d-proof-account`.
 
 ## Production Env Checklist
 
@@ -241,9 +247,9 @@ Latest external attempt on May 11, 2026:
 | --- | --- | --- | --- |
 | `EXPO_PUBLIC_LIVEKIT_URL` | Release runtime config | EAS/public runtime env or deployed fallback | Partial / Proof Pending |
 | `EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT` | Release runtime config | EAS/public runtime env or deployed fallback | Partial / Proof Pending |
-| `LIVEKIT_URL` | Supabase Edge Function | Supabase function secrets | External Setup Pending |
-| `LIVEKIT_API_KEY` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | External Setup Pending |
-| `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | External Setup Pending |
+| `LIVEKIT_URL` | Supabase Edge Function | Supabase function secrets | Configured / D7D Private Proof Passed |
+| `LIVEKIT_API_KEY` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
+| `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | TURN credentials, if external TURN is used | LiveKit infra | Host secret store only | External Setup Pending |
 | Supabase URL/anon/service role | Token function | Supabase function secrets | External Setup Pending |
 
