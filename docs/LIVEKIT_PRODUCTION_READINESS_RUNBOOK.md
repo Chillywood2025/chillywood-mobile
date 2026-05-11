@@ -218,7 +218,7 @@ Activation checklist before running `--profile egress`:
 8. Start only when ready: `docker compose --profile egress -f infra/hetzner/docker-compose.livekit.yml up -d`.
 9. Run a private `D7D_TEST_` start/stop proof through `spectator-broadcast-start` and `spectator-broadcast-stop`; verify cleanup and no public playback.
 
-Do not treat the scaffold or D7D private proof as public playback launch approval. D7D private start/stop proof is complete, but real spectator playback still requires private HLS delivery review, server health/cost review, and a later explicit D7E/D7F lane before any spectator playback UI or Admin broadcast controls.
+Do not treat the scaffold or D7D private proof as public playback launch approval. D7D private start/stop proof is complete, but real spectator playback still requires public-safe Hetzner Object Storage HLS delivery proof, server health/cost review, and a later explicit D7E playback enablement lane before any spectator playback UI or Admin broadcast controls can become live.
 
 External D7D proof closeout on May 11, 2026:
 
@@ -241,6 +241,32 @@ External D7D proof closeout on May 11, 2026:
 - No public playback, spectator playback, HLS URL return, full spectator token, D7E playback UI, or D7F Admin broadcast control was enabled.
 - Proof artifacts are under `/tmp/chillywood-proof-2026-05-11T20-59-14-038Z-livekit-egress-d7d-proof-account`.
 
+## D7E Hetzner HLS Delivery Gate
+
+Current D7E target:
+
+- Hetzner Object Storage is the active S3-compatible target for this lane.
+- The existing Supabase Edge Function output aliases already accept `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY` as server-side output config names.
+- Current proof found S3/Hetzner output secret names present by name/digest only, but no `PUBLIC_HLS_BASE_URL` is configured.
+- No public/custom HLS domain or prefix has been proved.
+- No real `.m3u8` playlist or segment file has been fetched from outside LiveKit.
+- Public spectator playback remains blocked. `/spectate/[itemId]` may show blocked/foundation readout states only.
+
+Hetzner activation checklist before D7E can pass:
+
+1. Use a dedicated Hetzner Object Storage bucket or a tightly scoped prefix for public HLS output. Do not expose private/source upload media by reusing a broad private bucket path.
+2. Configure the intended public HLS prefix with deliberate public-read delivery or a controlled custom-domain/CDN path.
+3. Choose the public playback base URL, for example `https://media.chillywoodstream.com/live-hls` or an approved Hetzner bucket/domain path.
+4. Set `PUBLIC_HLS_BASE_URL` as a Supabase Edge Function secret only after the public path is intentionally configured.
+5. Keep S3 access key and secret values server-side only. Do not put them in app config, mobile code, docs, screenshots, logs, or artifacts.
+6. Run a bounded D7E proof with a private proof room and operator-only start/stop path.
+7. Confirm LiveKit Egress writes a real HLS playlist and segment files to the Hetzner bucket/prefix.
+8. Fetch the `.m3u8` URL from outside LiveKit without a LiveKit participant token.
+9. Fetch at least one segment from that playlist from outside LiveKit.
+10. Stop Egress, revoke any temporary operator grant, and confirm post-revoke calls return `403 operator_required`.
+11. Confirm app/public users did not receive a LiveKit participant token, HLS URL, or full room access during proof.
+12. Only after D7E passes, scope a separate D7F playback lane for eligible public-safe content. Protected, title-rights-blocked, private, invite-only, ticketed, and Premium full-room flows must remain blocked unless separately backed.
+
 ## Production Env Checklist
 
 | Environment value | Owner | Where it belongs | Status |
@@ -250,6 +276,8 @@ External D7D proof closeout on May 11, 2026:
 | `LIVEKIT_URL` | Supabase Edge Function | Supabase function secrets | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_KEY` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
+| `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Supabase Edge Function HLS output | Supabase function secrets only | Names Present / D7E Public Proof Pending |
+| `PUBLIC_HLS_BASE_URL` | Supabase Edge Function public HLS readout | Supabase function secret, pointing only to approved public HLS delivery base | Missing / D7E Blocked |
 | TURN credentials, if external TURN is used | LiveKit infra | Host secret store only | External Setup Pending |
 | Supabase URL/anon/service role | Token function | Supabase function secrets | External Setup Pending |
 
