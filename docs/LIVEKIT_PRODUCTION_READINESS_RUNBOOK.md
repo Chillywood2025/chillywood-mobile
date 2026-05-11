@@ -247,7 +247,8 @@ Current D7E target:
 
 - Hetzner Object Storage is the active S3-compatible target for this lane.
 - The existing Supabase Edge Function output aliases already accept `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY` as server-side output config names.
-- Current proof found S3/Hetzner output secret names present by name/digest only, but no `PUBLIC_HLS_BASE_URL` is configured.
+- Current proof found S3/Hetzner output secret names present by name/digest only.
+- A bounded May 11 D7E attempt temporarily set a path-style Hetzner `PUBLIC_HLS_BASE_URL`, created a private `D7D_TEST_` room on the production LiveKit host, started/stopped real Egress through the operator-only Supabase function, then removed `PUBLIC_HLS_BASE_URL` because outside-LiveKit playlist fetch returned Hetzner `403` instead of a readable `.m3u8`.
 - No public/custom HLS domain or prefix has been proved.
 - No real `.m3u8` playlist or segment file has been fetched from outside LiveKit.
 - Public spectator playback remains blocked. `/spectate/[itemId]` may show blocked/foundation readout states only.
@@ -277,7 +278,7 @@ Hetzner activation checklist before D7E can pass:
 | `LIVEKIT_API_KEY` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Supabase Edge Function HLS output | Supabase function secrets only | Names Present / D7E Public Proof Pending |
-| `PUBLIC_HLS_BASE_URL` | Supabase Edge Function public HLS readout | Supabase function secret, pointing only to approved public HLS delivery base | Missing / D7E Blocked |
+| `PUBLIC_HLS_BASE_URL` | Supabase Edge Function public HLS readout | Supabase function secret, pointing only to approved public HLS delivery base | Unset after Hetzner `403` proof / D7E Blocked |
 | TURN credentials, if external TURN is used | LiveKit infra | Host secret store only | External Setup Pending |
 | Supabase URL/anon/service role | Token function | Supabase function secrets | External Setup Pending |
 
