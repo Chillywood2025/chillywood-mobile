@@ -37,7 +37,7 @@ export default function AccountDeletionPage() {
           ]}
         />
         <LegalParagraph>
-          If you need help with the deletion process, contact Chi&apos;llywood Support at chillywood92@gmail.com.
+          If you need help with the deletion process, contact Chi&apos;llywood Support at support@chillywoodstream.com.
         </LegalParagraph>
       </LegalSection>
 
@@ -129,7 +129,7 @@ export default function AccountDeletionPage() {
       <LegalSection title="12. Support Contact">
         <LegalParagraph>For account deletion help or status questions, contact:</LegalParagraph>
         <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
-        <LegalParagraph>chillywood92@gmail.com</LegalParagraph>
+        <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
       </LegalSection>
     </LegalPageShell>
   );

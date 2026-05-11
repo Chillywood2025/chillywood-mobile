@@ -184,7 +184,7 @@ export default function PrivacyPolicyPage() {
       <LegalSection title="17. Contact">
         <LegalParagraph>For privacy questions, support, account deletion, or legal requests, contact:</LegalParagraph>
         <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
-        <LegalParagraph>chillywood92@gmail.com</LegalParagraph>
+        <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
       </LegalSection>
     </LegalPageShell>
   );

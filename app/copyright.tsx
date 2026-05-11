@@ -63,7 +63,7 @@ export default function CopyrightPage() {
           Until a final designated DMCA agent and copyright contact process is approved, copyright notices should be sent to the support contact below. Do not treat this draft page as a final designated-agent record.
         </LegalParagraph>
         <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
-        <LegalParagraph>chillywood92@gmail.com</LegalParagraph>
+        <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
       </LegalSection>
 
       <LegalSection title="5. What Chi'llywood May Do After a Notice">
@@ -128,7 +128,7 @@ export default function CopyrightPage() {
       <LegalSection title="11. Contact">
         <LegalParagraph>For copyright, DMCA, or media-rights questions, contact:</LegalParagraph>
         <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
-        <LegalParagraph>chillywood92@gmail.com</LegalParagraph>
+        <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
       </LegalSection>
     </LegalPageShell>
   );

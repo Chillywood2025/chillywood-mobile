@@ -203,7 +203,7 @@ export default function TermsOfServicePage() {
       <LegalSection title="17. Contact">
         <LegalParagraph>For questions about these Terms, support, or legal requests, contact:</LegalParagraph>
         <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
-        <LegalParagraph>chillywood92@gmail.com</LegalParagraph>
+        <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
       </LegalSection>
     </LegalPageShell>
   );

@@ -164,7 +164,7 @@ export default function CommunityGuidelinesPage() {
       <LegalSection title="14. Contact">
         <LegalParagraph>For safety, support, or policy questions, contact:</LegalParagraph>
         <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
-        <LegalParagraph>chillywood92@gmail.com</LegalParagraph>
+        <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
       </LegalSection>
     </LegalPageShell>
   );

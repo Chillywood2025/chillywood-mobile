@@ -13,6 +13,7 @@ const DEPLOYED_LIVEKIT_TOKEN_ENDPOINT = "https://bmkkhihfbmsnnmcqkoly.supabase.c
 const DEPLOYED_PRIVACY_POLICY_URL = "https://live.chillywoodstream.com/privacy";
 const DEPLOYED_TERMS_OF_SERVICE_URL = "https://live.chillywoodstream.com/terms";
 const DEPLOYED_ACCOUNT_DELETION_URL = "https://live.chillywoodstream.com/account-deletion";
+const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
 
 const resolveExistingFile = (...candidates: Array<string | undefined>) => {
   for (const candidate of candidates) {
@@ -147,7 +148,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
             || DEPLOYED_ACCOUNT_DELETION_URL,
           ),
           supportEmail: normalizeText(
-            process.env.EXPO_PUBLIC_SUPPORT_EMAIL || existingLegal.supportEmail,
+            process.env.EXPO_PUBLIC_SUPPORT_EMAIL || existingLegal.supportEmail || DEPLOYED_SUPPORT_EMAIL,
           ),
         },
         communication: {
