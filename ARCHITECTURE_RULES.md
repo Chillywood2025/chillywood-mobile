@@ -66,6 +66,12 @@ That means:
 - `/communication` is not a normal destination
 - `/communication/[roomId]` is not a normal destination
 - if retained, those routes are compatibility-only
+- `app/communication/index.tsx` remains a compatibility-only route into `/chat`
+- `app/communication/[roomId].tsx` remains compatibility-only and must not own standalone communication room UI
+- `/communication/[roomId]` may resolve an active communication room id to a canonical Chat thread for the current member and redirect to `/chat/[threadId]?openCall=1`
+- if no member-visible Chat thread maps to the communication room id, `/communication/[roomId]` must redirect safely to `/chat`
+- `openCall=1` may open an existing active in-thread call panel only; it must not start a new call
+- Chat privacy and current-user thread membership checks remain canonical
 
 Room-grade communication belongs inside:
 - Party Room
@@ -102,6 +108,7 @@ Locked MVP architecture:
 - `/chat` is the standalone inbox route
 - `/chat/[threadId]` is the standalone direct-thread route
 - bottom-tab Chat navigation is not canonical unless it preserves those route owners without a duplicate Expo route
+- the deferred `app/(tabs)/chat.tsx` candidate remains non-canonical because it would duplicate normalized `/chat` ownership with `app/chat/index.tsx`
 - the direct-thread MVP owns header, messages, composer, timestamps, optimistic sending, realtime updates, and mark-read on open/focus
 - the MVP data model is `chat_threads`, `chat_thread_members`, and `chat_messages`
 - chat thread helpers must treat current-user membership as required before returning thread state, messages, send access, attachments, or call cleanup; RLS remains the primary database boundary, but client helpers must not accept non-member thread rows
@@ -522,6 +529,9 @@ Future Codex prompts for Chi'llywood must be production-grade. They need exact p
 - immediate execution scope belongs in `NEXT_TASK.md`
 - session guardrails belong in `SESSION_START_PROTOCOL.md`
 - temporary ADB/device/emulator debugging does not belong in permanent product doctrine
+- Expo Router currently exposes helper-looking files under `app/` as routes: `app/data/titles.ts` as `/data/titles`, `app/lib/_supabase.ts` as `/lib/_supabase`, `app/watch-party/_lib/_room-shared.ts` as `/watch-party/_lib/_room-shared`, and `app/watch-party/_lib/_waiting-room-shared.ts` as `/watch-party/_lib/_waiting-room-shared`
+- `app/watch-party/_lib/_room-shared.ts` and `app/watch-party/_lib/_waiting-room-shared.ts` are active Watch-Party helpers and must be preserved until a dedicated move lane proves safe import updates and route behavior
+- route-tree utility exposure cleanup must be a dedicated follow-up lane; do not delete or move these files as generic cleanup
 
 ## Proof Status Bookkeeping Rule
 - locked product truth must stay separate from current checkpoint truth

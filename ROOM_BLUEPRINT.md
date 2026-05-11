@@ -978,6 +978,9 @@ Relationship to other rooms: Chi'lly Chat is the native messaging and calling la
 - First-time users often reach it from self-profile, other-user profile, or Rachi's official starter presence.
 - Repeat users reach it from `/chat`, `/chat/[threadId]`, room follow-up prompts, profile opens, and notification taps.
 - Route ownership is `/chat` for inbox and `/chat/[threadId]` for direct threads.
+- `/communication/index.tsx` and `/communication/[roomId].tsx` are compatibility-only, not Chi'lly Chat owners.
+- `/communication/[roomId]` may resolve active communication room ids to canonical Chat threads and redirect to `/chat/[threadId]?openCall=1`; if no mapping is available, it redirects to `/chat`.
+- `openCall=1` may open an existing active in-thread call panel only and must not start a new call.
 - A bottom-tab Chat entry is not canonical until it can delegate without creating a duplicate normalized `/chat` route.
 - Preconditions are signed-in identity and valid thread membership when required.
 
