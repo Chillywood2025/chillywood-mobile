@@ -251,26 +251,26 @@ Current D7E target:
 - Bounded May 11 D7E attempts temporarily set proof-only Hetzner `PUBLIC_HLS_BASE_URL` values, created private `D7D_TEST_` rooms on the production LiveKit host, and started/stopped real Egress through the operator-only Supabase function.
 - The safer follow-up applied a proof-prefix-only public-read bucket policy for `d7d-test/<proof>/*` through a temporary operator-only policy function, then used a virtual-hosted public base for that proof only.
 - A May 12 server-side storage probe used a temporary nonce-protected Supabase function to read Hetzner/S3 secrets server-side without returning values. It confirmed default private throwaway objects return `403`, `x-amz-acl: public-read` throwaway objects return `200`, and exact-prefix public-read bucket-policy throwaway objects return `200`.
-- The no-publisher Egress probe started, returned an Egress id, and kept spectator/full-room token exposure false, but signed playlist read returned `404` and public playlist fetch stayed `403`; no real `.m3u8` marker or segment was proved.
-- The temporary public base, exact-prefix policy, temporary policy function, nonce secret, proof room, and operator/probe access were cleaned up afterward.
-- Hetzner object-level/prefix-level public read has been proved for throwaway objects only; real LiveKit Egress HLS output has not been proved public-readable.
-- No real `.m3u8` playlist or segment file has been fetched from outside LiveKit.
-- Public spectator playback remains blocked. `/spectate/[itemId]` may show blocked/foundation readout states only.
+- D7E public-safe HLS delivery proof passed on May 12, 2026 using physical Android device `R5CR120QCBF` as a publisher. Android Chrome loaded a local proof page, connected to a private proof LiveKit room, and published two real tracks.
+- The temporary Supabase proof function started LiveKit Egress with Hetzner Object Storage segment output, returned a real Egress id, and kept `fullRoomTokenForSpectators`, `hlsUrlReturned`, `publicPlaybackEnabled`, and `spectatorPlaybackEnabled` false.
+- Outside-LiveKit Hetzner fetch reached `200` for the generated `.m3u8` playlist and the playlist contained a real `#EXTM3U` marker. At least one segment fetched outside LiveKit with `200`, `video/mp2t`, and non-empty bytes.
+- The temporary public base, exact-prefix policy, temporary proof function, nonce secret, local publisher token, proof room, and operator/probe access were cleaned up afterward. `PUBLIC_HLS_BASE_URL` remains unset because app playback is not enabled.
+- Public spectator playback remains blocked until D7F. `/spectate/[itemId]` may show blocked/foundation readout states only.
 
-Hetzner activation checklist before D7E can pass:
+D7F activation checklist after D7E proof:
 
 1. Use a dedicated Hetzner Object Storage bucket or a tightly scoped prefix for public HLS output. Do not expose private/source upload media by reusing a broad private bucket path.
-2. Configure the intended public HLS prefix with deliberate public-read delivery or a controlled custom-domain/CDN path. The May 12 storage probe proved object ACL and exact-prefix policy reads on throwaway objects; the next proof must apply that access model to the exact real Egress output prefix after a publisher-backed room writes a playlist and segment.
+2. Configure the intended public HLS prefix with deliberate public-read delivery or a controlled custom-domain/CDN path. The May 12 D7E proof proved exact-prefix public-read delivery with real Egress playlist/segment output.
 3. Choose the public playback base URL, for example `https://media.chillywoodstream.com/live-hls` or an approved Hetzner bucket/domain path.
 4. Set `PUBLIC_HLS_BASE_URL` as a Supabase Edge Function secret only after the public path is intentionally configured.
 5. Keep S3 access key and secret values server-side only. Do not put them in app config, mobile code, docs, screenshots, logs, or artifacts.
-6. Run a bounded D7E proof with a private proof room and operator-only start/stop path.
-7. Confirm LiveKit Egress writes a real HLS playlist and segment files to the Hetzner bucket/prefix.
-8. Fetch the `.m3u8` URL from outside LiveKit without a LiveKit participant token.
-9. Fetch at least one segment from that playlist from outside LiveKit.
-10. Stop Egress, revoke any temporary operator grant, and confirm post-revoke calls return `403 operator_required`.
-11. Confirm app/public users did not receive a LiveKit participant token, HLS URL, or full room access during proof.
-12. Only after D7E passes, scope a separate D7F playback lane for eligible public-safe content. Protected, title-rights-blocked, private, invite-only, ticketed, and Premium full-room flows must remain blocked unless separately backed.
+6. Preserve the May 12 D7E proof as delivery-only truth. Do not rerun D7E unless storage, LiveKit Egress, or delivery domain config changes.
+7. Scope D7F as a separate app/admin/spectator integration lane for eligible public-safe content only.
+8. Ensure D7F reads only backed public-safe HLS state and never mints full LiveKit participant tokens for spectators.
+9. Keep protected, title-rights-blocked, private, invite-only, ticketed, and Premium full-room flows blocked unless separately backed.
+10. Runtime-prove `/spectate/[itemId]` with unavailable, blocked, and available public-safe states before enabling playback.
+11. Keep app/public users from receiving HLS URLs unless D7F intentionally exposes a public-safe playback URL for eligible content.
+12. Keep `PUBLIC_HLS_BASE_URL` unset until the D7F implementation lane intentionally configures the approved public playback base.
 
 ## Production Env Checklist
 
@@ -281,8 +281,8 @@ Hetzner activation checklist before D7E can pass:
 | `LIVEKIT_URL` | Supabase Edge Function | Supabase function secrets | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_KEY` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
-| `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Supabase Edge Function HLS output | Supabase function secrets only | Names Present / D7E Public Proof Pending |
-| `PUBLIC_HLS_BASE_URL` | Supabase Edge Function public HLS readout | Supabase function secret, pointing only to approved public HLS delivery base | Unset after path-style and exact-prefix Hetzner `403` proofs / D7E Blocked |
+| `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Supabase Edge Function HLS output | Supabase function secrets only | Names Present / D7E Public Proof Passed |
+| `PUBLIC_HLS_BASE_URL` | Supabase Edge Function public HLS readout | Supabase function secret, pointing only to approved public HLS delivery base | Unset after D7E proof / D7F App Integration Pending |
 | TURN credentials, if external TURN is used | LiveKit infra | Host secret store only | External Setup Pending |
 | Supabase URL/anon/service role | Token function | Supabase function secrets | External Setup Pending |
 
