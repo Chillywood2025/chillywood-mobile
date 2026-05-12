@@ -129,6 +129,200 @@ const readRequiredEnv = (key: string) => {
 
 const readOptionalEnv = (key: string) => toText(Deno.env.get(key)) || null;
 
+const textEncoder = new TextEncoder();
+
+const normalizeEndpoint = (value: string) => {
+  const trimmed = value.replace(/\/+$/g, "");
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+const readHlsOutputConfig = () => {
+  const bucket = readOptionalEnv("EGRESS_OUTPUT_BUCKET") || readOptionalEnv("S3_BUCKET");
+  const endpoint = readOptionalEnv("EGRESS_OUTPUT_ENDPOINT") || readOptionalEnv("S3_ENDPOINT");
+  const region = readOptionalEnv("EGRESS_OUTPUT_REGION") || readOptionalEnv("S3_REGION");
+  const accessKeyId = readOptionalEnv("EGRESS_OUTPUT_ACCESS_KEY_ID") || readOptionalEnv("S3_ACCESS_KEY_ID");
+  const secretAccessKey = readOptionalEnv("EGRESS_OUTPUT_SECRET_ACCESS_KEY") || readOptionalEnv("S3_SECRET_ACCESS_KEY");
+
+  if (!bucket || !endpoint || !region || !accessKeyId || !secretAccessKey) return null;
+  return {
+    accessKeyId,
+    bucket,
+    endpoint: normalizeEndpoint(endpoint),
+    region,
+    secretAccessKey,
+  };
+};
+
+const awsEncode = (value: string) => encodeURIComponent(value)
+  .replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+
+const encodeS3Path = (objectKey: string) => objectKey
+  .split("/")
+  .map((part) => encodeURIComponent(part))
+  .join("/");
+
+const bytesToHex = (buffer: ArrayBuffer) =>
+  Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+
+const hmacSha256 = async (key: ArrayBuffer | Uint8Array, data: string) => {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    key,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return crypto.subtle.sign("HMAC", cryptoKey, textEncoder.encode(data));
+};
+
+const sha256Hex = async (value: string) => {
+  const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(value));
+  return bytesToHex(digest);
+};
+
+const formatAmzDates = (date = new Date()) => {
+  const iso = date.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  return {
+    amzDate: iso,
+    dateStamp: iso.slice(0, 8),
+  };
+};
+
+const getSigningKey = async (secretAccessKey: string, dateStamp: string, region: string) => {
+  const dateKey = await hmacSha256(textEncoder.encode(`AWS4${secretAccessKey}`), dateStamp);
+  const regionKey = await hmacSha256(dateKey, region);
+  const serviceKey = await hmacSha256(regionKey, "s3");
+  return hmacSha256(serviceKey, "aws4_request");
+};
+
+const isSafeHlsObjectKey = (value: string) => (
+  !!value
+  && value.length <= 1024
+  && !value.startsWith("/")
+  && !value.split("/").includes("..")
+  && !/[\u0000-\u001F\u007F]/u.test(value)
+);
+
+const objectKeyFromConfiguredOutputUrl = (value: string) => {
+  const outputConfig = readHlsOutputConfig();
+  if (!outputConfig) return null;
+
+  const parsed = new URL(value);
+  const endpoint = new URL(outputConfig.endpoint);
+  const sourceHost = parsed.host.toLowerCase();
+  const endpointHost = endpoint.host.toLowerCase();
+  const endpointHostIncludesBucket = endpointHost.startsWith(`${outputConfig.bucket}.`.toLowerCase());
+  const bucketHost = `${outputConfig.bucket}.${endpointHost}`.toLowerCase();
+  const normalizedPath = parsed.pathname.replace(/^\/+/g, "");
+  const sourceUrlOutputConfig = {
+    ...outputConfig,
+    endpoint: `${parsed.protocol}//${parsed.host}`,
+  };
+
+  if (sourceHost.startsWith(`${outputConfig.bucket}.`.toLowerCase())) {
+    return isSafeHlsObjectKey(normalizedPath)
+      ? { objectKey: normalizedPath, outputConfig: sourceUrlOutputConfig }
+      : null;
+  }
+
+  if (sourceHost === bucketHost) {
+    return isSafeHlsObjectKey(normalizedPath) ? { objectKey: normalizedPath, outputConfig } : null;
+  }
+
+  if (sourceHost === endpointHost && endpointHostIncludesBucket) {
+    return isSafeHlsObjectKey(normalizedPath) ? { objectKey: normalizedPath, outputConfig } : null;
+  }
+
+  if (sourceHost === endpointHost) {
+    const [bucket, ...pathParts] = normalizedPath.split("/");
+    if (bucket === outputConfig.bucket) {
+      const objectKey = pathParts.join("/");
+      return isSafeHlsObjectKey(objectKey) ? { objectKey, outputConfig: sourceUrlOutputConfig } : null;
+    }
+  }
+
+  return null;
+};
+
+const createPresignedS3GetUrl = async (input: {
+  accessKeyId: string;
+  bucket: string;
+  endpoint: string;
+  expiresSeconds: number;
+  forcePathStyle?: boolean;
+  objectKey: string;
+  region: string;
+  secretAccessKey: string;
+}) => {
+  const endpoint = new URL(input.endpoint);
+  const bucketPrefix = `${input.bucket}.`.toLowerCase();
+  const endpointHost = endpoint.host.toLowerCase();
+  const endpointHostIncludesBucket = endpointHost.startsWith(bucketPrefix);
+  const host = input.forcePathStyle
+    ? endpointHostIncludesBucket ? endpoint.host.slice(input.bucket.length + 1) : endpoint.host
+    : endpointHostIncludesBucket ? endpoint.host : `${input.bucket}.${endpoint.host}`;
+  const protocol = endpoint.protocol || "https:";
+  const canonicalUri = input.forcePathStyle
+    ? `/${encodeURIComponent(input.bucket)}/${encodeS3Path(input.objectKey)}`
+    : `/${encodeS3Path(input.objectKey)}`;
+  const { amzDate, dateStamp } = formatAmzDates();
+  const credentialScope = `${dateStamp}/${input.region}/s3/aws4_request`;
+  const queryParams: Record<string, string> = {
+    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+    "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
+    "X-Amz-Credential": `${input.accessKeyId}/${credentialScope}`,
+    "X-Amz-Date": amzDate,
+    "X-Amz-Expires": String(input.expiresSeconds),
+    "X-Amz-SignedHeaders": "host",
+  };
+  const canonicalQuery = Object.entries(queryParams)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${awsEncode(key)}=${awsEncode(value)}`)
+    .join("&");
+  const canonicalHeaders = `host:${host}\n`;
+  const canonicalRequest = [
+    "GET",
+    canonicalUri,
+    canonicalQuery,
+    canonicalHeaders,
+    "host",
+    "UNSIGNED-PAYLOAD",
+  ].join("\n");
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    await sha256Hex(canonicalRequest),
+  ].join("\n");
+  const signingKey = await getSigningKey(input.secretAccessKey, dateStamp, input.region);
+  const signature = bytesToHex(await hmacSha256(signingKey, stringToSign));
+  return `${protocol}//${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+};
+
+const fetchApprovedHlsUrl = async (url: string, headers: HeadersInit = {}) => {
+  const response = await fetch(url, { headers });
+  if (response.ok) return { response };
+
+  await response.body?.cancel().catch(() => undefined);
+  const configuredOutput = objectKeyFromConfiguredOutputUrl(url);
+  if (!configuredOutput) return { response };
+
+  let fallbackResponse: Response | null = null;
+  for (const forcePathStyle of [false, true]) {
+    const signedUrl = await createPresignedS3GetUrl({
+      ...configuredOutput.outputConfig,
+      expiresSeconds: 60,
+      forcePathStyle,
+      objectKey: configuredOutput.objectKey,
+    });
+    fallbackResponse = await fetch(signedUrl, { headers });
+    if (fallbackResponse.ok) return { response: fallbackResponse };
+    await fallbackResponse.body?.cancel().catch(() => undefined);
+  }
+
+  return { response: fallbackResponse ?? response };
+};
+
 const createAdminClient = () => {
   const supabaseUrl = readRequiredEnv("SUPABASE_URL");
   const serviceRoleKey = readOptionalEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -961,11 +1155,12 @@ const handlePlaylistFetch = async (req: Request, adminClient: SupabaseClientLike
     });
   }
 
-  const response = await fetch(sourceUrl, {
+  const playlistFetch = await fetchApprovedHlsUrl(sourceUrl, {
     headers: {
       Accept: "application/vnd.apple.mpegurl, application/x-mpegURL, text/plain",
     },
   });
+  const response = playlistFetch.response;
   if (!response.ok) {
     return jsonResponse(502, {
       ...baseState(
@@ -1019,7 +1214,8 @@ const handleSegmentFetch = async (
     });
   }
 
-  const upstream = await fetch(targetUrl);
+  const segmentFetch = await fetchApprovedHlsUrl(targetUrl);
+  const upstream = segmentFetch.response;
   if (!upstream.ok || !upstream.body) {
     return jsonResponse(502, {
       error: "segment_fetch_failed",
