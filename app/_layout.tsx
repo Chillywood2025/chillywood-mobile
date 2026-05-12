@@ -22,6 +22,7 @@ import { bootstrapFirebaseRemoteConfig, getRemoteConfigBoolean } from "../_lib/f
 import { bootstrapLiveKitFoundation } from "../_lib/livekit/bootstrap";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
+import { configureNotificationRuntime, subscribeToNotificationResponses } from "../_lib/notifications";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { SessionProvider, useSession } from "../_lib/session";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
@@ -43,10 +44,21 @@ const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEG
 function RouteAnalyticsBridge() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     trackScreen(pathname, params as Record<string, string>);
   }, [params, pathname]);
+
+  useEffect(() => {
+    void configureNotificationRuntime();
+    const subscription = subscribeToNotificationResponses((path) => {
+      router.push(path as Parameters<typeof router.push>[0]);
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [router]);
 
   return null;
 }

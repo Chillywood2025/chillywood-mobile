@@ -1,5 +1,12 @@
 import type { Json, Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import * as Application from "expo-application";
+import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
+
 import {
   buildCreatorEventSummary,
   CREATOR_EVENTS_TABLE,
@@ -95,6 +102,7 @@ export type NotificationTargetRoute =
   | "/watch-party"
   | "/watch-party/[partyId]"
   | "/watch-party/live-stage/[partyId]"
+  | "/spectate/[itemId]"
   | "/title/[id]"
   | "/player/[id]"
   | "/admin";
@@ -111,12 +119,16 @@ export type NotificationRecord = {
   id: string;
   userId: string;
   category: NotificationCategory;
+  notificationType: string;
   title: string;
   body: string | null;
+  deepLink: string | null;
+  status: string;
   target: NormalizedNotificationTarget;
   readAt: string | null;
   dismissedAt: string | null;
   createdAt: string;
+  deliveredAt: string | null;
   isRead: boolean;
   isDismissed: boolean;
 };
@@ -185,6 +197,9 @@ type EventReminderRow = Tables<"event_reminders">;
 type EventReminderInsert = TablesInsert<"event_reminders">;
 type EventReminderUpdate = TablesUpdate<"event_reminders">;
 type CreatorEventRow = Tables<"creator_events">;
+type NotificationPreferenceRow = Tables<"notification_preferences">;
+type NotificationPreferenceInsert = TablesInsert<"notification_preferences">;
+type NotificationPreferenceUpdate = TablesUpdate<"notification_preferences">;
 
 const CREATOR_EVENT_NOTIFICATION_SELECT =
   "id,host_user_id,event_title,event_type,status,starts_at,ends_at,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
@@ -228,6 +243,7 @@ const normalizeTargetRoute = (value: unknown): NotificationTargetRoute | "unknow
     || normalized === "/watch-party"
     || normalized === "/watch-party/[partyId]"
     || normalized === "/watch-party/live-stage/[partyId]"
+    || normalized === "/spectate/[itemId]"
     || normalized === "/title/[id]"
     || normalized === "/player/[id]"
     || normalized === "/admin"
@@ -273,12 +289,16 @@ const parseNotificationRow = (row: NotificationRow | null): NotificationRecord |
     id,
     userId,
     category: normalizeNotificationCategory(row.category),
+    notificationType: normalizeText(row.notification_type) || normalizeNotificationCategory(row.category),
     title,
     body: normalizeText(row.body) || null,
+    deepLink: normalizeText(row.deep_link) || null,
+    status: normalizeText(row.status) || "pending",
     target,
     readAt,
     dismissedAt,
     createdAt: normalizeIsoTimestamp(row.created_at) ?? new Date().toISOString(),
+    deliveredAt: normalizeIsoTimestamp(row.delivered_at),
     isRead: !!readAt,
     isDismissed: !!dismissedAt,
   };
@@ -557,7 +577,7 @@ export async function markNotificationRead(
     });
   }
 
-  const payload: NotificationUpdate = { read_at: new Date().toISOString() };
+  const payload: NotificationUpdate = { read_at: new Date().toISOString(), status: "read" };
   const { error } = await supabase
     .from(NOTIFICATIONS_TABLE)
     .update(payload)
@@ -635,7 +655,7 @@ export async function dismissNotification(
     });
   }
 
-  const payload: NotificationUpdate = { dismissed_at: new Date().toISOString() };
+  const payload: NotificationUpdate = { dismissed_at: new Date().toISOString(), status: "dismissed" };
   const { error } = await supabase
     .from(NOTIFICATIONS_TABLE)
     .update(payload)
@@ -868,5 +888,365 @@ export async function readPublicEventReminderSummaries(
       event,
       enrollment: buildReminderEnrollment(event.id, viewerUserId, event, reminderRow),
     };
+  });
+}
+
+export type NotificationPreferenceSettings = {
+  followedCreatorLiveEnabled: boolean;
+  circleFriendLiveEnabled: boolean;
+  eventStartsSoonEnabled: boolean;
+  publicUploadEnabled: boolean;
+  replayLaterEnabled: boolean;
+  pushEnabled: boolean;
+  inAppEnabled: boolean;
+  updatedAt: string | null;
+};
+
+export type NotificationPreferencePatch = Partial<Omit<NotificationPreferenceSettings, "updatedAt">>;
+
+export type PushPermissionState =
+  | "unsupported"
+  | "undetermined"
+  | "granted"
+  | "denied"
+  | "error";
+
+export type PushRegistrationState = {
+  status: "unsupported" | "not_registered" | "registered" | "denied" | "blocked" | "error";
+  permissionState: PushPermissionState;
+  provider: "expo";
+  tokenFingerprint: string | null;
+  message: string;
+};
+
+const NOTIFICATION_INSTALL_ID_STORAGE_KEY = "chillywood.notification.install_id.v1";
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
+  circleFriendLiveEnabled: true,
+  eventStartsSoonEnabled: true,
+  followedCreatorLiveEnabled: true,
+  inAppEnabled: true,
+  publicUploadEnabled: true,
+  pushEnabled: true,
+  replayLaterEnabled: true,
+  updatedAt: null,
+};
+
+const buildClientId = () =>
+  "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const rand = Math.floor(Math.random() * 16);
+    const next = char === "x" ? rand : (rand & 0x3) | 0x8;
+    return next.toString(16);
+  });
+
+const getNotificationInstallId = async () => {
+  const existing = await AsyncStorage.getItem(NOTIFICATION_INSTALL_ID_STORAGE_KEY);
+  if (existing) return existing;
+  const next = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : buildClientId();
+  await AsyncStorage.setItem(NOTIFICATION_INSTALL_ID_STORAGE_KEY, next);
+  return next;
+};
+
+const parsePreferenceRow = (row: NotificationPreferenceRow | null): NotificationPreferenceSettings => {
+  if (!row) return DEFAULT_NOTIFICATION_PREFERENCES;
+  return {
+    circleFriendLiveEnabled: row.circle_friend_live_enabled !== false,
+    eventStartsSoonEnabled: row.event_starts_soon_enabled !== false,
+    followedCreatorLiveEnabled: row.followed_creator_live_enabled !== false,
+    inAppEnabled: row.in_app_enabled !== false,
+    publicUploadEnabled: row.public_upload_enabled !== false,
+    pushEnabled: row.push_enabled !== false,
+    replayLaterEnabled: row.replay_later_enabled !== false,
+    updatedAt: normalizeIsoTimestamp(row.updated_at),
+  };
+};
+
+const buildPreferenceUpdate = (patch: NotificationPreferencePatch): NotificationPreferenceUpdate => {
+  const update: NotificationPreferenceUpdate = {};
+  if (typeof patch.followedCreatorLiveEnabled === "boolean") {
+    update.followed_creator_live_enabled = patch.followedCreatorLiveEnabled;
+  }
+  if (typeof patch.circleFriendLiveEnabled === "boolean") {
+    update.circle_friend_live_enabled = patch.circleFriendLiveEnabled;
+  }
+  if (typeof patch.eventStartsSoonEnabled === "boolean") {
+    update.event_starts_soon_enabled = patch.eventStartsSoonEnabled;
+  }
+  if (typeof patch.publicUploadEnabled === "boolean") {
+    update.public_upload_enabled = patch.publicUploadEnabled;
+  }
+  if (typeof patch.replayLaterEnabled === "boolean") {
+    update.replay_later_enabled = patch.replayLaterEnabled;
+  }
+  if (typeof patch.pushEnabled === "boolean") {
+    update.push_enabled = patch.pushEnabled;
+  }
+  if (typeof patch.inAppEnabled === "boolean") {
+    update.in_app_enabled = patch.inAppEnabled;
+  }
+  return update;
+};
+
+export async function readNotificationPreferences(userId?: string): Promise<NotificationPreferenceSettings> {
+  const viewerUserId = await readSessionUserId(userId);
+  if (!viewerUserId) return DEFAULT_NOTIFICATION_PREFERENCES;
+
+  const { data, error } = await supabase
+    .from("notification_preferences")
+    .select("*")
+    .eq("user_id", viewerUserId)
+    .returns<NotificationPreferenceRow>()
+    .maybeSingle();
+
+  if (!error && data) return parsePreferenceRow(data);
+
+  const insert: NotificationPreferenceInsert = { user_id: viewerUserId };
+  const { data: created } = await supabase
+    .from("notification_preferences")
+    .insert(insert)
+    .select("*")
+    .returns<NotificationPreferenceRow>()
+    .maybeSingle();
+
+  return parsePreferenceRow(created ?? null);
+}
+
+export async function updateNotificationPreferences(
+  patch: NotificationPreferencePatch,
+  userId?: string,
+): Promise<NotificationPreferenceSettings> {
+  const viewerUserId = await readSessionUserId(userId);
+  if (!viewerUserId) throw new Error("Notification preferences require a signed-in user.");
+
+  const update = buildPreferenceUpdate(patch);
+  const { data, error } = await supabase
+    .from("notification_preferences")
+    .upsert({ ...update, user_id: viewerUserId }, { onConflict: "user_id" })
+    .select("*")
+    .returns<NotificationPreferenceRow>()
+    .maybeSingle();
+
+  if (error || !data) throw new Error("Unable to update notification preferences.");
+  return parsePreferenceRow(data);
+}
+
+export async function readPushPermissionState(): Promise<PushPermissionState> {
+  if (Platform.OS === "web") return "unsupported";
+  if (!Device.isDevice) return "unsupported";
+
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted) return "granted";
+    if (current.canAskAgain) return "undetermined";
+    return "denied";
+  } catch {
+    return "error";
+  }
+}
+
+const readExpoProjectId = () => {
+  const constants = Constants as typeof Constants & {
+    easConfig?: { projectId?: string };
+  };
+  return normalizeText(constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId);
+};
+
+export async function configureNotificationRuntime() {
+  if (Platform.OS === "web") return;
+
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      importance: Notifications.AndroidImportance.HIGH,
+      name: "Chi'llywood activity",
+      vibrationPattern: [0, 250, 250, 250],
+    });
+  }
+}
+
+async function registerPushTokenWithBackend(input: {
+  permissionStatus: PushPermissionState;
+  token: string;
+}): Promise<PushRegistrationState> {
+  const installId = await getNotificationInstallId();
+  const { data, error } = await supabase.functions.invoke("notification-device-tokens", {
+    body: {
+      action: "register",
+      appVersion: Application.nativeApplicationVersion,
+      buildVersion: Application.nativeBuildVersion,
+      installId,
+      metadata: {
+        deviceName: Device.deviceName ?? null,
+        modelName: Device.modelName ?? null,
+        osName: Device.osName ?? null,
+        osVersion: Device.osVersion ?? null,
+      },
+      permissionStatus: input.permissionStatus,
+      platform: Platform.OS,
+      provider: "expo",
+      token: input.token,
+    },
+  });
+
+  if (error) {
+    return {
+      message: "Unable to register this device for notifications.",
+      permissionState: input.permissionStatus,
+      provider: "expo",
+      status: "error",
+      tokenFingerprint: null,
+    };
+  }
+
+  const tokenFingerprint = normalizeText((data as { tokenFingerprint?: unknown } | null)?.tokenFingerprint) || null;
+  return {
+    message: "This Android device is registered for Chi'llywood notifications.",
+    permissionState: input.permissionStatus,
+    provider: "expo",
+    status: "registered",
+    tokenFingerprint,
+  };
+}
+
+export async function requestAndroidPushPermissionAndRegister(): Promise<PushRegistrationState> {
+  if (Platform.OS === "web" || !Device.isDevice) {
+    return {
+      message: "Push notifications require a physical mobile device.",
+      permissionState: "unsupported",
+      provider: "expo",
+      status: "unsupported",
+      tokenFingerprint: null,
+    };
+  }
+
+  if (Platform.OS !== "android") {
+    return {
+      message: "Android notifications are production-ready now. iOS/APNs remains later.",
+      permissionState: "unsupported",
+      provider: "expo",
+      status: "unsupported",
+      tokenFingerprint: null,
+    };
+  }
+
+  await configureNotificationRuntime();
+  const current = await Notifications.getPermissionsAsync();
+  const finalPermission = current.granted ? current : await Notifications.requestPermissionsAsync();
+
+  if (!finalPermission.granted) {
+    return {
+      message: "Notifications are off for this device. Chi'llywood still works; enable notifications in Android settings when you want alerts.",
+      permissionState: finalPermission.canAskAgain ? "undetermined" : "denied",
+      provider: "expo",
+      status: "denied",
+      tokenFingerprint: null,
+    };
+  }
+
+  const projectId = readExpoProjectId();
+  if (!projectId) {
+    return {
+      message: "Expo project id is missing from this build, so push token registration cannot complete.",
+      permissionState: "granted",
+      provider: "expo",
+      status: "blocked",
+      tokenFingerprint: null,
+    };
+  }
+
+  try {
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    const rawToken = normalizeText(token.data);
+    if (!rawToken) throw new Error("Expo returned an empty push token.");
+    return registerPushTokenWithBackend({ permissionStatus: "granted", token: rawToken });
+  } catch {
+    return {
+      message: "Unable to get a production push token for this Android build.",
+      permissionState: "granted",
+      provider: "expo",
+      status: "error",
+      tokenFingerprint: null,
+    };
+  }
+}
+
+export async function revokeCurrentPushInstall(): Promise<PushRegistrationState> {
+  if (Platform.OS === "web") {
+    return {
+      message: "Push notifications are not supported on web.",
+      permissionState: "unsupported",
+      provider: "expo",
+      status: "unsupported",
+      tokenFingerprint: null,
+    };
+  }
+
+  const installId = await getNotificationInstallId();
+  const { error } = await supabase.functions.invoke("notification-device-tokens", {
+    body: {
+      action: "revoke",
+      installId,
+      platform: Platform.OS,
+      provider: "expo",
+    },
+  });
+
+  if (error) {
+    return {
+      message: "Unable to turn off this device registration right now.",
+      permissionState: await readPushPermissionState(),
+      provider: "expo",
+      status: "error",
+      tokenFingerprint: null,
+    };
+  }
+
+  return {
+    message: "This device will no longer receive Chi'llywood push notifications.",
+    permissionState: await readPushPermissionState(),
+    provider: "expo",
+    status: "not_registered",
+    tokenFingerprint: null,
+  };
+}
+
+const normalizeNotificationPath = (value: unknown) => {
+  const raw = normalizeText(value);
+  if (!raw) return null;
+  const path = raw.startsWith("chillywoodmobile://")
+    ? raw.replace(/^chillywoodmobile:\/\//u, "/")
+    : raw;
+  if (
+    path === "/chat"
+    || path === "/settings"
+    || path === "/subscribe"
+    || path.startsWith("/spectate/")
+    || path.startsWith("/channel/")
+    || path.startsWith("/profile/")
+    || path.startsWith("/player/")
+    || path.startsWith("/watch-party/")
+    || path.startsWith("/chat/")
+  ) {
+    return path;
+  }
+  return null;
+};
+
+export function subscribeToNotificationResponses(onPath: (path: string) => void) {
+  return Notifications.addNotificationResponseReceivedListener((response) => {
+    const data = response.notification.request.content.data as Record<string, unknown>;
+    const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
+    if (path) onPath(path);
   });
 }

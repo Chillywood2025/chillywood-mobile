@@ -2721,44 +2721,214 @@ export type Database = {
           },
         ]
       }
+      notification_delivery_attempts: {
+        Row: {
+          attempt_number: number
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          notification_id: string | null
+          provider: string
+          provider_message_id: string | null
+          push_token_id: string | null
+          recipient_user_id: string
+          status: string
+        }
+        Insert: {
+          attempt_number?: number
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          notification_id?: string | null
+          provider: string
+          provider_message_id?: string | null
+          push_token_id?: string | null
+          recipient_user_id: string
+          status: string
+        }
+        Update: {
+          attempt_number?: number
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          notification_id?: string | null
+          provider?: string
+          provider_message_id?: string | null
+          push_token_id?: string | null
+          recipient_user_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_delivery_attempts_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_delivery_attempts_push_token_id_fkey"
+            columns: ["push_token_id"]
+            isOneToOne: false
+            referencedRelation: "user_push_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_event_dedupes: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          notification_id: string | null
+          recipient_user_id: string
+          source_id: string
+          source_type: string
+          timing_key: string
+          trigger_type: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          notification_id?: string | null
+          recipient_user_id: string
+          source_id: string
+          source_type: string
+          timing_key?: string
+          trigger_type: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          notification_id?: string | null
+          recipient_user_id?: string
+          source_id?: string
+          source_type?: string
+          timing_key?: string
+          trigger_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_event_dedupes_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          circle_friend_live_enabled: boolean
+          created_at: string
+          event_starts_soon_enabled: boolean
+          followed_creator_live_enabled: boolean
+          in_app_enabled: boolean
+          public_upload_enabled: boolean
+          push_enabled: boolean
+          replay_later_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          circle_friend_live_enabled?: boolean
+          created_at?: string
+          event_starts_soon_enabled?: boolean
+          followed_creator_live_enabled?: boolean
+          in_app_enabled?: boolean
+          public_upload_enabled?: boolean
+          push_enabled?: boolean
+          replay_later_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          circle_friend_live_enabled?: boolean
+          created_at?: string
+          event_starts_soon_enabled?: boolean
+          followed_creator_live_enabled?: boolean
+          in_app_enabled?: boolean
+          public_upload_enabled?: boolean
+          push_enabled?: boolean
+          replay_later_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
+          actor_user_id: string | null
+          blocked_reason: string | null
           body: string | null
           category: string
           created_at: string
+          deep_link: string | null
+          delivered_at: string | null
           dismissed_at: string | null
+          eligibility_reason: string | null
           id: string
+          notification_type: string
+          priority: number
           read_at: string | null
+          source_id: string | null
+          source_type: string | null
+          status: string
           target_context: Json
           target_entity_id: string | null
           target_route: string
           title: string
+          updated_at: string
           user_id: string
         }
         Insert: {
+          actor_user_id?: string | null
+          blocked_reason?: string | null
           body?: string | null
           category: string
           created_at?: string
+          deep_link?: string | null
+          delivered_at?: string | null
           dismissed_at?: string | null
+          eligibility_reason?: string | null
           id?: string
+          notification_type: string
+          priority?: number
           read_at?: string | null
+          source_id?: string | null
+          source_type?: string | null
+          status?: string
           target_context?: Json
           target_entity_id?: string | null
           target_route: string
           title: string
+          updated_at?: string
           user_id: string
         }
         Update: {
+          actor_user_id?: string | null
+          blocked_reason?: string | null
           body?: string | null
           category?: string
           created_at?: string
+          deep_link?: string | null
+          delivered_at?: string | null
           dismissed_at?: string | null
+          eligibility_reason?: string | null
           id?: string
+          notification_type?: string
+          priority?: number
           read_at?: string | null
+          source_id?: string | null
+          source_type?: string | null
+          status?: string
           target_context?: Json
           target_entity_id?: string | null
           target_route?: string
           title?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -3656,6 +3826,80 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      spectator_hls_playback_records: {
+        Row: {
+          access_type: string
+          broadcast_session_id: string
+          channel_user_id: string | null
+          created_at: string
+          creator_event_id: string | null
+          host_user_id: string | null
+          id: string
+          is_publicly_watchable: boolean
+          is_spectator_playback_enabled: boolean
+          metadata: Json
+          playback_status: string
+          playlist_path: string | null
+          requires_premium: boolean
+          requires_ticket: boolean
+          rights_status: string
+          source_room_id: string
+          updated_at: string
+          visibility: string
+          watch_party_room_id: string | null
+        }
+        Insert: {
+          access_type?: string
+          broadcast_session_id: string
+          channel_user_id?: string | null
+          created_at?: string
+          creator_event_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          is_publicly_watchable?: boolean
+          is_spectator_playback_enabled?: boolean
+          metadata?: Json
+          playback_status?: string
+          playlist_path?: string | null
+          requires_premium?: boolean
+          requires_ticket?: boolean
+          rights_status?: string
+          source_room_id: string
+          updated_at?: string
+          visibility?: string
+          watch_party_room_id?: string | null
+        }
+        Update: {
+          access_type?: string
+          broadcast_session_id?: string
+          channel_user_id?: string | null
+          created_at?: string
+          creator_event_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          is_publicly_watchable?: boolean
+          is_spectator_playback_enabled?: boolean
+          metadata?: Json
+          playback_status?: string
+          playlist_path?: string | null
+          requires_premium?: boolean
+          requires_ticket?: boolean
+          rights_status?: string
+          source_room_id?: string
+          updated_at?: string
+          visibility?: string
+          watch_party_room_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spectator_hls_playback_records_broadcast_session_id_fkey"
+            columns: ["broadcast_session_id"]
+            isOneToOne: true
+            referencedRelation: "room_broadcast_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sponsor_brand_records: {
         Row: {
@@ -4640,6 +4884,66 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string
+        }
+        Relationships: []
+      }
+      user_push_tokens: {
+        Row: {
+          app_version: string | null
+          build_version: string | null
+          created_at: string
+          device_id: string | null
+          enabled: boolean
+          id: string
+          install_id: string | null
+          last_seen_at: string
+          metadata: Json
+          platform: string
+          provider: string
+          revoked_at: string | null
+          token: string
+          token_fingerprint: string
+          token_hash: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          build_version?: string | null
+          created_at?: string
+          device_id?: string | null
+          enabled?: boolean
+          id?: string
+          install_id?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          platform: string
+          provider: string
+          revoked_at?: string | null
+          token: string
+          token_fingerprint: string
+          token_hash: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          build_version?: string | null
+          created_at?: string
+          device_id?: string | null
+          enabled?: boolean
+          id?: string
+          install_id?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          platform?: string
+          provider?: string
+          revoked_at?: string | null
+          token?: string
+          token_fingerprint?: string
+          token_hash?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

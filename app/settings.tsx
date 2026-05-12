@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ActivityIndicator, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
@@ -9,6 +9,20 @@ import {
   readMonetizationSnapshot,
   subscribeToMonetizationSnapshot,
 } from "../_lib/monetization";
+import {
+  dismissNotification,
+  markNotificationRead,
+  readNotificationList,
+  readNotificationPreferences,
+  readPushPermissionState,
+  requestAndroidPushPermissionAndRegister,
+  revokeCurrentPushInstall,
+  updateNotificationPreferences,
+  type NotificationPreferencePatch,
+  type NotificationPreferenceSettings,
+  type NotificationRecord,
+  type PushRegistrationState,
+} from "../_lib/notifications";
 import {
   getProfileVisibilityLabel,
   PROFILE_VISIBILITY_OPTIONS,
@@ -30,6 +44,11 @@ export default function SettingsScreen() {
   const [profileVisibilityLoading, setProfileVisibilityLoading] = useState(false);
   const [profileVisibilitySaving, setProfileVisibilitySaving] = useState<ProfileVisibility | null>(null);
   const [profileVisibilityNotice, setProfileVisibilityNotice] = useState<string | null>(null);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferenceSettings | null>(null);
+  const [notificationActivity, setNotificationActivity] = useState<NotificationRecord[]>([]);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
+  const [pushRegistration, setPushRegistration] = useState<PushRegistrationState | null>(null);
   const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
 
   useEffect(() => {
@@ -82,6 +101,88 @@ export default function SettingsScreen() {
       active = false;
     };
   }, [isLoading, isSignedIn]);
+
+  const refreshNotifications = useCallback(async () => {
+    if (!isSignedIn) return;
+    setNotificationLoading(true);
+    try {
+      const [preferences, activity, permissionState] = await Promise.all([
+        readNotificationPreferences(),
+        readNotificationList(undefined, 8),
+        readPushPermissionState(),
+      ]);
+      setNotificationPreferences(preferences);
+      setNotificationActivity(activity);
+      setPushRegistration((current) => current ?? {
+        message: permissionState === "granted"
+          ? "Notifications are allowed on this Android device. Register this device to receive push alerts."
+          : permissionState === "denied"
+            ? "Notifications are off for this device. You can still use Chi'llywood normally."
+            : "Register this Android device when you want live, upload, event, and replay alerts.",
+        permissionState,
+        provider: "expo",
+        status: permissionState === "denied" ? "denied" : "not_registered",
+        tokenFingerprint: null,
+      });
+    } finally {
+      setNotificationLoading(false);
+    }
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    if (isLoading || !isSignedIn) return;
+    void refreshNotifications();
+  }, [isLoading, isSignedIn, refreshNotifications]);
+
+  const onToggleNotificationPreference = useCallback(async (
+    key: keyof Omit<NotificationPreferenceSettings, "updatedAt">,
+    value: boolean,
+  ) => {
+    if (!notificationPreferences || notificationSavingKey) return;
+
+    setNotificationSavingKey(key);
+    try {
+      const updated = await updateNotificationPreferences({ [key]: value } as NotificationPreferencePatch);
+      setNotificationPreferences(updated);
+      if (key === "pushEnabled" && !value) {
+        const revoked = await revokeCurrentPushInstall();
+        setPushRegistration(revoked);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update notification preferences.";
+      Alert.alert("Notifications", message);
+    } finally {
+      setNotificationSavingKey(null);
+    }
+  }, [notificationPreferences, notificationSavingKey]);
+
+  const onPressRegisterPush = useCallback(async () => {
+    if (notificationSavingKey) return;
+
+    setNotificationSavingKey("push-register");
+    try {
+      const result = await requestAndroidPushPermissionAndRegister();
+      setPushRegistration(result);
+      if (result.status === "registered") {
+        const updated = await updateNotificationPreferences({ pushEnabled: true });
+        setNotificationPreferences(updated);
+      }
+    } finally {
+      setNotificationSavingKey(null);
+    }
+  }, [notificationSavingKey]);
+
+  const onPressNotification = useCallback((notification: NotificationRecord) => {
+    void markNotificationRead(notification.id).then(() => refreshNotifications());
+    const path = notification.deepLink?.replace(/^chillywoodmobile:\/\//u, "/") || "";
+    if (path.startsWith("/")) {
+      router.push(path as Parameters<typeof router.push>[0]);
+    }
+  }, [refreshNotifications, router]);
+
+  const onPressDismissNotification = useCallback((notificationId: string) => {
+    void dismissNotification(notificationId).then(() => refreshNotifications());
+  }, [refreshNotifications]);
 
   const monetizationStatusLabel = useMemo(() => {
     if (!monetizationSnapshot.configuration.shouldConfigure) return "Premium is not enabled on this build";
@@ -337,7 +438,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressChillyCircle}>
-          <Text style={styles.secondaryActionButtonText}>Chi'lly Circle</Text>
+          <Text style={styles.secondaryActionButtonText}>{"Chi'lly Circle"}</Text>
         </TouchableOpacity>
         <View style={styles.identityBlock}>
           <Text style={styles.identityLabel}>Profile privacy</Text>
@@ -391,6 +492,112 @@ export default function SettingsScreen() {
         >
           <Text style={styles.signOutButtonText}>{signingOut ? "Logging out..." : "Log Out"}</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.cardHeaderText}>
+            <Text style={styles.cardKicker}>NOTIFICATIONS</Text>
+            <Text style={styles.secondaryTitle}>Activity and Android alerts</Text>
+          </View>
+          {notificationLoading ? <ActivityIndicator color="#DC143C" size="small" /> : null}
+        </View>
+        <Text style={styles.body}>
+          {"Choose which backed Chi'llywood activity can notify you. Private, blocked, ticketed, protected, or ineligible items stay silent."}
+        </Text>
+
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Android push status</Text>
+          <Text style={styles.identityValue}>{pushRegistration?.message ?? "Register this Android device for production push alerts."}</Text>
+          {pushRegistration?.tokenFingerprint ? (
+            <Text style={styles.statusNote}>Device fingerprint {pushRegistration.tokenFingerprint}</Text>
+          ) : null}
+          <View style={styles.utilityRow}>
+            <TouchableOpacity
+              style={[styles.utilityButton, notificationSavingKey === "push-register" && styles.utilityButtonDisabled]}
+              activeOpacity={0.86}
+              disabled={notificationSavingKey === "push-register"}
+              onPress={() => {
+                void onPressRegisterPush();
+              }}
+            >
+              {notificationSavingKey === "push-register"
+                ? <ActivityIndicator color="#E5ECF8" size="small" />
+                : <Text style={styles.utilityButtonText}>Register Device</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.utilityButton}
+              activeOpacity={0.86}
+              onPress={() => {
+                void refreshNotifications();
+              }}
+            >
+              <Text style={styles.utilityButtonText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {notificationPreferences ? (
+          <View style={styles.preferenceList}>
+            {[
+              ["pushEnabled", "Push alerts", "Allow this device to receive Android push notifications."],
+              ["inAppEnabled", "In-app activity", "Keep recent activity visible in Settings."],
+              ["followedCreatorLiveEnabled", "Followed creators live", "A followed creator starts an eligible public live session."],
+              ["circleFriendLiveEnabled", "Chi'lly Circle live", "A mutual Chi'lly Circle connection starts an eligible public live session."],
+              ["eventStartsSoonEnabled", "Events starting soon", "A saved public event is about 15 minutes away."],
+              ["publicUploadEnabled", "Public uploads", "A followed creator publishes a public rights-safe upload."],
+              ["replayLaterEnabled", "Replay later", "An eligible saved replay becomes available."],
+            ].map(([key, label, description]) => {
+              const preferenceKey = key as keyof Omit<NotificationPreferenceSettings, "updatedAt">;
+              const value = !!notificationPreferences[preferenceKey];
+              return (
+                <View key={key} style={styles.preferenceRow}>
+                  <View style={styles.preferenceTextWrap}>
+                    <Text style={styles.preferenceLabel}>{label}</Text>
+                    <Text style={styles.preferenceDescription}>{description}</Text>
+                  </View>
+                  <Switch
+                    value={value}
+                    disabled={!!notificationSavingKey}
+                    onValueChange={(nextValue) => {
+                      void onToggleNotificationPreference(preferenceKey, nextValue);
+                    }}
+                    thumbColor={value ? "#FFE4EA" : "#A5AEC0"}
+                    trackColor={{ false: "rgba(255,255,255,0.16)", true: "rgba(220,20,60,0.52)" }}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Recent activity</Text>
+          {notificationActivity.length ? notificationActivity.map((notification) => (
+            <View key={notification.id} style={styles.activityRow}>
+              <TouchableOpacity
+                style={styles.activityMain}
+                activeOpacity={0.84}
+                onPress={() => onPressNotification(notification)}
+              >
+                <Text style={styles.activityTitle}>{notification.title}</Text>
+                {notification.body ? <Text style={styles.activityBody}>{notification.body}</Text> : null}
+                <Text style={styles.activityMeta}>
+                  {notification.isRead ? "Read" : "Unread"} · {new Date(notification.createdAt).toLocaleString()}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.activityDismissButton}
+                activeOpacity={0.84}
+                onPress={() => onPressDismissNotification(notification.id)}
+              >
+                <Text style={styles.activityDismissText}>Dismiss</Text>
+              </TouchableOpacity>
+            </View>
+          )) : (
+            <Text style={styles.statusNote}>No backed notification activity yet.</Text>
+          )}
+        </View>
       </View>
 
       <View style={styles.card}>
@@ -533,6 +740,16 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 12,
   },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  cardHeaderText: {
+    flex: 1,
+    gap: 8,
+  },
   cardKicker: {
     color: "#7B7B7B",
     fontSize: 9.5,
@@ -647,6 +864,78 @@ const styles = StyleSheet.create({
   },
   privacyOptionButtonTextActive: {
     color: "#FFE4EA",
+  },
+  preferenceList: {
+    gap: 10,
+  },
+  preferenceRow: {
+    minHeight: 62,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  preferenceTextWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  preferenceLabel: {
+    color: "#F4F7FC",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  preferenceDescription: {
+    color: "#98A4BA",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
+  activityRow: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 10,
+    gap: 10,
+  },
+  activityMain: {
+    gap: 4,
+  },
+  activityTitle: {
+    color: "#F4F7FC",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  activityBody: {
+    color: "#C4CEE2",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  activityMeta: {
+    color: "#7A859A",
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  activityDismissButton: {
+    alignSelf: "flex-start",
+    minHeight: 34,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  activityDismissText: {
+    color: "#EAF0FF",
+    fontSize: 11,
+    fontWeight: "900",
   },
   secondaryActionButton: {
     minHeight: 46,
