@@ -325,6 +325,40 @@ H1B2 does not add first-use enforcement and must not block existing users, admin
 - active branded shells such as login, support, admin, and channel settings should converge on that shared runtime asset path instead of drifting to unrelated imagery
 - room/content owners such as Party Room, Live Room / Live Stage, Player, Profile / Channel, Home rails, Explore, and Chi'lly Chat should keep their own room- or content-specific background treatments unless those owners are intentionally updated together
 
+## Native Room / Screen UI Rule
+Every Chi'llywood room or user-facing screen must be Chi'llywood-native before it can be considered production-complete. Generic React Native demo layouts, Expo starter styling, plain CRUD pages, old admin-panel composition on consumer surfaces, oversized stacked-card piles, debug/test UI, and flat white business dashboards are not acceptable production screens.
+
+New or changed routes must declare and implement:
+- owner system and canonical route owner
+- primary experience
+- top identity/status area
+- middle primary experience area
+- bottom fast-control area when the screen has frequent actions
+- More sheet/action sheet/popover for secondary actions when controls would otherwise clutter the surface
+- panels for read-only/status/supporting information
+- grids only for people/content collections
+- rails/shelves only for discovery/content browsing
+- modular dashboard layout only for owner/admin operating surfaces
+- empty/loading/error/locked states
+- role, permission, privacy, and Premium/entitlement gates
+- safe-area, keyboard, Android navigation, wrapping/truncation, and no-overlap proof
+
+Primary experience ownership is locked:
+- Live Stage / Live Room: people/video primary
+- Party Room / Watch-Party Live: shared content/player primary
+- Player: playback primary
+- Public Channel: creator/channel content primary
+- Profile: person/social identity primary
+- Channel Studio: creator management primary
+- Admin Command Center: platform operations primary
+- Chi'lly Chat: private messages primary
+- Spectator: public-safe metadata/access state primary
+- Home/Explore: discovery/search primary
+
+Visual enforcement must preserve the current dark cinematic background identity, brand colors, gradients, atmospheric media backdrops, and route-level background treatment. Do not change app-wide theme/background assets, route ownership, backend behavior, LiveKit transport, Premium gates, RLS/storage, provider setup, or activation-ready foundation systems as part of UI doctrine enforcement.
+
+Before editing a shared UI component that affects more than one system, report the affected systems and ownership impact. A shared visual polish change must not silently alter another route's behavior, gates, data source, role boundary, or primary experience.
+
 ## Live Stage Toggle Rule
 `Live First / Live Watch-Party` is in-screen Live Room state only.
 

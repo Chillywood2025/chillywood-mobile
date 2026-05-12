@@ -18,6 +18,7 @@ Status key:
 - Do not fake Premium, billing, moderation, Watch-Party, creator upload, audience role, monetization, or notification support.
 - Backend/RLS truth must enforce sensitive behavior. Hidden buttons are not security.
 - Runtime proof must save screenshots/logs under `/tmp` and summarize facts in repo control files.
+- Native room/screen UI is a launch-quality requirement. New or materially changed routes must be Chi'llywood-native, preserve the dark cinematic background identity, declare owner and primary experience, place identity/status at top, primary experience in the middle, fast controls at bottom, secondary controls in More/sheets, and prove no overlap/clipping, role leakage, fake data, route drift, or Premium gate weakening.
 - Profile is personal/social identity; Channel is the public mini streaming platform/network on `/channel/[userId]`; Channel Studio is owner-only on `/channel-studio`; `/channel-settings` remains compatibility.
 - Public Channel must not show owner-only controls to non-owners or drafts/private/unpublished content.
 - Launch is planned as 18+. H1A signup confirmation and H1B2 legal acceptance storage are pushed: signup shows the 18+ copy, requires an active checkbox confirmation before account creation is attempted, preserves legal links plus Sign In handoff, and writes backed age/terms/privacy acceptance after account creation succeeds with an authenticated session. Free users see ads at launch, Premium users see zero ads, and all full Live First, Live Watch-Party, and Watch-Party Live access is Premium.

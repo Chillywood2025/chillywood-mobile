@@ -34,6 +34,7 @@
 - Public V1 Hardening H2 upload/content lifecycle polish in Channel Studio Content, with one clear `Video Upload` form, honest no-file/selected/ready/uploading/succeeded/failed local states, and backed draft/published/media-ready labels
 - Public V1 Hardening H3 security/compliance/moderation hardening: Settings Support entry, Support sponsorship/ad/scam concern copy, and backed Report Sheet category guidance without new schema/actions
 - Public V1 current-build release proof completed on Android current build with core launch surfaces opening and default ads hidden
+- Chi'llywood Native Room / Screen UI doctrine is current Public v1 guardrail: every new or materially changed route must define owner, primary experience, top/middle/bottom/More placement, native mobile safe-area/keyboard/no-overlap proof, empty/loading/error/locked states, role/privacy/Premium gates, and background preservation before it is production-complete. Generic Expo/demo/admin-looking consumer screens, fake data/counts/participants/money, route ownership drift, Premium-gate weakening, and global background/theme changes remain forbidden.
 - moderation basics
 - analytics, error monitoring, and admin visibility
 - layered room participation truth with limited active live seats, scalable participant browsing, and a clear distinction between joined presence and true live-seat media

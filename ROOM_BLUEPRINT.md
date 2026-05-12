@@ -18,6 +18,43 @@ Every major room or room-adjacent surface must answer:
 3. Who can see or control what here?
 4. What AI help belongs here without getting in the way?
 
+Every major room or room-adjacent surface must also answer before code is production-complete:
+1. What is the primary experience?
+2. Which system owns the route and which systems must not be altered?
+3. What belongs at the top, middle, bottom, and More sheet/action sheet?
+4. Which controls are role-aware, permission-aware, privacy-aware, and entitlement-aware?
+5. What are the empty, loading, error, locked, unavailable, and recovery states?
+6. How will Android safe-area, keyboard, navigation-bar, text wrapping, and no-overlap proof be done?
+
+## Native Room Interface Doctrine
+Chi'llywood rooms must feel like a premium modern 2026 social streaming platform: cinematic, native-feeling, touch-friendly, fast to scan, social-first, and minimal but premium. They must not feel like generic Expo starter screens, debug panels, admin dashboards on consumer routes, or random stacked-card forms.
+
+Universal room placement:
+- TOP = identity and status.
+- MIDDLE = primary experience.
+- BOTTOM = fast controls.
+- MORE SHEET = secondary actions.
+- PANELS = status, read-only, and supporting details.
+- GRIDS = people and content collections.
+- RAILS = discovery and browsing.
+- MODULAR DASHBOARD = owner/admin operating surfaces only.
+
+Primary experience map:
+- Live Stage / Live Room: people/video are primary.
+- Party Room / Watch-Party Live: shared content/player is primary.
+- Player: playback is primary.
+- Public Channel: creator/channel content is primary.
+- Profile: person/social identity is primary.
+- Channel Studio: creator management is primary.
+- Admin Command Center: platform operations are primary.
+- Chi'lly Chat: private messages are primary.
+- Spectator page: public-safe metadata/access state is primary.
+- Home and Explore: discovery/search are primary.
+
+Use grid systems, modular layouts, responsive panels, adaptive containers, layered hierarchy, progressive disclosure, floating/docked controls, contextual sheets, status chips, badges, rails, shelves, keyboard-aware composers, and safe-area-aware layouts only where they match the room's purpose. Do not turn every route into a dashboard, every action into a top-bar button, or every content section into a generic card stack.
+
+Finished-room proof must show no clipped text, no controls hidden behind Android navigation, no bottom dock covering player controls or composers, no participant grids covering comments/player, no keyboard-blocked input, no missing empty/loading/error state, no unreachable or ambiguous visible button, no viewer/host/owner/admin role leakage, and no accidental background identity change.
+
 ## Product-Wide Analysis Lenses
 Before a feature or AI behavior belongs in a room, it should be tested against these lenses:
 1. Does it fit the room's purpose?

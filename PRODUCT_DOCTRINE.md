@@ -13,6 +13,27 @@ This file does not replace or reinterpret the locked Chi'lly Chat communication 
 
 If older active docs contain scattered cross-cutting monetization, compliance, product-phase, or profile/channel-platform statements that conflict with this file, this file wins unless a narrower room-specific rule in `ROOM_BLUEPRINT.md` intentionally governs that room.
 
+## Native Product Interface Doctrine
+Chi'llywood's product interface must feel like a premium modern social streaming platform, not a generic React Native demo, Expo starter screen, plain CRUD form, or old admin-panel app.
+
+All current and future user-facing rooms and screens must preserve the existing dark cinematic Chi'llywood background identity: the night/skyline feeling, branded gradients, atmospheric media backdrops, dark premium entertainment mood, and route-level background treatments. Product polish must not replace the app background, brighten the global theme, introduce a new palette, change splash/icon/native identity, or make Chi'llywood look like a generic business dashboard.
+
+Every new or materially changed screen must define its primary experience before implementation:
+- Live Stage / Live Room: people and video are primary.
+- Party Room / Watch-Party Live: shared content/player is primary.
+- Player: playback is primary.
+- Public Channel: creator/channel content is primary.
+- Profile: person/social identity is primary.
+- Channel Studio: creator management is primary.
+- Admin Command Center: platform operations are primary.
+- Chi'lly Chat: private messages are primary.
+- Spectator page: public-safe metadata/access state is primary.
+- Home and Explore: discovery/search are primary.
+
+Use native mobile layout systems intentionally: grid systems for people/content collections, modular layouts for screens with distinct job areas, responsive panels for status/read-only/supporting details, adaptive containers for media and growing content, rails/shelves for discovery browsing, floating or docked action surfaces for frequent controls, and contextual More sheets/action sheets/popovers for secondary actions. Owner/admin surfaces may use modular dashboards; consumer rooms and media surfaces must remain media/social-first rather than admin-like.
+
+Any generated route, room, or screen is incomplete unless it includes role-aware and permission-aware controls, empty/loading/error/locked states, safe-area and keyboard behavior where relevant, touch-friendly controls, no clipped/overlapping text or controls, and a proof plan. UI polish must not add fake data, fake counts, fake participants, fake money, fake messages, fake recommendations, route ownership changes, backend behavior changes, or Premium/role boundary changes.
+
 ## Monetization Core
 - creators can choose whether content is free or paid
 - preset price tiers are preferred over arbitrary pricing
