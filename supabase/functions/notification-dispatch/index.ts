@@ -99,6 +99,7 @@ const JSON_HEADERS = {
 
 const PUBLIC_SAFE_RIGHTS = new Set(["creator_owned", "chillywood_original", "licensed_for_public_stream"]);
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+const ANDROID_NOTIFICATION_CHANNEL_ID = "default";
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -599,6 +600,7 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   for (const token of tokens) {
     const pushResult = await sendExpoPush({
       body: copy.body,
+      channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
       data: {
         notificationId,
         path: input.target.deepLink.replace(/^chillywoodmobile:\/\//u, "/"),

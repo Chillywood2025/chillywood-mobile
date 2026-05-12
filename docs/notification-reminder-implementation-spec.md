@@ -15,7 +15,7 @@ It exists to:
 This spec does not:
 - change route truth
 - create additional studio route families beyond the pushed `/channel-studio`
-- implement push delivery
+- define a second push provider; D9 Android push delivery is implemented through Expo push backed by Firebase FCM V1
 - implement a fake notification center
 - invent background infrastructure that current repo truth does not support
 
@@ -57,7 +57,15 @@ Do not create route proliferation in this chapter.
 
 ### 3.1 Current Doctrine Already Supports
 Current repo doctrine already supports:
+- D9 canonical notification/activity records in `notifications`
+- notification categories for followed creator live, Circle friend live, event starts soon, public upload, and replay later
+- notification preferences in `notification_preferences`
+- Android device token registration/revocation through `notification-device-tokens`
+- server-side Android dispatch through `notification-dispatch`
+- delivery attempt logging in `notification_delivery_attempts`
+- notification event dedupe through `notification_event_dedupes`
 - creator-event reminder-ready truth on `creator_events`
+- reminder enrollment truth through `event_reminders`
 - creator and public event summary reads in `_lib/liveEvents.ts`
 - public reminder-ready surface cues on `/profile/[userId]` and `/channel/[userId]` only where backed and public-safe
 - creator reminder-ready control and summary cues on `/channel-studio` / `/channel-settings` compatibility
@@ -67,14 +75,10 @@ Current repo doctrine already supports:
 
 ### 3.2 Current Doctrine Does Not Yet Support
 Current repo doctrine does not yet support:
-- canonical notification records
-- a notification type/category model
-- read/dismiss notification state outside chat thread membership
-- reminder enrollment per user/event
-- notification deep-link contract
-- notification preferences
-- push token or background delivery infrastructure
-- an in-app notification center
+- iOS/APNs delivery
+- a second push provider path outside the Expo/FCM Android owner
+- creator marketing/broadcast notifications outside the five D9 trigger classes
+- fake notification counts or notification records outside backed D9/chat/moderation truth
 
 ## 4. Canonical Notification / Reminder Categories And Meanings
 
@@ -84,8 +88,8 @@ Meaning:
 - it is event-driven, not inferred from vague presence
 
 Current doctrine:
-- later until canonical notification records exist
-- must eventually map to real live-event truth, not runtime guesswork alone
+- D9 supports followed creator live and Circle friend live through real backed notification records, preferences, delivery attempts, and Android push proof.
+- live notification dispatch must map to public-safe live/discovery truth, not runtime guesswork alone.
 
 ### 4.2 Upcoming Event Reminder
 Meaning:
@@ -93,8 +97,9 @@ Meaning:
 - reminder is tied to real reminder-ready event truth plus real enrollment truth
 
 Current doctrine:
-- reminder-ready event truth exists now
-- reminder enrollment and delivery do not yet exist
+- reminder-ready event truth exists now.
+- reminder enrollment exists through backed `event_reminders`.
+- D9 supports event-starts-soon delivery for eligible users with duplicate-send prevention and Android push proof.
 
 ### 4.3 New Message
 Meaning:
@@ -109,16 +114,16 @@ Meaning:
 - a user gained real access to a creator/channel/content/event surface through a backed access change
 
 Current doctrine:
-- later until notification records exist
-- access truth itself is real today through the access/entitlement layer, but notification records are not
+- access truth itself is real today through the access/entitlement layer.
+- access-granted notification behavior remains later unless a real backed access-change source is scoped into the notification dispatcher.
 
 ### 4.5 Content Dropped
 Meaning:
 - newly available content became public or surfaced for a user
 
 Current doctrine:
-- later until notification records exist
-- content publication truth is real today, but notification records are not
+- content publication truth is real today.
+- D9 supports public-upload notification/activity records and Android push only when the upload/discovery item is public-safe and eligible.
 
 ### 4.6 Reply / Comment
 Meaning:
@@ -133,7 +138,7 @@ Meaning:
 
 Current doctrine:
 - moderation source truth exists today
-- notification records do not yet exist
+- D9 notification records exist, but moderation/admin notice notification behavior remains later unless separately scoped
 - future notices must stay audit-minded and must not be faked from generic error toasts
 
 ### 4.8 Payment / Access Confirmation
@@ -142,7 +147,7 @@ Meaning:
 
 Current doctrine:
 - local action outcomes exist today
-- durable notification records do not yet exist
+- D9 durable notification records exist for the five D9 trigger classes only
 - do not fabricate confirmations beyond the current paywall/access-sheet runtime feedback
 
 ## 5. Exact Surfaces Where Notification / Reminder Truth Must Apply
