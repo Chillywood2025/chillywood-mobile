@@ -254,23 +254,22 @@ Current D7E target:
 - D7E public-safe HLS delivery proof passed on May 12, 2026 using physical Android device `R5CR120QCBF` as a publisher. Android Chrome loaded a local proof page, connected to a private proof LiveKit room, and published two real tracks.
 - The temporary Supabase proof function started LiveKit Egress with Hetzner Object Storage segment output, returned a real Egress id, and kept `fullRoomTokenForSpectators`, `hlsUrlReturned`, `publicPlaybackEnabled`, and `spectatorPlaybackEnabled` false.
 - Outside-LiveKit Hetzner fetch reached `200` for the generated `.m3u8` playlist and the playlist contained a real `#EXTM3U` marker. At least one segment fetched outside LiveKit with `200`, `video/mp2t`, and non-empty bytes.
-- The temporary public base, exact-prefix policy, temporary proof function, nonce secret, local publisher token, proof room, and operator/probe access were cleaned up afterward. `PUBLIC_HLS_BASE_URL` remains unset because app playback is not enabled.
-- Public spectator playback remains blocked until D7F. `/spectate/[itemId]` may show blocked/foundation readout states only.
+- The temporary public base, exact-prefix policy, temporary proof function, nonce secret, local publisher token, proof room, and operator/probe access were cleaned up afterward. `PUBLIC_HLS_BASE_URL` remains unset.
+- D7F is implemented repo-side as a controlled public-safe app/admin/spectator gate. `/spectate/[itemId]` renders watch-only playback only from the `spectator-playback` resolver/proxy when `spectator_hls_playback_records` contains an approved eligible live public-safe record.
 
-D7F activation checklist after D7E proof:
+D7F activation checklist after repo-side integration:
 
 1. Use a dedicated Hetzner Object Storage bucket or a tightly scoped prefix for public HLS output. Do not expose private/source upload media by reusing a broad private bucket path.
 2. Configure the intended public HLS prefix with deliberate public-read delivery or a controlled custom-domain/CDN path. The May 12 D7E proof proved exact-prefix public-read delivery with real Egress playlist/segment output.
-3. Choose the public playback base URL, for example `https://media.chillywoodstream.com/live-hls` or an approved Hetzner bucket/domain path.
-4. Set `PUBLIC_HLS_BASE_URL` as a Supabase Edge Function secret only after the public path is intentionally configured.
-5. Keep S3 access key and secret values server-side only. Do not put them in app config, mobile code, docs, screenshots, logs, or artifacts.
-6. Preserve the May 12 D7E proof as delivery-only truth. Do not rerun D7E unless storage, LiveKit Egress, or delivery domain config changes.
-7. Scope D7F as a separate app/admin/spectator integration lane for eligible public-safe content only.
-8. Ensure D7F reads only backed public-safe HLS state and never mints full LiveKit participant tokens for spectators.
-9. Keep protected, title-rights-blocked, private, invite-only, ticketed, and Premium full-room flows blocked unless separately backed.
-10. Runtime-prove `/spectate/[itemId]` with unavailable, blocked, and available public-safe states before enabling playback.
-11. Keep app/public users from receiving HLS URLs unless D7F intentionally exposes a public-safe playback URL for eligible content.
-12. Keep `PUBLIC_HLS_BASE_URL` unset until the D7F implementation lane intentionally configures the approved public playback base.
+3. Apply/deploy the D7F migration and `spectator-playback` Edge Function before runtime proof. The function must keep `verify_jwt=false` because public state/playlist reads are allowed only after internal eligibility checks; admin publish/sync/disable still require owner/operator bearer auth.
+4. Keep S3 access key and secret values server-side only. Do not put them in app config, mobile code, docs, screenshots, logs, or artifacts.
+5. Preserve the May 12 D7E proof as delivery-only truth. Do not rerun D7E unless storage, LiveKit Egress, or delivery domain config changes.
+6. Use admin/server publish or sync only for a `room_broadcast_sessions` row with an approved real HLS playlist, `d7f_public_safe_approved`, public-free access, rights-safe status, non-ticketed state, and no Premium full-room requirement.
+7. Ensure D7F reads only backed public-safe HLS state and never mints full LiveKit participant tokens for spectators.
+8. Keep protected, title-rights-blocked, private, invite-only, ticketed, and Premium full-room flows blocked unless separately backed.
+9. Runtime-prove `/spectate/[itemId]` with unavailable, blocked, and available public-safe states before calling D7F production-ready.
+10. Keep app/public users on controlled `spectator-playback` URLs; do not show or log raw Hetzner HLS URLs.
+11. Keep `PUBLIC_HLS_BASE_URL` unset unless a future server-only lane explicitly needs it. The current D7F path does not require app clients to know that base.
 
 ## Production Env Checklist
 
@@ -282,7 +281,7 @@ D7F activation checklist after D7E proof:
 | `LIVEKIT_API_KEY` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Supabase Edge Function HLS output | Supabase function secrets only | Names Present / D7E Public Proof Passed |
-| `PUBLIC_HLS_BASE_URL` | Supabase Edge Function public HLS readout | Supabase function secret, pointing only to approved public HLS delivery base | Unset after D7E proof / D7F App Integration Pending |
+| `PUBLIC_HLS_BASE_URL` | Legacy/proof-only public HLS readout | Supabase function secret only if a future server-side lane explicitly needs it | Unset after D7E proof / Not required by current D7F resolver |
 | TURN credentials, if external TURN is used | LiveKit infra | Host secret store only | External Setup Pending |
 | Supabase URL/anon/service role | Token function | Supabase function secrets | External Setup Pending |
 

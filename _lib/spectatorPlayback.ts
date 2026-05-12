@@ -1,6 +1,7 @@
 import type { DiscoveryFeedItem } from "./discoveryFeed";
 import { isFeedItemPubliclyDiscoverable, isPublicSpectatorSafeRightsStatus } from "./discoveryFeed";
 import type { SpectatorAccessDecision } from "./spectatorAccess";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 
 export type SpectatorPlaybackState =
   | "loading"
@@ -23,14 +24,23 @@ export type SpectatorPlaybackReadout = {
   copy: string;
   guardrails: string[];
   canRenderPlayback: boolean;
-  publicHlsUrl: string | null;
+  playbackUrl: string | null;
   fullRoomRequiresPremium: boolean;
   fullRoomRequiresTicket: boolean;
   fullRoomTokenForSpectators: false;
+  rawHlsUrlVisibleToUsers: false;
 };
 
 type PlaybackSourceInput = {
-  provedPublicHlsUrl?: string | null;
+  serverReadout?: ServerSpectatorPlaybackReadout | null;
+};
+
+type ServerSpectatorPlaybackReadout = {
+  canRenderPlayback?: unknown;
+  copy?: unknown;
+  playbackUrl?: unknown;
+  state?: unknown;
+  title?: unknown;
 };
 
 const BLOCKED_GUARDRAILS = [
@@ -49,10 +59,25 @@ const WATCH_ONLY_GUARDRAILS = [
 ];
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const SPECTATOR_PLAYBACK_FUNCTION_URL = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/spectator-playback`;
 
-const isProvedPublicHlsUrl = (value: unknown) => {
+const isControlledPlaybackUrl = (value: unknown) => {
   const normalized = normalizeText(value);
-  return /^https:\/\/[^?#]+\.m3u8(?:[?#].*)?$/i.test(normalized) ? normalized : null;
+  if (!normalized) return null;
+
+  try {
+    const parsed = new URL(normalized);
+    const expectedBase = new URL(SPECTATOR_PLAYBACK_FUNCTION_URL);
+    const expectedPath = `${expectedBase.pathname.replace(/\/+$/g, "")}/records/`;
+    return parsed.protocol === "https:"
+      && parsed.origin === expectedBase.origin
+      && parsed.pathname.startsWith(expectedPath)
+      && parsed.pathname.endsWith("/index.m3u8")
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 const blockedReadout = (
@@ -66,10 +91,11 @@ const blockedReadout = (
   copy,
   guardrails: BLOCKED_GUARDRAILS,
   canRenderPlayback: false,
-  publicHlsUrl: null,
+  playbackUrl: null,
   fullRoomRequiresPremium: decision.requiresPremium,
   fullRoomRequiresTicket: decision.requiresTicket,
   fullRoomTokenForSpectators: false,
+  rawHlsUrlVisibleToUsers: false,
 });
 
 export function resolveSpectatorPlaybackState(
@@ -84,10 +110,11 @@ export function resolveSpectatorPlaybackState(
       copy: "Spectator playback is waiting on backed metadata.",
       guardrails: BLOCKED_GUARDRAILS,
       canRenderPlayback: false,
-      publicHlsUrl: null,
+      playbackUrl: null,
       fullRoomRequiresPremium: true,
       fullRoomRequiresTicket: false,
       fullRoomTokenForSpectators: false,
+      rawHlsUrlVisibleToUsers: false,
     };
   }
 
@@ -153,6 +180,24 @@ export function resolveSpectatorPlaybackState(
     );
   }
 
+  const serverState = normalizeText(source.serverReadout?.state) as SpectatorPlaybackState;
+  const controlledPlaybackUrl = isControlledPlaybackUrl(source.serverReadout?.playbackUrl);
+  if (serverState === "available" && controlledPlaybackUrl && source.serverReadout?.canRenderPlayback === true) {
+    return {
+      state: "available",
+      title: normalizeText(source.serverReadout.title) || "Spectator playback is available.",
+      copy: normalizeText(source.serverReadout.copy)
+        || "This item has a proved public-safe HLS source and remains watch-only for spectators.",
+      guardrails: WATCH_ONLY_GUARDRAILS,
+      canRenderPlayback: true,
+      playbackUrl: controlledPlaybackUrl,
+      fullRoomRequiresPremium: decision.requiresPremium,
+      fullRoomRequiresTicket: decision.requiresTicket,
+      fullRoomTokenForSpectators: false,
+      rawHlsUrlVisibleToUsers: false,
+    };
+  }
+
   if (!item.is_spectator_enabled) {
     return blockedReadout(
       "not_configured",
@@ -166,30 +211,51 @@ export function resolveSpectatorPlaybackState(
     return blockedReadout(
       "waiting_for_egress",
       "Spectator playback is waiting on Egress/HLS proof.",
-      "A real public-safe HLS delivery path must be proved before playback can appear here.",
+      "A public-safe playback record has not been approved for this item yet.",
       decision,
     );
   }
 
-  const publicHlsUrl = isProvedPublicHlsUrl(source.provedPublicHlsUrl);
-  if (!publicHlsUrl) {
-    return blockedReadout(
-      "waiting_for_egress",
-      "Spectator playback is waiting on Egress/HLS proof.",
-      "Playback is marked as intended, but no proved public-safe HLS URL is available to render.",
-      decision,
-    );
+  const serverCopy = normalizeText(source.serverReadout?.copy);
+  return blockedReadout(
+    serverState || "waiting_for_egress",
+    normalizeText(source.serverReadout?.title) || "Spectator playback is waiting on Egress/HLS proof.",
+    serverCopy || "Playback is marked as intended, but no approved controlled playback endpoint is available to render.",
+    decision,
+  );
+}
+
+export async function readSpectatorPlaybackReadout(
+  item: DiscoveryFeedItem,
+  decision: SpectatorAccessDecision,
+): Promise<SpectatorPlaybackReadout> {
+  const baseReadout = resolveSpectatorPlaybackState(item, decision);
+  if (
+    baseReadout.state !== "waiting_for_egress"
+    && baseReadout.state !== "not_configured"
+    && baseReadout.state !== "unavailable"
+  ) {
+    return baseReadout;
   }
 
-  return {
-    state: "available",
-    title: "Spectator playback is available.",
-    copy: "This item has a proved public-safe HLS source and remains watch-only for spectators.",
-    guardrails: WATCH_ONLY_GUARDRAILS,
-    canRenderPlayback: true,
-    publicHlsUrl,
-    fullRoomRequiresPremium: decision.requiresPremium,
-    fullRoomRequiresTicket: decision.requiresTicket,
-    fullRoomTokenForSpectators: false,
-  };
+  try {
+    const response = await fetch(SPECTATOR_PLAYBACK_FUNCTION_URL, {
+      body: JSON.stringify({
+        itemId: item.id,
+        sourceRoomId: item.room_id ?? item.source_id ?? item.event_id ?? item.id,
+      }),
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) return baseReadout;
+
+    const serverReadout = await response.json().catch(() => null) as ServerSpectatorPlaybackReadout | null;
+    return resolveSpectatorPlaybackState(item, decision, { serverReadout });
+  } catch {
+    return baseReadout;
+  }
 }

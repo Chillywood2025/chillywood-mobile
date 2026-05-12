@@ -1,3 +1,4 @@
+import { ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -19,7 +20,11 @@ import {
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
 import { resolveSpectatorAccess, type SpectatorAccessDecision } from "../../_lib/spectatorAccess";
-import { resolveSpectatorPlaybackState, type SpectatorPlaybackReadout } from "../../_lib/spectatorPlayback";
+import {
+  readSpectatorPlaybackReadout,
+  resolveSpectatorPlaybackState,
+  type SpectatorPlaybackReadout,
+} from "../../_lib/spectatorPlayback";
 
 type LoadState = "loading" | "ready" | "unavailable";
 
@@ -71,7 +76,9 @@ export default function SpectatorMetadataScreen() {
       }
 
       const nextDecision = resolveSpectatorAccess(nextItem);
-      const nextPlayback = resolveSpectatorPlaybackState(nextItem, nextDecision);
+      const fallbackPlayback = resolveSpectatorPlaybackState(nextItem, nextDecision);
+      const nextPlayback = await readSpectatorPlaybackReadout(nextItem, nextDecision).catch(() => fallbackPlayback);
+      if (!active) return;
       setItem(nextItem);
       setDecision(nextDecision);
       setPlayback(nextPlayback);
@@ -176,7 +183,7 @@ export default function SpectatorMetadataScreen() {
           </View>
 
           <View style={styles.heroCopy}>
-            <Text style={styles.kicker}>METADATA ONLY</Text>
+            <Text style={styles.kicker}>{playback.canRenderPlayback ? "WATCH ONLY" : "METADATA ONLY"}</Text>
             <Text style={styles.title} numberOfLines={3}>{title}</Text>
             {subtitle ? <Text style={styles.subtitle} numberOfLines={3}>{subtitle}</Text> : null}
             <Text style={styles.meta}>{formatDate(scheduledAt)}</Text>
@@ -192,6 +199,23 @@ export default function SpectatorMetadataScreen() {
             ))}
           </View>
         </View>
+
+        {playback.canRenderPlayback && playback.playbackUrl ? (
+          <View style={styles.playbackCard}>
+            <View style={styles.playbackShell}>
+              <Video
+                source={{ uri: playback.playbackUrl }}
+                style={styles.playbackVideo}
+                resizeMode={ResizeMode.CONTAIN}
+                shouldPlay
+                useNativeControls
+              />
+            </View>
+            <Text style={styles.playbackCaption}>
+              Watch-only spectator playback. Mic, camera, and host controls stay off.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.detailCard}>
           <View style={styles.detailRow}>
@@ -419,6 +443,33 @@ const styles = StyleSheet.create({
   guardrailItem: {
     color: "#F2DCE4",
     fontSize: 12.5,
+    fontWeight: "800",
+  },
+  playbackCard: {
+    marginHorizontal: 18,
+    marginTop: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(126,215,255,0.26)",
+    backgroundColor: "rgba(7,11,18,0.96)",
+    padding: 12,
+    gap: 10,
+  },
+  playbackShell: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    overflow: "hidden",
+    borderRadius: 14,
+    backgroundColor: "#03050A",
+  },
+  playbackVideo: {
+    width: "100%",
+    height: "100%",
+  },
+  playbackCaption: {
+    color: "#AAB5CA",
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: "800",
   },
   detailCard: {

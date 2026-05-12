@@ -54,3 +54,6 @@ verify_jwt = false
 
 [functions.spectator-broadcast-status]
 verify_jwt = false
+
+[functions.spectator-playback]
+verify_jwt = false
