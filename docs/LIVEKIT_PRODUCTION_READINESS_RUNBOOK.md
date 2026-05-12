@@ -250,16 +250,17 @@ Current D7E target:
 - Current proof found S3/Hetzner output secret names present by name/digest only.
 - Bounded May 11 D7E attempts temporarily set proof-only Hetzner `PUBLIC_HLS_BASE_URL` values, created private `D7D_TEST_` rooms on the production LiveKit host, and started/stopped real Egress through the operator-only Supabase function.
 - The safer follow-up applied a proof-prefix-only public-read bucket policy for `d7d-test/<proof>/*` through a temporary operator-only policy function, then used a virtual-hosted public base for that proof only.
-- Outside-LiveKit playlist fetch still returned Hetzner `403` instead of a readable `.m3u8`; no segment fetch was possible.
-- The temporary public base, exact-prefix policy, temporary policy function, proof room, and operator grant were cleaned up afterward.
-- No public/custom HLS domain or prefix has been proved.
+- A May 12 server-side storage probe used a temporary nonce-protected Supabase function to read Hetzner/S3 secrets server-side without returning values. It confirmed default private throwaway objects return `403`, `x-amz-acl: public-read` throwaway objects return `200`, and exact-prefix public-read bucket-policy throwaway objects return `200`.
+- The no-publisher Egress probe started, returned an Egress id, and kept spectator/full-room token exposure false, but signed playlist read returned `404` and public playlist fetch stayed `403`; no real `.m3u8` marker or segment was proved.
+- The temporary public base, exact-prefix policy, temporary policy function, nonce secret, proof room, and operator/probe access were cleaned up afterward.
+- Hetzner object-level/prefix-level public read has been proved for throwaway objects only; real LiveKit Egress HLS output has not been proved public-readable.
 - No real `.m3u8` playlist or segment file has been fetched from outside LiveKit.
 - Public spectator playback remains blocked. `/spectate/[itemId]` may show blocked/foundation readout states only.
 
 Hetzner activation checklist before D7E can pass:
 
 1. Use a dedicated Hetzner Object Storage bucket or a tightly scoped prefix for public HLS output. Do not expose private/source upload media by reusing a broad private bucket path.
-2. Configure the intended public HLS prefix with deliberate public-read delivery or a controlled custom-domain/CDN path. The prior proof-prefix-only bucket policy still returned `403`, so confirm any required Hetzner console public-access setting, object ACL behavior, custom-domain rule, or bucket-level access block before rerunning proof.
+2. Configure the intended public HLS prefix with deliberate public-read delivery or a controlled custom-domain/CDN path. The May 12 storage probe proved object ACL and exact-prefix policy reads on throwaway objects; the next proof must apply that access model to the exact real Egress output prefix after a publisher-backed room writes a playlist and segment.
 3. Choose the public playback base URL, for example `https://media.chillywoodstream.com/live-hls` or an approved Hetzner bucket/domain path.
 4. Set `PUBLIC_HLS_BASE_URL` as a Supabase Edge Function secret only after the public path is intentionally configured.
 5. Keep S3 access key and secret values server-side only. Do not put them in app config, mobile code, docs, screenshots, logs, or artifacts.
