@@ -248,7 +248,10 @@ Current D7E target:
 - Hetzner Object Storage is the active S3-compatible target for this lane.
 - The existing Supabase Edge Function output aliases already accept `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY` as server-side output config names.
 - Current proof found S3/Hetzner output secret names present by name/digest only.
-- A bounded May 11 D7E attempt temporarily set a path-style Hetzner `PUBLIC_HLS_BASE_URL`, created a private `D7D_TEST_` room on the production LiveKit host, started/stopped real Egress through the operator-only Supabase function, then removed `PUBLIC_HLS_BASE_URL` because outside-LiveKit playlist fetch returned Hetzner `403` instead of a readable `.m3u8`.
+- Bounded May 11 D7E attempts temporarily set proof-only Hetzner `PUBLIC_HLS_BASE_URL` values, created private `D7D_TEST_` rooms on the production LiveKit host, and started/stopped real Egress through the operator-only Supabase function.
+- The safer follow-up applied a proof-prefix-only public-read bucket policy for `d7d-test/<proof>/*` through a temporary operator-only policy function, then used a virtual-hosted public base for that proof only.
+- Outside-LiveKit playlist fetch still returned Hetzner `403` instead of a readable `.m3u8`; no segment fetch was possible.
+- The temporary public base, exact-prefix policy, temporary policy function, proof room, and operator grant were cleaned up afterward.
 - No public/custom HLS domain or prefix has been proved.
 - No real `.m3u8` playlist or segment file has been fetched from outside LiveKit.
 - Public spectator playback remains blocked. `/spectate/[itemId]` may show blocked/foundation readout states only.
@@ -256,7 +259,7 @@ Current D7E target:
 Hetzner activation checklist before D7E can pass:
 
 1. Use a dedicated Hetzner Object Storage bucket or a tightly scoped prefix for public HLS output. Do not expose private/source upload media by reusing a broad private bucket path.
-2. Configure the intended public HLS prefix with deliberate public-read delivery or a controlled custom-domain/CDN path.
+2. Configure the intended public HLS prefix with deliberate public-read delivery or a controlled custom-domain/CDN path. The prior proof-prefix-only bucket policy still returned `403`, so confirm any required Hetzner console public-access setting, object ACL behavior, custom-domain rule, or bucket-level access block before rerunning proof.
 3. Choose the public playback base URL, for example `https://media.chillywoodstream.com/live-hls` or an approved Hetzner bucket/domain path.
 4. Set `PUBLIC_HLS_BASE_URL` as a Supabase Edge Function secret only after the public path is intentionally configured.
 5. Keep S3 access key and secret values server-side only. Do not put them in app config, mobile code, docs, screenshots, logs, or artifacts.
@@ -278,7 +281,7 @@ Hetzner activation checklist before D7E can pass:
 | `LIVEKIT_API_KEY` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Supabase Edge Function HLS output | Supabase function secrets only | Names Present / D7E Public Proof Pending |
-| `PUBLIC_HLS_BASE_URL` | Supabase Edge Function public HLS readout | Supabase function secret, pointing only to approved public HLS delivery base | Unset after Hetzner `403` proof / D7E Blocked |
+| `PUBLIC_HLS_BASE_URL` | Supabase Edge Function public HLS readout | Supabase function secret, pointing only to approved public HLS delivery base | Unset after path-style and exact-prefix Hetzner `403` proofs / D7E Blocked |
 | TURN credentials, if external TURN is used | LiveKit infra | Host secret store only | External Setup Pending |
 | Supabase URL/anon/service role | Token function | Supabase function secrets | External Setup Pending |
 
