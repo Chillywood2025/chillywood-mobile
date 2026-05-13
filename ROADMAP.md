@@ -19,6 +19,7 @@
 - standalone player
 - Watch-Party Live core flow
 - Watch-Party Party Room polish is pushed at `e0116d3`: `/watch-party/[partyId]` remains title/player-based and separate from Live Stage, with clearer Party Screen/Party Feeds language, Player/Invite/Report/Leave action dock, confirmed Leave behavior, and no Player-control or Live Stage changes.
+- Watch-Party Live local participant pinning is pushed at `c4b16ca`: `/watch-party/[partyId]` lets each viewer long-press a Party Feeds participant tile, choose inline Pin/Unpin, persist one local pinned participant, and keep that participant first locally without changing Live Stage, Chi'lly Chat calls, Player controls, LiveKit token/join logic, playback sync, room authority, Premium gates, or other users' views.
 - Live Watch-Party / Live Stage core flow
 - Live Stage role/access hardening is pushed: mode switching is host-only, non-host route-param mode mutation is blocked, Live First viewers cannot self-promote into camera/speaker seats, and shared participant-state writes require the authenticated room host
 - all full Live First, Live Watch-Party, and Watch-Party Live access gated by Premium

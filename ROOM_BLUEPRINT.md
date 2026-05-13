@@ -110,6 +110,7 @@ Only use these where they actually fit the room:
 - Live Waiting Room leads into Live Room on `/watch-party/live-stage/[partyId]`.
 - Live Stage is an in-room presentation mode inside Live Room.
 - Party Room owns the social watch-together shell.
+- Party Room may provide viewer-local Party Feeds personalization such as participant pinning, but that personalization must stay inside `/watch-party/[partyId]`, must not alter host authority, room membership, LiveKit transport, shared playback, Premium gates, Live Stage, Chi'lly Chat calls, or other users' views, and must clear safely when the target participant is absent.
 - Watch-Party Live / shared party player owns the synchronized playback layer inside the Party flow.
 - Standalone Player owns solo playback and `Watch-Party Live` entry.
 - Profile / Channel and Chi'lly Chat connect people, titles, rooms, and official presence across the product.

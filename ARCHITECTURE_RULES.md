@@ -129,6 +129,7 @@ These labels are locked and are not runtime-branding experiments.
 - Home controls `Live Watch-Party`
 - Player/title surfaces control `Watch-Party Live`
 - Party Room controls the shared watch-party player and room-native controls
+- Party Room owns Watch-Party Live local participant pinning inside its existing Party Feeds tile area; pinning must remain local-only and must not alter Live Stage, Chi'lly Chat calls, Player controls, LiveKit token/join logic, host/viewer authority, playback sync, Premium gates, or other users' views
 - Live Room controls `Live First` and `Live Watch-Party`
 - `/chat` controls standalone Chi'lly Chat copy and behavior
 - Party Room and Live Room control room-native communication copy and behavior
