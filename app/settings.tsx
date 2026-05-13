@@ -296,7 +296,7 @@ export default function SettingsScreen() {
   }, []);
 
   const openLocalLegalRoute = useCallback((
-    path: "/privacy" | "/terms" | "/account-deletion" | "/community-guidelines" | "/copyright",
+    path: "/privacy" | "/terms" | "/account-deletion" | "/community-guidelines" | "/creator-rules" | "/copyright",
   ) => {
     router.push(path as Parameters<typeof router.push>[0]);
   }, [router]);
@@ -354,6 +354,16 @@ export default function SettingsScreen() {
     });
 
     openLocalLegalRoute("/community-guidelines");
+  }, [openLocalLegalRoute]);
+
+  const onPressCreatorRules = useCallback(() => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "creator_rules",
+      destination: "local",
+    });
+
+    openLocalLegalRoute("/creator-rules");
   }, [openLocalLegalRoute]);
 
   const onPressCopyright = useCallback(() => {
@@ -618,11 +628,14 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCommunityGuidelines}>
             <Text style={styles.utilityButtonText}>Community Guidelines</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyright}>
-            <Text style={styles.utilityButtonText}>Copyright / DMCA</Text>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCreatorRules}>
+            <Text style={styles.utilityButtonText}>Creator Rules</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.utilityRow}>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyright}>
+            <Text style={styles.utilityButtonText}>Copyright / DMCA</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupport}>
             <Text style={styles.utilityButtonText}>Support</Text>
           </TouchableOpacity>

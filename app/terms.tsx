@@ -3,7 +3,7 @@ import React from "react";
 import { LegalList, LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const EFFECTIVE_DATE = "April 11, 2026";
-const LAST_UPDATED = "April 27, 2026";
+const LAST_UPDATED = "May 13, 2026";
 
 export default function TermsOfServicePage() {
   return (
@@ -15,9 +15,9 @@ export default function TermsOfServicePage() {
       <LegalMeta label="Effective Date" value={EFFECTIVE_DATE} />
       <LegalMeta label="Last Updated" value={LAST_UPDATED} />
 
-      <LegalSection title="Legal Review Status">
+      <LegalSection title="About These Terms">
         <LegalParagraph>
-          These Terms are serious draft launch-readiness language for Chi&apos;llywood. They are not final legal advice, are not attorney-approved yet, and do not guarantee any legal outcome. Final wording, governing-law posture, liability language, indemnification, dispute process, and account/content enforcement details require legal review before public launch.
+          These Terms explain the rules for using Chi&apos;llywood. They apply to accounts, Profiles, Channels, uploads, posts, comments, files, links, Watch-Party, Live Stage, Chi&apos;lly Chat, Premium, reporting, copyright, sponsorships, and future creator monetization features when those features are active.
         </LegalParagraph>
       </LegalSection>
 
@@ -96,7 +96,7 @@ export default function TermsOfServicePage() {
           By submitting content through the Service, you grant Chi&apos;llywood a non-exclusive, worldwide, royalty-free license to host, store, reproduce, process, transcode or otherwise process if those technical features are later built, adapt for display or playback, display, perform, stream, distribute within the Service, make available to other users according to your selected visibility settings, and otherwise use that content as reasonably necessary to operate and provide the Service.
         </LegalParagraph>
         <LegalParagraph>
-          This license supports Profile, Channel, creator upload, Player, Watch-Party, Live, Chi&apos;lly Chat, support, moderation, safety, security, integrity, debugging, legal review, and service-improvement functions. Final wording and any country-specific rights language require legal review before launch.
+          This license supports Profile, Channel, creator upload, Player, Watch-Party, Live, Chi&apos;lly Chat, support, moderation, safety, security, integrity, debugging, legal compliance, and service-improvement functions.
         </LegalParagraph>
       </LegalSection>
 
@@ -158,33 +158,27 @@ export default function TermsOfServicePage() {
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="12. Disclaimers Pending Legal Review">
+      <LegalSection title="12. Disclaimers">
         <LegalParagraph>
           THE SERVICE IS PROVIDED “AS IS” AND “AS AVAILABLE.” TO THE MAXIMUM EXTENT PERMITTED BY LAW, CHI&apos;LLYWOOD DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
         </LegalParagraph>
         <LegalParagraph>
           User-generated content is created or provided by users, not by Chi&apos;llywood. To the maximum extent permitted by law, Chi&apos;llywood is not responsible for user-generated content, user conduct, or user communications except as required by applicable law and the moderation, reporting, and legal processes we actually support.
         </LegalParagraph>
-        <LegalParagraph>
-          This section is placeholder legal language pending attorney/legal review before launch.
-        </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="13. Limitation of Liability Pending Legal Review">
+      <LegalSection title="13. Limitation of Liability">
         <LegalParagraph>
           TO THE MAXIMUM EXTENT PERMITTED BY LAW, CHI&apos;LLYWOOD AND ITS AFFILIATES, OFFICERS, DIRECTORS, EMPLOYEES, CONTRACTORS, AND LICENSORS WILL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, GOODWILL, OR OTHER INTANGIBLE LOSSES, ARISING OUT OF OR RELATED TO THE SERVICE OR THESE TERMS.
         </LegalParagraph>
         <LegalParagraph>
-          The liability cap, exclusions, country/state-specific exceptions, and enforceability language require attorney/legal review before public launch.
+          Some jurisdictions do not allow certain limits on liability, so some of the limits above may not apply where prohibited by law.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="14. Indemnification Pending Legal Review">
+      <LegalSection title="14. Indemnification">
         <LegalParagraph>
           To the maximum extent permitted by law, you agree to defend, indemnify, and hold harmless Chi&apos;llywood and its affiliates, officers, directors, employees, contractors, licensors, and service providers from claims, damages, liabilities, losses, costs, and expenses, including reasonable attorneys&apos; fees, arising out of or related to your use of the Service, your content, your violation of these Terms, or your violation of law or the rights of another person.
-        </LegalParagraph>
-        <LegalParagraph>
-          This indemnification language requires attorney/legal review before launch.
         </LegalParagraph>
       </LegalSection>
 
@@ -194,9 +188,9 @@ export default function TermsOfServicePage() {
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="16. Governing Law and Dispute Placeholders">
+      <LegalSection title="16. Disputes">
         <LegalParagraph>
-          Draft governing law, venue, arbitration, class-action waiver, informal resolution, and consumer-law exception language must be reviewed and finalized by an attorney/legal owner before launch. Until then, this page should not be treated as a final dispute-resolution agreement.
+          If a dispute comes up, contact Chi&apos;llywood Support first so the issue can be reviewed. Any governing law, venue, arbitration, class-action waiver, informal resolution, or consumer-law exception terms will be posted or provided where required before they apply.
         </LegalParagraph>
       </LegalSection>
 

@@ -43,6 +43,7 @@ const SUPPORT_CATEGORIES = [
   "Report abuse and safety: creator videos, profiles/channels, rooms, live behavior, chat/message issues, harassment, impersonation, and unsafe content.",
   "Sponsorship, ads, and scam concerns: undisclosed sponsorship, unsafe product promotion, misleading paid placement claims, fake offers, or fraud.",
   "Copyright and DMCA: takedown notices, counter-notice questions, unauthorized media, and creator upload rights concerns.",
+  "Creator rules: Channel identity, upload rights, live conduct, sponsorship disclosure, and monetization eligibility.",
   "Product reliability: playback, Watch-Party, Live Stage, Chi'lly Chat, crash, performance, and confusing route behavior.",
 ];
 
@@ -80,6 +81,10 @@ export function SupportScreen() {
       return "Review the copyright and DMCA contact path for creator-upload rights issues, takedown requests, and counter-notices.";
     }
 
+    if (topic === "creator-rules") {
+      return "Review Chi'llywood's creator rules for Channel identity, uploads, live behavior, monetization eligibility, sponsorship disclosure, and enforcement.";
+    }
+
     if (topic === "privacy") {
       return legalConfig.privacyPolicyUrl
         ? "Open the current Privacy Policy in your browser, or use support if you need help reviewing the latest policy for your account."
@@ -92,27 +97,27 @@ export function SupportScreen() {
         : "Use this support surface if you need the current Terms of Use while the public legal URL is not configured in this build.";
     }
 
-    return "Open the current Privacy Policy, review the Terms of Use, check community and copyright policies, or request account deletion from the same support surface that already owns signed-in feedback and launch help. Final support response timing and legal wording remain pending launch-owner approval.";
+    return "Open the current Privacy Policy, review the Terms of Use, check community, creator, and copyright policies, or request account deletion from the same support surface that already owns signed-in feedback and launch help. Support response timing can vary by issue type, safety priority, and account verification needs.";
   }, [legalConfig.accountDeletionUrl, legalConfig.privacyPolicyUrl, legalConfig.termsOfServiceUrl, topic]);
 
   const legalCardTitle = useMemo(() => {
     if (topic === "account-deletion") return "Account deletion help";
     if (topic === "community-guidelines") return "Community guidelines";
     if (topic === "copyright") return "Copyright and DMCA help";
+    if (topic === "creator-rules") return "Creator rules";
     if (topic === "privacy") return "Privacy help";
     if (topic === "terms") return "Terms help";
     return "Privacy, terms, and account help";
   }, [topic]);
 
-  const primaryLegalAction = topic === "account-deletion"
-    ? "account-deletion"
-    : topic === "community-guidelines"
-      ? "community-guidelines"
-      : topic === "copyright"
-        ? "copyright"
-    : topic === "terms"
-      ? "terms"
-      : "privacy";
+  const primaryLegalAction = useMemo(() => {
+    if (topic === "account-deletion") return "account-deletion";
+    if (topic === "community-guidelines") return "community-guidelines";
+    if (topic === "creator-rules") return "creator-rules";
+    if (topic === "copyright") return "copyright";
+    if (topic === "terms") return "terms";
+    return "privacy";
+  }, [topic]);
 
   const openExternalDestination = async (
     url: string,
@@ -155,6 +160,10 @@ export function SupportScreen() {
 
   const onPressCommunityGuidelines = () => {
     router.push("/community-guidelines" as Parameters<typeof router.push>[0]);
+  };
+
+  const onPressCreatorRules = () => {
+    router.push("/creator-rules" as Parameters<typeof router.push>[0]);
   };
 
   const onPressCopyright = () => {
@@ -358,6 +367,15 @@ export function SupportScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={primaryLegalAction === "creator-rules" ? styles.primaryButton : styles.secondaryButton}
+              activeOpacity={0.86}
+              onPress={onPressCreatorRules}
+            >
+              <Text style={primaryLegalAction === "creator-rules" ? styles.primaryButtonText : styles.secondaryButtonText}>
+                Creator Rules
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={primaryLegalAction === "copyright" ? styles.primaryButton : styles.secondaryButton}
               activeOpacity={0.86}
               onPress={onPressCopyright}
@@ -389,7 +407,7 @@ export function SupportScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Safety and response expectations</Text>
           <Text style={styles.cardBody}>
-            Chi&apos;llywood Support is not an emergency service. If there is immediate danger, contact local emergency services or the appropriate authority first. Public v1 support response timing, escalation ownership, and legal takedown workflows are launch-readiness items pending final owner approval.
+            Chi&apos;llywood Support is not an emergency service. If there is immediate danger, contact local emergency services or the appropriate authority first. Response timing depends on issue type, safety priority, copyright review, and account verification needs.
           </Text>
         </View>
 

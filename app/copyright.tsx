@@ -3,7 +3,7 @@ import React from "react";
 import { LegalList, LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const EFFECTIVE_DATE = "April 26, 2026";
-const LAST_UPDATED = "April 27, 2026";
+const LAST_UPDATED = "May 13, 2026";
 
 export default function CopyrightPage() {
   return (
@@ -15,9 +15,9 @@ export default function CopyrightPage() {
       <LegalMeta label="Effective Date" value={EFFECTIVE_DATE} />
       <LegalMeta label="Last Updated" value={LAST_UPDATED} />
 
-      <LegalSection title="Legal Review Status">
+      <LegalSection title="About This Policy">
         <LegalParagraph>
-          This Copyright and DMCA page is draft launch-readiness language. It is not final legal advice, is not attorney-approved, and does not guarantee DMCA safe-harbor protection. Final notice wording, counter-notice handling, repeat-infringer process, agent/contact details, and record-retention process require attorney/legal approval before public launch.
+          This page explains how Chi&apos;llywood handles creator upload rights, copyright reports, takedown requests, counter-notices, repeat infringement, and DMCA readiness. It is not legal advice and does not guarantee any legal outcome.
         </LegalParagraph>
       </LegalSection>
 
@@ -43,7 +43,7 @@ export default function CopyrightPage() {
 
       <LegalSection title="3. Submitting a Copyright Takedown Notice">
         <LegalParagraph>
-          If you believe content on Chi&apos;llywood infringes your copyright, send a copyright notice to Chi&apos;llywood Support with enough information for review. Final DMCA notice wording and legally required details must be approved before launch.
+          If you believe content on Chi&apos;llywood infringes your copyright, send a copyright notice to Chi&apos;llywood Support with enough information for review.
         </LegalParagraph>
         <LegalList
           items={[
@@ -60,7 +60,7 @@ export default function CopyrightPage() {
 
       <LegalSection title="4. Where to Send Copyright Notices">
         <LegalParagraph>
-          Until a final designated DMCA agent and copyright contact process is approved, copyright notices should be sent to the support contact below. Do not treat this draft page as a final designated-agent record.
+          Formal designated DMCA agent details will be posted when confirmed. Until then, copyright notices should be sent to the support contact below. Chi&apos;llywood does not claim DMCA safe-harbor completion unless the designated agent is publicly posted and registered with the U.S. Copyright Office.
         </LegalParagraph>
         <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
         <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
@@ -93,9 +93,6 @@ export default function CopyrightPage() {
             "Your physical or electronic signature.",
           ]}
         />
-        <LegalParagraph>
-          Final counter-notice requirements, timing, restoration rules, and legal review steps require attorney/legal approval before launch.
-        </LegalParagraph>
       </LegalSection>
 
       <LegalSection title="7. Repeat Infringer Policy">
@@ -103,7 +100,7 @@ export default function CopyrightPage() {
           Chi&apos;llywood may restrict, suspend, or terminate accounts that repeatedly infringe copyrights, repeatedly upload unauthorized media, repeatedly misuse Watch-Party or Live surfaces for unauthorized media, or repeatedly abuse the copyright process.
         </LegalParagraph>
         <LegalParagraph>
-          Repeat-infringer thresholds, appeal handling, account reinstatement, and record-retention rules require attorney/legal approval before public launch.
+          Valid copyright removals may count as strikes. A successful counter-notice, reinstatement, or clear mistake may reduce or remove a strike. Severe, willful, or repeated infringement can lead to immediate loss of upload privileges or account termination.
         </LegalParagraph>
       </LegalSection>
 
@@ -115,7 +112,7 @@ export default function CopyrightPage() {
 
       <LegalSection title="9. DMCA Agent and Safe-Harbor Readiness">
         <LegalParagraph>
-          For formal DMCA safe-harbor readiness, Chi&apos;llywood&apos;s final company process should be reviewed by an attorney and may require registering a designated DMCA agent with the U.S. Copyright Office. This draft page does not guarantee safe-harbor protection.
+          For formal DMCA safe-harbor readiness, Chi&apos;llywood&apos;s designated agent must be publicly posted and registered with the U.S. Copyright Office. This page does not claim that registration is complete.
         </LegalParagraph>
       </LegalSection>
 

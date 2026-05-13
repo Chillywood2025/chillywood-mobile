@@ -36,6 +36,7 @@ const PUBLIC_LEGAL_PATHS = new Set([
   "/terms",
   "/account-deletion",
   "/community-guidelines",
+  "/creator-rules",
   "/copyright",
 ]);
 

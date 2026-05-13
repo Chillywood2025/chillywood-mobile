@@ -3,7 +3,7 @@ import React from "react";
 import { LegalList, LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const EFFECTIVE_DATE = "April 11, 2026";
-const LAST_UPDATED = "April 27, 2026";
+const LAST_UPDATED = "May 13, 2026";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -15,9 +15,9 @@ export default function PrivacyPolicyPage() {
       <LegalMeta label="Effective Date" value={EFFECTIVE_DATE} />
       <LegalMeta label="Last Updated" value={LAST_UPDATED} />
 
-      <LegalSection title="Legal Review Status">
+      <LegalSection title="About This Policy">
         <LegalParagraph>
-          This Privacy Policy is draft launch-readiness language. It is not final legal advice and must be reviewed by an attorney/privacy owner before public launch. Google Play Data Safety answers, public hosted URLs, and SDK/provider disclosures must match the final release build.
+          This Privacy Policy explains how Chi&apos;llywood collects, uses, shares, retains, and protects information when you use the app, public legal pages, support flows, backend services, Premium surfaces, diagnostics, and related services.
         </LegalParagraph>
       </LegalSection>
 
@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection title="2. Eligibility and Minor Safety">
         <LegalParagraph>
-          Chi&apos;llywood is intended only for adults age 18 and older. If you are under 18, you may not use the Service. Final target-audience, age-gating, and store-disclosure language must be approved before public launch.
+          Chi&apos;llywood is intended only for adults age 18 and older. If you are under 18, you may not use the Service.
         </LegalParagraph>
       </LegalSection>
 
@@ -65,7 +65,7 @@ export default function PrivacyPolicyPage() {
             "Camera and microphone permissions are used for Live Stage, live room, or communication features when you choose to use those features.",
             "The file picker is used when you choose a video file for creator upload. Chi'llywood should not claim broad device-library scanning based on current repo truth.",
             "Internet/network access, device/app information, app version, runtime environment, and diagnostics may be processed to operate the app and troubleshoot issues.",
-            "Notifications/reminders may be supported or expanded later. Do not treat push delivery as proved until release proof confirms it.",
+            "Push notification tokens and notification preferences may be processed when notifications are enabled so Chi'llywood can send activity alerts and respect your choices.",
           ]}
         />
       </LegalSection>
@@ -75,7 +75,7 @@ export default function PrivacyPolicyPage() {
           Chi&apos;llywood may collect crash reports, non-fatal errors, performance traces, app startup data, route/event analytics, device/app information, and runtime diagnostics to keep the app stable and improve launch quality.
         </LegalParagraph>
         <LegalParagraph>
-          Firebase Crashlytics, Firebase Performance, Firebase Analytics, or related Firebase services may be used if enabled in the release build. Final Privacy and Google Play Data Safety entries must match the actual SDK configuration used in production.
+          Firebase Crashlytics, Firebase Performance, Firebase Analytics, or related Firebase services may be used if enabled in the release build.
         </LegalParagraph>
       </LegalSection>
 
@@ -123,7 +123,7 @@ export default function PrivacyPolicyPage() {
           ]}
         />
         <LegalParagraph>
-          We do not state here that Chi&apos;llywood sells personal information. Final sale/share/ad-tracking wording requires legal and SDK review before launch.
+          We do not state here that Chi&apos;llywood sells personal information. If future advertising, analytics, or data-sharing practices require additional disclosures, Chi&apos;llywood must update this Policy before relying on those practices.
         </LegalParagraph>
       </LegalSection>
 
@@ -171,7 +171,7 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection title="15. International Processing">
         <LegalParagraph>
-          If Chi&apos;llywood is made available across jurisdictions, information may be processed in countries other than where you live. Those countries may have data protection rules different from your jurisdiction. Final international transfer wording requires legal review.
+          If Chi&apos;llywood is made available across jurisdictions, information may be processed in countries other than where you live. Those countries may have data protection rules different from your jurisdiction.
         </LegalParagraph>
       </LegalSection>
 

@@ -72,7 +72,7 @@ Use current official documentation during actual setup because console requireme
 | Google Play Store listing | `app.json` names the app `Chi'llywood`, version `1.0.0`, Android package `com.chillywood.mobile`, and icons/splash assets under `assets/images`. `eas.json` has a production Android app-bundle profile. `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md` now records draft listing copy, asset gaps, screenshot plan, category guidance, and content-rating prep. | Prepare Play Store app listing, short/full descriptions, screenshots, feature graphic, app category, contact email, privacy policy URL, account deletion URL, content rating, target audience, and tester tracks. | Product owner plus release manager. | Play Console listing checklist passes, internal/closed testing track accepts AAB, policy declarations are accepted. | External Setup Pending | Follow `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`: approve copy, create icon/feature/screenshot assets, fill content rating/target audience, then upload first production-profile AAB to internal testing after release proof. |
 | Google Play Data Safety | Repo has policy pages and support surfaces, but Data Safety answers are a Play Console responsibility. App uses Supabase auth/storage, Firebase, RevenueCat, LiveKit, camera, microphone, and notifications dependencies. The listing/content-rating runbook flags Data Safety consistency issues that must not be contradicted by store copy. | Complete Data Safety with actual data collected/shared, encryption/deletion practices, diagnostics/analytics, account creation/deletion, camera/microphone use, and user-generated content moderation. | Product owner plus privacy/legal reviewer. | Data Safety form is accepted by Play Console and matches app behavior plus third-party SDK use. | External Setup Pending | Use `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` and `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md` to fill the Play Console Data Safety form, then legal/privacy owner must approve it before submission. |
 | Account deletion policy | `app/account-deletion.tsx` exists and `app.config.ts` has fallback hosted URL `https://live.chillywoodstream.com/account-deletion`; Settings links to deletion support. It is an honest request/help flow, not fake automated deletion. The route now includes request status, identity verification, Profile/Channel/upload effects, chat/room/social effects, retained-record categories, subscription caveats, timing placeholders, and backend-runbook requirements. | Confirm public hosted account deletion URL, process owner, response SLA, backend deletion/export policy, and Play Console account deletion declaration. | Product owner plus support/legal owner. | URL is public, opens outside the app, explains delete request flow, and Play Console accepts it. | External Setup Pending | Follow the Lane 2 runbook below and `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`; do not build destructive deletion until the backend retention plan is approved. |
-| Legal pages and support | Expanded routes exist for Privacy, Terms, Community Guidelines, Copyright/DMCA, Support, and account deletion. `app.config.ts` has privacy/terms/account deletion fallbacks, supports `EXPO_PUBLIC_SUPPORT_EMAIL`, and falls back to `support@chillywoodstream.com`. Legal pages now show `support@chillywoodstream.com`. Privacy, Terms, and account-deletion fallback URLs returned HTTP 200 during the Lane 2 audit. Cloudflare Email Routing for `chillywoodstream.com` is enabled/ready, the support destination is verified, and an enabled forwarding rule routes `support@chillywoodstream.com` to the support inbox destination. | Legal review, final hosted URLs, support inbox receipt proof, support email/SLA, DMCA/contact process, and support inbox ownership. | Legal/support owner. | Links open in release build, public URLs are reachable, `support@chillywoodstream.com` receives a test request through the verified inbox route, and legal copy is approved. | External Setup Pending / Inbox Receipt Proof Pending | Finalize legal copy, hosted policy URLs, DMCA agent/contact process, support mailbox, and support response expectations, then send a real test message to `support@chillywoodstream.com` before entering it in Play Console. |
+| Legal pages and support | Expanded routes exist for Privacy, Terms, Community Guidelines, Creator Rules, Copyright/DMCA, Support, and account deletion. `docs/legal/` contains drafted launch policy documents for Terms, Privacy, Creator Rules, Community Guidelines, Copyright/DMCA, copyright takedown workflow, account deletion, refunds/subscriptions, creator payouts, fraud/forfeiture, sponsor disclosure, banned content, moderation/reporting, and launch status. `app.config.ts` has privacy/terms/account deletion fallbacks, supports `EXPO_PUBLIC_SUPPORT_EMAIL`, and falls back to `support@chillywoodstream.com`. Legal pages show `support@chillywoodstream.com` or placeholders where a real legal/DMCA contact is not confirmed. Privacy, Terms, and account-deletion fallback URLs returned HTTP 200 during the Lane 2 audit. Cloudflare Email Routing for `chillywoodstream.com` is enabled/ready, the support destination is verified, and an enabled forwarding rule routes `support@chillywoodstream.com` to the support inbox destination. | Attorney/legal review, final hosted URLs, support inbox receipt proof, support email/SLA, DMCA designated agent/contact process, DMCA agent public posting, Copyright Office registration if safe-harbor readiness will be claimed, and support inbox ownership. | Legal/support owner. | Links open in release build, public URLs are reachable, `support@chillywoodstream.com` receives a test request through the verified inbox route, legal copy is approved, and DMCA/account-deletion store requirements are accepted where applicable. | External Setup Pending / Inbox Receipt Proof Pending / Attorney Review Pending | Finalize legal copy, hosted policy URLs, DMCA agent/contact process, support mailbox, and support response expectations, then send a real test message to `support@chillywoodstream.com` before entering legal URLs in Play Console. Do not claim DMCA safe-harbor completion until the agent is publicly posted and registered. |
 | Android permissions and policy declarations | `app.json` requests `CAMERA`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, and `POST_NOTIFICATIONS`. Live Stage/LiveKit uses camera/microphone. D9 now includes real Android notification permission UX and device-token registration. | Declare camera/microphone and notification purpose in Play Console, privacy copy, Data Safety, and store listing. Confirm runtime permission prompts are contextual in the release build. | Release manager plus product owner. | Install release build, verify camera/microphone/notification prompts are contextual and Play declarations match actual features. | External Setup Pending | Run release build permission smoke and update Play Console declarations before production review. |
 | Android push provider credentials | D9 Android provider proof passed on May 12, 2026: remote migration `202605120003` is applied, `notification-device-tokens` and `notification-dispatch` are deployed, physical Android token registration succeeded on device `R5CR120QCBF` with safe fingerprint `c1ab24247f5d`, all five notification/activity trigger classes created backed rows and `sent` delivery attempts, blocked states stayed silent/skipped/blocked, and delivery attempts were logged. Expo/EAS production Push Notifications FCM V1 is assigned for `com.chillywood.mobile` to the dedicated Firebase service account `expo-fcm-v1-d9@chillywood-app.iam.gserviceaccount.com`; no service-account JSON or private key is committed. `notification-dispatch` targets the existing Android `default` channel so Chi'llywood pushes display as high-importance Activity notifications. A fresh background push appeared under Alerting notifications on physical Android and tapping it opened the safe `/spectate/[itemId]` target. | Keep FCM V1 assigned in Expo/EAS and rotate/manage the Firebase service-account key only through Firebase/EAS, never repo text. iOS/APNs remains later unless separately scoped. | Release manager plus Firebase/Expo owner. | Release-candidate smoke confirms backend-sent Android push still reaches the physical device, tapping opens the safe deep link, delivery attempt status remains `sent`, and private/proof/protected/title-rights-blocked/ticketed/Premium-full-room/non-recipient/blocked-user cases do not notify or leak. | Complete / Android Proved | Re-run notification smoke during release-candidate testing and after any Firebase/EAS credential rotation. |
 | Firebase project and Android config | Firebase packages and config plugins are present. `firebase.json` enables Crashlytics collection/debug settings. `google-services.json` exists for project `chillywood-app` and package `com.chillywood.mobile`. Helpers exist for Crashlytics, Performance, Analytics, and Remote Config. Detailed lane prep now lives in `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`. | Verify Firebase project ownership, Android app registration, SHA/package match if required, Crashlytics and Performance dashboard setup, and production data collection posture. | Release manager/Firebase owner. | Internal/release build reports a non-fatal Crashlytics event, Performance traces appear, and dashboards show the expected Android app. | Proof Pending | Follow `docs/FIREBASE_CRASHLYTICS_PERFORMANCE_RUNBOOK.md`: verify the Firebase Console app, build/install a release-like candidate, and capture dashboard receipt. |
@@ -200,40 +200,44 @@ Detailed owner doc: `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`
 Scope for this lane only:
 
 - Account deletion instructions and support handoff.
-- Privacy, Terms, Community Guidelines, Copyright/DMCA, Support, and account deletion URL readiness.
+- Privacy, Terms, Creator Rules, Community Guidelines, Copyright/DMCA, Support, and account deletion URL readiness.
 - Google Play Data Safety preparation.
 - User-generated-content safety readiness for creator uploads.
 - No destructive account deletion or account data mutation.
 
 Repo-ready facts:
 
-- Public legal routes exist for `/privacy`, `/terms`, `/account-deletion`, `/community-guidelines`, and `/copyright`.
+- Public legal routes exist for `/privacy`, `/terms`, `/account-deletion`, `/community-guidelines`, `/creator-rules`, and `/copyright`.
 - `app/_layout.tsx` allows those legal routes to render publicly without requiring sign-in or full runtime config.
-- Settings links to Privacy, Terms, Community Guidelines, Copyright/DMCA, and Request Account Deletion.
+- Settings links to Privacy, Terms, Community Guidelines, Creator Rules, Copyright/DMCA, Support, and Request Account Deletion.
 - Support links to the same policy/account-help surfaces and can collect signed-in feedback.
 - Configured fallback URLs for Privacy, Terms, and Account Deletion returned HTTP 200 in this audit.
 - Account deletion is request-based and honest; it does not pretend destructive deletion has completed.
 - The account deletion route now explicitly documents impact/retention posture for Profile, Channel, uploaded videos, chat, rooms, billing/subscription records, and moderation/report records.
 - A Play Data Safety preparation matrix now exists in `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`.
+- `docs/legal/LEGAL_LAUNCH_CHECKLIST.md` records per-policy status for Terms, Privacy, Creator Rules, Community Guidelines, DMCA/Copyright, DMCA agent posting/registration, copyright report/counter-notice/repeat infringer workflow, account deletion, refunds/subscriptions, payouts, fraud/forfeiture, sponsor disclosure, banned content, and moderation/reporting.
+- The current in-app report sheet supports a generic copyright category, but it does not collect every formal DMCA notice or counter-notice field.
 
 Manual actions before marking Done:
 
-1. Legal/support owner approves Privacy, Terms, Community Guidelines, Copyright/DMCA, and Account Deletion copy.
+1. Legal/support owner approves Privacy, Terms, Creator Rules, Community Guidelines, Copyright/DMCA, Account Deletion, Refunds/Subscriptions, Creator Payouts, Fraud/Forfeiture, Sponsor Disclosure, Banned Content, and Moderation workflow copy.
 2. Product/support owner finalizes support email/URL, support inbox owner, and response SLA.
-3. Backend/legal owner approves the deletion/de-identification and retained-record process for Supabase auth, profiles, channels, videos/storage, chat, room records, entitlements/billing events, moderation reports, support rows, notifications/reminders, logs, and backups.
-4. Release owner confirms final public URLs are reachable without login where Play requires it.
-5. Play Console owner enters Privacy Policy URL.
-6. Play Console owner enters Account Deletion URL and confirms the form describes deletion and retained data accurately.
-7. Play Console owner fills Data Safety using `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` plus current SDK/provider disclosures.
-8. Play Console owner answers user-generated-content/content-moderation questions using the Community Guidelines, report-abuse, admin/moderation, and DMCA process truth.
+3. Legal owner publishes the final DMCA designated-agent/contact details and completes U.S. Copyright Office registration before any DMCA safe-harbor completion claim.
+4. Backend/legal owner approves the deletion/de-identification and retained-record process for Supabase auth, profiles, channels, videos/storage, chat, room records, entitlements/billing events, moderation reports, support rows, notifications/reminders, logs, and backups.
+5. Release owner confirms final public URLs are reachable without login where Play requires it.
+6. Play Console owner enters Privacy Policy URL.
+7. Play Console owner enters Account Deletion URL and confirms the form describes deletion and retained data accurately.
+8. Play Console owner fills Data Safety using `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` plus current SDK/provider disclosures.
+9. Play Console owner answers user-generated-content/content-moderation questions using the Community Guidelines, Creator Rules, report-abuse, admin/moderation, and DMCA process truth.
 
 Proof required:
 
 - Android release build opens Settings legal/support/deletion links correctly.
-- External Privacy, Terms, and Account Deletion URLs open from a non-authenticated browser.
+- External Privacy, Terms, Creator Rules, Community Guidelines, Copyright/DMCA, Support, and Account Deletion URLs open from a non-authenticated browser where used.
 - Support/account deletion request lands in the expected support queue.
 - Creator-video report/admin moderation proof passes for user-generated-content safety readiness.
 - Play Console accepts Data Safety and account deletion entries.
+- DMCA agent details are publicly posted and Copyright Office registration is confirmed before any safe-harbor completion claim.
 
 Stop and do not mark Done if:
 
@@ -242,6 +246,7 @@ Stop and do not mark Done if:
 - Data Safety answers are not reconciled with Firebase, RevenueCat/Google Play, Supabase, LiveKit, Expo, and app-feature behavior.
 - The app claims automated deletion but no backend deletion/de-identification process is built and proved.
 - UGC policy/report/moderation/DMCA paths are not available or not proveable.
+- The repo or app claims live payouts, sponsor payments, or refunds beyond store/provider rules without backed operational proof.
 
 ## Lane 3 Runbook - Android Release Build / EAS Signing Readiness
 
@@ -512,7 +517,7 @@ Manual actions before marking Done:
 
 1. Configure EAS production env for all required public runtime values in `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`.
 2. Keep Supabase service-role keys, database passwords, LiveKit API secrets, RevenueCat private/API/webhook secrets, Play service account JSON, Firebase service account JSON, keystore passwords, JWT secrets, and provider tokens out of Expo public config.
-3. Verify final Privacy, Terms, Account Deletion, and Support URLs are public and approved.
+3. Verify final Privacy, Terms, Creator Rules, Community Guidelines, Copyright/DMCA, Account Deletion, and Support URLs are public and approved.
 4. Verify RevenueCat Android production public SDK key is from the intended Chi'llywood RevenueCat app.
 5. Verify LiveKit public URL and token endpoint match production server/function truth.
 6. Run `CHILLYWOOD_VALIDATE_PRODUCTION_ENV=1 npm run validate:runtime` from the intended release env without printing values.
@@ -553,7 +558,7 @@ Scope for this lane only:
 Repo-ready facts:
 
 - `app.json` names the app `Chi'llywood`, package `com.chillywood.mobile`, version `1.0.0`, and uses `assets/images/icon.png` plus Android adaptive icon assets.
-- The app has bundled public legal/support routes for Privacy, Terms, Account Deletion, Community Guidelines, Copyright/DMCA, and Support.
+- The app has bundled public legal/support routes for Privacy, Terms, Account Deletion, Community Guidelines, Creator Rules, Copyright/DMCA, and Support.
 - `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` already maps account/legal/Data Safety truth.
 - `docs/ANDROID_RELEASE_EAS_RUNBOOK.md` already maps preview/production build and signing proof.
 - Current asset inspection found launcher/splash/source art but no Play feature graphic and no dedicated store screenshot set.
@@ -567,7 +572,7 @@ Manual actions before marking Done:
 2. Release owner exports or creates a Play-ready 512 x 512 app icon from approved brand art.
 3. Brand/product owner creates a 1024 x 500 feature graphic that does not overpromise later features.
 4. Release owner captures sanitized phone screenshots from a preview or release-like Android build.
-5. Product/legal owner confirms final Privacy, Terms, Account Deletion, Community Guidelines, Copyright/DMCA, and Support URLs.
+5. Product/legal owner confirms final Privacy, Terms, Account Deletion, Community Guidelines, Creator Rules, Copyright/DMCA, and Support URLs.
 6. Product/legal owner decides whether explicit Terms/Privacy/Community Guidelines acceptance needs to be added to signup before Play review.
 7. Play Console owner completes Content Rating, Target Audience, Ads declaration, Data Safety, Account Deletion, and UGC policy answers using the runbooks.
 8. Play Console owner uploads listing assets and keeps proof screenshots/notes free of secrets or private account data.

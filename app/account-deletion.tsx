@@ -3,27 +3,27 @@ import React from "react";
 import { LegalList, LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const EFFECTIVE_DATE = "April 11, 2026";
-const LAST_UPDATED = "April 27, 2026";
+const LAST_UPDATED = "May 13, 2026";
 
 export default function AccountDeletionPage() {
   return (
     <LegalPageShell
       eyebrow="Chi'llywood Legal"
       title="Account Deletion"
-      subtitle="How to request deletion of a Chi'llywood account, what may be deleted, what may be retained, and what still requires legal/backend approval."
+      subtitle="How to request deletion of a Chi'llywood account, what may be deleted, what may be retained, and how support handles account deletion requests."
     >
       <LegalMeta label="Effective Date" value={EFFECTIVE_DATE} />
       <LegalMeta label="Last Updated" value={LAST_UPDATED} />
 
-      <LegalSection title="Legal and Backend Review Status">
+      <LegalSection title="About Account Deletion">
         <LegalParagraph>
-          This account deletion page is draft launch-readiness language. Chi&apos;llywood currently uses a request-based deletion flow. Final automated deletion, data export, de-identification, retention, support, and backend handling rules require attorney/legal and backend owner approval before public launch.
+          Chi&apos;llywood currently uses a request-based account deletion flow. This page explains how to start a deletion request, what the request may affect, and why some records may be retained.
         </LegalParagraph>
       </LegalSection>
 
       <LegalSection title="1. Current Deletion Status">
         <LegalParagraph>
-          For Public v1 readiness, Chi&apos;llywood provides a public account deletion information page and support handoff. This page does not instantly delete an account or run destructive backend deletion. It explains how to start a deletion request and what the final approved process must cover.
+          Chi&apos;llywood provides a public account deletion information page and support handoff. This page does not instantly delete an account or run destructive backend deletion from the app.
         </LegalParagraph>
       </LegalSection>
 
@@ -65,7 +65,7 @@ export default function AccountDeletionPage() {
           A deletion request may affect your public Profile, Channel, uploaded videos, uploaded-video metadata, storage paths, thumbnails, creator ownership, and public Channel presentation.
         </LegalParagraph>
         <LegalParagraph>
-          Depending on the final approved backend and legal process, uploaded videos may be deleted, unpublished, disconnected from the account, de-identified, hidden from public surfaces, or retained only where legal, safety, copyright, moderation, or compliance obligations require it. Chi&apos;llywood should not claim a specific purge method or timeline until the process is approved and proved.
+          Depending on the account, uploaded videos may be deleted, unpublished, disconnected from the account, de-identified, hidden from public surfaces, or retained only where legal, safety, copyright, moderation, or compliance obligations require it.
         </LegalParagraph>
       </LegalSection>
 
@@ -102,13 +102,13 @@ export default function AccountDeletionPage() {
 
       <LegalSection title="9. Timeline Placeholder">
         <LegalParagraph>
-          Deletion timing may vary depending on account verification, support queue capacity, legal or safety review, billing/subscription status, copyright/moderation holds, backup cycles, and technical processing time across systems. Final timing/SLA language requires legal, support, and backend approval before launch.
+          Deletion timing may vary depending on account verification, support queue capacity, legal or safety review, billing/subscription status, copyright/moderation holds, backup cycles, and technical processing time across systems.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="10. Final Automated Deletion Pending">
+      <LegalSection title="10. No Instant In-App Deletion">
         <LegalParagraph>
-          A fully automated deletion portal, if built later, must be separately designed, approved, and proved. Until then, Chi&apos;llywood should describe deletion as request-based and should not pretend automated permanent deletion has completed.
+          A fully automated deletion portal may be added later. Until that exists, deletion is handled through a verified request and support process.
         </LegalParagraph>
       </LegalSection>
 

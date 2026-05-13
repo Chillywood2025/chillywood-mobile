@@ -3,7 +3,7 @@ import React from "react";
 import { LegalList, LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const EFFECTIVE_DATE = "April 26, 2026";
-const LAST_UPDATED = "April 27, 2026";
+const LAST_UPDATED = "May 13, 2026";
 
 export default function CommunityGuidelinesPage() {
   return (
@@ -15,9 +15,9 @@ export default function CommunityGuidelinesPage() {
       <LegalMeta label="Effective Date" value={EFFECTIVE_DATE} />
       <LegalMeta label="Last Updated" value={LAST_UPDATED} />
 
-      <LegalSection title="Legal Review Status">
+      <LegalSection title="About These Guidelines">
         <LegalParagraph>
-          These Community Guidelines are draft launch-readiness language. They are not final legal advice and require attorney/legal, product, and safety-owner approval before public launch.
+          These Community Guidelines explain what is allowed on Chi&apos;llywood and what can lead to content removal, restrictions, suspension, or termination.
         </LegalParagraph>
       </LegalSection>
 
@@ -90,7 +90,7 @@ export default function CommunityGuidelinesPage() {
             "No unauthorized movies, shows, songs, music videos, clips, livestreams, sports/event broadcasts, paywalled content, or stolen creator uploads.",
             "No misleading edits, thumbnails, titles, or descriptions that make content appear authorized, official, or owned by you when it is not.",
             "No copyright process abuse, fake notices, or attempts to suppress lawful creator content through false reports.",
-            "Copyright reports and counter-notice handling remain subject to final DMCA/legal approval.",
+            "Copyright reports and counter-notices must be submitted through Chi'llywood's copyright process.",
           ]}
         />
       </LegalSection>
@@ -151,7 +151,7 @@ export default function CommunityGuidelinesPage() {
           Chi&apos;llywood may offer manual support review for certain account, content, or moderation decisions where the current support process allows it. A full self-serve appeal center is not yet promised for Public v1.
         </LegalParagraph>
         <LegalParagraph>
-          If you believe a moderation or copyright action was mistaken, contact Chi&apos;llywood Support with your account information, the affected content or route, and a clear explanation. Final appeal timing and process require legal/safety approval.
+          If you believe a moderation or copyright action was mistaken, contact Chi&apos;llywood Support with your account information, the affected content or route, and a clear explanation.
         </LegalParagraph>
       </LegalSection>
 
