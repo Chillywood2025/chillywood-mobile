@@ -137,6 +137,22 @@ Remote activation proof completed:
 
 Keep the heartbeat running from server-side monitoring or a wrapper around `ops/livekit-registry/heartbeat-livekit.sh`. If the heartbeat goes stale, new room token issuance intentionally fails safe instead of falling back to a hardcoded LiveKit URL.
 
+## May 13, 2026 Production Proof Follow-Up
+
+Passed from this local/dev-device proof environment:
+
+- DNS/TLS/WebSocket: `live.chillywoodstream.com` resolves to the intended Hetzner host, TLS verifies for `live.chillywoodstream.com`, HTTPS is served by Caddy, and the LiveKit `/rtc` WebSocket path is reachable and rejects invalid authorization with `401`.
+- Token/admin safety: deployed `livekit-token` and `livekit-registry` are active, required Supabase/LiveKit secret names are present by name only, unauthenticated registry/list/heartbeat/token requests return safe `401` responses, anon REST cannot read `livekit_servers`, `livekit_room_assignments`, or `livekit_routing_audit`, and no LiveKit secret, service-role key, provider credential, HLS raw URL, internal API URL, or participant token was printed or committed.
+- Registry/router/drain: the routed registry design remains active for `chillywood-prod-01`; the previous remote operator proof remains the latest operator-level row proof for active status, fresh heartbeat, nullable metrics, assignment rows, and audit rows. This follow-up did not migrate active rooms, delete rooms, disconnect participants, provision servers, add autoscaling, or change drain behavior.
+- D7F spectator safety: spectator playback remains on `spectator-playback` controlled HLS resolver/proxy paths. This proof did not issue spectator LiveKit tokens and did not return raw HLS URLs.
+- Device posture: physical Android devices were connected with the big phone on cellular and the smaller phone on Wi-Fi. The smaller Wi-Fi phone proved the existing Premium gate blocks Live Watch-Party before full room/session/token/connect.
+
+Not closed by this proof:
+
+- TURN allocation: local probes confirmed public HTTPS/signaling reachability and UDP send reachability to expected realtime/TURN/range ports, but STUN/TURN allocation timed out and no local TURN client or host-side allocation proof environment was available. A real allocation proof still needs an operator host/TURN test environment or installed TURN client with safe credentials.
+- Real-device media: both connected app accounts lacked an active Premium entitlement, so Watch-Party Live / Live Stage media join, host camera/mic publish, viewer subscribe, leave/rejoin, stale-room containment, and cellular/Wi-Fi media traversal could not be completed without faking access.
+- 10-participant readiness: no 10-participant proof is claimed. The router script proves assignment/drain/no-eligible behavior only; media readiness still needs real two-device Premium proof plus controlled synthetic/load proof or real participant proof.
+
 ## Domain, TLS, And Reverse Proxy Checklist
 
 Official LiveKit deployment docs state that production deployments need a trusted SSL certificate, a domain used by the SDK as the `wss://` endpoint, and HTTPS/SSL termination through a load balancer or reverse proxy. They also note that self-signed certificates are not acceptable for this use.
@@ -533,15 +549,15 @@ Required pass facts:
 | Area | Status | Reason | Next action |
 | --- | --- | --- | --- |
 | App LiveKit config | Partial / Proof Pending | Runtime owner exists and defaults to `wss://live.chillywoodstream.com`; release env still needs validation. | Run `npm run validate:runtime` from release env and inspect public Expo config without secrets. |
-| Token endpoint | Remote Proof Passed / App-Route Proof Pending | Supabase function owner routes through the registry before returning `serverUrl`; remote token proof passed for `watch-party-live`, `live-stage`, and `chat-call` with no secret/internal URL exposure. | Run release-like app-route proof against the deployed token function, then continue DNS/TURN/device proof. |
+| Token endpoint | Remote Proof Passed / Premium App-Route Proof Blocked | Supabase function owner routes through the registry before returning `serverUrl`; remote token proof passed for `watch-party-live`, `live-stage`, and `chat-call` with no secret/internal URL exposure. May 13 unauthenticated token requests failed safe with `401`, and app-route Live Watch-Party proof reached the existing Premium gate before room/session/token/connect. | Run release-like app-route proof with a valid entitlement-backed Premium account; do not bypass the gate. |
 | Registry/router/drain mode | Remote Activated / Proof Passed | Backed registry, assignment, heartbeat, audit, operator function, one-box runbook, local proof, remote migration, deployed functions, heartbeat, routing proof, drain proof, and stale/offline/full proof are complete. Production has one Hetzner box today. | Keep heartbeat monitoring active; add a second real server/standby only when actual usage requires it. |
-| Domain/TLS | Partial / Proof Pending | Hetzner spec records DNS/TLS/Caddy/LiveKit truth, but this lane did not re-prove it. | Run DNS/TLS/WebSocket checks and capture sanitized results. |
-| TURN/firewall | External Setup Pending / Proof Pending | Repo scaffold documents ports, but actual firewall/TURN config is external. | Verify host firewall, UDP/TCP/TURN settings, and cellular/Wi-Fi media connectivity. |
+| Domain/TLS | Proof Passed | May 13 proof confirmed DNS resolution, valid TLS for `live.chillywoodstream.com`, HTTPS through Caddy, and reachable LiveKit `/rtc` WebSocket path that rejects invalid authorization without leaking secrets. | Recheck during release/internal build proof or after DNS/Caddy/LiveKit changes. |
+| TURN/firewall | Partial / Allocation Proof Pending | May 13 local probes confirmed public HTTPS/signaling reachability and UDP send reachability to expected realtime/TURN/range ports. Full STUN/TURN allocation timed out from this local machine, and no TURN client/host allocation proof environment was available. | Run a safe TURN allocation proof from an operator environment or installed TURN client, then verify cellular/Wi-Fi media traversal with Premium devices. |
 | Server/provider | Partial / Proof Pending | Hetzner is documented as the current realtime host; OVH remains later. | Confirm host health, image pin, Caddy, LiveKit config, and monitoring. |
 | Logging/privacy | Implemented / Proof Pending | Static audit found no mobile token/API-secret logging; release log audit still required. | Run bounded release log audit during production LiveKit proof. |
-| One-device proof | Proof Pending | Not run in this lane. | Run after release env and server checks are ready. |
-| Two-device proof | Proof Pending | Not run in this lane. | Run bounded two-phone Live First and Live Watch-Party proof. |
-| Cellular/TURN proof | Proof Pending | Not run in this lane. | Test one device on cellular and one on Wi-Fi or different NAT. |
+| One-device proof | Blocked By Premium Entitlement | Physical Android devices were connected, but active app accounts had no Premium entitlement, so media join could not proceed without faking access. | Run after a valid entitlement-backed Premium account or real store-backed Premium setup exists. |
+| Two-device proof | Blocked By Premium Entitlement | Big phone was on cellular and smaller phone was on Wi-Fi, but full Watch-Party Live / Live Stage room entry is Premium and blocked before token/connect. | Run bounded two-phone Live First, Live Watch-Party, and Watch-Party Live proof with entitled accounts. |
+| Cellular/TURN proof | Partial / Media Proof Blocked | Device network posture was available, but actual cellular/Wi-Fi media traversal was blocked by the Premium gate and local TURN allocation proof was unavailable. | Pair TURN allocation proof with entitled cellular/Wi-Fi device media proof. |
 
 ## Exact Next Action
 
@@ -549,9 +565,9 @@ Before running Android/two-device proof:
 
 1. Confirm production runtime values for `EXPO_PUBLIC_LIVEKIT_URL` and `EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT`.
 2. Confirm Supabase `livekit-token` and registry secrets remain present and aligned with the LiveKit server without printing values.
-3. Confirm the `chillywood-prod-01` heartbeat remains fresh before live-room proof.
-4. Confirm DNS/TLS for `live.chillywoodstream.com`.
-5. Confirm firewall ports and TURN/TLS/UDP posture on the host.
+3. Confirm the `chillywood-prod-01` heartbeat remains fresh before live-room proof through an operator-safe readout.
+4. DNS/TLS for `live.chillywoodstream.com` passed on May 13, 2026; recheck only if infrastructure changed or before release/internal build proof.
+5. Complete firewall/TURN allocation proof from an operator host/TURN environment.
 6. Confirm host/container health and log retention.
 7. Prepare a bounded `/tmp/chillywood-livekit-production-proof-*` artifact folder.
 9. Run one-device proof.
