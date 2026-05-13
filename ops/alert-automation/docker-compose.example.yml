@@ -8,6 +8,13 @@ services:
       ALLOW_LIVE_ACTIONS: "false"
       ALLOW_NET_SHAPING: "false"
       OPS_APPROVAL_TOKEN: "local-only-change-me"
+      OPS_ADMIN_READ_TOKEN: "local-read-only-change-me"
+      OPS_EMAIL_ENABLED: "false"
+      OPS_EMAIL_PROVIDER: "smtp"
+      OPS_EMAIL_TEST_MODE: "true"
+      OPS_EMAIL_FROM: "ops@example.invalid"
+      OPS_ADMIN_EMAILS: "admin@example.invalid"
+      OPS_ADMIN_PANEL_BASE_URL: "http://localhost:3000/admin/ops-alerts"
       JOB_STORE_PATH: "/data/jobs.json"
       AUDIT_LOG_PATH: "/data/audit.log"
     volumes:

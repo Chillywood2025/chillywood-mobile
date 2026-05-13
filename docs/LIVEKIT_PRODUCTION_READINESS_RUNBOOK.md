@@ -276,23 +276,28 @@ D7F activation closeout:
 Current repo-side ops automation placement:
 
 - `ops/alert-automation` is a standalone backend/server ops package for Prometheus Alertmanager webhooks.
-- It does not run inside the React Native app and does not change Watch-Party Live, Live Stage, Player, Supabase Edge Functions, Hetzner Object Storage/HLS, creator-video upload/player flows, or mobile app routes.
+- It does not run inside the React Native app and does not change Watch-Party Live, Live Stage, Player, Supabase Edge Functions, Hetzner Object Storage/HLS, creator-video upload/player flows, or public mobile app routes.
 - It receives Alertmanager payloads, validates them, records persistent JSON jobs, writes JSONL audit events, and plans safe actions.
+- It exposes sanitized `GET /jobs` and `GET /jobs/:id` read endpoints for trusted operator/admin infrastructure. When `OPS_ADMIN_READ_TOKEN` is set, these reads require `X-Ops-Admin-Token`.
+- Optional SMTP email notifications are disabled by default. When enabled, they notify only on newly created actionable approval jobs, skip duplicates/no-ops, and cannot approve, deny, or execute actions.
+- The Admin Command Center has an Ops Alerts visibility tab. Mobile Admin Approve/Deny controls are disabled until a secure server-side admin proxy owns `OPS_APPROVAL_TOKEN`; the token must never be stored in client code.
 - `DRY_RUN=true` is the default.
 - Destructive LiveKit admin actions such as `DeleteRoom` and `RemoveParticipant` require a recorded approval, `ALLOW_LIVE_ACTIONS=true`, and `DRY_RUN=false`.
 - TURN/network shaping actions require a recorded approval, `ALLOW_NET_SHAPING=true`, and `DRY_RUN=false`.
 - Approval and denial endpoints require `X-Ops-Approval-Token`; webhook HMAC protection is supported with `X-Ops-Signature: sha256=<hex>` when `OPS_WEBHOOK_SECRET` is configured.
 - Shell execution is limited to exact scripts in `ops/alert-automation/scripts/`; alert labels are not interpolated into arbitrary shell commands.
-- Local proof ran with dry-run and both safety flags false. Webhook receipt created jobs and audit events, approval without a token was rejected, and approval with a token stayed blocked by safety while `ALLOW_LIVE_ACTIONS=false`.
-- No real destructive LiveKit action, TURN mutation, network shaping, production host change, production secret commit, or HLS/spectator playback change was executed during proof.
+- Local proof ran with dry-run and both safety flags false. Webhook receipt created jobs and audit events, mock email/test transport produced email audit events, duplicate alerts skipped duplicate email, approval without a token was rejected, and approval with a token stayed blocked by safety while `ALLOW_LIVE_ACTIONS=false`.
+- No real email, destructive LiveKit action, TURN mutation, network shaping, production host change, production secret commit, or HLS/spectator playback change was executed during proof.
 
 Production activation guardrail:
 
 1. Keep `DRY_RUN=true`, `ALLOW_LIVE_ACTIONS=false`, and `ALLOW_NET_SHAPING=false` until a bounded operator incident run explicitly authorizes otherwise.
 2. Configure secrets only on the ops host, never in repo docs or mobile app code.
-3. Review the planned job and audit log before approval.
-4. Enable the relevant `ALLOW_*` flag only for the shortest bounded window needed.
-5. Prefer dry-run and observe-only responses for unknown or uncertain alerts.
+3. Configure SMTP only on the ops host when email notification is wanted; email remains notify-only.
+4. Keep `OPS_APPROVAL_TOKEN`, SMTP credentials, LiveKit secrets, and provider secrets out of mobile Admin code.
+5. Review the planned job and audit log before approval.
+6. Enable the relevant `ALLOW_*` flag only for the shortest bounded window needed.
+7. Prefer dry-run and observe-only responses for unknown or uncertain alerts.
 
 ## Production Env Checklist
 
@@ -305,6 +310,8 @@ Production activation guardrail:
 | `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Supabase Edge Function HLS output | Supabase function secrets only | Names Present / D7E Public Proof Passed |
 | `PUBLIC_HLS_BASE_URL` | Legacy/proof-only public HLS readout | Supabase function secret only if a future server-side lane explicitly needs it | Unset after D7E proof / Not required by current D7F resolver |
+| `OPS_WEBHOOK_SECRET`, `OPS_APPROVAL_TOKEN`, `OPS_ADMIN_READ_TOKEN` | Ops alert automation | Ops host secret store only | Optional/readiness scaffolded |
+| `OPS_EMAIL_*`, `OPS_SMTP_*` | Ops alert email notification | Ops host secret store only | Disabled by default / External SMTP setup required |
 | TURN credentials, if external TURN is used | LiveKit infra | Host secret store only | External Setup Pending |
 | Supabase URL/anon/service role | Token function | Supabase function secrets | External Setup Pending |
 

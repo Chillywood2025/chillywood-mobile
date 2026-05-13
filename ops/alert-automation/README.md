@@ -9,6 +9,7 @@ It is not a mobile app feature. It does not change Watch-Party Live, Live Stage,
 - `DRY_RUN=true` by default.
 - `ALLOW_LIVE_ACTIONS=false` by default.
 - `ALLOW_NET_SHAPING=false` by default.
+- Optional ops email notifications are disabled by default and notify only.
 - Webhook receipt never runs destructive actions.
 - Every destructive or network-changing action requires a recorded approval first.
 - Approved LiveKit admin actions still block unless `ALLOW_LIVE_ACTIONS=true` and `DRY_RUN=false`.
@@ -20,9 +21,14 @@ It is not a mobile app feature. It does not change Watch-Party Live, Live Stage,
 
 - `GET /healthz`
 - `POST /webhook/alert`
+- `GET /jobs`
 - `GET /jobs/:id`
 - `POST /jobs/:id/approve`
 - `POST /jobs/:id/deny`
+
+`GET /jobs` supports `status` and `limit` query params and returns sanitized recent jobs only.
+`GET /jobs` and `GET /jobs/:id` require `X-Ops-Admin-Token` when `OPS_ADMIN_READ_TOKEN` is configured.
+Neither read endpoint returns approval tokens, LiveKit secrets, SMTP credentials, raw headers, raw HLS URLs, provider secrets, raw device tokens, or arbitrary annotations.
 
 When `OPS_WEBHOOK_SECRET` is set, webhook requests must include:
 
@@ -41,6 +47,44 @@ Optional:
 ```text
 X-Ops-Approved-By: <operator id>
 ```
+
+Admin job reads, when `OPS_ADMIN_READ_TOKEN` is set, require:
+
+```text
+X-Ops-Admin-Token: <OPS_ADMIN_READ_TOKEN>
+```
+
+## Optional Email Notifications
+
+Email is notification-only. It cannot approve, deny, or execute actions.
+
+Set these values only on the server or deployment secret store:
+
+```text
+OPS_EMAIL_ENABLED=false
+OPS_EMAIL_PROVIDER=smtp
+OPS_EMAIL_FROM=
+OPS_ADMIN_EMAILS=
+OPS_SMTP_HOST=
+OPS_SMTP_PORT=465
+OPS_SMTP_USER=
+OPS_SMTP_PASS=
+OPS_SMTP_SECURE=true
+OPS_ADMIN_PANEL_BASE_URL=
+OPS_EMAIL_TEST_MODE=false
+```
+
+When `OPS_EMAIL_ENABLED=true`, the service sends one sanitized email for each newly created actionable job that has a valid plan and requires approval.
+It does not email for unknown no-op alerts, resolved no-op alerts, invalid action plans, or duplicate/idempotent alerts.
+Email failures are audited as `email_failed` and do not crash webhook handling or run actions.
+Automated tests and local proof use `OPS_EMAIL_TEST_MODE=true`; production should keep that false and configure real SMTP values externally.
+
+## Admin Panel Visibility
+
+The Chi'llywood Admin Command Center includes an Ops Alerts tab that documents the safety gate and secure-proxy blocker.
+The mobile Admin panel does not call the ops service directly in this lane and does not store `OPS_APPROVAL_TOKEN`.
+Approve/Deny controls remain disabled there until a trusted server-side admin proxy owns the approval token server-side.
+Active approval/denial remains available only through the backend ops service endpoints protected by `X-Ops-Approval-Token`.
 
 ## Allowed Alert Actions
 
@@ -71,6 +115,12 @@ DRY_RUN=true \
 ALLOW_LIVE_ACTIONS=false \
 ALLOW_NET_SHAPING=false \
 OPS_APPROVAL_TOKEN=test-approval-token \
+OPS_EMAIL_ENABLED=true \
+OPS_EMAIL_PROVIDER=smtp \
+OPS_ADMIN_EMAILS=test@example.com \
+OPS_EMAIL_FROM=ops@example.com \
+OPS_ADMIN_PANEL_BASE_URL=http://localhost:3000/admin/ops-alerts \
+OPS_EMAIL_TEST_MODE=true \
 npm run dev
 ```
 
@@ -130,6 +180,10 @@ Read the audit log:
 tail -n 20 ./data/audit.log
 ```
 
+Expected email-proof audit events for a new actionable job are `email_queued` then `email_sent` when local test mode is enabled.
+Duplicate actionable alerts should produce `email_skipped_duplicate` and no second `email_sent`.
+Unknown alerts should produce no email event.
+
 ## Deployment
 
 1. Build the package:
@@ -167,4 +221,4 @@ Keep the audit log and job store for incident review unless retention policy say
 
 ## Audit Logs
 
-Audit entries are JSONL and include event type, timestamp, job id, alert name, action type, dry-run status, operator marker when supplied, and reason. They must not contain LiveKit API secrets, webhook secrets, approval tokens, provider credentials, or raw private keys.
+Audit entries are JSONL and include event type, timestamp, job id, alert name, action type, dry-run status, operator marker when supplied, and reason. Email-specific events are `email_queued`, `email_sent`, `email_failed`, `email_skipped_duplicate`, and `email_skipped_disabled`. Audit logs must not contain LiveKit API secrets, webhook secrets, approval tokens, SMTP credentials, provider credentials, raw HLS URLs, raw device tokens, or raw private keys.

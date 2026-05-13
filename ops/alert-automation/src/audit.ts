@@ -10,7 +10,12 @@ export type AuditEventType =
   | "denied"
   | "executed"
   | "blocked_by_safety"
-  | "failed";
+  | "failed"
+  | "email_queued"
+  | "email_sent"
+  | "email_failed"
+  | "email_skipped_duplicate"
+  | "email_skipped_disabled";
 
 export type AuditEvent = {
   eventType: AuditEventType;

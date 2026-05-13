@@ -142,6 +142,7 @@ type OperatorTabKey =
   | "networks"
   | "sponsors"
   | "fraud"
+  | "ops-alerts"
   | "system";
 
 type EditorForm = {
@@ -228,6 +229,7 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "networks", label: "Networks" },
   { key: "sponsors", label: "Sponsors" },
   { key: "fraud", label: "Fraud" },
+  { key: "ops-alerts", label: "Ops Alerts" },
   { key: "system", label: "System" },
 ];
 const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
@@ -1330,6 +1332,12 @@ export default function AdminStudioScreen() {
           : "Immutable admin audit logs are not connected yet.",
         tone: adminImmutableAuditReadModel.connected ? "default" : "unavailable",
         destination: "audit",
+      },
+      {
+        label: "Ops Alerts",
+        value: "Safety gate",
+        body: "Alertmanager automation jobs stay backend-owned, dry-run-first, and approval-gated. Mobile Admin visibility is read-only until a secure server-side proxy exists.",
+        destination: "ops-alerts",
       },
       {
         label: "App Config",
@@ -4850,6 +4858,102 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Future requirements</Text>
                 <Text style={styles.configListBody}>Fraud enforcement must require reason, evidence, admin notes, audit trail, review state, confirmation for dangerous actions, and an appeal/review path later.</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "ops-alerts" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>OPS ALERTS</Text>
+              <Text style={styles.configTitle}>Ops alert automation</Text>
+              <Text style={styles.configBody}>
+                Admin visibility for the backend Alertmanager safety gate. This panel does not call LiveKit, run shell scripts, or hold approval tokens in mobile code.
+              </Text>
+            </View>
+            <View style={[styles.badge, styles.badgeScheduled]}>
+              <Text style={styles.badgeText}>Operator-only</Text>
+            </View>
+          </View>
+
+          <View style={styles.dashboardGrid}>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Safety Model</Text>
+              <Text style={styles.dashboardMetricValue}>Dry-run first</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Webhook receipt can create jobs and audit plans, but destructive actions require backend approval plus explicit safety flags.
+              </Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Email</Text>
+              <Text style={styles.dashboardMetricValue}>Default off</Text>
+              <Text style={styles.dashboardMetricBody}>
+                SMTP notifications are optional, notify-only, and cannot approve or execute ops jobs.
+              </Text>
+            </View>
+            <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
+              <Text style={styles.dashboardMetricLabel}>Approve / Deny</Text>
+              <Text style={styles.dashboardMetricValue}>Proxy needed</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Active approval requires a server-side admin proxy. `OPS_APPROVAL_TOKEN` must never ship in client code.
+              </Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Read API</Text>
+              <Text style={styles.dashboardMetricValue}>Backend-owned</Text>
+              <Text style={styles.dashboardMetricBody}>
+                The ops service exposes sanitized job list/detail endpoints for a trusted admin backend or internal operator network.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Admin visibility scope</Text>
+                <Text style={styles.configListBody}>
+                  This tab records the current integration contract only. It does not fetch ops jobs from the mobile client because the repo has no safe server-side Admin proxy in this lane.
+                </Text>
+              </View>
+              <View style={styles.badgesRow}>
+                <View style={[styles.badge, styles.badgeScheduled]}>
+                  <Text style={styles.badgeText}>Read-only</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Approval path</Text>
+                <Text style={styles.configListBody}>
+                  Approve/Deny remains available only through the ops backend endpoints protected by `X-Ops-Approval-Token`; mobile Admin controls stay disabled until a secure proxy owns that token server-side.
+                </Text>
+              </View>
+              <View style={styles.configListActions}>
+                <TouchableOpacity style={[styles.actionBtn, styles.configSaveBtnDisabled]} disabled>
+                  <Text style={styles.actionText}>Approve disabled</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.actionBtnDanger, styles.configSaveBtnDisabled]} disabled>
+                  <Text style={styles.actionTextDanger}>Deny disabled</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Production action gates</Text>
+                <Text style={styles.configListBody}>
+                  LiveKit DeleteRoom/RemoveParticipant still require approval, `ALLOW_LIVE_ACTIONS=true`, and `DRY_RUN=false`. Network shaping still requires approval, `ALLOW_NET_SHAPING=true`, and `DRY_RUN=false`.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Secrets boundary</Text>
+                <Text style={styles.configListBody}>
+                  Approval tokens, SMTP credentials, LiveKit API secrets, provider secrets, HLS URLs, service-role keys, and raw device tokens must never appear in this mobile Admin panel.
+                </Text>
               </View>
             </View>
           </View>

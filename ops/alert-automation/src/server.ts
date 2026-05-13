@@ -5,13 +5,16 @@ import { z } from "zod";
 import { AuditLog } from "./audit.js";
 import { executeAction, planAction } from "./actions.js";
 import { loadConfig, type OpsConfig } from "./config.js";
+import { notifyActionableJob } from "./email.js";
 import {
   createIdempotencyKey,
   getAlertName,
   JobStore,
+  type JobStatus,
   type AlertmanagerAlert,
   type OpsJob
 } from "./jobs.js";
+import { sanitizeJob } from "./sanitize.js";
 
 type RawBodyRequest = Request & {
   rawBody?: Buffer;
@@ -90,6 +93,19 @@ function verifyApprovalToken(req: Request, config: OpsConfig): { ok: true } | { 
   return { ok: true };
 }
 
+function verifyAdminReadToken(req: Request, config: OpsConfig): { ok: true } | { ok: false; code: number; error: string } {
+  if (!config.adminReadToken) {
+    return { ok: true };
+  }
+
+  const provided = req.get("x-ops-admin-token");
+  if (!provided || provided !== config.adminReadToken) {
+    return { ok: false, code: 401, error: "admin_read_token_required" };
+  }
+
+  return { ok: true };
+}
+
 function asyncRoute(
   handler: (req: Request, res: Response, next: NextFunction) => Promise<void>
 ) {
@@ -98,12 +114,45 @@ function asyncRoute(
   };
 }
 
-function serializeJob(job: OpsJob): OpsJob {
-  return job;
+function serializeJob(job: OpsJob & { duplicate?: boolean }) {
+  return sanitizeJob(job);
 }
 
 function routeParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+function queryString(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return typeof value[0] === "string" ? value[0] : undefined;
+  }
+
+  return typeof value === "string" ? value : undefined;
+}
+
+function queryLimit(value: unknown): number {
+  const raw = queryString(value);
+  const parsed = raw ? Number.parseInt(raw, 10) : 25;
+  if (!Number.isFinite(parsed)) {
+    return 25;
+  }
+
+  return Math.max(1, Math.min(parsed, 100));
+}
+
+const jobStatuses: readonly JobStatus[] = [
+  "queued",
+  "dry_run_completed",
+  "waiting_approval",
+  "approved",
+  "denied",
+  "executed",
+  "failed"
+];
+
+function queryStatus(value: unknown): JobStatus | undefined {
+  const raw = queryString(value);
+  return raw && jobStatuses.includes(raw as JobStatus) ? (raw as JobStatus) : undefined;
 }
 
 async function handleIncomingAlert(
@@ -115,6 +164,17 @@ async function handleIncomingAlert(
   const idempotencyKey = createIdempotencyKey(alert);
   const existing = await store.getByIdempotencyKey(idempotencyKey);
   if (existing) {
+    if (existing.plan.valid && existing.plan.requiresApproval) {
+      await audit.write({
+        eventType: "email_skipped_duplicate",
+        jobId: existing.id,
+        alertname: getAlertName(existing.alert),
+        actionType: existing.plan.actionType,
+        dryRun: config.dryRun,
+        reason: "idempotent_alert"
+      });
+    }
+
     return { ...existing, duplicate: true };
   }
 
@@ -147,10 +207,12 @@ async function handleIncomingAlert(
       reason: plan.blockedReason
     });
 
-    return await store.update(job.id, {
+    const failed = await store.update(job.id, {
       status: "failed",
       failureReason: plan.blockedReason ?? "invalid_action_plan"
     });
+    await notifyActionableJob(failed, config, audit);
+    return failed;
   }
 
   await audit.write({
@@ -177,7 +239,7 @@ async function handleIncomingAlert(
       reason: `approval_expires_at:${approvalExpiresAt}`
     });
 
-    return await store.update(job.id, {
+    const waiting = await store.update(job.id, {
       status: "waiting_approval",
       approvalExpiresAt,
       dryRunResult: {
@@ -186,15 +248,19 @@ async function handleIncomingAlert(
         plannedCommands: plan.plannedCommands ?? []
       }
     });
+    await notifyActionableJob(waiting, config, audit);
+    return waiting;
   }
 
-  return await store.update(job.id, {
+  const completed = await store.update(job.id, {
     status: "dry_run_completed",
     dryRunResult: {
       summary: plan.summary,
       target: plan.target ?? {}
     }
   });
+  await notifyActionableJob(completed, config, audit);
+  return completed;
 }
 
 export function createApp(env: NodeJS.ProcessEnv = process.env) {
@@ -220,6 +286,34 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
       allowNetShaping: config.allowNetShaping
     });
   });
+
+  app.get(
+    "/jobs",
+    asyncRoute(async (req, res) => {
+      const token = verifyAdminReadToken(req, config);
+      if (!token.ok) {
+        res.status(token.code).json({ error: token.error });
+        return;
+      }
+
+      const status = queryStatus(req.query.status);
+      const limit = queryLimit(req.query.limit);
+      const allJobs = await store.list();
+      const jobs = allJobs
+        .filter((job) => !status || job.status === status)
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+        .slice(0, limit);
+
+      res.json({
+        jobs: jobs.map(serializeJob),
+        count: jobs.length,
+        filters: {
+          status: status ?? null,
+          limit
+        }
+      });
+    })
+  );
 
   app.post(
     "/webhook/alert",
@@ -250,6 +344,12 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
   app.get(
     "/jobs/:id",
     asyncRoute(async (req, res) => {
+      const token = verifyAdminReadToken(req, config);
+      if (!token.ok) {
+        res.status(token.code).json({ error: token.error });
+        return;
+      }
+
       const job = await store.getById(routeParam(req.params.id));
       if (!job) {
         res.status(404).json({ error: "job_not_found" });
