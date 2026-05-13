@@ -33,6 +33,7 @@ Use current official docs during final setup because requirements can change:
 | Terms of Service | `app/terms.tsx`; runtime env `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`; fallback `https://live.chillywoodstream.com/terms` | Yes; Settings opens configured external URL first, otherwise bundled `/terms` | Yes | Expanded route exists with acceptance, Profile/Channel, UGC, creator upload, Watch-Party/Live/Chat, Premium, moderation, liability/indemnification, and public-readable dispute/support language; configured fallback returned HTTP 200 during this audit; legal review still pending | Final public Terms URL must be approved and available without login |
 | Account Deletion | `app/account-deletion.tsx`; runtime env `EXPO_PUBLIC_ACCOUNT_DELETION_URL`; fallback `https://live.chillywoodstream.com/account-deletion` | Yes; Settings opens configured external URL first, otherwise bundled `/account-deletion` | Yes; signed-in support can start request/help | Expanded request-based page exists; no destructive deletion runs in app; configured fallback returned HTTP 200 during this audit; final backend/support process pending | Final public account deletion URL must be approved, reachable without login where Play requires it, and entered in Play Console |
 | Support | `app/support.tsx`, `components/system/support-screen.tsx`; runtime env `EXPO_PUBLIC_SUPPORT_EMAIL`; fallback `support@chillywoodstream.com` | Settings links to support/account help surfaces indirectly through legal/account controls | Yes | Support route exists with support categories, account/billing/upload/safety/copyright/deletion guidance, emergency disclaimer, signed-in feedback handoff, and pending SLA language; public support email is `support@chillywoodstream.com`, Cloudflare routing is configured, and inbox receipt proof is still pending | Public support URL, support inbox receipt, support ownership/SLA, and legal approval must be confirmed |
+| Static public legal/support site | `public-site/legal-site/`; build with `npm run legal-site:build`; output `public-site/legal-site/site/`; Cloudflare Pages project `chillywood-legal` | Not wired to Settings until final apex host is live | Public web surface only | Generates `/terms`, `/privacy`, `/creator-rules`, `/community-guidelines`, `/copyright`, `/account-deletion`, `/refunds`, `/sponsor-disclosure`, `/banned-content`, `/moderation`, and `/support` from repo policy truth and confirmed support contact. `https://chillywood-legal.pages.dev/*` returned HTTP 200 for all required paths. | Complete apex DNS/custom-domain activation for `https://chillywoodstream.com/*`, prove each apex URL with curl/browser, then update runtime/store URLs only after approval |
 | Community Guidelines / Content Policy | `app/community-guidelines.tsx` | Yes | Yes | Expanded bundled route covers creator uploads, live rooms, Watch-Party, chat/message/comment behavior, copyright/media rights, minor safety, reporting, enforcement, repeat violations, and manual review posture; legal/content policy review pending | Public hosted URL is recommended before Play listing submission |
 | Creator Rules | `app/creator-rules.tsx` | Yes | Yes | Bundled public route covers creator ownership, upload rights, Channel identity, files/links, live rules, monetization/payout inactive status, sponsorship disclosures, and enforcement; legal/content policy review pending | Public hosted URL is recommended before Play listing submission |
 | Copyright / DMCA | `app/copyright.tsx` | Yes | Yes | Expanded bundled route covers takedown notices, required notice information, possible actions, counter-notice placeholder, repeat infringer policy, false-notice warning, and pending DMCA agent/legal approval | Public hosted URL and DMCA contact/process should be confirmed before store submission |
@@ -45,6 +46,7 @@ This section is not legal advice and does not make legal guarantees. It records 
 Implemented in this lane:
 
 - `docs/legal/` now contains drafted policy documents for Terms, Privacy, Creator Rules, Community Guidelines, Copyright/DMCA, copyright takedown workflow, account deletion, refunds/subscriptions, creator payouts, fraud/forfeiture, sponsor disclosure, banned content, moderation/reporting, and the launch legal checklist. Each repo policy file is marked attorney-review-required before public launch.
+- `public-site/legal-site/` now builds an expanded static public legal/support site for `/terms`, `/privacy`, `/creator-rules`, `/community-guidelines`, `/copyright`, `/account-deletion`, `/refunds`, `/sponsor-disclosure`, `/banned-content`, `/moderation`, and `/support` from repo policy truth and confirmed support contact only.
 - Public app copy now avoids visible draft/placeholder language while still avoiding false compliance claims.
 - Settings and Support now link Creator Rules in addition to Privacy, Terms, Community Guidelines, Copyright/DMCA, Account Deletion, and Support.
 - Signup now states: "Chi'llywood is for users 18 and older." It requires the user to check "I confirm I am 18 or older." before account creation is attempted. If unchecked, signup blocks before `supabase.auth.signUp` and shows the required 18+ confirmation alert.
@@ -65,7 +67,7 @@ Still pending:
 
 - Attorney/legal approval of final Terms, Privacy, Creator Rules, Community Guidelines, Copyright/DMCA, account deletion, refund/subscription, payout, fraud/forfeiture, sponsor disclosure, banned content, moderation workflow, and signup acceptance wording.
 - Runtime signup proof with a safe disposable account. H1B2 wires storage for authenticated signup sessions, but the implementation/proof pass did not create a real account.
-- Final hosted public URLs for legal/support pages, especially Creator Rules, Community Guidelines, and Copyright/DMCA if Play listing links to them.
+- Final apex public URLs for the expanded static site at `https://chillywoodstream.com/*`, with DNS/custom-domain activation and curl/browser proof for every required path. The Cloudflare Pages fallback `https://chillywood-legal.pages.dev/*` is live/proved, but the preferred apex remains pending.
 - Final DMCA agent/contact decision and any required U.S. Copyright Office designated-agent registration.
 - Formal DMCA notice/counter-notice intake fields if Chi'llywood needs more than the current generic in-app copyright report category.
 - Final backend deletion/de-identification and retention runbook.
@@ -178,6 +180,7 @@ Still proof-pending:
 | Creator Rules | Bundled route `/creator-rules` | App route exists; no external fallback env exists | External Setup Pending | Publish/confirm hosted URL if Play listing or web support needs a public link. |
 | Copyright / DMCA | Bundled route `/copyright` | App route exists; no external fallback env exists | External Setup Pending | Publish/confirm hosted URL and final DMCA contact/process. |
 | Support | `EXPO_PUBLIC_SUPPORT_EMAIL` and `/support` | Route exists; support email is env-driven with fallback `support@chillywoodstream.com`; Cloudflare destination/routing is configured | Inbox Receipt Proof Pending | Send a real test message to `support@chillywoodstream.com`, confirm public support URL, and approve support owner/SLA. |
+| Expanded static legal site | `public-site/legal-site/site/` and `https://chillywood-legal.pages.dev` | Cloudflare Pages hostname proved for all required public routes; preferred apex `chillywoodstream.com` remains pending DNS/custom-domain activation | Cloudflare Pages Proved / Apex DNS Pending | Add the apex DNS record for `chillywoodstream.com` to route to `chillywood-legal.pages.dev` or rerun with a token that has DNS Records permissions, wait for Pages status to become active, then prove `/terms`, `/privacy`, `/creator-rules`, `/community-guidelines`, `/copyright`, `/account-deletion`, `/refunds`, `/sponsor-disclosure`, `/banned-content`, `/moderation`, and `/support` return real content from the apex. |
 
 ## Completion Status
 
@@ -190,6 +193,7 @@ Done:
 - Bundled legal routes exist for Privacy, Terms, Account Deletion, Community Guidelines, Creator Rules, and Copyright/DMCA.
 - Privacy, Terms, Account Deletion, Community Guidelines, Creator Rules, Copyright/DMCA, and Support are expanded beyond placeholder pages and now contain structured, launch-ready public copy.
 - `docs/legal/` contains attorney-review-required policy drafts for Terms, Privacy, Creator Rules, Community Guidelines, Copyright/DMCA, copyright takedown workflow, account deletion, refunds/subscriptions, creator payouts, fraud/forfeiture, sponsor disclosure, banned content, moderation/reporting, and the launch legal checklist.
+- `public-site/legal-site/` generates static public pages for the complete requested URL surface; repo/local generation is implemented, while deployment remains external.
 - Settings links to privacy, terms, community guidelines, creator rules, copyright/DMCA, support, and account deletion.
 - Support route provides account-deletion help and signed-in feedback handoff.
 - Configured privacy, terms, and account-deletion fallback URLs returned HTTP 200 in this audit.
@@ -206,7 +210,7 @@ External Setup Pending:
 - Final backend deletion/de-identification and retention runbook.
 - Play Console Data Safety form entry.
 - Play Console account deletion URL entry.
-- Public hosted URLs for Creator Rules, Community Guidelines, Copyright/DMCA, and Support if required for listing/support.
+- Public hosted apex URLs for the expanded static surface at `https://chillywoodstream.com/*`; Cloudflare Pages is live at `https://chillywood-legal.pages.dev/*`, but apex DNS/custom-domain activation and production apex curl proof remain pending.
 
 Proof Pending:
 
