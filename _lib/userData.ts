@@ -355,6 +355,29 @@ async function getSignedInUserSnapshot() {
   }
 }
 
+type PublicChannelProfileRpc = {
+  maybeSingle: () => Promise<{ data: UserProfileRow | null; error: { message?: string } | null }>;
+};
+
+async function readPublicChannelProfile(userId: string): Promise<UserProfile | null> {
+  const normalizedUserId = toIdString(userId);
+  if (!normalizedUserId) return null;
+
+  try {
+    const rpc = (supabase.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>
+    ) => PublicChannelProfileRpc)("read_public_channel_profile", {
+      profile_user_id: normalizedUserId,
+    });
+    const { data, error } = await rpc.maybeSingle();
+    if (error || !data) return null;
+    return parseRemoteUserProfile(data);
+  } catch {
+    return null;
+  }
+}
+
 const buildFallbackUsernameFromEmail = (email?: string) => {
   const localPart = String(email ?? "").split("@")[0]?.trim().toLowerCase() ?? "";
   const normalized = localPart.replace(/[^a-z0-9._-]/g, "");
@@ -376,6 +399,8 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
       .maybeSingle();
 
     if (error || !data) {
+      const publicProfile = await readPublicChannelProfile(normalizedUserId);
+      if (publicProfile) return publicProfile;
       logChatProfile("remote_read_empty", {
         userId: normalizedUserId,
         hasError: !!error,
