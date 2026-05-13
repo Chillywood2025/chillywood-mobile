@@ -41,6 +41,7 @@ type ResolvedRoomRecord =
       kind: "communication";
       roomName: string;
       hostUserId: string;
+      chatThreadId: string | null;
     };
 
 const JSON_HEADERS = {
@@ -169,10 +170,19 @@ async function resolveTargetRoom(
 
     if (communicationRoom.error || !communicationRoom.data) return null;
 
+    const chatThread = await adminClient
+      .from("chat_threads")
+      .select("id")
+      .eq("active_communication_room_id", sanitizeText(communicationRoom.data.room_id))
+      .maybeSingle();
+
+    if (chatThread.error) return null;
+
     return {
       kind: "communication",
       roomName: sanitizeText(communicationRoom.data.room_id),
       hostUserId: sanitizeText(communicationRoom.data.host_user_id),
+      chatThreadId: chatThread.data ? sanitizeText(chatThread.data.id) : null,
     };
   }
 
@@ -192,6 +202,21 @@ async function resolveTargetRoom(
   };
 }
 
+async function userCanAccessChatThread(
+  adminClient: ReturnType<typeof createClient>,
+  threadId: string,
+  userId: string,
+) {
+  const membership = await adminClient
+    .from("chat_thread_members")
+    .select("thread_id")
+    .eq("thread_id", threadId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return !membership.error && !!membership.data;
+}
+
 async function userCanJoinAsRequestedRole(
   adminClient: ReturnType<typeof createClient>,
   room: ResolvedRoomRecord,
@@ -200,6 +225,12 @@ async function userCanJoinAsRequestedRole(
   userId: string,
   metadata: Record<string, ScalarMetadataValue>,
 ) {
+  if (room.kind === "communication" && surface === "chat-call") {
+    if (!room.chatThreadId) return false;
+    const canAccessChatThread = await userCanAccessChatThread(adminClient, room.chatThreadId, userId);
+    if (!canAccessChatThread) return false;
+  }
+
   if (room.hostUserId === userId) return true;
 
   if (room.kind === "watch-party") {

@@ -31,18 +31,26 @@
 - Inbox preview text updates from the latest message.
 - Unread count increments for the recipient.
 - Opening the thread clears unread for the current member.
+- Signed-out inbox/thread and private deep links show safe auth handoff without message leakage.
+- Supported chat attachments upload, render for the recipient, and stay private to thread members.
 - `Voice Call` starts a thread-based voice session with camera off and mic on.
 - `Video Call` starts a thread-based video session with camera on and mic on.
 - A participant with an active thread call sees the active-call banner in the same thread.
 - Joining and ending a thread call clears active call state for both participants.
+- `chat-call` LiveKit token compatibility remains routed through the registry if a LiveKit-backed path is used.
 
 ## What This Pass Does Not Need To Prove
 - Group chat
-- Media attachments
 - Typing indicators
 - Push notifications
 - Incoming-call alerts or ringing UX
 - Background telephony-style handling
+
+## Current May 13, 2026 Proof State
+- Runtime details are recorded in `docs/chilly-chat-final-behavior-proof.md`.
+- Passed: signed-in inbox/open, direct thread send/read persistence, post-migration realtime UI delivery without duplicates, signed-out physical-device auth handoff for inbox/thread/call-compatible deep links, non-member thread read block, attachment recipient read/privacy, regular voice-call connect/audio/hangup, video-call connect/remote media/camera toggle/mic toggle/hangup, invalid `chat-call` token safe failure.
+- Fixed during proof: communication-room join RLS now requires chat thread membership for rooms attached to private chat threads; chat realtime tables are now added to Supabase Realtime publication when present; Realtime broadcast/untrack waits in the call session are bounded so hangup cleanup is not held by a stale Realtime operation.
+- Still blocked: none for the Chi'lly Chat final behavior proof lane.
 
 ## Runtime Evidence To Capture
 - Use the dev overlay when running development builds.

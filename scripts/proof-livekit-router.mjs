@@ -54,27 +54,30 @@ const createRouter = (servers) => {
     servers: clone(servers),
   };
 
-  const assign = (roomId) => {
-    const existing = state.assignments.get(roomId);
+  const assignmentKey = (roomId, roomType = "proof") => `${roomType}:${roomId}`;
+
+  const assign = (roomId, roomType = "proof") => {
+    const key = assignmentKey(roomId, roomType);
+    const existing = state.assignments.get(key);
     if (existing) {
       const server = state.servers.find((candidate) => candidate.serverId === existing.serverId);
       if (!server || !["active", "draining"].includes(server.status)) {
-        state.audit.push({ event: "assignment_failed", roomId, reason: "assigned_server_unavailable" });
+        state.audit.push({ event: "assignment_failed", reason: "assigned_server_unavailable", roomId, roomType });
         return { ok: false, reason: "assigned_server_unavailable" };
       }
 
-      state.audit.push({ event: "assignment_reused", roomId, serverId: existing.serverId });
+      state.audit.push({ event: "assignment_reused", roomId, roomType, serverId: existing.serverId });
       return { ok: true, serverId: existing.serverId };
     }
 
     const server = chooseServer(state.servers);
     if (!server) {
-      state.audit.push({ event: "no_eligible_server", roomId });
+      state.audit.push({ event: "no_eligible_server", roomId, roomType });
       return { ok: false, reason: "no_eligible_server" };
     }
 
-    state.assignments.set(roomId, { serverId: server.serverId });
-    state.audit.push({ event: "room_assigned", roomId, serverId: server.serverId });
+    state.assignments.set(key, { serverId: server.serverId });
+    state.audit.push({ event: "room_assigned", roomId, roomType, serverId: server.serverId });
     return { ok: true, serverId: server.serverId };
   };
 
@@ -132,6 +135,21 @@ assert.deepEqual(fullBox.assign("ROOM_FULL"), { ok: false, reason: "no_eligible_
 const staleBox = createRouter([{ ...baseServer, lastHeartbeatAt: new Date(now - STALE_MS - 1_000).toISOString() }]);
 assert.deepEqual(staleBox.assign("ROOM_STALE"), { ok: false, reason: "no_eligible_server" });
 
+const chatCallRouter = createRouter([baseServer]);
+const chatCallFirstRoom = chatCallRouter.assign("CHAT_CALL_A", "chat_call");
+assert.deepEqual(chatCallFirstRoom, { ok: true, serverId: "chillywood-prod-01" });
+
+const chatCallReusedRoom = chatCallRouter.assign("CHAT_CALL_A", "chat_call");
+assert.deepEqual(chatCallReusedRoom, { ok: true, serverId: "chillywood-prod-01" });
+
+chatCallRouter.setStatus("chillywood-prod-01", "draining");
+
+const chatCallExistingOnDraining = chatCallRouter.assign("CHAT_CALL_A", "chat_call");
+assert.deepEqual(chatCallExistingOnDraining, { ok: true, serverId: "chillywood-prod-01" });
+
+const chatCallNewWhileDraining = chatCallRouter.assign("CHAT_CALL_B", "chat_call");
+assert.deepEqual(chatCallNewWhileDraining, { ok: false, reason: "no_eligible_server" });
+
 const futureScale = createRouter([
   { ...baseServer, currentRooms: 99, serverId: "chillywood-livekit-us-1", publicWsUrl: "wss://live-1.example.test" },
   { ...baseServer, currentRooms: 5, serverId: "chillywood-livekit-us-2", publicWsUrl: "wss://live-2.example.test" },
@@ -148,8 +166,12 @@ assert.deepEqual(futureScale.assign("ROOM_SCALE_C"), { ok: true, serverId: "chil
 assert.ok(singleBox.state.audit.some((entry) => entry.event === "room_assigned"));
 assert.ok(singleBox.state.audit.some((entry) => entry.event === "assignment_reused"));
 assert.ok(singleBox.state.audit.some((entry) => entry.event === "no_eligible_server"));
+assert.ok(chatCallRouter.state.audit.some((entry) => entry.event === "room_assigned" && entry.roomType === "chat_call"));
+assert.ok(chatCallRouter.state.audit.some((entry) => entry.event === "assignment_reused" && entry.roomType === "chat_call"));
+assert.ok(chatCallRouter.state.audit.some((entry) => entry.event === "no_eligible_server" && entry.roomType === "chat_call"));
 
 console.log(JSON.stringify({
+  chatCallAuditEvents: chatCallRouter.state.audit.map((entry) => entry.roomType ? `${entry.roomType}:${entry.event}` : entry.event),
   futureScaleAuditEvents: futureScale.state.audit.map((entry) => entry.event),
   singleBoxAuditEvents: singleBox.state.audit.map((entry) => entry.event),
   status: "passed",

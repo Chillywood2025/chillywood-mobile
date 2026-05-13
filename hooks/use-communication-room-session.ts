@@ -10,7 +10,6 @@ import { trackEvent } from "../_lib/analytics";
 import {
   buildCommunicationChannelName,
   buildCommunicationPresencePayload,
-  COMMUNICATION_ACTIVE_MEMBER_WINDOW_MILLIS,
   COMMUNICATION_DEFAULT_ICE_SERVERS,
   COMMUNICATION_ROOM_MAX_PARTICIPANTS,
   createCommunicationMediaStream,
@@ -63,6 +62,9 @@ type PresenceStatePayload = {
 };
 
 const HEARTBEAT_INTERVAL_MILLIS = 10_000;
+const OFFER_RETRY_DELAY_MILLIS = 2_500;
+const OFFER_RETRY_MIN_INTERVAL_MILLIS = 2_000;
+const REALTIME_OPERATION_TIMEOUT_MILLIS = 3_000;
 const PREFERRED_VIDEO_CODEC = "VP8";
 
 const logChatRtc = (event: string, details?: Record<string, unknown>) => {
@@ -257,6 +259,40 @@ const mapPresenceState = (state: Record<string, PresenceStatePayload[] | undefin
   return mapped;
 };
 
+const shouldInitiatePeerOffer = ({
+  localUserId,
+  remoteUserId,
+  hostUserId,
+}: {
+  localUserId: string;
+  remoteUserId: string;
+  hostUserId?: string | null;
+}) => {
+  const localId = localUserId.trim();
+  const remoteId = remoteUserId.trim();
+  const hostId = String(hostUserId ?? "").trim();
+  if (!localId || !remoteId) return false;
+  if (hostId) {
+    if (localId === hostId && remoteId !== hostId) return true;
+    if (remoteId === hostId) return false;
+  }
+  return localId.localeCompare(remoteId) < 0;
+};
+
+const waitForRealtimeOperation = async <T,>(operation: Promise<T>, timeoutMillis = REALTIME_OPERATION_TIMEOUT_MILLIS) => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<null>((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), timeoutMillis);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
 export function useCommunicationRoomSession({
   roomId,
   initialMediaPreferences,
@@ -294,6 +330,8 @@ export function useCommunicationRoomSession({
   const localStreamRef = useRef<MediaStream | null>(null);
   const auxiliaryStreamsRef = useRef<MediaStream[]>([]);
   const peerConnectionsRef = useRef<Record<string, any>>({});
+  const offerRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const lastOfferSentAtRef = useRef<Record<string, number>>({});
   const endingRef = useRef(false);
   const reconnectTrackedRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
@@ -391,11 +429,18 @@ export function useCommunicationRoomSession({
     };
   }, []);
 
+  const clearOfferRetry = useCallback((userId: string) => {
+    const existingTimer = offerRetryTimersRef.current[userId];
+    if (existingTimer) clearTimeout(existingTimer);
+    delete offerRetryTimersRef.current[userId];
+  }, []);
+
   const cleanupRemotePeer = useCallback((userId: string) => {
     logChatRtc("remote_peer_cleanup", {
       roomId,
       userId,
     });
+    clearOfferRetry(userId);
     const existing = peerConnectionsRef.current[userId];
     if (existing) {
       try {
@@ -418,7 +463,7 @@ export function useCommunicationRoomSession({
       delete next[userId];
       return next;
     });
-  }, []);
+  }, [clearOfferRetry, roomId]);
 
   const cleanupSessionMedia = useCallback(() => {
     logChatRtc("session_media_cleanup_start", {
@@ -426,6 +471,7 @@ export function useCommunicationRoomSession({
       remotePeerCount: Object.keys(peerConnectionsRef.current).length,
       hasLocalStream: !!localStreamRef.current,
     });
+    Object.keys(offerRetryTimersRef.current).forEach(clearOfferRetry);
     Object.keys(peerConnectionsRef.current).forEach(cleanupRemotePeer);
     stopCommunicationStream(localStreamRef.current);
     localStreamRef.current = null;
@@ -435,14 +481,14 @@ export function useCommunicationRoomSession({
     logChatRtc("session_media_cleanup_complete", {
       roomId,
     });
-  }, [cleanupRemotePeer, roomId]);
+  }, [cleanupRemotePeer, clearOfferRetry, roomId]);
 
   const cleanupChannel = useCallback(async () => {
     const channel = channelRef.current;
     if (!channel) return;
 
     try {
-      await channel.untrack();
+      await waitForRealtimeOperation(channel.untrack());
     } catch {
       // noop
     }
@@ -492,7 +538,7 @@ export function useCommunicationRoomSession({
   const sendBroadcast = useCallback(async (event: string, payload: Record<string, unknown>) => {
     const channel = channelRef.current;
     if (!channel) return;
-    await channel.send({ type: "broadcast", event, payload }).catch(() => {});
+    await waitForRealtimeOperation(channel.send({ type: "broadcast", event, payload })).catch(() => {});
   }, []);
 
   const applyParticipantsFromSources = useCallback(async (presenceByUserId?: Record<string, PresenceStatePayload>) => {
@@ -543,7 +589,7 @@ export function useCommunicationRoomSession({
         micOn: participant.micOn,
       })),
     });
-  }, []);
+  }, [roomId]);
 
   const refreshSnapshot = useCallback(async (targetRoomId?: string) => {
     const resolvedRoomId = formatRoomId(targetRoomId ?? roomRef.current?.roomId ?? roomId);
@@ -664,7 +710,7 @@ export function useCommunicationRoomSession({
       localStream: describeStream(localStream),
       peer: describePeerConnection(peerConnection),
     });
-  }, [ensureInitialLocalStream]);
+  }, [ensureInitialLocalStream, roomId]);
 
   const logInboundVideoDiagnostics = useCallback(async (remoteUserId: string, peerConnection: any, reason: string) => {
     if (!__DEV__) return;
@@ -803,6 +849,9 @@ export function useCommunicationRoomSession({
         state: mappedState,
         peer: describePeerConnection(peerConnection),
       });
+      if (mappedState === "connected") {
+        clearOfferRetry(remoteUserId);
+      }
       if (mappedState === "connected" || mappedState === "connecting") {
         void logInboundVideoDiagnostics(remoteUserId, peerConnection, `pc_${mappedState}`);
       }
@@ -830,7 +879,50 @@ export function useCommunicationRoomSession({
       [remoteUserId]: "connecting",
     }));
     return peerConnection;
-  }, [attachMissingLocalTracks, logInboundVideoDiagnostics, roomId, sendBroadcast]);
+  }, [attachMissingLocalTracks, clearOfferRetry, logInboundVideoDiagnostics, roomId, sendBroadcast]);
+
+  const broadcastOfferDescription = useCallback(async (remoteUserId: string, description: { type?: unknown; sdp?: unknown } | null | undefined) => {
+    const resolvedIdentity = identityRef.current;
+    if (!resolvedIdentity || !description) return false;
+
+    const descriptionType = String(description.type ?? "").trim();
+    if (descriptionType !== "offer") return false;
+
+    lastOfferSentAtRef.current[remoteUserId] = Date.now();
+    await sendBroadcast("webrtc:offer", {
+      targetUserId: remoteUserId,
+      fromUserId: resolvedIdentity.userId,
+      description: {
+        type: descriptionType,
+        sdp: typeof description.sdp === "string" ? description.sdp : null,
+      },
+    });
+    return true;
+  }, [sendBroadcast]);
+
+  const scheduleOfferRetry = useCallback((remoteUserId: string) => {
+    clearOfferRetry(remoteUserId);
+    offerRetryTimersRef.current[remoteUserId] = setTimeout(() => {
+      delete offerRetryTimersRef.current[remoteUserId];
+      const peerConnection = peerConnectionsRef.current[remoteUserId];
+      if (!peerConnection) return;
+
+      const connectionState = String(peerConnection.connectionState ?? "");
+      if (connectionState === "connected" || connectionState === "closed") return;
+
+      const localDescription = peerConnection.localDescription
+        ?? peerConnection.pendingLocalDescription
+        ?? peerConnection.currentLocalDescription;
+      if (String(localDescription?.type ?? "") !== "offer") return;
+
+      logChatRtc("offer_retry_resend", {
+        roomId,
+        remoteUserId,
+        peer: describePeerConnection(peerConnection),
+      });
+      void broadcastOfferDescription(remoteUserId, localDescription);
+    }, OFFER_RETRY_DELAY_MILLIS);
+  }, [broadcastOfferDescription, clearOfferRetry, roomId]);
 
   const createAndSendOffer = useCallback(async (remoteUserId: string) => {
     const resolvedIdentity = identityRef.current;
@@ -838,6 +930,33 @@ export function useCommunicationRoomSession({
 
     const peerConnection = await ensurePeerConnection(remoteUserId);
     if (!peerConnection) return;
+
+    const connectionState = String(peerConnection.connectionState ?? "");
+    if (connectionState === "connected" || connectionState === "closed") {
+      clearOfferRetry(remoteUserId);
+      return;
+    }
+
+    const signalingState = String(peerConnection.signalingState ?? "stable");
+    const existingLocalDescription = peerConnection.localDescription
+      ?? peerConnection.pendingLocalDescription
+      ?? peerConnection.currentLocalDescription;
+    if (signalingState !== "stable") {
+      if (String(existingLocalDescription?.type ?? "") === "offer") {
+        await broadcastOfferDescription(remoteUserId, existingLocalDescription);
+        scheduleOfferRetry(remoteUserId);
+      } else {
+        logChatRtc("offer_skipped_unstable", {
+          roomId,
+          remoteUserId,
+          peer: describePeerConnection(peerConnection),
+        });
+      }
+      return;
+    }
+
+    const lastOfferSentAt = lastOfferSentAtRef.current[remoteUserId] ?? 0;
+    if (Date.now() - lastOfferSentAt < OFFER_RETRY_MIN_INTERVAL_MILLIS) return;
 
     const offer = await peerConnection.createOffer({
       offerToReceiveAudio: true,
@@ -853,16 +972,15 @@ export function useCommunicationRoomSession({
       peer: describePeerConnection(peerConnection),
     });
     await peerConnection.setLocalDescription(normalizedOffer);
-
-    await sendBroadcast("webrtc:offer", {
-      targetUserId: remoteUserId,
-      fromUserId: resolvedIdentity.userId,
-      description: {
-        type: normalizedOffer.type,
-        sdp: normalizedOffer.sdp ?? null,
-      },
-    });
-  }, [ensurePeerConnection, roomId, sendBroadcast]);
+    await broadcastOfferDescription(remoteUserId, normalizedOffer);
+    scheduleOfferRetry(remoteUserId);
+  }, [
+    broadcastOfferDescription,
+    clearOfferRetry,
+    ensurePeerConnection,
+    roomId,
+    scheduleOfferRetry,
+  ]);
 
   const syncPeerConnections = useCallback(async (nextParticipants: CommunicationParticipantPresence[]) => {
     const resolvedIdentity = identityRef.current;
@@ -901,14 +1019,27 @@ export function useCommunicationRoomSession({
     for (const participant of allowedParticipants) {
       if (participant.userId === resolvedIdentity.userId) continue;
 
-      if (peerConnectionsRef.current[participant.userId]) {
-        await attachMissingLocalTracks(peerConnectionsRef.current[participant.userId]);
+      const shouldInitiateOffer = shouldInitiatePeerOffer({
+        localUserId: resolvedIdentity.userId,
+        remoteUserId: participant.userId,
+        hostUserId: roomRef.current?.hostUserId,
+      });
+      const existingPeerConnection = peerConnectionsRef.current[participant.userId];
+      if (existingPeerConnection) {
+        await attachMissingLocalTracks(existingPeerConnection);
+        if (shouldInitiateOffer) {
+          const connectionState = String(existingPeerConnection.connectionState ?? "");
+          const lastOfferSentAt = lastOfferSentAtRef.current[participant.userId] ?? 0;
+          if (
+            connectionState !== "connected"
+            && connectionState !== "closed"
+            && Date.now() - lastOfferSentAt >= OFFER_RETRY_MIN_INTERVAL_MILLIS
+          ) {
+            await createAndSendOffer(participant.userId);
+          }
+        }
         continue;
       }
-
-      const localJoinedAt = localJoinedAtRef.current;
-      const shouldInitiateOffer = localJoinedAt < participant.joinedAt
-        || (localJoinedAt === participant.joinedAt && resolvedIdentity.userId.localeCompare(participant.userId) < 0);
 
       if (shouldInitiateOffer) {
         await createAndSendOffer(participant.userId);
@@ -1005,7 +1136,7 @@ export function useCommunicationRoomSession({
       roomId,
       endRoomIfHost: !!options?.endRoomIfHost,
     });
-  }, [cleanupChannel, cleanupSessionMedia, cleanupSnapshotChannel, roomId, sendBroadcast]);
+  }, [analyticsRole, analyticsSurface, cleanupChannel, cleanupSessionMedia, cleanupSnapshotChannel, roomId, sendBroadcast]);
 
   useEffect(() => {
     let active = true;
@@ -1255,6 +1386,7 @@ export function useCommunicationRoomSession({
 
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection) return;
+        clearOfferRetry(fromUserId);
         await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription(payload?.description as any));
         logChatRtc("diag_answer_remote_description_set", {
           roomId: snapshot.room.roomId,
@@ -1328,9 +1460,14 @@ export function useCommunicationRoomSession({
             roomId: snapshot.room.roomId,
             reason: reconnectReason,
           });
-          await updatePresence(cameraEnabledRef.current, micEnabledRef.current);
-          await refreshSnapshot(snapshot.room.roomId);
           setLoading(false);
+          void updatePresence(cameraEnabledRef.current, micEnabledRef.current)
+            .then(() => refreshSnapshot(snapshot.room.roomId))
+            .catch((error) => {
+              reportRuntimeError("communication-presence-initial-sync", error, {
+                roomId: snapshot.room.roomId,
+              });
+            });
           return;
         }
 
@@ -1427,6 +1564,7 @@ export function useCommunicationRoomSession({
     enabled,
     analyticsRole,
     analyticsSurface,
+    clearOfferRetry,
   ]);
 
   useEffect(() => {
