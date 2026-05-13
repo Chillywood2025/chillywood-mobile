@@ -1,0 +1,22 @@
+[Unit]
+Description=Chi'llywood Ops Alert Automation Safety Gate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chillywood
+Group=chillywood
+WorkingDirectory=/opt/chillywood/ops/alert-automation
+EnvironmentFile=/etc/chillywood/ops-alert-automation.env
+ExecStart=/usr/bin/node dist/server.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/chillywood/ops/alert-automation/data
+
+[Install]
+WantedBy=multi-user.target

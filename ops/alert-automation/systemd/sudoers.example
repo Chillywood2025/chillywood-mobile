@@ -1,0 +1,5 @@
+# Example only. Install with visudo after replacing the user/path if needed.
+# No wildcards are used; only these exact scripts may be run by the service user.
+chillywood ALL=(root) NOPASSWD: /opt/chillywood/ops/alert-automation/scripts/turn-cap.sh
+chillywood ALL=(root) NOPASSWD: /opt/chillywood/ops/alert-automation/scripts/net-throttle.sh
+chillywood ALL=(root) NOPASSWD: /opt/chillywood/ops/alert-automation/scripts/net-throttle-rollback.sh

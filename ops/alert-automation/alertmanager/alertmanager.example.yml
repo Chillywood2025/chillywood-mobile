@@ -1,0 +1,11 @@
+route:
+  receiver: chillywood-ops-alert-automation
+
+receivers:
+  - name: chillywood-ops-alert-automation
+    webhook_configs:
+      - url: http://ops-alert-automation:8080/webhook/alert
+        send_resolved: true
+        # Add X-Ops-Signature: sha256=<hmac> at the proxy or sidecar layer when
+        # OPS_WEBHOOK_SECRET is configured. Alertmanager does not natively template
+        # HMAC signatures for webhook receivers.

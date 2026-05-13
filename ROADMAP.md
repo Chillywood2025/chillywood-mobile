@@ -38,6 +38,7 @@
 - Chi'llywood Native Room / Screen UI doctrine is current Public v1 guardrail: every new or materially changed route must define owner, primary experience, top/middle/bottom/More placement, native mobile safe-area/keyboard/no-overlap proof, empty/loading/error/locked states, role/privacy/Premium gates, and background preservation before it is production-complete. Generic Expo/demo/admin-looking consumer screens, fake data/counts/participants/money, route ownership drift, Premium-gate weakening, and global background/theme changes remain forbidden.
 - moderation basics
 - analytics, error monitoring, and admin visibility
+- backend/server ops alert automation safety gate under `ops/alert-automation`: Alertmanager webhook intake, dry-run action planner, persistent job store, JSONL audit log, approval token gate, LiveKit admin action planner, and network-shaping script planner exist with no default live execution. Destructive LiveKit actions require approval plus `ALLOW_LIVE_ACTIONS=true` plus `DRY_RUN=false`; network shaping requires approval plus `ALLOW_NET_SHAPING=true` plus `DRY_RUN=false`. This is not a mobile app feature and does not change Watch-Party Live, Live Stage, Player, Supabase, Hetzner HLS, creator-video flows, or user-facing routes.
 - layered room participation truth with limited active live seats, scalable participant browsing, and a clear distinction between joined presence and true live-seat media
 - Public v1 should stay focused on the core social streaming experience instead of the full long-term platform vision
 

@@ -1,0 +1,14 @@
+services:
+  ops-alert-automation:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DRY_RUN: "true"
+      ALLOW_LIVE_ACTIONS: "false"
+      ALLOW_NET_SHAPING: "false"
+      OPS_APPROVAL_TOKEN: "local-only-change-me"
+      JOB_STORE_PATH: "/data/jobs.json"
+      AUDIT_LOG_PATH: "/data/audit.log"
+    volumes:
+      - ./data:/data

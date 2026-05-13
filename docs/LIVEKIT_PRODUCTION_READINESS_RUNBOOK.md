@@ -271,6 +271,29 @@ D7F activation closeout:
 10. Keep app/public users on controlled `spectator-playback` URLs; do not show or log raw Hetzner HLS URLs.
 11. Keep `PUBLIC_HLS_BASE_URL` unset unless a future server-only lane explicitly needs it. The current D7F path does not require app clients to know that base.
 
+## Ops Alert Automation Safety Gate
+
+Current repo-side ops automation placement:
+
+- `ops/alert-automation` is a standalone backend/server ops package for Prometheus Alertmanager webhooks.
+- It does not run inside the React Native app and does not change Watch-Party Live, Live Stage, Player, Supabase Edge Functions, Hetzner Object Storage/HLS, creator-video upload/player flows, or mobile app routes.
+- It receives Alertmanager payloads, validates them, records persistent JSON jobs, writes JSONL audit events, and plans safe actions.
+- `DRY_RUN=true` is the default.
+- Destructive LiveKit admin actions such as `DeleteRoom` and `RemoveParticipant` require a recorded approval, `ALLOW_LIVE_ACTIONS=true`, and `DRY_RUN=false`.
+- TURN/network shaping actions require a recorded approval, `ALLOW_NET_SHAPING=true`, and `DRY_RUN=false`.
+- Approval and denial endpoints require `X-Ops-Approval-Token`; webhook HMAC protection is supported with `X-Ops-Signature: sha256=<hex>` when `OPS_WEBHOOK_SECRET` is configured.
+- Shell execution is limited to exact scripts in `ops/alert-automation/scripts/`; alert labels are not interpolated into arbitrary shell commands.
+- Local proof ran with dry-run and both safety flags false. Webhook receipt created jobs and audit events, approval without a token was rejected, and approval with a token stayed blocked by safety while `ALLOW_LIVE_ACTIONS=false`.
+- No real destructive LiveKit action, TURN mutation, network shaping, production host change, production secret commit, or HLS/spectator playback change was executed during proof.
+
+Production activation guardrail:
+
+1. Keep `DRY_RUN=true`, `ALLOW_LIVE_ACTIONS=false`, and `ALLOW_NET_SHAPING=false` until a bounded operator incident run explicitly authorizes otherwise.
+2. Configure secrets only on the ops host, never in repo docs or mobile app code.
+3. Review the planned job and audit log before approval.
+4. Enable the relevant `ALLOW_*` flag only for the shortest bounded window needed.
+5. Prefer dry-run and observe-only responses for unknown or uncertain alerts.
+
 ## Production Env Checklist
 
 | Environment value | Owner | Where it belongs | Status |

@@ -1,0 +1,48 @@
+groups:
+  - name: chillywood-livekit-ops-examples
+    rules:
+      # Example thresholds only. Tune against production baselines before enabling.
+      - alert: TurnAllocationSurge
+        expr: sum(rate(livekit_turn_allocations_total[5m])) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: TURN allocation surge example
+          description: Example only; review production TURN allocation baseline first.
+
+      # Example only. Replace metric names and thresholds with verified production metrics.
+      - alert: RoomZombieStuck
+        expr: livekit_room_age_seconds{state="empty"} > 1800
+        for: 10m
+        labels:
+          severity: warning
+          room: "{{ $labels.room }}"
+        annotations:
+          summary: Stuck empty LiveKit room example
+
+      - alert: PublisherFlood
+        expr: rate(livekit_participant_publish_attempts_total[1m]) > 30
+        for: 3m
+        labels:
+          severity: warning
+          room: "{{ $labels.room }}"
+          identity: "{{ $labels.identity }}"
+        annotations:
+          summary: Publisher flood example
+
+      - alert: LiveKitHighEgress
+        expr: sum(rate(livekit_egress_bytes_total[5m])) > 100000000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: High LiveKit egress example
+
+      - alert: ServerCpuMemoryPressure
+        expr: avg(node_load1) > 8 or (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Server CPU or memory pressure example
