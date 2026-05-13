@@ -141,6 +141,22 @@ These labels are locked and are not runtime-branding experiments.
 
 If duplicate files or shared constants exist, prove which active surface owns the label before editing.
 
+## LiveKit Registry / Router Rule
+LiveKit owns RTC/media transport only. Chi'llywood room ownership, role gates, Premium gates, and UI layout stay with the canonical app routes.
+
+RTC token issuance must route through the backed LiveKit server registry and room router:
+- current production has one Hetzner LiveKit server record, `chillywood-prod-01`, with public connect URL `wss://live.chillywoodstream.com`
+- new RTC rooms may be assigned only to an `active`, fresh-heartbeating, under-capacity server
+- existing room assignments win and stay pinned to their assigned server
+- `draining` servers receive no new rooms but existing assigned rooms may continue to resolve there
+- `offline`, `maintenance`, `disabled`, `standby`, stale, or full servers receive no new rooms
+- active rooms must not be silently migrated, deleted, or disconnected by the router
+- no hardcoded `LIVEKIT_URL` fallback may mint tokens for new rooms unless a separate emergency fallback lane explicitly approves and documents it
+- clients may receive only the assigned public WebSocket URL and their authorized participant token; they must not receive LiveKit API secrets, internal API URLs, service-role keys, routing internals, or spectator-only HLS provider details
+- D7F spectator playback remains watch-only through `spectator-playback` and must never receive a full LiveKit participant token
+
+The registry/router/drain foundation enables future manual scaling and later semi-auto/full autoscaling lanes, but it does not itself provision servers, activate standby boxes, rebalance rooms, or autoscale.
+
 ## Admin Command Center Rule
 `/admin` is the canonical platform owner/operator route.
 

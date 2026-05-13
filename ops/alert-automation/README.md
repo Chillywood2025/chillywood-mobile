@@ -17,6 +17,12 @@ It is not a mobile app feature. It does not change Watch-Party Live, Live Stage,
 - Alert labels never become arbitrary shell commands.
 - LiveKit API secrets, webhook secrets, approval tokens, and provider secrets must stay outside git.
 
+## Registry / Drain Mode Relationship
+
+The LiveKit Server Registry + Room Router + Drain Mode foundation lives outside this ops automation package in `supabase/functions/livekit-registry`, `supabase/functions/_shared/livekit-routing.ts`, and `ops/livekit-registry/`.
+
+Alert labels may include `server_id` later for operator context, but this service does not auto-drain, auto-activate standby, auto-provision, migrate active rooms, or autoscale servers. Any future alert-driven drain/activation action must be a separate approved lane with the same dry-run, approval, and safety-flag model used here.
+
 ## Endpoints
 
 - `GET /healthz`

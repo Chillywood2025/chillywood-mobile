@@ -111,6 +111,7 @@ Only use these where they actually fit the room:
 - Live Stage is an in-room presentation mode inside Live Room.
 - Party Room owns the social watch-together shell.
 - Party Room may provide viewer-local Party Feeds personalization such as participant pinning, but that personalization must stay inside `/watch-party/[partyId]`, must not alter host authority, room membership, LiveKit transport, shared playback, Premium gates, Live Stage, Chi'lly Chat calls, or other users' views, and must clear safely when the target participant is absent.
+- LiveKit RTC transport for Watch-Party Live, Live Stage, and Chi'lly Chat calls is assigned by the backed server registry/router, now remote-proved against `chillywood-prod-01`. Existing rooms stay pinned to their assigned server; a draining server receives no new rooms but does not disconnect assigned rooms. Current production has one Hetzner server record, `chillywood-prod-01`, until real usage requires adding additional boxes.
 - Watch-Party Live / shared party player owns the synchronized playback layer inside the Party flow.
 - Standalone Player owns solo playback and `Watch-Party Live` entry.
 - Profile / Channel and Chi'lly Chat connect people, titles, rooms, and official presence across the product.

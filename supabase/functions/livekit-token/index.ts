@@ -2,6 +2,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { AccessToken } from "npm:livekit-server-sdk@2";
+import {
+  normalizeLiveKitRoutingRoomType,
+  resolveLiveKitAssignment,
+} from "../_shared/livekit-routing.ts";
 
 type LiveKitJoinSurface = "live-stage" | "watch-party-live" | "chat-call";
 type LiveKitParticipantRole = "host" | "speaker" | "viewer";
@@ -262,7 +266,6 @@ Deno.serve(async (req) => {
     const supabaseServiceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const livekitApiKey = readRequiredEnv("LIVEKIT_API_KEY");
     const livekitApiSecret = readRequiredEnv("LIVEKIT_API_SECRET");
-    const livekitServerUrl = readRequiredEnv("LIVEKIT_URL");
 
     const authResult = await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
     if ("error" in authResult) return authResult.error;
@@ -342,6 +345,31 @@ Deno.serve(async (req) => {
     const participantName = resolveParticipantName(payload, authResult.user);
     const requestedGrants = getRequestedLiveKitGrants(participantRole);
     const participantIdentity = userId;
+    const routingRoomType = normalizeLiveKitRoutingRoomType(
+      surface,
+      room.kind,
+      room.kind === "watch-party" ? room.roomType : null,
+    );
+    const routing = await resolveLiveKitAssignment(adminClient, {
+      actorUserId: userId,
+      appRoomId: room.roomName,
+      livekitRoomName: room.roomName,
+      metadata: {
+        roomKind: room.kind,
+        roomType: room.kind === "watch-party" ? room.roomType : null,
+        surface,
+      },
+      requestedRegion: tokenMetadata.requestedRegion ?? tokenMetadata.region ?? null,
+      roomType: routingRoomType,
+    });
+
+    if (!routing.ok) {
+      return json(routing.status, {
+        error: routing.error,
+        message: routing.message,
+      });
+    }
+
     const accessToken = new AccessToken(livekitApiKey, livekitApiSecret, {
       identity: participantIdentity,
       metadata: JSON.stringify({
@@ -369,7 +397,7 @@ Deno.serve(async (req) => {
 
     return json(200, {
       participantToken,
-      serverUrl: livekitServerUrl,
+      serverUrl: routing.serverUrl,
     });
   } catch (error) {
     console.error("livekit-token failure", error);

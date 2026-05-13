@@ -30,6 +30,7 @@ This runbook records current repo truth, what is only documented from previous i
 | Runtime reader | `_lib/runtimeConfig.ts` owns `getRuntimeLiveKitConfig()` and `isLiveKitRuntimeConfigured()`. | Implemented |
 | Client token contract | `_lib/livekit/token-contract.ts` sends authenticated POST requests to the configured token endpoint and never mints LiveKit credentials locally. | Implemented / Proof Pending |
 | Prepared join boundary | `_lib/livekit/join-boundary.ts` caches prepared token contracts briefly for Live Stage and Watch-Party Live handoff. | Implemented / Proof Pending |
+| Server registry/router | `livekit_servers`, `livekit_room_assignments`, `livekit_server_heartbeats`, `livekit_routing_audit`, `livekit-registry`, and the routed `livekit-token` path assign RTC rooms to eligible LiveKit servers before token issuance. Current production starts with one Hetzner server record, `chillywood-prod-01`. | Remote Activated / Proof Passed |
 | Live Stage route owner | `app/watch-party/live-stage/[partyId].tsx` owns Live Room / Live Stage behavior. | Implemented / Proof Pending |
 | Stage media surface | `components/watch-party-live/livekit-stage-media-surface.tsx` owns LiveKit media rendering and stale signal-loop containment. | Implemented / Proof Pending |
 | Watch-Party Live camera sidecar | `app/watch-party/[partyId].tsx` prepares `surface=watch-party-live`; `app/player/[id].tsx` consumes it for Party Room shared-player camera presence. | Implemented / Proof Pending |
@@ -59,7 +60,7 @@ Current status:
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `LIVEKIT_API_KEY`
   - `LIVEKIT_API_SECRET`
-  - `LIVEKIT_URL`
+- The function no longer uses a hardcoded `LIVEKIT_URL` as the new-room connect target. It resolves the assigned public connect URL from the LiveKit server registry before returning `serverUrl`.
 - The app passes its Supabase auth access token in the `Authorization` header to the function. That auth token must never be printed or stored in proof artifacts.
 - The function returns only `participantToken` and `serverUrl` to the client.
 
@@ -88,6 +89,53 @@ Proof still required:
 5. Missing room returns `404`.
 6. Returned `serverUrl` is the intended production `wss://live.chillywoodstream.com` or approved release override.
 7. Supabase function logs do not expose API secrets, service-role keys, bearer tokens, or participant tokens.
+
+## LiveKit Server Registry / Router / Drain Mode
+
+Current production truth:
+
+- There is one production LiveKit box today: `chillywood-prod-01`.
+- Provider: Hetzner.
+- Public connect URL: `wss://live.chillywoodstream.com`.
+- Additional Hetzner/OVH boxes are not provisioned in this lane.
+- Full autoscaling, standby auto-activation, active-room migration, room deletion, and participant disconnection are not implemented.
+
+Repo-side owners:
+
+- Migration: `supabase/migrations/202605120004_livekit_server_registry_router.sql`.
+- Router helper: `supabase/functions/_shared/livekit-routing.ts`.
+- Operator function: `supabase/functions/livekit-registry/index.ts`.
+- Token integration: `supabase/functions/livekit-token/index.ts`.
+- Operator runbook/helper: `ops/livekit-registry/README.md` and `ops/livekit-registry/heartbeat-livekit.sh`.
+- Local proof script: `scripts/proof-livekit-router.mjs`.
+
+Routing rules:
+
+1. Existing room assignment wins.
+2. Existing assigned rooms continue on a draining server.
+3. Existing assigned rooms fail safe if their assigned server is offline, disabled, maintenance, standby, or missing.
+4. New rooms require an active server with a fresh heartbeat, public WebSocket URL, and capacity headroom.
+5. `draining`, `offline`, `maintenance`, `disabled`, `standby`, stale, full, or over-threshold servers receive no new rooms.
+6. If no server is eligible, the token endpoint returns a safe unavailable response and does not fall back to a hardcoded LiveKit URL.
+7. Clients receive only the assigned public `serverUrl` plus their authorized participant token. Internal API URLs, API keys, API secrets, service-role keys, heartbeat secrets, and routing internals stay server-side.
+8. D7F spectator playback is unchanged and never receives a full LiveKit participant token.
+
+Remote activation proof completed:
+
+1. Remote migration `202605120004_livekit_server_registry_router.sql` is applied.
+2. `livekit-registry` and the routed `livekit-token` functions are deployed.
+3. `LIVEKIT_REGISTRY_HEARTBEAT_SECRET` is set as a server-side Supabase function secret by name only.
+4. `chillywood-prod-01` is active with public connect URL `wss://live.chillywoodstream.com`.
+5. A real heartbeat for `chillywood-prod-01` was posted with safe available counts and null metrics where host metric sources were not available.
+6. Remote token proof passed for `watch-party-live`, `live-stage`, and `chat-call`; each returned the registry-selected `serverUrl` for `chillywood-prod-01`.
+7. Repeated same-room proof reused the same assignment.
+8. Routing audit and assignment rows were written.
+9. Drain proof passed: an existing assigned proof room still resolved to `chillywood-prod-01` while draining, and a new proof room returned `no_eligible_livekit_server` because no second real production box exists today.
+10. Reactivation plus fresh heartbeat restored new-room routing.
+11. Dummy standby/offline/full/stale proof records were used only for proof, did not affect real production rooms, and were disabled after proof.
+12. The temporary proof operator grant was restored to revoked, and the post-revoke registry call returned `403 operator_required`.
+
+Keep the heartbeat running from server-side monitoring or a wrapper around `ops/livekit-registry/heartbeat-livekit.sh`. If the heartbeat goes stale, new room token issuance intentionally fails safe instead of falling back to a hardcoded LiveKit URL.
 
 ## Domain, TLS, And Reverse Proxy Checklist
 
@@ -308,6 +356,7 @@ Production activation guardrail:
 | `LIVEKIT_URL` | Supabase Edge Function | Supabase function secrets | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_KEY` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
 | `LIVEKIT_API_SECRET` | Supabase Edge Function and LiveKit server | Supabase/host secret stores only | Configured / D7D Private Proof Passed |
+| `LIVEKIT_REGISTRY_HEARTBEAT_SECRET` | `livekit-registry` heartbeat writer | Supabase function secret plus host monitoring secret store only | Repo-side Implemented / External Activation Pending |
 | `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Supabase Edge Function HLS output | Supabase function secrets only | Names Present / D7E Public Proof Passed |
 | `PUBLIC_HLS_BASE_URL` | Legacy/proof-only public HLS readout | Supabase function secret only if a future server-side lane explicitly needs it | Unset after D7E proof / Not required by current D7F resolver |
 | `OPS_WEBHOOK_SECRET`, `OPS_APPROVAL_TOKEN`, `OPS_ADMIN_READ_TOKEN` | Ops alert automation | Ops host secret store only | Optional/readiness scaffolded |
@@ -484,7 +533,8 @@ Required pass facts:
 | Area | Status | Reason | Next action |
 | --- | --- | --- | --- |
 | App LiveKit config | Partial / Proof Pending | Runtime owner exists and defaults to `wss://live.chillywoodstream.com`; release env still needs validation. | Run `npm run validate:runtime` from release env and inspect public Expo config without secrets. |
-| Token endpoint | Partial / Proof Pending | Supabase function owner exists and remote status was previously ACTIVE; secrets and request/denial proof remain pending. | Verify Supabase function secrets, then run authenticated/denial proof from a release-like build. |
+| Token endpoint | Remote Proof Passed / App-Route Proof Pending | Supabase function owner routes through the registry before returning `serverUrl`; remote token proof passed for `watch-party-live`, `live-stage`, and `chat-call` with no secret/internal URL exposure. | Run release-like app-route proof against the deployed token function, then continue DNS/TURN/device proof. |
+| Registry/router/drain mode | Remote Activated / Proof Passed | Backed registry, assignment, heartbeat, audit, operator function, one-box runbook, local proof, remote migration, deployed functions, heartbeat, routing proof, drain proof, and stale/offline/full proof are complete. Production has one Hetzner box today. | Keep heartbeat monitoring active; add a second real server/standby only when actual usage requires it. |
 | Domain/TLS | Partial / Proof Pending | Hetzner spec records DNS/TLS/Caddy/LiveKit truth, but this lane did not re-prove it. | Run DNS/TLS/WebSocket checks and capture sanitized results. |
 | TURN/firewall | External Setup Pending / Proof Pending | Repo scaffold documents ports, but actual firewall/TURN config is external. | Verify host firewall, UDP/TCP/TURN settings, and cellular/Wi-Fi media connectivity. |
 | Server/provider | Partial / Proof Pending | Hetzner is documented as the current realtime host; OVH remains later. | Confirm host health, image pin, Caddy, LiveKit config, and monitoring. |
@@ -498,18 +548,19 @@ Required pass facts:
 Before running Android/two-device proof:
 
 1. Confirm production runtime values for `EXPO_PUBLIC_LIVEKIT_URL` and `EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT`.
-2. Confirm Supabase `livekit-token` secrets are present and aligned with the LiveKit server.
-3. Confirm DNS/TLS for `live.chillywoodstream.com`.
-4. Confirm firewall ports and TURN/TLS/UDP posture on the host.
-5. Confirm host/container health and log retention.
-6. Prepare a bounded `/tmp/chillywood-livekit-production-proof-*` artifact folder.
-7. Run one-device proof.
-8. Run two-device Live First proof.
-9. Run two-device Live Watch-Party proof.
-10. Run leave/rejoin and stale-room containment proof.
-11. Run cellular/Wi-Fi proof.
-12. Run token denial proof.
-13. Update `CURRENT_STATE.md`, `NEXT_TASK.md`, `docs/EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST.md`, and `docs/PUBLIC_V1_READINESS_CHECKLIST.md` only after proof.
+2. Confirm Supabase `livekit-token` and registry secrets remain present and aligned with the LiveKit server without printing values.
+3. Confirm the `chillywood-prod-01` heartbeat remains fresh before live-room proof.
+4. Confirm DNS/TLS for `live.chillywoodstream.com`.
+5. Confirm firewall ports and TURN/TLS/UDP posture on the host.
+6. Confirm host/container health and log retention.
+7. Prepare a bounded `/tmp/chillywood-livekit-production-proof-*` artifact folder.
+9. Run one-device proof.
+10. Run two-device Live First proof.
+11. Run two-device Live Watch-Party proof.
+12. Run leave/rejoin and stale-room containment proof.
+13. Run cellular/Wi-Fi proof.
+14. Run token denial proof.
+15. Update `CURRENT_STATE.md`, `NEXT_TASK.md`, `docs/EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST.md`, and `docs/PUBLIC_V1_READINESS_CHECKLIST.md` only after proof.
 
 ## Stop Conditions
 

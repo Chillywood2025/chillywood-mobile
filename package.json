@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "proof:session": "node ./scripts/start-proof-session.mjs",
+    "proof:livekit-router": "node ./scripts/proof-livekit-router.mjs",
     "validate:runtime": "node ./scripts/validate-runtime.mjs",
     "lint": "expo lint",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs",
