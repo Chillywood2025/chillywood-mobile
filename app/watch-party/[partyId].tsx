@@ -97,6 +97,13 @@ import {
     type WatchPartyState,
 } from "../../_lib/watchParty";
 import {
+    clearWatchPartyLivePinnedParticipantId,
+    markWatchPartyLivePinCoachSeen,
+    readWatchPartyLivePinCoachSeen,
+    readWatchPartyLivePinnedParticipantId,
+    saveWatchPartyLivePinnedParticipantId,
+} from "../../_lib/watchPartyPinning";
+import {
     createSocialAttachmentForSurface,
     getSocialAttachmentValidationMessage,
     readSocialAttachmentsForSurfaces,
@@ -333,6 +340,12 @@ export default function WatchPartyRoomScreen() {
   const [tapPulseById, setTapPulseById] = useState<Record<string, boolean>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<LiveBubbleParticipant | null>(null);
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
+  const [pinnedParticipantId, setPinnedParticipantId] = useState("");
+  const [pinActionParticipantId, setPinActionParticipantId] = useState("");
+  const [pinCoachSeen, setPinCoachSeen] = useState(false);
+  const [pinCoachVisible, setPinCoachVisible] = useState(false);
+  const [pinStorageReady, setPinStorageReady] = useState(false);
+  const [presenceSynced, setPresenceSynced] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
@@ -370,6 +383,7 @@ export default function WatchPartyRoomScreen() {
   const micSpeakingRef = useRef(false);
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const pinCoachTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activityPulse = useRef(new Animated.Value(0)).current;
   const liveBubbleOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
@@ -401,6 +415,31 @@ export default function WatchPartyRoomScreen() {
     return () => {
       Object.values(tapPulseTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
       tapPulseTimeoutsRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    Promise.all([
+      readWatchPartyLivePinnedParticipantId(),
+      readWatchPartyLivePinCoachSeen(),
+    ]).then(([storedPinnedParticipantId, storedPinCoachSeen]) => {
+      if (!active) return;
+      setPinnedParticipantId(storedPinnedParticipantId);
+      setPinCoachSeen(storedPinCoachSeen);
+      setPinStorageReady(true);
+    }).catch(() => {
+      if (!active) return;
+      setPinStorageReady(true);
+    });
+
+    return () => {
+      active = false;
+      if (pinCoachTimeoutRef.current) {
+        clearTimeout(pinCoachTimeoutRef.current);
+        pinCoachTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -847,6 +886,7 @@ export default function WatchPartyRoomScreen() {
     (userId: string | null, role: "host" | "viewer", fetchedRoom: WatchPartyState, profile: UserProfile | null) => {
       if (chatChannelRef.current) supabase.removeChannel(chatChannelRef.current);
       setConnState("connecting");
+      setPresenceSynced(false);
 
       const safeUserId = String(userId ?? "").trim();
       const trackedUserId = safeUserId || "anon";
@@ -865,6 +905,7 @@ export default function WatchPartyRoomScreen() {
           trackedUserId,
         });
         setParticipants(list);
+        setPresenceSynced(true);
       });
 
       // Presence join → system message
@@ -1842,8 +1883,24 @@ export default function WatchPartyRoomScreen() {
     [participants, trackedUserId, selfFallbackParticipant, featuredParticipantById, isSpeakingById],
   );
 
+  const hostParticipant = useMemo(
+    () => liveBubbleParticipants.find((participant) => participant.role === "host") ?? null,
+    [liveBubbleParticipants],
+  );
+  const visibleLiveBubbleParticipants = useMemo(() => {
+    const baseParticipants = liveBubbleParticipants.filter((participant) => !hiddenParticipantIds[participant.userId]);
+    const safePinnedParticipantId = String(pinnedParticipantId ?? "").trim();
+    if (!safePinnedParticipantId) return baseParticipants;
+    const pinnedParticipant = baseParticipants.find((participant) => participant.userId === safePinnedParticipantId);
+    if (!pinnedParticipant) return baseParticipants;
+    return [
+      pinnedParticipant,
+      ...baseParticipants.filter((participant) => participant.userId !== safePinnedParticipantId),
+    ];
+  }, [hiddenParticipantIds, liveBubbleParticipants, pinnedParticipantId]);
+
   useEffect(() => {
-    const nextOrder = liveBubbleParticipants.map((participant) => participant.userId).join("|");
+    const nextOrder = visibleLiveBubbleParticipants.map((participant) => participant.userId).join("|");
     if (!nextOrder) return;
     if (liveBubbleOrderRef.current && liveBubbleOrderRef.current !== nextOrder) {
       LayoutAnimation.configureNext({
@@ -1852,16 +1909,23 @@ export default function WatchPartyRoomScreen() {
       });
     }
     liveBubbleOrderRef.current = nextOrder;
-  }, [liveBubbleParticipants]);
+  }, [visibleLiveBubbleParticipants]);
 
-  const hostParticipant = useMemo(
-    () => liveBubbleParticipants.find((participant) => participant.role === "host") ?? null,
-    [liveBubbleParticipants],
-  );
-  const visibleLiveBubbleParticipants = useMemo(
-    () => liveBubbleParticipants.filter((participant) => !hiddenParticipantIds[participant.userId]),
-    [hiddenParticipantIds, liveBubbleParticipants],
-  );
+  useEffect(() => {
+    if (!pinStorageReady || !presenceSynced || !pinnedParticipantId) return;
+    const pinnedParticipantStillPresent = liveBubbleParticipants.some((participant) => participant.userId === pinnedParticipantId);
+    if (pinnedParticipantStillPresent) return;
+    setPinnedParticipantId("");
+    setPinActionParticipantId("");
+    void clearWatchPartyLivePinnedParticipantId();
+  }, [liveBubbleParticipants, pinnedParticipantId, pinStorageReady, presenceSynced]);
+
+  useEffect(() => {
+    if (!pinActionParticipantId) return;
+    const actionParticipantStillPresent = liveBubbleParticipants.some((participant) => participant.userId === pinActionParticipantId);
+    if (!actionParticipantStillPresent) setPinActionParticipantId("");
+  }, [liveBubbleParticipants, pinActionParticipantId]);
+
   const watchPartyLiveFeedSpacerCount = visibleLiveBubbleParticipants.length > 0
     ? (WATCH_PARTY_LIVE_FEED_COLUMNS - (visibleLiveBubbleParticipants.length % WATCH_PARTY_LIVE_FEED_COLUMNS)) % WATCH_PARTY_LIVE_FEED_COLUMNS
     : 0;
@@ -1984,6 +2048,35 @@ export default function WatchPartyRoomScreen() {
     () => Object.values(hiddenParticipantIds).filter(Boolean).length,
     [hiddenParticipantIds],
   );
+  const clearPinnedParticipant = useCallback(() => {
+    setPinnedParticipantId("");
+    setPinActionParticipantId("");
+    void clearWatchPartyLivePinnedParticipantId();
+  }, []);
+  const showPinCoachmark = useCallback(() => {
+    if (pinCoachSeen) return;
+    setPinCoachSeen(true);
+    setPinCoachVisible(true);
+    void markWatchPartyLivePinCoachSeen();
+    if (pinCoachTimeoutRef.current) clearTimeout(pinCoachTimeoutRef.current);
+    pinCoachTimeoutRef.current = setTimeout(() => {
+      setPinCoachVisible(false);
+      pinCoachTimeoutRef.current = null;
+    }, 3000);
+  }, [pinCoachSeen]);
+  const togglePinnedParticipant = useCallback((participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    if (pinnedParticipantId === nextParticipantId) {
+      clearPinnedParticipant();
+      return;
+    }
+    setPinnedParticipantId(nextParticipantId);
+    setActiveParticipantId(nextParticipantId);
+    setPinActionParticipantId("");
+    void saveWatchPartyLivePinnedParticipantId(nextParticipantId);
+    showPinCoachmark();
+  }, [clearPinnedParticipant, pinnedParticipantId, showPinCoachmark]);
   const featureParticipantFirst = useCallback((participantId: string) => {
     const nextParticipantId = String(participantId ?? "").trim();
     if (!nextParticipantId) return;
@@ -2011,8 +2104,13 @@ export default function WatchPartyRoomScreen() {
     if (activeParticipantId === nextParticipantId) {
       setActiveParticipantId(hostParticipant?.userId ?? "");
     }
+    if (pinnedParticipantId === nextParticipantId) {
+      clearPinnedParticipant();
+    } else {
+      setPinActionParticipantId((current) => (current === nextParticipantId ? "" : current));
+    }
     setSelectedParticipant((current) => (current?.userId === nextParticipantId ? null : current));
-  }, [activeParticipantId, currentUserBubbleId, hostParticipant?.userId, liveBubbleParticipants]);
+  }, [activeParticipantId, clearPinnedParticipant, currentUserBubbleId, hostParticipant?.userId, liveBubbleParticipants, pinnedParticipantId]);
   const showEveryoneLocally = useCallback(() => {
     setHiddenParticipantIds({});
   }, []);
@@ -2022,7 +2120,8 @@ export default function WatchPartyRoomScreen() {
     setParticipantPresentationById({});
     setActiveParticipantId(hostParticipant?.userId ?? "");
     setSelectedParticipant(null);
-  }, [hostParticipant?.userId]);
+    clearPinnedParticipant();
+  }, [clearPinnedParticipant, hostParticipant?.userId]);
   const closeParticipantModal = useCallback(() => {
     setSelectedParticipant(null);
   }, []);
@@ -2838,6 +2937,8 @@ export default function WatchPartyRoomScreen() {
               };
               const isCurrentUser = participant.userId === currentUserBubbleId;
               const isFeatured = !!featuredParticipantById[participant.userId];
+              const isPinned = participant.userId === pinnedParticipantId;
+              const isPinActionVisible = participant.userId === pinActionParticipantId;
               const isFocused = participant.userId === activeParticipantId;
               const isMuted = participantState.isMuted;
               const isSpeakerRole = participantState.role === "speaker";
@@ -2856,10 +2957,12 @@ export default function WatchPartyRoomScreen() {
                     isExpanded && styles.liveBubbleItemExpanded,
                     isFocused && !isFeatured && styles.liveBubbleItemActive,
                     isFeatured && styles.liveBubbleItemFeatured,
+                    isPinned && styles.liveBubbleItemPinned,
                     isRemoved && styles.liveBubbleItemRemoved,
                   ]}
                   activeOpacity={0.76}
                   onPress={() => {
+                    setPinActionParticipantId("");
                     triggerBubbleTapPulse(participant.userId);
                     if (isHost) {
                       debugLog("watch-party", "host tap user", { userId: participant.userId });
@@ -2874,13 +2977,25 @@ export default function WatchPartyRoomScreen() {
                     setSelectedParticipant(participant);
                   }}
                   onLongPress={() => {
-                    setFeaturedParticipantById((prev) => ({
-                      ...prev,
-                      [participant.userId]: !prev[participant.userId],
-                    }));
+                    setActiveParticipantId(participant.userId);
+                    setPinActionParticipantId((current) => (current === participant.userId ? "" : participant.userId));
                   }}
                   delayLongPress={220}
                 >
+                  {isPinActionVisible ? (
+                    <TouchableOpacity
+                      style={styles.liveBubblePinAction}
+                      activeOpacity={0.86}
+                      onPress={(event) => {
+                        event.stopPropagation();
+                        togglePinnedParticipant(participant.userId);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={isPinned ? `Unpin ${participant.displayName}` : `Pin ${participant.displayName}`}
+                    >
+                      <Text style={styles.liveBubblePinActionText}>{isPinned ? "Unpin" : "Pin"}</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   {isHost && isFocused && canModerateParticipant ? (
                     <View style={styles.liveBubbleActionMenu}>
                       <TouchableOpacity
@@ -2963,6 +3078,7 @@ export default function WatchPartyRoomScreen() {
                         isExpanded && styles.liveBubbleExpanded,
                         isFocused && !isFeatured && styles.liveBubbleFocused,
                         isFeatured && styles.liveBubbleFeatured,
+                        isPinned && styles.liveBubblePinned,
                         isCurrentUser && styles.liveBubbleMe,
                       ]}
                     >
@@ -3001,12 +3117,33 @@ export default function WatchPartyRoomScreen() {
                       {isMuted ? <Text style={styles.liveBubbleMutedIcon}>🔇</Text> : null}
                     </View>
                   </View>
+                  {isPinned ? (
+                    pinCoachVisible ? (
+                      <TouchableOpacity
+                        style={styles.liveBubblePinCoach}
+                        activeOpacity={0.86}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          togglePinnedParticipant(participant.userId);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Unpin ${participant.displayName}`}
+                      >
+                        <Text style={styles.liveBubblePinCoachText}>Pinned — tap to unpin</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.liveBubblePinnedPill}>
+                        <Text style={styles.liveBubblePinnedPillText}>Pinned</Text>
+                      </View>
+                    )
+                  ) : null}
                   <Text style={styles.liveBubbleName} numberOfLines={1}>
                     <Text
                       style={[
                         isExpanded && styles.liveBubbleNameExpanded,
                         isFocused && !isFeatured && styles.liveBubbleNameFocused,
                         isFeatured && styles.liveBubbleNameFeatured,
+                        isPinned && styles.liveBubbleNamePinned,
                       ]}
                     >
                       {isCurrentUser ? "You" : participant.displayName}
@@ -3515,6 +3652,14 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
+  liveBubbleItemPinned: {
+    borderColor: "rgba(210,226,255,0.74)",
+    backgroundColor: "rgba(35,48,80,0.72)",
+    shadowColor: "rgba(170,202,255,0.78)",
+    shadowOpacity: 0.26,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
   liveBubbleItemRemoved: {
     opacity: 0.6,
   },
@@ -3554,6 +3699,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.36,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 3 },
+  },
+  liveBubblePinned: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderColor: "rgba(224,236,255,0.82)",
+    backgroundColor: "rgba(142,178,255,0.2)",
   },
   liveBubbleMe: {
     width: 46,
@@ -3657,10 +3809,58 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   liveBubbleHostBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  liveBubblePinAction: {
+    minHeight: 26,
+    minWidth: 52,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,232,255,0.46)",
+    backgroundColor: "rgba(30,44,74,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  liveBubblePinActionText: {
+    color: "#EAF1FF",
+    fontSize: 9.5,
+    fontWeight: "900",
+  },
+  liveBubblePinnedPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,232,255,0.36)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  liveBubblePinnedPillText: {
+    color: "#E7EEFF",
+    fontSize: 8.5,
+    fontWeight: "900",
+  },
+  liveBubblePinCoach: {
+    minHeight: 27,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,232,255,0.52)",
+    backgroundColor: "rgba(20,32,56,0.94)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  liveBubblePinCoachText: {
+    color: "#F5F8FF",
+    fontSize: 8.5,
+    fontWeight: "900",
+    textAlign: "center",
+  },
   liveBubbleName: { color: "#BEBEBE", fontSize: 9.5, fontWeight: "700", maxWidth: "100%", textAlign: "center" },
   liveBubbleNameExpanded: { fontSize: 10.5, color: "#E5EBF8", fontWeight: "800" },
   liveBubbleNameFocused: { color: "#EDF3FF", fontWeight: "800" },
   liveBubbleNameFeatured: { fontSize: 10.5, fontWeight: "900", color: "#F4F7FF" },
+  liveBubbleNamePinned: { color: "#F4F7FF", fontWeight: "900" },
   liveBubbleRole: {
     marginTop: -1,
     color: "#97A1B5",
