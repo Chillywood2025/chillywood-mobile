@@ -19,6 +19,7 @@ import {
   acceptChillyCircleRequest,
   cancelChillyCircleRequest,
   declineChillyCircleRequest,
+  readActiveFriendUserIds,
   readFriendListSummary,
   readFriendRelationshipState,
   removeFromChillyCircle,
@@ -27,18 +28,25 @@ import {
 } from "../../_lib/friendGraph";
 import {
   followChannel,
+  readFollowedChannelUserIds,
   readMyChannelFollowState,
   unfollowChannel,
   type ChannelViewerFollowState,
 } from "../../_lib/channelAudience";
 import {
+  readPublicDiscoveryFeedItems,
+  type DiscoveryFeedItem,
+} from "../../_lib/discoveryFeed";
+import {
   type CreatorEventSummary,
   type CreatorEventType,
 } from "../../_lib/liveEvents";
 import {
+  readNotificationList,
   readPublicEventReminderSummaries,
   setEventReminderEnrollment,
   type EventReminderEnrollment,
+  type NotificationRecord,
   type PublicEventReminderSummary,
 } from "../../_lib/notifications";
 import { reportRuntimeError } from "../../_lib/logger";
@@ -60,6 +68,7 @@ import {
   getCreatorVideoTooLargeMessage,
   isCreatorVideoFileOverChannelMovieLimit,
   readCreatorVideos,
+  readCreatorVideosForOwners,
   uploadCreatorVideo,
   type CreatorVideo,
   type CreatorVideoFile,
@@ -90,6 +99,15 @@ import {
   type ProfilePostEngagementState,
 } from "../../_lib/profilePosts";
 import {
+  buildOwnProfileSocialFeed,
+  buildPublicProfileActivityFeed,
+  type ProfileSocialFeedActor,
+  type ProfileSocialFeedActorMap,
+  type ProfileSocialFeedItem,
+  type ProfileSocialFeedMode,
+  type ProfileSocialFeedPostActivity,
+} from "../../_lib/profileSocialFeed";
+import {
   getSocialAttachmentValidationMessage,
   SOCIAL_ATTACHMENT_PICKER_TYPES,
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
@@ -116,6 +134,7 @@ import {
   type UserProfile,
 } from "../../_lib/userData";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
+import { ProfileSocialFeedCard } from "../../components/ProfileSocialFeedCard";
 import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
@@ -137,6 +156,100 @@ type OwnerStatCard = {
   body: string;
   tone?: "default" | "live" | "linked";
 };
+
+type ProfileSocialFeedExtraState = {
+  actorsByUserId: ProfileSocialFeedActorMap;
+  circleUserIds: string[];
+  followedChannelUserIds: string[];
+  circlePosts: ProfileSocialFeedPostActivity[];
+  followedPosts: ProfileSocialFeedPostActivity[];
+  circleVideos: CreatorVideo[];
+  followedVideos: CreatorVideo[];
+  discoveryItems: DiscoveryFeedItem[];
+  notifications: NotificationRecord[];
+  circleBackingUnavailable: boolean;
+};
+
+const createEmptyProfileSocialFeedExtras = (): ProfileSocialFeedExtraState => ({
+  actorsByUserId: {},
+  circleUserIds: [],
+  followedChannelUserIds: [],
+  circlePosts: [],
+  followedPosts: [],
+  circleVideos: [],
+  followedVideos: [],
+  discoveryItems: [],
+  notifications: [],
+  circleBackingUnavailable: false,
+});
+
+const normalizeFeedUserId = (value: unknown) => String(value ?? "").trim();
+
+const dedupeProfileSocialDiscoveryItems = (items: DiscoveryFeedItem[]) => {
+  const byId = new Map<string, DiscoveryFeedItem>();
+  for (const item of items) {
+    const id = normalizeFeedUserId(item.id);
+    if (id && !byId.has(id)) byId.set(id, item);
+  }
+  return [...byId.values()];
+};
+
+const buildProfileSocialActor = (
+  userId: string,
+  profile: Pick<ReturnType<typeof buildUserChannelProfile>, "displayName" | "handle" | "avatarUrl"> | null,
+): ProfileSocialFeedActor => ({
+  userId,
+  displayName: normalizeFeedUserId(profile?.displayName) || "Member",
+  handle: normalizeFeedUserId(profile?.handle) || null,
+  avatarUrl: normalizeFeedUserId(profile?.avatarUrl) || null,
+});
+
+async function readProfileSocialActor(userId: string): Promise<ProfileSocialFeedActor> {
+  const normalizedUserId = normalizeFeedUserId(userId);
+  const profile = normalizedUserId
+    ? await readUserProfileByUserId(normalizedUserId).catch(() => null)
+    : null;
+  return buildProfileSocialActor(
+    normalizedUserId,
+    buildUserChannelProfile({
+      id: normalizedUserId,
+      profile,
+      fallbackDisplayName: "Member",
+    }),
+  );
+}
+
+async function readProfileSocialActorMap(userIds: string[]): Promise<ProfileSocialFeedActorMap> {
+  const normalizedUserIds = Array.from(new Set(userIds.map(normalizeFeedUserId).filter(Boolean))).slice(0, 24);
+  const actors = await Promise.all(normalizedUserIds.map(readProfileSocialActor));
+  return actors.reduce<ProfileSocialFeedActorMap>((map, actor) => {
+    map[actor.userId] = actor;
+    return map;
+  }, {});
+}
+
+async function readProfileSocialPostsForActors(
+  actorIds: string[],
+  actorsByUserId: ProfileSocialFeedActorMap,
+  sourceContext: "chilly_circle" | "following",
+): Promise<ProfileSocialFeedPostActivity[]> {
+  const normalizedActorIds = Array.from(new Set(actorIds.map(normalizeFeedUserId).filter(Boolean))).slice(0, 10);
+  const postGroups = await Promise.all(normalizedActorIds.map(async (actorId) => {
+    const actor = actorsByUserId[actorId] ?? await readProfileSocialActor(actorId);
+    const posts = await readProfilePosts(actorId, { includeDrafts: false, limit: 3 }).catch(() => []);
+    return posts.map((post) => ({ post, actor, sourceContext }));
+  }));
+  return postGroups.flat();
+}
+
+async function readProfileSocialDiscoveryItemsForActors(actorIds: string[]): Promise<DiscoveryFeedItem[]> {
+  const normalizedActorIds = Array.from(new Set(actorIds.map(normalizeFeedUserId).filter(Boolean))).slice(0, 12);
+  const itemGroups = await Promise.all(normalizedActorIds.flatMap((actorId) => [
+    readPublicDiscoveryFeedItems({ surface: "profile", ownerUserId: actorId, limit: 6 }).catch(() => []),
+    readPublicDiscoveryFeedItems({ surface: "profile", channelUserId: actorId, limit: 6 }).catch(() => []),
+  ]));
+  return dedupeProfileSocialDiscoveryItems(itemGroups.flat());
+}
 
 type OwnerQuickAction = {
   label: string;
@@ -517,6 +630,11 @@ export default function ProfileScreen() {
   const [publicEvents, setPublicEvents] = useState<CreatorEventSummary[]>([]);
   const [publicReminderSummaries, setPublicReminderSummaries] = useState<PublicEventReminderSummary[]>([]);
   const [publicEventsReady, setPublicEventsReady] = useState(false);
+  const [profileSocialFeedExtras, setProfileSocialFeedExtras] = useState<ProfileSocialFeedExtraState>(
+    createEmptyProfileSocialFeedExtras,
+  );
+  const [profileSocialFeedExtrasReady, setProfileSocialFeedExtrasReady] = useState(false);
+  const [profileSocialFeedNotice, setProfileSocialFeedNotice] = useState<string | null>(null);
   const [reminderActionLoading, setReminderActionLoading] = useState<string | null>(null);
   const [reminderActionNotice, setReminderActionNotice] = useState<string | null>(null);
   const params = useLocalSearchParams<{
@@ -720,6 +838,120 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [canViewFullProfile, isSelfProfile, profilePrivacyReady, userId]);
+
+  useEffect(() => {
+    let active = true;
+
+    setProfileSocialFeedExtrasReady(false);
+    setProfileSocialFeedNotice(null);
+    setProfileSocialFeedExtras(createEmptyProfileSocialFeedExtras());
+
+    if (!userId || !profilePrivacyReady || isOfficialProfile || !canViewFullProfile) {
+      setProfileSocialFeedExtrasReady(!!profilePrivacyReady);
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadProfileSocialFeedExtras = async () => {
+      if (isSelfProfile && currentUserId) {
+        let circleUserIds: string[] = [];
+        let circleBackingUnavailable = false;
+        try {
+          circleUserIds = await readActiveFriendUserIds();
+        } catch {
+          circleBackingUnavailable = true;
+          circleUserIds = [];
+        }
+
+        const followedChannelUserIds = await readFollowedChannelUserIds({ limit: 50 }).catch(() => []);
+        const normalizedCircleUserIds = Array.from(new Set(
+          circleUserIds.map(normalizeFeedUserId).filter((id) => id && id !== userId),
+        ));
+        const circleIdSet = new Set(normalizedCircleUserIds);
+        const normalizedFollowedChannelUserIds = Array.from(new Set(
+          followedChannelUserIds
+            .map(normalizeFeedUserId)
+            .filter((id) => id && id !== userId && !circleIdSet.has(id)),
+        ));
+        const actorIds = Array.from(new Set([
+          ...normalizedCircleUserIds,
+          ...normalizedFollowedChannelUserIds,
+        ]));
+        const actorsByUserId = await readProfileSocialActorMap(actorIds);
+        const discoveryActorIds = Array.from(new Set([
+          userId,
+          ...normalizedCircleUserIds,
+          ...normalizedFollowedChannelUserIds,
+        ]));
+
+        const [
+          circlePosts,
+          followedPosts,
+          circleVideos,
+          followedVideos,
+          discoveryItems,
+          notifications,
+        ] = await Promise.all([
+          readProfileSocialPostsForActors(normalizedCircleUserIds, actorsByUserId, "chilly_circle"),
+          readProfileSocialPostsForActors(normalizedFollowedChannelUserIds, actorsByUserId, "following"),
+          normalizedCircleUserIds.length
+            ? readCreatorVideosForOwners(normalizedCircleUserIds, { limit: 12 }).catch(() => [])
+            : Promise.resolve([]),
+          normalizedFollowedChannelUserIds.length
+            ? readCreatorVideosForOwners(normalizedFollowedChannelUserIds, { limit: 12 }).catch(() => [])
+            : Promise.resolve([]),
+          readProfileSocialDiscoveryItemsForActors(discoveryActorIds),
+          readNotificationList(currentUserId, 12).catch(() => []),
+        ]);
+
+        if (!active) return;
+        setProfileSocialFeedExtras({
+          actorsByUserId,
+          circleUserIds: normalizedCircleUserIds,
+          followedChannelUserIds: normalizedFollowedChannelUserIds,
+          circlePosts,
+          followedPosts,
+          circleVideos,
+          followedVideos,
+          discoveryItems,
+          notifications,
+          circleBackingUnavailable,
+        });
+        setProfileSocialFeedExtrasReady(true);
+        return;
+      }
+
+      const actorsByUserId = await readProfileSocialActorMap([userId]);
+      const discoveryItems = await readProfileSocialDiscoveryItemsForActors([userId]);
+
+      if (!active) return;
+      setProfileSocialFeedExtras({
+        ...createEmptyProfileSocialFeedExtras(),
+        actorsByUserId,
+        discoveryItems,
+      });
+      setProfileSocialFeedExtrasReady(true);
+    };
+
+    void loadProfileSocialFeedExtras().catch(() => {
+      if (!active) return;
+      setProfileSocialFeedExtras(createEmptyProfileSocialFeedExtras());
+      setProfileSocialFeedNotice("Unable to load the full social feed right now.");
+      setProfileSocialFeedExtrasReady(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    canViewFullProfile,
+    currentUserId,
+    isOfficialProfile,
+    isSelfProfile,
+    profilePrivacyReady,
+    userId,
+  ]);
 
   const profilePostIdsKey = useMemo(
     () => profilePosts.map((post) => post.id).join("|"),
@@ -2138,7 +2370,7 @@ export default function ProfileScreen() {
       return (
         <>
           <View style={[styles.actionChip, styles.actionChipConnected]}>
-            <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>In Chi'lly Circle</Text>
+            <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>{"In Chi'lly Circle"}</Text>
           </View>
           {friendState.canRemove ? (
             <TouchableOpacity
@@ -2553,6 +2785,69 @@ export default function ProfileScreen() {
         : activeTab === "community"
           ? communityTabSections
           : aboutTabSections;
+  const profileSocialFeedActor = useMemo<ProfileSocialFeedActor | null>(() => {
+    if (!userId) return null;
+    return buildProfileSocialActor(userId, {
+      avatarUrl: profile.avatarUrl,
+      displayName: profile.displayName,
+      handle: profile.handle,
+    });
+  }, [profile.avatarUrl, profile.displayName, profile.handle, userId]);
+  const profileSocialFeedMode: ProfileSocialFeedMode = isSelfProfile
+    ? "own_profile_social_feed"
+    : "public_profile_activity_feed";
+  const profileSocialFeedItems = useMemo<ProfileSocialFeedItem[]>(() => {
+    if (!userId || !canViewFullProfile) return [];
+    if (profileSocialFeedMode === "own_profile_social_feed") {
+      return buildOwnProfileSocialFeed({
+        ownerUserId: userId,
+        ownerActor: profileSocialFeedActor,
+        ownPosts: profilePosts,
+        ownVideos: creatorVideos,
+        circlePosts: profileSocialFeedExtras.circlePosts,
+        followedPosts: profileSocialFeedExtras.followedPosts,
+        circleVideos: profileSocialFeedExtras.circleVideos,
+        followedVideos: profileSocialFeedExtras.followedVideos,
+        discoveryItems: profileSocialFeedExtras.discoveryItems,
+        notifications: profileSocialFeedExtras.notifications,
+        actorsByUserId: {
+          ...profileSocialFeedExtras.actorsByUserId,
+          ...(profileSocialFeedActor ? { [userId]: profileSocialFeedActor } : {}),
+        },
+        chillyCircleUserIds: profileSocialFeedExtras.circleUserIds,
+        followedChannelUserIds: profileSocialFeedExtras.followedChannelUserIds,
+      });
+    }
+
+    return buildPublicProfileActivityFeed({
+      profileUserId: userId,
+      profileActor: profileSocialFeedActor,
+      profilePosts,
+      profileVideos: creatorVideos,
+      discoveryItems: profileSocialFeedExtras.discoveryItems,
+      actorsByUserId: {
+        ...profileSocialFeedExtras.actorsByUserId,
+        ...(profileSocialFeedActor ? { [userId]: profileSocialFeedActor } : {}),
+      },
+    });
+  }, [
+    canViewFullProfile,
+    creatorVideos,
+    profilePosts,
+    profileSocialFeedActor,
+    profileSocialFeedExtras.actorsByUserId,
+    profileSocialFeedExtras.circlePosts,
+    profileSocialFeedExtras.circleUserIds,
+    profileSocialFeedExtras.circleVideos,
+    profileSocialFeedExtras.discoveryItems,
+    profileSocialFeedExtras.followedChannelUserIds,
+    profileSocialFeedExtras.followedPosts,
+    profileSocialFeedExtras.followedVideos,
+    profileSocialFeedExtras.notifications,
+    profileSocialFeedMode,
+    userId,
+  ]);
+  const profileSocialFeedReady = profilePostsReady && creatorVideosReady && profileSocialFeedExtrasReady;
   const publicEventSummaryCards: readonly OwnerStatCard[] = [
     {
       label: "Live Now",
@@ -2740,6 +3035,86 @@ export default function ProfileScreen() {
         source: "creator-video",
       },
     });
+  };
+  const openProfileSocialActorProfile = (actor: ProfileSocialFeedActor) => {
+    const actorUserId = normalizeFeedUserId(actor.userId);
+    if (!actorUserId) return;
+    router.push({
+      pathname: "/profile/[userId]",
+      params: { userId: actorUserId },
+    });
+  };
+  const openProfileSocialActorChannel = (actor: ProfileSocialFeedActor) => {
+    const actorUserId = normalizeFeedUserId(actor.userId);
+    if (!actorUserId) return;
+    router.push({
+      pathname: "/channel/[userId]",
+      params: { userId: actorUserId },
+    });
+  };
+  const openProfileSocialDiscoveryItem = (item: DiscoveryFeedItem) => {
+    const mediaId = normalizeFeedUserId(item.media_id);
+    if (item.item_type === "creator_upload" && mediaId) {
+      router.push({
+        pathname: "/player/[id]",
+        params: {
+          id: mediaId,
+          source: "creator-video",
+        },
+      });
+      return;
+    }
+
+    const itemId = normalizeFeedUserId(item.id);
+    if (!itemId) return;
+    router.push(`/spectate/${encodeURIComponent(itemId)}` as Parameters<typeof router.push>[0]);
+  };
+  const openProfileSocialNotification = (item: Extract<ProfileSocialFeedItem, { type: "backed_activity_item" }>) => {
+    const target = item.notification.target;
+    const entityId = normalizeFeedUserId(target.entityId);
+
+    switch (target.route) {
+      case "/profile/[userId]":
+        if (entityId) {
+          router.push({ pathname: "/profile/[userId]", params: { userId: entityId } });
+        }
+        return;
+      case "/channel/[userId]":
+        if (entityId) {
+          router.push({ pathname: "/channel/[userId]", params: { userId: entityId } });
+        }
+        return;
+      case "/player/[id]":
+        if (entityId) {
+          router.push({ pathname: "/player/[id]", params: { id: entityId, source: "creator-video" } });
+        }
+        return;
+      case "/spectate/[itemId]":
+        if (entityId) {
+          router.push(`/spectate/${encodeURIComponent(entityId)}` as Parameters<typeof router.push>[0]);
+        }
+        return;
+      case "/watch-party/[partyId]":
+        if (entityId) {
+          router.push({ pathname: "/watch-party/[partyId]", params: { partyId: entityId } });
+        }
+        return;
+      case "/title/[id]":
+        if (entityId) {
+          router.push({ pathname: "/title/[id]", params: { id: entityId } });
+        }
+        return;
+      case "/chat":
+        router.push("/chat");
+        return;
+      case "/chat/[threadId]":
+        if (entityId) {
+          router.push({ pathname: "/chat/[threadId]", params: { threadId: entityId } });
+        }
+        return;
+      default:
+        return;
+    }
   };
   const renderComposerAvatar = (size: "small" | "medium" = "small") => (
     <View style={size === "small" ? styles.composerAvatar : styles.feedAvatar}>
@@ -3273,31 +3648,68 @@ export default function ProfileScreen() {
       </View>
     );
   };
-  const renderPostsFeed = () => (
+  const renderProfileSocialFeedItem = (item: ProfileSocialFeedItem) => {
+    if (item.type === "my_post" || item.type === "public_profile_post") {
+      return renderProfilePostCard(item.post);
+    }
+
+    return (
+      <ProfileSocialFeedCard
+        key={item.id}
+        item={item}
+        onOpenActorChannel={openProfileSocialActorChannel}
+        onOpenActorProfile={openProfileSocialActorProfile}
+        onOpenCreatorVideo={openCreatorVideo}
+        onOpenDiscoveryItem={openProfileSocialDiscoveryItem}
+        onOpenNotification={openProfileSocialNotification}
+      />
+    );
+  };
+  const renderProfileSocialFeed = () => (
     <View style={styles.feedStack}>
       {renderProfilePostComposer()}
-      {profilePostsNotice ? (
+      <View style={styles.profileSocialFeedHeader}>
+        <Text style={styles.profileSocialFeedKicker}>
+          {profileSocialFeedMode === "own_profile_social_feed" ? "YOUR CHI'LLYWOOD FEED" : "PUBLIC ACTIVITY"}
+        </Text>
+        <Text style={styles.profileSocialFeedTitle}>
+          {profileSocialFeedMode === "own_profile_social_feed" ? "Profile Social Feed" : `${profile.displayName}'s Profile Feed`}
+        </Text>
+        <Text style={styles.profileSocialFeedBody}>
+          {profileSocialFeedMode === "own_profile_social_feed"
+            ? "Your posts, creator uploads, Chi'lly Circle, followed creators, and backed activity appear here when real rows exist."
+            : "This feed only shows this profile owner's public posts, uploads, and safe live or replay entries."}
+        </Text>
+      </View>
+      {profilePostsNotice || profileSocialFeedNotice ? (
         <View style={styles.profileComposerNotice}>
-          <Text style={styles.profileComposerNoticeText}>{profilePostsNotice}</Text>
+          <Text style={styles.profileComposerNoticeText}>{profilePostsNotice ?? profileSocialFeedNotice}</Text>
         </View>
       ) : null}
-      {!profilePostsReady ? (
+      {profileSocialFeedExtras.circleBackingUnavailable ? (
+        <View style={styles.profileComposerNotice}>
+          <Text style={styles.profileComposerNoticeText}>{"Chi'lly Circle activity is not backed yet."}</Text>
+        </View>
+      ) : null}
+      {!profileSocialFeedReady ? (
         <View style={styles.feedEmptyCard}>
           <ActivityIndicator color="#DC143C" />
-          <Text style={styles.feedEmptyTitle}>Loading profile updates</Text>
-          <Text style={styles.feedEmptyText}>Checking real public updates before showing this Profile feed.</Text>
+          <Text style={styles.feedEmptyTitle}>Loading profile feed</Text>
+          <Text style={styles.feedEmptyText}>Checking real backed posts, uploads, activity, and spectator-safe entries.</Text>
         </View>
-      ) : profilePosts.length ? (
-        profilePosts.map(renderProfilePostCard)
+      ) : profileSocialFeedItems.length ? (
+        profileSocialFeedItems.map(renderProfileSocialFeedItem)
       ) : (
         <View style={styles.feedEmptyCard}>
           <Text style={styles.feedEmptyTitle}>
-            {isSelfProfile ? "Post your first update." : "No posts yet."}
+            {profileSocialFeedMode === "own_profile_social_feed"
+              ? "Follow creators and build your Chi'lly Circle to fill your Chi'llywood feed."
+              : "No public activity yet."}
           </Text>
           <Text style={styles.feedEmptyText}>
-            {isSelfProfile
-              ? "Post a short thought or how-you-feel update here. Creator videos still belong to your Channel."
-              : "This Profile has not shared a public personal update yet."}
+            {profileSocialFeedMode === "own_profile_social_feed"
+              ? "Only real public posts, uploads, backed activity, and safe live or replay entries appear here."
+              : "This profile has not shared public posts, uploads, or safe live/replay entries yet."}
           </Text>
           <TouchableOpacity style={styles.feedEmptyButton} activeOpacity={0.86} onPress={onPressViewChannel}>
             <MaterialIcons name="video-library" size={17} color="#fff" />
@@ -3559,7 +3971,7 @@ export default function ProfileScreen() {
                     activeOpacity={0.86}
                     onPress={onPressChillyCircleManage}
                   >
-                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Chi'lly Circle</Text>
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>{"Chi'lly Circle"}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionChip, styles.actionChipConnected]}
@@ -3719,7 +4131,7 @@ export default function ProfileScreen() {
               ))}
             </ScrollView>
           </View>
-          {activeTab === "home" ? renderPostsFeed() : null}
+          {activeTab === "home" ? renderProfileSocialFeed() : null}
           {activeTab === "about" ? renderOwnerHandoffCard() : null}
           {activeTab !== "home" ? activeTabSections.map((section) => (
             <View
@@ -5127,6 +5539,31 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   ownerPromptActionText: { color: "#E4E9FF", fontSize: 12, fontWeight: "800" },
+  profileSocialFeedHeader: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.2)",
+    backgroundColor: "rgba(28,13,24,0.72)",
+    padding: 16,
+    gap: 6,
+  },
+  profileSocialFeedKicker: {
+    color: "#F7AFC0",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  profileSocialFeedTitle: {
+    color: "#FFF5F8",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  profileSocialFeedBody: {
+    color: "#D7DFEF",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
 
   sectionStack: { gap: 14 },
   sectionCard: {
