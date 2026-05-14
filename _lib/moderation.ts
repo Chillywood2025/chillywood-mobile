@@ -1,4 +1,4 @@
-import type { Json, Tables, TablesInsert } from "../supabase/database.types";
+import type { Json, TablesInsert } from "../supabase/database.types";
 import { trackEvent } from "./analytics";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import { isBetaOperatorIdentity } from "./runtimeConfig";
@@ -23,6 +23,7 @@ export type SafetyReportCategoryCopy = {
 };
 export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner" | "moderator";
 export type PlatformRole = "owner" | "operator" | "moderator";
+export type PlatformStaffManagementRole = "admin" | "operator" | "moderator";
 
 export type ModerationAccess = {
   actorRole: ModerationActorRole;
@@ -68,6 +69,14 @@ export type PlatformRoleRosterReadModel = {
     operatorCount: number;
     moderatorCount: number;
   };
+};
+
+export type PlatformStaffRoleActionResult = {
+  id: number | null;
+  email: string;
+  role: PlatformRole;
+  displayRole: "owner" | "admin" | "moderator";
+  status: "active" | "revoked";
 };
 
 export type SafetyReportRecord = {
@@ -230,7 +239,15 @@ const normalizePlatformRoleStatus = (value: unknown) => {
   return normalized === "revoked" ? "revoked" : "active";
 };
 
-const formatPlatformRoleToken = (role: PlatformRole) => role.replaceAll("_", " ").toUpperCase();
+export const formatPlatformRoleDisplayLabel = (role: PlatformRole | PlatformStaffManagementRole) => {
+  const normalized = normalizeText(role).toLowerCase();
+  if (normalized === "operator" || normalized === "admin") return "Admin";
+  if (normalized === "owner") return "Owner";
+  if (normalized === "moderator") return "Moderator";
+  return "Unknown";
+};
+
+const formatPlatformRoleToken = (role: PlatformRole) => formatPlatformRoleDisplayLabel(role).toUpperCase();
 
 const buildRoleIdentityLabel = (entry: {
   user_id?: unknown;
@@ -241,6 +258,13 @@ const buildRoleIdentityLabel = (entry: {
   if (email) return email;
   if (userId) return `USER ${userId}`;
   return "UNKNOWN IDENTITY";
+};
+
+const normalizePlatformStaffManagementRole = (value: unknown): PlatformStaffManagementRole | null => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === "admin" || normalized === "operator") return "admin";
+  if (normalized === "moderator") return "moderator";
+  return null;
 };
 
 const normalizeSafetyReportTargetType = (value: unknown): SafetyReportTargetType => {
@@ -469,6 +493,14 @@ export function canManagePrivilegedAdminWrites(
   return hasPlatformRoleMembership(memberships, ["owner", "operator"]);
 }
 
+export function canManageAdminRoleAssignments(memberships: PlatformRoleMembership[]) {
+  return hasPlatformRoleMembership(memberships, ["owner"]);
+}
+
+export function canManageModeratorRoleAssignments(memberships: PlatformRoleMembership[]) {
+  return hasPlatformRoleMembership(memberships, ["owner", "operator"]);
+}
+
 const platformMembershipMatchesIdentity = (
   entry: { user_id?: unknown; email?: unknown },
   identity: { userId: string; email: string },
@@ -561,6 +593,59 @@ export async function readPlatformRoleRoster(options?: {
       moderatorCount: activeItems.filter((entry) => entry.role === "moderator").length,
     },
   };
+}
+
+const readStaffRoleActionResult = (value: unknown): PlatformStaffRoleActionResult => {
+  const payload = isPlainObject(value) ? value : {};
+  const role = normalizePlatformRole(payload.role) ?? "moderator";
+  const status = normalizePlatformRoleStatus(payload.status) === "revoked" ? "revoked" : "active";
+  return {
+    id: Number.isFinite(Number(payload.id)) ? Number(payload.id) : null,
+    email: normalizeText(payload.email).toLowerCase(),
+    role,
+    displayRole: role === "operator" ? "admin" : role,
+    status,
+  };
+};
+
+export async function grantPlatformStaffRoleByEmail(input: {
+  email: string;
+  role: PlatformStaffManagementRole;
+  reason?: string | null;
+}) {
+  const email = normalizeText(input.email).toLowerCase();
+  const role = normalizePlatformStaffManagementRole(input.role);
+  if (!email) throw new Error("Enter a staff email.");
+  if (!role) throw new Error("Choose a supported staff role.");
+
+  const { data, error } = await supabase.rpc("admin_grant_platform_role_by_email", {
+    p_reason: normalizeText(input.reason) || null,
+    p_role: role,
+    p_target_email: email,
+  });
+
+  if (error) throw error;
+  return readStaffRoleActionResult(data);
+}
+
+export async function revokePlatformStaffRoleByEmail(input: {
+  email: string;
+  role: PlatformStaffManagementRole;
+  reason?: string | null;
+}) {
+  const email = normalizeText(input.email).toLowerCase();
+  const role = normalizePlatformStaffManagementRole(input.role);
+  if (!email) throw new Error("Enter a staff email.");
+  if (!role) throw new Error("Choose a supported staff role.");
+
+  const { data, error } = await supabase.rpc("admin_revoke_platform_role_by_email", {
+    p_reason: normalizeText(input.reason) || null,
+    p_role: role,
+    p_target_email: email,
+  });
+
+  if (error) throw error;
+  return readStaffRoleActionResult(data);
 }
 
 export async function readSafetyReports(options?: {

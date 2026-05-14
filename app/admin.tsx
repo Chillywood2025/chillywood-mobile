@@ -35,18 +35,24 @@ import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
   canAccessAdminConsole,
+  canManageAdminRoleAssignments,
+  canManageModeratorRoleAssignments,
   canManagePrivilegedAdminWrites,
   canReviewSafetyQueue,
+  formatPlatformRoleDisplayLabel,
   getModerationAccess,
+  grantPlatformStaffRoleByEmail,
   readMyPlatformRoleMemberships,
   readPlatformRoleRoster,
   readSafetyReportQueue,
+  revokePlatformStaffRoleByEmail,
   resolvePlatformActorRole,
   type AdminAuditLogEntry,
   type AdminAuditLogReadModel,
   type PlatformRoleMembership,
   type PlatformRoleRosterEntry,
   type PlatformRoleRosterReadModel,
+  type PlatformStaffManagementRole,
   type SafetyReportQueueItem,
   type SafetyReportQueueSummary,
 } from "../_lib/moderation";
@@ -778,6 +784,7 @@ const normalizePublicationState = ({
 const formatModerationToken = (value: unknown) => {
   const text = String(value ?? "").trim();
   if (!text) return "UNKNOWN";
+  if (text.toLowerCase() === "operator") return "Admin";
   return text.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
@@ -1019,6 +1026,10 @@ export default function AdminStudioScreen() {
   const [platformRoleRosterSummary, setPlatformRoleRosterSummary] =
     useState<PlatformRoleRosterReadModel["summary"] | null>(null);
   const [platformRoleRosterLoading, setPlatformRoleRosterLoading] = useState(false);
+  const [staffRoleEmail, setStaffRoleEmail] = useState("");
+  const [staffRoleTarget, setStaffRoleTarget] = useState<PlatformStaffManagementRole>("moderator");
+  const [staffRoleReason, setStaffRoleReason] = useState("");
+  const [staffRoleBusy, setStaffRoleBusy] = useState<"grant" | "revoke" | null>(null);
   const [adminAuditLog, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
   const [adminAuditLogSummary, setAdminAuditLogSummary] =
     useState<AdminAuditLogReadModel["summary"] | null>(null);
@@ -1113,17 +1124,46 @@ export default function AdminStudioScreen() {
   const canAccessAdmin = isSignedIn && isActive && platformRolesChecked && canAccessAdminConsole(moderationAccess, platformRoles);
   const canReviewSafetyReports = isSignedIn && isActive && platformRolesChecked && canReviewSafetyQueue(moderationAccess, platformRoles);
   const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
+  const canManageAdminStaff = isSignedIn && isActive && platformRolesChecked && canManageAdminRoleAssignments(platformRoles);
+  const canManageModeratorStaff = isSignedIn && isActive && platformRolesChecked && canManageModeratorRoleAssignments(platformRoles);
   const visibleOperatorTabs = useMemo(
-    () => operatorTabs.filter((tab) => tab.key !== "live-cost-guard" || canManagePrivilegedWrites),
-    [canManagePrivilegedWrites],
+    () => {
+      if (canManagePrivilegedWrites) return operatorTabs;
+      if (canReviewSafetyReports) {
+        return operatorTabs.filter((tab) => tab.key === "reports" || tab.key === "audit");
+      }
+      return [];
+    },
+    [canManagePrivilegedWrites, canReviewSafetyReports],
+  );
+  const staffRoleOptions = useMemo<readonly { key: PlatformStaffManagementRole; label: string }[]>(
+    () => {
+      if (canManageAdminStaff) {
+        return [
+          { key: "admin", label: "Admin" },
+          { key: "moderator", label: "Moderator" },
+        ];
+      }
+      if (canManageModeratorStaff) {
+        return [{ key: "moderator", label: "Moderator" }];
+      }
+      return [];
+    },
+    [canManageAdminStaff, canManageModeratorStaff],
   );
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Operator Center");
 
   useEffect(() => {
-    if (operatorTab === "live-cost-guard" && !canManagePrivilegedWrites) {
-      setOperatorTab("home");
+    if (visibleOperatorTabs.length > 0 && !visibleOperatorTabs.some((tab) => tab.key === operatorTab)) {
+      setOperatorTab(visibleOperatorTabs[0].key);
     }
-  }, [canManagePrivilegedWrites, operatorTab]);
+  }, [operatorTab, visibleOperatorTabs]);
+
+  useEffect(() => {
+    if (staffRoleOptions.length > 0 && !staffRoleOptions.some((option) => option.key === staffRoleTarget)) {
+      setStaffRoleTarget(staffRoleOptions[0].key);
+    }
+  }, [staffRoleOptions, staffRoleTarget]);
 
   useEffect(() => {
     if (!isSignedIn || !isActive) {
@@ -1136,6 +1176,10 @@ export default function AdminStudioScreen() {
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
       setPlatformRoleRosterLoading(false);
+      setStaffRoleEmail("");
+      setStaffRoleTarget("moderator");
+      setStaffRoleReason("");
+      setStaffRoleBusy(null);
       setAdminAuditLog([]);
       setAdminAuditLogSummary(null);
       setAdminAuditLogLoading(false);
@@ -1178,6 +1222,7 @@ export default function AdminStudioScreen() {
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
       setPlatformRoleRosterLoading(false);
+      setStaffRoleBusy(null);
       setAdminAuditLog([]);
       setAdminAuditLogSummary(null);
       setAdminAuditLogLoading(false);
@@ -1202,13 +1247,22 @@ export default function AdminStudioScreen() {
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
       return;
     }
+    if (!canManagePrivilegedWrites) {
+      setLoading(false);
+      setConfigLoading(false);
+      setAppConfigConnected(false);
+      setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
+      setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
+      setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
+      return;
+    }
     loadTitles();
     loadExperienceConfig();
     void loadAdminV1ReadModel();
     void loadAdminFinanceReadModel();
     void loadAdminImmutableAuditReadModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canAccessAdmin]);
+  }, [canAccessAdmin, canManagePrivilegedWrites]);
 
   useEffect(() => {
     if (!canAccessAdmin || !canReviewSafetyReports) {
@@ -1906,7 +1960,7 @@ export default function AdminStudioScreen() {
           : "Locked",
         body: canViewStaffRoles
           ? roleSummary
-            ? `${roleSummary.ownerCount} owner · ${roleSummary.operatorCount} operator · ${roleSummary.moderatorCount} moderator records are currently visible.`
+            ? `${roleSummary.ownerCount} owner · ${roleSummary.operatorCount} admin · ${roleSummary.moderatorCount} moderator records are currently visible.`
             : "Current staff visibility is bounded to role-record truth already stored in platform memberships."
           : "Staff-role visibility stays behind active owner/operator write-capable admin truth.",
         tone: canViewStaffRoles ? "default" : "unavailable",
@@ -2771,6 +2825,122 @@ export default function AdminStudioScreen() {
       setAdminAuditLogLoading(false);
     }
   }, [canManagePrivilegedWrites, canReviewSafetyReports]);
+
+  const refreshStaffRoleState = useCallback(async () => {
+    await Promise.all([
+      loadPlatformRoles(),
+      loadStaffAndAuditVisibility(),
+    ]);
+  }, [loadPlatformRoles, loadStaffAndAuditVisibility]);
+
+  const runStaffRoleGrant = useCallback(async () => {
+    const email = staffRoleEmail.trim().toLowerCase();
+    if (staffRoleBusy) return;
+    if (!email) {
+      setAdminOpsNotice("Enter an email before granting a staff role.");
+      return;
+    }
+    if (staffRoleTarget === "admin" && !canManageAdminStaff) {
+      setAdminOpsNotice("Only an active Owner can add Admins.");
+      return;
+    }
+    if (staffRoleTarget === "moderator" && !canManageModeratorStaff) {
+      setAdminOpsNotice("Only an active Owner or Admin can add Moderators.");
+      return;
+    }
+
+    try {
+      setStaffRoleBusy("grant");
+      setAdminOpsNotice(null);
+      const result = await grantPlatformStaffRoleByEmail({
+        email,
+        role: staffRoleTarget,
+        reason: staffRoleReason.trim() || null,
+      });
+      setAdminOpsNotice(`${formatPlatformRoleDisplayLabel(result.role)} granted for ${maskOperatorIdentity(result.email)}.`);
+      setStaffRoleReason("");
+      await refreshStaffRoleState();
+    } catch (err: any) {
+      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to grant staff role."));
+    } finally {
+      setStaffRoleBusy(null);
+    }
+  }, [
+    canManageAdminStaff,
+    canManageModeratorStaff,
+    refreshStaffRoleState,
+    staffRoleBusy,
+    staffRoleEmail,
+    staffRoleReason,
+    staffRoleTarget,
+  ]);
+
+  const runStaffRoleRevoke = useCallback(async (emailInput?: string | null, roleInput?: PlatformStaffManagementRole) => {
+    const email = (emailInput ?? staffRoleEmail).trim().toLowerCase();
+    const role = roleInput ?? staffRoleTarget;
+    if (staffRoleBusy) return;
+    if (!email) {
+      setAdminOpsNotice("Enter an email before removing a staff role.");
+      return;
+    }
+    if (role === "admin" && !canManageAdminStaff) {
+      setAdminOpsNotice("Only an active Owner can remove Admins.");
+      return;
+    }
+    if (role === "moderator" && !canManageModeratorStaff) {
+      setAdminOpsNotice("Only an active Owner or Admin can remove Moderators.");
+      return;
+    }
+
+    try {
+      setStaffRoleBusy("revoke");
+      setAdminOpsNotice(null);
+      const result = await revokePlatformStaffRoleByEmail({
+        email,
+        role,
+        reason: staffRoleReason.trim() || null,
+      });
+      setAdminOpsNotice(`${formatPlatformRoleDisplayLabel(result.role)} removed for ${maskOperatorIdentity(result.email)}.`);
+      setStaffRoleReason("");
+      await refreshStaffRoleState();
+    } catch (err: any) {
+      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to remove staff role."));
+    } finally {
+      setStaffRoleBusy(null);
+    }
+  }, [
+    canManageAdminStaff,
+    canManageModeratorStaff,
+    refreshStaffRoleState,
+    staffRoleBusy,
+    staffRoleEmail,
+    staffRoleReason,
+    staffRoleTarget,
+  ]);
+
+  const confirmStaffRoleRevoke = useCallback((emailInput?: string | null, roleInput?: PlatformStaffManagementRole) => {
+    const email = (emailInput ?? staffRoleEmail).trim().toLowerCase();
+    const role = roleInput ?? staffRoleTarget;
+    if (!email) {
+      setAdminOpsNotice("Enter an email before removing a staff role.");
+      return;
+    }
+
+    Alert.alert(
+      "Remove staff role",
+      `Remove ${formatPlatformRoleDisplayLabel(role)} from ${maskOperatorIdentity(email)}? This is backed by server-side role truth and will be audited.`,
+      [
+        { style: "cancel", text: "Cancel" },
+        {
+          style: "destructive",
+          text: "Remove",
+          onPress: () => {
+            void runStaffRoleRevoke(email, role);
+          },
+        },
+      ],
+    );
+  }, [runStaffRoleRevoke, staffRoleEmail, staffRoleTarget]);
 
   const toDbPatch = useCallback(
     (patch: Partial<TitleRow>): Record<string, any> => {
@@ -4195,10 +4365,77 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Staff & Roles</Text>
                 <Text style={styles.configListBody}>
-                  Staff-role visibility is limited to current backend platform role truth. No role-assignment workflow or fake staff console has been added.
+                  Staff-role visibility and management are backed by platform role truth. Owner can manage Admins and Moderators; Admins can manage Moderators only.
                 </Text>
               </View>
             </View>
+            ) : null}
+
+            {operatorTab === "roles" && (canManageAdminStaff || canManageModeratorStaff) ? (
+              <View style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>Manage staff by email</Text>
+                  <Text style={styles.configListBody}>
+                    Emails are normalized to lowercase. Admin is stored internally as the existing operator role; Owner grants stay bootstrap-only.
+                  </Text>
+                </View>
+
+                <TextInput
+                  value={staffRoleEmail}
+                  onChangeText={setStaffRoleEmail}
+                  placeholder="staff@example.com"
+                  placeholderTextColor="#788196"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  style={styles.input}
+                />
+
+                <View style={styles.toggleRowWrap}>
+                  {staffRoleOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={[styles.toggleChip, staffRoleTarget === option.key && styles.toggleChipActive]}
+                      onPress={() => setStaffRoleTarget(option.key)}
+                      disabled={staffRoleBusy !== null}
+                    >
+                      <Text style={[styles.toggleChipText, staffRoleTarget === option.key && styles.toggleChipTextActive]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TextInput
+                  value={staffRoleReason}
+                  onChangeText={setStaffRoleReason}
+                  placeholder="Audit reason optional"
+                  placeholderTextColor="#788196"
+                  style={styles.input}
+                />
+
+                <View style={styles.configListActions}>
+                  <TouchableOpacity
+                    style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
+                    onPress={() => void runStaffRoleGrant()}
+                    disabled={staffRoleBusy !== null}
+                  >
+                    <Text style={styles.orderBtnText}>{staffRoleBusy === "grant" ? "Granting..." : "Grant Role"}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
+                    onPress={() => confirmStaffRoleRevoke()}
+                    disabled={staffRoleBusy !== null}
+                  >
+                    <Text style={styles.orderBtnText}>{staffRoleBusy === "revoke" ? "Removing..." : "Remove Role"}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : operatorTab === "roles" ? (
+              <View style={styles.configListRowSubtle}>
+                <Text style={styles.configListBody}>
+                  Staff management actions require active Owner or Admin role truth. Moderators cannot add or remove staff.
+                </Text>
+              </View>
             ) : null}
 
             {operatorTab === "roles" && canManagePrivilegedWrites ? (
@@ -4225,12 +4462,39 @@ export default function AdminStudioScreen() {
 
                     <View style={styles.badgesRow}>
                       <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{formatModerationToken(entry.role)}</Text>
+                        <Text style={styles.badgeText}>{formatPlatformRoleDisplayLabel(entry.role)}</Text>
                       </View>
                       <View style={[styles.badge, entry.status === "active" ? styles.badgeOn : styles.badgeOff]}>
                         <Text style={styles.badgeText}>{formatModerationToken(entry.status)}</Text>
                       </View>
                     </View>
+
+                    {entry.status === "active" && entry.email && entry.role !== "owner" ? (
+                      <View style={styles.configListActions}>
+                        {entry.role === "operator" && canManageAdminStaff ? (
+                          <TouchableOpacity
+                            style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
+                            onPress={() => confirmStaffRoleRevoke(entry.email, "admin")}
+                            disabled={staffRoleBusy !== null}
+                          >
+                            <Text style={styles.orderBtnText}>Remove Admin</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {entry.role === "moderator" && canManageModeratorStaff ? (
+                          <TouchableOpacity
+                            style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
+                            onPress={() => confirmStaffRoleRevoke(entry.email, "moderator")}
+                            disabled={staffRoleBusy !== null}
+                          >
+                            <Text style={styles.orderBtnText}>Remove Moderator</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    ) : entry.role === "owner" ? (
+                      <View style={styles.configListRowSubtle}>
+                        <Text style={styles.configListBody}>Owner records are protected. At least one active Owner must always remain.</Text>
+                      </View>
+                    ) : null}
                   </View>
                 ))
               ) : (

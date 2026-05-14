@@ -3836,8 +3836,11 @@ export type Database = {
           granted_by: string | null
           id: number
           notes: string | null
+          revoked_at: string | null
+          revoked_by: string | null
           role: string
           status: string
+          updated_at: string
           user_id: string | null
         }
         Insert: {
@@ -3846,8 +3849,11 @@ export type Database = {
           granted_by?: string | null
           id?: number
           notes?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
           role: string
           status?: string
+          updated_at?: string
           user_id?: string | null
         }
         Update: {
@@ -3856,9 +3862,54 @@ export type Database = {
           granted_by?: string | null
           id?: number
           notes?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
           role?: string
           status?: string
+          updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      platform_staff_role_audit: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          reason: string | null
+          role: string
+          target_email: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          role: string
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          role?: string
+          target_email?: string | null
+          target_user_id?: string | null
         }
         Relationships: []
       }
@@ -6004,6 +6055,22 @@ export type Database = {
     Functions: {
       acknowledge_beta_onboarding: { Args: never; Returns: Json }
       activate_beta_membership: { Args: never; Returns: Json }
+      admin_grant_platform_role_by_email: {
+        Args: {
+          p_reason?: string | null
+          p_role: string
+          p_target_email: string
+        }
+        Returns: Json
+      }
+      admin_revoke_platform_role_by_email: {
+        Args: {
+          p_reason?: string | null
+          p_role: string
+          p_target_email: string
+        }
+        Returns: Json
+      }
       admin_dmca_add_strike: {
         Args: {
           p_case_id: string
@@ -6329,6 +6396,7 @@ export type Database = {
         Args: { required_roles: string[] }
         Returns: boolean
       }
+      platform_staff_actor_role: { Args: never; Returns: string }
       read_public_channel_profile: {
         Args: { profile_user_id: string }
         Returns: {
