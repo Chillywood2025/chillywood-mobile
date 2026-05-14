@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 const SITE_HOST = "https://chillywoodstream.com";
 const SUPPORT_EMAIL = "support@chillywoodstream.com";
 const LAST_UPDATED = "May 13, 2026";
+const DMCA_LAST_UPDATED = "May 14, 2026";
+const DMCA_REGISTRATION_NUMBER = "DMCA-1072720";
+const DMCA_AGENT_NAME = "Chi'llywood Copyright Agent / Chi'llywood";
+const DMCA_MAILING_ADDRESS = "9316 S Kimbark, Chicago, IL 60619";
+const DMCA_PHONE = "3124879454";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -40,6 +45,7 @@ const pages = [
     title: "Copyright And DMCA Policy",
     source: "docs/legal/COPYRIGHT_DMCA_POLICY.md",
     description: "How Chi'llywood handles copyright complaints, takedowns, counter-notices, and repeat infringement.",
+    lastUpdated: DMCA_LAST_UPDATED,
   },
   {
     slug: "account-deletion",
@@ -75,6 +81,7 @@ const pages = [
     slug: "support",
     title: "Support",
     description: "How to contact Chi'llywood Support for account, policy, copyright, abuse, subscription, and product help.",
+    lastUpdated: DMCA_LAST_UPDATED,
     markdown: buildSupportMarkdown(),
   },
 ];
@@ -84,7 +91,7 @@ const navLinks = pages.map(({ slug, title }) => ({ slug, title }));
 function buildSupportMarkdown() {
   return `# Support
 
-Last updated: ${LAST_UPDATED}
+Last updated: ${DMCA_LAST_UPDATED}
 
 Chi'llywood Support can help with account access, Profile or Channel issues, account deletion requests, legal/policy questions, copyright concerns, report-abuse guidance, subscription troubleshooting, and product reliability problems.
 
@@ -104,9 +111,13 @@ Account deletion is request-based in current repo truth. Chi'llywood may need to
 For copyright complaints, unauthorized uploads, takedown questions, or counter-notice questions, review the Copyright And DMCA Policy and contact Support with enough information to locate the content.
 
 - Copyright policy: ${SITE_HOST}/copyright
-- Support email: ${SUPPORT_EMAIL}
+- DMCA registration number: ${DMCA_REGISTRATION_NUMBER}
+- DMCA agent: ${DMCA_AGENT_NAME}
+- DMCA email: ${SUPPORT_EMAIL}
+- Mailing address: ${DMCA_MAILING_ADDRESS}
+- Phone: ${DMCA_PHONE}
 
-The official DMCA designated-agent setup is pending. Chi'llywood does not claim DMCA safe-harbor completion or Copyright Office designated-agent registration from this support page.
+Chi'llywood's DMCA designated agent registration is active in the U.S. Copyright Office directory. Registration and public contact posting are one part of the process; Chi'llywood must still keep the agent information current and operate notice, counter-notice, and repeat-infringer handling.
 
 ## Report Abuse Or Unsafe Content
 
@@ -153,9 +164,16 @@ function publicizeMarkdown(markdown, slug) {
     /## 2\. Copyright Complaints[\s\S]*?## 3\. Required Complaint Information/,
     `## 2. Copyright Complaints
 
-If you believe content on Chi'llywood infringes your copyright, send a copyright complaint to Chi'llywood Support at ${SUPPORT_EMAIL} with enough information for review.
+If you believe content on Chi'llywood infringes your copyright, send a copyright complaint to Chi'llywood's designated DMCA agent contact:
 
-Chi'llywood's official designated DMCA agent setup is pending. This page does not claim DMCA safe-harbor completion or U.S. Copyright Office designated-agent registration.
+- Service provider: Chi'llywood
+- DMCA registration number: ${DMCA_REGISTRATION_NUMBER}
+- DMCA agent name: ${DMCA_AGENT_NAME}
+- DMCA email: ${SUPPORT_EMAIL}
+- Mailing address: ${DMCA_MAILING_ADDRESS}
+- Phone: ${DMCA_PHONE}
+
+The U.S. Copyright Office directory lists the Chi'llywood designation as active effective May 13, 2026. Registration and public contact posting are one part of the process; this page does not claim full DMCA safe-harbor compliance, and Chi'llywood must keep agent contact information current and operate a proper notice, counter-notice, and repeat-infringer process.
 
 ## 3. Required Complaint Information`,
   );
@@ -184,10 +202,6 @@ Support: ${SUPPORT_EMAIL}`,
     .replace(/\[PUBLIC_ACCOUNT_DELETION_URL\]/g, `${SITE_HOST}/account-deletion`)
     .replace(/\[PUBLIC_TERMS_URL\]/g, `${SITE_HOST}/terms`)
     .replace(/\[PUBLIC_PRIVACY_URL\]/g, `${SITE_HOST}/privacy`)
-    .replace(/^- DMCA agent name: \[DMCA AGENT NAME\]\n?/gm, "")
-    .replace(/^- DMCA email: \[DMCA_EMAIL\]\n?/gm, "")
-    .replace(/^- Mailing address: \[DMCA MAILING ADDRESS\]\n?/gm, "")
-    .replace(/^- Phone, if used: \[DMCA PHONE IF USED\]\n?/gm, "")
     .replace(/^Legal contact: \[LEGAL_EMAIL\]\n?/gm, "")
     .replace(/^Privacy\/legal contact: \[LEGAL_EMAIL\]\n?/gm, "")
     .replace(/^Public Terms URL: .*\n?/gm, "")
@@ -335,7 +349,7 @@ ${renderNav(page.slug)}
       <p class="eyebrow">Chi'llywood Public Policy</p>
       <h1>${escapeHtml(page.title)}</h1>
       <p class="summary">${escapeHtml(page.description)}</p>
-      <p class="updated">Last updated: ${LAST_UPDATED}</p>
+      <p class="updated">Last updated: ${page.lastUpdated || LAST_UPDATED}</p>
       <div class="policy-body">
 ${html}
       </div>

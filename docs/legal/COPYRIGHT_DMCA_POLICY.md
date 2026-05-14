@@ -1,8 +1,8 @@
 # Copyright / DMCA Policy
 
-Last updated: May 13, 2026
+Last updated: May 14, 2026
 
-> Repo launch note: Attorney review required before public launch. DMCA safe-harbor readiness is not complete unless Chi'llywood publicly posts a designated DMCA agent and registers that agent with the U.S. Copyright Office.
+> Repo launch note: Attorney review required before public launch. Chi'llywood's DMCA designated agent registration is recorded as complete from the provided registration details, but this policy still needs attorney review and ongoing operational compliance before any broader legal-compliance claim.
 
 Chi'llywood respects copyright owners and creators. Users must only upload, stream, post, message, link, or share content they own or have permission to use.
 
@@ -14,13 +14,14 @@ Do not upload or stream unauthorized movies, shows, music, music videos, clips, 
 
 If you believe content on Chi'llywood infringes your copyright, submit a copyright complaint to:
 
-- DMCA agent name: [DMCA AGENT NAME]
-- DMCA email: [DMCA_EMAIL]
-- Mailing address: [DMCA MAILING ADDRESS]
-- Phone, if used: [DMCA PHONE IF USED]
-- Support fallback until final DMCA contact is approved: support@chillywoodstream.com
+- Service provider: Chi'llywood
+- DMCA registration number: DMCA-1072720
+- DMCA agent name: Chi'llywood Copyright Agent / Chi'llywood
+- DMCA email: support@chillywoodstream.com
+- Mailing address: 9316 S Kimbark, Chicago, IL 60619
+- Phone: 3124879454
 
-The final public DMCA agent/contact page must be published before Chi'llywood claims a completed DMCA process.
+The U.S. Copyright Office directory lists the Chi'llywood designation as active effective May 13, 2026. Chi'llywood must keep the public agent contact information and Copyright Office registration current.
 
 ## 3. Required Complaint Information
 

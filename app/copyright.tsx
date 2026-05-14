@@ -3,7 +3,7 @@ import React from "react";
 import { LegalList, LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const EFFECTIVE_DATE = "April 26, 2026";
-const LAST_UPDATED = "May 13, 2026";
+const LAST_UPDATED = "May 14, 2026";
 
 export default function CopyrightPage() {
   return (
@@ -60,10 +60,14 @@ export default function CopyrightPage() {
 
       <LegalSection title="4. Where to Send Copyright Notices">
         <LegalParagraph>
-          Formal designated DMCA agent details will be posted when confirmed. Until then, copyright notices should be sent to the support contact below. Chi&apos;llywood does not claim DMCA safe-harbor completion unless the designated agent is publicly posted and registered with the U.S. Copyright Office.
+          Copyright notices should be sent to Chi&apos;llywood&apos;s designated DMCA agent contact below.
         </LegalParagraph>
-        <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
+        <LegalParagraph>Service provider: Chi&apos;llywood</LegalParagraph>
+        <LegalParagraph>DMCA registration number: DMCA-1072720</LegalParagraph>
+        <LegalParagraph>DMCA agent: Chi&apos;llywood Copyright Agent / Chi&apos;llywood</LegalParagraph>
         <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
+        <LegalParagraph>9316 S Kimbark, Chicago, IL 60619</LegalParagraph>
+        <LegalParagraph>Phone: 3124879454</LegalParagraph>
       </LegalSection>
 
       <LegalSection title="5. What Chi'llywood May Do After a Notice">
@@ -112,7 +116,7 @@ export default function CopyrightPage() {
 
       <LegalSection title="9. DMCA Agent and Safe-Harbor Readiness">
         <LegalParagraph>
-          For formal DMCA safe-harbor readiness, Chi&apos;llywood&apos;s designated agent must be publicly posted and registered with the U.S. Copyright Office. This page does not claim that registration is complete.
+          Chi&apos;llywood&apos;s designated DMCA agent registration is recorded under registration number DMCA-1072720. The U.S. Copyright Office directory lists the designation as active effective May 13, 2026. Registration and public contact posting are one part of the process; this page does not claim full DMCA safe-harbor compliance, and Chi&apos;llywood must keep agent contact information current and operate a proper notice, counter-notice, and repeat-infringer process.
         </LegalParagraph>
       </LegalSection>
 
@@ -124,8 +128,9 @@ export default function CopyrightPage() {
 
       <LegalSection title="11. Contact">
         <LegalParagraph>For copyright, DMCA, or media-rights questions, contact:</LegalParagraph>
-        <LegalParagraph>Chi&apos;llywood Support</LegalParagraph>
+        <LegalParagraph>Chi&apos;llywood Copyright Agent / Chi&apos;llywood</LegalParagraph>
         <LegalParagraph>support@chillywoodstream.com</LegalParagraph>
+        <LegalParagraph>9316 S Kimbark, Chicago, IL 60619</LegalParagraph>
       </LegalSection>
     </LegalPageShell>
   );

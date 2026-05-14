@@ -1,8 +1,8 @@
 # Copyright Takedown Workflow
 
-Last updated: May 13, 2026
+Last updated: May 14, 2026
 
-> Repo launch note: Attorney review required before public launch. This is an operational workflow, not a claim that DMCA safe harbor is complete.
+> Repo launch note: Attorney review required before public launch. DMCA designated agent registration is now recorded as complete from the provided registration details, but this workflow does not claim full legal compliance or replace attorney review.
 
 ## Current App Reality
 
@@ -36,15 +36,16 @@ A formal copyright complaint form should collect:
 
 ## Support Inbox Target
 
-Until a dedicated DMCA inbox is confirmed, support fallback is:
+Formal DMCA notices should be sent to Chi'llywood's designated agent contact:
 
-- support@chillywoodstream.com
+- Service provider: Chi'llywood
+- DMCA registration number: DMCA-1072720
+- DMCA agent name: Chi'llywood Copyright Agent / Chi'llywood
+- DMCA email: support@chillywoodstream.com
+- Mailing address: 9316 S Kimbark, Chicago, IL 60619
+- Phone: 3124879454
 
-Formal DMCA contact placeholder:
-
-- [DMCA_EMAIL]
-
-Do not publish `[DMCA_EMAIL]` as real contact until legal/support confirms the mailbox exists and is monitored.
+Support inbox receipt proof for `support@chillywoodstream.com` remains tracked separately in launch readiness docs.
 
 ## Triage Steps
 
@@ -103,7 +104,6 @@ Share only what is needed to process the claim, counter-notice, legal request, o
 ## Implementation Blockers
 
 - Dedicated DMCA form fields are not implemented.
-- Dedicated DMCA inbox/contact is not confirmed.
-- DMCA designated agent is not publicly posted.
-- DMCA designated agent is not confirmed registered with the U.S. Copyright Office.
+- Support inbox receipt proof remains pending in launch readiness docs.
+- DMCA designated agent public contact and U.S. Copyright Office registration are recorded as complete from the provided registration details.
 - Copyright claim log/admin workflow exists only as operational docs, not a complete dedicated backend workflow.

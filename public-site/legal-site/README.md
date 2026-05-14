@@ -34,12 +34,14 @@ Preferred production mapping after DNS/hosting setup:
 - `https://chillywoodstream.com/moderation`
 - `https://chillywoodstream.com/support`
 
-Current repo truth: this static site can be built and proved locally from repo source. Deployment to `chillywoodstream.com`, DNS/hosting routing, Google Play web-link acceptance, attorney review, DMCA designated-agent public posting, and Copyright Office registration remain external until separately proved.
+Current repo truth: this static site is deployed on `chillywoodstream.com` from repo source. Google Play web-link acceptance, attorney review, support inbox receipt proof, and ongoing DMCA operational workflow proof remain external until separately proved. DMCA designated-agent public contact posting and U.S. Copyright Office registration are recorded complete for registration `DMCA-1072720`.
 
 Cloudflare status as of May 13, 2026:
 
 - Pages project: `chillywood-legal`
 - Proved Pages hostname: `https://chillywood-legal.pages.dev`
 - Required paths returned HTTP 200 on the Pages hostname.
-- Custom domain `chillywoodstream.com` is attached to the Pages project but remains pending.
-- Public DNS for the apex does not resolve yet; the current Wrangler OAuth session cannot create DNS records because Cloudflare DNS Records API access returns `403`.
+- Custom domain `chillywoodstream.com` is active.
+- `https://chillywoodstream.com/` returns HTTP/2 200.
+- `/terms`, `/privacy`, `/account-deletion`, `/copyright`, and `/support` return HTTP/2 200 after trailing-slash redirect.
+- No LiveKit fallback was reached on legal/support paths.

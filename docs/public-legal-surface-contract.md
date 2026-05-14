@@ -52,7 +52,8 @@ Current deployment truth:
 - `https://chillywoodstream.com/account-deletion` is the live Google Play account deletion web URL candidate;
 - `https://chillywoodstream.com/support` is the live public support URL;
 - Google Play account deletion compliance is not complete until the live public deletion URL is entered in Play Console and accepted;
-- DMCA safe-harbor completion is not claimed because designated-agent public posting and U.S. Copyright Office registration remain external;
+- DMCA designated agent public contact posting and U.S. Copyright Office registration are recorded complete under registration `DMCA-1072720`;
+- broader DMCA/legal-compliance claims still require attorney review, current agent information, and proper operational notice/counter-notice/repeat-infringer handling;
 - attorney review remains required before public launch;
 - support inbox receipt proof for `support@chillywoodstream.com` remains pending.
 

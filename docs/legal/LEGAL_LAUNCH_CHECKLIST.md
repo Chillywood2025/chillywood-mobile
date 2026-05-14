@@ -1,6 +1,6 @@
 # Legal Launch Checklist
 
-Last updated: May 13, 2026
+Last updated: May 14, 2026
 
 > Repo launch note: Attorney review required before public launch. This checklist is the status map for repo policy drafting and external legal/setup blockers.
 
@@ -18,9 +18,9 @@ Status key:
 | Privacy | Drafted pending attorney review / linked in app | `app/privacy.tsx`; docs policy in `docs/legal/PRIVACY_POLICY.md`; public URL fallback exists for Privacy. |
 | Creator Rules | Drafted pending attorney review / linked in app | `app/creator-rules.tsx`; Settings and Support link to it. |
 | Community Guidelines | Drafted pending attorney review / linked in app | `app/community-guidelines.tsx`; docs policy created. |
-| DMCA/Copyright Policy | Drafted pending attorney review / linked in app | `app/copyright.tsx`; docs policy created; not safe-harbor complete. |
-| DMCA agent public page/contact | Externally blocked | `[DMCA_EMAIL]` and agent details are placeholders. |
-| Copyright Office DMCA agent registration | Externally blocked | Must be completed with the U.S. Copyright Office before claiming safe-harbor readiness. |
+| DMCA/Copyright Policy | Drafted pending attorney review / linked in app / DMCA agent registered | `app/copyright.tsx`; docs policy created; designated agent contact now uses registration number `DMCA-1072720` and `support@chillywoodstream.com`. Attorney review is still pending. |
+| DMCA agent public page/contact | Done / attorney review pending | Public copyright page now lists Chi'llywood's designated agent contact: Chi'llywood Copyright Agent / Chi'llywood, `support@chillywoodstream.com`, 9316 S Kimbark, Chicago, IL 60619, phone `3124879454`. |
+| Copyright Office DMCA agent registration | Done | User-provided registration truth records Chi'llywood DMCA registration number `DMCA-1072720`; public Copyright Office directory status was checked as active effective May 13, 2026. |
 | Copyright report flow | Drafted pending attorney review / not fully implemented | Generic in-app copyright report exists; full DMCA fields are missing. |
 | Counter-notice workflow | Drafted pending attorney review / not fully implemented | Operational doc created; legal timing/jurisdiction placeholders remain. |
 | Repeat infringer policy | Drafted pending attorney review | Policy exists; dedicated strike automation is not implemented. |
@@ -37,8 +37,8 @@ Status key:
 
 - attorney/legal approval of Terms, Privacy, Creator Rules, Community Guidelines, Copyright/DMCA, Account Deletion, Refunds/Subscriptions, Payouts, Fraud/Forfeiture, Sponsor Disclosure, Banned Content, and Moderation workflow;
 - final public URLs for Terms, Privacy, Account Deletion, Community Guidelines, Copyright/DMCA, Creator Rules, and Support as needed;
-- public DMCA designated agent/contact page;
-- U.S. Copyright Office DMCA agent registration if Chi'llywood intends to claim DMCA safe-harbor readiness;
+- attorney review of the public DMCA designated agent/contact language and operational workflow;
+- keep U.S. Copyright Office DMCA agent registration current, including renewals/updates if agent contact information changes;
 - support inbox receipt proof for `support@chillywoodstream.com`;
 - account deletion process/SLA/backend retention runbook;
 - Google Play account deletion URL acceptance and Data Safety answers;
