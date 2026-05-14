@@ -34,7 +34,7 @@ Preferred production mapping after DNS/hosting setup:
 - `https://chillywoodstream.com/moderation`
 - `https://chillywoodstream.com/support`
 
-Current repo truth: this static site is deployed on `chillywoodstream.com` from repo source. Google Play web-link acceptance, attorney review, support inbox receipt proof, live end-to-end DMCA workflow proof, uploader-facing counter-notice submission, and outbound email automation remain external/pending until separately proved. DMCA designated-agent public contact posting and U.S. Copyright Office registration are recorded complete for registration `DMCA-1072720`; backed DMCA case/Admin tooling exists in the app/backend.
+Current repo truth: this static site is deployed on `chillywoodstream.com` from repo source. Google Play web-link acceptance, attorney review, support inbox receipt proof, uploader-facing counter-notice submission if required, and outbound email automation remain external/pending until separately proved. DMCA designated-agent public contact posting and U.S. Copyright Office registration are recorded complete for registration `DMCA-1072720`; backed/Admin DMCA case tooling is live-proof closed in the app/backend.
 
 Cloudflare status as of May 13, 2026:
 

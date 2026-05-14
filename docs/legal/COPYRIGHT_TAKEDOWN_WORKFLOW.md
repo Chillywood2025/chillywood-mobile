@@ -69,6 +69,7 @@ Implemented backed flow:
 3. Owner/operator Admin can mark a case under review, incomplete, rejected, uploader-notified, eligible for restore, repeat-infringer review, or closed.
 4. Owner/operator Admin can record hide/disable/restore/no-action/evidence actions through `admin_dmca_record_content_action`.
 5. Owner/operator Admin can add/remove copyright strikes and record counter-notices, forwarding, court action notices, restore eligibility, and audit history.
+6. Live end-to-end proof passed with disposable reporter/uploader/admin/viewer accounts and safe profile-post/comment/creator-video content: valid notice creation, invalid notice rejection, Admin list/detail/status actions, supported content hide/restore, public hidden/restored visibility, strike/repeat-infringer review, rejected no-strike behavior, counter-notice deadlines, court-action restore blocking, RLS denial for normal users, generic report compatibility, and proof-content cleanup.
 
 ## Emergency Disable / Removal
 
@@ -100,7 +101,7 @@ Escalate reports that appear false, retaliatory, automated, harassing, or design
 
 [ATTORNEY TO CONFIRM COUNTER-NOTICE TIMING AND JURISDICTION LANGUAGE]
 
-Current implementation supports Admin-recorded counter-notices received by Support/email. It stores submitter details, required statements, signature, forwarding time, 10-business-day restore-not-before date, 14-business-day restore-not-after date, court-action notice time, and status. A direct uploader-facing counter-notice route is still pending.
+Current implementation supports Admin-recorded counter-notices received by Support/email. It stores submitter details, required statements, signature, forwarding time, 10-business-day restore-not-before date, 14-business-day restore-not-after date, court-action notice time, and status. Court-action notices now block both restore-eligible status and the restore content action. A direct uploader-facing counter-notice route is still pending.
 
 ## Repeat Offender Review
 
@@ -118,9 +119,9 @@ Share only what is needed to process the claim, counter-notice, legal request, o
 
 ## Implementation Blockers
 
-- Live end-to-end proof with a safe disposable copyright case, admin account, uploader account, and content target is still pending.
+- Live end-to-end backed/Admin DMCA proof with safe disposable reporter/uploader/admin/viewer accounts and supported content targets passed on May 14, 2026.
 - Support inbox receipt proof remains pending in launch readiness docs.
 - DMCA designated agent public contact and U.S. Copyright Office registration are recorded as complete from the provided registration details.
-- Uploader-facing counter-notice submission route is still pending; Admin-recorded counter-notices are implemented.
-- Outbound email automation is still pending; notification templates/status recording are implemented for manual support/admin workflow.
+- Uploader-facing counter-notice submission route is still pending; Admin-recorded counter-notices are implemented and proved.
+- Outbound email automation is still pending; notification templates/status recording are implemented for manual support/admin workflow and template coverage is proved.
 - Live-room and channel-level DMCA disable/restore require a separate safe moderation action; this tool supports creator videos, profile posts, profile-post comments, creator-video comments, and social attachments.

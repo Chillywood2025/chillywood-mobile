@@ -50,6 +50,7 @@ Operational status:
 - formal copyright notice intake is backed by a DMCA case record;
 - Admin owner/operator review can mark a notice under review, incomplete, rejected, disabled, restored, closed, or in repeat-infringer review;
 - supported content actions can hide, disable, restore, preserve evidence, or record no action for creator videos, profile posts, profile-post comments, creator-video comments, and social attachments;
+- live backed/Admin proof has passed for safe profile-post and creator-video hide/restore, public visibility blocking/restoration, counter-notice deadlines, court-action restore blocking, strikes, repeat-infringer review, audit history, and RLS/private-data denial;
 - live rooms and channel-level takedowns still require a separate safe moderation action unless handled by support/legal outside this tool;
 - outbound email automation is not claimed; support/admin notices may be manual and recorded in the case history.
 
@@ -69,7 +70,7 @@ A counter-notice should include:
 
 After a proper counter-notice, the rightsholder may need to file legal action to keep the content down. Timing and reinstatement rules must be confirmed by legal counsel.
 
-Current tooling lets Admin record a counter-notice received through Support, record forwarding to the claimant, store the 10-14 business-day response window, record a court action notice, and mark a case eligible for restore after review. A direct uploader-facing counter-notice submission route is not yet public.
+Current tooling lets Admin record a counter-notice received through Support, record forwarding to the claimant, store the 10-14 business-day response window, record a court action notice, and mark a case eligible for restore after review. Court-action notices block restore eligibility and restore actions in the backed Admin workflow. A direct uploader-facing counter-notice submission route is not yet public.
 
 ## 6. Repeat Infringer Policy
 

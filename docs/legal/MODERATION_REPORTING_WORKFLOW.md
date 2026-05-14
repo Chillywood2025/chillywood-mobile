@@ -94,6 +94,7 @@ Current admin tooling:
 - DMCA cases are backed by dedicated tables for formal notices, counter-notices, content actions, strikes, and audit history;
 - owner/operator Admin can list/detail DMCA cases, mark case statuses, record hide/disable/restore/no-action/evidence actions, add/remove strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view audit history;
 - normal users cannot access Admin DMCA case details or private reporter/uploader contact fields through the DMCA tables;
+- live backed/Admin DMCA proof passed with disposable reporter/uploader/admin/viewer accounts and safe profile-post/comment/creator-video content, including invalid notice rejection, notice creation, Admin list/detail/status, content hide/restore, public hidden/restored visibility, strike/repeat-infringer review, rejected no-strike behavior, counter-notice deadlines, court-action restore blocking, RLS/private-data denial, generic report compatibility, and proof-content cleanup;
 - first-class open/resolved report workflow is not connected;
 - fraud runtime enforcement hooks are not connected;
 - payout holds are foundation-only unless a future release proves enforcement.
@@ -111,6 +112,5 @@ Outbound email automation is pending. Admin/support notification templates exist
 - uploader-facing counter-notice submission route;
 - live-room/channel DMCA action tooling;
 - outbound email automation proof;
-- end-to-end runtime proof with safe DMCA test data and admin/uploader/reporter accounts;
 - dedicated fraud/sponsor/payout enforcement workflow;
 - final severe-safety escalation owner and SLA.

@@ -53,7 +53,7 @@ Current deployment truth:
 - `https://chillywoodstream.com/support` is the live public support URL;
 - Google Play account deletion compliance is not complete until the live public deletion URL is entered in Play Console and accepted;
 - DMCA designated agent public contact posting and U.S. Copyright Office registration are recorded complete under registration `DMCA-1072720`;
-- broader DMCA/legal-compliance claims still require attorney review, current agent information, live end-to-end workflow proof, and properly operated notice/counter-notice/repeat-infringer handling;
+- broader DMCA/legal-compliance claims still require attorney review, current agent information, support inbox operations, and properly operated notice/counter-notice/repeat-infringer handling; the backed/Admin DMCA workflow itself has live proof for formal notice intake, Admin review/actions, supported content hide/restore, strikes, Admin-recorded counter-notices, court-action restore blocking, and normal-user access denial;
 - attorney review remains required before public launch;
 - support inbox receipt proof for `support@chillywoodstream.com` remains pending.
 
