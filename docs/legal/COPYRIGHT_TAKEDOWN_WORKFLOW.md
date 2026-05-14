@@ -6,15 +6,18 @@ Last updated: May 14, 2026
 
 ## Current App Reality
 
-The app has a generic report sheet with a `Copyright` category. It does not currently collect every formal DMCA notice field. A complete copyright-report form is an implementation blocker before Chi'llywood can treat in-app copyright reports as formal DMCA notices.
+The app has a generic report sheet with a `Copyright` category, and that category now points users to the formal copyright notice route. A dedicated in-app copyright report route exists at `app/copyright-report.tsx` and submits required notice fields through the backed `submit_dmca_notice` RPC.
 
 Existing intake:
 
 - in-app generic report sheet: `components/safety/report-sheet.tsx`
+- formal copyright report route: `app/copyright-report.tsx`
 - backed table/helper: `_lib/moderation.ts` and `safety_reports`
+- DMCA case helper: `_lib/dmca.ts`
 - public copyright page: `app/copyright.tsx`
 - support route: `app/support.tsx`
-- admin report readout: `app/admin.tsx`
+- admin report and DMCA readout/action panel: `app/admin.tsx`
+- backed DMCA schema/RPC migration: `supabase/migrations/202605140001_dmca_operational_tooling.sql`
 
 ## Required Copyright Report Form Fields
 
@@ -59,6 +62,14 @@ Support inbox receipt proof for `support@chillywoodstream.com` remains tracked s
 8. Apply a strike if the claim is valid and not resolved by retraction, counter-notice, or reinstatement.
 9. Record moderator/legal reviewer, action, reason, timestamp, claim id, affected content id, and uploader id.
 
+Implemented backed flow:
+
+1. `submit_dmca_notice(jsonb)` stores a formal notice as a `dmca_cases` row and returns only case id, case number, and status to the submitter.
+2. Owner/operator Admin can read the private case list/detail; normal users cannot read the full case table.
+3. Owner/operator Admin can mark a case under review, incomplete, rejected, uploader-notified, eligible for restore, repeat-infringer review, or closed.
+4. Owner/operator Admin can record hide/disable/restore/no-action/evidence actions through `admin_dmca_record_content_action`.
+5. Owner/operator Admin can add/remove copyright strikes and record counter-notices, forwarding, court action notices, restore eligibility, and audit history.
+
 ## Emergency Disable / Removal
 
 Disable access quickly when a report identifies clear infringement, stolen commercial media, repeat infringement, high-risk live stream, or content that creates legal/safety urgency.
@@ -89,9 +100,13 @@ Escalate reports that appear false, retaliatory, automated, harassing, or design
 
 [ATTORNEY TO CONFIRM COUNTER-NOTICE TIMING AND JURISDICTION LANGUAGE]
 
+Current implementation supports Admin-recorded counter-notices received by Support/email. It stores submitter details, required statements, signature, forwarding time, 10-business-day restore-not-before date, 14-business-day restore-not-after date, court-action notice time, and status. A direct uploader-facing counter-notice route is still pending.
+
 ## Repeat Offender Review
 
 Review accounts with multiple valid copyright removals, severe willful infringement, stolen commercial media, ban evasion, or rights-holder abuse. Actions may include upload limits, channel restrictions, monetization hold, account suspension, or termination.
+
+Current implementation supports active/removed/disputed/expired strikes by user/channel/case/content and opens repeat-infringer review when Admin records a severe strike or the active strike count reaches the configured review threshold in the RPC. It does not automatically terminate accounts.
 
 ## Reporter And Uploader Privacy
 
@@ -103,7 +118,9 @@ Share only what is needed to process the claim, counter-notice, legal request, o
 
 ## Implementation Blockers
 
-- Dedicated DMCA form fields are not implemented.
+- Live end-to-end proof with a safe disposable copyright case, admin account, uploader account, and content target is still pending.
 - Support inbox receipt proof remains pending in launch readiness docs.
 - DMCA designated agent public contact and U.S. Copyright Office registration are recorded as complete from the provided registration details.
-- Copyright claim log/admin workflow exists only as operational docs, not a complete dedicated backend workflow.
+- Uploader-facing counter-notice submission route is still pending; Admin-recorded counter-notices are implemented.
+- Outbound email automation is still pending; notification templates/status recording are implemented for manual support/admin workflow.
+- Live-room and channel-level DMCA disable/restore require a separate safe moderation action; this tool supports creator videos, profile posts, profile-post comments, creator-video comments, and social attachments.

@@ -38,6 +38,7 @@ const PUBLIC_LEGAL_PATHS = new Set([
   "/community-guidelines",
   "/creator-rules",
   "/copyright",
+  "/copyright-report",
 ]);
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
@@ -189,6 +190,7 @@ function RootNavigator() {
         <Stack.Screen name="channel-studio/index" />
         <Stack.Screen name="channel-settings" />
         <Stack.Screen name="support" />
+        <Stack.Screen name="copyright-report" />
         <Stack.Screen name="beta-support" />
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       </Stack>

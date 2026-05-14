@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   Modal,
   ScrollView,
@@ -32,6 +33,7 @@ export function ReportSheet({
   onSubmit,
   onClose,
 }: ReportSheetProps) {
+  const router = useRouter();
   const [category, setCategory] = useState<SafetyReportCategory>("safety");
   const [note, setNote] = useState("");
 
@@ -81,6 +83,25 @@ export function ReportSheet({
           />
 
           <Text style={styles.helperText}>{helperText}</Text>
+
+          {category === "copyright" ? (
+            <View style={styles.formalNoticeBox}>
+              <Text style={styles.formalNoticeTitle}>Formal copyright notice</Text>
+              <Text style={styles.formalNoticeText}>
+                A DMCA-style copyright notice needs ownership, signature, and good-faith statements. Open the dedicated copyright report form for that process.
+              </Text>
+              <TouchableOpacity
+                style={styles.formalNoticeButton}
+                activeOpacity={0.86}
+                onPress={() => {
+                  onClose();
+                  router.push("/copyright-report" as Parameters<typeof router.push>[0]);
+                }}
+              >
+                <Text style={styles.formalNoticeButtonText}>Open Copyright Report</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={[styles.primaryButton, busy && styles.buttonDisabled]}
@@ -205,6 +226,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     fontWeight: "600",
+  },
+  formalNoticeBox: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.28)",
+    backgroundColor: "rgba(220,20,60,0.1)",
+    padding: 12,
+    gap: 8,
+  },
+  formalNoticeTitle: {
+    color: "#FFE6EB",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  formalNoticeText: {
+    color: "#C8D0E2",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  formalNoticeButton: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "#DC143C",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  formalNoticeButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
   },
   primaryButton: {
     borderRadius: 999,

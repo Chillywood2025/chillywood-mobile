@@ -175,6 +175,8 @@ If you believe content on Chi'llywood infringes your copyright, send a copyright
 
 The U.S. Copyright Office directory lists the Chi'llywood designation as active effective May 13, 2026. Registration and public contact posting are one part of the process; this page does not claim full DMCA safe-harbor compliance, and Chi'llywood must keep agent contact information current and operate a proper notice, counter-notice, and repeat-infringer process.
 
+Chi'llywood also has an in-app Report Copyright Infringement form at \`/copyright-report\` for formal copyright notices where that route is available. The generic safety report sheet may link users to that form when Copyright is selected.
+
 ## 3. Required Complaint Information`,
   );
 

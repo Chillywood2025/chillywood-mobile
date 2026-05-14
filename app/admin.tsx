@@ -79,6 +79,26 @@ import {
   type AdminImmutableAuditReadModel,
   type PlatformAdminAuditLogRow,
 } from "../_lib/platformAudit";
+import {
+  DMCA_CONTENT_ACTIONS,
+  DMCA_NOTIFICATION_TEMPLATES,
+  adminDmcaAddStrike,
+  adminDmcaForwardCounterNotice,
+  adminDmcaMarkRestoreEligible,
+  adminDmcaRecordContentAction,
+  adminDmcaRecordCounterNotice,
+  adminDmcaRecordCourtAction,
+  adminDmcaRemoveStrike,
+  adminDmcaSetCaseStatus,
+  getDmcaNoticeCompleteness,
+  readAdminDmcaCaseDetail,
+  readAdminDmcaCases,
+  type DmcaCase,
+  type DmcaCaseDetail,
+  type DmcaCaseStatus,
+  type DmcaContentAction,
+  type DmcaContentType,
+} from "../_lib/dmca";
 import { supabase } from "../_lib/supabase";
 import { moderateCreatorVideo, type CreatorVideoModerationStatus } from "../_lib/creatorVideos";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
@@ -128,6 +148,7 @@ type EditorMode = "create" | "edit";
 type OperatorTabKey =
   | "home"
   | "reports"
+  | "dmca"
   | "content"
   | "roles"
   | "audit"
@@ -215,6 +236,7 @@ const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archive
 const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "home", label: "Home" },
   { key: "reports", label: "Reports" },
+  { key: "dmca", label: "DMCA" },
   { key: "content", label: "Content" },
   { key: "roles", label: "Roles" },
   { key: "audit", label: "Audit" },
@@ -459,6 +481,37 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
     controlKey: "premium_required_for_watch_party",
     body: "Existing Premium watch-party gates remain enforced separately. Not enforced yet as a runtime switch.",
   },
+];
+const dmcaStatusFilters: (DmcaCaseStatus | "all")[] = [
+  "all",
+  "received",
+  "needs_more_info",
+  "under_review",
+  "content_disabled",
+  "counter_notice_received",
+  "waiting_rightsholder_response",
+  "eligible_for_restore",
+  "repeat_infringer_review",
+  "closed",
+];
+const dmcaStatusActionOptions: DmcaCaseStatus[] = [
+  "under_review",
+  "needs_more_info",
+  "rejected",
+  "uploader_notified",
+  "eligible_for_restore",
+  "repeat_infringer_review",
+  "closed",
+];
+const dmcaActionContentTypes: DmcaContentType[] = [
+  "creator_video",
+  "profile_post",
+  "profile_post_comment",
+  "creator_video_comment",
+  "social_attachment",
+  "comment",
+  "reply",
+  "attachment",
 ];
 const railLabels: Record<HomeRailKey, string> = {
   top_picks: "Top Picks",
@@ -947,6 +1000,31 @@ export default function AdminStudioScreen() {
   const [safetyReportQueueSummary, setSafetyReportQueueSummary] = useState<SafetyReportQueueSummary | null>(null);
   const [safetyReportsLoading, setSafetyReportsLoading] = useState(false);
   const [moderationNotice, setModerationNotice] = useState<string | null>(null);
+  const [dmcaCases, setDmcaCases] = useState<DmcaCase[]>([]);
+  const [dmcaCasesLoading, setDmcaCasesLoading] = useState(false);
+  const [dmcaCaseDetail, setDmcaCaseDetail] = useState<DmcaCaseDetail | null>(null);
+  const [dmcaSelectedCaseId, setDmcaSelectedCaseId] = useState<string | null>(null);
+  const [dmcaStatusFilter, setDmcaStatusFilter] = useState<DmcaCaseStatus | "all">("all");
+  const [dmcaNotice, setDmcaNotice] = useState<string | null>(null);
+  const [dmcaActionBusy, setDmcaActionBusy] = useState<string | null>(null);
+  const [dmcaActionReason, setDmcaActionReason] = useState("");
+  const [dmcaAdminNotes, setDmcaAdminNotes] = useState("");
+  const [dmcaContentType, setDmcaContentType] = useState<DmcaContentType>("creator_video");
+  const [dmcaContentId, setDmcaContentId] = useState("");
+  const [dmcaContentAction, setDmcaContentAction] = useState<DmcaContentAction>("hidden");
+  const [dmcaStrikeUserId, setDmcaStrikeUserId] = useState("");
+  const [dmcaStrikeSeverity, setDmcaStrikeSeverity] = useState<"standard" | "severe">("standard");
+  const [counterSubmitterName, setCounterSubmitterName] = useState("");
+  const [counterSubmitterEmail, setCounterSubmitterEmail] = useState("");
+  const [counterSubmitterPhone, setCounterSubmitterPhone] = useState("");
+  const [counterSubmitterAddress, setCounterSubmitterAddress] = useState("");
+  const [counterRemovedDescription, setCounterRemovedDescription] = useState("");
+  const [counterRemovedLocation, setCounterRemovedLocation] = useState("");
+  const [counterGoodFaith, setCounterGoodFaith] = useState(false);
+  const [counterJurisdiction, setCounterJurisdiction] = useState(false);
+  const [counterService, setCounterService] = useState(false);
+  const [counterSignature, setCounterSignature] = useState("");
+  const [counterForwardedNow, setCounterForwardedNow] = useState(false);
   const [creatorVideoModerationId, setCreatorVideoModerationId] = useState("");
   const [creatorVideoModerationReason, setCreatorVideoModerationReason] = useState("");
   const [creatorVideoModerationBusy, setCreatorVideoModerationBusy] = useState<CreatorVideoModerationStatus | null>(null);
@@ -1014,6 +1092,12 @@ export default function AdminStudioScreen() {
       setSafetyReports([]);
       setSafetyReportsLoading(false);
       setModerationNotice(null);
+      setDmcaCases([]);
+      setDmcaCasesLoading(false);
+      setDmcaCaseDetail(null);
+      setDmcaSelectedCaseId(null);
+      setDmcaNotice(null);
+      setDmcaActionBusy(null);
       setCreatorVideoModerationId("");
       setCreatorVideoModerationReason("");
       setCreatorVideoModerationBusy(null);
@@ -1041,6 +1125,12 @@ export default function AdminStudioScreen() {
       setAdminAuditLogLoading(false);
       setSafetyReports([]);
       setSafetyReportsLoading(false);
+      setDmcaCases([]);
+      setDmcaCasesLoading(false);
+      setDmcaCaseDetail(null);
+      setDmcaSelectedCaseId(null);
+      setDmcaNotice(null);
+      setDmcaActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -1262,6 +1352,11 @@ export default function AdminStudioScreen() {
     const recentReportValue = canReviewSafetyReports
       ? String(safetyReportQueueSummary?.totalReports ?? safetyReports.length)
       : "Locked";
+    const dmcaValue = canManagePrivilegedWrites
+      ? dmcaCasesLoading
+        ? "Loading"
+        : String(dmcaCases.length)
+      : "Locked";
     const creatorVideoValue = canManagePrivilegedWrites ? "Ready" : "Locked";
     const appConfigValue = configLoading ? "Loading" : appConfigConnected ? "Connected" : "Not connected yet";
     const premiumValue = formatAdminV1Count(adminV1ReadModel.premiumActiveCount, adminV1ReadModel.loading);
@@ -1308,6 +1403,15 @@ export default function AdminStudioScreen() {
           : "Report review requires active platform role membership.",
         tone: canReviewSafetyReports ? "default" : "unavailable",
         destination: "reports",
+      },
+      {
+        label: "DMCA Cases",
+        value: dmcaValue,
+        body: canManagePrivilegedWrites
+          ? "Formal copyright cases, takedown actions, counter-notices, strikes, and audit history are owner/operator only."
+          : "DMCA case visibility requires active owner/operator role truth.",
+        tone: canManagePrivilegedWrites ? "default" : "unavailable",
+        destination: "dmca",
       },
       {
         label: "Creator Video Safety",
@@ -1450,6 +1554,8 @@ export default function AdminStudioScreen() {
     canManagePrivilegedWrites,
     canReviewSafetyReports,
     configLoading,
+    dmcaCases.length,
+    dmcaCasesLoading,
     platformRoles,
     resolvedActorRole,
     safetyReportQueueSummary,
@@ -1500,6 +1606,16 @@ export default function AdminStudioScreen() {
       });
     }
 
+    if (dmcaNotice) {
+      rows.push({
+        label: "DMCA Notice",
+        value: "Needs review",
+        body: dmcaNotice,
+        tone: "unavailable",
+        destination: "dmca",
+      });
+    }
+
     if (adminOpsNotice) {
       rows.push({
         label: "Admin Ops Notice",
@@ -1516,6 +1632,7 @@ export default function AdminStudioScreen() {
     appConfigConnected,
     canReviewSafetyReports,
     configLoading,
+    dmcaNotice,
     moderationNotice,
     notice,
     safetyReportQueueSummary,
@@ -1844,6 +1961,405 @@ export default function AdminStudioScreen() {
       setSafetyReportsLoading(false);
     }
   }, []);
+
+  const resetCounterNoticeForm = useCallback(() => {
+    setCounterSubmitterName("");
+    setCounterSubmitterEmail("");
+    setCounterSubmitterPhone("");
+    setCounterSubmitterAddress("");
+    setCounterRemovedDescription("");
+    setCounterRemovedLocation("");
+    setCounterGoodFaith(false);
+    setCounterJurisdiction(false);
+    setCounterService(false);
+    setCounterSignature("");
+    setCounterForwardedNow(false);
+  }, []);
+
+  const applyDmcaDetailDefaults = useCallback((detail: DmcaCaseDetail) => {
+    setDmcaContentType(detail.case.contentType);
+    setDmcaContentId(detail.case.contentId ?? "");
+    setDmcaStrikeUserId(detail.case.uploaderUserId ?? "");
+    setCounterRemovedLocation(detail.case.contentUrl ?? detail.case.contentId ?? "");
+  }, []);
+
+  const loadDmcaCases = useCallback(async () => {
+    if (!canManagePrivilegedWrites) {
+      setDmcaCases([]);
+      setDmcaCasesLoading(false);
+      return;
+    }
+
+    try {
+      setDmcaCasesLoading(true);
+      setDmcaNotice(null);
+      const cases = await readAdminDmcaCases({ limit: 20, status: dmcaStatusFilter });
+      setDmcaCases(cases);
+    } catch (err: any) {
+      setDmcaCases([]);
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to load DMCA cases."));
+    } finally {
+      setDmcaCasesLoading(false);
+    }
+  }, [canManagePrivilegedWrites, dmcaStatusFilter]);
+
+  const loadDmcaCaseDetail = useCallback(async (caseId: string) => {
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("DMCA case details require active owner/operator truth.");
+      return;
+    }
+
+    try {
+      setDmcaActionBusy(`detail-${caseId}`);
+      setDmcaNotice(null);
+      setDmcaSelectedCaseId(caseId);
+      const detail = await readAdminDmcaCaseDetail(caseId);
+      setDmcaCaseDetail(detail);
+      applyDmcaDetailDefaults(detail);
+    } catch (err: any) {
+      setDmcaCaseDetail(null);
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to load DMCA case detail."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [applyDmcaDetailDefaults, canManagePrivilegedWrites]);
+
+  useEffect(() => {
+    if (!canAccessAdmin || !canManagePrivilegedWrites) {
+      setDmcaCases([]);
+      setDmcaCasesLoading(false);
+      setDmcaCaseDetail(null);
+      setDmcaSelectedCaseId(null);
+      setDmcaNotice(null);
+      setDmcaActionBusy(null);
+      return;
+    }
+    void loadDmcaCases();
+  }, [canAccessAdmin, canManagePrivilegedWrites, loadDmcaCases]);
+
+  const refreshDmcaAfterAction = useCallback(async (caseId: string) => {
+    await loadDmcaCases();
+    await loadDmcaCaseDetail(caseId);
+  }, [loadDmcaCaseDetail, loadDmcaCases]);
+
+  const runDmcaStatusUpdate = useCallback(async (status: DmcaCaseStatus) => {
+    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    if (!selectedCaseId || dmcaActionBusy) return;
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("DMCA admin actions require active owner/operator truth.");
+      return;
+    }
+
+    const reason = dmcaActionReason.trim() || `Marked ${formatModerationToken(status).toLowerCase()} by admin.`;
+    try {
+      setDmcaActionBusy(`status-${status}`);
+      setDmcaNotice(null);
+      await adminDmcaSetCaseStatus({
+        caseId: selectedCaseId,
+        status,
+        reason,
+        adminNotes: dmcaAdminNotes.trim() || undefined,
+      });
+      setDmcaNotice(`DMCA case marked ${formatModerationToken(status).toLowerCase()}.`);
+      await refreshDmcaAfterAction(selectedCaseId);
+    } catch (err: any) {
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to update DMCA case status."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    dmcaActionBusy,
+    dmcaActionReason,
+    dmcaAdminNotes,
+    dmcaCaseDetail?.case.id,
+    dmcaSelectedCaseId,
+    refreshDmcaAfterAction,
+  ]);
+
+  const runDmcaContentAction = useCallback(async () => {
+    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const contentId = dmcaContentId.trim();
+    const reason = dmcaActionReason.trim();
+    if (!selectedCaseId || dmcaActionBusy) return;
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("DMCA admin actions require active owner/operator truth.");
+      return;
+    }
+    if (!contentId) {
+      setDmcaNotice("Enter a content id before recording a DMCA content action.");
+      return;
+    }
+    if (!reason) {
+      setDmcaNotice("Add an action reason before recording a DMCA content action.");
+      return;
+    }
+
+    try {
+      setDmcaActionBusy(`content-${dmcaContentAction}`);
+      setDmcaNotice(null);
+      await adminDmcaRecordContentAction({
+        caseId: selectedCaseId,
+        contentType: dmcaContentType,
+        contentId,
+        action: dmcaContentAction,
+        reason,
+      });
+      setDmcaNotice(`DMCA content action recorded: ${formatModerationToken(dmcaContentAction)}.`);
+      await refreshDmcaAfterAction(selectedCaseId);
+    } catch (err: any) {
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to record DMCA content action."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    dmcaActionBusy,
+    dmcaActionReason,
+    dmcaCaseDetail?.case.id,
+    dmcaContentAction,
+    dmcaContentId,
+    dmcaContentType,
+    dmcaSelectedCaseId,
+    refreshDmcaAfterAction,
+  ]);
+
+  const runDmcaAddStrike = useCallback(async () => {
+    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const userId = dmcaStrikeUserId.trim();
+    const contentId = dmcaContentId.trim();
+    const reason = dmcaActionReason.trim();
+    if (!selectedCaseId || dmcaActionBusy) return;
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("DMCA strike actions require active owner/operator truth.");
+      return;
+    }
+    if (!userId || !contentId || !reason) {
+      setDmcaNotice("Add user id, content id, and reason before adding a copyright strike.");
+      return;
+    }
+
+    try {
+      setDmcaActionBusy("strike-add");
+      setDmcaNotice(null);
+      await adminDmcaAddStrike({
+        caseId: selectedCaseId,
+        userId,
+        channelId: dmcaCaseDetail?.case.uploaderChannelId ?? null,
+        contentType: dmcaContentType,
+        contentId,
+        severity: dmcaStrikeSeverity,
+        reason,
+      });
+      setDmcaNotice("Copyright strike added. Repeat-infringer review opens at threshold or severe severity.");
+      await refreshDmcaAfterAction(selectedCaseId);
+    } catch (err: any) {
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to add copyright strike."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    dmcaActionBusy,
+    dmcaActionReason,
+    dmcaCaseDetail?.case.id,
+    dmcaCaseDetail?.case.uploaderChannelId,
+    dmcaContentId,
+    dmcaContentType,
+    dmcaSelectedCaseId,
+    dmcaStrikeSeverity,
+    dmcaStrikeUserId,
+    refreshDmcaAfterAction,
+  ]);
+
+  const runDmcaRemoveStrike = useCallback(async (strikeId: string) => {
+    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const reason = dmcaActionReason.trim();
+    if (!selectedCaseId || dmcaActionBusy) return;
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("DMCA strike actions require active owner/operator truth.");
+      return;
+    }
+    if (!reason) {
+      setDmcaNotice("Add a reason before removing a copyright strike.");
+      return;
+    }
+
+    try {
+      setDmcaActionBusy(`strike-remove-${strikeId}`);
+      setDmcaNotice(null);
+      await adminDmcaRemoveStrike({ strikeId, reason });
+      setDmcaNotice("Copyright strike removed.");
+      await refreshDmcaAfterAction(selectedCaseId);
+    } catch (err: any) {
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to remove copyright strike."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    dmcaActionBusy,
+    dmcaActionReason,
+    dmcaCaseDetail?.case.id,
+    dmcaSelectedCaseId,
+    refreshDmcaAfterAction,
+  ]);
+
+  const runDmcaRecordCounterNotice = useCallback(async () => {
+    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    if (!selectedCaseId || dmcaActionBusy) return;
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("Counter-notice recording requires active owner/operator truth.");
+      return;
+    }
+    if (!counterSubmitterName.trim() || !counterSubmitterEmail.trim() || !counterRemovedDescription.trim() || !counterRemovedLocation.trim() || !counterSignature.trim()) {
+      setDmcaNotice("Counter-notice needs submitter, email, removed material, location, and signature.");
+      return;
+    }
+    if (!counterGoodFaith || !counterJurisdiction || !counterService) {
+      setDmcaNotice("Confirm all counter-notice statements before recording.");
+      return;
+    }
+
+    try {
+      setDmcaActionBusy("counter-record");
+      setDmcaNotice(null);
+      await adminDmcaRecordCounterNotice({
+        caseId: selectedCaseId,
+        submitterUserId: dmcaCaseDetail?.case.uploaderUserId ?? undefined,
+        submitterName: counterSubmitterName,
+        submitterEmail: counterSubmitterEmail,
+        submitterPhone: counterSubmitterPhone,
+        submitterAddress: counterSubmitterAddress,
+        removedMaterialDescription: counterRemovedDescription,
+        removedMaterialUrlOrLocation: counterRemovedLocation,
+        goodFaithMistakeStatement: counterGoodFaith,
+        jurisdictionConsentStatement: counterJurisdiction,
+        serviceAcceptanceStatement: counterService,
+        electronicSignature: counterSignature,
+        forwardedToClaimant: counterForwardedNow,
+      });
+      setDmcaNotice(counterForwardedNow
+        ? "Counter-notice recorded and claimant forwarding window started."
+        : "Counter-notice recorded. Forwarding is still manual/pending.");
+      resetCounterNoticeForm();
+      await refreshDmcaAfterAction(selectedCaseId);
+    } catch (err: any) {
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to record counter-notice."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    counterForwardedNow,
+    counterGoodFaith,
+    counterJurisdiction,
+    counterRemovedDescription,
+    counterRemovedLocation,
+    counterService,
+    counterSignature,
+    counterSubmitterAddress,
+    counterSubmitterEmail,
+    counterSubmitterName,
+    counterSubmitterPhone,
+    dmcaActionBusy,
+    dmcaCaseDetail?.case.id,
+    dmcaCaseDetail?.case.uploaderUserId,
+    dmcaSelectedCaseId,
+    refreshDmcaAfterAction,
+    resetCounterNoticeForm,
+  ]);
+
+  const runDmcaForwardCounterNotice = useCallback(async (counterNoticeId: string) => {
+    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const reason = dmcaActionReason.trim() || "Counter-notice forwarding to claimant recorded.";
+    if (!selectedCaseId || dmcaActionBusy) return;
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("Counter-notice actions require active owner/operator truth.");
+      return;
+    }
+    try {
+      setDmcaActionBusy(`counter-forward-${counterNoticeId}`);
+      setDmcaNotice(null);
+      await adminDmcaForwardCounterNotice({ counterNoticeId, reason });
+      setDmcaNotice("Counter-notice forwarding recorded. The 10-14 business-day window is stored.");
+      await refreshDmcaAfterAction(selectedCaseId);
+    } catch (err: any) {
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to forward counter-notice record."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    dmcaActionBusy,
+    dmcaActionReason,
+    dmcaCaseDetail?.case.id,
+    dmcaSelectedCaseId,
+    refreshDmcaAfterAction,
+  ]);
+
+  const runDmcaRecordCourtAction = useCallback(async (counterNoticeId: string) => {
+    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const reason = dmcaActionReason.trim() || "Court action notice received from claimant.";
+    if (!selectedCaseId || dmcaActionBusy) return;
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("Counter-notice actions require active owner/operator truth.");
+      return;
+    }
+    try {
+      setDmcaActionBusy(`court-${counterNoticeId}`);
+      setDmcaNotice(null);
+      await adminDmcaRecordCourtAction({ counterNoticeId, reason });
+      setDmcaNotice("Court action notice recorded. Restore is blocked for this counter-notice.");
+      await refreshDmcaAfterAction(selectedCaseId);
+    } catch (err: any) {
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to record court action notice."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    dmcaActionBusy,
+    dmcaActionReason,
+    dmcaCaseDetail?.case.id,
+    dmcaSelectedCaseId,
+    refreshDmcaAfterAction,
+  ]);
+
+  const runDmcaMarkRestoreEligible = useCallback(async (counterNoticeId: string) => {
+    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const reason = dmcaActionReason.trim() || "No court action notice recorded within the review window.";
+    if (!selectedCaseId || dmcaActionBusy) return;
+    if (!canManagePrivilegedWrites) {
+      setDmcaNotice("Counter-notice actions require active owner/operator truth.");
+      return;
+    }
+    try {
+      setDmcaActionBusy(`restore-eligible-${counterNoticeId}`);
+      setDmcaNotice(null);
+      await adminDmcaMarkRestoreEligible({ caseId: selectedCaseId, counterNoticeId, reason });
+      setDmcaNotice("DMCA case marked eligible for restore. Admin must still restore content explicitly.");
+      await refreshDmcaAfterAction(selectedCaseId);
+    } catch (err: any) {
+      setDmcaNotice(formatAdminOperationFailure(err, "Failed to mark restore eligibility."));
+    } finally {
+      setDmcaActionBusy(null);
+    }
+  }, [
+    canManagePrivilegedWrites,
+    dmcaActionBusy,
+    dmcaActionReason,
+    dmcaCaseDetail?.case.id,
+    dmcaSelectedCaseId,
+    refreshDmcaAfterAction,
+  ]);
+
+  const selectedDmcaDetail = dmcaCaseDetail;
+  const selectedDmcaCase = selectedDmcaDetail?.case ?? null;
+  const dmcaCompleteness = useMemo(
+    () => selectedDmcaCase ? getDmcaNoticeCompleteness(selectedDmcaCase) : null,
+    [selectedDmcaCase],
+  );
 
   const loadAdminV1ReadModel = useCallback(async () => {
     setAdminV1ReadModel((current) => ({ ...current, loading: true }));
@@ -2535,7 +3051,7 @@ export default function AdminStudioScreen() {
             <Text style={styles.kicker}>PRIVATE PLATFORM SURFACE</Text>
             <Text style={styles.title}>Admin Command Center</Text>
             <Text style={styles.subtitle}>
-              Operate Chi'llywood, review platform risk, and monitor launch readiness.
+              {"Operate Chi'llywood, review platform risk, and monitor launch readiness."}
             </Text>
           </View>
 
@@ -2884,6 +3400,455 @@ export default function AdminStudioScreen() {
               </View>
             )
           ) : null}
+        </View>
+        ) : null}
+
+        {operatorTab === "dmca" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>DMCA / COPYRIGHT</Text>
+              <Text style={styles.configTitle}>DMCA cases and repeat-infringer review</Text>
+              <Text style={styles.configBody}>
+                Formal copyright notices, counter-notices, content actions, strikes, and audit history stay owner/operator only. Outbound email automation is not claimed here.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.orderBtn, (!canManagePrivilegedWrites || dmcaCasesLoading) && styles.configSaveBtnDisabled]}
+              disabled={!canManagePrivilegedWrites || dmcaCasesLoading}
+              onPress={() => void loadDmcaCases()}
+            >
+              <Text style={styles.orderBtnText}>{dmcaCasesLoading ? "Loading" : "Refresh"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.badgesRow}>
+            <View style={[styles.badge, canManagePrivilegedWrites ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canManagePrivilegedWrites ? "Owner/operator only" : "Locked"}</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeScheduled]}>
+              <Text style={styles.badgeText}>Formal notice intake</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeDraft]}>
+              <Text style={styles.badgeText}>Manual email notices</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeOff]}>
+              <Text style={styles.badgeText}>No auto-termination</Text>
+            </View>
+          </View>
+
+          {dmcaNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{dmcaNotice}</Text>
+            </View>
+          ) : null}
+
+          {!canManagePrivilegedWrites ? (
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>DMCA tooling is locked</Text>
+                <Text style={styles.configListBody}>
+                  This route may be visible to some admin roles, but copyright cases include private reporter and uploader data. Full DMCA access requires active owner/operator backend role truth.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <>
+              <View style={styles.toggleRowWrap}>
+                {dmcaStatusFilters.map((status) => (
+                  <TouchableOpacity
+                    key={status}
+                    style={[styles.toggleChip, dmcaStatusFilter === status && styles.toggleChipActive]}
+                    onPress={() => setDmcaStatusFilter(status)}
+                  >
+                    <Text style={[styles.toggleChipText, dmcaStatusFilter === status && styles.toggleChipTextActive]}>
+                      {status === "all" ? "ALL" : formatModerationToken(status)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {dmcaCasesLoading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading DMCA cases...</Text>
+                </View>
+              ) : dmcaCases.length ? (
+                <View style={styles.configList}>
+                  {dmcaCases.map((dmcaCase) => (
+                    <View key={dmcaCase.id} style={styles.reportCard}>
+                      <View style={styles.reportHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.reportKicker}>
+                            {`${dmcaCase.caseNumber} · ${formatModerationToken(dmcaCase.contentType)}`}
+                          </Text>
+                          <Text style={styles.reportTitle}>{formatAuditDisplayText(dmcaCase.reporterName)}</Text>
+                          <Text style={styles.reportMeta}>{`Reporter ${formatAuditDisplayText(dmcaCase.reporterEmail)}`}</Text>
+                          <Text style={styles.reportMeta}>{`Updated ${formatModerationTimestamp(dmcaCase.updatedAt)}`}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.orderBtn}
+                          onPress={() => void loadDmcaCaseDetail(dmcaCase.id)}
+                        >
+                          <Text style={styles.orderBtnText}>
+                            {dmcaActionBusy === `detail-${dmcaCase.id}` ? "Loading" : "Open"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.badgesRow}>
+                        <View style={[styles.badge, styles.badgeScheduled]}>
+                          <Text style={styles.badgeText}>{formatModerationToken(dmcaCase.status)}</Text>
+                        </View>
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{formatModerationToken(dmcaCase.source)}</Text>
+                        </View>
+                        <View style={[styles.badge, dmcaCase.activeStrikeCount > 0 ? styles.badgeDraft : styles.badgeOff]}>
+                          <Text style={styles.badgeText}>{`${dmcaCase.activeStrikeCount} active strike${dmcaCase.activeStrikeCount === 1 ? "" : "s"}`}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.reportMeta}>{`Content id ${formatCompactIdentifier(dmcaCase.contentId)}`}</Text>
+                      {dmcaCase.contentUrl ? (
+                        <Text style={styles.reportBody}>{formatAuditDisplayText(dmcaCase.contentUrl)}</Text>
+                      ) : null}
+                      {dmcaCase.uploaderUserId ? (
+                        <Text style={styles.reportMeta}>{`Uploader ${formatCompactIdentifier(dmcaCase.uploaderUserId)}`}</Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.configListRow}>
+                  <View style={styles.configListCopy}>
+                    <Text style={styles.configListTitle}>No DMCA cases in this filter</Text>
+                    <Text style={styles.configListBody}>
+                      Formal copyright cases submitted through `/copyright-report` will appear here for owner/operator review.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {selectedDmcaDetail && selectedDmcaCase ? (
+                <View style={styles.configList}>
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>{`Case ${selectedDmcaCase.caseNumber}`}</Text>
+                      <Text style={styles.configListBody}>{`Status ${formatModerationToken(selectedDmcaCase.status)} · Created ${formatModerationTimestamp(selectedDmcaCase.createdAt)}`}</Text>
+                      <Text style={styles.configListBody}>{`Reporter ${formatAuditDisplayText(selectedDmcaCase.reporterName)} · ${formatAuditDisplayText(selectedDmcaCase.reporterEmail)}`}</Text>
+                      {selectedDmcaCase.reporterPhone ? (
+                        <Text style={styles.configListBody}>{`Phone ${formatAuditDisplayText(selectedDmcaCase.reporterPhone)}`}</Text>
+                      ) : null}
+                      {selectedDmcaCase.reporterAddress ? (
+                        <Text style={styles.configListBody}>{`Address ${formatAuditDisplayText(selectedDmcaCase.reporterAddress)}`}</Text>
+                      ) : null}
+                      {selectedDmcaCase.reporterCompany ? (
+                        <Text style={styles.configListBody}>{`Company ${formatAuditDisplayText(selectedDmcaCase.reporterCompany)}`}</Text>
+                      ) : null}
+                      {!selectedDmcaCase.reporterIsOwner && selectedDmcaCase.authorizedAgentName ? (
+                        <Text style={styles.configListBody}>{`Authorized agent ${formatAuditDisplayText(selectedDmcaCase.authorizedAgentName)}`}</Text>
+                      ) : null}
+                      <Text style={styles.configListBody}>{`Work: ${formatAuditDisplayText(selectedDmcaCase.copyrightedWorkDescription)}`}</Text>
+                      {selectedDmcaCase.copyrightedWorkUrls.length ? (
+                        <Text style={styles.configListBody}>{`Work URLs: ${selectedDmcaCase.copyrightedWorkUrls.join(" · ")}`}</Text>
+                      ) : null}
+                      <Text style={styles.configListBody}>
+                        {`Target ${formatModerationToken(selectedDmcaCase.contentType)} · ${formatCompactIdentifier(selectedDmcaCase.contentId)} · ${selectedDmcaCase.contentUrl ?? "no URL"}`}
+                      </Text>
+                      <Text style={styles.configListBody}>{`Uploader ${formatCompactIdentifier(selectedDmcaCase.uploaderUserId)}`}</Text>
+                      <Text style={styles.configListBody}>{`Completeness: ${dmcaCompleteness?.complete ? "complete" : `missing ${dmcaCompleteness?.missing.join(", ") || "unknown"}`}`}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Case status and notes</Text>
+                      <TextInput
+                        style={[styles.input, styles.multiline]}
+                        placeholder="Action reason / audit note"
+                        placeholderTextColor="#8d8d8d"
+                        value={dmcaActionReason}
+                        onChangeText={setDmcaActionReason}
+                        multiline
+                      />
+                      <TextInput
+                        style={[styles.input, styles.multiline]}
+                        placeholder="Internal admin notes (optional)"
+                        placeholderTextColor="#8d8d8d"
+                        value={dmcaAdminNotes}
+                        onChangeText={setDmcaAdminNotes}
+                        multiline
+                      />
+                      <View style={styles.actionsRow}>
+                        {dmcaStatusActionOptions.map((status) => (
+                          <TouchableOpacity
+                            key={status}
+                            style={[
+                              status === "rejected" ? styles.actionBtnDanger : styles.actionBtn,
+                              dmcaActionBusy !== null && styles.configSaveBtnDisabled,
+                            ]}
+                            disabled={dmcaActionBusy !== null}
+                            onPress={() => void runDmcaStatusUpdate(status)}
+                          >
+                            <Text style={status === "rejected" ? styles.actionTextDanger : styles.actionText}>
+                              {formatModerationToken(status)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Content disable / restore</Text>
+                      <Text style={styles.configListBody}>
+                        Supported here: creator videos, profile posts, profile-post comments, creator-video comments, and social attachments. Live rooms and channels are documented workflow gaps unless a separate safe moderation action exists.
+                      </Text>
+                      <View style={styles.toggleRowWrap}>
+                        {dmcaActionContentTypes.map((entry) => (
+                          <TouchableOpacity
+                            key={entry}
+                            style={[styles.toggleChip, dmcaContentType === entry && styles.toggleChipActive]}
+                            onPress={() => setDmcaContentType(entry)}
+                          >
+                            <Text style={[styles.toggleChipText, dmcaContentType === entry && styles.toggleChipTextActive]}>
+                              {formatModerationToken(entry)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Content id"
+                        placeholderTextColor="#8d8d8d"
+                        value={dmcaContentId}
+                        onChangeText={setDmcaContentId}
+                        autoCapitalize="none"
+                      />
+                      <View style={styles.toggleRowWrap}>
+                        {DMCA_CONTENT_ACTIONS.map((action) => (
+                          <TouchableOpacity
+                            key={action}
+                            style={[styles.toggleChip, dmcaContentAction === action && styles.toggleChipActive]}
+                            onPress={() => setDmcaContentAction(action)}
+                          >
+                            <Text style={[styles.toggleChipText, dmcaContentAction === action && styles.toggleChipTextActive]}>
+                              {formatModerationToken(action)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.actionBtnPrimary, dmcaActionBusy !== null && styles.configSaveBtnDisabled]}
+                        disabled={dmcaActionBusy !== null}
+                        onPress={() => void runDmcaContentAction()}
+                      >
+                        <Text style={styles.actionTextPrimary}>Record Content Action</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Copyright strikes</Text>
+                      <Text style={styles.configListBody}>
+                        Valid takedowns can add active strikes. Rejected or incomplete notices should not add strikes. Successful counter-notices can remove/dispute a strike by admin action.
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Uploader user id"
+                        placeholderTextColor="#8d8d8d"
+                        value={dmcaStrikeUserId}
+                        onChangeText={setDmcaStrikeUserId}
+                        autoCapitalize="none"
+                      />
+                      <View style={styles.actionsRow}>
+                        {(["standard", "severe"] as const).map((severity) => (
+                          <TouchableOpacity
+                            key={severity}
+                            style={[styles.toggleChip, dmcaStrikeSeverity === severity && styles.toggleChipActive]}
+                            onPress={() => setDmcaStrikeSeverity(severity)}
+                          >
+                            <Text style={[styles.toggleChipText, dmcaStrikeSeverity === severity && styles.toggleChipTextActive]}>
+                              {formatModerationToken(severity)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity
+                          style={[styles.actionBtnDanger, dmcaActionBusy !== null && styles.configSaveBtnDisabled]}
+                          disabled={dmcaActionBusy !== null}
+                          onPress={() => void runDmcaAddStrike()}
+                        >
+                          <Text style={styles.actionTextDanger}>Add Strike</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {selectedDmcaDetail.strikes.length ? (
+                        selectedDmcaDetail.strikes.map((strike) => (
+                          <View key={strike.id} style={styles.configListRowSubtle}>
+                            <Text style={styles.configListTitle}>{`${formatModerationToken(strike.severity)} strike · ${formatModerationToken(strike.strikeStatus)}`}</Text>
+                            <Text style={styles.configListBody}>{`User ${formatCompactIdentifier(strike.userId)} · Content ${formatCompactIdentifier(strike.contentId)}`}</Text>
+                            <Text style={styles.configListBody}>{formatAuditDisplayText(strike.reason)}</Text>
+                            {strike.strikeStatus === "active" ? (
+                              <TouchableOpacity
+                                style={[styles.actionBtn, dmcaActionBusy !== null && styles.configSaveBtnDisabled]}
+                                disabled={dmcaActionBusy !== null}
+                                onPress={() => void runDmcaRemoveStrike(strike.id)}
+                              >
+                                <Text style={styles.actionText}>Remove / Dispute Strike</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.configListBody}>No strikes recorded for this case yet.</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Counter-notice recording</Text>
+                      <Text style={styles.configListBody}>
+                        Uploader-facing counter-notice submission is not exposed in this pass. Admin can record a counter-notice received through Support and store the 10-14 business-day response window after forwarding.
+                      </Text>
+                      <TextInput style={styles.input} placeholder="Submitter name" placeholderTextColor="#8d8d8d" value={counterSubmitterName} onChangeText={setCounterSubmitterName} />
+                      <TextInput style={styles.input} placeholder="Submitter email" placeholderTextColor="#8d8d8d" value={counterSubmitterEmail} onChangeText={setCounterSubmitterEmail} keyboardType="email-address" autoCapitalize="none" />
+                      <TextInput style={styles.input} placeholder="Phone (optional)" placeholderTextColor="#8d8d8d" value={counterSubmitterPhone} onChangeText={setCounterSubmitterPhone} keyboardType="phone-pad" />
+                      <TextInput style={[styles.input, styles.multiline]} placeholder="Address (if supplied/required)" placeholderTextColor="#8d8d8d" value={counterSubmitterAddress} onChangeText={setCounterSubmitterAddress} multiline />
+                      <TextInput style={[styles.input, styles.multiline]} placeholder="Removed material description" placeholderTextColor="#8d8d8d" value={counterRemovedDescription} onChangeText={setCounterRemovedDescription} multiline />
+                      <TextInput style={styles.input} placeholder="Removed material URL or location" placeholderTextColor="#8d8d8d" value={counterRemovedLocation} onChangeText={setCounterRemovedLocation} autoCapitalize="none" />
+                      <View style={styles.toggleRowWrap}>
+                        {[
+                          { label: "Good-faith mistake", value: counterGoodFaith, set: setCounterGoodFaith },
+                          { label: "Jurisdiction consent", value: counterJurisdiction, set: setCounterJurisdiction },
+                          { label: "Service accepted", value: counterService, set: setCounterService },
+                          { label: "Forward now", value: counterForwardedNow, set: setCounterForwardedNow },
+                        ].map((entry) => (
+                          <TouchableOpacity
+                            key={entry.label}
+                            style={[styles.toggleChip, entry.value && styles.toggleChipActive]}
+                            onPress={() => entry.set(!entry.value)}
+                          >
+                            <Text style={[styles.toggleChipText, entry.value && styles.toggleChipTextActive]}>{entry.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TextInput style={styles.input} placeholder="Electronic signature" placeholderTextColor="#8d8d8d" value={counterSignature} onChangeText={setCounterSignature} />
+                      <TouchableOpacity
+                        style={[styles.actionBtnPrimary, dmcaActionBusy !== null && styles.configSaveBtnDisabled]}
+                        disabled={dmcaActionBusy !== null}
+                        onPress={() => void runDmcaRecordCounterNotice()}
+                      >
+                        <Text style={styles.actionTextPrimary}>Record Counter-Notice</Text>
+                      </TouchableOpacity>
+
+                      {selectedDmcaDetail.counterNotices.length ? (
+                        selectedDmcaDetail.counterNotices.map((counterNotice) => (
+                          <View key={counterNotice.id} style={styles.configListRowSubtle}>
+                            <Text style={styles.configListTitle}>{`${formatModerationToken(counterNotice.status)} · ${formatAuditDisplayText(counterNotice.submitterName)}`}</Text>
+                            <Text style={styles.configListBody}>{`Received ${formatModerationTimestamp(counterNotice.receivedAt)}`}</Text>
+                            <Text style={styles.configListBody}>{`Forwarded ${formatModerationTimestamp(counterNotice.forwardedToClaimantAt)}`}</Text>
+                            <Text style={styles.configListBody}>{`Restore not before ${formatModerationTimestamp(counterNotice.restoreNotBeforeAt)}`}</Text>
+                            <Text style={styles.configListBody}>{`Restore not after ${formatModerationTimestamp(counterNotice.restoreNotAfterAt)}`}</Text>
+                            {counterNotice.courtActionNoticeReceivedAt ? (
+                              <Text style={styles.configListBody}>{`Court action notice ${formatModerationTimestamp(counterNotice.courtActionNoticeReceivedAt)}`}</Text>
+                            ) : null}
+                            <View style={styles.actionsRow}>
+                              <TouchableOpacity
+                                style={[styles.actionBtn, dmcaActionBusy !== null && styles.configSaveBtnDisabled]}
+                                disabled={dmcaActionBusy !== null}
+                                onPress={() => void runDmcaForwardCounterNotice(counterNotice.id)}
+                              >
+                                <Text style={styles.actionText}>Record Forwarded</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.actionBtnDanger, dmcaActionBusy !== null && styles.configSaveBtnDisabled]}
+                                disabled={dmcaActionBusy !== null}
+                                onPress={() => void runDmcaRecordCourtAction(counterNotice.id)}
+                              >
+                                <Text style={styles.actionTextDanger}>Court Action</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.actionBtn, dmcaActionBusy !== null && styles.configSaveBtnDisabled]}
+                                disabled={dmcaActionBusy !== null}
+                                onPress={() => void runDmcaMarkRestoreEligible(counterNotice.id)}
+                              >
+                                <Text style={styles.actionText}>Restore Eligible</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.configListBody}>No counter-notices recorded for this case yet.</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Notifications and templates</Text>
+                      <Text style={styles.configListBody}>
+                        Templates are available for support/admin workflow. Email sending is manual/pending unless a separate outbound email lane proves automation.
+                      </Text>
+                      <View style={styles.configList}>
+                        {DMCA_NOTIFICATION_TEMPLATES.map((template) => (
+                          <View key={template.key} style={styles.configListRowSubtle}>
+                            <Text style={styles.configListTitle}>{template.label}</Text>
+                            <Text style={styles.configListBody}>{template.purpose}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Content action history</Text>
+                      {selectedDmcaDetail.contentActions.length ? (
+                        selectedDmcaDetail.contentActions.map((action) => (
+                          <View key={action.id} style={styles.configListRowSubtle}>
+                            <Text style={styles.configListTitle}>{formatModerationToken(action.action)}</Text>
+                            <Text style={styles.configListBody}>{`${formatModerationToken(action.contentType)} · ${formatCompactIdentifier(action.contentId)} · ${formatModerationTimestamp(action.createdAt)}`}</Text>
+                            <Text style={styles.configListBody}>{formatAuditDisplayText(action.reason)}</Text>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.configListBody}>No content actions recorded yet.</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>Audit history</Text>
+                      {selectedDmcaDetail.auditLog.length ? (
+                        selectedDmcaDetail.auditLog.map((entry) => (
+                          <View key={entry.id} style={styles.configListRowSubtle}>
+                            <Text style={styles.configListTitle}>{formatModerationToken(entry.eventType)}</Text>
+                            <Text style={styles.configListBody}>{`${formatModerationTimestamp(entry.createdAt)} · ${formatModerationToken(entry.actorRole)}`}</Text>
+                            {entry.reason ? (
+                              <Text style={styles.configListBody}>{formatAuditDisplayText(entry.reason)}</Text>
+                            ) : null}
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.configListBody}>No audit events recorded yet.</Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.configListRow}>
+                  <View style={styles.configListCopy}>
+                    <Text style={styles.configListTitle}>Select a DMCA case</Text>
+                    <Text style={styles.configListBody}>
+                      Open a case to review private notice fields, record takedown/restoration actions, add strikes, and track counter-notice deadlines.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
         </View>
         ) : null}
 
@@ -3670,7 +4635,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>CTV future</Text>
                 <Text style={styles.configListBody}>CTV ads are not active yet.</Text>
-                <Text style={styles.configListBody}>Future inventory: Chi'llywood Originals and network-style content.</Text>
+                <Text style={styles.configListBody}>{"Future inventory: Chi'llywood Originals and network-style content."}</Text>
                 <Text style={styles.configListBody}>
                   {`ctv_ads_enabled_later: ${String(adsLaunchConfig.ctv_ads_enabled_later)}`}
                 </Text>
@@ -4598,9 +5563,9 @@ export default function AdminStudioScreen() {
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Future sponsor model</Text>
-                <Text style={styles.configListBody}>Brand pays Chi'llywood first.</Text>
-                <Text style={styles.configListBody}>Creator-sold sponsor slots: creator 80% net / Chi'llywood 20% net</Text>
-                <Text style={styles.configListBody}>Platform-served creator-page ads: creator 70% net / Chi'llywood 30% net</Text>
+                <Text style={styles.configListBody}>{"Brand pays Chi'llywood first."}</Text>
+                <Text style={styles.configListBody}>{"Creator-sold sponsor slots: creator 80% net / Chi'llywood 20% net"}</Text>
+                <Text style={styles.configListBody}>{"Platform-served creator-page ads: creator 70% net / Chi'llywood 30% net"}</Text>
                 <Text style={styles.configListBody}>Platform review, disclosure review, safe product review, scam/fraud review, payout hold/review, and audit trail are required later.</Text>
               </View>
             </View>

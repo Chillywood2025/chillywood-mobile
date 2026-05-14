@@ -23,6 +23,8 @@ If you believe content on Chi'llywood infringes your copyright, submit a copyrig
 
 The U.S. Copyright Office directory lists the Chi'llywood designation as active effective May 13, 2026. Chi'llywood must keep the public agent contact information and Copyright Office registration current.
 
+Chi'llywood also has an in-app "Report Copyright Infringement" form at `/copyright-report` for formal copyright notices where that route is available. The generic safety report sheet may link users to that form when "Copyright" is selected.
+
 ## 3. Required Complaint Information
 
 A copyright complaint should include:
@@ -43,6 +45,14 @@ Chi'llywood may remove or disable access to content where appropriate, notify th
 
 Chi'llywood may decline, request more information, or take limited action where a report is incomplete, abusive, unclear, not tied to copyright, or appears false.
 
+Operational status:
+
+- formal copyright notice intake is backed by a DMCA case record;
+- Admin owner/operator review can mark a notice under review, incomplete, rejected, disabled, restored, closed, or in repeat-infringer review;
+- supported content actions can hide, disable, restore, preserve evidence, or record no action for creator videos, profile posts, profile-post comments, creator-video comments, and social attachments;
+- live rooms and channel-level takedowns still require a separate safe moderation action unless handled by support/legal outside this tool;
+- outbound email automation is not claimed; support/admin notices may be manual and recorded in the case history.
+
 ## 5. Counter-Notice
 
 If your content was removed because of a copyright complaint and you believe the removal was a mistake or misidentification, you may submit a counter-notice.
@@ -59,6 +69,8 @@ A counter-notice should include:
 
 After a proper counter-notice, the rightsholder may need to file legal action to keep the content down. Timing and reinstatement rules must be confirmed by legal counsel.
 
+Current tooling lets Admin record a counter-notice received through Support, record forwarding to the claimant, store the 10-14 business-day response window, record a court action notice, and mark a case eligible for restore after review. A direct uploader-facing counter-notice submission route is not yet public.
+
 ## 6. Repeat Infringer Policy
 
 Chi'llywood may terminate or restrict repeat infringers.
@@ -69,6 +81,8 @@ Strike approach:
 - successful counter-notices, retractions, or reinstatements may remove or reduce a strike;
 - severe or willful infringement may lead to immediate termination;
 - multiple valid notices may terminate upload privileges, creator privileges, monetization access, or the account.
+
+Admin can add or remove copyright strikes and open repeat-infringer review. Chi'llywood does not automatically terminate accounts from the strike table without admin/legal review.
 
 ## 7. Misuse
 

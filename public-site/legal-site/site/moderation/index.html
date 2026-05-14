@@ -112,18 +112,25 @@
 <ul>
 <li>recent safety reports can be read by platform roles;</li>
 <li>creator-video moderation status can be set to hidden, removed, or clean by owner/operator roles;</li>
+<li>DMCA cases are backed by dedicated tables for formal notices, counter-notices, content actions, strikes, and audit history;</li>
+<li>owner/operator Admin can list/detail DMCA cases, mark case statuses, record hide/disable/restore/no-action/evidence actions, add/remove strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view audit history;</li>
+<li>normal users cannot access Admin DMCA case details or private reporter/uploader contact fields through the DMCA tables;</li>
 <li>first-class open/resolved report workflow is not connected;</li>
-<li>dedicated copyright claim workflow is not connected;</li>
 <li>fraud runtime enforcement hooks are not connected;</li>
 <li>payout holds are foundation-only unless a future release proves enforcement.</li>
 </ul>
+<p>DMCA content disable/restore support currently covers creator videos, profile posts, profile-post comments, creator-video comments, and social attachments. Live-room and channel-level takedowns still need a separate safe moderation action or support/legal handling.</p>
+<p>Outbound email automation is pending. Admin/support notification templates exist for receipt confirmation, incomplete notice, rejection, uploader notice, counter-notice receipt/forwarding, restore eligibility, content restore, and repeat-infringer warnings, but sending remains manual unless a future email lane proves automation.</p>
 <h2 id="launch-gaps">Launch Gaps</h2>
 <ul>
-<li>dedicated DMCA form and claim log;</li>
 <li>report status lifecycle: open, investigating, actioned, dismissed, appealed, closed;</li>
 <li>reviewer assignment queue;</li>
 <li>automated evidence bundle;</li>
 <li>user-facing appeal center;</li>
+<li>uploader-facing counter-notice submission route;</li>
+<li>live-room/channel DMCA action tooling;</li>
+<li>outbound email automation proof;</li>
+<li>end-to-end runtime proof with safe DMCA test data and admin/uploader/reporter accounts;</li>
 <li>dedicated fraud/sponsor/payout enforcement workflow;</li>
 <li>final severe-safety escalation owner and SLA.</li>
 </ul>

@@ -45,6 +45,9 @@ export default function CopyrightPage() {
         <LegalParagraph>
           If you believe content on Chi&apos;llywood infringes your copyright, send a copyright notice to Chi&apos;llywood Support with enough information for review.
         </LegalParagraph>
+        <LegalParagraph>
+          Where available in the app, use the Report Copyright Infringement form at `/copyright-report`. The generic report sheet may still be used for safety issues, but formal copyright notices need the fields below.
+        </LegalParagraph>
         <LegalList
           items={[
             "Your full name and contact information.",
@@ -82,11 +85,20 @@ export default function CopyrightPage() {
             "Decline to act or seek more information where a report appears abusive, incomplete, false, or not tied to a copyright claim.",
           ]}
         />
+        <LegalParagraph>
+          Chi&apos;llywood&apos;s Admin tooling can record formal notices, case status, content actions, counter-notices, strike history, and audit events. Supported content actions currently cover creator videos, profile posts, profile-post comments, creator-video comments, and social attachments. Live-room and channel-level action still requires separate support/legal handling unless a safe moderation action is available.
+        </LegalParagraph>
+        <LegalParagraph>
+          Outbound email automation is not claimed here. Support/admin notifications may be handled manually and recorded in the case history.
+        </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="6. Counter-Notice Process Placeholder">
+      <LegalSection title="6. Counter-Notice Process">
         <LegalParagraph>
           If your content was removed because of a copyright report and you believe the removal was a mistake or misidentification, contact Chi&apos;llywood Support with your account information, the removed content, and the reason you believe you have the right to share it.
+        </LegalParagraph>
+        <LegalParagraph>
+          Admin can record counter-notices received through Support, record forwarding to the claimant, store the 10-14 business-day response window, record court action notices, and mark content eligible for restore after review. A direct uploader-facing counter-notice form is not yet public.
         </LegalParagraph>
         <LegalList
           items={[

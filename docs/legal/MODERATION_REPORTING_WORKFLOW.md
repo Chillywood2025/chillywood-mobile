@@ -1,6 +1,6 @@
 # Moderation And Reporting Workflow
 
-Last updated: May 13, 2026
+Last updated: May 14, 2026
 
 > Repo launch note: Attorney review required before public launch. This workflow documents current and required operations; it does not claim a complete trust-and-safety organization exists.
 
@@ -91,17 +91,26 @@ Current admin tooling:
 
 - recent safety reports can be read by platform roles;
 - creator-video moderation status can be set to hidden, removed, or clean by owner/operator roles;
+- DMCA cases are backed by dedicated tables for formal notices, counter-notices, content actions, strikes, and audit history;
+- owner/operator Admin can list/detail DMCA cases, mark case statuses, record hide/disable/restore/no-action/evidence actions, add/remove strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view audit history;
+- normal users cannot access Admin DMCA case details or private reporter/uploader contact fields through the DMCA tables;
 - first-class open/resolved report workflow is not connected;
-- dedicated copyright claim workflow is not connected;
 - fraud runtime enforcement hooks are not connected;
 - payout holds are foundation-only unless a future release proves enforcement.
 
+DMCA content disable/restore support currently covers creator videos, profile posts, profile-post comments, creator-video comments, and social attachments. Live-room and channel-level takedowns still need a separate safe moderation action or support/legal handling.
+
+Outbound email automation is pending. Admin/support notification templates exist for receipt confirmation, incomplete notice, rejection, uploader notice, counter-notice receipt/forwarding, restore eligibility, content restore, and repeat-infringer warnings, but sending remains manual unless a future email lane proves automation.
+
 ## Launch Gaps
 
-- dedicated DMCA form and claim log;
 - report status lifecycle: open, investigating, actioned, dismissed, appealed, closed;
 - reviewer assignment queue;
 - automated evidence bundle;
 - user-facing appeal center;
+- uploader-facing counter-notice submission route;
+- live-room/channel DMCA action tooling;
+- outbound email automation proof;
+- end-to-end runtime proof with safe DMCA test data and admin/uploader/reporter accounts;
 - dedicated fraud/sponsor/payout enforcement workflow;
 - final severe-safety escalation owner and SLA.

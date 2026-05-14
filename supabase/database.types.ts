@@ -1879,6 +1879,335 @@ export type Database = {
         }
         Relationships: []
       }
+      dmca_audit_log: {
+        Row: {
+          actor_role: string
+          actor_user_id: string | null
+          created_at: string
+          dmca_case_id: string | null
+          event_type: string
+          id: string
+          metadata: Json | null
+          reason: string | null
+        }
+        Insert: {
+          actor_role: string
+          actor_user_id?: string | null
+          created_at?: string
+          dmca_case_id?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          reason?: string | null
+        }
+        Update: {
+          actor_role?: string
+          actor_user_id?: string | null
+          created_at?: string
+          dmca_case_id?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dmca_audit_log_case_fkey"
+            columns: ["dmca_case_id"]
+            isOneToOne: false
+            referencedRelation: "dmca_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dmca_cases: {
+        Row: {
+          accuracy_penalty_perjury_statement: boolean
+          admin_notes: string | null
+          allegedly_infringing_content_id: string | null
+          allegedly_infringing_content_type: string
+          allegedly_infringing_url: string | null
+          assigned_admin_id: string | null
+          authorized_agent_name: string | null
+          case_number: string
+          closed_at: string | null
+          copyrighted_work_description: string
+          copyrighted_work_urls: Json
+          created_at: string
+          electronic_signature: string
+          good_faith_statement: boolean
+          id: string
+          public_safe_summary: string | null
+          received_at: string
+          report_type: string
+          reporter_address: string | null
+          reporter_company: string | null
+          reporter_email: string
+          reporter_is_owner: boolean
+          reporter_name: string
+          reporter_phone: string | null
+          reporter_user_id: string | null
+          source: string
+          status: string
+          submitted_ip_hash: string | null
+          submitted_user_agent_hash: string | null
+          updated_at: string
+          uploader_channel_id: string | null
+          uploader_user_id: string | null
+        }
+        Insert: {
+          accuracy_penalty_perjury_statement?: boolean
+          admin_notes?: string | null
+          allegedly_infringing_content_id?: string | null
+          allegedly_infringing_content_type?: string
+          allegedly_infringing_url?: string | null
+          assigned_admin_id?: string | null
+          authorized_agent_name?: string | null
+          case_number: string
+          closed_at?: string | null
+          copyrighted_work_description: string
+          copyrighted_work_urls?: Json
+          created_at?: string
+          electronic_signature: string
+          good_faith_statement?: boolean
+          id?: string
+          public_safe_summary?: string | null
+          received_at?: string
+          report_type?: string
+          reporter_address?: string | null
+          reporter_company?: string | null
+          reporter_email: string
+          reporter_is_owner?: boolean
+          reporter_name: string
+          reporter_phone?: string | null
+          reporter_user_id?: string | null
+          source?: string
+          status?: string
+          submitted_ip_hash?: string | null
+          submitted_user_agent_hash?: string | null
+          updated_at?: string
+          uploader_channel_id?: string | null
+          uploader_user_id?: string | null
+        }
+        Update: {
+          accuracy_penalty_perjury_statement?: boolean
+          admin_notes?: string | null
+          allegedly_infringing_content_id?: string | null
+          allegedly_infringing_content_type?: string
+          allegedly_infringing_url?: string | null
+          assigned_admin_id?: string | null
+          authorized_agent_name?: string | null
+          case_number?: string
+          closed_at?: string | null
+          copyrighted_work_description?: string
+          copyrighted_work_urls?: Json
+          created_at?: string
+          electronic_signature?: string
+          good_faith_statement?: boolean
+          id?: string
+          public_safe_summary?: string | null
+          received_at?: string
+          report_type?: string
+          reporter_address?: string | null
+          reporter_company?: string | null
+          reporter_email?: string
+          reporter_is_owner?: boolean
+          reporter_name?: string
+          reporter_phone?: string | null
+          reporter_user_id?: string | null
+          source?: string
+          status?: string
+          submitted_ip_hash?: string | null
+          submitted_user_agent_hash?: string | null
+          updated_at?: string
+          uploader_channel_id?: string | null
+          uploader_user_id?: string | null
+        }
+        Relationships: []
+      }
+      dmca_content_actions: {
+        Row: {
+          action: string
+          actor_admin_id: string
+          content_id: string
+          content_type: string
+          created_at: string
+          dmca_case_id: string
+          id: string
+          new_state: Json | null
+          previous_state: Json | null
+          reason: string
+        }
+        Insert: {
+          action: string
+          actor_admin_id: string
+          content_id: string
+          content_type: string
+          created_at?: string
+          dmca_case_id: string
+          id?: string
+          new_state?: Json | null
+          previous_state?: Json | null
+          reason: string
+        }
+        Update: {
+          action?: string
+          actor_admin_id?: string
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          dmca_case_id?: string
+          id?: string
+          new_state?: Json | null
+          previous_state?: Json | null
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dmca_content_actions_case_fkey"
+            columns: ["dmca_case_id"]
+            isOneToOne: false
+            referencedRelation: "dmca_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dmca_counter_notices: {
+        Row: {
+          court_action_notice_received_at: string | null
+          created_at: string
+          dmca_case_id: string
+          electronic_signature: string
+          forwarded_to_claimant_at: string | null
+          good_faith_mistake_statement: boolean
+          id: string
+          jurisdiction_consent_statement: boolean
+          received_at: string
+          removed_material_description: string
+          removed_material_url_or_location: string
+          response_deadline_start_at: string | null
+          restore_not_after_at: string | null
+          restore_not_before_at: string | null
+          service_acceptance_statement: boolean
+          status: string
+          submitter_address: string | null
+          submitter_email: string
+          submitter_name: string
+          submitter_phone: string | null
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          court_action_notice_received_at?: string | null
+          created_at?: string
+          dmca_case_id: string
+          electronic_signature: string
+          forwarded_to_claimant_at?: string | null
+          good_faith_mistake_statement?: boolean
+          id?: string
+          jurisdiction_consent_statement?: boolean
+          received_at?: string
+          removed_material_description: string
+          removed_material_url_or_location: string
+          response_deadline_start_at?: string | null
+          restore_not_after_at?: string | null
+          restore_not_before_at?: string | null
+          service_acceptance_statement?: boolean
+          status?: string
+          submitter_address?: string | null
+          submitter_email: string
+          submitter_name: string
+          submitter_phone?: string | null
+          submitter_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          court_action_notice_received_at?: string | null
+          created_at?: string
+          dmca_case_id?: string
+          electronic_signature?: string
+          forwarded_to_claimant_at?: string | null
+          good_faith_mistake_statement?: boolean
+          id?: string
+          jurisdiction_consent_statement?: boolean
+          received_at?: string
+          removed_material_description?: string
+          removed_material_url_or_location?: string
+          response_deadline_start_at?: string | null
+          restore_not_after_at?: string | null
+          restore_not_before_at?: string | null
+          service_acceptance_statement?: boolean
+          status?: string
+          submitter_address?: string | null
+          submitter_email?: string
+          submitter_name?: string
+          submitter_phone?: string | null
+          submitter_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dmca_counter_notices_case_fkey"
+            columns: ["dmca_case_id"]
+            isOneToOne: false
+            referencedRelation: "dmca_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dmca_strikes: {
+        Row: {
+          channel_id: string | null
+          content_id: string
+          content_type: string
+          created_at: string
+          dmca_case_id: string
+          id: string
+          reason: string
+          removed_at: string | null
+          removed_reason: string | null
+          severity: string
+          strike_status: string
+          user_id: string
+        }
+        Insert: {
+          channel_id?: string | null
+          content_id: string
+          content_type: string
+          created_at?: string
+          dmca_case_id: string
+          id?: string
+          reason: string
+          removed_at?: string | null
+          removed_reason?: string | null
+          severity?: string
+          strike_status?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string | null
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          dmca_case_id?: string
+          id?: string
+          reason?: string
+          removed_at?: string | null
+          removed_reason?: string | null
+          severity?: string
+          strike_status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dmca_strikes_case_fkey"
+            columns: ["dmca_case_id"]
+            isOneToOne: false
+            referencedRelation: "dmca_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_reminders: {
         Row: {
           created_at: string
@@ -2277,6 +2606,258 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      livekit_room_assignments: {
+        Row: {
+          app_room_id: string
+          assigned_server_id: string
+          assignment_reason: string
+          assignment_status: string
+          created_at: string
+          created_by: string | null
+          ended_at: string | null
+          id: string
+          is_publicly_eligible: boolean
+          livekit_room_name: string
+          metadata: Json
+          room_type: string
+          updated_at: string
+          visibility: string | null
+        }
+        Insert: {
+          app_room_id: string
+          assigned_server_id: string
+          assignment_reason: string
+          assignment_status?: string
+          created_at?: string
+          created_by?: string | null
+          ended_at?: string | null
+          id?: string
+          is_publicly_eligible?: boolean
+          livekit_room_name: string
+          metadata?: Json
+          room_type: string
+          updated_at?: string
+          visibility?: string | null
+        }
+        Update: {
+          app_room_id?: string
+          assigned_server_id?: string
+          assignment_reason?: string
+          assignment_status?: string
+          created_at?: string
+          created_by?: string | null
+          ended_at?: string | null
+          id?: string
+          is_publicly_eligible?: boolean
+          livekit_room_name?: string
+          metadata?: Json
+          room_type?: string
+          updated_at?: string
+          visibility?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "livekit_room_assignments_assigned_server_id_fkey"
+            columns: ["assigned_server_id"]
+            isOneToOne: false
+            referencedRelation: "livekit_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      livekit_routing_audit: {
+        Row: {
+          actor_user_id: string | null
+          app_room_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          livekit_room_name: string | null
+          metadata: Json
+          reason: string
+          server_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          app_room_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          livekit_room_name?: string | null
+          metadata?: Json
+          reason: string
+          server_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          app_room_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          livekit_room_name?: string | null
+          metadata?: Json
+          reason?: string
+          server_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "livekit_routing_audit_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "livekit_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      livekit_server_heartbeats: {
+        Row: {
+          active_participants: number
+          active_publishers: number
+          active_rooms: number
+          bandwidth_in_mbps: number | null
+          bandwidth_out_mbps: number | null
+          cpu_percent: number | null
+          disconnect_rate: number | null
+          heartbeat_at: string
+          id: string
+          packet_loss_percent: number | null
+          ram_percent: number | null
+          server_id: string
+        }
+        Insert: {
+          active_participants?: number
+          active_publishers?: number
+          active_rooms?: number
+          bandwidth_in_mbps?: number | null
+          bandwidth_out_mbps?: number | null
+          cpu_percent?: number | null
+          disconnect_rate?: number | null
+          heartbeat_at?: string
+          id?: string
+          packet_loss_percent?: number | null
+          ram_percent?: number | null
+          server_id: string
+        }
+        Update: {
+          active_participants?: number
+          active_publishers?: number
+          active_rooms?: number
+          bandwidth_in_mbps?: number | null
+          bandwidth_out_mbps?: number | null
+          cpu_percent?: number | null
+          disconnect_rate?: number | null
+          heartbeat_at?: string
+          id?: string
+          packet_loss_percent?: number | null
+          ram_percent?: number | null
+          server_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "livekit_server_heartbeats_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "livekit_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      livekit_servers: {
+        Row: {
+          bandwidth_in_mbps: number | null
+          bandwidth_out_mbps: number | null
+          cpu_percent: number | null
+          created_at: string
+          current_participants: number
+          current_publishers: number
+          current_rooms: number
+          disconnect_rate: number | null
+          display_name: string
+          drain_reason: string | null
+          drain_started_at: string | null
+          id: string
+          internal_api_url: string | null
+          last_assignment_at: string | null
+          last_heartbeat_at: string | null
+          max_egress_mbps: number | null
+          max_participants: number
+          max_publishers: number | null
+          max_rooms: number
+          metadata: Json
+          packet_loss_percent: number | null
+          provider: string
+          public_ws_url: string
+          ram_percent: number | null
+          region: string
+          server_id: string
+          status: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          bandwidth_in_mbps?: number | null
+          bandwidth_out_mbps?: number | null
+          cpu_percent?: number | null
+          created_at?: string
+          current_participants?: number
+          current_publishers?: number
+          current_rooms?: number
+          disconnect_rate?: number | null
+          display_name: string
+          drain_reason?: string | null
+          drain_started_at?: string | null
+          id?: string
+          internal_api_url?: string | null
+          last_assignment_at?: string | null
+          last_heartbeat_at?: string | null
+          max_egress_mbps?: number | null
+          max_participants?: number
+          max_publishers?: number | null
+          max_rooms?: number
+          metadata?: Json
+          packet_loss_percent?: number | null
+          provider?: string
+          public_ws_url: string
+          ram_percent?: number | null
+          region: string
+          server_id: string
+          status?: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          bandwidth_in_mbps?: number | null
+          bandwidth_out_mbps?: number | null
+          cpu_percent?: number | null
+          created_at?: string
+          current_participants?: number
+          current_publishers?: number
+          current_rooms?: number
+          disconnect_rate?: number | null
+          display_name?: string
+          drain_reason?: string | null
+          drain_started_at?: string | null
+          id?: string
+          internal_api_url?: string | null
+          last_assignment_at?: string | null
+          last_heartbeat_at?: string | null
+          max_egress_mbps?: number | null
+          max_participants?: number
+          max_publishers?: number | null
+          max_rooms?: number
+          metadata?: Json
+          packet_loss_percent?: number | null
+          provider?: string
+          public_ws_url?: string
+          ram_percent?: number | null
+          region?: string
+          server_id?: string
+          status?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: []
       }
       network_account_plan_assignments: {
         Row: {
@@ -5285,6 +5866,285 @@ export type Database = {
     Functions: {
       acknowledge_beta_onboarding: { Args: never; Returns: Json }
       activate_beta_membership: { Args: never; Returns: Json }
+      admin_dmca_add_strike: {
+        Args: {
+          p_case_id: string
+          p_channel_id: string
+          p_content_id: string
+          p_content_type: string
+          p_reason: string
+          p_severity: string
+          p_user_id: string
+        }
+        Returns: {
+          channel_id: string | null
+          content_id: string
+          content_type: string
+          created_at: string
+          dmca_case_id: string
+          id: string
+          reason: string
+          removed_at: string | null
+          removed_reason: string | null
+          severity: string
+          strike_status: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_strikes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_dmca_forward_counter_notice: {
+        Args: { p_counter_notice_id: string; p_reason: string }
+        Returns: {
+          court_action_notice_received_at: string | null
+          created_at: string
+          dmca_case_id: string
+          electronic_signature: string
+          forwarded_to_claimant_at: string | null
+          good_faith_mistake_statement: boolean
+          id: string
+          jurisdiction_consent_statement: boolean
+          received_at: string
+          removed_material_description: string
+          removed_material_url_or_location: string
+          response_deadline_start_at: string | null
+          restore_not_after_at: string | null
+          restore_not_before_at: string | null
+          service_acceptance_statement: boolean
+          status: string
+          submitter_address: string | null
+          submitter_email: string
+          submitter_name: string
+          submitter_phone: string | null
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_counter_notices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_dmca_mark_restore_eligible: {
+        Args: {
+          p_case_id: string
+          p_counter_notice_id: string
+          p_reason: string
+        }
+        Returns: {
+          accuracy_penalty_perjury_statement: boolean
+          admin_notes: string | null
+          allegedly_infringing_content_id: string | null
+          allegedly_infringing_content_type: string
+          allegedly_infringing_url: string | null
+          assigned_admin_id: string | null
+          authorized_agent_name: string | null
+          case_number: string
+          closed_at: string | null
+          copyrighted_work_description: string
+          copyrighted_work_urls: Json
+          created_at: string
+          electronic_signature: string
+          good_faith_statement: boolean
+          id: string
+          public_safe_summary: string | null
+          received_at: string
+          report_type: string
+          reporter_address: string | null
+          reporter_company: string | null
+          reporter_email: string
+          reporter_is_owner: boolean
+          reporter_name: string
+          reporter_phone: string | null
+          reporter_user_id: string | null
+          source: string
+          status: string
+          submitted_ip_hash: string | null
+          submitted_user_agent_hash: string | null
+          updated_at: string
+          uploader_channel_id: string | null
+          uploader_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_cases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_dmca_record_content_action: {
+        Args: {
+          p_action: string
+          p_case_id: string
+          p_content_id: string
+          p_content_type: string
+          p_reason: string
+        }
+        Returns: {
+          action: string
+          actor_admin_id: string
+          content_id: string
+          content_type: string
+          created_at: string
+          dmca_case_id: string
+          id: string
+          new_state: Json | null
+          previous_state: Json | null
+          reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_content_actions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_dmca_record_counter_notice: {
+        Args: {
+          p_case_id: string
+          p_forwarded_to_claimant?: boolean
+          p_payload: Json
+        }
+        Returns: {
+          court_action_notice_received_at: string | null
+          created_at: string
+          dmca_case_id: string
+          electronic_signature: string
+          forwarded_to_claimant_at: string | null
+          good_faith_mistake_statement: boolean
+          id: string
+          jurisdiction_consent_statement: boolean
+          received_at: string
+          removed_material_description: string
+          removed_material_url_or_location: string
+          response_deadline_start_at: string | null
+          restore_not_after_at: string | null
+          restore_not_before_at: string | null
+          service_acceptance_statement: boolean
+          status: string
+          submitter_address: string | null
+          submitter_email: string
+          submitter_name: string
+          submitter_phone: string | null
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_counter_notices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_dmca_record_court_action: {
+        Args: { p_counter_notice_id: string; p_reason: string }
+        Returns: {
+          court_action_notice_received_at: string | null
+          created_at: string
+          dmca_case_id: string
+          electronic_signature: string
+          forwarded_to_claimant_at: string | null
+          good_faith_mistake_statement: boolean
+          id: string
+          jurisdiction_consent_statement: boolean
+          received_at: string
+          removed_material_description: string
+          removed_material_url_or_location: string
+          response_deadline_start_at: string | null
+          restore_not_after_at: string | null
+          restore_not_before_at: string | null
+          service_acceptance_statement: boolean
+          status: string
+          submitter_address: string | null
+          submitter_email: string
+          submitter_name: string
+          submitter_phone: string | null
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_counter_notices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_dmca_remove_strike: {
+        Args: { p_removed_reason: string; p_strike_id: string }
+        Returns: {
+          channel_id: string | null
+          content_id: string
+          content_type: string
+          created_at: string
+          dmca_case_id: string
+          id: string
+          reason: string
+          removed_at: string | null
+          removed_reason: string | null
+          severity: string
+          strike_status: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_strikes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_dmca_set_case_status: {
+        Args: {
+          p_admin_notes?: string
+          p_case_id: string
+          p_reason: string
+          p_status: string
+        }
+        Returns: {
+          accuracy_penalty_perjury_statement: boolean
+          admin_notes: string | null
+          allegedly_infringing_content_id: string | null
+          allegedly_infringing_content_type: string
+          allegedly_infringing_url: string | null
+          assigned_admin_id: string | null
+          authorized_agent_name: string | null
+          case_number: string
+          closed_at: string | null
+          copyrighted_work_description: string
+          copyrighted_work_urls: Json
+          created_at: string
+          electronic_signature: string
+          good_faith_statement: boolean
+          id: string
+          public_safe_summary: string | null
+          received_at: string
+          report_type: string
+          reporter_address: string | null
+          reporter_company: string | null
+          reporter_email: string
+          reporter_is_owner: boolean
+          reporter_name: string
+          reporter_phone: string | null
+          reporter_user_id: string | null
+          source: string
+          status: string
+          submitted_ip_hash: string | null
+          submitted_user_agent_hash: string | null
+          updated_at: string
+          uploader_channel_id: string | null
+          uploader_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_cases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_access_chat_thread: {
         Args: { target_thread_id: string }
         Returns: boolean
@@ -5305,10 +6165,54 @@ export type Database = {
         Args: { target_feed_item_id: string }
         Returns: boolean
       }
+      dmca_add_business_days: {
+        Args: { day_count: number; start_at: string }
+        Returns: string
+      }
+      dmca_assert_owner_operator: { Args: never; Returns: undefined }
+      dmca_next_case_number: { Args: never; Returns: string }
+      dmca_resolve_uploader_user_id: {
+        Args: { content_id: string; content_type: string }
+        Returns: string
+      }
+      dmca_safe_uuid: { Args: { value: string }; Returns: string }
+      dmca_write_audit: {
+        Args: {
+          p_actor_role: string
+          p_case_id: string
+          p_event_type: string
+          p_metadata?: Json
+          p_reason?: string
+        }
+        Returns: string
+      }
       has_active_beta_access: { Args: never; Returns: boolean }
       has_platform_role: {
         Args: { required_roles: string[] }
         Returns: boolean
+      }
+      read_public_channel_profile: {
+        Args: { profile_user_id: string }
+        Returns: {
+          avatar_index: number
+          avatar_url: string
+          channel_layout_preset: string
+          channel_role: string
+          default_communication_capture_policy: string
+          default_communication_content_access_rule: string
+          default_watch_party_capture_policy: string
+          default_watch_party_content_access_rule: string
+          default_watch_party_join_policy: string
+          default_watch_party_reactions_policy: string
+          display_name: string
+          follower_surface_enabled: boolean
+          profile_visibility: string
+          public_activity_visibility: string
+          subscriber_surface_enabled: boolean
+          tagline: string
+          user_id: string
+          username: string
+        }[]
       }
       record_creator_video_upload_usage: {
         Args: { target_video_id: string }
@@ -5359,6 +6263,14 @@ export type Database = {
       sanitize_app_configuration: {
         Args: { input_config: Json }
         Returns: Json
+      }
+      submit_dmca_notice: {
+        Args: { p_payload: Json }
+        Returns: {
+          case_number: string
+          id: string
+          status: string
+        }[]
       }
       user_has_active_entitlement: {
         Args: { required_entitlement_keys: string[]; target_user_id: string }
