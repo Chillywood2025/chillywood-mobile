@@ -45,11 +45,13 @@ Current deployment truth:
 - the expanded 11-route static site exists in repo and can be locally built/proved;
 - Cloudflare Pages project `chillywood-legal` is created and deployed;
 - stable Pages hostname `https://chillywood-legal.pages.dev` returns HTTP 200 with nonblank content for every required path;
-- the preferred custom domain `chillywoodstream.com` is attached to the Pages project but is still pending;
-- public DNS for `chillywoodstream.com` currently has Cloudflare nameservers but no apex A/CNAME answer from this machine;
-- the current Wrangler OAuth session can manage Pages and see the zone, but Cloudflare DNS Records API calls return `403`, so DNS record creation must be completed by a Cloudflare/DNS owner or with a token that has DNS Records permissions;
-- `https://chillywoodstream.com/*` is not marked live until DNS/custom-domain activation and curl/browser proof pass;
-- Google Play account deletion compliance is not complete until the final public deletion URL is live, entered in Play Console, and accepted;
+- the custom domain `chillywoodstream.com` is active on the Pages project;
+- `https://chillywoodstream.com/` returns HTTP/2 200;
+- `https://chillywoodstream.com/terms`, `/privacy`, `/account-deletion`, `/copyright`, and `/support` redirect with HTTP/2 308 to their trailing-slash paths and then return HTTP/2 200 with real static legal/support content;
+- no LiveKit fallback was reached; the Privacy page mentions LiveKit only as policy text;
+- `https://chillywoodstream.com/account-deletion` is the live Google Play account deletion web URL candidate;
+- `https://chillywoodstream.com/support` is the live public support URL;
+- Google Play account deletion compliance is not complete until the live public deletion URL is entered in Play Console and accepted;
 - DMCA safe-harbor completion is not claimed because designated-agent public posting and U.S. Copyright Office registration remain external;
 - attorney review remains required before public launch;
 - support inbox receipt proof for `support@chillywoodstream.com` remains pending.
@@ -105,13 +107,13 @@ It would not mean:
 - auth cutover
 - data deletion automation moving to Hetzner
 
-### 2.4 Current Live Host Truth
-The bounded public legal slice is now actually live on the existing Hetzner edge at:
+### 2.4 Legacy Live Host Truth
+Before the expanded Cloudflare Pages surface, a bounded three-route public legal slice was proved on the existing Hetzner edge at:
 - `https://live.chillywoodstream.com/privacy`
 - `https://live.chillywoodstream.com/terms`
 - `https://live.chillywoodstream.com/account-deletion`
 
-Current serving strategy is:
+That legacy serving strategy was:
 - same host as the LiveKit ingress
 - path-scoped static serving only for the exact legal paths
 - shared `/_expo` assets and `/favicon.ico` served from the legal artifact
@@ -131,9 +133,11 @@ This means:
 - the legal-page content owners were bounded and self-contained enough that a later static host/export slice was honest
 - that slice stays fully separate from a broader app/backend upstream
 
-Current deployment truth:
+Current expanded Cloudflare Pages deployment truth:
 - `LEGAL_SURFACE_DEPLOYED = YES`
-- the bounded static slice is now proved live on the current host/path strategy
+- the expanded static slice is now proved live on `https://chillywoodstream.com`
+- Terms, Privacy, Account Deletion, Copyright, and Support return HTTP/2 200 after trailing-slash redirect
+- no LiveKit fallback was reached
 
 This does not mean:
 - a broader app upstream is now justified
@@ -150,10 +154,12 @@ Canonical in-app routes remain:
 - `/terms`
 - `/account-deletion`
 
-Current public-hosted destinations are:
-- `https://live.chillywoodstream.com/privacy`
-- `https://live.chillywoodstream.com/terms`
-- `https://live.chillywoodstream.com/account-deletion`
+Current public-hosted destinations for the expanded surface are:
+- `https://chillywoodstream.com/privacy`
+- `https://chillywoodstream.com/terms`
+- `https://chillywoodstream.com/account-deletion`
+- `https://chillywoodstream.com/copyright`
+- `https://chillywoodstream.com/support`
 
 ## 5. Explicit Out Of Scope
 Even if public legal hosting is adopted later, it must not imply:
