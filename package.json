@@ -14,6 +14,7 @@
     "legal-site:serve": "node ./public-site/legal-site/serve.mjs",
     "validate:runtime": "node ./scripts/validate-runtime.mjs",
     "lint": "expo lint",
+    "guard:refresh-policy": "node ./scripts/guard-refresh-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs",
     "typecheck": "tsc --noEmit && npm run guard:watch-party-livekit"
   },

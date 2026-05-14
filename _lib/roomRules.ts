@@ -4,6 +4,9 @@ import {
   type MonetizationGateResolution,
   type MonetizationTargetId,
 } from "./monetization";
+import {
+  ROOM_MEMBERSHIP_ACTIVE_WINDOW_MS,
+} from "./performancePolicy";
 
 export type JoinPolicy = "open" | "locked";
 export type ReactionsPolicy = "enabled" | "muted";
@@ -61,7 +64,7 @@ export type RoomPolicyLike = {
   linkedRoomMode?: unknown;
 };
 
-export const ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS = 25_000;
+export const ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MS;
 
 export const normalizeJoinPolicy = (value: unknown): JoinPolicy => (
   String(value ?? "").trim().toLowerCase() === "locked" ? "locked" : "open"

@@ -25,6 +25,10 @@ For dashboard-by-dashboard ownership, login/manual actions, secret placement, pr
 - Do not commit local Supabase metadata such as `supabase/.temp/` or Supabase branch metadata unless a repo control file explicitly requires it.
 - Do not fake Premium purchases, restore success, account deletion completion, LiveKit production readiness, or policy compliance.
 
+## Refresh / Video / Data Cost Policy
+
+Repo-side Public v1 cost policy is implemented. Live publishing defaults to 720p / 30fps with v1 max 30fps, full live access remains Premium-gated, room heartbeats are 15 seconds, and non-live surfaces should use load-on-open, focus/manual refresh, or cached reads instead of frequent polling. Release proof still needs device/network observation for battery, bandwidth, TURN usage, and Premium entitlement behavior. VOD quality ladder/transcoding remains an external/product infrastructure blocker before free 360p/480p and Premium 720p/1080p selection can be claimed live.
+
 ## Read-Only Audit Snapshot
 
 - Repo root: `/Users/loverslane/chillywood-mobile`

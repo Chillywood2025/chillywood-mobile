@@ -33,6 +33,9 @@ import {
   type CommunicationRoomState,
 } from "../_lib/communication";
 import { reportRuntimeError } from "../_lib/logger";
+import {
+  ROOM_HEARTBEAT_MS,
+} from "../_lib/performancePolicy";
 import { normalizeRoomMembershipState } from "../_lib/roomRules";
 import { supabase } from "../_lib/supabase";
 
@@ -61,7 +64,7 @@ type PresenceStatePayload = {
   isHost?: boolean;
 };
 
-const HEARTBEAT_INTERVAL_MILLIS = 10_000;
+const HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
 const OFFER_RETRY_DELAY_MILLIS = 2_500;
 const OFFER_RETRY_MIN_INTERVAL_MILLIS = 2_000;
 const REALTIME_OPERATION_TIMEOUT_MILLIS = 3_000;

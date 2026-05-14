@@ -17,6 +17,10 @@ import {
 
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import {
+  LIVE_VIDEO_CAPTURE_OPTIONS,
+  createLiveKitV1RoomOptions,
+} from "../../_lib/performancePolicy";
+import {
   LiveKitAudioSession as AudioSession,
   LiveKitRoom,
   LiveKitVideoTrack as VideoTrack,
@@ -409,7 +413,7 @@ export function LiveKitStageMediaSurface({
   const effectivePublishLocalCamera = shouldConnectRoom && publishLocalCamera;
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const room = useMemo(() => {
-    const nextRoom = new Room({ adaptiveStream: layout !== "bubble-grid", dynacast: false });
+    const nextRoom = new Room(createLiveKitV1RoomOptions({ adaptiveStream: layout !== "bubble-grid", dynacast: false }));
     patchLiveKitSignalReadingLoop(
       nextRoom,
       surfaceLabel,
@@ -651,7 +655,7 @@ export function LiveKitStageMediaSurface({
         token={joinContract.participantToken}
         connect={shouldConnectRoom}
         audio={effectivePublishLocalAudio}
-        video={effectivePublishLocalCamera}
+        video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}
         connectOptions={connectOptions}
         onConnected={handleConnected}
         onDisconnected={handleDisconnected}

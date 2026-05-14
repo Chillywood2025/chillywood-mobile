@@ -45,6 +45,9 @@ import {
 import { reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
+import {
+  READ_RECEIPT_THROTTLE_MS,
+} from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
 import {
   getSocialAttachmentValidationMessage,
@@ -208,9 +211,18 @@ export default function ChillyChatThreadScreen() {
   const [friendBusy, setFriendBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
   const autoStartCallRef = useRef("");
   const autoOpenCallRef = useRef("");
+  const lastReadReceiptWriteAtRef = useRef(0);
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
+
+  const markThreadReadWithThrottle = useCallback(async () => {
+    if (!threadId) return;
+    const now = Date.now();
+    if (now - lastReadReceiptWriteAtRef.current < READ_RECEIPT_THROTTLE_MS) return;
+    lastReadReceiptWriteAtRef.current = now;
+    await markChatThreadRead(threadId).catch(() => null);
+  }, [threadId]);
 
   useEffect(() => {
     let active = true;
@@ -297,7 +309,7 @@ export default function ChillyChatThreadScreen() {
         activeCallType: nextThread.activeCallType ?? "",
       });
 
-      await markChatThreadRead(threadId).catch(() => null);
+      await markThreadReadWithThrottle();
 
       setCallPanelOpen((wasOpen) => (wasOpen ? !!nextThread.activeCommunicationRoomId : false));
     } catch (loadError: any) {
@@ -308,7 +320,7 @@ export default function ChillyChatThreadScreen() {
       setError(loadError?.message ?? "Unable to load this Chi'lly Chat thread.");
       setLoading(false);
     }
-  }, [isSignedIn, reconcileEndedCallState, threadId]);
+  }, [isSignedIn, markThreadReadWithThrottle, reconcileEndedCallState, threadId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -627,7 +639,7 @@ export default function ChillyChatThreadScreen() {
         hasAttachment: selectedAttachment ? "true" : "false",
       });
       setMessages((prev) => prev.map((message) => (message.id === tempId ? sent : message)));
-      await markChatThreadRead(threadId).catch(() => null);
+      await markThreadReadWithThrottle();
     } catch (sendError) {
       setMessages((prev) => prev.filter((message) => message.id !== tempId));
       if (selectedAttachment) setAttachmentFile(selectedAttachment);
@@ -643,7 +655,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setSending(false);
     }
-  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, sending, thread, threadId]);
+  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, markThreadReadWithThrottle, sending, thread, threadId]);
 
   const handleStartCall = useCallback(async (mode: ChatCallType) => {
     logChatCall("handle_start_call", {
@@ -1097,7 +1109,7 @@ export default function ChillyChatThreadScreen() {
           {!officialAccount && otherMember?.userId && friendStatusSummary ? (
             <View style={styles.friendshipCard}>
               <View style={styles.friendshipHeader}>
-                <Text style={styles.friendshipKicker}>CHI'LLY CIRCLE</Text>
+                <Text style={styles.friendshipKicker}>CHI&apos;LLY CIRCLE</Text>
                 <View style={styles.friendshipPill}>
                   <Text style={styles.friendshipPillText}>{friendStatusSummary.pill}</Text>
                 </View>

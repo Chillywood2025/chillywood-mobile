@@ -47,6 +47,12 @@ import {
   getMonetizationAccessSheetPresentation,
 } from "../../../_lib/monetization";
 import {
+  LIVE_COMMENT_FALLBACK_REFRESH_MS,
+  LIVE_VIDEO_CAPTURE_OPTIONS,
+  ROOM_HEARTBEAT_MS,
+  createLiveKitV1RoomOptions,
+} from "../../../_lib/performancePolicy";
+import {
     getRuntimeControlBlockedCopy,
     isRuntimeControlBlockedAccess,
     LIVE_FIRST_PREMIUM_UPSELL_COPY,
@@ -222,7 +228,7 @@ type StagePresenceEntry = {
 const SIM_REACTIONS = ["👍", "🔥", "👏", "❤️", "✨", "😂"];
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
-const STAGE_HEARTBEAT_INTERVAL_MILLIS = 10_000;
+const STAGE_HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
 const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 10_000;
 const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as const;
 const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
@@ -440,7 +446,7 @@ function LiveKitHybridCommunityRoomHost({
   const roomKey = `${joinContract.roomName}:${joinContract.participantToken}`;
   const room = useMemo(() => {
     void roomKey;
-    const nextRoom = new Room({ adaptiveStream: true, dynacast: false });
+    const nextRoom = new Room(createLiveKitV1RoomOptions({ adaptiveStream: true, dynacast: false }));
     patchLiveKitSignalReadingLoop(
       nextRoom,
       "Hybrid Live Stage",
@@ -557,7 +563,7 @@ function LiveKitHybridCommunityRoomHost({
       token={joinContract.participantToken}
       connect
       audio={publishLocalAudio}
-      video={publishLocalCamera}
+      video={publishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}
       connectOptions={connectOptions}
       onConnected={handleConnected}
       onDisconnected={handleDisconnected}
@@ -2294,7 +2300,7 @@ export default function WatchPartyLiveStageScreen() {
     void syncHybridComments();
     const interval = setInterval(() => {
       void syncHybridComments();
-    }, 2_500);
+    }, LIVE_COMMENT_FALLBACK_REFRESH_MS);
 
     return () => {
       active = false;

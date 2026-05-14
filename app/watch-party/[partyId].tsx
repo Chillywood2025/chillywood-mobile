@@ -69,6 +69,10 @@ import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
 import {
+  ROOM_HEARTBEAT_MS,
+  ROOM_SNAPSHOT_REFRESH_MS,
+} from "../../_lib/performancePolicy";
+import {
     getRuntimeControlBlockedCopy,
     isRuntimeControlBlockedAccess,
     LIVE_FIRST_PREMIUM_UPSELL_COPY,
@@ -212,7 +216,7 @@ type FloatingReaction = {
 
 const MIC_SPEAKING_THRESHOLD_DB = -52;
 const MIC_SPEAKING_RELEASE_MS = 420;
-const ROOM_HEARTBEAT_INTERVAL_MILLIS = 10_000;
+const ROOM_HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
 const WATCH_PARTY_LIVE_FEED_COLUMNS = 5;
 const WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS = 2;
 const WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT = 102;
@@ -817,7 +821,7 @@ export default function WatchPartyRoomScreen() {
 
         pollRef.current = setInterval(() => {
           refreshRoomSnapshot(userId).catch(() => {});
-        }, 5000);
+        }, ROOM_SNAPSHOT_REFRESH_MS);
 
         if (access?.isAllowed) {
           heartbeatRef.current = setInterval(() => {
