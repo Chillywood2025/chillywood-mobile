@@ -10,7 +10,8 @@ It is not a public feature. Normal users should not see it, and it must not chan
 - Default enabled state: `false`.
 - Admin visibility: owner/operator only.
 - Backing tables: `admin_live_cost_guard_settings`, `admin_live_cost_guard_events`, `admin_live_cost_guard_actions`.
-- Alertmanager webhook: scaffolded as `admin-live-cost-guard-webhook`.
+- Alertmanager webhook: deployed as `admin-live-cost-guard-webhook`; `LIVE_COST_GUARD_WEBHOOK_SECRET` is configured in Supabase Edge Function secrets.
+- Observe-only webhook delivery proof: passed on 2026-05-14 with a safe `TEST_LIVE_COST_GUARD_OBSERVE_ONLY` warning payload. Invalid secret returned `401 invalid_webhook_secret`; valid secret returned `200` with `eventsInserted: 1`, `actionsInserted: 0`, and `mode: observe_only`. The inserted event was `warning` / `alertmanager` / `logged_disabled`, settings remained `enabled=false`, and no destructive action row was created.
 - Manual admin action endpoint: scaffolded as `admin-live-cost-guard-action`.
 - TURN cap behavior: request/runbook only. Use `docs/TURN_SPIKE_PROTECTION_RUNBOOK.md` and `scripts/infra/` for operator guidance. No SSH, Ansible, firewall, coturn, or host mutation is automated in this lane.
 - Metrics status: not connected until Prometheus/Alertmanager are configured and proved.
@@ -121,7 +122,7 @@ Thresholds must remain placeholders until real baseline traffic exists:
 ## What Is Not Live Yet
 
 - Production Prometheus metric readout is not proved.
-- Alertmanager production delivery is not proved until the webhook is deployed and tested.
+- Production Alertmanager metric delivery is not proved. Only a direct safe observe-only webhook delivery test has passed.
 - Automatic TURN caps are not live.
 - SSH/Ansible/host mutation is not wired.
 - `scripts/infra/turn-emergency-cap.sh` prints dry-run/operator steps and does not silently apply firewall rules or stop services.

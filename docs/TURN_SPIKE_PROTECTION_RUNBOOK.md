@@ -9,6 +9,7 @@ Purpose: give Chi'llywood operators a practical, non-user-facing response path f
 - Admin Live Cost Guard exists as an owner/operator-only observe-first control plane.
 - Default Admin Live Cost Guard settings are `enabled=false` and `mode=observe_only`.
 - The guard records settings, events, and action audit rows.
+- `LIVE_COST_GUARD_WEBHOOK_SECRET` is configured in Supabase Edge Function secrets, and direct observe-only webhook delivery proof passed on 2026-05-14 with a safe fake warning event.
 - Production Prometheus/Alertmanager metrics are not claimed live until configured and proved.
 - Production TURN firewall/coturn caps are not claimed live.
 - The scripts in `scripts/infra/` are repo-side operator helpers only. They do not apply production firewall or service changes by themselves.
@@ -172,7 +173,7 @@ Run them from a trusted operator shell. Do not run them from the mobile app, pub
 
 ## Known Limitations
 
-- Production Prometheus and Alertmanager wiring is pending until configured and proved.
+- Production Prometheus and Alertmanager metric wiring is pending until configured and proved. The current proof is direct webhook delivery only.
 - DKIM/email deliverability is separate from TURN cost protection.
 - Automatic TURN firewall/coturn mutation is not implemented.
 - No SSH/Ansible action is wired here.
