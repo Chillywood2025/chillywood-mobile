@@ -55,7 +55,7 @@ Current deployment truth:
 - DMCA designated agent public contact posting and U.S. Copyright Office registration are recorded complete under registration `DMCA-1072720`;
 - broader DMCA/legal-compliance claims still require attorney review, current agent information, support inbox operations, and properly operated notice/counter-notice/repeat-infringer handling; the backed/Admin DMCA workflow itself has live proof for formal notice intake, Admin review/actions, supported content hide/restore, strikes, Admin-recorded counter-notices, court-action restore blocking, and normal-user access denial;
 - attorney review remains required before public launch;
-- support inbox receipt proof for `support@chillywoodstream.com` remains pending.
+- support inbox receipt proof for `support@chillywoodstream.com` passed on May 13, 2026 by operator-confirmed destination-inbox receipt for subject `Chi'llywood Support Receipt Proof - 2026-05-13`; no screenshots, raw headers, inbox exports, private contents, sender private details, credentials, tokens, or email secrets are committed.
 
 The expanded static support page is intentionally informational only. It does not replace the in-app signed-in support/feedback workflow, and it does not create an app backend, support ticket system, status page, full web app, payment flow, payout flow, or account deletion backend.
 

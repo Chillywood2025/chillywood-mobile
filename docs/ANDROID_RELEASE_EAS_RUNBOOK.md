@@ -157,7 +157,7 @@ Production EAS builds need the following values intentionally configured through
 | `EXPO_PUBLIC_PRIVACY_POLICY_URL` | Hosted Privacy Policy | Runtime config reads it and has fallback | External Setup Pending until legal approval |
 | `EXPO_PUBLIC_TERMS_OF_SERVICE_URL` | Hosted Terms | Runtime config reads it and has fallback | External Setup Pending until legal approval |
 | `EXPO_PUBLIC_ACCOUNT_DELETION_URL` | Hosted account deletion page | Runtime config reads it and has fallback | External Setup Pending until Play/legal approval |
-| `EXPO_PUBLIC_SUPPORT_EMAIL` | Public support handoff | Runtime config reads it and `app.config.ts` falls back to `support@chillywoodstream.com` | Inbox Proof Pending |
+| `EXPO_PUBLIC_SUPPORT_EMAIL` | Public support handoff | Runtime config reads it and `app.config.ts` falls back to `support@chillywoodstream.com` | Inbox Proof Passed |
 | `EXPO_PUBLIC_COMMUNICATION_ICE_SERVERS` and related STUN/TURN vars | Chi'lly Chat / communication fallback media networking | Runtime config reads them; LiveKit also has its own production network lane | Proof Pending |
 | `google-services.json` | Firebase Android app config | Present; project/package identity matches `chillywood-app` / `com.chillywood.mobile` | Proof Pending |
 
