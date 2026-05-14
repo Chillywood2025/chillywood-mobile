@@ -6,6 +6,7 @@ import {
   normalizeLiveKitRoutingRoomType,
   resolveLiveKitAssignment,
 } from "../_shared/livekit-routing.ts";
+import { readLiveCostGuardTokenDecision } from "../_shared/live-cost-guard.ts";
 
 type LiveKitJoinSurface = "live-stage" | "watch-party-live" | "chat-call";
 type LiveKitParticipantRole = "host" | "speaker" | "viewer";
@@ -401,6 +402,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    const liveCostGuardDecision = await readLiveCostGuardTokenDecision(adminClient, surface);
+    if (liveCostGuardDecision.blockNewLiveRooms) {
+      return json(429, {
+        error: "live_cost_guard_pause_active",
+        message: liveCostGuardDecision.reason ?? "Live Cost Guard is temporarily pausing new live room tokens.",
+      });
+    }
+
     const accessToken = new AccessToken(livekitApiKey, livekitApiSecret, {
       identity: participantIdentity,
       metadata: JSON.stringify({
@@ -413,7 +422,7 @@ Deno.serve(async (req) => {
         ...tokenMetadata,
       }),
       name: participantName,
-      ttl: "1h",
+      ttl: liveCostGuardDecision.tokenTtlSeconds ? `${liveCostGuardDecision.tokenTtlSeconds}s` : "1h",
     });
 
     accessToken.addGrant({

@@ -69,6 +69,25 @@ import {
   type AdminUsageReadModel,
 } from "../_lib/platformUsage";
 import {
+  DEFAULT_LIVE_COST_GUARD_SETTINGS,
+  LIVE_COST_GUARD_ACTION_TYPES,
+  LIVE_COST_GUARD_MODES,
+  classifyLiveCostSeverity,
+  createManualLiveCostGuardEvent,
+  formatEstimatedLiveCost,
+  getLiveCostGuardSettings,
+  listLiveCostGuardActions,
+  listLiveCostGuardEvents,
+  requestLiveCostGuardAction,
+  updateLiveCostGuardSettings,
+  type LiveCostGuardAction,
+  type LiveCostGuardActionType,
+  type LiveCostGuardEvent,
+  type LiveCostGuardMode,
+  type LiveCostGuardSettings,
+  type LiveCostGuardSettingsReadModel,
+} from "../_lib/adminLiveCostGuard";
+import {
   formatFinanceFoundationCount,
   readAdminFinanceReadModel,
   type AdminFinanceReadModel,
@@ -163,6 +182,7 @@ type OperatorTabKey =
   | "networks"
   | "sponsors"
   | "fraud"
+  | "live-cost-guard"
   | "ops-alerts"
   | "system";
 
@@ -251,6 +271,7 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "networks", label: "Networks" },
   { key: "sponsors", label: "Sponsors" },
   { key: "fraud", label: "Fraud" },
+  { key: "live-cost-guard", label: "Live Cost Guard" },
   { key: "ops-alerts", label: "Ops Alerts" },
   { key: "system", label: "System" },
 ];
@@ -875,6 +896,12 @@ const getProviderUsageStatusStyle = (status: AdminProviderUsageImportStatus["sta
   return styles.badgeOff;
 };
 
+const getLiveCostGuardSeverityStyle = (severity: string) => {
+  if (severity === "emergency" || severity === "critical") return styles.badgeDraft;
+  if (severity === "high" || severity === "warning") return styles.badgeScheduled;
+  return styles.badgePublished;
+};
+
 const formatProviderUsageRows = (count: number | null) => (
   count === null ? "usage rows not readable" : `${count} provider usage row${count === 1 ? "" : "s"}`
 );
@@ -1031,6 +1058,19 @@ export default function AdminStudioScreen() {
   const [pendingCreatorVideoModeration, setPendingCreatorVideoModeration] =
     useState<PendingCreatorVideoModerationAction | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
+  const [liveCostGuardSettingsReadModel, setLiveCostGuardSettingsReadModel] =
+    useState<LiveCostGuardSettingsReadModel | null>(null);
+  const [liveCostGuardSettingsForm, setLiveCostGuardSettingsForm] =
+    useState<LiveCostGuardSettings>(DEFAULT_LIVE_COST_GUARD_SETTINGS);
+  const [liveCostGuardEvents, setLiveCostGuardEvents] = useState<LiveCostGuardEvent[]>([]);
+  const [liveCostGuardActions, setLiveCostGuardActions] = useState<LiveCostGuardAction[]>([]);
+  const [liveCostGuardLoading, setLiveCostGuardLoading] = useState(false);
+  const [liveCostGuardSaving, setLiveCostGuardSaving] = useState(false);
+  const [liveCostGuardNotice, setLiveCostGuardNotice] = useState<string | null>(null);
+  const [liveCostGuardActionBusy, setLiveCostGuardActionBusy] = useState<string | null>(null);
+  const [liveCostGuardRoomName, setLiveCostGuardRoomName] = useState("");
+  const [liveCostGuardParticipantIdentity, setLiveCostGuardParticipantIdentity] = useState("");
+  const [liveCostGuardActionReason, setLiveCostGuardActionReason] = useState("");
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
@@ -1073,7 +1113,17 @@ export default function AdminStudioScreen() {
   const canAccessAdmin = isSignedIn && isActive && platformRolesChecked && canAccessAdminConsole(moderationAccess, platformRoles);
   const canReviewSafetyReports = isSignedIn && isActive && platformRolesChecked && canReviewSafetyQueue(moderationAccess, platformRoles);
   const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
+  const visibleOperatorTabs = useMemo(
+    () => operatorTabs.filter((tab) => tab.key !== "live-cost-guard" || canManagePrivilegedWrites),
+    [canManagePrivilegedWrites],
+  );
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Operator Center");
+
+  useEffect(() => {
+    if (operatorTab === "live-cost-guard" && !canManagePrivilegedWrites) {
+      setOperatorTab("home");
+    }
+  }, [canManagePrivilegedWrites, operatorTab]);
 
   useEffect(() => {
     if (!isSignedIn || !isActive) {
@@ -1103,6 +1153,14 @@ export default function AdminStudioScreen() {
       setCreatorVideoModerationBusy(null);
       setPendingCreatorVideoModeration(null);
       setAdminOpsNotice(null);
+      setLiveCostGuardSettingsReadModel(null);
+      setLiveCostGuardSettingsForm(DEFAULT_LIVE_COST_GUARD_SETTINGS);
+      setLiveCostGuardEvents([]);
+      setLiveCostGuardActions([]);
+      setLiveCostGuardLoading(false);
+      setLiveCostGuardSaving(false);
+      setLiveCostGuardNotice(null);
+      setLiveCostGuardActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -1131,6 +1189,14 @@ export default function AdminStudioScreen() {
       setDmcaSelectedCaseId(null);
       setDmcaNotice(null);
       setDmcaActionBusy(null);
+      setLiveCostGuardSettingsReadModel(null);
+      setLiveCostGuardSettingsForm(DEFAULT_LIVE_COST_GUARD_SETTINGS);
+      setLiveCostGuardEvents([]);
+      setLiveCostGuardActions([]);
+      setLiveCostGuardLoading(false);
+      setLiveCostGuardSaving(false);
+      setLiveCostGuardNotice(null);
+      setLiveCostGuardActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -1345,6 +1411,38 @@ export default function AdminStudioScreen() {
     };
   }, [hasReleaseControl, hasStatusControl, titles]);
 
+  const liveCostGuardSnapshot = useMemo(() => {
+    const severityOrder: Record<string, number> = {
+      normal: 0,
+      warning: 1,
+      high: 2,
+      critical: 3,
+      emergency: 4,
+    };
+    const strongestEventSeverity = liveCostGuardEvents
+      .map((event) => event.severity)
+      .sort((left, right) => (severityOrder[right] ?? 0) - (severityOrder[left] ?? 0))[0] ?? "normal";
+    const thresholdSeverity = classifyLiveCostSeverity(
+      {
+        estimatedTurnMbps: null,
+        estimatedUsdPerHour: null,
+      },
+      liveCostGuardSettingsForm,
+    );
+    const activeSeverity = (severityOrder[strongestEventSeverity] ?? 0) > (severityOrder[thresholdSeverity] ?? 0)
+      ? strongestEventSeverity
+      : thresholdSeverity;
+    const since = Date.now() - (24 * 60 * 60 * 1000);
+    const eventsLast24h = liveCostGuardEvents.filter((event) => Date.parse(event.createdAt) >= since).length;
+    const actionsLast24h = liveCostGuardActions.filter((action) => Date.parse(action.createdAt) >= since).length;
+
+    return {
+      actionsLast24h,
+      activeSeverity,
+      eventsLast24h,
+    };
+  }, [liveCostGuardActions, liveCostGuardEvents, liveCostGuardSettingsForm]);
+
   const adminDashboardCards = useMemo<readonly AdminDashboardCard[]>(() => {
     const activeRoleLabels = platformRoles.length
       ? platformRoles.map((membership) => formatModerationToken(membership.role)).join(" · ")
@@ -1442,6 +1540,19 @@ export default function AdminStudioScreen() {
         value: "Safety gate",
         body: "Alertmanager automation jobs stay backend-owned, dry-run-first, and approval-gated. Mobile Admin visibility is read-only until a secure server-side proxy exists.",
         destination: "ops-alerts",
+      },
+      {
+        label: "Live Cost Guard",
+        value: canManagePrivilegedWrites
+          ? liveCostGuardSettingsReadModel?.connected
+            ? formatModerationToken(liveCostGuardSettingsForm.mode)
+            : "Not connected yet"
+          : "Locked",
+        body: canManagePrivilegedWrites
+          ? "Owner/operator-only LiveKit/TURN cost guard. Default observe-only mode does not kick users, throttle rooms, or change live behavior."
+          : "Live Cost Guard requires active owner/operator role truth.",
+        tone: canManagePrivilegedWrites && liveCostGuardSettingsReadModel?.connected ? "default" : "unavailable",
+        destination: canManagePrivilegedWrites ? "live-cost-guard" : undefined,
       },
       {
         label: "App Config",
@@ -1556,6 +1667,8 @@ export default function AdminStudioScreen() {
     configLoading,
     dmcaCases.length,
     dmcaCasesLoading,
+    liveCostGuardSettingsForm.mode,
+    liveCostGuardSettingsReadModel?.connected,
     platformRoles,
     resolvedActorRole,
     safetyReportQueueSummary,
@@ -2382,6 +2495,169 @@ export default function AdminStudioScreen() {
     setAdminImmutableAuditReadModel({ ...immutableAuditReadModel, loading: false });
   }, []);
 
+  const loadLiveCostGuard = useCallback(async () => {
+    if (!canManagePrivilegedWrites) {
+      setLiveCostGuardSettingsReadModel(null);
+      setLiveCostGuardSettingsForm(DEFAULT_LIVE_COST_GUARD_SETTINGS);
+      setLiveCostGuardEvents([]);
+      setLiveCostGuardActions([]);
+      setLiveCostGuardLoading(false);
+      return;
+    }
+
+    try {
+      setLiveCostGuardLoading(true);
+      setLiveCostGuardNotice(null);
+      const [settingsReadModel, events, actions] = await Promise.all([
+        getLiveCostGuardSettings(),
+        listLiveCostGuardEvents(25),
+        listLiveCostGuardActions(25),
+      ]);
+      setLiveCostGuardSettingsReadModel(settingsReadModel);
+      setLiveCostGuardSettingsForm(settingsReadModel.settings);
+      setLiveCostGuardEvents(events);
+      setLiveCostGuardActions(actions);
+    } catch (err: any) {
+      setLiveCostGuardNotice(formatAdminOperationFailure(err, "Failed to load Live Cost Guard."));
+      setLiveCostGuardSettingsReadModel(null);
+      setLiveCostGuardSettingsForm(DEFAULT_LIVE_COST_GUARD_SETTINGS);
+      setLiveCostGuardEvents([]);
+      setLiveCostGuardActions([]);
+    } finally {
+      setLiveCostGuardLoading(false);
+    }
+  }, [canManagePrivilegedWrites]);
+
+  useEffect(() => {
+    if (!canAccessAdmin || !canManagePrivilegedWrites) {
+      setLiveCostGuardSettingsReadModel(null);
+      setLiveCostGuardSettingsForm(DEFAULT_LIVE_COST_GUARD_SETTINGS);
+      setLiveCostGuardEvents([]);
+      setLiveCostGuardActions([]);
+      setLiveCostGuardLoading(false);
+      setLiveCostGuardSaving(false);
+      setLiveCostGuardNotice(null);
+      setLiveCostGuardActionBusy(null);
+      return;
+    }
+    void loadLiveCostGuard();
+  }, [canAccessAdmin, canManagePrivilegedWrites, loadLiveCostGuard]);
+
+  const saveLiveCostGuardSettings = useCallback(async () => {
+    if (!canManagePrivilegedWrites || liveCostGuardSaving) {
+      setLiveCostGuardNotice("Live Cost Guard settings require active owner/operator truth.");
+      return;
+    }
+
+    try {
+      setLiveCostGuardSaving(true);
+      setLiveCostGuardNotice(null);
+      const settingsReadModel = await updateLiveCostGuardSettings(liveCostGuardSettingsForm);
+      setLiveCostGuardSettingsReadModel(settingsReadModel);
+      setLiveCostGuardSettingsForm(settingsReadModel.settings);
+      setLiveCostGuardNotice("Live Cost Guard settings saved.");
+      await loadLiveCostGuard();
+    } catch (err: any) {
+      setLiveCostGuardNotice(formatAdminOperationFailure(err, "Failed to save Live Cost Guard settings."));
+    } finally {
+      setLiveCostGuardSaving(false);
+    }
+  }, [canManagePrivilegedWrites, liveCostGuardSaving, liveCostGuardSettingsForm, loadLiveCostGuard]);
+
+  const logLiveCostGuardTestWarning = useCallback(async () => {
+    if (!canManagePrivilegedWrites || liveCostGuardActionBusy) {
+      setLiveCostGuardNotice("Live Cost Guard actions require active owner/operator truth.");
+      return;
+    }
+
+    try {
+      setLiveCostGuardActionBusy("manual-warning");
+      setLiveCostGuardNotice(null);
+      await createManualLiveCostGuardEvent({
+        actionStatus: "logged_manual_test",
+        estimatedUsdPerHour: null,
+        metricSnapshot: { proof: "manual_admin_test", fakeMetrics: false },
+        recommendedAction: "shorten_token_ttl",
+        roomName: liveCostGuardRoomName.trim() || null,
+        severity: "warning",
+      });
+      setLiveCostGuardNotice("Manual Live Cost Guard warning event logged.");
+      await loadLiveCostGuard();
+    } catch (err: any) {
+      setLiveCostGuardNotice(formatAdminOperationFailure(err, "Failed to log manual Live Cost Guard event."));
+    } finally {
+      setLiveCostGuardActionBusy(null);
+    }
+  }, [canManagePrivilegedWrites, liveCostGuardActionBusy, liveCostGuardRoomName, loadLiveCostGuard]);
+
+  const runLiveCostGuardAction = useCallback((actionType: LiveCostGuardActionType) => {
+    if (!canManagePrivilegedWrites || liveCostGuardActionBusy) {
+      setLiveCostGuardNotice("Live Cost Guard actions require active owner/operator truth.");
+      return;
+    }
+
+    const reason = liveCostGuardActionReason.trim();
+    const roomName = liveCostGuardRoomName.trim();
+    const participantIdentity = liveCostGuardParticipantIdentity.trim();
+    if (!reason) {
+      setLiveCostGuardNotice("Add an audit reason before requesting a Live Cost Guard action.");
+      return;
+    }
+    if ((actionType === "restrict_publish" || actionType === "remove_participant") && (!roomName || !participantIdentity)) {
+      setLiveCostGuardNotice("Room name and participant identity are required for participant-targeted actions.");
+      return;
+    }
+
+    const mode = liveCostGuardSettingsForm.mode;
+    const enabled = liveCostGuardSettingsForm.enabled;
+    const observeOnlyCopy = mode === "observe_only"
+      ? "Observe-only mode will only record what would have happened. No LiveKit or room behavior will change."
+      : "This request is server-side, audited, and gated by the saved Live Cost Guard mode.";
+
+    Alert.alert(
+      "Confirm Live Cost Guard action",
+      `${formatModerationToken(actionType)}\n\n${observeOnlyCopy}`,
+      [
+        { style: "cancel", text: "Cancel" },
+        {
+          style: actionType === "shorten_token_ttl" || actionType === "restore_normal_mode" ? "default" : "destructive",
+          text: "Confirm",
+          onPress: () => {
+            void (async () => {
+              try {
+                setLiveCostGuardActionBusy(actionType);
+                setLiveCostGuardNotice(null);
+                await requestLiveCostGuardAction({
+                  actionType,
+                  participantIdentity: participantIdentity || null,
+                  reason,
+                  roomName: roomName || null,
+                });
+                setLiveCostGuardNotice(enabled || mode === "observe_only"
+                  ? "Live Cost Guard action recorded."
+                  : "Live Cost Guard action recorded as disabled because the guard is not enabled.");
+                await loadLiveCostGuard();
+              } catch (err: any) {
+                setLiveCostGuardNotice(formatAdminOperationFailure(err, "Failed to request Live Cost Guard action."));
+              } finally {
+                setLiveCostGuardActionBusy(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [
+    canManagePrivilegedWrites,
+    liveCostGuardActionBusy,
+    liveCostGuardActionReason,
+    liveCostGuardParticipantIdentity,
+    liveCostGuardRoomName,
+    liveCostGuardSettingsForm.enabled,
+    liveCostGuardSettingsForm.mode,
+    loadLiveCostGuard,
+  ]);
+
   const queueCreatorVideoModeration = useCallback((status: CreatorVideoModerationStatus) => {
     const videoId = creatorVideoModerationId.trim();
     const reason = creatorVideoModerationReason.trim();
@@ -3069,7 +3345,7 @@ export default function AdminStudioScreen() {
         )}
 
         <View style={styles.tabBar}>
-          {operatorTabs.map((tab) => {
+          {visibleOperatorTabs.map((tab) => {
             const active = operatorTab === tab.key;
             return (
               <TouchableOpacity
@@ -5824,6 +6100,321 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListTitle}>Future requirements</Text>
                 <Text style={styles.configListBody}>Fraud enforcement must require reason, evidence, admin notes, audit trail, review state, confirmation for dangerous actions, and an appeal/review path later.</Text>
               </View>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "live-cost-guard" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>LIVE COST GUARD</Text>
+              <Text style={styles.configTitle}>LiveKit / TURN runaway cost guard</Text>
+              <Text style={styles.configBody}>
+                Owner/operator-only controls for observing LiveKit/TURN cost pressure. Observe-only mode logs events and actions without kicking, throttling, blocking rooms, or changing normal live behavior.
+              </Text>
+            </View>
+            <View style={[styles.badge, getLiveCostGuardSeverityStyle(liveCostGuardSnapshot.activeSeverity)]}>
+              <Text style={styles.badgeText}>{formatModerationToken(liveCostGuardSnapshot.activeSeverity)}</Text>
+            </View>
+          </View>
+
+          {liveCostGuardNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{liveCostGuardNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.dashboardGrid}>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Mode</Text>
+              <Text style={styles.dashboardMetricValue}>{formatModerationToken(liveCostGuardSettingsForm.mode)}</Text>
+              <Text style={styles.dashboardMetricBody}>
+                {liveCostGuardSettingsForm.enabled
+                  ? "Enabled settings are saved, but auto-protect runs only in Auto Protect mode."
+                  : "Disabled by default. Normal live behavior is unchanged."}
+              </Text>
+            </View>
+            <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
+              <Text style={styles.dashboardMetricLabel}>LiveKit Metrics</Text>
+              <Text style={styles.dashboardMetricValue}>Not connected</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Metrics not connected yet. This page does not show fake TURN Mbps, fake participants, or fake burn rate.
+              </Text>
+            </View>
+            <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
+              <Text style={styles.dashboardMetricLabel}>Estimated Burn</Text>
+              <Text style={styles.dashboardMetricValue}>{formatEstimatedLiveCost(null)}</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Prometheus/provider cost metrics are pending; existing DB usage estimates are not treated as cost truth.
+              </Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Events / Actions 24h</Text>
+              <Text style={styles.dashboardMetricValue}>{`${liveCostGuardSnapshot.eventsLast24h} / ${liveCostGuardSnapshot.actionsLast24h}`}</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Backed rows from the Live Cost Guard tables only.
+              </Text>
+            </View>
+            <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
+              <Text style={styles.dashboardMetricLabel}>Alertmanager Webhook</Text>
+              <Text style={styles.dashboardMetricValue}>
+                {liveCostGuardSettingsReadModel?.alertmanagerWebhookStatus === "configured" ? "Configured" : "Not configured"}
+              </Text>
+              <Text style={styles.dashboardMetricBody}>
+                Webhook requires `LIVE_COST_GUARD_WEBHOOK_SECRET`; no secret is stored in the mobile app.
+              </Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>TURN Cap</Text>
+              <Text style={styles.dashboardMetricValue}>Request only</Text>
+              <Text style={styles.dashboardMetricBody}>
+                No SSH, firewall, coturn, or host mutation runs from this build.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Settings</Text>
+                <Text style={styles.configListBody}>
+                  Settings persist through owner/operator RLS. Save does not enable automatic action unless the mode and enabled toggle explicitly allow it.
+                </Text>
+              </View>
+              <View style={styles.toggleRowWrap}>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleChip,
+                    liveCostGuardSettingsForm.enabled && styles.toggleChipActive,
+                    !canManagePrivilegedWrites && styles.toggleChipDisabled,
+                  ]}
+                  onPress={() => {
+                    if (!canManagePrivilegedWrites) return;
+                    setLiveCostGuardSettingsForm((prev) => ({ ...prev, enabled: !prev.enabled }));
+                  }}
+                  disabled={!canManagePrivilegedWrites}
+                >
+                  <Text style={[styles.toggleChipText, liveCostGuardSettingsForm.enabled && styles.toggleChipTextActive]}>
+                    {liveCostGuardSettingsForm.enabled ? "Enabled" : "Disabled"}
+                  </Text>
+                </TouchableOpacity>
+                {LIVE_COST_GUARD_MODES.map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[
+                      styles.toggleChip,
+                      liveCostGuardSettingsForm.mode === mode && styles.toggleChipActive,
+                      !canManagePrivilegedWrites && styles.toggleChipDisabled,
+                    ]}
+                    onPress={() => {
+                      if (!canManagePrivilegedWrites) return;
+                      setLiveCostGuardSettingsForm((prev) => ({ ...prev, mode: mode as LiveCostGuardMode }));
+                    }}
+                    disabled={!canManagePrivilegedWrites}
+                  >
+                    <Text style={[styles.toggleChipText, liveCostGuardSettingsForm.mode === mode && styles.toggleChipTextActive]}>
+                      {formatModerationToken(mode)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Warning Mbps"
+                  placeholderTextColor="#8d8d8d"
+                  keyboardType="numeric"
+                  value={liveCostGuardSettingsForm.warningThresholdMbps === null ? "" : String(liveCostGuardSettingsForm.warningThresholdMbps)}
+                  onChangeText={(text) => setLiveCostGuardSettingsForm((prev) => ({
+                    ...prev,
+                    warningThresholdMbps: Number.isFinite(Number(text)) && text.trim() ? Number(text) : null,
+                  }))}
+                />
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Critical Mbps"
+                  placeholderTextColor="#8d8d8d"
+                  keyboardType="numeric"
+                  value={liveCostGuardSettingsForm.criticalThresholdMbps === null ? "" : String(liveCostGuardSettingsForm.criticalThresholdMbps)}
+                  onChangeText={(text) => setLiveCostGuardSettingsForm((prev) => ({
+                    ...prev,
+                    criticalThresholdMbps: Number.isFinite(Number(text)) && text.trim() ? Number(text) : null,
+                  }))}
+                />
+              </View>
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Emergency Mbps"
+                  placeholderTextColor="#8d8d8d"
+                  keyboardType="numeric"
+                  value={liveCostGuardSettingsForm.emergencyThresholdMbps === null ? "" : String(liveCostGuardSettingsForm.emergencyThresholdMbps)}
+                  onChangeText={(text) => setLiveCostGuardSettingsForm((prev) => ({
+                    ...prev,
+                    emergencyThresholdMbps: Number.isFinite(Number(text)) && text.trim() ? Number(text) : null,
+                  }))}
+                />
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Max USD / hour"
+                  placeholderTextColor="#8d8d8d"
+                  keyboardType="numeric"
+                  value={liveCostGuardSettingsForm.maxEstimatedUsdPerHour === null ? "" : String(liveCostGuardSettingsForm.maxEstimatedUsdPerHour)}
+                  onChangeText={(text) => setLiveCostGuardSettingsForm((prev) => ({
+                    ...prev,
+                    maxEstimatedUsdPerHour: Number.isFinite(Number(text)) && text.trim() ? Number(text) : null,
+                  }))}
+                />
+              </View>
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Warning token TTL seconds"
+                  placeholderTextColor="#8d8d8d"
+                  keyboardType="numeric"
+                  value={String(liveCostGuardSettingsForm.tokenTtlWarningSeconds)}
+                  onChangeText={(text) => setLiveCostGuardSettingsForm((prev) => ({
+                    ...prev,
+                    tokenTtlWarningSeconds: Math.max(1, Math.trunc(Number(text) || 300)),
+                  }))}
+                />
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Critical token TTL seconds"
+                  placeholderTextColor="#8d8d8d"
+                  keyboardType="numeric"
+                  value={String(liveCostGuardSettingsForm.tokenTtlCriticalSeconds)}
+                  onChangeText={(text) => setLiveCostGuardSettingsForm((prev) => ({
+                    ...prev,
+                    tokenTtlCriticalSeconds: Math.max(1, Math.trunc(Number(text) || 60)),
+                  }))}
+                />
+              </View>
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  placeholder="Cooldown seconds"
+                  placeholderTextColor="#8d8d8d"
+                  keyboardType="numeric"
+                  value={String(liveCostGuardSettingsForm.cooldownSeconds)}
+                  onChangeText={(text) => setLiveCostGuardSettingsForm((prev) => ({
+                    ...prev,
+                    cooldownSeconds: Math.max(0, Math.trunc(Number(text) || 0)),
+                  }))}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.configSaveBtn,
+                    { backgroundColor: themePalette.accent },
+                    (liveCostGuardSaving || liveCostGuardLoading || !canManagePrivilegedWrites) && styles.configSaveBtnDisabled,
+                  ]}
+                  onPress={() => void saveLiveCostGuardSettings()}
+                  disabled={liveCostGuardSaving || liveCostGuardLoading || !canManagePrivilegedWrites}
+                >
+                  {liveCostGuardSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Guard</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Manual Controls</Text>
+                <Text style={styles.configListBody}>
+                  Dangerous controls require confirmation and are server-side/audited. Observe-only logs what would happen without applying it.
+                </Text>
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Room name (required for room/participant actions)"
+                placeholderTextColor="#8d8d8d"
+                value={liveCostGuardRoomName}
+                onChangeText={setLiveCostGuardRoomName}
+                autoCapitalize="characters"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Participant identity (required for participant actions)"
+                placeholderTextColor="#8d8d8d"
+                value={liveCostGuardParticipantIdentity}
+                onChangeText={setLiveCostGuardParticipantIdentity}
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={[styles.input, styles.multiline]}
+                placeholder="Audit reason"
+                placeholderTextColor="#8d8d8d"
+                value={liveCostGuardActionReason}
+                onChangeText={setLiveCostGuardActionReason}
+                multiline
+              />
+              <View style={styles.configListActions}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, liveCostGuardActionBusy !== null && styles.configSaveBtnDisabled]}
+                  onPress={() => void logLiveCostGuardTestWarning()}
+                  disabled={liveCostGuardActionBusy !== null}
+                >
+                  <Text style={styles.actionText}>Log test warning event</Text>
+                </TouchableOpacity>
+                {LIVE_COST_GUARD_ACTION_TYPES.map((actionType) => (
+                  <TouchableOpacity
+                    key={actionType}
+                    style={[
+                      actionType === "shorten_token_ttl" || actionType === "restore_normal_mode"
+                        ? styles.actionBtn
+                        : styles.actionBtnDanger,
+                      liveCostGuardActionBusy !== null && styles.configSaveBtnDisabled,
+                    ]}
+                    onPress={() => runLiveCostGuardAction(actionType)}
+                    disabled={liveCostGuardActionBusy !== null}
+                  >
+                    <Text style={actionType === "shorten_token_ttl" || actionType === "restore_normal_mode" ? styles.actionText : styles.actionTextDanger}>
+                      {liveCostGuardActionBusy === actionType ? "Working..." : formatModerationToken(actionType)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Event Log</Text>
+                <Text style={styles.configListBody}>Newest Live Cost Guard events first.</Text>
+              </View>
+              {liveCostGuardLoading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading Live Cost Guard events...</Text>
+                </View>
+              ) : liveCostGuardEvents.length ? liveCostGuardEvents.map((event) => (
+                <View key={event.id} style={styles.configListRowSubtle}>
+                  <Text style={styles.configListTitle}>{`${formatModerationToken(event.severity)} · ${formatModerationToken(event.source)}`}</Text>
+                  <Text style={styles.configListBody}>{formatModerationTimestamp(event.createdAt)}</Text>
+                  <Text style={styles.configListBody}>{`Room ${event.roomName || "not set"} · Participant ${formatCompactIdentifier(event.participantIdentity)}`}</Text>
+                  <Text style={styles.configListBody}>{`Estimated burn ${formatEstimatedLiveCost(event.estimatedUsdPerHour)} · Action ${event.recommendedAction ? formatModerationToken(event.recommendedAction) : "None"} · ${event.actionStatus}`}</Text>
+                </View>
+              )) : (
+                <Text style={styles.configListBody}>No Live Cost Guard events recorded yet.</Text>
+              )}
+            </View>
+
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Action Audit Log</Text>
+                <Text style={styles.configListBody}>Every manual/system request is recorded here, including blocked observe-only attempts.</Text>
+              </View>
+              {liveCostGuardActions.length ? liveCostGuardActions.map((action) => (
+                <View key={action.id} style={styles.configListRowSubtle}>
+                  <Text style={styles.configListTitle}>{formatModerationToken(action.actionType)}</Text>
+                  <Text style={styles.configListBody}>{`${formatModerationTimestamp(action.createdAt)} · ${formatModerationToken(action.actorType)} · ${action.success ? "success" : "not applied"}`}</Text>
+                  <Text style={styles.configListBody}>{`Room ${action.roomName || "not set"} · Participant ${formatCompactIdentifier(action.participantIdentity)}`}</Text>
+                  <Text style={styles.configListBody}>{`Reason: ${formatAuditDisplayText(action.reason) || "No reason"}`}</Text>
+                  {action.errorMessage ? <Text style={styles.configListBody}>{`Result: ${formatAuditDisplayText(action.errorMessage)}`}</Text> : null}
+                </View>
+              )) : (
+                <Text style={styles.configListBody}>No Live Cost Guard actions recorded yet.</Text>
+              )}
             </View>
           </View>
         </View>

@@ -363,6 +363,46 @@ Production activation guardrail:
 6. Enable the relevant `ALLOW_*` flag only for the shortest bounded window needed.
 7. Prefer dry-run and observe-only responses for unknown or uncertain alerts.
 
+## Admin Live Cost Guard
+
+Current repo-side placement:
+
+- The Admin Live Cost Guard is an owner/operator-only cost control plane for LiveKit/TURN runaway-cost protection.
+- It adds `admin_live_cost_guard_settings`, `admin_live_cost_guard_events`, and `admin_live_cost_guard_actions` with RLS; normal users must not read or mutate these rows.
+- Default state is `enabled=false` and `mode=observe_only`.
+- Admin has a Live Cost Guard tab for settings, manual event/action logging, event log, and action audit log.
+- `admin-live-cost-guard-webhook` accepts Alertmanager payloads only with `x-chillywood-live-cost-guard-secret`.
+- `admin-live-cost-guard-action` accepts owner/operator-authenticated manual action requests and records every request.
+- Live Watch-Party and Watch-Party Live token issuance can read the guard state, but this path is inert unless the guard is enabled outside observe-only.
+- Metrics are not connected yet unless a later proof wires Prometheus/Alertmanager; do not show fake TURN Mbps, fake participants, or fake burn.
+- TURN cap is request/runbook only in this lane. Do not SSH, mutate coturn, change firewall rules, or run network shaping from the mobile app.
+
+Required environment variables for deployment:
+
+- `LIVE_COST_GUARD_ENABLED=false` by default.
+- `LIVE_COST_GUARD_MODE=observe_only` by default.
+- `LIVE_COST_GUARD_WEBHOOK_SECRET` for the webhook header.
+- `LIVE_COST_GUARD_PROMETHEUS_URL` optional, for later metrics readout/proxy work.
+- `LIVE_COST_GUARD_ALERTMANAGER_URL` optional, for later operator docs/readout work.
+- `LIVE_COST_GUARD_MAX_USD_PER_HOUR` optional, for later threshold defaults.
+
+Safe activation procedure:
+
+1. Keep `enabled=false` and `mode=observe_only` until owner/operator proof passes.
+2. Deploy the Edge Functions and set `LIVE_COST_GUARD_WEBHOOK_SECRET` only in Supabase secrets.
+3. Prove missing/invalid webhook secret returns safe denial.
+4. Prove valid Alertmanager test payload writes only event rows in observe-only.
+5. Prove manual controls require owner/operator auth and confirmation.
+6. Prove auto-protect only against safe proof rooms before enabling it for production.
+7. Keep Watch-Party Live, Live Stage, Player, spectator HLS, billing, and payout behavior unchanged during proof.
+
+Rollback:
+
+1. Set `enabled=false` in Admin Live Cost Guard settings.
+2. Record `restore_normal_mode` from Admin if any proof action created a cooldown-scoped token guard action.
+3. Remove/rotate `LIVE_COST_GUARD_WEBHOOK_SECRET` if webhook traffic is suspicious.
+4. Confirm token issuance returns to normal one-hour TTL for Live Watch-Party and Watch-Party Live.
+
 ## Production Env Checklist
 
 | Environment value | Owner | Where it belongs | Status |

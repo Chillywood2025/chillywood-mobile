@@ -66,3 +66,9 @@ verify_jwt = false
 
 [functions.notification-dispatch]
 verify_jwt = false
+
+[functions.admin-live-cost-guard-webhook]
+verify_jwt = false
+
+[functions.admin-live-cost-guard-action]
+verify_jwt = false

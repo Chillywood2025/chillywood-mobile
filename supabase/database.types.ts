@@ -14,6 +14,144 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_live_cost_guard_actions: {
+        Row: {
+          action_type: string
+          actor_id: string | null
+          actor_type: string
+          after_json: Json
+          before_json: Json
+          created_at: string | null
+          error_message: string | null
+          id: string
+          participant_identity: string | null
+          reason: string
+          room_name: string | null
+          success: boolean
+        }
+        Insert: {
+          action_type: string
+          actor_id?: string | null
+          actor_type: string
+          after_json?: Json
+          before_json?: Json
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          participant_identity?: string | null
+          reason: string
+          room_name?: string | null
+          success?: boolean
+        }
+        Update: {
+          action_type?: string
+          actor_id?: string | null
+          actor_type?: string
+          after_json?: Json
+          before_json?: Json
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          participant_identity?: string | null
+          reason?: string
+          room_name?: string | null
+          success?: boolean
+        }
+        Relationships: []
+      }
+      admin_live_cost_guard_events: {
+        Row: {
+          action_status: string
+          action_taken: string | null
+          admin_actor_id: string | null
+          created_at: string | null
+          estimated_usd_per_hour: number | null
+          id: string
+          metric_snapshot_json: Json
+          participant_identity: string | null
+          recommended_action: string | null
+          room_name: string | null
+          severity: string
+          source: string
+        }
+        Insert: {
+          action_status?: string
+          action_taken?: string | null
+          admin_actor_id?: string | null
+          created_at?: string | null
+          estimated_usd_per_hour?: number | null
+          id?: string
+          metric_snapshot_json?: Json
+          participant_identity?: string | null
+          recommended_action?: string | null
+          room_name?: string | null
+          severity: string
+          source: string
+        }
+        Update: {
+          action_status?: string
+          action_taken?: string | null
+          admin_actor_id?: string | null
+          created_at?: string | null
+          estimated_usd_per_hour?: number | null
+          id?: string
+          metric_snapshot_json?: Json
+          participant_identity?: string | null
+          recommended_action?: string | null
+          room_name?: string | null
+          severity?: string
+          source?: string
+        }
+        Relationships: []
+      }
+      admin_live_cost_guard_settings: {
+        Row: {
+          cooldown_seconds: number | null
+          created_at: string | null
+          critical_threshold_mbps: number | null
+          emergency_threshold_mbps: number | null
+          enabled: boolean
+          id: string
+          max_estimated_usd_per_hour: number | null
+          mode: string
+          token_ttl_critical_seconds: number | null
+          token_ttl_warning_seconds: number | null
+          updated_at: string | null
+          updated_by: string | null
+          warning_threshold_mbps: number | null
+        }
+        Insert: {
+          cooldown_seconds?: number | null
+          created_at?: string | null
+          critical_threshold_mbps?: number | null
+          emergency_threshold_mbps?: number | null
+          enabled?: boolean
+          id?: string
+          max_estimated_usd_per_hour?: number | null
+          mode?: string
+          token_ttl_critical_seconds?: number | null
+          token_ttl_warning_seconds?: number | null
+          updated_at?: string | null
+          updated_by?: string | null
+          warning_threshold_mbps?: number | null
+        }
+        Update: {
+          cooldown_seconds?: number | null
+          created_at?: string | null
+          critical_threshold_mbps?: number | null
+          emergency_threshold_mbps?: number | null
+          enabled?: boolean
+          id?: string
+          max_estimated_usd_per_hour?: number | null
+          mode?: string
+          token_ttl_critical_seconds?: number | null
+          token_ttl_warning_seconds?: number | null
+          updated_at?: string | null
+          updated_by?: string | null
+          warning_threshold_mbps?: number | null
+        }
+        Relationships: []
+      }
       app_configurations: {
         Row: {
           config: Json
