@@ -36,6 +36,14 @@ Direct insert/update/delete grants on `platform_role_memberships` stay blocked f
 
 ## Operational Status
 
-Repo-side implementation is present in migration `202605140008_platform_staff_role_management.sql`. Live role truth is complete after that migration is applied to the target Supabase project and the bootstrap rows are visible for the normalized Owner/Admin emails.
+Live role truth is closed for the current Supabase project.
+
+- Remote migration `202605140008_platform_staff_role_management.sql` is applied.
+- Remote follow-up migration `202605140009_platform_staff_role_management_null_actor_guard.sql` is applied.
+- `rob2008gn@gmail.com` exists as a live auth user and resolves as active Owner.
+- `chillywood92@gmail.com` exists as a live auth user and resolves as active Admin/operator.
+- Live SQL/RPC proof passed for Owner add/remove Admin, Owner add/remove Moderator, Admin add/remove Moderator, Admin blocked from Owner/Admin-only actions, Moderator blocked from staff management, regular user blocked from staff RPCs and direct role writes, revoked-role loss of access, last-active-Owner protection, and grant/revoke audit rows.
+
+The `202605140009` follow-up fixed a NULL actor-role permission fallthrough found during proof and revoked the accidental proof row created while verifying the boundary.
 
 This role system does not activate billing, payouts, live money, provider imports, LiveKit backend secrets, SMTP secrets, or any unsafe production action.
