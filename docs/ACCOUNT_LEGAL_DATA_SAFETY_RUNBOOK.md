@@ -147,7 +147,7 @@ Still proof-pending:
 
 ## Manual Play Console Steps
 
-1. In Play Console, open the Chi'llywood app for package `com.chillywood.mobile`.
+1. In Play Console, open the verified Chi'llywood app for package `com.chillywood.mobile`; Android developer/package verification is complete, but Data Safety/account deletion acceptance is not.
 2. Complete App content / Privacy Policy with the final public Privacy Policy URL.
 3. Complete App content / Data Safety using the data-category table above plus current SDK provider disclosures.
 4. Complete the account deletion section with the final public account deletion URL.
@@ -208,8 +208,8 @@ External Setup Pending:
 - DMCA designated agent registration/contact maintenance; registration `DMCA-1072720` is recorded complete, backed/Admin DMCA tooling is live-proof closed, support inbox receipt proof passed, and domain MX/SPF/DMARC baseline is proved; attorney review, uploader-facing counter-notice route, outbound email automation, and DKIM after real outbound-provider setup remain pending.
 - Final account deletion support process/SLA and support ownership approval; public support URL, verified `support@chillywoodstream.com` inbox receipt, SPF, and DMARC baseline are proved.
 - Final backend deletion/de-identification and retention runbook.
-- Play Console Data Safety form entry.
-- Play Console account deletion URL entry.
+- Play Console Data Safety form entry; package verification for `com.chillywood.mobile` is complete, but Data Safety acceptance remains pending.
+- Play Console account deletion URL entry; package verification for `com.chillywood.mobile` is complete, but account deletion URL acceptance remains pending.
 - Play Console entry and acceptance for the live public hosted URLs, including the account deletion URL candidate `https://chillywoodstream.com/account-deletion`; production apex curl proof has passed for Terms, Privacy, Account Deletion, Copyright, and Support.
 
 Proof Pending:

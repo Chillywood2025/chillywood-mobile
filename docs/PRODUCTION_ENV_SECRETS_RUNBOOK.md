@@ -67,8 +67,10 @@ This runbook is not proof that production env is complete. It records the curren
 | `LIVEKIT_API_SECRET` | `supabase/functions/livekit-token/index.ts`, host config | LiveKit token backend | Local secure shell only | Supabase function secrets and LiveKit host secret store | Secret; never app client | Yes for token function | External Setup Pending / Proof Pending |
 | `LIVEKIT_URL` | `supabase/functions/livekit-token/index.ts`, host config | LiveKit token backend | Local secure shell only | Supabase function secrets | Public endpoint but server-side source of returned truth | Yes | External Setup Pending / Proof Pending |
 | Google Play service account JSON | RevenueCat/Google/EAS setup | Billing/store submit | Not in repo | Google/RevenueCat/EAS dashboards only | Secret | Yes if store billing/submit ship | External Setup Pending |
-| EAS Android signing credentials / keystore passwords | EAS credentials / Play Console | Release signing | Not in repo | EAS credentials or secure local owner store | Secret | Yes | External Setup Pending |
+| EAS Android signing credentials / keystore passwords | EAS credentials / Play Console | Release signing | Not in repo | EAS credentials or secure local owner store | Secret | Yes | Package Verification Complete / Release Signing Proof Pending |
 | Database passwords / CLI login | Supabase CLI/dashboard | Remote schema/RLS proof | Not in repo | Approved local secret manager/session only | Secret | Yes for remote proof | External Setup Pending |
+
+Google Play Android developer/package verification is complete for `com.chillywood.mobile` using selected signing certificate fingerprint `2B:A7:84:1B:70:6B:E8:69:E8:0F:EA:DA:43:8D:14:33:34:D6:E8:70:99:63:FA:B9:63:94:07:4E:9D:D0:95:43`. The fingerprint is public certificate proof, not a secret. Keystore files, passwords, aliases, Play service account JSON, and EAS signing credentials remain external and must not be committed. The ADI verification APK is archive proof only and does not replace production AAB/internal-testing release proof.
 
 ## Client-Safe Public Config
 
@@ -193,7 +195,7 @@ Release log audit is still required from a preview/release build. Do not mark th
 | LiveKit public endpoint resolves | Partial / Proof Pending | App config shows intended `wss://` endpoint and token function; device proof connects. |
 | RevenueCat public SDK key configured | External Setup Pending | `/subscribe` loads the expected offering in release-like build. |
 | Firebase Android config included | Implemented / Proof Pending | Firebase dashboards receive Crashlytics/Performance data from release-like build. |
-| Legal/support URLs final | External Setup Pending | Public URLs open without login and match Play Console entries. |
+| Legal/support URLs final | External Setup Pending | Public URLs open without login and match Play Console entries; Play package verification is complete, but URL/Data Safety/account-deletion acceptance remains pending. |
 | Server secrets stay server-side | External Setup Pending / Proof Pending | Supabase/RevenueCat/Firebase/Google/host dashboards checked without printing values. |
 | `.env` and local metadata uncommitted | Implemented / Proof Pending | `git status --short` stays clean except allowed local metadata. |
 
@@ -205,7 +207,7 @@ Release log audit is still required from a preview/release build. Do not mark th
 4. Confirm the mobile release env uses `EXPO_PUBLIC_LIVEKIT_URL` and `EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT` matching the production LiveKit runbook.
 5. Configure RevenueCat dashboard and set `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY` for production.
 6. Confirm `google-services.json` is the intended production Firebase Android app config for package `com.chillywood.mobile`.
-7. Finalize Privacy, Terms, Account Deletion, and Support public URLs and set them in production env.
+7. Finalize Privacy, Terms, Account Deletion, and Support public URLs and set them in production env. Google Play package verification for `com.chillywood.mobile` is complete, but Play URL/Data Safety/account-deletion acceptance remains pending.
 8. Confirm no `.env`, keystore, service account JSON, database password, or `.temp` metadata is staged.
 9. Run:
    ```bash

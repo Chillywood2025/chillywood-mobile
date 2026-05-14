@@ -42,6 +42,20 @@ This runbook is not proof that the current `main` commit has a passing release b
 | Submit run in this lane | No |
 | Latest EAS version read check | `npx eas-cli build:version:get --platform android --profile production --json` returned `{}` after enabling remote source, so the remote Android version record still needs release-owner initialization/verification before any Play upload |
 
+## May 14, 2026 Google Play ADI Verification Proof
+
+Google Play Android developer/package verification is complete for `com.chillywood.mobile`.
+
+Proof facts:
+
+- Play Console accepted the Android developer/package ownership verification.
+- The selected signing certificate fingerprint is verified as `2B:A7:84:1B:70:6B:E8:69:E8:0F:EA:DA:43:8D:14:33:34:D6:E8:70:99:63:FA:B9:63:94:07:4E:9D:D0:95:43`.
+- The verification APK included `assets/adi-registration.properties` and was built only for ADI ownership verification.
+- The ADI APK is archive proof only and is no longer operationally needed.
+- No private keys, keystore passwords, Play service account JSON, credential files, or signing secrets are committed.
+
+This proof does not close production release readiness. The production AAB/internal-testing upload, remote Android build number, release signing credential posture, RevenueCat/Google Play purchase/restore proof, Google Play Data Safety/account deletion acceptance, and release-route smoke remain separate.
+
 ## Official Setup References
 
 - Expo EAS Build overview: `https://docs.expo.dev/build/introduction/`
@@ -84,6 +98,7 @@ What remains:
 | Field | Current value / evidence | Readiness |
 | --- | --- | --- |
 | Package / application id | `com.chillywood.mobile` in `app.json` | Correct target for Play/RevenueCat lane |
+| Play package/developer verification | Complete for `com.chillywood.mobile`; selected signing fingerprint `2B:A7:84:1B:70:6B:E8:69:E8:0F:EA:DA:43:8D:14:33:34:D6:E8:70:99:63:FA:B9:63:94:07:4E:9D:D0:95:43` verified in Play Console | Done for package ownership only; production release proof remains pending |
 | App name | `Chi'llywood` in `app.json` | Ready, subject to final listing review |
 | Version name | `1.0.0` from Expo `version` | Ready for first Public v1 candidate if product owner approves |
 | Version code | EAS remote app version source with production `autoIncrement: true`; latest remote read returned `{}` and older EAS builds reported version code `1` | Initialize/verify remote value before each Play upload |
@@ -119,6 +134,7 @@ What is known:
 
 - Expo docs state EAS can generate/manage Android signing credentials or use credentials supplied by the owner.
 - No production keystore or service account credential was inspected or downloaded in this lane.
+- Google Play Android developer/package verification is complete for `com.chillywood.mobile`; the selected public signing certificate fingerprint is verified in Play Console. This is public certificate proof only and does not expose or replace private signing material.
 - A generated debug keystore exists under ignored `/android/app/debug.keystore`; it is a local native-build artifact and is not a Play upload key.
 - `.gitignore` now ignores `*.keystore` in addition to `*.jks`, `*.p8`, `*.p12`, `*.key`, `*.pem`, `/android`, and `/ios`.
 - The generated `/android` and `/ios` native folders are ignored and must not become accidental source-of-truth unless the project intentionally moves to checked-in native folders later.
@@ -128,17 +144,17 @@ Manual release-owner steps:
 1. Run `npx eas-cli login` if the local session is not already authenticated.
 2. Run `npx eas-cli credentials --platform android`.
 3. Select the Chi'llywood project/app and the `production` profile.
-4. Verify whether Android credentials already exist in EAS for `com.chillywood.mobile`.
+4. Verify whether Android production release credentials already exist in EAS for `com.chillywood.mobile`.
 5. If no credentials exist, choose EAS-managed upload keystore unless the release owner already has a Play-approved upload key to import.
 6. If uploading a manually managed keystore, keep the keystore and `credentials.json` outside the repo and never paste passwords or aliases into chat/docs.
-7. Confirm Google Play App Signing posture in Play Console. For first Play upload, follow Play's first-upload flow and opt into Play App Signing if required.
+7. Google Play package ownership verification is complete. Still confirm Google Play App Signing posture in Play Console before production AAB/internal-testing upload. For first Play upload, follow Play's first-upload flow and opt into Play App Signing if required.
 8. Record only non-secret proof facts in this runbook/checklist after verification: credential exists yes/no, managed by EAS yes/no, and Play App Signing status.
 
 Stop conditions:
 
 - Stop if EAS asks to generate or rotate credentials and the release owner has not approved it.
 - Stop if EAS asks for a keystore path/password/alias and the owner has not prepared a secure local handoff.
-- Stop if Play Console first-upload requirements or package ownership are not confirmed.
+- Stop if Play Console first-upload requirements, production release signing posture, or upload-key requirements are not confirmed.
 
 ## Production Environment And Secrets Readiness
 

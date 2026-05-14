@@ -62,7 +62,7 @@ Use this with:
 
 | Dashboard / external system | Purpose | URL / dashboard entry | Owner | Current repo support | Current dashboard status | Required env / secrets by name only | Where values should live | Must never be committed | Proof required | Status | Exact next action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Google Play Console | Android app record, testing tracks, subscriptions, Data Safety, content rating, account deletion, listing, Play signing, releases | `https://play.google.com/console` | Product owner + release manager | `app.json`, `eas.json`, legal/support pages, billing helpers, store runbooks | Not proved from repo | Play service account JSON if EAS submit later; subscription product/base-plan ids | Google Play, RevenueCat, EAS submit credentials | Play service account JSON, screenshots with private account data | App record, subscription product, internal test, Data Safety, content rating, account deletion URL, AAB upload accepted | External Setup Pending | Create/confirm app record for package `com.chillywood.mobile`, then configure subscription and internal testing. |
+| Google Play Console | Android app record, testing tracks, subscriptions, Data Safety, content rating, account deletion, listing, Play signing, releases | `https://play.google.com/console` | Product owner + release manager | `app.json`, `eas.json`, legal/support pages, billing helpers, store runbooks | Package verification complete for `com.chillywood.mobile`; ADI APK archive proof only | Play service account JSON if EAS submit later; subscription product/base-plan ids | Google Play, RevenueCat, EAS submit credentials | Play service account JSON, screenshots with private account data | Subscription product, internal test, Data Safety, content rating, account deletion URL, AAB upload accepted; package ownership already verified | External Setup Pending | Configure subscription, Data Safety/account deletion entries, internal testing, and production AAB proof. |
 | RevenueCat | Store product bridge, Premium entitlement, offerings, purchase/restore customer info | `https://app.revenuecat.com` | Billing owner | `react-native-purchases`, `_lib/revenuecat.ts`, `_lib/monetization.ts`, `_lib/premiumEntitlements.ts`, `/subscribe` | Not proved from repo | `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`, optional dev public key, RevenueCat private/API/webhook keys later | Public SDK key in EAS env; private keys/webhooks in RevenueCat/backend only | Private API keys, webhook secret, receipts, purchase tokens | Offer loads, license tester purchase activates entitlement `premium`, restore works, expired/revoked blocks | External Setup Pending | Configure Android app/package, entitlement `premium`, offering `premium`, and Play product/base plan. |
 | Firebase Console | Crashlytics, Performance, Analytics/Remote Config readiness | `https://console.firebase.google.com` | Firebase/release owner | Firebase packages, `google-services.json`, `firebase.json`, `_lib/firebase*`, app shell bootstrap | Config present; dashboard receipt not proved | Firebase client config is present; service account credentials if CI/backend later | Firebase console/EAS as needed; `google-services.json` is repo client config | Firebase service account JSON/private keys, crash payloads with PII | Nonfatal/crash receipt in Crashlytics, Performance trace/dashboard receipt, privacy/Data Safety reconciliation | Proof Pending | Verify project `chillywood-app`, app package `com.chillywood.mobile`, then run approved release-like Crashlytics/Performance proof. |
 | Supabase Dashboard | Auth, database, storage, RLS, Edge Functions, live schema, creator media, reports, entitlements | `https://supabase.com/dashboard/project/bmkkhihfbmsnnmcqkoly` | Backend/Supabase owner | Migrations, `supabase/database.types.ts`, `_lib/supabase.ts`, creator/video/watch-party/moderation helpers | Migration history previously aligned; full live proof pending | Supabase URL, anon key, service role key, database password, Edge Function secrets | Public URL/anon in EAS env; service role/database/function secrets in Supabase/backend only | Service role key, database password, JWTs, anon key dumps, signed URLs, local `.temp` | Migration alignment, RLS API proof, storage bucket proof, Edge Function token proof | Partial / Proof Pending | Run safe remote lint/API/RLS/storage proof with approved DB login path; keep `.temp` uncommitted. |
@@ -83,7 +83,7 @@ Dashboard:
 - Website: `https://play.google.com/console`
 - App package: `com.chillywood.mobile`
 - App name: `Chi'llywood`
-- Status: `External Setup Pending`
+- Status: `Package Verification Complete / External Setup Pending`
 
 Purpose:
 
@@ -98,7 +98,7 @@ Repo support:
 
 Manual steps:
 
-1. Create or confirm the Play Console app record for package `com.chillywood.mobile`.
+1. Play Console app/package verification is complete for `com.chillywood.mobile`; keep this as the anchor for remaining setup.
 2. Confirm developer account owner, public developer name, support email, and account recovery/2FA.
 3. Configure Play App Signing and upload-key posture before first production AAB.
 4. Create internal testing track and license testers.
@@ -605,10 +605,10 @@ Next action:
 
 Use this order unless repo control docs intentionally change it.
 
-1. **Google Play app record + package confirmation**
+1. **Google Play app record + package verification**
    - Why first: Play package identity anchors subscriptions, signing, store listing, Data Safety, account deletion, and internal testing.
-   - Proof closes it: Play app exists for `com.chillywood.mobile`; internal testing track exists.
-   - Blocks next: RevenueCat Android product connection and first store-subscription proof.
+   - Proof status: Play app/package verification is complete for `com.chillywood.mobile`; selected signing certificate fingerprint `2B:A7:84:1B:70:6B:E8:69:E8:0F:EA:DA:43:8D:14:33:34:D6:E8:70:99:63:FA:B9:63:94:07:4E:9D:D0:95:43` is verified. Internal testing track/release proof remains pending.
+   - Blocks next: RevenueCat Android product connection and first store-subscription proof still need Play product/internal-test setup.
 
 2. **RevenueCat product / entitlement / offering**
    - Why second: Premium access gates need real entitlement truth before store proof.
@@ -735,6 +735,6 @@ A dashboard lane is not `Done` until all of the following are true:
 
 ## Immediate Highest-Priority Dashboard Action
 
-Start with Google Play Console app record/package confirmation for `com.chillywood.mobile`, because RevenueCat product mapping, Play Billing proof, Data Safety, account deletion declarations, internal testing, and production AAB upload all depend on the Play app record existing and matching the app package.
+Google Play Console app/package verification for `com.chillywood.mobile` is complete. The next highest-priority dashboard work is RevenueCat/Play Billing product setup plus Play Data Safety/account deletion entries, because purchase proof, account-deletion acceptance, internal testing, and production AAB upload still depend on those external dashboard steps.
 
 Do not start a production build or submit anything until the Play app record, RevenueCat product/entitlement mapping, EAS env values, and legal/support URL plan are ready.

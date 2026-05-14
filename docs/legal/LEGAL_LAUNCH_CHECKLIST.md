@@ -43,6 +43,6 @@ Status key:
 - support inbox receipt proof for `support@chillywoodstream.com` passed on May 13, 2026 by operator-confirmed destination-inbox receipt; no screenshots, raw headers, inbox exports, private contents, sender private details, credentials, tokens, or email secrets are committed;
 - domain email baseline DNS is proved: Cloudflare MX records remain present, SPF is `v=spf1 include:_spf.mx.cloudflare.net ~all`, and DMARC is `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`; DKIM remains pending until a real outbound mail provider for `@chillywoodstream.com` issues selector records;
 - account deletion process/SLA/backend retention runbook;
-- Google Play account deletion URL acceptance and Data Safety answers;
+- Google Play Android developer/package verification for `com.chillywood.mobile` is complete; Google Play account deletion URL acceptance and Data Safety answers remain pending;
 - RevenueCat/Google Play purchase, restore, cancellation/refund/revocation proof if Premium ships live;
 - live payout/sponsor/payment/fraud enforcement legal and provider approval before activating money movement.
