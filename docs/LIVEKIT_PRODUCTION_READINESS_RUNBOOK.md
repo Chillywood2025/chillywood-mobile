@@ -38,6 +38,8 @@ This runbook records current repo truth, what is only documented from previous i
 
 Current app config is environment-aware. The public mobile runtime value is safe to ship as a public endpoint, but all API keys, API secrets, service-role keys, and TURN credentials must stay server-side or in approved external secret stores.
 
+TURN Spike Protection / LiveKit Cost Safety is tracked separately in `docs/TURN_SPIKE_PROTECTION_RUNBOOK.md` and Admin -> Live Cost Guard. Current repo-side status is observe-only/default-disabled guardrails plus operator scripts; production Prometheus alerts and TURN caps are not claimed live until configured and proved.
+
 ## Token Endpoint Status
 
 Owner files:

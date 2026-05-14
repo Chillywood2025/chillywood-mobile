@@ -142,7 +142,7 @@ Category C, requires store/legal/account/release setup outside this pass:
 - Store listing, feature graphic, screenshots, content rating, target audience, Data Safety consistency, Play acceptance of the live support URL and account-deletion URL, and UGC policy declarations.
 - Release runtime environment confirmation for Supabase, LiveKit, RevenueCat, Firebase, support, and legal links, tracked in `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md`.
 - LiveKit production DNS/TLS/TURN/firewall/token endpoint proof from `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md`.
-- Admin Live Cost Guard foundation is present in observe-only/default-disabled form with owner/operator-only settings, event/action logs, Admin visibility, and server-side webhook/action scaffolding. Production Prometheus/Alertmanager metrics, webhook deployment proof, auto-protect proof, and TURN-cap operator runbook execution remain pending; no public launch claim should treat it as live automatic cost enforcement yet.
+- Admin Live Cost Guard foundation is present in observe-only/default-disabled form with owner/operator-only settings, event/action logs, Admin visibility, and server-side webhook/action scaffolding. TURN Spike Protection runbook/scripts now exist for repo-side operator guidance, but production Prometheus/Alertmanager metrics, webhook deployment proof, auto-protect proof, and TURN-cap operator execution remain pending; no public launch claim should treat it as live automatic cost enforcement yet.
 
 Category D, later phase by product decision:
 

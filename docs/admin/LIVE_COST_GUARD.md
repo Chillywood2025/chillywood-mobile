@@ -12,7 +12,7 @@ It is not a public feature. Normal users should not see it, and it must not chan
 - Backing tables: `admin_live_cost_guard_settings`, `admin_live_cost_guard_events`, `admin_live_cost_guard_actions`.
 - Alertmanager webhook: scaffolded as `admin-live-cost-guard-webhook`.
 - Manual admin action endpoint: scaffolded as `admin-live-cost-guard-action`.
-- TURN cap behavior: request/runbook only. No SSH, Ansible, firewall, coturn, or host mutation is automated in this lane.
+- TURN cap behavior: request/runbook only. Use `docs/TURN_SPIKE_PROTECTION_RUNBOOK.md` and `scripts/infra/` for operator guidance. No SSH, Ansible, firewall, coturn, or host mutation is automated in this lane.
 - Metrics status: not connected until Prometheus/Alertmanager are configured and proved.
 
 ## Why This Exists
@@ -80,6 +80,24 @@ Use conservative observe-only thresholds until real production baselines exist:
 
 Do not invent thresholds from fake metrics. The first production pass should collect and review real metrics before enforcement.
 
+## Minimum Production Metrics
+
+Production monitoring should be wired before enforcement:
+
+- TURN egress bytes/sec.
+- Total relay bandwidth.
+- Active TURN allocations/sessions.
+- LiveKit room count.
+- Top rooms by bandwidth if available.
+- Host network egress.
+- Estimated cost burn per hour.
+
+Thresholds must remain placeholders until real baseline traffic exists:
+
+- WARN threshold: `<calibrate_after_baseline>`.
+- HIGH threshold: `<calibrate_after_baseline>`.
+- CRITICAL threshold: `<calibrate_after_baseline>`.
+
 ## Manual Test Procedure
 
 1. Confirm Admin Live Cost Guard is visible only to owner/operator accounts.
@@ -106,5 +124,6 @@ Do not invent thresholds from fake metrics. The first production pass should col
 - Alertmanager production delivery is not proved until the webhook is deployed and tested.
 - Automatic TURN caps are not live.
 - SSH/Ansible/host mutation is not wired.
+- `scripts/infra/turn-emergency-cap.sh` prints dry-run/operator steps and does not silently apply firewall rules or stop services.
 - No normal user sees Admin Live Cost Guard.
 - No billing, payout, Player, Live Stage, Watch-Party Live UI, or spectator HLS behavior is changed by default.
