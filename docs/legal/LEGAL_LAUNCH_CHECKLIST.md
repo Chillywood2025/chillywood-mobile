@@ -41,6 +41,7 @@ Status key:
 - keep operational DMCA proof evidence internal only; backed/Admin live proof passed with safe disposable reporter/uploader/admin/viewer accounts and no private report artifacts committed;
 - keep U.S. Copyright Office DMCA agent registration current, including renewals/updates if agent contact information changes;
 - support inbox receipt proof for `support@chillywoodstream.com` passed on May 13, 2026 by operator-confirmed destination-inbox receipt; no screenshots, raw headers, inbox exports, private contents, sender private details, credentials, tokens, or email secrets are committed;
+- domain email baseline DNS is proved: Cloudflare MX records remain present, SPF is `v=spf1 include:_spf.mx.cloudflare.net ~all`, and DMARC is `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`; DKIM remains pending until a real outbound mail provider for `@chillywoodstream.com` issues selector records;
 - account deletion process/SLA/backend retention runbook;
 - Google Play account deletion URL acceptance and Data Safety answers;
 - RevenueCat/Google Play purchase, restore, cancellation/refund/revocation proof if Premium ships live;
