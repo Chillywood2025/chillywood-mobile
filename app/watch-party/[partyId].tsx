@@ -1847,6 +1847,8 @@ export default function WatchPartyRoomScreen() {
 
   const isPlaying = room?.playbackState === "playing";
   const isLiveRoom = room?.roomType === "live";
+  // Watch-Party Live controls are intentionally persistent and must not auto-hide.
+  const watchPartyLiveControlsVisible = true;
   const backgroundSource: ImageSourcePropType | null = (() => {
     const first = localTitles[0] as any;
     return first?.image || first?.poster || null;
@@ -2486,7 +2488,7 @@ export default function WatchPartyRoomScreen() {
   };
 
   const renderWatchPartyLiveDeck = () => {
-    if (isLiveRoom) return null;
+    if (isLiveRoom || !watchPartyLiveControlsVisible) return null;
 
     // Layout lock: preserve content-top Watch-Party Live structure per docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md.
     return (
@@ -2532,7 +2534,7 @@ export default function WatchPartyRoomScreen() {
   };
 
   const renderPartyRoomActionDock = () => {
-    if (isLiveRoom) return null;
+    if (isLiveRoom || !watchPartyLiveControlsVisible) return null;
 
     return (
       <View style={styles.partyRoomActionDockCard}>
@@ -2809,7 +2811,7 @@ export default function WatchPartyRoomScreen() {
   // ── Room UI ──────────────────────────────────────────────────────────────────
   return (
     <View style={styles.outerFlex}>
-      {isLiveRoom ? (
+      {isLiveRoom && watchPartyLiveControlsVisible ? (
         <LiveBottomStrip
           participants={bottomStripEntries}
           currentUserId={currentUserBubbleId}
@@ -3214,7 +3216,7 @@ export default function WatchPartyRoomScreen() {
         ) : null}
 
         {/* ── Primary CTA ─────────────────────────────────────────────── */}
-        {isLiveRoom ? (
+        {isLiveRoom && watchPartyLiveControlsVisible ? (
           <TouchableOpacity
             style={styles.watchCTA}
             activeOpacity={0.88}
