@@ -5735,6 +5735,77 @@ export type Database = {
         }
         Relationships: []
       }
+      video_renditions: {
+        Row: {
+          access_tier: string
+          bitrate_kbps: number | null
+          codec: string | null
+          container: string | null
+          created_at: string
+          error_message: string | null
+          fps: number | null
+          height: number | null
+          id: string
+          manifest_path: string | null
+          owner_id: string
+          quality_label: string
+          status: string
+          storage_bucket: string | null
+          storage_path: string | null
+          updated_at: string
+          video_id: string
+          width: number | null
+        }
+        Insert: {
+          access_tier?: string
+          bitrate_kbps?: number | null
+          codec?: string | null
+          container?: string | null
+          created_at?: string
+          error_message?: string | null
+          fps?: number | null
+          height?: number | null
+          id?: string
+          manifest_path?: string | null
+          owner_id: string
+          quality_label: string
+          status?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          updated_at?: string
+          video_id: string
+          width?: number | null
+        }
+        Update: {
+          access_tier?: string
+          bitrate_kbps?: number | null
+          codec?: string | null
+          container?: string | null
+          created_at?: string
+          error_message?: string | null
+          fps?: number | null
+          height?: number | null
+          id?: string
+          manifest_path?: string | null
+          owner_id?: string
+          quality_label?: string
+          status?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          updated_at?: string
+          video_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_renditions_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       videos: {
         Row: {
           created_at: string | null
@@ -6424,6 +6495,10 @@ export type Database = {
         Args: { target_video_id: string }
         Returns: Json
       }
+      record_video_original_rendition: {
+        Args: { p_video_id: string }
+        Returns: Json
+      }
       request_friendship: {
         Args: { target_user_id: string }
         Returns: {
@@ -6464,6 +6539,10 @@ export type Database = {
       }
       rollup_creator_video_upload_usage_daily: {
         Args: { target_usage_date?: string }
+        Returns: Json
+      }
+      resolve_video_playback: {
+        Args: { target_video_id: string }
         Returns: Json
       }
       sanitize_app_configuration: {

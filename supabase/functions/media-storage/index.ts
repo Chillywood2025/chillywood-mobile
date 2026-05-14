@@ -321,6 +321,92 @@ const readCreatorVideoForObject = async (
   };
 };
 
+const readCreatorVideoRenditionForObject = async (
+  adminClient: SupabaseClient,
+  recordId: string,
+  bucket: string,
+  objectKey: string,
+) => {
+  if (!recordId) return null;
+  const { data: storagePathRendition } = await adminClient
+    .from("video_renditions")
+    .select("id,video_id,owner_id,quality_label,status,access_tier,storage_bucket,storage_path,manifest_path")
+    .eq("video_id", recordId)
+    .eq("storage_bucket", bucket)
+    .eq("storage_path", objectKey)
+    .limit(1)
+    .maybeSingle();
+  let rendition = storagePathRendition;
+  if (!rendition) {
+    const { data: manifestPathRendition } = await adminClient
+      .from("video_renditions")
+      .select("id,video_id,owner_id,quality_label,status,access_tier,storage_bucket,storage_path,manifest_path")
+      .eq("video_id", recordId)
+      .eq("storage_bucket", bucket)
+      .eq("manifest_path", objectKey)
+      .limit(1)
+      .maybeSingle();
+    rendition = manifestPathRendition;
+  }
+  if (!rendition) return null;
+
+  const { data: video } = await adminClient
+    .from("videos")
+    .select("id,owner_id,visibility,moderation_status")
+    .eq("id", recordId)
+    .maybeSingle();
+  if (!video) return null;
+
+  return {
+    id: toText(rendition.id),
+    videoId: toText(rendition.video_id),
+    ownerId: toText(rendition.owner_id || video.owner_id),
+    qualityLabel: toText(rendition.quality_label),
+    status: toText(rendition.status),
+    accessTier: toText(rendition.access_tier),
+    visibility: toText(video.visibility),
+    moderationStatus: toText(video.moderation_status),
+  };
+};
+
+const userHasActiveEntitlement = async (
+  adminClient: SupabaseClient,
+  userId: string,
+  entitlementKeys: string[],
+) => {
+  const { data } = await adminClient
+    .from("user_entitlements")
+    .select("user_id")
+    .eq("user_id", userId)
+    .in("entitlement_key", entitlementKeys)
+    .in("status", ["active", "trialing", "grace_period"])
+    .is("revoked_at", null)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    .limit(1)
+    .maybeSingle();
+  return !!data?.user_id;
+};
+
+const canReadCreatorVideoRendition = async (
+  adminClient: SupabaseClient,
+  user: { id: string; email: string },
+  recordId: string,
+  bucket: string,
+  objectKey: string,
+) => {
+  const rendition = await readCreatorVideoRenditionForObject(adminClient, recordId, bucket, objectKey);
+  if (!rendition) return null;
+  if (rendition.status !== "ready") return false;
+  if (rendition.qualityLabel === "original") return rendition.ownerId === user.id || userHasPlatformRole(adminClient, user, ["operator"]);
+  if (rendition.ownerId === user.id) return true;
+  if (await userHasPlatformRole(adminClient, user, ["operator", "moderator"])) return true;
+  const publicSafe = rendition.visibility === "public" && ["clean", "reported"].includes(rendition.moderationStatus);
+  if (!publicSafe) return false;
+  if (rendition.accessTier === "free") return true;
+  if (rendition.accessTier === "premium") return userHasActiveEntitlement(adminClient, user.id, ["premium"]);
+  return false;
+};
+
 const canReadCreatorVideo = async (
   adminClient: SupabaseClient,
   user: { id: string; email: string },
@@ -328,6 +414,9 @@ const canReadCreatorVideo = async (
   bucket: string,
   objectKey: string,
 ) => {
+  const renditionAllowed = await canReadCreatorVideoRendition(adminClient, user, recordId, bucket, objectKey);
+  if (renditionAllowed !== null) return renditionAllowed;
+
   const video = await readCreatorVideoForObject(adminClient, recordId, bucket, objectKey);
   if (!video) return false;
   if (toText(video.owner_id) === user.id) return true;

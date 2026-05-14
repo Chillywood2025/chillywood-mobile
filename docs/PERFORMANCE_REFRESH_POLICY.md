@@ -11,7 +11,7 @@ This policy controls cost-sensitive refresh behavior for Public v1. Screen refre
 - Premium live launch quality is capped at 720p / 30fps.
 - 60fps live is not a Public v1 default and must stay behind a later disabled-by-default feature flag if it is ever added.
 - Free users do not get full Live First, Live Watch-Party, or Watch-Party Live access. Existing strict Premium gates remain the access owner.
-- VOD policy target is 360p/480p for free playback and 720p/1080p for Premium playback when storage and delivery support a real quality ladder. The current creator-video player uses one backed playback URL, so VOD quality selection/transcoding remains pending and is not faked.
+- VOD policy target is 360p/480p for free playback and 720p/1080p for Premium playback when storage and delivery support a real quality ladder. The repo now has a rendition metadata table and backend playback resolver foundation; real quality enforcement still depends on actual generated renditions/transcoding/delivery proof.
 - Realtime is reserved for live interaction: room presence, chat/comments, host status, room ended/kicked/blocked state, and active direct-call state.
 - Non-live surfaces should load on open, refresh on focus/return where already backed, support pull-to-refresh/manual refresh where present, and use cached/read-on-demand data instead of one-second polling.
 
@@ -46,6 +46,7 @@ The source of truth is `_lib/performancePolicy.ts`.
 - Live Stage hybrid room comments still use Supabase realtime first; the fallback sync is 15 seconds.
 - Chat read receipts are route-throttled to avoid repeated write bursts while messages are loading or sending.
 - Home, Profile, Public Channel, and Channel Studio remain load-on-open/focus/manual surfaces; this lane does not add new feed polling.
+- VOD quality ladder foundation lives in `docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md`. Player asks the resolver for allowed creator-video renditions and falls back to legacy single-file playback only when no real renditions exist.
 
 ## Guardrails
 
@@ -59,6 +60,6 @@ The guard blocks regressions to default 60fps live, live v1 max above 30fps, Pre
 
 ## Pending
 
-- Real VOD quality ladder/transcoding/delivery selection remains pending.
+- Real VOD transcoding/delivery selection remains pending. The resolver foundation exists, but no fake 360p/480p/720p/1080p files are created.
 - Release-device battery and bandwidth observation should be captured during final LiveKit/Premium proof.
 - RevenueCat/Google Play billing proof remains separate from this policy; this policy does not fake Premium.

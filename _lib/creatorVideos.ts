@@ -13,6 +13,13 @@ import {
 } from "./mediaStorage";
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
 import { supabase } from "./supabase";
+import {
+  readVideoRenditionStatuses,
+  recordOriginalVideoRendition,
+  resolveSignedVideoPlaybackSource,
+  type VodPlaybackResolution,
+  type VodRenditionStatusItem,
+} from "./vodQuality";
 
 export const CREATOR_VIDEO_BUCKET = "creator-videos";
 export const CREATOR_VIDEO_SIGNED_URL_SECONDS = 60 * 60;
@@ -53,6 +60,9 @@ export type CreatorVideo = {
   thumbStoragePath: string;
   mimeType: string;
   fileSizeBytes: number | null;
+  playbackResolution: VodPlaybackResolution | null;
+  playbackQualityLabel: string | null;
+  renditionStatuses: VodRenditionStatusItem[];
   createdAt: string;
   updatedAt: string;
 };
@@ -166,7 +176,30 @@ async function createSupabaseSignedUrl(path: string) {
   return data.signedUrl;
 }
 
-async function parseCreatorVideo(row: CreatorVideoRow): Promise<CreatorVideo> {
+async function createCreatorVideoPlaybackUrl(input: {
+  id: string;
+  storageProvider: MediaStorageProvider;
+  storageBucket: string;
+  storageObjectKey: string;
+  storagePath: string;
+  playbackUrl: string;
+}) {
+  if (input.storageProvider === "s3" && input.storageObjectKey) {
+    return createSignedMediaDownload({
+      surfaceType: "creator_video",
+      provider: input.storageProvider,
+      bucket: input.storageBucket,
+      objectKey: input.storageObjectKey,
+      recordId: input.id,
+    }).catch(() => "");
+  }
+  return createSupabaseSignedUrl(input.storagePath || input.playbackUrl);
+}
+
+async function parseCreatorVideo(
+  row: CreatorVideoRow,
+  options?: { resolveLegacyPlaybackUrl?: boolean },
+): Promise<CreatorVideo> {
   const id = toText(row.id);
   const storagePath = toText(row.storage_path);
   const storageProvider = normalizeMediaStorageProvider(row.storage_provider);
@@ -178,15 +211,16 @@ async function parseCreatorVideo(row: CreatorVideoRow): Promise<CreatorVideo> {
   const storageObjectKey = toText(row.storage_object_key) || storagePath || toText(row.playback_url);
   const thumbnailPath = toText(row.thumb_storage_path);
   const thumbnailFallback = toText(row.thumb_url);
-  const playbackUrl = storageProvider === "s3" && storageObjectKey
-    ? await createSignedMediaDownload({
-      surfaceType: "creator_video",
-      provider: storageProvider,
-      bucket: storageBucket,
-      objectKey: storageObjectKey,
-      recordId: id,
-    }).catch(() => "")
-    : await createSupabaseSignedUrl(storagePath || toText(row.playback_url));
+  const playbackUrl = options?.resolveLegacyPlaybackUrl === true
+    ? await createCreatorVideoPlaybackUrl({
+      id,
+      storageProvider,
+      storageBucket,
+      storageObjectKey,
+      storagePath,
+      playbackUrl: toText(row.playback_url),
+    })
+    : "";
 
   return {
     id,
@@ -207,9 +241,22 @@ async function parseCreatorVideo(row: CreatorVideoRow): Promise<CreatorVideo> {
     thumbStoragePath: thumbnailPath,
     mimeType: toText(row.mime_type),
     fileSizeBytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null,
+    playbackResolution: null,
+    playbackQualityLabel: null,
+    renditionStatuses: [],
     createdAt: toText(row.created_at) || new Date().toISOString(),
     updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
   };
+}
+
+async function attachRenditionStatuses(videos: CreatorVideo[]): Promise<CreatorVideo[]> {
+  if (!videos.length) return videos;
+  const statusMap = await readVideoRenditionStatuses(videos.map((video) => video.id));
+  if (!statusMap.size) return videos;
+  return videos.map((video) => ({
+    ...video,
+    renditionStatuses: statusMap.get(video.id) ?? video.renditionStatuses,
+  }));
 }
 
 async function getRequiredUserId() {
@@ -243,7 +290,7 @@ export async function readCreatorVideos(
 
   const { data, error } = await query.returns<CreatorVideoRow[]>();
   if (error || !data) return [];
-  return Promise.all(data.map(parseCreatorVideo));
+  return attachRenditionStatuses(await Promise.all(data.map((row) => parseCreatorVideo(row))));
 }
 
 export async function readCreatorVideosForOwners(
@@ -267,7 +314,7 @@ export async function readCreatorVideosForOwners(
     .returns<CreatorVideoRow[]>();
 
   if (error || !data) return [];
-  return Promise.all(data.map(parseCreatorVideo));
+  return attachRenditionStatuses(await Promise.all(data.map((row) => parseCreatorVideo(row))));
 }
 
 export async function readLatestPublicCreatorVideos(
@@ -284,7 +331,7 @@ export async function readLatestPublicCreatorVideos(
     .returns<CreatorVideoRow[]>();
 
   if (error || !data) return [];
-  return Promise.all(data.map(parseCreatorVideo));
+  return attachRenditionStatuses(await Promise.all(data.map((row) => parseCreatorVideo(row))));
 }
 
 export async function readCreatorVideoForPlayer(videoId: string): Promise<CreatorVideo | null> {
@@ -300,13 +347,42 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
     .maybeSingle();
 
   if (error || !data) return null;
-  const parsed = await parseCreatorVideo(data);
-  if (parsed.visibility === "public") return parsed;
+  const row = data as CreatorVideoRow;
+  const parsed = await parseCreatorVideo(row, { resolveLegacyPlaybackUrl: false });
 
   const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
   const viewerUserId = toText(authData.user?.id);
   const viewerOwnsVideo = !!viewerUserId && viewerUserId === parsed.ownerId;
-  return viewerOwnsVideo ? parsed : null;
+  if (parsed.visibility !== "public" && !viewerOwnsVideo) return null;
+
+  const playbackResolution = await resolveSignedVideoPlaybackSource({
+    videoId: parsed.id,
+    storageProvider: parsed.storageProvider,
+    fallbackBucket: parsed.storageBucket,
+  });
+  const legacyPlaybackUrl = !playbackResolution.defaultPlaybackUrl && (
+    playbackResolution.legacyPlaybackAllowed
+    || playbackResolution.legacyQualityEnforcement === "resolver_unavailable"
+  )
+    ? await createCreatorVideoPlaybackUrl({
+      id: parsed.id,
+      storageProvider: parsed.storageProvider,
+      storageBucket: parsed.storageBucket,
+      storageObjectKey: parsed.storageObjectKey,
+      storagePath: parsed.storagePath,
+      playbackUrl: toText(row.playback_url),
+    })
+    : "";
+
+  return {
+    ...parsed,
+    playbackUrl: playbackResolution.defaultPlaybackUrl || legacyPlaybackUrl,
+    playbackResolution,
+    playbackQualityLabel: playbackResolution.defaultPlaybackQuality ?? (legacyPlaybackUrl ? "legacy_single_file" : null),
+    renditionStatuses: playbackResolution.renditionStatuses.length
+      ? playbackResolution.renditionStatuses
+      : parsed.renditionStatuses,
+  };
 }
 
 export async function uploadCreatorVideo(input: {
@@ -405,6 +481,7 @@ export async function uploadCreatorVideo(input: {
   }
 
   logCreatorVideoUpload("metadata_insert_succeeded", { id, visibility: payload.visibility });
+  await recordOriginalVideoRendition(id);
 
   const createdVideo = await parseCreatorVideo(data);
   try {

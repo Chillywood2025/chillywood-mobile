@@ -9,6 +9,7 @@ import {
 
 import type { CreatorVideo } from "../../_lib/creatorVideos";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import { formatVodRenditionStatusSummary, getVodQualityPolicyCopy } from "../../_lib/vodQuality";
 
 type CreatorVideoCardMode = "owner" | "public";
 
@@ -117,6 +118,8 @@ export function CreatorVideoCard({
     updatedDate ? `Updated ${updatedDate}` : null,
     video.mimeType || null,
   ].filter(Boolean);
+  const renditionStatusSummary = ownerMode ? formatVodRenditionStatusSummary(video.renditionStatuses) : "";
+  const qualityPolicyCopy = ownerMode ? getVodQualityPolicyCopy() : null;
 
   return (
     <View style={[styles.card, !playable && styles.cardUnavailable]}>
@@ -170,6 +173,11 @@ export function CreatorVideoCard({
         {ownerMode && rawTitleDetected ? (
           <Text style={styles.ownerGuidance}>
             This title still looks like a file name. Tap Edit to rename it for viewers.
+          </Text>
+        ) : null}
+        {ownerMode ? (
+          <Text style={styles.ownerGuidance}>
+            {`VOD ladder: ${renditionStatusSummary}. Free max ${qualityPolicyCopy?.freeMax}; Premium max ${qualityPolicyCopy?.premiumMax} when renditions exist.`}
           </Text>
         ) : null}
 

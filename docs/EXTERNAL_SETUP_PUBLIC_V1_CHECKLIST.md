@@ -29,6 +29,10 @@ For dashboard-by-dashboard ownership, login/manual actions, secret placement, pr
 
 Repo-side Public v1 cost policy is implemented. Live publishing defaults to 720p / 30fps with v1 max 30fps, full live access remains Premium-gated, room heartbeats are 15 seconds, and non-live surfaces should use load-on-open, focus/manual refresh, or cached reads instead of frequent polling. Release proof still needs device/network observation for battery, bandwidth, TURN usage, and Premium entitlement behavior. VOD quality ladder/transcoding remains an external/product infrastructure blocker before free 360p/480p and Premium 720p/1080p selection can be claimed live.
 
+## VOD Quality Ladder / Playback Resolver
+
+Repo-side VOD quality ladder foundation now exists: `video_renditions`, `resolve_video_playback`, original-rendition recording, Player resolver integration, creator status display, and media-storage rendition authorization. External/product infrastructure is still required for real transcode/rendition generation, delivery proof, and Premium entitlement proof before launch can claim live Free/Premium VOD quality enforcement. No fake 360p/480p/720p/1080p files were created.
+
 ## Read-Only Audit Snapshot
 
 - Repo root: `/Users/loverslane/chillywood-mobile`
