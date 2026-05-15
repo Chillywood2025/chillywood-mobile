@@ -54,7 +54,7 @@ Proof facts:
 - The ADI APK is archive proof only and is no longer operationally needed.
 - No private keys, keystore passwords, Play service account JSON, credential files, or signing secrets are committed.
 
-This proof does not close production release readiness. The production AAB/internal-testing upload, remote Android build number, release signing credential posture, RevenueCat/Google Play purchase/restore proof, Google Play Data Safety/account deletion acceptance, and release-route smoke remain separate.
+This proof does not close production release readiness. A current production AAB was later built through EAS as `aedded50-3818-4d7b-8bcf-9bb9c2d36513` with versionCode `2`, but the first Google Play upload/internal-testing submission remains manual because EAS submit reported that the first submission of the app must be performed manually. RevenueCat/Google Play purchase/restore proof, Google Play Data Safety/account deletion acceptance, and release-route smoke remain separate.
 
 ## Official Setup References
 
@@ -168,7 +168,7 @@ Production EAS builds need the following values intentionally configured through
 | `EXPO_PUBLIC_BETA_ENVIRONMENT` | `closed-beta` or `public-v1` runtime gate | Runtime validation requires it | Proof Pending |
 | `EXPO_PUBLIC_LIVEKIT_URL` | LiveKit WebSocket server | Runtime config reads it and has deployed fallback | Proof Pending |
 | `EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT` | Supabase Edge Function token endpoint | Runtime config reads it and has deployed fallback | Proof Pending |
-| `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY` | RevenueCat production Android public SDK key | Runtime config reads it; real release value pending external setup | External Setup Pending |
+| `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY` | RevenueCat production Android public SDK key | Runtime config reads it; EAS production env is configured; local `.env` remains intentionally uncommitted | EAS Production Configured / Purchase Proof Pending |
 | `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV` | RevenueCat dev/test Android public SDK key | Runtime config reads it; dev/test value may exist locally | Proof Pending |
 | `EXPO_PUBLIC_PRIVACY_POLICY_URL` | Hosted Privacy Policy | Runtime config reads it and has fallback | External Setup Pending until legal approval |
 | `EXPO_PUBLIC_TERMS_OF_SERVICE_URL` | Hosted Terms | Runtime config reads it and has fallback | External Setup Pending until legal approval |
@@ -300,7 +300,7 @@ Before production AAB:
 After production AAB:
 
 1. Download or reference the AAB from EAS without committing artifacts.
-2. Upload manually to Google Play internal testing first if this is the first upload, because Expo submit docs note the first upload must be manual.
+2. Upload manually to Google Play internal testing first if this is the first upload. EAS submit proof on build `aedded50-3818-4d7b-8bcf-9bb9c2d36513` confirmed Google/EAS still requires the first submission to be manual.
 3. Complete Data Safety, account deletion, content rating, camera/microphone declarations, store listing assets, and billing/subscription setup.
 4. Install from internal testing on at least one physical Android device.
 5. Run final route smoke and release log audit.
@@ -311,7 +311,7 @@ After production AAB:
 | Area | Status | Reason | Next action |
 | --- | --- | --- | --- |
 | EAS project/config | Implemented / Proof Pending | Project id, updates URL, and profiles exist | Run preview/production build after proof lanes |
-| Production AAB profile | Implemented / Proof Pending | `production` profile uses Android `app-bundle` | Build current `main` when approved |
+| Production AAB profile | Implemented / Current AAB Built | `production` profile uses Android `app-bundle`; build `aedded50-3818-4d7b-8bcf-9bb9c2d36513` completed for versionCode `2` | Manually upload the AAB to Play internal testing as first submission |
 | Preview/internal profile | Implemented / Proof Pending | `preview` profile exists, but Android artifact type is not explicitly pinned | Use for internal release-like testing or add explicit artifact type later |
 | EAS login | Proof Pending | Local session was authenticated during audit, but this is machine/user state | Release owner verifies before build |
 | Android signing credentials | External Setup Pending | Not inspected or generated in this lane | Run `npx eas-cli credentials --platform android` manually |
