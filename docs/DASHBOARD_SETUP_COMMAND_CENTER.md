@@ -55,7 +55,7 @@ Use this with:
 | Firebase project id from safe config inspection | `chillywood-app` |
 | RevenueCat v1 entitlement target | `premium` |
 | RevenueCat v1 offering target | `premium` |
-| Google Play v1 subscription product target | `premium_subscription` in app logic; recommended Play id `chillywood_premium_v1` from billing runbook |
+| Google Play v1 subscription product target | `premium_subscription` |
 | Main local-only metadata to keep uncommitted | `supabase/.temp/` |
 
 ## Master Dashboard Inventory
