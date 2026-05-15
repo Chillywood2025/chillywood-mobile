@@ -16,6 +16,7 @@
     "lint": "expo lint",
     "guard:refresh-policy": "node ./scripts/guard-refresh-policy.mjs",
     "guard:creator-monetization-policy": "node ./scripts/guard-creator-monetization-policy.mjs",
+    "guard:payment-rail-policy": "node ./scripts/guard-payment-rail-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs",

@@ -39,6 +39,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - Premium subscription revenue belongs to Chi'llywood/platform. It must not be split with creators, must not create a creator subscription revenue pool, and must not be treated as creator earnings.
 - RevenueCat remains the Premium subscription truth owner. Premium gates must be entitlement-backed, not local fake flags, local-only bypasses, manual Admin toggles, or client-only state.
 - RevenueCat/Google Play purchase proof remains pending until a release-like Android build proves product load, purchase sheet, purchase, restore, active entitlement, and expired/revoked blocking.
+- Premium purchases use Google Play plus RevenueCat only; Stripe must not sell or grant Premium.
 - Premium unlocks platform features, Premium-only live/watch-party access, creator tools, and future creator monetization tools where backed.
 - Creator Channel is the creator mini platform direction. Platform Studio is the owner command center for managing that mini platform. Public-facing docs/copy may call Channel a mini platform where appropriate, but technical route/table names do not need to be renamed and Platform Studio itself should not be renamed to mini platform.
 - The creator mini platform is free by default for viewers.
@@ -54,6 +55,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - no free live/watch-party preview mode exists; any future preview must be explicitly designed, limited, low-cost, separately gated, and proved safely
 - Premium supports expensive live usage
 - paid creator content is free by default unless the creator marks it paid through a backed monetization tool
+- Android in-app digital creator paid content must use Google Play Billing or an explicitly approved Play billing/external-offers path; Stripe must not silently sell Android in-app digital access.
 - later paid creator monetization includes paid videos, paid rooms, paid posts/content, paid collections, paid events, VIP access, and channel subscriptions/fan memberships
 - creator paid content split is creator 80% net and Chi'llywood 20% net
 - net receipts means after store/payment fees, taxes, refunds, chargebacks, provider fees, and adjustments
@@ -64,10 +66,12 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - Chi'llywood should not take a direct percentage cut from the tip amount
 - any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed
 - tips must not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods
+- tips may use Stripe only when they unlock no digital access, no paid content, no VIP treatment, no badges, no rankings, no emojis, and no other digital goods/perks.
 - if a user tips `$10`, the creator tip amount remains `$10`; any allowed Chi'llywood or provider fee must be separate and disclosed where allowed
 - Chi'llywood's main creator-commerce platform percentage should come from paid content and other marketplace/commerce sales, not hidden cuts from 100%-to-creator tip copy
 - merch, products, clothing, and other allowed creator sales belong on the future Channel mini platform and are managed from Platform Studio command-center surfaces
 - creator merch/product sales are separate from Premium subscription revenue, and viewers do not need Premium to buy creator merch/products
+- Physical merch/products/clothing may use Stripe or another commerce provider when provider, tax, shipping, refund, dispute, and legal readiness are proved.
 - merch/product sales need a future commerce/provider path, likely Stripe Connect or a commerce provider, plus product listings, prices, inventory/status where needed, fulfillment/shipping status for physical goods, refunds/disputes, payout ledger entries, and tax/provider/legal review
 - do not create fake product orders, fake inventory, fake shipping, fake product payouts, or live commerce checkout without a separate proved lane
 - creator payouts should be calculated from net receipts actually received after app-store fees, taxes, refunds, chargebacks, and adjustments, not gross sticker price
@@ -104,6 +108,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - do not call money `available` until it is actually payable
 - creator payout infrastructure should assume Stripe Connect or an equivalent marketplace payout layer
 - Stripe Connect is preferred for creator payout onboarding, KYC/tax readiness, provider account tracking, transfers, payout rails, 1099/tax tooling, tips, sponsor payments, marketplace/network money, paid content payouts, and merch/product payouts
+- Stripe Connect is the only planned payout/cash-out rail; RevenueCat and Google Play must not execute creator payouts or cash-out.
 - Google Play plus RevenueCat is for Premium subscription entitlement; Stripe must not be used as the Premium entitlement source of truth
 - creator payouts must remain separate from app-store billing and separate from RevenueCat
 - the mobile app must not directly write creator earnings or payout balances

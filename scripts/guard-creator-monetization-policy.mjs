@@ -21,6 +21,7 @@ const assertNotIncludes = (source, needle, label) => {
 
 const featureFlags = read("_lib/featureFlags.ts");
 const creatorMonetization = read("_lib/creatorMonetization.ts");
+const paymentRailPolicy = read("_lib/paymentRailPolicy.ts");
 const migration = read("supabase/migrations/202605140011_creator_monetization_systems_foundation.sql");
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
@@ -56,6 +57,10 @@ assertIncludes(creatorMonetization, "setCreatorContentPrice", "creator pricing c
 assertIncludes(creatorMonetization, "requestCreatorPayout", "cash-out request client helper");
 assertIncludes(creatorMonetization, "creatorMonetizationCheckoutPreflight", "checkout preflight client helper");
 assertNotIncludes(creatorMonetization, "499", "no $4.99 cap in creator monetization helper");
+assertIncludes(paymentRailPolicy, "resolvePaymentRailPolicy", "payment rail policy helper");
+assertIncludes(paymentRailPolicy, "PREMIUM_PAYMENT_RAIL = \"google_play_revenuecat\"", "Premium rail policy");
+assertIncludes(paymentRailPolicy, "ANDROID_DIGITAL_CREATOR_CONTENT_STRIPE_ENABLED = false", "Android digital paid content Stripe block");
+assertIncludes(paymentRailPolicy, "tips_cannot_unlock_digital_access", "tips cannot unlock digital access rail");
 
 assertIncludes(migration, 'create table if not exists public."monetization_system_settings"', "settings table");
 assertIncludes(migration, '"live_money_enabled" boolean not null default false', "live money default off");
