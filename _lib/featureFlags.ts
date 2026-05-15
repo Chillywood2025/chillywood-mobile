@@ -88,12 +88,30 @@ export const APP_MONETIZATION_RUNTIME_DEFAULTS: {
   sponsorPlacementsEnabled: boolean;
   playerBannerEnabled: boolean;
   playerMidRollEnabled: boolean;
+  premiumPurchaseEnabled: boolean;
+  paidContentCheckoutEnabled: boolean;
+  creatorPricingEnabled: boolean;
+  tipsEnabled: boolean;
+  merchStoreEnabled: boolean;
+  cashoutEnabled: boolean;
+  payoutsEnabled: boolean;
+  stripeConnectProductionEnabled: boolean;
+  liveMoneyEnabled: boolean;
 } = {
   premiumEnabled: true,
   partyPassEnabled: true,
   sponsorPlacementsEnabled: false,
   playerBannerEnabled: false,
   playerMidRollEnabled: false,
+  premiumPurchaseEnabled: false,
+  paidContentCheckoutEnabled: false,
+  creatorPricingEnabled: false,
+  tipsEnabled: false,
+  merchStoreEnabled: false,
+  cashoutEnabled: false,
+  payoutsEnabled: false,
+  stripeConnectProductionEnabled: false,
+  liveMoneyEnabled: false,
 };
 
 export type AppMonetizationRuntimeFeatures = typeof APP_MONETIZATION_RUNTIME_DEFAULTS;
@@ -179,6 +197,33 @@ export const resolveAppMonetizationRuntimeFeatures = (
   playerMidRollEnabled: typeof overrides?.playerMidRollEnabled === "boolean"
     ? overrides.playerMidRollEnabled
     : APP_MONETIZATION_RUNTIME_DEFAULTS.playerMidRollEnabled,
+  premiumPurchaseEnabled: typeof overrides?.premiumPurchaseEnabled === "boolean"
+    ? overrides.premiumPurchaseEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.premiumPurchaseEnabled,
+  paidContentCheckoutEnabled: typeof overrides?.paidContentCheckoutEnabled === "boolean"
+    ? overrides.paidContentCheckoutEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.paidContentCheckoutEnabled,
+  creatorPricingEnabled: typeof overrides?.creatorPricingEnabled === "boolean"
+    ? overrides.creatorPricingEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.creatorPricingEnabled,
+  tipsEnabled: typeof overrides?.tipsEnabled === "boolean"
+    ? overrides.tipsEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.tipsEnabled,
+  merchStoreEnabled: typeof overrides?.merchStoreEnabled === "boolean"
+    ? overrides.merchStoreEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.merchStoreEnabled,
+  cashoutEnabled: typeof overrides?.cashoutEnabled === "boolean"
+    ? overrides.cashoutEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.cashoutEnabled,
+  payoutsEnabled: typeof overrides?.payoutsEnabled === "boolean"
+    ? overrides.payoutsEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.payoutsEnabled,
+  stripeConnectProductionEnabled: typeof overrides?.stripeConnectProductionEnabled === "boolean"
+    ? overrides.stripeConnectProductionEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.stripeConnectProductionEnabled,
+  liveMoneyEnabled: typeof overrides?.liveMoneyEnabled === "boolean"
+    ? overrides.liveMoneyEnabled
+    : APP_MONETIZATION_RUNTIME_DEFAULTS.liveMoneyEnabled,
 });
 
 export const getAppMonetizationRuntimeFeatures = () => cachedAppMonetizationRuntimeFeatures;

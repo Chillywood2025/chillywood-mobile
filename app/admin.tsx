@@ -350,6 +350,17 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   creatorPayoutProviderTransferSyncFailedCount: null,
   creatorPayoutHoldCount: null,
   creatorPayoutAuditLogCount: null,
+  creatorMonetizationProfileCount: null,
+  creatorContentPriceCount: null,
+  paidContentPurchaseCount: null,
+  contentAccessGrantCount: null,
+  creatorProductCount: null,
+  creatorProductOrderCount: null,
+  creatorTipTransactionCount: null,
+  creatorEarningsLedgerCount: null,
+  creatorPayoutRequestCount: null,
+  monetizationWebhookEventCount: null,
+  monetizationAuditLogCount: null,
   networkBillingAccountCount: null,
   networkInvoiceRecordCount: null,
   networkInvoiceDraftCount: null,
@@ -5307,6 +5318,64 @@ export default function AdminStudioScreen() {
                 </Text>
               </View>
             </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Creator Monetization Foundation</Text>
+                <Text style={styles.configListBody}>
+                  Monetization profiles: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorMonetizationProfileCount,
+                    adminFinanceReadModel.loading,
+                    "profile",
+                    "profiles",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Paid content prices: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorContentPriceCount,
+                    adminFinanceReadModel.loading,
+                    "price row",
+                    "price rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Purchases/access grants: {formatAdminFinanceCount(
+                    adminFinanceReadModel.paidContentPurchaseCount,
+                    adminFinanceReadModel.loading,
+                    "purchase row",
+                    "purchase rows",
+                  )} / {formatAdminFinanceCount(
+                    adminFinanceReadModel.contentAccessGrantCount,
+                    adminFinanceReadModel.loading,
+                    "access grant",
+                    "access grants",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Products/orders: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorProductCount,
+                    adminFinanceReadModel.loading,
+                    "product",
+                    "products",
+                  )} / {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorProductOrderCount,
+                    adminFinanceReadModel.loading,
+                    "order",
+                    "orders",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Tip transactions: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorTipTransactionCount,
+                    adminFinanceReadModel.loading,
+                    "tip row",
+                    "tip rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  These are foundation/control-plane records only. No checkout success, payout release, fake purchase, fake order, fake tip, or live money action can be created from Admin.
+                </Text>
+              </View>
+            </View>
             {[
               "Subscription money is not connected yet unless real finance ledger rows exist.",
               "Ads revenue is not connected yet.",
@@ -5352,6 +5421,43 @@ export default function AdminStudioScreen() {
                 </Text>
                 <Text style={styles.configListBody}>
                   No withdrawal button, payout approval, payout provider integration, KYC flow, creator-facing balance, fake payable balance, or fake earnings are active.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Creator earnings and cash-out foundation</Text>
+                <Text style={styles.configListBody}>
+                  Immutable earnings ledger rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorEarningsLedgerCount,
+                    adminFinanceReadModel.loading,
+                    "ledger row",
+                    "ledger rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Payout/cash-out requests: {formatAdminFinanceCount(
+                    adminFinanceReadModel.creatorPayoutRequestCount,
+                    adminFinanceReadModel.loading,
+                    "request",
+                    "requests",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Monetization webhook/audit rows: {formatAdminFinanceCount(
+                    adminFinanceReadModel.monetizationWebhookEventCount,
+                    adminFinanceReadModel.loading,
+                    "webhook row",
+                    "webhook rows",
+                  )} / {formatAdminFinanceCount(
+                    adminFinanceReadModel.monetizationAuditLogCount,
+                    adminFinanceReadModel.loading,
+                    "audit row",
+                    "audit rows",
+                  )}
+                </Text>
+                <Text style={styles.configListBody}>
+                  Scheduled payouts are free later. Optional instant cash-out is planned at 1.5% with no default cap, but cash-out and payout execution remain disabled.
                 </Text>
               </View>
             </View>

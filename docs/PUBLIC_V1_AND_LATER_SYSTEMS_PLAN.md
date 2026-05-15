@@ -1498,7 +1498,7 @@ Later layers:
 - Do not promise dollars per 1,000 views, fake ad earnings, fake sponsor earnings, fake purchases, fake merch orders, fake payouts, or fake balances.
 - Ad-sharing eligibility should be channel-based: creator age 18+, verified creator/channel, public channel, no active strikes, at least 5 videos, at least 100 followers, and at least 1,000 views or 100 watch hours.
 - Stripe Connect or an equivalent marketplace provider is the preferred creator payout/commerce direction; Google Play plus RevenueCat remains Premium subscription entitlement truth.
-- These are later phase and must not be faked in v1.
+- Repo-side creator monetization foundation now exists for these rules through default-off settings, backed pricing/access/product/tip/ledger/payout-request tables, webhook idempotency, audit logs, and fail-closed RPCs. It remains foundation-only and must not be treated as live checkout, live tips, live merch sales, live creator earnings, live cash-out, live payouts, production Stripe Connect, or Premium purchase proof.
 
 ### G. Ledger requirements later
 

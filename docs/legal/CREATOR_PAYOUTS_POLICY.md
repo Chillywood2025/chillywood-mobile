@@ -6,7 +6,7 @@ Last updated: May 13, 2026
 
 ## Current Status
 
-Creator payouts are planned/foundation-only unless Chi'llywood explicitly enables them in a proved release. The current repo has read-only/foundation payout surfaces, Stripe Connect test-mode backend functions, preflight gates, and admin readouts. It does not activate live payouts, transfers, cash-out, payable balances, or withdrawal. Premium subscription revenue belongs to Chi'llywood/platform and is not split with creators.
+Creator payouts are planned/foundation-only unless Chi'llywood explicitly enables them in a proved release. The current repo has read-only/foundation payout surfaces, Stripe Connect test-mode backend functions, preflight gates, admin readouts, and a default-off creator monetization systems foundation for future paid content, products, tips, immutable earnings ledger rows, payout requests, webhook idempotency, and audit logs. It does not activate live payouts, transfers, cash-out, payable balances, withdrawal, checkout, paid status, fake purchases, fake tips, fake orders, or fake earnings. Premium subscription revenue belongs to Chi'llywood/platform and is not split with creators.
 
 ## Eligibility
 

@@ -43,6 +43,17 @@ export const CREATOR_PAYOUT_AUDIT_LOG_TABLE = "creator_payout_audit_log";
 export const CREATOR_PAYOUT_REVIEW_RECORDS_TABLE = "creator_payout_review_records";
 export const CREATOR_PAYOUT_REVIEW_NOTES_TABLE = "creator_payout_review_notes";
 export const CREATOR_PAYOUT_BATCH_ITEMS_TABLE = "creator_payout_batch_items";
+export const CREATOR_MONETIZATION_PROFILES_TABLE = "creator_monetization_profiles";
+export const CREATOR_CONTENT_PRICES_TABLE = "creator_content_prices";
+export const PAID_CONTENT_PURCHASES_TABLE = "paid_content_purchases";
+export const CONTENT_ACCESS_GRANTS_TABLE = "content_access_grants";
+export const CREATOR_PRODUCTS_TABLE = "creator_products";
+export const CREATOR_PRODUCT_ORDERS_TABLE = "creator_product_orders";
+export const CREATOR_TIP_TRANSACTIONS_TABLE = "creator_tip_transactions";
+export const CREATOR_EARNINGS_LEDGER_TABLE = "creator_earnings_ledger";
+export const CREATOR_PAYOUT_REQUESTS_TABLE = "creator_payout_requests";
+export const MONETIZATION_WEBHOOK_EVENTS_TABLE = "monetization_webhook_events";
+export const MONETIZATION_AUDIT_LOG_TABLE = "monetization_audit_log";
 
 export type AdminFinanceReadModel = {
   financeLedgerEventCount: number | null;
@@ -78,6 +89,17 @@ export type AdminFinanceReadModel = {
   creatorPayoutProviderTransferSyncFailedCount: number | null;
   creatorPayoutHoldCount: number | null;
   creatorPayoutAuditLogCount: number | null;
+  creatorMonetizationProfileCount: number | null;
+  creatorContentPriceCount: number | null;
+  paidContentPurchaseCount: number | null;
+  contentAccessGrantCount: number | null;
+  creatorProductCount: number | null;
+  creatorProductOrderCount: number | null;
+  creatorTipTransactionCount: number | null;
+  creatorEarningsLedgerCount: number | null;
+  creatorPayoutRequestCount: number | null;
+  monetizationWebhookEventCount: number | null;
+  monetizationAuditLogCount: number | null;
   networkBillingAccountCount: number | null;
   networkInvoiceRecordCount: number | null;
   networkInvoiceDraftCount: number | null;
@@ -210,6 +232,17 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutProviderTransferSyncFailedCount,
     creatorPayoutHoldCount,
     creatorPayoutAuditLogCount,
+    creatorMonetizationProfileCount,
+    creatorContentPriceCount,
+    paidContentPurchaseCount,
+    contentAccessGrantCount,
+    creatorProductCount,
+    creatorProductOrderCount,
+    creatorTipTransactionCount,
+    creatorEarningsLedgerCount,
+    creatorPayoutRequestCount,
+    monetizationWebhookEventCount,
+    monetizationAuditLogCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
     networkInvoiceDraftCount,
@@ -290,6 +323,17 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCountWhereEq(CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE, "status", "sync_failed")),
     safeRead(() => readTableCount(CREATOR_PAYOUT_HOLDS_TABLE)),
     safeRead(() => readTableCount(CREATOR_PAYOUT_AUDIT_LOG_TABLE)),
+    safeRead(() => readTableCount(CREATOR_MONETIZATION_PROFILES_TABLE)),
+    safeRead(() => readTableCount(CREATOR_CONTENT_PRICES_TABLE)),
+    safeRead(() => readTableCount(PAID_CONTENT_PURCHASES_TABLE)),
+    safeRead(() => readTableCount(CONTENT_ACCESS_GRANTS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PRODUCTS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PRODUCT_ORDERS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_TIP_TRANSACTIONS_TABLE)),
+    safeRead(() => readTableCount(CREATOR_EARNINGS_LEDGER_TABLE)),
+    safeRead(() => readTableCount(CREATOR_PAYOUT_REQUESTS_TABLE)),
+    safeRead(() => readTableCount(MONETIZATION_WEBHOOK_EVENTS_TABLE)),
+    safeRead(() => readTableCount(MONETIZATION_AUDIT_LOG_TABLE)),
     safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
     safeRead(() => readTableCount(NETWORK_INVOICE_RECORDS_TABLE)),
     safeRead(() => readTableCountWhereEq(NETWORK_INVOICE_RECORDS_TABLE, "status", "draft")),
@@ -372,6 +416,17 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutProviderTransferSyncFailedCount,
     creatorPayoutHoldCount,
     creatorPayoutAuditLogCount,
+    creatorMonetizationProfileCount,
+    creatorContentPriceCount,
+    paidContentPurchaseCount,
+    contentAccessGrantCount,
+    creatorProductCount,
+    creatorProductOrderCount,
+    creatorTipTransactionCount,
+    creatorEarningsLedgerCount,
+    creatorPayoutRequestCount,
+    monetizationWebhookEventCount,
+    monetizationAuditLogCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
     networkInvoiceDraftCount,

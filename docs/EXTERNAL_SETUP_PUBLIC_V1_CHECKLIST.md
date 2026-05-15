@@ -37,6 +37,10 @@ Supabase linked DB CLI auth is no longer the VOD live-enforcement blocker. Migra
 
 Existing standalone Player proof video `84c486e9-a62e-4121-8e70-ee79e17b1bf0` can be used as the next proof candidate once an authenticated proof path is available. The current blocker is not schema or function deployment; it is real source/rendition file access plus real owner/free/Premium auth contexts. Do not insert ready rendition rows, claim Free/Premium VOD enforcement, or claim HD Premium proof until actual files and entitlements are proved.
 
+## Creator Monetization / Stripe Connect / Live Money
+
+Repo-side creator monetization systems foundation now exists in `202605140011_creator_monetization_systems_foundation.sql`, `_lib/creatorMonetization.ts`, Admin readouts, and Platform Studio copy. All live-money flags default off. The foundation covers creator pricing/access-control records, product/order records, tip records, append-only earnings ledger, payout request records, webhook idempotency, audit logs, and fail-closed RPCs. This is not live money: paid creator checkout, tips, merch checkout, cash-out, payout execution, production Stripe Connect, and real paid-content access grants remain external/provider/legal/security proof blockers. Do not configure Stripe production transfers, Stripe checkout, Google Play paid-content products, provider webhooks, cash-out, or payouts from this checklist unless a later exact lane proves provider policy, legal/tax/accounting, fraud/DMCA holds, refunds/chargebacks, idempotency, immutable audit, Owner approval, and secret storage.
+
 The Free rendition proof currently needs one safe authenticated source-access path before work can continue. The proof shell has `ffmpeg` and `ffprobe`, but no owner/test auth session for owner `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f`, no service-role/operator source-download path, no S3 credentials, and no usable linked database password. Provide an approved owner/test session or server-side operator path, then generate/upload real non-upscaled 360p/480p files and insert trusted rows only for those real files.
 
 ## Read-Only Audit Snapshot

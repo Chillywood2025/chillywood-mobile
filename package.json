@@ -15,6 +15,7 @@
     "validate:runtime": "node ./scripts/validate-runtime.mjs",
     "lint": "expo lint",
     "guard:refresh-policy": "node ./scripts/guard-refresh-policy.mjs",
+    "guard:creator-monetization-policy": "node ./scripts/guard-creator-monetization-policy.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs",
     "typecheck": "tsc --noEmit && npm run guard:watch-party-livekit"
