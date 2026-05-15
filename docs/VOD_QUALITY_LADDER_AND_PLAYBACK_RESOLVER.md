@@ -54,6 +54,8 @@ The next live proof pass selected existing standalone Player creator-video proof
 
 That pass did not create rendition rows because the proof environment had no real owner/free/Premium auth sessions and no local S3 signing credentials. Anonymous resolver proof returns `pending_renditions` with no allowed qualities, anonymous direct `video_renditions` read/write is denied, and anonymous `media-storage` signing returns `401 missing_auth`. The next proof needs a safe authenticated owner/test session or server-side operator proof path to download the real source, generate real non-upscaled renditions, upload actual files, and insert trusted rows only for those files.
 
+The Free VOD rendition enforcement proof was retried against the same selected video and stopped before source download. `ffmpeg` and `ffprobe` are installed locally, but this shell has no owner/test auth session for owner `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f`, no safe service-role/operator source-download path, no S3 storage credentials, and no usable linked database password. Because an allowed actor could not sign/download the source, no ffprobe metadata proof, 360p/480p file generation, storage upload, trusted `video_renditions` insert, or processing/failed proof rows were created. Free signed-in resolver/signing proof remains blocked; the existing anonymous proof remains fail-closed with `pending_renditions`, direct `video_renditions` denial, and `401 missing_auth` from `media-storage`.
+
 ## Current Limits
 
 - This lane does not create a transcoder.

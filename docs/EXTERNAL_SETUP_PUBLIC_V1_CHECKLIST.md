@@ -37,6 +37,8 @@ Supabase linked DB CLI auth is no longer the VOD live-enforcement blocker. Migra
 
 Existing standalone Player proof video `84c486e9-a62e-4121-8e70-ee79e17b1bf0` can be used as the next proof candidate once an authenticated proof path is available. The current blocker is not schema or function deployment; it is real source/rendition file access plus real owner/free/Premium auth contexts. Do not insert ready rendition rows, claim Free/Premium VOD enforcement, or claim HD Premium proof until actual files and entitlements are proved.
 
+The Free rendition proof currently needs one safe authenticated source-access path before work can continue. The proof shell has `ffmpeg` and `ffprobe`, but no owner/test auth session for owner `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f`, no service-role/operator source-download path, no S3 credentials, and no usable linked database password. Provide an approved owner/test session or server-side operator path, then generate/upload real non-upscaled 360p/480p files and insert trusted rows only for those real files.
+
 ## Read-Only Audit Snapshot
 
 - Repo root: `/Users/loverslane/chillywood-mobile`
