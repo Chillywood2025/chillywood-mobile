@@ -35,6 +35,8 @@ Repo-side VOD quality ladder foundation now exists: `video_renditions`, `resolve
 
 Supabase linked DB CLI auth is no longer the VOD live-enforcement blocker. Migration `202605140010_vod_quality_ladder_resolver.sql` is remote-applied, post-apply dry-run says the remote database is up to date, and `media-storage` is deployed as ACTIVE version 37 with no-auth signing denial proved. External/product proof is still required for real safe rendition files, trusted `video_renditions` rows, real viewer/owner auth contexts, and backed Premium entitlement before launch can claim live Free/Premium VOD quality enforcement.
 
+Existing standalone Player proof video `84c486e9-a62e-4121-8e70-ee79e17b1bf0` can be used as the next proof candidate once an authenticated proof path is available. The current blocker is not schema or function deployment; it is real source/rendition file access plus real owner/free/Premium auth contexts. Do not insert ready rendition rows, claim Free/Premium VOD enforcement, or claim HD Premium proof until actual files and entitlements are proved.
+
 ## Read-Only Audit Snapshot
 
 - Repo root: `/Users/loverslane/chillywood-mobile`

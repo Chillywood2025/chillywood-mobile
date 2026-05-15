@@ -48,6 +48,12 @@ As of 2026-05-14, live VOD enforcement is not closed, but the schema/function de
 
 The remaining blocker is real playback proof data and real auth contexts. No trusted `video_renditions` rows were inserted, no real rendition files were created or proved, and no backed Premium entitlement was proved in this lane. Do not claim live Free/Premium VOD enforcement until real files exist, trusted rows reference only those files, and resolver/media-storage proof passes for free viewer, Premium viewer or fail-closed entitlement blocking, owner status, original/master privacy, direct-path denial, and processing/failed denial.
 
+## Existing Player Test Video Attempt
+
+The next live proof pass selected existing standalone Player creator-video proof row `84c486e9-a62e-4121-8e70-ee79e17b1bf0`, safe label `S3 Runtime Proof 2026-04-30T21-46-14-025Z`. Prior artifacts show it opened through `/player/84c486e9-a62e-4121-8e70-ee79e17b1bf0?source=creator-video`, and public metadata shows it is public/clean S3 media in `chillywood-media-prod`.
+
+That pass did not create rendition rows because the proof environment had no real owner/free/Premium auth sessions and no local S3 signing credentials. Anonymous resolver proof returns `pending_renditions` with no allowed qualities, anonymous direct `video_renditions` read/write is denied, and anonymous `media-storage` signing returns `401 missing_auth`. The next proof needs a safe authenticated owner/test session or server-side operator proof path to download the real source, generate real non-upscaled renditions, upload actual files, and insert trusted rows only for those files.
+
 ## Current Limits
 
 - This lane does not create a transcoder.
