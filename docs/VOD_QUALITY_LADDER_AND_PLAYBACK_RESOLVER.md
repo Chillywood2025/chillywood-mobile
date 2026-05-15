@@ -44,9 +44,9 @@ Client integration:
 
 ## Live Proof Status
 
-As of 2026-05-14, live VOD enforcement is not closed. The linked Supabase project was confirmed as `bmkkhihfbmsnnmcqkoly` / Chillywood2025's Project and relinked for IPv4 without printing secrets. A dry-run showed only `202605140010_vod_quality_ladder_resolver.sql` pending. The required post-relink `supabase migration list` and `supabase db lint --linked --schema public --fail-on error` then failed with Supabase pooler `(ECIRCUITBREAKER) too many authentication failures` for `cli_login_postgres.bmkkhihfbmsnnmcqkoly` and requested `SUPABASE_DB_PASSWORD`.
+As of 2026-05-14, live VOD enforcement is not closed, but the schema/function deployment blocker is cleared. The linked Supabase project was confirmed as `bmkkhihfbmsnnmcqkoly` / Chillywood2025's Project. Linked migration list and linked schema lint passed, dry-run showed only `202605140010_vod_quality_ladder_resolver.sql`, migration `202605140010` was applied remotely, post-apply migration list shows local/remote alignment through `202605140010`, and post-apply dry-run says the remote database is up to date. `media-storage` was deployed as ACTIVE version 37, OPTIONS returned `200`, and a no-auth signing request returned `401 missing_auth`.
 
-Because linked migration list and linked lint did not both pass, migration `202605140010` has not been applied remotely, `media-storage` has not been deployed from this lane, no trusted rendition rows were inserted, and no real rendition files were created or proved. Do not apply, deploy, or write proof rows until linked migration list, linked lint, and `supabase db push --dry-run` all pass and the dry-run still shows only `202605140010`.
+The remaining blocker is real playback proof data and real auth contexts. No trusted `video_renditions` rows were inserted, no real rendition files were created or proved, and no backed Premium entitlement was proved in this lane. Do not claim live Free/Premium VOD enforcement until real files exist, trusted rows reference only those files, and resolver/media-storage proof passes for free viewer, Premium viewer or fail-closed entitlement blocking, owner status, original/master privacy, direct-path denial, and processing/failed denial.
 
 ## Current Limits
 
