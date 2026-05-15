@@ -25,7 +25,6 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
   const redirectTo = String(params.redirectTo ?? "").trim() || "/";
-  const isAdminSignIn = redirectTo === "/admin";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -93,28 +92,13 @@ export default function Login() {
           <View style={styles.card}>
             <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
             <Text style={styles.title}>
-              {isAdminSignIn
-                ? "Admin Command Center Sign In"
-                : isClosedBetaEnvironment()
-                  ? "Closed Beta Sign In"
-                  : "Sign In"}
+              {isClosedBetaEnvironment() ? "Closed Beta Sign In" : "Sign In"}
             </Text>
             <Text style={styles.subtitle}>
-              {isAdminSignIn
-                ? "Enter your Chi'llywood operator account. Admin access still requires an active platform role after sign-in."
-                : isClosedBetaEnvironment()
+              {isClosedBetaEnvironment()
                 ? "Use the invited Chi'llywood account for room access, feedback capture, and rollout verification."
                 : "Sign in to join rooms, manage your channel, unlock eligible access, and send support reports."}
             </Text>
-
-            {isAdminSignIn ? (
-              <View style={styles.adminNotice}>
-                <Text style={styles.adminNoticeTitle}>Operator route selected</Text>
-                <Text style={styles.adminNoticeBody}>
-                  After sign-in, Chi&apos;llywood will open `/admin`. Normal signed-in and platform-role checks still apply.
-                </Text>
-              </View>
-            ) : null}
 
             <TextInput
               style={styles.input}
@@ -156,18 +140,6 @@ export default function Login() {
               <Link href={{ pathname: "/(auth)/signup", params: { redirectTo } }} style={styles.link}>
                 Sign up
               </Link>
-            </View>
-
-            <View style={styles.adminRow}>
-              {isAdminSignIn ? (
-                <Link href={{ pathname: "/(auth)/login", params: { redirectTo: "/" } }} style={styles.secondaryLink}>
-                  Regular sign in
-                </Link>
-              ) : (
-                <Link href={{ pathname: "/(auth)/login", params: { redirectTo: "/admin" } }} style={styles.secondaryLink}>
-                  Admin Command Center sign in
-                </Link>
-              )}
             </View>
           </View>
         </ScrollView>
@@ -220,27 +192,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 20,
   },
-  adminNotice: {
-    borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.34)",
-    backgroundColor: "rgba(220,20,60,0.1)",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-  },
-  adminNoticeTitle: {
-    color: "#F5F7FB",
-    fontSize: 12,
-    fontWeight: "900",
-    marginBottom: 6,
-    textTransform: "uppercase",
-  },
-  adminNoticeBody: {
-    color: "#B8C1D6",
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontWeight: "600",
-  },
   input: {
     backgroundColor: "rgba(255,255,255,0.04)",
     borderWidth: 1,
@@ -268,16 +219,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 18,
   },
-  adminRow: {
-    alignItems: "center",
-    marginTop: 14,
-  },
   muted: { color: "#9aa0a6" },
   link: { color: "#DC143C", fontWeight: "700" },
-  secondaryLink: {
-    color: "#AEB7CC",
-    fontSize: 13,
-    fontWeight: "800",
-    textDecorationLine: "underline",
-  },
 });

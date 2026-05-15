@@ -54,7 +54,7 @@ Proof facts:
 - The ADI APK is archive proof only and is no longer operationally needed.
 - No private keys, keystore passwords, Play service account JSON, credential files, or signing secrets are committed.
 
-This proof does not close production release readiness. A current production AAB was later built through EAS as `aedded50-3818-4d7b-8bcf-9bb9c2d36513` with versionCode `2`, but the first Google Play upload/internal-testing submission remains manual because EAS submit reported that the first submission of the app must be performed manually. RevenueCat/Google Play purchase/restore proof, Google Play Data Safety/account deletion acceptance, and release-route smoke remain separate.
+This proof does not close production release readiness. A production AAB was built through EAS as `aedded50-3818-4d7b-8bcf-9bb9c2d36513` with versionCode `2`, and that first AAB was manually uploaded to Google Play Internal Testing as `Internal test v2 - RevenueCat Premium setup`. After the manual upload, Android Publisher API package visibility for `com.chillywood.mobile` returns `200`, but the Google Play subscription `premium_subscription` is still missing and CLI product/base-plan setup is blocked by Play monetization permission/manual setup. A newer production build `96e60082-00b1-48dc-843b-132ce82a7710` completed after the public Admin sign-in link removal, incremented versionCode to 3, and produced an AAB artifact. EAS submit targeted the internal track only and failed because the service account is missing the necessary app-level Google Play submit permission. RevenueCat/Google Play purchase/restore proof, Google Play Data Safety/account deletion acceptance, and release-route smoke remain separate.
 
 ## Official Setup References
 
@@ -300,7 +300,7 @@ Before production AAB:
 After production AAB:
 
 1. Download or reference the AAB from EAS without committing artifacts.
-2. Upload manually to Google Play internal testing first if this is the first upload. EAS submit proof on build `aedded50-3818-4d7b-8bcf-9bb9c2d36513` confirmed Google/EAS still requires the first submission to be manual.
+2. For the first upload, use the already-completed manual Play Console path; build `aedded50-3818-4d7b-8bcf-9bb9c2d36513` / versionCode `2` is uploaded to Internal Testing. Later builds may use EAS submit only when configured for the internal track and after the build artifact exists.
 3. Complete Data Safety, account deletion, content rating, camera/microphone declarations, store listing assets, and billing/subscription setup.
 4. Install from internal testing on at least one physical Android device.
 5. Run final route smoke and release log audit.
@@ -311,7 +311,7 @@ After production AAB:
 | Area | Status | Reason | Next action |
 | --- | --- | --- | --- |
 | EAS project/config | Implemented / Proof Pending | Project id, updates URL, and profiles exist | Run preview/production build after proof lanes |
-| Production AAB profile | Implemented / Current AAB Built | `production` profile uses Android `app-bundle`; build `aedded50-3818-4d7b-8bcf-9bb9c2d36513` completed for versionCode `2` | Manually upload the AAB to Play internal testing as first submission |
+| Production AAB profile | Implemented / Internal Submit Permission Blocked | `production` profile uses Android `app-bundle`; build `aedded50-3818-4d7b-8bcf-9bb9c2d36513` completed for versionCode `2` and was manually uploaded to Internal Testing; build `96e60082-00b1-48dc-843b-132ce82a7710` completed for versionCode `3`; EAS internal-track submit failed because the service account lacks app-level submit permission | Grant the service account exact app-level release submit permission or upload the versionCode 3 AAB manually to Internal Testing |
 | Preview/internal profile | Implemented / Proof Pending | `preview` profile exists, but Android artifact type is not explicitly pinned | Use for internal release-like testing or add explicit artifact type later |
 | EAS login | Proof Pending | Local session was authenticated during audit, but this is machine/user state | Release owner verifies before build |
 | Android signing credentials | External Setup Pending | Not inspected or generated in this lane | Run `npx eas-cli credentials --platform android` manually |
