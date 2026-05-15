@@ -355,6 +355,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Free users see ads at launch.
 - Premium users see no ads.
 - Planned Premium price: `$9.99/month` and `$99/year`.
+- Premium uses Google Play plus RevenueCat entitlement `premium`; Premium subscription revenue belongs to Chi'llywood/platform, is not split with creators, and must not create a creator subscription revenue pool.
 - Full live/watch-party access is Premium and must not be made free again without an explicit product decision.
 - Free users may only get live/watch-party preview in a separate future pass if explicitly designed safely; no preview mode exists now.
 - Ads support free browsing.
@@ -368,6 +369,7 @@ Required proof before the next Admin V1B2 runtime-control enforcement:
 - Launch app ads are platform money at first. RevenueCat remains Premium subscription truth only and does not take ad revenue. Google Play does not take a subscription fee from AppLovin ad payouts.
 - Creator-page ad revenue share is later: creator 70% net and Chi'llywood 30% net. Creator-sold sponsor slots are later: brand pays Chi'llywood first, creator 80% net, and Chi'llywood 20% net.
 - No live creator ad revenue sharing, payout execution, sponsor deal execution, or CTV revenue system exists yet; finance and payout-provider tables are foundation-only.
+- Creator mini-platform monetization remains later/foundation-only: Premium creators may eventually sell paid videos, rooms, posts/content, collections, events, VIP access, channel subscriptions/fan memberships, and merch/products/clothing from Studio/mini-platform surfaces, while free viewers may buy paid creator content/products without Premium. Paid creator content and creator merch/product sales are separate from Premium subscription revenue. Creator paid content split is creator 80% net / Chi'llywood 20% net. Tips remain creator 100% of the tip amount/net tip with separate disclosed service/platform/provider/cash-out fees where allowed. Scheduled payouts are free; optional instant cash-out preferred direction is 1.5% with no default cap. Do not add fake purchases, fake merch orders, fake earnings, fake balances, payout release, transfer creation, or live money movement.
 - CTV ads are future-only for Chi'llywood Originals and network-style content and are not active now.
 - Storage doctrine: Cloudflare R2 for public/high-download media; Hetzner Object Storage for source/original uploads, drafts, backups, archive, private/held/deleted media; Hetzner/OVH boxes for LiveKit and real-time live/watch-party traffic.
 

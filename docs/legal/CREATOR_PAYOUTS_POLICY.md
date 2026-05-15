@@ -6,7 +6,7 @@ Last updated: May 13, 2026
 
 ## Current Status
 
-Creator payouts are planned/foundation-only unless Chi'llywood explicitly enables them in a proved release. The current repo has read-only/foundation payout surfaces, Stripe Connect test-mode backend functions, preflight gates, and admin readouts. It does not activate live payouts, transfers, cash-out, payable balances, or withdrawal.
+Creator payouts are planned/foundation-only unless Chi'llywood explicitly enables them in a proved release. The current repo has read-only/foundation payout surfaces, Stripe Connect test-mode backend functions, preflight gates, and admin readouts. It does not activate live payouts, transfers, cash-out, payable balances, or withdrawal. Premium subscription revenue belongs to Chi'llywood/platform and is not split with creators.
 
 ## Eligibility
 
@@ -27,7 +27,7 @@ If payouts become active, eligibility may require:
 
 [PAYOUT SCHEDULE PLACEHOLDER]
 
-Standard scheduled creator payouts remain the preferred free payout direction in repo doctrine. Instant Payout / Instant Cash Out is a later monetized lane and must be clearly disclosed if enabled.
+Standard scheduled creator payouts remain the preferred free payout direction in repo doctrine. Instant Payout / Instant Cash Out is a later optional monetized lane. The preferred creator-facing instant cash-out fee direction is `1.5%` of the cash-out amount with no default cap, subject to Stripe/provider/legal/accounting review before live payouts. Any instant cash-out fee must be separate from creator earnings, must not be taken from the creator's tip amount, and must be clearly disclosed before confirmation.
 
 ## Platform Share / Fees
 
@@ -35,13 +35,20 @@ Repo truth currently says:
 
 - creator-page ad revenue share later: creator 70% net, Chi'llywood 30% net;
 - creator-sold sponsor slots later: creator 80% net, Chi'llywood 20% net;
-- preferred Chi'llywood platform cut for paid content later: 20% of net receipts;
+- preferred paid creator content split later: creator 80% net, Chi'llywood 20% net;
 - creators keep 100% of the tip amount/net tip in current doctrine;
 - any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed;
 - tips do not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods;
-- non-tip payout calculations use net receipts actually received after app-store fees, taxes, refunds, chargebacks, and adjustments, not gross sticker price.
+- creator merch/product/commerce sales are future Studio/mini-platform monetization and remain inactive until a backed commerce/provider path exists;
+- non-tip payout calculations use net receipts actually received after store/payment fees, taxes, refunds, chargebacks, provider fees, and adjustments, not gross sticker price.
 
 These are planning rules, not active payout promises.
+
+## Provider Direction And Permissions
+
+Stripe Connect or an equivalent marketplace payout provider is the preferred direction for creator payout onboarding, KYC/tax readiness, connected-account tracking, transfers, payout rails, 1099/tax tooling, tips, sponsor payments, marketplace/network money, paid content payouts, and merch/product payouts. Google Play plus RevenueCat remains the Premium subscription entitlement path and must not become the creator payout system.
+
+Future Owner/Admin money permissions must be role-controlled and server-side. Owners may configure payout/monetization settings later through backed workflows. Admins may view payout/readiness/status panels and flag payout issues where backed, but must not directly edit creator balances or release money without a backed Owner-approved server-side flow. Moderators have no money access.
 
 ## Holds, Reversals, And Forfeiture
 

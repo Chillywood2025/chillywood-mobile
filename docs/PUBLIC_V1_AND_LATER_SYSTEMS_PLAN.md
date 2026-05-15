@@ -1406,6 +1406,8 @@ Future backend tables:
 - `creator_monetization_settings`
 - `paid_content_access`
 - `creator_earnings_ledger`
+- `creator_product_listings`
+- `creator_product_orders`
 - `user_wallets`
 - `coin_transactions`
 - `tip_transactions`
@@ -1420,7 +1422,9 @@ Future backend tables:
 
 - pricing strategy
 - premium tiers
+- creator mini platform commerce direction
 - creator paid media later
+- creator merch/product sales later
 - tips/coins later
 - ad strategy later
 - platform revenue share
@@ -1449,6 +1453,7 @@ Public v1:
 - Creator uploads can exist without creator payouts in v1.
 - No paid creator videos in v1 unless intentionally built and fully proved.
 - No subscriber-only creator videos in v1.
+- No creator merch/product checkout in v1 unless intentionally built and fully proved.
 - No tips/coins/payouts in v1.
 - No ads in v1 unless intentionally integrated and compliant.
 
@@ -1463,23 +1468,36 @@ Later layers:
 5. Tips.
 6. Chi'llywood coins or credits.
 7. VIP access.
-8. Ads.
-9. Creator payouts.
-10. Platform share.
-11. Taxes/KYC/1099.
-12. Chargebacks/refunds/holds.
+8. Paid creator posts/content, collections, and events.
+9. Creator merch, products, clothing, and other allowed items.
+10. Ads.
+11. Creator payouts.
+12. Platform share.
+13. Taxes/KYC/1099.
+14. Chargebacks/refunds/holds.
 
 ### F. Known business rules to preserve
 
+- Premium is `$9.99/month`, uses Google Play plus RevenueCat, and unlocks platform/creator tools and Premium-only features through RevenueCat entitlement `premium`.
+- Premium subscription revenue belongs to Chi'llywood/platform, is not split with creators, and must not create a creator subscription revenue pool.
+- Premium creators can monetize their creator mini platform when backed, choose free or paid content, and set prices where pricing is backed.
+- Free viewers can buy and watch paid creator content without Premium, but they still cannot enter Premium-only Live, Watch-Party, creator hosting, or other Premium-only platform features.
+- Do not confuse `Premium subscriber` with `paid content buyer`.
+- Creator paid content later uses creator 80% net and Chi'llywood 20% net.
 - Creators keep 100% of the tip amount/net tip.
 - Chi'llywood should not take a direct percentage cut from the tip amount.
 - Any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed.
 - Tips do not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods.
-- Platform share on paid content later can be 20% of net receipts.
-- Net receipts means after app-store fees, taxes, refunds, chargebacks, and adjustments.
+- Creator merch/product sales later belong in Studio/mini-platform commerce and require product listings, prices, inventory/status where needed, fulfillment/shipping for physical goods, refunds/disputes, payout ledger entries, and tax/provider/legal review.
+- Net receipts means after store/payment fees, taxes, refunds, chargebacks, provider fees, and adjustments.
 - Standard scheduled creator payouts remain free.
-- Instant Payout / Instant Cash Out may have fees later.
-- Withdrawal/transaction fees may exist later.
+- Instant Payout / Instant Cash Out may have a separate optional fee later; preferred direction is `1.5%` of the cash-out amount with no default cap, subject to provider/legal/accounting review.
+- The instant cash-out fee is not taken from the creator's tip amount. If a user tips `$10`, the creator tip amount remains `$10`.
+- Platform-served creator ads later use creator 70% net and Chi'llywood 30% net.
+- Creator-sold sponsor slots later use creator 80% net and Chi'llywood 20% net.
+- Do not promise dollars per 1,000 views, fake ad earnings, fake sponsor earnings, fake purchases, fake merch orders, fake payouts, or fake balances.
+- Ad-sharing eligibility should be channel-based: creator age 18+, verified creator/channel, public channel, no active strikes, at least 5 videos, at least 100 followers, and at least 1,000 views or 100 watch hours.
+- Stripe Connect or an equivalent marketplace provider is the preferred creator payout/commerce direction; Google Play plus RevenueCat remains Premium subscription entitlement truth.
 - These are later phase and must not be faked in v1.
 
 ### G. Ledger requirements later

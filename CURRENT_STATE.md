@@ -217,6 +217,7 @@ D9 production notifications/activity is closed for Android. Migration `202605120
 - Free users see ads at launch.
 - Premium users see no ads.
 - Planned Premium price is `$9.99/month` and `$99/year`.
+- Premium uses Google Play plus RevenueCat entitlement `premium`; Premium subscription revenue belongs to Chi'llywood/platform, is not split with creators, and must not create a creator subscription revenue pool.
 - Full live/watch-party access is Premium and must not be made free again without an explicit product decision.
 - Free users do not get full Live First, Live Watch-Party, Watch-Party Live, or full LiveKit room/token/connect access.
 - Free preview was not added. Any future live/watch-party preview must be a separate, explicitly scoped, limited, low-cost, separately gated pass.
@@ -231,6 +232,7 @@ D9 production notifications/activity is closed for Android. Migration `202605120
 - Ads must not appear inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, immediately at app launch, in Admin, in Channel Studio, in Chat, or in Profile/composer contexts unless explicitly redesigned later.
 - Launch app ads are platform money at first. RevenueCat remains Premium subscription truth only and does not take ad revenue. Google Play does not take a subscription fee from AppLovin ad payouts.
 - Creator-page ad revenue share is later: creator 70% net and Chi'llywood 30% net. Creator-sold sponsor slots are later: brand pays Chi'llywood first, creator 80% net, and Chi'llywood 20% net. No live creator ad revenue sharing, payout execution, sponsor deal execution, or CTV revenue system exists yet; finance and payout-provider tables are foundation-only.
+- Creator mini-platform monetization is later/foundation-only: Premium creators may eventually sell paid videos, rooms, posts/content, collections, events, VIP access, channel subscriptions/fan memberships, and merch/products/clothing from Studio/mini-platform surfaces, while free viewers may buy paid creator content/products without Premium. Paid creator content and creator merch/product sales are separate from Premium subscription revenue. Creator paid content split is creator 80% net / Chi'llywood 20% net. Tips remain creator 100% of the tip amount/net tip with any service/platform/provider/cash-out fee separate and disclosed where allowed. Scheduled payouts are free; optional instant cash-out preferred direction is 1.5% with no default cap. No live tips, paid creator purchases, merch orders, creator earnings, payable balances, cash-out, payout release, or live money movement exists.
 - CTV ads are future-only for Chi'llywood Originals and network-style content; no CTV inventory is active now.
 - Storage doctrine: Hetzner Object Storage is the current object-storage target, including the D7E public-safe HLS delivery proof lane; Cloudflare R2 is a possible later public/high-download media direction only after an explicit provider activation lane; Hetzner/OVH boxes remain the direction for LiveKit and real-time live/watch-party traffic.
 

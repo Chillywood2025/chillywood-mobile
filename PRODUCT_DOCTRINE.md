@@ -35,24 +35,43 @@ Use native mobile layout systems intentionally: grid systems for people/content 
 Any generated route, room, or screen is incomplete unless it includes role-aware and permission-aware controls, empty/loading/error/locked states, safe-area and keyboard behavior where relevant, touch-friendly controls, no clipped/overlapping text or controls, and a proof plan. UI polish must not add fake data, fake counts, fake participants, fake money, fake messages, fake recommendations, route ownership changes, backend behavior changes, or Premium/role boundary changes.
 
 ## Monetization Core
-- creators can choose whether content is free or paid
-- preset price tiers are preferred over arbitrary pricing
+- Premium is the platform subscription. It uses Google Play plus RevenueCat, RevenueCat entitlement `premium`, and the current planned price is `$9.99/month` and `$99/year`.
+- Premium subscription revenue belongs to Chi'llywood/platform. It must not be split with creators, must not create a creator subscription revenue pool, and must not be treated as creator earnings.
+- RevenueCat remains the Premium subscription truth owner. Premium gates must be entitlement-backed, not local fake flags, local-only bypasses, manual Admin toggles, or client-only state.
+- RevenueCat/Google Play purchase proof remains pending until a release-like Android build proves product load, purchase sheet, purchase, restore, active entitlement, and expired/revoked blocking.
+- Premium unlocks platform features, Premium-only live/watch-party access, creator tools, and future creator monetization tools where backed.
+- Creator Channel/Studio is the creator mini platform direction. Public-facing docs/copy may call it a mini platform where appropriate, but technical route/table names do not need to be renamed.
+- The creator mini platform is free by default for viewers.
+- Premium creators can monetize their mini platform when the relevant tool is backed.
+- Premium creators can choose whether each content item is free or paid where pricing is backed.
+- Premium creators can set their own price per paid content item where price controls are backed; preset price tiers remain preferred over arbitrary pricing.
+- Viewers/buyers do not need Premium to buy and watch paid creator content. Free users can buy paid creator content without becoming Premium.
+- Free users still cannot enter Premium-only Live First, Live Watch-Party, Watch-Party Live, creator hosting, or other Premium-only platform features.
+- Do not confuse `Premium subscriber` with `paid content buyer`.
 - Chi'llywood Premium gates all full live/watch-party access: Live First, Live Watch-Party, and Watch-Party Live
 - Live First is no longer free full access
 - free users do not get full live/watch-party access, full LiveKit room tokens, or full LiveKit room/connect access
 - no free live/watch-party preview mode exists; any future preview must be explicitly designed, limited, low-cost, separately gated, and proved safely
-- the current planned Premium price is `$9.99/month` and `$99/year`
 - Premium supports expensive live usage
-- RevenueCat remains the Premium subscription truth owner
+- paid creator content is free by default unless the creator marks it paid through a backed monetization tool
+- later paid creator monetization includes paid videos, paid rooms, paid posts/content, paid collections, paid events, VIP access, and channel subscriptions/fan memberships
+- creator paid content split is creator 80% net and Chi'llywood 20% net
+- net receipts means after store/payment fees, taxes, refunds, chargebacks, provider fees, and adjustments
+- do not promise exact dollars per view or guaranteed earnings
+- do not create fake paid content purchases, fake access records, fake creator sales, fake earnings, or fake balances
 - creators keep 100% of the tip amount/net tip
 - tips are anonymous to other users but fully traceable in backend and admin records
 - Chi'llywood should not take a direct percentage cut from the tip amount
 - any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed
 - tips must not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods
-- Chi'llywood's main platform percentage should come from paid content sales
+- if a user tips `$10`, the creator tip amount remains `$10`; any allowed Chi'llywood or provider fee must be separate and disclosed where allowed
+- Chi'llywood's main creator-commerce platform percentage should come from paid content and other marketplace/commerce sales, not hidden cuts from 100%-to-creator tip copy
+- merch, products, clothing, and other allowed creator sales belong in the future Studio/mini-platform commerce direction
+- creator merch/product sales are separate from Premium subscription revenue, and viewers do not need Premium to buy creator merch/products
+- merch/product sales need a future commerce/provider path, likely Stripe Connect or a commerce provider, plus product listings, prices, inventory/status where needed, fulfillment/shipping status for physical goods, refunds/disputes, payout ledger entries, and tax/provider/legal review
+- do not create fake product orders, fake inventory, fake shipping, fake product payouts, or live commerce checkout without a separate proved lane
 - creator payouts should be calculated from net receipts actually received after app-store fees, taxes, refunds, chargebacks, and adjustments, not gross sticker price
 - if app currency is used for tipping, it should be treated as internal app coins or credits, not crypto or blockchain tokens
-- the current preferred Chi'llywood platform cut for paid content is 20% of net receipts
 
 ## Premium And Ticketed Room Doctrine
 - Premium access, ticketed events, and paid room entry are approved Chi'llywood directions, but they must stay compatible with the layered room-participation model defined in `ROOM_BLUEPRINT.md`.
@@ -74,13 +93,23 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 
 ## Payout Direction
 - standard scheduled creator payouts remain free
-- the monetized fee lane is `Instant Payout` / `Instant Cash Out`
-- `up to $25`: about `$0.50-$0.75`
-- `$25.01-$200`: `$1.99`
-- `above $200`: small percentage with a cap rather than a flat fee; the preferred example is `1.5%` capped at `$4.99`
-- the fee must be clearly labeled and clearly disclosed as `Instant Payout` / `Instant Cash Out`
+- optional instant payout / instant cash-out is the monetized fee lane
+- the preferred creator-facing instant cash-out fee is `1.5%` of the cash-out amount
+- there is no default cap on the `1.5%` instant cash-out fee unless the owner explicitly approves a cap in a later lane
+- final cash-out fee schedule requires Stripe/provider/legal/accounting review before live payouts
+- instant cash-out fees are separate from creator earnings and are not taken from the creator's tip amount
+- every instant payout / instant cash-out fee must be clearly labeled and clearly disclosed before confirmation
+- payout holds should support a 7-30 day window before money is treated as payable
+- balances must account for refunds, chargebacks, taxes, provider fees, holds, fraud, DMCA, suspension, and adjustments
+- do not call money `available` until it is actually payable
 - creator payout infrastructure should assume Stripe Connect or an equivalent marketplace payout layer
+- Stripe Connect is preferred for creator payout onboarding, KYC/tax readiness, provider account tracking, transfers, payout rails, 1099/tax tooling, tips, sponsor payments, marketplace/network money, paid content payouts, and merch/product payouts
+- Google Play plus RevenueCat is for Premium subscription entitlement; Stripe must not be used as the Premium entitlement source of truth
 - creator payouts must remain separate from app-store billing and separate from RevenueCat
+- the mobile app must not directly write creator earnings or payout balances
+- Admins must not freely edit creator balances; future money actions need backed server-side workflows, role control, immutable audit, and Owner-approved policy
+- Moderators have no money access, though backed moderation/DMCA/fraud actions may later affect payout eligibility
+- Creators may view their own monetization readiness, connect payout accounts later, view real ledger rows when backed, and set eligible/Premium creator prices later, but they cannot edit ledgers, payout balances, or platform fees
 - Finance F2B creator payout provider schema foundation is pushed and remote-applied/type-refreshed. It defines future payout accounts, payout batches, provider transfers, payout holds, and immutable payout audit logs only; it does not add Stripe SDKs/keys/provider calls, payout buttons, withdrawal buttons, creator self-read on provider account/transfer tables, moderator access, live payout execution, or runtime UI.
 - Creator Payout Read-Only Dashboard Foundation is pushed as a Channel Studio foundation surface only. Payouts live in Channel Studio after Insights and before Brand, and the Home Payouts card switches to that tab. The dashboard is read-only and says creator payouts are not active yet; it shows no Withdraw, Cash Out, Connect Stripe, KYC live flow, tax form flow, payout approval/release, transfer creation, fake payable balance, fake earnings, or live money movement. Migration `supabase/migrations/202605080007_creator_payout_dashboard_read_policy.sql` is policy-only and lets regular creators read only their own `creator_payout_ledger_entries` rows where `creator_user_id = auth.uid()::text`; regular creators cannot insert/update/delete payout rows, anon cannot insert payout rows, and no generated database type change was needed.
 - Stripe Connect Schema Foundation (Payout S2) is pushed and remote-applied/type-refreshed through migration `supabase/migrations/202605080008_stripe_connect_schema_foundation.sql`. It adds additive payout account provider/config/capability/readiness fields, onboarding session records without long-term onboarding URL storage, provider webhook event records with idempotent provider/environment/event id uniqueness, creator payout eligibility/readiness records, and immutable audit linkage fields only. It does not add Stripe SDKs/keys/provider calls, Stripe accounts, onboarding links, transfers, payouts, Connect Stripe UI, Withdraw/Cash Out, KYC/tax live flow, payout approval/release, fake payable balance, fake earnings, live money movement, or runtime UI.
@@ -126,6 +155,10 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - Google Play does not take a subscription fee from AppLovin ad payouts
 - creator-page ad revenue share is later: creator 70% net and Chi'llywood 30% net
 - creator-sold sponsor slots are later: brand pays Chi'llywood first, creator 80% net, and Chi'llywood 20% net
+- do not promise dollars per 1,000 views
+- do not build view-payout ad sharing before scale/proof
+- do not create fake ad earnings or fake sponsor earnings
+- ad-sharing eligibility should be channel-based and require creator age 18+, verified creator/channel, public channel, no active strikes, at least 5 videos, at least 100 followers, and at least 1,000 views or 100 watch hours before any real payout lane
 - Sponsor Checkout Foundation is pushed as schema/helper/Admin read-only foundation only. It includes sponsor brands, sponsor deals, creatives, placements, disclosures, review logs, payment records, and payout split records with foundation-only proof rows. No sponsor checkout exists, no brand can pay yet, no payment link exists, no Stripe Checkout is connected, no sponsor approval action exists, no fake sponsor revenue is shown, and no creator payout split can execute.
 - Sponsor Checkout Preflight Foundation is pushed/deployed as backend-only/admin-operator checkout refusal. It returns `preconditions_required`, rejects checkout/payment/provider credential/customer/charge/currency/amount/Stripe instructions, writes requested/blocked audit rows only, and creates no Stripe Checkout session, payment link, brand charge, sponsor approval, sponsor activation, creator payout split execution, creator payout release, fake sponsor revenue, or live money movement.
 - Sponsor Brand Payment Preflight Foundation is pushed/deployed as backend-only/admin-operator payment refusal. It returns `preconditions_required`, rejects payment/checkout/provider credential/customer/charge/currency/amount/Stripe instructions, writes requested/blocked audit rows only, and creates no payment intent, Stripe Checkout session, payment link, brand charge, sponsor paid status, payable creator split, creator payout release, fake sponsor revenue, or live money movement.

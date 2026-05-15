@@ -1764,6 +1764,11 @@ export function ChannelStudioScreen() {
       body: "Any Chi'llywood service, platform, cash-out, or provider fee must be shown separately where allowed. Tips do not unlock digital perks or paid access.",
     },
     {
+      label: "Merch/products",
+      value: "Future commerce",
+      body: "Studio mini-platform commerce needs product listings, inventory or fulfillment status where needed, provider proof, refunds, tax review, and payout ledger truth before launch.",
+    },
+    {
       label: "Paid content",
       value: "80% net later",
       body: "Only after paid-content purchase, refund, tax, and provider proof exist.",

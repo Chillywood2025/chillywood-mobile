@@ -131,6 +131,7 @@ Scope for this lane only:
   - monetization target id: `premium_subscription`
   - RevenueCat offering id: `premium`
   - RevenueCat entitlement id: `premium`
+- Premium subscription revenue belongs to Chi'llywood/platform, is not split with creators, and must not create a creator subscription revenue pool. RevenueCat/Google Play is Premium entitlement truth, not creator payout truth.
 - Later/non-v1 monetization targets are present in code for planning compatibility but must not be enabled as active Public v1 products in this lane:
   - `paid_title_access` / offering `paid-content`
   - `premium_live_access` / offering `premium-live`
@@ -150,12 +151,12 @@ Scope for this lane only:
    - Recommended product id: `chillywood_premium_v1`
    - Product name: `Chi'llywood Premium`
    - Entitlement represented: `premium`
-   - Do not create paid creator-video, tip, coin, payout, ad, or subscriber-only products in this lane.
+   - Do not create paid creator-video, creator merch/product, tip, coin, payout, ad, or subscriber-only products in this lane.
 5. Add a base plan for the first Public v1 subscription.
    - Recommended base plan id: `monthly-autorenewing`
    - Renewal type: auto-renewing
    - Billing period: monthly unless the product owner chooses a different v1 price strategy
-   - Set the launch/test price in required regions.
+   - Set the launch/test price in required regions. Current doctrine is `$9.99/month`.
    - Activate the base plan when ready for testing.
 6. Optional: create an introductory offer only if the product owner wants it for Public v1. If used, keep it simple and make sure the RevenueCat package selected by the app still maps to the intended Premium entitlement.
 7. Configure Google Play license testers for purchase proof.
