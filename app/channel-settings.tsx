@@ -1760,8 +1760,8 @@ export function ChannelStudioScreen() {
     },
     {
       label: "Tips",
-      value: "100% less processing later",
-      body: "Only after a real tips product and provider payment proof exist.",
+      value: "100% to creator later",
+      body: "Any Chi'llywood service, platform, cash-out, or provider fee must be shown separately where allowed. Tips do not unlock digital perks or paid access.",
     },
     {
       label: "Paid content",

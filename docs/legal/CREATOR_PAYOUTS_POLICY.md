@@ -36,8 +36,10 @@ Repo truth currently says:
 - creator-page ad revenue share later: creator 70% net, Chi'llywood 30% net;
 - creator-sold sponsor slots later: creator 80% net, Chi'llywood 20% net;
 - preferred Chi'llywood platform cut for paid content later: 20% of net receipts;
-- creators keep 100% of tips in current doctrine;
-- payouts are calculated from net receipts actually received after app-store fees, taxes, refunds, chargebacks, and adjustments, not gross sticker price.
+- creators keep 100% of the tip amount/net tip in current doctrine;
+- any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed;
+- tips do not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods;
+- non-tip payout calculations use net receipts actually received after app-store fees, taxes, refunds, chargebacks, and adjustments, not gross sticker price.
 
 These are planning rules, not active payout promises.
 

@@ -1471,8 +1471,10 @@ Later layers:
 
 ### F. Known business rules to preserve
 
-- Tips later may be 100% to creators.
-- Chi'llywood should not take a direct percentage cut from tips.
+- Creators keep 100% of the tip amount/net tip.
+- Chi'llywood should not take a direct percentage cut from the tip amount.
+- Any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed.
+- Tips do not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods.
 - Platform share on paid content later can be 20% of net receipts.
 - Net receipts means after app-store fees, taxes, refunds, chargebacks, and adjustments.
 - Standard scheduled creator payouts remain free.

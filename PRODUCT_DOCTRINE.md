@@ -44,9 +44,11 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - the current planned Premium price is `$9.99/month` and `$99/year`
 - Premium supports expensive live usage
 - RevenueCat remains the Premium subscription truth owner
-- creators keep 100% of tips
+- creators keep 100% of the tip amount/net tip
 - tips are anonymous to other users but fully traceable in backend and admin records
-- Chi'llywood should not take a direct percentage cut from tips
+- Chi'llywood should not take a direct percentage cut from the tip amount
+- any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed
+- tips must not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods
 - Chi'llywood's main platform percentage should come from paid content sales
 - creator payouts should be calculated from net receipts actually received after app-store fees, taxes, refunds, chargebacks, and adjustments, not gross sticker price
 - if app currency is used for tipping, it should be treated as internal app coins or credits, not crypto or blockchain tokens
