@@ -53,6 +53,7 @@ import {
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
+import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import {
     getRuntimeControlBlockedCopy,
     isRuntimeControlBlockedAccess,
@@ -4186,6 +4187,17 @@ export default function PlayerScreen() {
   }, [expectsCreatorVideo, item, localTitle]);
 
   const isCreatorVideoPlayback = playbackSourceKind === "creator-video" || expectsCreatorVideo;
+  const creatorVideoPaidContentLocked = isCreatorVideoPlayback
+    && creatorVideo?.paidContentAccess?.resolverStatus === "resolved"
+    && creatorVideo.paidContentAccess.requiresPurchase
+    && !creatorVideo.paidContentAccess.allowed;
+  const creatorVideoPaidContentPriceLabel = creatorVideoPaidContentLocked
+    && creatorVideo?.paidContentAccess?.priceCents
+    ? formatMonetizationCurrency(
+      creatorVideo.paidContentAccess.priceCents,
+      creatorVideo.paidContentAccess.currency ?? "usd",
+    )
+    : "";
   const source = useMemo(() => {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     if (isCreatorVideoPlayback) return null;
@@ -5302,7 +5314,9 @@ export default function PlayerScreen() {
   );
 
   const renderCreatorVideoCommentsPanel = () => {
-    if (!isStandalonePlayer || !isCreatorVideoPlayback || standalonePlaybackGateActive) return null;
+    if (!isStandalonePlayer || !isCreatorVideoPlayback || standalonePlaybackGateActive || creatorVideoPaidContentLocked) {
+      return null;
+    }
 
     const draftLength = creatorVideoCommentDraft.trim().length;
     const commentDisabled = creatorVideoCommentBusy || draftLength === 0 || draftLength > CREATOR_VIDEO_COMMENT_BODY_LIMIT;
@@ -6228,14 +6242,18 @@ export default function PlayerScreen() {
                   {isCreatorVideoPlaybackUnavailable || isPlatformVideoUnavailable ? null : <ActivityIndicator color={ACCENT} />}
                   <Text style={styles.videoLoadingText}>
                     {isCreatorVideoPlaybackUnavailable
-                      ? "Creator video unavailable"
+                      ? creatorVideoPaidContentLocked
+                        ? "Paid creator content"
+                        : "Creator video unavailable"
                       : isPlatformVideoUnavailable
                         ? "Video unavailable"
                         : "Preparing video..."}
                   </Text>
                   {isCreatorVideoPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>
-                      {playbackLoadError
+                      {creatorVideoPaidContentLocked
+                        ? `Checkout is not active yet${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. Buying creator-paid content does not require Premium once provider proof is ready.`
+                        : playbackLoadError
                         ? "This upload could not be loaded from storage. Re-upload or repair the video file."
                         : "This upload does not have a playable source yet."}
                     </Text>

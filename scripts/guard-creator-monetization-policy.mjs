@@ -25,6 +25,8 @@ const migration = read("supabase/migrations/202605140011_creator_monetization_sy
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
 const channelSettings = read("app/channel-settings.tsx");
+const publicChannel = read("app/channel/[userId].tsx");
+const player = read("app/player/[id].tsx");
 const admin = read("app/admin.tsx");
 
 [
@@ -49,6 +51,10 @@ assertIncludes(creatorMonetization, "CREATOR_PAID_CONTENT_PLATFORM_SHARE_BPS = 2
 assertIncludes(creatorMonetization, "CREATOR_TIP_CREATOR_SHARE_BPS = 10000", "tip creator share");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 150", "instant cash-out fee");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: number | null = null", "no instant cash-out cap");
+assertIncludes(creatorMonetization, "readCreatorMiniPlatformCommerceSurface", "public mini platform commerce readout");
+assertIncludes(creatorMonetization, "setCreatorContentPrice", "creator pricing client helper");
+assertIncludes(creatorMonetization, "requestCreatorPayout", "cash-out request client helper");
+assertIncludes(creatorMonetization, "creatorMonetizationCheckoutPreflight", "checkout preflight client helper");
 assertNotIncludes(creatorMonetization, "499", "no $4.99 cap in creator monetization helper");
 
 assertIncludes(migration, 'create table if not exists public."monetization_system_settings"', "settings table");
@@ -76,8 +82,14 @@ assertIncludes(premiumEntitlements, "entitlement_key", "backed entitlement helpe
 assertIncludes(premiumEntitlements, "revoked_at", "revoked entitlement blocking");
 
 assertIncludes(channelSettings, "Tips do not unlock digital perks or paid access", "tip no-perks copy");
+assertIncludes(channelSettings, "Monetize", "Platform Studio Monetize tab");
 assertIncludes(channelSettings, "Paid content", "Platform Studio paid content copy");
 assertIncludes(channelSettings, "Merch/products", "Platform Studio product copy");
+assertIncludes(channelSettings, "Run your mini platform from one place", "Platform Studio mini platform copy");
+assertIncludes(publicChannel, "Mini Platform Store", "public mini platform store state");
+assertIncludes(publicChannel, "Checkout pending", "public mini platform checkout disabled copy");
+assertIncludes(player, "creatorVideoPaidContentLocked", "Player paid creator-content lock");
+assertIncludes(player, "Buying creator-paid content does not require Premium", "Player paid-content doctrine copy");
 assertIncludes(admin, "No checkout success, payout release, fake purchase, fake order, fake tip, or live money action", "Admin money safety copy");
 assertIncludes(admin, "1.5% with no default cap", "Admin cash-out fee copy");
 

@@ -14,6 +14,11 @@ import {
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
 import { supabase } from "./supabase";
 import {
+  resolveCreatorContentAccess,
+  type CreatorContentAccessResolution,
+} from "./creatorMonetization";
+import {
+  createUnavailableVodPlaybackResolution,
   readVideoRenditionStatuses,
   recordOriginalVideoRendition,
   resolveSignedVideoPlaybackSource,
@@ -62,6 +67,7 @@ export type CreatorVideo = {
   fileSizeBytes: number | null;
   playbackResolution: VodPlaybackResolution | null;
   playbackQualityLabel: string | null;
+  paidContentAccess: CreatorContentAccessResolution | null;
   renditionStatuses: VodRenditionStatusItem[];
   createdAt: string;
   updatedAt: string;
@@ -243,6 +249,7 @@ async function parseCreatorVideo(
     fileSizeBytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null,
     playbackResolution: null,
     playbackQualityLabel: null,
+    paidContentAccess: null,
     renditionStatuses: [],
     createdAt: toText(row.created_at) || new Date().toISOString(),
     updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
@@ -355,6 +362,20 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
   const viewerOwnsVideo = !!viewerUserId && viewerUserId === parsed.ownerId;
   if (parsed.visibility !== "public" && !viewerOwnsVideo) return null;
 
+  const paidContentAccess = await resolveCreatorContentAccess({
+    contentType: "creator_video",
+    contentId: parsed.id,
+  });
+  if (paidContentAccess.resolverStatus === "resolved" && !paidContentAccess.allowed) {
+    return {
+      ...parsed,
+      playbackUrl: "",
+      playbackResolution: createUnavailableVodPlaybackResolution(parsed.id, paidContentAccess.reason),
+      playbackQualityLabel: null,
+      paidContentAccess,
+    };
+  }
+
   const playbackResolution = await resolveSignedVideoPlaybackSource({
     videoId: parsed.id,
     storageProvider: parsed.storageProvider,
@@ -379,6 +400,7 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
     playbackUrl: playbackResolution.defaultPlaybackUrl || legacyPlaybackUrl,
     playbackResolution,
     playbackQualityLabel: playbackResolution.defaultPlaybackQuality ?? (legacyPlaybackUrl ? "legacy_single_file" : null),
+    paidContentAccess,
     renditionStatuses: playbackResolution.renditionStatuses.length
       ? playbackResolution.renditionStatuses
       : parsed.renditionStatuses,

@@ -47,6 +47,14 @@ import {
   type CreatorPayoutDashboardReadModel,
 } from "../_lib/creatorPayouts";
 import {
+  CREATOR_MONETIZATION_DOCTRINE,
+  DEFAULT_CREATOR_MONETIZATION_RUNTIME_FLAGS,
+  calculateInstantCashoutFeeCents,
+  formatMonetizationCurrency,
+  readCreatorMonetizationFoundationSummary,
+  type CreatorMonetizationFoundationSummary,
+} from "../_lib/creatorMonetization";
+import {
   approveChannelAudienceRequest,
   blockChannelAudienceMember,
   cancelChannelAudienceRequest,
@@ -122,7 +130,7 @@ type SummaryMetricCard = {
   tone?: "default" | "unavailable";
 };
 
-type StudioTabId = "home" | "content" | "live" | "audience" | "insights" | "payouts" | "revenue" | "brand";
+type StudioTabId = "home" | "content" | "monetize" | "live" | "audience" | "insights" | "payouts" | "revenue" | "brand";
 type ContentStatusFilter = "all" | "published" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
@@ -323,7 +331,7 @@ const getChannelAccessSummaryBody = (resolution: ChannelAccessResolution | null)
     return "Checking saved defaults and creator grants.";
   }
   if (resolution.reason === "channel_defaults_subscriber") {
-    return "Both defaults are gated, so public channel copy should prepare visitors for member-style access.";
+    return "Both defaults are gated, so public mini platform copy should prepare visitors for member-style access.";
   }
   if (resolution.reason === "channel_defaults_private") {
     return "Watch-party entry is locked by default, so private room behavior should stay explicit on public surfaces.";
@@ -366,11 +374,11 @@ const formatChannelLayoutPresetLabel = (value?: UserProfile["channelLayoutPreset
 const getChannelLayoutPresetBody = (value?: UserProfile["channelLayoutPreset"] | null) => {
   switch (value) {
     case "live_first":
-      return "The public channel home leads with live presence first.";
+      return "The public mini platform home leads with live presence first.";
     case "library_first":
-      return "The public channel home leads with content/library context first.";
+      return "The public mini platform home leads with content/library context first.";
     default:
-      return "The public channel home keeps the featured spotlight first.";
+      return "The public mini platform home keeps the featured spotlight first.";
   }
 };
 
@@ -458,6 +466,7 @@ const analyticsUnavailableMetricDefinitions: readonly {
 const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "content", label: "Content" },
+  { id: "monetize", label: "Monetize" },
   { id: "live", label: "Live" },
   { id: "audience", label: "Audience" },
   { id: "insights", label: "Insights" },
@@ -482,6 +491,7 @@ const normalizeStudioTabId = (value: unknown): StudioTabId | null => {
   if (
     normalized === "home"
     || normalized === "content"
+    || normalized === "monetize"
     || normalized === "live"
     || normalized === "audience"
     || normalized === "insights"
@@ -536,7 +546,7 @@ const getVideoLifecycleCopy = (input: {
   if (input.lifecycleState === "succeeded") {
     return {
       label: "Upload Succeeded",
-      body: "The video was saved to creator storage and added to your channel library.",
+      body: "The video was saved to creator storage and added to your mini platform library.",
       tone: "success" as const,
     };
   }
@@ -602,6 +612,8 @@ export function ChannelStudioScreen() {
   const [creatorPayoutSummary, setCreatorPayoutSummary] = useState<CreatorPayoutDashboardReadModel>(
     createEmptyCreatorPayoutDashboardReadModel,
   );
+  const [creatorMonetizationSummary, setCreatorMonetizationSummary] =
+    useState<CreatorMonetizationFoundationSummary | null>(null);
   const [payoutSetupBusy, setPayoutSetupBusy] = useState<"setup" | "sync" | null>(null);
   const [payoutSetupNotice, setPayoutSetupNotice] = useState<string | null>(null);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
@@ -653,6 +665,7 @@ export function ChannelStudioScreen() {
   useEffect(() => {
     if (!canUseChannelSettings) {
       setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
+      setCreatorMonetizationSummary(null);
       setPayoutSetupNotice(null);
       setLoading(false);
       return;
@@ -667,6 +680,7 @@ export function ChannelStudioScreen() {
       readChannelSafetyAdminSummary(String(user?.id ?? "")).catch(() => null),
       readCreatorAnalyticsSummary(String(user?.id ?? "")).catch(() => null),
       readCreatorPayoutDashboardSummary({ creatorUserId: String(user?.id ?? ""), limit: 5 }),
+      readCreatorMonetizationFoundationSummary(String(user?.id ?? "")).catch(() => null),
     ])
       .then(([
         resolvedProfile,
@@ -676,6 +690,7 @@ export function ChannelStudioScreen() {
         resolvedSafetyAdminSummary,
         resolvedCreatorAnalyticsSummary,
         resolvedCreatorPayoutSummary,
+        resolvedCreatorMonetizationSummary,
       ]) => {
         if (!active) return;
         setProfile(normalizeUserProfile(resolvedProfile));
@@ -689,6 +704,7 @@ export function ChannelStudioScreen() {
         setSafetyAdminSummary(resolvedSafetyAdminSummary);
         setCreatorAnalyticsSummary(resolvedCreatorAnalyticsSummary);
         setCreatorPayoutSummary(resolvedCreatorPayoutSummary);
+        setCreatorMonetizationSummary(resolvedCreatorMonetizationSummary);
         setLoading(false);
       })
       .catch(() => {
@@ -701,6 +717,7 @@ export function ChannelStudioScreen() {
         setSafetyAdminSummary(null);
         setCreatorAnalyticsSummary(null);
         setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
+        setCreatorMonetizationSummary(null);
         setLoading(false);
       });
 
@@ -1188,7 +1205,7 @@ export function ChannelStudioScreen() {
     if (video.visibility === "public") {
       Alert.alert(
         "Unpublish Video",
-        `Move "${video.title}" back to draft? It will stop appearing publicly but stays in your channel library.`,
+        `Move "${video.title}" back to draft? It will stop appearing publicly but stays in your mini platform library.`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -1205,7 +1222,7 @@ export function ChannelStudioScreen() {
 
     Alert.alert(
       "Publish Video",
-      `Publish "${video.title}" to your public channel? Public videos can appear on your Profile/Channel and open in Player.`,
+      `Publish "${video.title}" to your public mini platform? Public videos can appear on your Profile/Mini Platform and open in Player.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -1221,7 +1238,7 @@ export function ChannelStudioScreen() {
   const onDeleteVideo = (video: CreatorVideo) => {
     Alert.alert(
       "Delete Video",
-      `Remove "${video.title}" from your channel?`,
+      `Remove "${video.title}" from your mini platform?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -1340,7 +1357,7 @@ export function ChannelStudioScreen() {
   const studioSectionGroups: readonly ChannelSettingsSectionGroup[] = [
     {
       title: "Content",
-      body: "Creator-owned videos and the future channel library shape.",
+      body: "Creator-owned videos and the future mini platform library shape.",
       sections: [
         {
           title: "Creator Content",
@@ -1356,6 +1373,27 @@ export function ChannelStudioScreen() {
           title: "Playlists / Shelves",
           status: "near_term",
           body: "Coming soon once playlist or shelf backing exists.",
+        },
+      ],
+    },
+    {
+      title: "Monetize",
+      body: "Default-off paid content, tips, merch, and checkout foundation.",
+      sections: [
+        {
+          title: "Paid Content Pricing",
+          status: "near_term",
+          body: "Premium creators can price their own items only after server flags, provider proof, and entitlement proof are ready.",
+        },
+        {
+          title: "Tips / Support",
+          status: "near_term",
+          body: "Tips stay separate from Premium and do not unlock digital perks or paid access.",
+        },
+        {
+          title: "Merch / Products",
+          status: "near_term",
+          body: "Product listings are foundation-only until commerce checkout, fulfillment, refund, and tax paths are proved.",
         },
       ],
     },
@@ -1774,6 +1812,73 @@ export function ChannelStudioScreen() {
       body: "Only after paid-content purchase, refund, tax, and provider proof exist.",
     },
   ];
+  const creatorMonetizationSettings =
+    creatorMonetizationSummary?.settings ?? DEFAULT_CREATOR_MONETIZATION_RUNTIME_FLAGS;
+  const calculateInstantCashoutFeePreviewCents = calculateInstantCashoutFeeCents(10_000);
+  const creatorMonetizationFoundationCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Creator pricing",
+      value: creatorMonetizationSettings.creatorPricingEnabled ? "Enabled later" : "Off",
+      body: "Server-backed creator pricing is required before Premium creators can mark content paid.",
+      tone: creatorMonetizationSettings.creatorPricingEnabled ? "default" : "unavailable",
+    },
+    {
+      label: "Paid checkout",
+      value: creatorMonetizationSettings.paidContentCheckoutEnabled ? "Enabled later" : "Off",
+      body: "Checkout remains blocked until provider, policy, webhook, refund, and access-grant proof pass.",
+      tone: creatorMonetizationSettings.paidContentCheckoutEnabled ? "default" : "unavailable",
+    },
+    {
+      label: "Tips",
+      value: creatorMonetizationSettings.tipsEnabled ? "Enabled later" : "Off",
+      body: "Creators keep 100% of the tip amount; fees must be separate and disclosed where allowed.",
+      tone: creatorMonetizationSettings.tipsEnabled ? "default" : "unavailable",
+    },
+    {
+      label: "Merch/products",
+      value: creatorMonetizationSettings.merchStoreEnabled ? "Enabled later" : "Off",
+      body: "Mini platform product listings need checkout, tax, fulfillment, refund, and payout proof before launch.",
+      tone: creatorMonetizationSettings.merchStoreEnabled ? "default" : "unavailable",
+    },
+    {
+      label: "Live money",
+      value: creatorMonetizationSettings.liveMoneyEnabled ? "On" : "Off",
+      body: "Live money must stay off until legal, provider, tax, fraud, and Owner-approved rollout proof passes.",
+      tone: creatorMonetizationSettings.liveMoneyEnabled ? "default" : "unavailable",
+    },
+  ];
+  const creatorMonetizationCountCards: readonly SummaryMetricCard[] = [
+    {
+      label: "Price rows",
+      value: formatCount(creatorMonetizationSummary?.pricingRows ?? null),
+      body: "Backed paid-content pricing rows for this creator, if the foundation migration is applied.",
+      tone: creatorMonetizationSummary?.pricingRows == null ? "unavailable" : "default",
+    },
+    {
+      label: "Product rows",
+      value: formatCount(creatorMonetizationSummary?.productRows ?? null),
+      body: "Backed product/merch rows for this creator; checkout remains disabled.",
+      tone: creatorMonetizationSummary?.productRows == null ? "unavailable" : "default",
+    },
+    {
+      label: "Tip rows",
+      value: formatCount(creatorMonetizationSummary?.tipRows ?? null),
+      body: "Webhook-confirmed tip rows only; no fake tips are created by Platform Studio.",
+      tone: creatorMonetizationSummary?.tipRows == null ? "unavailable" : "default",
+    },
+    {
+      label: "Ledger rows",
+      value: formatCount(creatorMonetizationSummary?.ledgerRows ?? null),
+      body: "Immutable ledger rows only; balances are derived and cannot be edited here.",
+      tone: creatorMonetizationSummary?.ledgerRows == null ? "unavailable" : "default",
+    },
+    {
+      label: "Payout requests",
+      value: formatCount(creatorMonetizationSummary?.payoutRequestRows ?? null),
+      body: "Scheduled and instant cash-out request foundation only; no payout execution exists.",
+      tone: creatorMonetizationSummary?.payoutRequestRows == null ? "unavailable" : "default",
+    },
+  ];
   const upcomingEvents = useMemo(
     () => creatorEvents.filter((event) => event.isUpcoming),
     [creatorEvents],
@@ -1876,7 +1981,7 @@ export function ChannelStudioScreen() {
       tone: eventsWithReminderInterest.length ? "default" : "unavailable",
     },
   ];
-  const channelName = String(profile?.displayName || profile?.username || "Your Channel").trim();
+  const channelName = String(profile?.displayName || profile?.username || "Your Mini Platform").trim();
   const channelTagline = String(profile?.tagline ?? "").trim();
   const channelInitial = channelName.charAt(0).toUpperCase() || "C";
   const publishedVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
@@ -1932,6 +2037,12 @@ export function ChannelStudioScreen() {
       value: videosLoading ? "..." : String(draftVideoCount),
       body: draftVideoCount ? "Waiting to publish" : "No drafts",
       tab: "content",
+    },
+    {
+      label: "Monetize",
+      value: creatorMonetizationSettings.liveMoneyEnabled ? "On" : "Off",
+      body: "Foundation only",
+      tab: "monetize",
     },
     {
       label: "Events",
@@ -2036,18 +2147,18 @@ export function ChannelStudioScreen() {
       ? "No published videos yet. Publish a draft when it is ready."
       : contentStatusFilter === "drafts"
         ? "No drafts right now."
-        : "No channel videos yet. Upload your first video.";
+        : "No mini platform videos yet. Upload your first video.";
 
     return (
     <View style={[styles.panel, styles.creatorContentPanel]}>
       <View style={styles.panelHeader}>
         <View style={styles.panelHeaderCopy}>
           <Text style={styles.panelTitle}>Content</Text>
-          <Text style={styles.panelSubtitle}>Manage your channel videos, drafts, and published uploads.</Text>
+          <Text style={styles.panelSubtitle}>Manage your mini platform videos, drafts, and published uploads.</Text>
         </View>
       </View>
       <Text style={styles.permissionCopy}>
-        Upload playable videos to your public channel. Drafts stay visible only to you; public videos can appear on your Profile/Channel and open in Player.
+        Upload playable videos to your public mini platform. Drafts stay visible only to you; public videos can appear on your Profile/Mini Platform and open in Player.
       </Text>
 
       {videoNotice ? (
@@ -2060,7 +2171,7 @@ export function ChannelStudioScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Videos</Text>
           <Text style={styles.summaryValue}>{videosLoading ? "..." : String(creatorVideos.length)}</Text>
-          <Text style={styles.summaryBody}>creator-owned uploads in this channel library</Text>
+          <Text style={styles.summaryBody}>creator-owned uploads in this mini platform library</Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Published</Text>
@@ -2162,8 +2273,10 @@ export function ChannelStudioScreen() {
         </View>
       ) : (
         <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>No channel videos yet</Text>
-          <Text style={styles.eventEmptyBody}>No channel videos yet. Use the Video Upload form below when you're ready.</Text>
+          <Text style={styles.eventEmptyTitle}>No mini platform videos yet</Text>
+          <Text style={styles.eventEmptyBody}>
+            {"No mini platform videos yet. Use the Video Upload form below when you're ready."}
+          </Text>
         </View>
       )}
 
@@ -2295,8 +2408,8 @@ export function ChannelStudioScreen() {
           activeOpacity={0.86}
           disabled
         >
-          <Text style={styles.studioActionButtonText}>Preview Channel</Text>
-          <Text style={styles.studioActionButtonCopy}>Profile required to preview channel.</Text>
+          <Text style={styles.studioActionButtonText}>Preview Mini Platform</Text>
+          <Text style={styles.studioActionButtonCopy}>Profile required to preview mini platform.</Text>
         </TouchableOpacity>
       );
     }
@@ -2312,8 +2425,8 @@ export function ChannelStudioScreen() {
           });
         }}
       >
-        <Text style={styles.studioActionButtonText}>Preview Channel</Text>
-        <Text style={styles.studioActionButtonCopy}>Open public channel</Text>
+        <Text style={styles.studioActionButtonText}>Preview Mini Platform</Text>
+        <Text style={styles.studioActionButtonCopy}>Open public mini platform</Text>
       </TouchableOpacity>
     );
   };
@@ -2321,7 +2434,7 @@ export function ChannelStudioScreen() {
   const renderStudioHeader = () => (
     <View style={styles.studioHeaderCard}>
       <Text style={styles.heroTitle}>Platform Studio</Text>
-      <Text style={styles.studioSubtitle}>Run your channel from one place.</Text>
+      <Text style={styles.studioSubtitle}>Run your mini platform from one place.</Text>
       <Text style={styles.studioClarifier}>Profile settings stay separate.</Text>
       {profile ? (
         <View style={styles.channelIdentityRow}>
@@ -2430,8 +2543,8 @@ export function ChannelStudioScreen() {
     if (!latestCreatorVideo) {
       return (
         <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>No channel videos yet</Text>
-          <Text style={styles.eventEmptyBody}>No channel videos yet. Upload your first video to start building your channel.</Text>
+          <Text style={styles.eventEmptyTitle}>No mini platform videos yet</Text>
+          <Text style={styles.eventEmptyBody}>No mini platform videos yet. Upload your first video to start building your mini platform.</Text>
         </View>
       );
     }
@@ -2519,6 +2632,11 @@ export function ChannelStudioScreen() {
             title: "Content",
             body: "Library",
             onPress: () => setActiveStudioTab("content"),
+          })}
+          {renderHomeActionCard({
+            title: "Monetize",
+            body: "Foundation",
+            onPress: () => setActiveStudioTab("monetize"),
           })}
           {renderHomeActionCard({
             title: "Go Live",
@@ -2609,6 +2727,131 @@ export function ChannelStudioScreen() {
     </>
   );
 
+  const renderMonetizeTab = () => (
+    <>
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Monetize</Text>
+            <Text style={styles.panelSubtitle}>Paid content, tips, and mini platform commerce are foundation-only.</Text>
+          </View>
+          <Text style={styles.panelStatusMuted}>OFF</Text>
+        </View>
+        <Text style={styles.permissionCopy}>
+          Platform Studio can show the safe monetization control plane, but it cannot create purchases, tips, orders, ledger earnings, cash-out, payouts, or Stripe production transfers while live money is off.
+        </Text>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Creator monetization gates</Text>
+          <Text style={styles.panelStatusMuted}>Server-backed</Text>
+        </View>
+        <View style={styles.summaryGrid}>
+          {creatorMonetizationFoundationCards.map((card) => (
+            <View
+              key={card.label}
+              style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
+            >
+              <Text style={styles.summaryLabel}>{card.label}</Text>
+              <Text style={styles.summaryValue}>{card.value}</Text>
+              <Text style={styles.summaryBody}>{card.body}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Safe tool states</Text>
+          <Text style={styles.panelStatusMuted}>Blocked</Text>
+        </View>
+        <View style={styles.eventList}>
+          {[
+            {
+              title: "Paid creator content",
+              body: `Premium creators will be able to price their own content after ${CREATOR_MONETIZATION_DOCTRINE.premiumEntitlement} entitlement proof, server flags, and provider checkout proof. Viewers will not need Premium to buy creator-paid content.`,
+            },
+            {
+              title: "Tips / support",
+              body: "Creators keep 100% of the tip amount. Tips do not unlock digital perks, VIP access, badges, rankings, special content, or paid access.",
+            },
+            {
+              title: "Merch / products / clothing",
+              body: "Product listings belong to the creator mini platform, but checkout, taxes, inventory, fulfillment, refunds, and payout ledger entries are not live.",
+            },
+            {
+              title: "Cash-out",
+              body: `Scheduled payouts are free later. Optional instant cash-out is ${CREATOR_MONETIZATION_DOCTRINE.instantCashoutFeeBps / 100}% with no default cap, separate from the creator tip amount.`,
+            },
+          ].map((item) => (
+            <View key={item.title} style={styles.eventEmptyCard}>
+              <Text style={styles.eventEmptyTitle}>{item.title}</Text>
+              <Text style={styles.eventEmptyBody}>{item.body}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Foundation rows</Text>
+          <Text style={styles.panelStatusMuted}>{creatorMonetizationSummary ? "Read-only" : "Not connected"}</Text>
+        </View>
+        <Text style={styles.permissionCopy}>
+          Counts here are not earnings, payable balances, purchases, orders, or payout eligibility.
+        </Text>
+        <View style={styles.summaryGrid}>
+          {creatorMonetizationCountCards.map((card) => (
+            <View
+              key={card.label}
+              style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
+            >
+              <Text style={styles.summaryLabel}>{card.label}</Text>
+              <Text style={styles.summaryValue}>{card.value}</Text>
+              <Text style={styles.summaryBody}>{card.body}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Split doctrine</Text>
+          <Text style={styles.panelStatusMuted}>Planning truth</Text>
+        </View>
+        <View style={styles.summaryGrid}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Paid content</Text>
+            <Text style={styles.summaryValue}>80% / 20%</Text>
+            <Text style={styles.summaryBody}>
+              {"Creator gets 80% of net receipts; Chi'llywood gets 20% after fees, taxes, refunds, chargebacks, and adjustments."}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Tips</Text>
+            <Text style={styles.summaryValue}>100%</Text>
+            <Text style={styles.summaryBody}>Creator keeps 100% of the tip amount. Service, platform, provider, or cash-out fees must be separate where allowed.</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Premium</Text>
+            <Text style={styles.summaryValue}>{CREATOR_MONETIZATION_DOCTRINE.premiumPrice}</Text>
+            <Text style={styles.summaryBody}>
+              {"Premium revenue belongs to Chi'llywood and is not split with creators."}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Cash-out fee</Text>
+            <Text style={styles.summaryValue}>
+              {formatMonetizationCurrency(calculateInstantCashoutFeePreviewCents, "usd")}
+            </Text>
+            <Text style={styles.summaryBody}>Example instant fee on a $100 cash-out; scheduled payout fee is $0.</Text>
+          </View>
+        </View>
+      </View>
+    </>
+  );
+
   const renderPayoutsTab = () => (
     <>
       <View style={styles.panel}>
@@ -2649,7 +2892,7 @@ export function ChannelStudioScreen() {
               <Text style={styles.summaryValue}>
                 {creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Provider ready" : "Not connected"}
               </Text>
-              <Text style={styles.summaryBody}>No Chi'llywood KYC or tax form flow exists in the app.</Text>
+              <Text style={styles.summaryBody}>{"No Chi'llywood KYC or tax form flow exists in the app."}</Text>
             </View>
             <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
               <Text style={styles.summaryLabel}>Payout execution</Text>
@@ -2970,6 +3213,7 @@ export function ChannelStudioScreen() {
             {renderStudioTabBar()}
             {activeStudioTab === "home" ? renderStudioHomeTab() : null}
             {activeStudioTab === "content" ? renderContentPanel() : null}
+            {activeStudioTab === "monetize" ? renderMonetizeTab() : null}
             {activeStudioTab === "payouts" ? renderPayoutsTab() : null}
             {activeStudioTab === "revenue" ? renderRevenueTab() : null}
 
@@ -2979,7 +3223,7 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Brand</Text>
-                  <Text style={styles.panelSubtitle}>Control how your public channel presents itself.</Text>
+                  <Text style={styles.panelSubtitle}>Control how your public mini platform presents itself.</Text>
                 </View>
               </View>
               <Text style={styles.permissionCopy}>
@@ -3241,7 +3485,7 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Live</Text>
-                  <Text style={styles.panelSubtitle}>Manage live events and future Watch-Party tools for your channel.</Text>
+                  <Text style={styles.panelSubtitle}>Manage live events and future Watch-Party tools for your mini platform.</Text>
                 </View>
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
@@ -3485,7 +3729,7 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Audience</Text>
-                  <Text style={styles.panelSubtitle}>Manage followers, requests, blocks, and subscriber signals for your channel.</Text>
+                  <Text style={styles.panelSubtitle}>Manage followers, requests, blocks, and subscriber signals for your mini platform.</Text>
                 </View>
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
@@ -3772,7 +4016,7 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Insights</Text>
-                  <Text style={styles.panelSubtitle}>Track what is actually backed by your channel data today.</Text>
+                  <Text style={styles.panelSubtitle}>Track what is actually backed by your mini platform data today.</Text>
                 </View>
                 <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
               </View>

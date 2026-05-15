@@ -66,6 +66,39 @@ export type CreatorMonetizationFoundationSummary = {
   generatedAt: string;
 };
 
+export type CreatorContentAccessResolution = {
+  allowed: boolean;
+  reason: string;
+  requiresPurchase: boolean;
+  priceCents: number | null;
+  currency: string | null;
+  creatorId: string | null;
+  resolverStatus: "resolved" | "unavailable";
+};
+
+export type CreatorProductListing = {
+  id: string;
+  creatorId: string;
+  title: string;
+  description: string;
+  priceCents: number;
+  currency: string;
+  status: "draft" | "active" | "paused" | "archived";
+  productType: "merch" | "clothing" | "physical" | "digital_link" | "external";
+  imagePath: string | null;
+  inventoryMode: "not_tracked" | "limited" | "unlimited" | "external";
+};
+
+export type CreatorMiniPlatformCommerceSurface = {
+  status: MonetizationFoundationStatus;
+  settings: CreatorMonetizationRuntimeFlags;
+  products: CreatorProductListing[];
+  tipsStatus: "disabled" | "enabled_later";
+  paidContentCheckoutStatus: "disabled" | "enabled_later";
+  merchCheckoutStatus: "disabled" | "enabled_later";
+  message: string;
+};
+
 export const DEFAULT_CREATOR_MONETIZATION_RUNTIME_FLAGS: CreatorMonetizationRuntimeFlags = {
   premiumPurchaseEnabled: false,
   paidContentCheckoutEnabled: false,
@@ -92,13 +125,10 @@ export const CREATOR_MONETIZATION_DOCTRINE = {
   payoutHoldDaysMax: CREATOR_PAYOUT_HOLD_DAYS_MAX,
 } as const;
 
-type CountQueryResult = {
+type QueryResult<T = Record<string, unknown>[]> = {
+  data: T | null;
   count: number | null;
   error: unknown;
-};
-
-type CountQuery = PromiseLike<CountQueryResult> & {
-  eq: (column: string, value: string | number | boolean) => PromiseLike<CountQueryResult>;
 };
 
 type SelectMaybeSingleQuery<T> = PromiseLike<{
@@ -106,15 +136,17 @@ type SelectMaybeSingleQuery<T> = PromiseLike<{
   error: unknown;
 }>;
 
+type SelectQuery<T = Record<string, unknown>[]> = PromiseLike<QueryResult<T>> & {
+  eq: (column: string, value: string | number | boolean) => SelectQuery<T>;
+  maybeSingle: () => SelectMaybeSingleQuery<Record<string, unknown>>;
+};
+
 const monetizationClient = supabase as unknown as {
   from: (table: string) => {
-    select: (
+    select: <T = Record<string, unknown>[]>(
       columns: string,
       options?: { count?: "exact"; head?: boolean },
-    ) => CountQuery & {
-      maybeSingle: () => SelectMaybeSingleQuery<Record<string, unknown>>;
-      eq: (column: string, value: string | number | boolean) => CountQuery;
-    };
+    ) => SelectQuery<T>;
   };
   rpc: <T = unknown>(fn: string, args?: Record<string, unknown>) => Promise<{ data: T | null; error: unknown }>;
 };
@@ -133,6 +165,64 @@ const safeCount = async (table: string, creatorId?: string | null) => {
 const toRuntimeBoolean = (value: unknown, fallback = false) => (
   typeof value === "boolean" ? value : fallback
 );
+
+const toText = (value: unknown) => String(value ?? "").trim();
+
+const toCents = (value: unknown) => {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) return 0;
+  return Math.max(0, Math.trunc(normalized));
+};
+
+const normalizeCreatorContentAccessResolution = (
+  payload: unknown,
+  fallbackReason = "resolver_unavailable",
+): CreatorContentAccessResolution => {
+  const body = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {};
+  const reason = toText(body.reason) || fallbackReason;
+  return {
+    allowed: body.allowed === true,
+    reason,
+    requiresPurchase: body.requiresPurchase === true || reason === "purchase_required",
+    priceCents: body.priceCents == null ? null : toCents(body.priceCents),
+    currency: toText(body.currency) || null,
+    creatorId: toText(body.creatorId) || null,
+    resolverStatus: fallbackReason === "resolver_unavailable" ? "unavailable" : "resolved",
+  };
+};
+
+const normalizeCreatorProductListing = (row: Record<string, unknown>): CreatorProductListing | null => {
+  const id = toText(row.id);
+  const title = toText(row.title);
+  const creatorId = toText(row.creator_id);
+  if (!id || !title || !creatorId) return null;
+  const status = toText(row.status) as CreatorProductListing["status"];
+  const productType = toText(row.product_type) as CreatorProductListing["productType"];
+  const inventoryMode = toText(row.inventory_mode) as CreatorProductListing["inventoryMode"];
+  return {
+    id,
+    creatorId,
+    title,
+    description: toText(row.description),
+    priceCents: toCents(row.price_cents),
+    currency: toText(row.currency) || "usd",
+    status: status === "active" || status === "paused" || status === "archived" ? status : "draft",
+    productType: productType === "clothing"
+      || productType === "physical"
+      || productType === "digital_link"
+      || productType === "external"
+      ? productType
+      : "merch",
+    imagePath: toText(row.image_path) || null,
+    inventoryMode: inventoryMode === "limited"
+      || inventoryMode === "unlimited"
+      || inventoryMode === "external"
+      ? inventoryMode
+      : "not_tracked",
+  };
+};
 
 export const calculateInstantCashoutFeeCents = (amountCents: number) => {
   const normalized = Math.max(0, Math.trunc(Number.isFinite(amountCents) ? amountCents : 0));
@@ -231,14 +321,156 @@ export async function readCreatorMonetizationFoundationSummary(
   };
 }
 
+export async function readCreatorMiniPlatformCommerceSurface(
+  creatorId: string,
+): Promise<CreatorMiniPlatformCommerceSurface> {
+  const normalizedCreatorId = toText(creatorId);
+  const settings = await readCreatorMonetizationRuntimeFlags();
+  if (!normalizedCreatorId) {
+    return {
+      status: "blocked",
+      settings,
+      products: [],
+      tipsStatus: "disabled",
+      paidContentCheckoutStatus: "disabled",
+      merchCheckoutStatus: "disabled",
+      message: "Mini platform commerce needs a creator id.",
+    };
+  }
+
+  try {
+    const { data, error } = await monetizationClient
+      .from(CREATOR_PRODUCTS_TABLE)
+      .select("id,creator_id,title,description,price_cents,currency,status,product_type,image_path,inventory_mode")
+      .eq("creator_id", normalizedCreatorId)
+      .eq("status", "active");
+
+    if (error) throw error;
+
+    const products = Array.isArray(data)
+      ? data.map((row) => normalizeCreatorProductListing(row as Record<string, unknown>)).filter((row): row is CreatorProductListing => !!row)
+      : [];
+
+    return {
+      status: settings.liveMoneyEnabled ? "blocked" : "disabled",
+      settings,
+      products,
+      tipsStatus: settings.tipsEnabled && settings.liveMoneyEnabled ? "enabled_later" : "disabled",
+      paidContentCheckoutStatus: settings.paidContentCheckoutEnabled && settings.liveMoneyEnabled ? "enabled_later" : "disabled",
+      merchCheckoutStatus: settings.merchStoreEnabled && settings.liveMoneyEnabled ? "enabled_later" : "disabled",
+      message: settings.liveMoneyEnabled
+        ? "Mini platform commerce still needs provider/legal proof before checkout can open."
+        : "Mini platform commerce is foundation-only; checkout, tips, orders, and cash-out are disabled.",
+    };
+  } catch {
+    return {
+      status: "not_connected",
+      settings,
+      products: [],
+      tipsStatus: "disabled",
+      paidContentCheckoutStatus: "disabled",
+      merchCheckoutStatus: "disabled",
+      message: "Mini platform commerce tables are not connected in this environment yet.",
+    };
+  }
+}
+
 export async function resolveCreatorContentAccess(options: {
   contentType: string;
   contentId: string;
+}): Promise<CreatorContentAccessResolution> {
+  try {
+    const { data, error } = await monetizationClient.rpc("resolve_creator_content_access", {
+      p_content_type: options.contentType,
+      p_content_id: options.contentId,
+    });
+    if (error) throw error;
+    return normalizeCreatorContentAccessResolution(data, "resolved");
+  } catch {
+    return {
+      allowed: true,
+      reason: "resolver_unavailable",
+      requiresPurchase: false,
+      priceCents: null,
+      currency: null,
+      creatorId: null,
+      resolverStatus: "unavailable",
+    };
+  }
+}
+
+export async function setCreatorContentPrice(input: {
+  contentType: string;
+  contentId: string;
+  isPaid: boolean;
+  priceCents: number;
+  currency?: string;
 }) {
-  const { data, error } = await monetizationClient.rpc("resolve_creator_content_access", {
-    p_content_type: options.contentType,
-    p_content_id: options.contentId,
+  const { data, error } = await monetizationClient.rpc("set_creator_content_price", {
+    p_content_type: input.contentType,
+    p_content_id: input.contentId,
+    p_is_paid: input.isPaid,
+    p_price_cents: Math.max(0, Math.trunc(input.priceCents || 0)),
+    p_currency: input.currency ?? "usd",
   });
-  if (error) throw new Error("Content access could not be resolved.");
+  if (error) throw new Error("Creator pricing is not available yet.");
+  return data;
+}
+
+export async function createCreatorProductListing(input: {
+  title: string;
+  description?: string;
+  priceCents: number;
+  productType?: CreatorProductListing["productType"];
+  currency?: string;
+}) {
+  const { data, error } = await monetizationClient.rpc("create_creator_product_listing", {
+    p_title: input.title,
+    p_description: input.description ?? "",
+    p_price_cents: Math.max(0, Math.trunc(input.priceCents || 0)),
+    p_product_type: input.productType ?? "merch",
+    p_currency: input.currency ?? "usd",
+  });
+  if (error) throw new Error("Product listing tools are not available yet.");
+  return data;
+}
+
+export async function readCreatorPayoutBalances(creatorId?: string | null): Promise<CreatorEarningsBalances | null> {
+  const { data, error } = await monetizationClient.rpc<Record<string, unknown>>("calculate_creator_payout_balances", {
+    p_creator_id: creatorId ?? null,
+  });
+  if (error || !data) return null;
+  return {
+    pendingCents: toCents(data.pendingCents),
+    heldCents: toCents(data.heldCents),
+    availableCents: toCents(data.availableCents),
+    paidCents: toCents(data.paidCents),
+    reversedCents: toCents(data.reversedCents),
+  };
+}
+
+export async function requestCreatorPayout(input: {
+  amountCents: number;
+  payoutType: "scheduled" | "instant";
+}) {
+  const { data, error } = await monetizationClient.rpc("request_creator_payout", {
+    p_amount_cents: Math.max(0, Math.trunc(input.amountCents || 0)),
+    p_payout_type: input.payoutType,
+  });
+  if (error) throw new Error("Creator payouts are not available yet.");
+  return data;
+}
+
+export async function creatorMonetizationCheckoutPreflight(input: {
+  checkoutType: "paid_content" | "tip" | "product";
+  targetId?: string | null;
+  amountCents?: number | null;
+}) {
+  const { data, error } = await monetizationClient.rpc("creator_monetization_checkout_preflight", {
+    p_checkout_type: input.checkoutType,
+    p_target_id: input.targetId ?? null,
+    p_amount_cents: input.amountCents == null ? null : Math.max(0, Math.trunc(input.amountCents || 0)),
+  });
+  if (error) throw new Error("Checkout preflight is not available yet.");
   return data;
 }

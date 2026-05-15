@@ -20,6 +20,11 @@ import {
   unfollowChannel,
   type PublicChannelAudienceState,
 } from "../../_lib/channelAudience";
+import {
+  formatMonetizationCurrency,
+  readCreatorMiniPlatformCommerceSurface,
+  type CreatorMiniPlatformCommerceSurface,
+} from "../../_lib/creatorMonetization";
 import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
 import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
@@ -101,6 +106,7 @@ export default function PublicChannelScreen() {
   const [audienceState, setAudienceState] = useState<PublicChannelAudienceState | null>(null);
   const [videos, setVideos] = useState<CreatorVideo[]>([]);
   const [events, setEvents] = useState<CreatorEventSummary[]>([]);
+  const [commerceSurface, setCommerceSurface] = useState<CreatorMiniPlatformCommerceSurface | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -118,6 +124,7 @@ export default function PublicChannelScreen() {
       setAudienceState(null);
       setVideos([]);
       setEvents([]);
+      setCommerceSurface(null);
 
       if (!routeUserId) {
         setLoadState("not_found");
@@ -139,7 +146,7 @@ export default function PublicChannelScreen() {
       const nextChannel = buildUserChannelProfile({
         id: routeUserId,
         profile,
-        fallbackDisplayName: "Untitled Channel",
+        fallbackDisplayName: "Untitled Mini Platform",
       });
 
       const nextAudienceState = await readPublicChannelAudienceState(routeUserId).catch(() => null);
@@ -153,15 +160,17 @@ export default function PublicChannelScreen() {
         return;
       }
 
-      const [publicVideos, publicEvents] = await Promise.all([
+      const [publicVideos, publicEvents, nextCommerceSurface] = await Promise.all([
         readCreatorVideos(routeUserId, { includeDrafts: false, limit: 24 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
+        readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
       ]);
 
       if (!active) return;
 
       setVideos(publicVideos);
       setEvents(publicEvents.filter((event) => event.isLiveNow || event.isUpcoming));
+      setCommerceSurface(nextCommerceSurface);
       setLoadState("ready");
     };
 
@@ -212,7 +221,7 @@ export default function PublicChannelScreen() {
 
   const openPlayer = (video: CreatorVideo) => {
     if (!hasPlayableVideo(video)) {
-      Alert.alert("Video unavailable", "This channel video is not playable right now.");
+      Alert.alert("Video unavailable", "This mini platform video is not playable right now.");
       return;
     }
 
@@ -348,7 +357,7 @@ export default function PublicChannelScreen() {
       <TouchableOpacity style={styles.navButton} activeOpacity={0.82} onPress={() => router.back()}>
         <Text style={styles.navButtonText}>←</Text>
       </TouchableOpacity>
-      <Text style={styles.navTitle}>Channel</Text>
+      <Text style={styles.navTitle}>Mini Platform</Text>
       {isOwner ? (
         <TouchableOpacity style={styles.navStudioButton} activeOpacity={0.86} onPress={openStudio}>
           <Text style={styles.navStudioText}>Studio</Text>
@@ -363,7 +372,7 @@ export default function PublicChannelScreen() {
     <View style={styles.screen}>
       {renderBackHeader()}
       <View style={styles.unavailableCard}>
-        <Text style={styles.unavailableTitle}>Channel unavailable</Text>
+        <Text style={styles.unavailableTitle}>Mini platform unavailable</Text>
         <Text style={styles.unavailableBody}>{body}</Text>
         <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={() => router.back()}>
           <Text style={styles.primaryButtonText}>Back</Text>
@@ -391,7 +400,7 @@ export default function PublicChannelScreen() {
                 </Text>
               )}
             </View>
-            <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Channel"}</Text>
+            <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Mini Platform"}</Text>
             {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
@@ -436,7 +445,7 @@ export default function PublicChannelScreen() {
           </TouchableOpacity>
           {isOwner ? (
             <TouchableOpacity style={[styles.actionButton, styles.actionButtonWide, styles.actionButtonOwner]} activeOpacity={0.86} onPress={openStudio}>
-              <Text style={styles.actionButtonOwnerText}>Open Channel Studio</Text>
+              <Text style={styles.actionButtonOwnerText}>Open Platform Studio</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -525,10 +534,10 @@ export default function PublicChannelScreen() {
         renderFeaturedVideoCard(featuredVideo)
       ) : (
         <View style={[styles.emptyCard, styles.featuredEmptyCard, styles.spotlightEmptyCard]}>
-          <Text style={styles.emptyText}>This channel has not published videos yet.</Text>
+          <Text style={styles.emptyText}>This mini platform has not published videos yet.</Text>
           {isOwner ? (
             <TouchableOpacity style={styles.emptySecondaryButton} activeOpacity={0.86} onPress={openStudio}>
-              <Text style={styles.emptySecondaryButtonText}>Open Channel Studio</Text>
+              <Text style={styles.emptySecondaryButtonText}>Open Platform Studio</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -597,6 +606,50 @@ export default function PublicChannelScreen() {
     </View>
   );
 
+  const renderMiniPlatformCommerce = () => {
+    const products = commerceSurface?.products ?? [];
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Mini Platform Store</Text>
+        {products.length ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.shelfScroll}
+            contentContainerStyle={styles.shelfRow}
+          >
+            {products.map((product) => (
+              <View key={product.id} style={styles.shelfCard}>
+                <View style={styles.shelfCopy}>
+                  <Text style={styles.cardKicker}>{product.productType.replaceAll("_", " ").toUpperCase()}</Text>
+                  <Text style={styles.shelfTitle} numberOfLines={2}>{product.title}</Text>
+                  {product.description ? (
+                    <Text style={styles.shelfBody} numberOfLines={2}>{product.description}</Text>
+                  ) : null}
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaText}>
+                      {formatMonetizationCurrency(product.priceCents, product.currency)}
+                    </Text>
+                    <Text style={styles.publicChip}>Checkout pending</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>
+              {commerceSurface?.message ?? "Mini platform commerce is not active yet."}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              Tips, paid content, products, orders, and cash-out stay disabled until provider and legal proof is complete.
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderAbout = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>About</Text>
@@ -617,7 +670,7 @@ export default function PublicChannelScreen() {
         </View>
       ) : (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>This channel has not added an about section yet.</Text>
+          <Text style={styles.emptyText}>This mini platform has not added an about section yet.</Text>
         </View>
       )}
     </View>
@@ -629,18 +682,18 @@ export default function PublicChannelScreen() {
         {renderBackHeader()}
         <View style={styles.loadingCard}>
           <ActivityIndicator color="#DC143C" />
-          <Text style={styles.loadingText}>Loading channel…</Text>
+          <Text style={styles.loadingText}>Loading mini platform…</Text>
         </View>
       </View>
     );
   }
 
   if (loadState === "not_found") {
-    return renderUnavailable("This channel could not be found.");
+    return renderUnavailable("This mini platform could not be found.");
   }
 
   if (loadState === "blocked") {
-    return renderUnavailable("You cannot view this channel.");
+    return renderUnavailable("You cannot view this mini platform.");
   }
 
   return (
@@ -656,6 +709,7 @@ export default function PublicChannelScreen() {
         {renderLatestUploads()}
         {renderLiveNow()}
         {renderUpcomingEvents()}
+        {renderMiniPlatformCommerce()}
         {renderAbout()}
       </ScrollView>
       <ReportSheet
@@ -1196,6 +1250,13 @@ const styles = StyleSheet.create({
     color: "#AEB9CF",
     fontSize: 14,
     lineHeight: 20,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  emptySubtext: {
+    color: "#7F8AA1",
+    fontSize: 12,
+    lineHeight: 18,
     fontWeight: "700",
     textAlign: "center",
   },

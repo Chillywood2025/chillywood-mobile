@@ -47,6 +47,23 @@ The migration also adds RPC foundations:
 
 These RPCs fail closed while server flags are off. They do not trust client-side purchase success, do not mark money paid, do not write fake earnings, and do not execute provider payouts.
 
+Client helpers in `_lib/creatorMonetization.ts` now expose the safe repo-side paths for:
+
+- reading default-off runtime flags and foundation counts;
+- resolving creator-paid content access;
+- reading public mini platform commerce rows without checkout;
+- preflighting paid-content, tip, and product checkout while live money is off;
+- calculating creator balances from immutable ledger rows;
+- calculating the 1.5% no-cap instant cash-out fee;
+- requesting payout/cash-out only through server-side RPCs that remain disabled while live-money flags are off.
+
+## App Surfaces
+
+- Platform Studio has a `Monetize` tab with disabled/foundation states for paid content pricing, tips/support, merch/products, checkout, cash-out, payout rows, split doctrine, and Premium/Paid-content separation.
+- The public Channel route is product-copy framed as the creator `Mini Platform` and can show a real active product shelf if backed product rows exist. It still says checkout is pending and does not create product orders.
+- The standalone Player checks the creator-paid-content resolver for creator videos. If a backed active paid-content price requires purchase, regular playback does not receive a playable URL and the Player shows a locked paid-creator-content state instead of guessing from the client.
+- Platform Studio remains the creator command center; Channel remains the public mini platform. Technical route/table names are unchanged in this lane.
+
 ## Current Status
 
 - Paid creator checkout: foundation only, disabled.
@@ -55,6 +72,7 @@ These RPCs fail closed while server flags are off. They do not trust client-side
 - Merch/products/clothing: product listing foundation only, disabled.
 - Creator earnings: append-only ledger foundation only, no fake rows.
 - Cash-out/payouts: request/fee foundation only, disabled.
+- Paid creator content playback enforcement: repo-side Player/resolver integration exists; live proof still requires remote migration apply, backed price rows, real purchase/access grants, and provider webhook proof.
 - Stripe Connect production: not live.
 - RevenueCat/Google Play Premium purchase proof: still externally blocked until release-like Android purchase/restore/entitlement proof passes.
 
