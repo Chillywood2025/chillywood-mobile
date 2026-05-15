@@ -249,7 +249,7 @@ Before Public v1 launch, finish:
 - Real Chi'llyfects AR processing and native AR SDKs.
 - Native game/video streaming.
 - Paid creator videos, subscriber-only media, tips, coins, payouts, ads, tax/KYC, and earnings ledgers.
-- Full global search, push notification delivery, notification center, full audience role roster, comment media uploads, advanced creator studio, and automatic transcoding.
+- Full global search, push notification delivery, notification center, full audience role roster, comment media uploads, advanced Platform Studio, and automatic transcoding.
 
 ## Exact Next Runtime Proof Order
 

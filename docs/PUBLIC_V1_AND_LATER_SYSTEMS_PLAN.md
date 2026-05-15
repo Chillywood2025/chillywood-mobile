@@ -30,10 +30,10 @@ Current Public v1 truth:
 - Every account has Profile + Channel.
 - Profile is the person/social identity.
 - Channel is the public mini streaming platform/network at `/channel/[userId]`.
-- Channel Studio is the owner-only creator operating system at `/channel-studio`.
+- Platform Studio is the owner-only creator operating system at `/channel-studio`.
 - `/channel-settings` remains compatibility for older owner links.
 - Profile View Channel routes to `/channel/[userId]`.
-- Channel Studio Preview Channel routes to `/channel/[ownUserId]`.
+- Platform Studio Preview Channel routes to `/channel/[ownUserId]`.
 - User/creator Channels show creator-owned uploads, videos, events, live/watch-party content, and backed creator shelves only.
 - Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
 - `/profile/[userId]` is the public Profile/social identity surface.
@@ -51,7 +51,7 @@ Current Public v1 truth:
 - Profile post media, richer reactions beyond a single backed like, media comments, nested replies, reposts, polls, full Friends, close friends, and friend-only privacy are post-v1.
 - Comment media upload is post-v1.
 - Native game/video streaming is later phase.
-- Paid/subscriber media, tips, coins, payouts, VIPs, and advanced creator studio are later phase.
+- Paid/subscriber media, tips, coins, payouts, VIPs, and advanced Platform Studio are later phase.
 - Premium/access gate proof is required for full Live First, Live Watch-Party, and Watch-Party Live.
 - Current business decision is that all full live/watch-party access is Premium. Live First is no longer free, free users do not receive full LiveKit room/token/connect access, and no free preview mode exists. Any future preview must be explicitly designed, limited, low-cost, separately gated, and proved safely.
 - Basic moderation/safety is required before public launch because creator uploads exist.
@@ -116,7 +116,7 @@ Owns:
 - channel defaults
 - audience summary display
 - public hero, featured, latest uploads, live/upcoming, and about display
-- owner handoff into Channel Studio
+- owner handoff into Platform Studio
 
 Must not own:
 
@@ -141,9 +141,9 @@ Future Codex should avoid:
 - removing or bypassing `/channel/[userId]`
 - renaming Profile and Channel into separate identities
 - relying on unbacked audience roles for upload security
-- leaking owner-only Studio controls, drafts, private videos, unpublished videos, upload/edit/publish/delete actions, insights, or admin controls to non-owners
+- leaking owner-only Platform Studio controls, drafts, private videos, unpublished videos, upload/edit/publish/delete actions, insights, or admin controls to non-owners
 
-### Channel Studio / Channel Settings Compatibility
+### Platform Studio / Channel Settings Compatibility
 
 Owns:
 
@@ -172,7 +172,7 @@ Interacts with:
 
 Future Codex should avoid:
 
-- turning Channel Studio or Channel Settings into platform admin
+- turning Platform Studio or Channel Settings into platform admin
 - showing unsupported VIP/mod/co-host/subscriber mutation as real
 - making a button appear before its backend owner exists
 
@@ -775,7 +775,7 @@ Current route/surface owners:
 - `app/channel/[userId].tsx`: public Channel report entry.
 - `app/title/[id].tsx`: title report entry.
 - `app/player/[id].tsx`: playback unavailable states, creator-video not-ready states, and creator-video report entry.
-- Channel Studio (`app/channel-settings.tsx` implementation, `/channel-studio` preferred route): creator/channel safety summary, moderated creator-video status display, and owner management constraints, not global moderation queue.
+- Platform Studio (`app/channel-settings.tsx` implementation, `/channel-studio` preferred route): creator/channel safety summary, moderated creator-video status display, and owner management constraints, not global moderation queue.
 - `app/watch-party/[partyId].tsx`: Party Room report entry.
 - `app/watch-party/live-stage/[partyId].tsx`: Live Room report entry.
 - `app/chat/[threadId].tsx`: direct-thread report context where supported.
@@ -1488,7 +1488,7 @@ Later layers:
 - Chi'llywood should not take a direct percentage cut from the tip amount.
 - Any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed.
 - Tips do not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods.
-- Creator merch/product sales later belong in Studio/mini-platform commerce and require product listings, prices, inventory/status where needed, fulfillment/shipping for physical goods, refunds/disputes, payout ledger entries, and tax/provider/legal review.
+- Creator merch/product sales later belong on the Channel mini platform, are managed from Platform Studio command-center surfaces, and require product listings, prices, inventory/status where needed, fulfillment/shipping for physical goods, refunds/disputes, payout ledger entries, and tax/provider/legal review.
 - Net receipts means after store/payment fees, taxes, refunds, chargebacks, provider fees, and adjustments.
 - Standard scheduled creator payouts remain free.
 - Instant Payout / Instant Cash Out may have a separate optional fee later; preferred direction is `1.5%` of the cash-out amount with no default cap, subject to provider/legal/accounting review.
@@ -1755,7 +1755,7 @@ Recommendation:
 - Admin controls platform titles, reports, takedowns, configs, and later monetization support.
 - Admin access must be backend enforced.
 - Admin UI must not expose fake authority.
-- Admin is the private Operator Center for backend platform roles; Channel Studio is the creator/content-owner surface, with `/channel-settings` compatibility preserved.
+- Admin is the private Operator Center for backend platform roles; Platform Studio is the creator/content-owner surface, with `/channel-settings` compatibility preserved.
 - Rachi can have a backend-protected official-account management section inside Admin, but Rachi is not Admin and must not imply operator authority.
 - Admin actions should gain audit records before sensitive mutation launch.
 
@@ -1795,7 +1795,7 @@ Recommendation:
 - VIPs
 - moderators/co-hosts at scale
 - full Audience Role Roster
-- advanced creator studio
+- advanced Platform Studio
 - automatic transcoding
 - creator-upload Watch-Party linking follow-up if runtime proof is not completed for Public v1
 

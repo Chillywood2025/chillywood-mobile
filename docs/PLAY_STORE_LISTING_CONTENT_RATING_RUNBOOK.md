@@ -13,7 +13,7 @@ This runbook is not proof that Google Play listing setup is complete. It is a re
 - Do not submit or upload anything to Google Play from this docs lane.
 - Do not claim Store Listing, Content Rating, Target Audience, Data Safety, or UGC policy setup is Done until Play Console accepts the entries and proof is captured.
 - Do not overpromise later-phase features as live.
-- Do not say paid creator videos, subscriber-only videos, tips, coins, payouts, ads, VIPs, native game streaming, comment media uploads, advanced creator studio, or automatic transcoding are live.
+- Do not say paid creator videos, subscriber-only videos, tips, coins, payouts, ads, VIPs, native game streaming, comment media uploads, advanced Platform Studio, or automatic transcoding are live.
 - Do not include screenshots with test emails, account ids, signed media URLs, room tokens, LiveKit tokens, RevenueCat receipts, internal admin data, private room codes, or unapproved user content.
 - Do not treat this runbook as legal advice. Legal/support owners must approve final public listing copy, policy pages, and support/account deletion processes.
 
@@ -98,7 +98,7 @@ Watch platform titles, creator uploads, and shared rooms with a modern Player ex
 
 Creator uploads, chat, profiles, rooms, and live features are protected by community guidelines, report paths, and moderation review. Some Premium, billing, and live features may require sign-in, subscription access, or staged rollout availability.
 
-Public v1 focuses on Profile, Channel, creator videos, Player, Watch-Party, Live, Chat, Premium access, and safety basics. Native game streaming, paid creator media, tips, coins, payouts, VIP systems, comment media uploads, ads, and advanced creator studio tools are not live v1 features unless a future release explicitly adds and proves them.
+Public v1 focuses on Profile, Channel, creator videos, Player, Watch-Party, Live, Chat, Premium access, and safety basics. Native game streaming, paid creator media, tips, coins, payouts, VIP systems, comment media uploads, ads, and advanced Platform Studio tools are not live v1 features unless a future release explicitly adds and proves them.
 ```
 
 Description guardrails:

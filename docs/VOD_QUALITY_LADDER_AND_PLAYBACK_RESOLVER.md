@@ -39,7 +39,7 @@ Client integration:
 
 - `_lib/vodQuality.ts` normalizes resolver output and signs only the resolver-selected rendition where possible.
 - `_lib/creatorVideos.ts` uses the resolver for Player playback and records an original rendition after new uploads when the migration is present.
-- `components/creator-media/creator-video-card.tsx` shows creator-facing rendition status in Channel Studio Content cards.
+- `components/creator-media/creator-video-card.tsx` shows creator-facing rendition status in Platform Studio Content cards.
 - `supabase/functions/media-storage` now authorizes rendition downloads by checking `video_renditions`, video public/moderation state, ownership/staff role, and Premium entitlement before signing S3 rendition paths.
 
 ## Live Proof Status

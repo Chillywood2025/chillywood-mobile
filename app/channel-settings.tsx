@@ -638,7 +638,7 @@ export function ChannelStudioScreen() {
         : "Enter a title to enable upload.";
   const isVideoSubmitDisabled = videoSaving || !!videoSubmitRequirement;
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
-  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Channel Studio");
+  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Platform Studio");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
 
   useEffect(() => {
@@ -1329,9 +1329,9 @@ export function ChannelStudioScreen() {
       });
       await saveUserProfile(normalized);
       setProfile(normalized);
-      setNotice("Channel Studio saved.");
+      setNotice("Platform Studio saved.");
     } catch {
-      setNotice("Unable to save Channel Studio changes right now.");
+      setNotice("Unable to save Platform Studio changes right now.");
     } finally {
       setSaving(false);
     }
@@ -1417,7 +1417,7 @@ export function ChannelStudioScreen() {
           body: "Backed room, event, and audience signals.",
         },
         {
-          title: "Channel IQ / Rachi Studio Assistant",
+          title: "Channel IQ / Rachi Platform Studio Assistant",
           status: "later_phase",
           body: "Coming later; no assistant implementation is wired in this pass.",
         },
@@ -1766,7 +1766,7 @@ export function ChannelStudioScreen() {
     {
       label: "Merch/products",
       value: "Future commerce",
-      body: "Studio mini-platform commerce needs product listings, inventory or fulfillment status where needed, provider proof, refunds, tax review, and payout ledger truth before launch.",
+      body: "Channel mini-platform commerce is managed from Platform Studio and needs product listings, inventory or fulfillment status where needed, provider proof, refunds, tax review, and payout ledger truth before launch.",
     },
     {
       label: "Paid content",
@@ -2320,7 +2320,7 @@ export function ChannelStudioScreen() {
 
   const renderStudioHeader = () => (
     <View style={styles.studioHeaderCard}>
-      <Text style={styles.heroTitle}>Channel Studio</Text>
+      <Text style={styles.heroTitle}>Platform Studio</Text>
       <Text style={styles.studioSubtitle}>Run your channel from one place.</Text>
       <Text style={styles.studioClarifier}>Profile settings stay separate.</Text>
       {profile ? (
@@ -2603,7 +2603,7 @@ export function ChannelStudioScreen() {
         <View style={styles.roadmapList}>
           <Text style={styles.roadmapItem}>Featured Video / Trailer — Coming later</Text>
           <Text style={styles.roadmapItem}>Playlists / Shelves — Coming later</Text>
-          <Text style={styles.roadmapItem}>Channel IQ / Rachi Studio Assistant — Coming later</Text>
+          <Text style={styles.roadmapItem}>Channel IQ / Rachi Platform Studio Assistant — Coming later</Text>
         </View>
       </View>
     </>
@@ -2886,7 +2886,7 @@ export function ChannelStudioScreen() {
       <View style={styles.quickActionGrid}>
         {renderQuickActionCard({
           title: "Go Live",
-          body: "Live route not wired from Studio yet.",
+          body: "Live route not wired from Platform Studio yet.",
           disabled: true,
         })}
         {renderQuickActionCard({
@@ -2906,7 +2906,7 @@ export function ChannelStudioScreen() {
   if (authLoading || betaLoading) {
     return (
       <BetaAccessScreen
-        title="Loading Channel Studio"
+        title="Loading Platform Studio"
         body="Checking your signed-in identity before opening the channel management surface."
         loadingOverride
       />
@@ -2916,8 +2916,8 @@ export function ChannelStudioScreen() {
   if (!isSignedIn) {
     return (
       <BetaAccessScreen
-        title="Sign in to open Channel Studio"
-        body="Channel Studio stays behind signed-in access because it changes creator defaults and room options."
+        title="Sign in to open Platform Studio"
+        body="Platform Studio stays behind signed-in access because it changes creator defaults and room options."
       />
     );
   }
@@ -2950,11 +2950,11 @@ export function ChannelStudioScreen() {
         {loading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color="#fff" />
-            <Text style={styles.loadingText}>Loading Channel Studio…</Text>
+            <Text style={styles.loadingText}>Loading Platform Studio…</Text>
           </View>
         ) : !settingsEnabled ? (
           <View style={styles.disabledCard}>
-            <Text style={styles.disabledTitle}>Channel Studio is hidden</Text>
+            <Text style={styles.disabledTitle}>Platform Studio is hidden</Text>
             <Text style={styles.disabledBody}>
               The creator settings entry is currently disabled in global app config.
             </Text>

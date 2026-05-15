@@ -1,6 +1,6 @@
 # Chi'llywood Channel Design / Layout Implementation Spec
 
-2026-05-06 current-route note: current Channel design/layout ownership is public Channel on `/channel/[userId]` for viewer presentation and owner Channel Studio on `/channel-studio` for owner controls. `/channel-settings` remains compatibility.
+2026-05-06 current-route note: current Channel design/layout ownership is public Channel on `/channel/[userId]` for viewer presentation and owner Platform Studio on `/channel-studio` for owner controls. `/channel-settings` remains compatibility.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's channel design / layout chapter.
@@ -29,7 +29,7 @@ This spec does not:
 | --- | --- | --- |
 | `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route and public presentation surface. |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator-side control center and future owner for channel design/layout controls. |
-| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
 | `/title/[id]` | `app/title/[id].tsx` | Canonical title detail surface. Title programming flags may influence profile presentation, but title route truth does not move here. |
 | `/watch-party/*` | current room owners | Live/party route truth remains separate from channel layout truth. |
@@ -121,7 +121,7 @@ Current doctrine:
 - template or block-order controls if they become real
 - summary/explainer copy about what this route will own
 
-`/channel-settings` must remain compatibility for older owner Studio links.
+`/channel-settings` must remain compatibility for older owner Platform Studio links.
 
 ### 4.2 Public Surface
 `/channel/[userId]` must remain the owner for:
@@ -189,7 +189,7 @@ Current creator-side route ownership already exists in:
 - `app/channel-settings.tsx`
 - `app/channel-studio/index.tsx`
 
-The owner Studio already:
+The owner Platform Studio already:
 - exposes the Brand tab for backed identity/default fields
 - keeps unsupported design/layout controls out of the public Channel
 - preserves `/channel-settings` compatibility for older links
@@ -209,8 +209,8 @@ This is route-ownership truth, not yet a fully backed design system.
 ### 7.1 Keep Current Ownership
 - `_lib/appConfig.ts` remains the owner for global theme/home defaults
 - `app/channel/[userId].tsx` remains the public Channel presentation owner
-- `app/channel-settings.tsx` remains the Channel Studio implementation/compatibility owner
-- `app/channel-studio/index.tsx` remains the preferred owner Studio route wrapper
+- `app/channel-settings.tsx` remains the Platform Studio implementation/compatibility owner
+- `app/channel-studio/index.tsx` remains the preferred owner Platform Studio route wrapper
 
 ### 7.2 Likely Next Helper / Model Need
 The next narrow implementation lanes in this chapter, if justified by audit truth, should stay within:

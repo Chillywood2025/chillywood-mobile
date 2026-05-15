@@ -1,6 +1,6 @@
 # Chi'llywood Creator Analytics / Conversion Implementation Spec
 
-2026-05-06 current-route note: creator analytics/insights belong in owner Channel Studio on `/channel-studio`. Public Channel on `/channel/[userId]` may show public-safe backed stats only. `/channel-settings` remains compatibility.
+2026-05-06 current-route note: creator analytics/insights belong in owner Platform Studio on `/channel-studio`. Public Channel on `/channel/[userId]` may show public-safe backed stats only. `/channel-settings` remains compatibility.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's creator analytics / conversion chapter.
@@ -28,7 +28,7 @@ This spec does not:
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator-side analytics/Insights owner today. |
-| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. Not a creator analytics console. |
 | `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. Public-safe backed stats only, not creator analytics console. |
 | `/chat` | `app/chat/index.tsx` | Canonical Chi'lly Chat inbox route. |
@@ -42,7 +42,7 @@ Do not create route proliferation in this chapter.
 
 ### 2.2 Current Product Rules To Preserve
 - `/channel-studio` remains the preferred creator-side control center and current creator analytics/Insights summary owner.
-- `/channel-settings` remains compatibility for older owner Studio links.
+- `/channel-settings` remains compatibility for older owner Platform Studio links.
 - `/profile/[userId]` remains a personal/social identity surface, not a private creator analytics dashboard.
 - `/channel/[userId]` remains the public Channel route and may show public-safe backed stats only.
 - Chi'lly Chat unread/read truth stays messaging-owned truth, not creator analytics by default.

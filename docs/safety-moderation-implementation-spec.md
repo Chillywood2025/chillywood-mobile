@@ -1,6 +1,6 @@
 # Chi'llywood Safety / Moderation Workflow Implementation Spec
 
-2026-05-06 current-route note: creator/channel safety summaries belong in owner Channel Studio on `/channel-studio`; `/channel-settings` remains compatibility. Public Channel on `/channel/[userId]` may open public-safe report intake but must not expose moderation/admin controls.
+2026-05-06 current-route note: creator/channel safety summaries belong in owner Platform Studio on `/channel-studio`; `/channel-settings` remains compatibility. Public Channel on `/channel/[userId]` may open public-safe report intake but must not expose moderation/admin controls.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's safety / moderation workflow deepening chapter.
@@ -28,7 +28,7 @@ This spec does not:
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator-side control center. May show creator/channel safety summary truth, but is not the platform moderation queue. |
-| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. May open honest report intake, but is not a creator moderation console. |
 | `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. May open honest public-safe report intake, but must not expose owner/admin controls. |
 | `/title/[id]` | `app/title/[id].tsx` | Canonical title detail route. May open honest report intake for title-owned context. |
@@ -42,7 +42,7 @@ Do not create route proliferation in this chapter.
 
 ### 2.2 Product Rules To Preserve
 - `/channel-studio` remains the creator-side owner for channel safety summary truth, not the global moderation queue.
-- `/channel-settings` remains compatibility for older owner Studio links.
+- `/channel-settings` remains compatibility for older owner Platform Studio links.
 - `/profile/[userId]` remains the personal/social Profile route and must not become a creator moderation console.
 - `/channel/[userId]` remains the public Channel route and must not expose owner/admin safety controls.
 - Report submission must remain grounded in actual target, route, and audit context.
@@ -111,7 +111,7 @@ Current doctrine allows it to show:
 - Fraud Hold Enforcement Foundation counts for fraud enforcement policies and non-executable planned action readiness, as read-only/foundation rows only; runtime hooks are not connected and no payout pause, monetization disable, upload restriction, live restriction, sponsor restriction, account restriction, or fake risk score is active
 - Fraud Runtime Hook Planning/Spec is recorded only: future payout pause, monetization disable, sponsor restriction, network billing hold, upload restriction, and live restriction hooks require immutable audit, admin reason, linked fraud hold/action records, review state, reversible state, appeal/review path, and affected-surface proof before enforcement
 - Immutable Admin Audit Log Foundation latest rows in Audit, as read-only append-only foundation rows only
-- Creator Payout Read-Only Dashboard Foundation is a Channel Studio read-only surface, not an Admin enforcement workflow; future payout release still requires fraud review and immutable audit before any dangerous action
+- Creator Payout Read-Only Dashboard Foundation is a Platform Studio read-only surface, not an Admin enforcement workflow; future payout release still requires fraud review and immutable audit before any dangerous action
 - Stripe Connect Test-Mode Backend Functions are deployed backend-only/test-mode and do not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior; backend Stripe secret names are configured by digest only, account creation/reuse, onboarding-link creation, account sync, signed webhook handling, and duplicate-event idempotency passed test-mode provider proof, invalid webhook signatures are rejected, and future payout release still requires fraud review plus immutable audit rows before dangerous actions
 - Payout Review Queue + Batch Draft Workflow Foundation is Admin read-only/draft-only and does not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior; future payout approval/release/batch processing still requires fraud review, KYC/tax readiness, provider proof, admin reason/approval, and immutable audit rows before dangerous actions
 - Provider Transfer Records Sync Foundation is backend-only/admin-operator/test-mode status import for existing local provider transfer records; it does not change safety enforcement, fraud holds, payout release, creator UI, or live money behavior, and future transfer creation/payout release still requires fraud review, KYC/tax readiness, provider proof, admin reason/approval, and immutable audit rows before dangerous actions

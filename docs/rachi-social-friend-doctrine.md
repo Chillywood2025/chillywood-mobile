@@ -19,8 +19,8 @@ This document does not:
 ## 2. Current Doctrine That Must Be Preserved
 - `/profile/[userId]` is the personal/social Profile route.
 - `/channel/[userId]` is the public Channel route.
-- `/channel-studio` is the preferred owner Channel Studio route.
-- `/channel-settings` remains compatibility for older creator-side Studio links.
+- `/channel-studio` is the preferred owner Platform Studio route.
+- `/channel-settings` remains compatibility for older creator-side Platform Studio links.
 - `/admin` remains the bounded internal/admin owner.
 - owner remains above Rachi.
 - Rachi is internal AI operations/system truth and official platform identity, not owner authority.

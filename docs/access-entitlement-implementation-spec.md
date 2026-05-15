@@ -1,6 +1,6 @@
 # Chi'llywood Access / Entitlement Implementation Spec
 
-2026-05-06 current-route note: Profile is `/profile/[userId]`, public Channel is `/channel/[userId]`, owner Channel Studio is `/channel-studio`, and `/channel-settings` remains compatibility. All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Admin Command Center V1A is pushed on `/admin` and must preserve RevenueCat as Premium truth without manual Premium toggles.
+2026-05-06 current-route note: Profile is `/profile/[userId]`, public Channel is `/channel/[userId]`, owner Platform Studio is `/channel-studio`, and `/channel-settings` remains compatibility. All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Admin Command Center V1A is pushed on `/admin` and must preserve RevenueCat as Premium truth without manual Premium toggles.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's current access and entitlement architecture.
@@ -28,8 +28,8 @@ This spec does not:
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile surface. |
 | `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel surface. |
-| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Channel Studio. |
-| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Platform Studio. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/title/[id]` | `app/title/[id].tsx` | Canonical title detail and title-entry gate surface. |
 | `/player/[id]` | `app/player/[id].tsx` | Canonical standalone player surface. |
 | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Canonical Party Room route. |
@@ -59,7 +59,7 @@ Current live/watch-party role truth:
 - Access must not become a scattered mix of per-screen guesses.
 - Official presence is not a creator paywall.
 - Room access, content access, and future event access may share language, but they are not the same source-of-truth today.
-- Creator Payout Read-Only Dashboard Foundation is not an entitlement or payout activation system. It lives in Channel Studio as read-only/foundation payout readiness and own-ledger visibility only; it does not add Withdraw, Cash Out, Connect Stripe, KYC/tax, payout approval/release, fake payable balance, fake earnings, or live money movement.
+- Creator Payout Read-Only Dashboard Foundation is not an entitlement or payout activation system. It lives in Platform Studio as read-only/foundation payout readiness and own-ledger visibility only; it does not add Withdraw, Cash Out, Connect Stripe, KYC/tax, payout approval/release, fake payable balance, fake earnings, or live money movement.
 - Stripe Connect Test-Mode Backend Functions are not entitlement, payout activation, or creator setup UI. They are backend-only/test-mode Edge Functions with no Connect Stripe button and no creator setup UI; backend Stripe secret names are configured by digest only, and account/reuse, onboarding link, account sync, signed webhook, and duplicate-event idempotency proof passed in test mode. They add no entitlement path, transfer, payout, checkout session, live-mode behavior, fake payable balance, or live money movement.
 - Payout Review Queue + Batch Draft Workflow Foundation is not an entitlement, payout activation, or creator-payable system. It lives in Admin Payouts as read-only/foundation review counts and draft-only batch grouping; it does not add payout approval, release, batch processing, transfer creation, fake payable balance, fake earnings, creator withdrawal, or live money movement.
 - Provider Transfer Records Sync Foundation is not entitlement, payout activation, transfer creation, or creator-payable truth. It is backend-only/admin-operator/test-mode status import for existing local provider transfer records; it does not add creator setup UI, payout approval, release, retry, Mark Paid, Send Money, Process Batch, fake paid status, fake payable balance, creator withdrawal, or live money movement.
@@ -204,7 +204,7 @@ Current room truth includes:
 This is related to access posture, but it is not yet the same as a general entitlement resolver.
 
 ### 5.7 Current Channel Access Summaries
-Channel Studio (`app/channel-settings.tsx` implementation, `/channel-studio` preferred route) derives channel access summary labels from current room defaults. `/profile/[userId]` and `/channel/[userId]` may surface only public-safe backed posture:
+Platform Studio (`app/channel-settings.tsx` implementation, `/channel-studio` preferred route) derives channel access summary labels from current room defaults. `/profile/[userId]` and `/channel/[userId]` may surface only public-safe backed posture:
 - `Official Access`
 - `Loading Access`
 - `Subscriber Access`

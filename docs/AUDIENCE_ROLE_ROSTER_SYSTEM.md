@@ -37,9 +37,9 @@ Backend-backed behavior exists for:
 
 Current UI behavior:
 
-- Channel Studio (`/channel-studio`, implemented through `app/channel-settings.tsx`) shows backed follower, subscriber, request, and blocked counts.
-- Channel Studio supports owner/operator actions for request review, follower removal, and block/unblock.
-- Channel Studio already marks subscriber mutation and VIP/mod/co-host workflows as later or unsupported.
+- Platform Studio (`/channel-studio`, implemented through `app/channel-settings.tsx`) shows backed follower, subscriber, request, and blocked counts.
+- Platform Studio supports owner/operator actions for request review, follower removal, and block/unblock.
+- Platform Studio already marks subscriber mutation and VIP/mod/co-host workflows as later or unsupported.
 - `/channel/[userId]` can show public-safe backed audience posture/counts from profile/channel truth.
 - `/admin` owns platform role and safety-review visibility, not channel audience roster management.
 
@@ -70,7 +70,7 @@ Profile / Channel System:
 
 - Profile is the personal/social identity surface on `/profile/[userId]`.
 - Public Channel is the mini streaming/network surface on `/channel/[userId]`.
-- Channel Studio is the owner control surface on `/channel-studio`; `/channel-settings` remains compatibility.
+- Platform Studio is the owner control surface on `/channel-studio`; `/channel-settings` remains compatibility.
 - Audience Role Roster feeds channel audience posture, counts, relationship controls, and later role management.
 
 Creator Media System:
@@ -319,7 +319,7 @@ Phase 0: Documentation and audit
 Phase 1: Public v1 hardening
 
 - Finish creator media public/draft and owner/non-owner runtime proof.
-- Keep Channel Studio audience UI limited to backed follower/request/block/subscriber-summary truth, with `/channel-settings` compatibility preserved.
+- Keep Platform Studio audience UI limited to backed follower/request/block/subscriber-summary truth, with `/channel-settings` compatibility preserved.
 - Confirm block/report basics are sufficient for Public v1 safety posture.
 
 Phase 2: Unified roster foundation

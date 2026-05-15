@@ -1,6 +1,6 @@
 # Chi'llywood Audience Management Implementation Spec
 
-2026-05-06 current-route note: current audience ownership is public Channel on `/channel/[userId]` for viewer-safe audience signals and owner Channel Studio on `/channel-studio` for owner audience controls. `/channel-settings` remains compatibility.
+2026-05-06 current-route note: current audience ownership is public Channel on `/channel/[userId]` for viewer-safe audience signals and owner Platform Studio on `/channel-studio` for owner audience controls. `/channel-settings` remains compatibility.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's audience-management chapter.
@@ -28,8 +28,8 @@ This spec does not:
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
 | `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. |
-| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Channel Studio and future audience-management owner. |
-| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Studio links. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Platform Studio and future audience-management owner. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/chat` and `/chat/[threadId]` | `app/chat/index.tsx`, `app/chat/[threadId].tsx` | Canonical Chi'lly Chat routes. |
 | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Canonical Party Room route. |
 | `/watch-party/live-stage/[partyId]` | `app/watch-party/live-stage/[partyId].tsx` | Canonical Live Room / Live Stage route. |
@@ -38,8 +38,8 @@ Do not create route proliferation in this chapter.
 
 ### 2.2 Current Product Rules To Preserve
 - `/profile/[userId]` remains identity/social presentation first, not a full creator CRM.
-- `/channel-studio` remains the preferred owner Channel Studio for deeper creator audience controls.
-- `/channel-settings` remains compatibility for older owner Studio links.
+- `/channel-studio` remains the preferred owner Platform Studio for deeper creator audience controls.
+- `/channel-settings` remains compatibility for older owner Platform Studio links.
 - Chi'lly Chat stays the canonical follow-up and messaging layer; audience management must not turn profile or settings into a replacement inbox.
 - The access/entitlement chapter already closed enough to move on; audience work should reuse that chapter's language where it affects subscriber and visibility posture, not reopen it.
 - Creator/channel subscriber relationship truth is distinct from account-tier premium entitlement truth.
@@ -63,8 +63,8 @@ Do not collapse account-tier `premium` into creator/channel `subscriber`.
 ### 3.1 Current Doctrine Already Supports
 Current repo doctrine already supports:
 - canonical audience relationship tables for followers, subscribers, pending requests, and blocked audience
-- creator-facing audience summary counts and visibility summary in Channel Studio
-- backed Channel Studio audience actions for request review, follower removal, and block/unblock through `_lib/channelAudience.ts`
+- creator-facing audience summary counts and visibility summary in Platform Studio
+- backed Platform Studio audience actions for request review, follower removal, and block/unblock through `_lib/channelAudience.ts`
 - owner/operator-scoped audience read-model access through `_lib/channelReadModels.ts`
 - public-safe Channel audience stats on `/channel/[userId]`
 - public-activity visibility posture on `user_profiles`
@@ -312,7 +312,7 @@ This phase should:
 - keep premium entitlement and creator/channel subscriber truth separate
 
 ### Phase C — Creator Audience Management Surface
-Adopt the landed action/helper truth into Channel Studio.
+Adopt the landed action/helper truth into Platform Studio.
 
 This phase should:
 - deepen the current summary cards into real creator workflow sections

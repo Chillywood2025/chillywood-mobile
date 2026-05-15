@@ -33,7 +33,7 @@ The source of truth is `_lib/performancePolicy.ts`.
 | Live comment fallback refresh | 15 seconds, with realtime as the primary path |
 | Home soft refresh floor | 2 minutes |
 | Channel live status refresh floor | 60 seconds |
-| Studio dashboard refresh floor | 2 minutes |
+| Platform Studio dashboard refresh floor | 2 minutes |
 | Analytics refresh mode | manual / on open / cached |
 | Typing throttle | 2 seconds |
 | Read receipt throttle | 10 seconds |
@@ -45,7 +45,7 @@ The source of truth is `_lib/performancePolicy.ts`.
 - Watch-Party Live snapshot fallback refresh is 30 seconds.
 - Live Stage hybrid room comments still use Supabase realtime first; the fallback sync is 15 seconds.
 - Chat read receipts are route-throttled to avoid repeated write bursts while messages are loading or sending.
-- Home, Profile, Public Channel, and Channel Studio remain load-on-open/focus/manual surfaces; this lane does not add new feed polling.
+- Home, Profile, Public Channel, and Platform Studio remain load-on-open/focus/manual surfaces; this lane does not add new feed polling.
 - VOD quality ladder foundation lives in `docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md`. Player asks the resolver for allowed creator-video renditions and falls back to legacy single-file playback only when no real renditions exist.
 
 ## Guardrails
@@ -56,7 +56,7 @@ Run:
 npm run guard:refresh-policy
 ```
 
-The guard blocks regressions to default 60fps live, live v1 max above 30fps, Premium live above 720p, room heartbeats below 15 seconds, Home refresh below 2 minutes, Studio/analytics auto-polling below 60 seconds, missing chat throttles, and missing strict Premium live gate references.
+The guard blocks regressions to default 60fps live, live v1 max above 30fps, Premium live above 720p, room heartbeats below 15 seconds, Home refresh below 2 minutes, Platform Studio/analytics auto-polling below 60 seconds, missing chat throttles, and missing strict Premium live gate references.
 
 ## Pending
 

@@ -2,7 +2,7 @@
 
 Date: 2026-04-28
 
-2026-05-06 current-route note: this static audit predates the pushed Channel Studio and public Channel route. Current truth is Profile = `/profile/[userId]`, public Channel = `/channel/[userId]`, owner Channel Studio = `/channel-studio`, and `/channel-settings` compatibility remains.
+2026-05-06 current-route note: this static audit predates the pushed Platform Studio and public Channel route. Current truth is Profile = `/profile/[userId]`, public Channel = `/channel/[userId]`, owner Platform Studio = `/channel-studio`, and `/channel-settings` compatibility remains.
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 
@@ -24,7 +24,7 @@ The non-room app surface is mostly aligned with the product doctrine:
 - Home, Explore, and My List own platform-title discovery and saved content.
 - Profile is the person/social identity surface.
 - Public Channel is the viewer-facing mini streaming/network surface.
-- Channel Studio is the owner control center for channel settings and creator media; `/channel-settings` remains compatibility.
+- Platform Studio is the owner control center for channel settings and creator media; `/channel-settings` remains compatibility.
 - Creator Media owns uploaded-video metadata, storage handoff, Profile/Channel display, Player handoff, and moderation status.
 - Player owns standalone premium playback and must keep platform title and creator-video sources explicit.
 - Title Detail owns platform title detail, access, report, and Watch-Party Live entry.
@@ -54,8 +54,8 @@ Recommendation: keep the fixes, run the next route smoke on Android, and keep th
 | Explore | `/(tabs)/explore` | `app/(tabs)/explore.tsx` | Discovery | Platform-title browse | Creator upload management, fake search | Protected tab route | Correct / proof pending |
 | My List | `/(tabs)/my-list` | `app/(tabs)/my-list.tsx` | Saved content | Saved platform titles | Creator upload management | Protected tab route | Correct / proof pending |
 | Profile | `/profile/[userId]` | `app/profile/[userId].tsx` | Profile social identity | Identity, backed text-only personal Posts, profile actions, Chi'lly Chat handoff, View Channel handoff | Public Channel implementation, deep creator-video edit/delete management, Player playback, admin moderation writes, platform title discovery, fake engagement or fake Friends | Protected route; owner and public viewer controls differ | Correct / proof pending |
-| Public Channel | `/channel/[userId]` | `app/channel/[userId].tsx` | Public Channel | Viewer-facing hero, backed stats, featured/latest public videos, live/upcoming, about, Follow/Share/Report/View Profile, owner-only Open Studio | Upload/edit/publish/unpublish/delete, drafts/private/unpublished videos, analytics/admin controls | Public/viewer route; owner-only Studio action only for owner | Correct / proof passed for visual correction |
-| Channel Studio | `/channel-studio` | `app/channel-studio/index.tsx`, `app/channel-settings.tsx` | Channel owner controls | Dashboard, Content, Live, Audience, Insights, Brand, creator upload/manage, creator events, audience summaries | Public channel display, Player playback, platform admin | Signed-in owner route; `/channel-settings` compatibility | Correct / proof pending |
+| Public Channel | `/channel/[userId]` | `app/channel/[userId].tsx` | Public Channel | Viewer-facing hero, backed stats, featured/latest public videos, live/upcoming, about, Follow/Share/Report/View Profile, owner-only Open Platform Studio | Upload/edit/publish/unpublish/delete, drafts/private/unpublished videos, analytics/admin controls | Public/viewer route; owner-only Platform Studio action only for owner | Correct / proof passed for visual correction |
+| Platform Studio | `/channel-studio` | `app/channel-studio/index.tsx`, `app/channel-settings.tsx` | Channel owner controls | Dashboard, Content, Live, Audience, Insights, Brand, creator upload/manage, creator events, audience summaries | Public channel display, Player playback, platform admin | Signed-in owner route; `/channel-settings` compatibility | Correct / proof pending |
 | Creator Media management | `/channel-studio` Content tab | `app/channel-settings.tsx`, `_lib/creatorVideos.ts` | Creator Media | Choose file, metadata, draft/public, edit, publish/unpublish, delete | Paid media, transcoding, fake upload success | Owner-only UI; backend/RLS proof still required | Correct / proof pending |
 | Standalone Player | `/player/[id]` | `app/player/[id].tsx` | Player | Platform-title playback, creator-video playback when source is explicit, report, Watch-Party entry | Upload management, source guessing | Protected route plus access gate | Fixed / proof pending |
 | Title Detail | `/title/[id]` | `app/title/[id].tsx` | Platform title detail | Title metadata, play, favorite/list, report, Watch-Party Live CTA | Creator-video detail | Protected route plus access gate | Correct / proof pending |
@@ -80,12 +80,12 @@ Recommendation: keep the fixes, run the next route smoke on Android, and keep th
 | Signup legal links | Signup | Open Terms, Privacy, Guidelines | Route links exist | Real |
 | Signup Sign In | Signup | Route existing users to login | Added in this pass | Fixed |
 | Logout | Settings | Supabase sign out | Calls auth sign out and leaves protected routes to auth gate | Real / proof pending |
-| Edit/manage profile | Profile/Settings | Owner opens Profile settings or Channel Studio as appropriate | Owner-only handoff exists | Real |
-| Channel Studio | Profile/Settings | Route to `/channel-studio` | Owner/account handoff exists | Real |
+| Edit/manage profile | Profile/Settings | Owner opens Profile settings or Platform Studio as appropriate | Owner-only handoff exists | Real |
+| Platform Studio | Profile/Settings | Route to `/channel-studio` | Owner/account handoff exists | Real |
 | Upload Video from Profile | Owner Profile | Expand inline composer, open Android picker, attach a real video, and publish through creator-video backend path without routing away | Inline Profile composer now calls `expo-document-picker` and `_lib/creatorVideos.ts`; runtime proof pending | Real / proof pending |
-| Choose Video File | Channel Studio | Open Android picker and show selected file | `expo-document-picker` flow exists; runtime proof from earlier upload lane exists, final non-room route smoke pending | Real / proof pending |
-| Save/upload | Channel Studio | Save metadata/storage or show error | Upload/loading/error/success states exist; no fake success | Real / proof pending |
-| Edit video | Channel Studio | Edit metadata in owner lane | Existing code path present | Real / proof pending |
+| Choose Video File | Platform Studio | Open Android picker and show selected file | `expo-document-picker` flow exists; runtime proof from earlier upload lane exists, final non-room route smoke pending | Real / proof pending |
+| Save/upload | Platform Studio | Save metadata/storage or show error | Upload/loading/error/success states exist; no fake success | Real / proof pending |
+| Edit video | Platform Studio | Edit metadata in owner lane | Existing code path present | Real / proof pending |
 | Publish/unpublish | Channel Settings | Toggle draft/public honestly, blocked by moderation when needed | Existing code path and moderated blocked copy present | Real / proof pending |
 | Delete video | Channel Settings | Confirm then remove owner video | Confirmation/code path exists; Storage API delete proof pending | Real / proof pending |
 | Open Player | Profile/Channel Settings | Open creator video with explicit source | Routes to `/player/[id]?source=creator-video` | Real |
@@ -139,7 +139,7 @@ Profile owns the owner-only creator-video upload composer, while Channel Setting
 
 Presentation update: creator videos now use a shared media-first card in Channel Settings and in the Profile Channel tab. The card shows real thumbnails from `thumb_url` / `thumb_storage_path` when available, a branded fallback preview when not, Play overlay, visibility and moderation badges where appropriate, file size/date metadata where present, and owner controls only in owner surfaces or management handoffs.
 
-No fake paid/subscriber media, transcoding, payout, or advanced creator studio controls were added.
+No fake paid/subscriber media, transcoding, payout, or advanced Platform Studio controls were added.
 
 Engagement truth: creator-video Report is backed in Player, public creator-video Share uses the app route/deep link, standalone creator-video comments/replies are backed through `creator_video_comments`, and Profile updates are backed through `profile_posts`. Profile post comments/replies and single likes/counts are now locally backed through `profile_post_comments` and `profile_post_likes`, with remote application pending. Clickable links are client-rendered only, and social/chat attachments are locally backed through `social_attachments` with a 250 MB cap and remote application pending. Creator-video likes/saves/counts, deep nested replies, richer reactions, automatic link previews, and full Friends are not backed or shown. Title-only engagement remains title-only.
 
@@ -216,7 +216,7 @@ Status: Implemented / Proof Pending.
 
 Admin is protected by signed-in plus backend `platform_role_memberships` truth. A 2026-04-28 proof found the previous frontend mismatch: local beta operator helper status exposed `Admin Access Enabled` and creator-video moderation controls to a backend non-operator even though Supabase RLS refused the write. The frontend now waits for backend role checks, treats local helper status as denial context only, and shows no destructive controls without an active owner/operator/moderator membership.
 
-UI update: `/admin` now presents a private Chi'llywood Operator Center with Reports, Content, Roles, Audit, and Rachi tabs. Rachi is restored only as a dedicated backend-protected official-account management section for public concierge/profile/chat presence; it is not the Admin system and does not grant operator permissions. The screen does not call channel/content ownership admin authority and keeps Channel Studio as the owner surface for creator uploads. Report cards use compact metadata instead of raw long IDs as the primary UI. Creator-video Hide/Remove/Restore actions now use confirmation copy, require safety reason for Hide/Remove, and keep raw Supabase/PostgREST errors out of user-facing copy.
+UI update: `/admin` now presents a private Chi'llywood Operator Center with Reports, Content, Roles, Audit, and Rachi tabs. Rachi is restored only as a dedicated backend-protected official-account management section for public concierge/profile/chat presence; it is not the Admin system and does not grant operator permissions. The screen does not call channel/content ownership admin authority and keeps Platform Studio as the owner surface for creator uploads. Report cards use compact metadata instead of raw long IDs as the primary UI. Creator-video Hide/Remove/Restore actions now use confirmation copy, require safety reason for Hide/Remove, and keep raw Supabase/PostgREST errors out of user-facing copy.
 
 Proof passed: signed-out Admin denial, backend non-operator/local-helper denial with no destructive controls, and temporary backend operator hide/restore with post-cleanup denial. Proof pending: Android visual smoke for the redesigned Operator Center, report queue proof, and hidden/removed public Profile/Channel proof.
 
@@ -259,7 +259,7 @@ No destructive SQL, migration push, storage mutation, or production backend comm
 | Notification center | Later | Post-v1 | Helpers/tables exist, but no push/inbox proof. |
 | Premium manage subscription route | Later | After store setup | `/subscribe` is enough until live billing proof exists. |
 | Friends/social graph route | Later | Post-v1 | Following is backed as audience relationship; full Friends, friend requests, close friends, and friend-only privacy stay post-v1. |
-| Creator dashboard | Later | Post-v1 | Channel Studio is the current owner control center; `/channel-settings` remains compatibility. |
+| Creator dashboard | Later | Post-v1 | Platform Studio is the current owner control center; `/channel-settings` remains compatibility. |
 
 No new routes were added.
 
@@ -292,4 +292,4 @@ No new routes were added.
 4. Prove report row creation, modern Operator Center Android visual behavior, hidden/removed public Profile/Channel behavior, and Storage API delete/remove behavior.
 5. Prove Premium/access gates and RevenueCat/store setup only after external dashboard configuration is ready.
 6. Continue release readiness: production env validation, Play Store assets, legal URLs, support process, Firebase proof, and final release-route smoke.
-7. Keep native game streaming, real Chi'llyfects AR processing, paid creator media, tips/coins/payouts, ads, global search, push notification delivery, and advanced creator studio in later phases.
+7. Keep native game streaming, real Chi'llyfects AR processing, paid creator media, tips/coins/payouts, ads, global search, push notification delivery, and advanced Platform Studio in later phases.

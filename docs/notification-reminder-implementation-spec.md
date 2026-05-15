@@ -26,8 +26,8 @@ This spec does not:
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
 | `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. |
-| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Channel Studio route and future creator-side reminder/notification-adjacent owner where truthful. |
-| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older Channel Studio links. |
+| `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Platform Studio route and future creator-side reminder/notification-adjacent owner where truthful. |
+| `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older Platform Studio links. |
 | `/chat` | `app/chat/index.tsx` | Canonical Chi'lly Chat inbox route. |
 | `/chat/[threadId]` | `app/chat/[threadId].tsx` | Canonical Chi'lly Chat direct-thread route. |
 | `/watch-party/index` | `app/watch-party/index.tsx` | Waiting-room owner for live and party entry. |
