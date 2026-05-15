@@ -1,8 +1,8 @@
 # Creator Monetization Systems Foundation
 
-Last updated: May 14, 2026
+Last updated: May 15, 2026
 
-This is repo-side foundation only. It does not activate live money, paid-content checkout, tips, merch checkout, cash-out, payouts, production Stripe Connect, or RevenueCat/Google Play purchase proof.
+This is repo-side and live-schema foundation only. Remote migration `202605140011_creator_monetization_systems_foundation.sql` is applied on the linked Chi'llywood Supabase project, but it does not activate live money, paid-content checkout, tips, merch checkout, cash-out, payouts, production Stripe Connect, or RevenueCat/Google Play purchase proof.
 
 ## Doctrine
 
@@ -66,6 +66,8 @@ Client helpers in `_lib/creatorMonetization.ts` now expose the safe repo-side pa
 
 ## Current Status
 
+- Live schema: installed. `supabase migration list` shows `202605140011` local and remote, post-apply `supabase db push --dry-run` reports the remote database is up to date, and `supabase db lint --linked --schema public --fail-on error` passes.
+- Live safety proof: `monetization_settings_json` returns every live-money flag as `false`; anon REST direct writes to `creator_earnings_ledger`, `paid_content_purchases`, `creator_tip_transactions`, and `creator_payout_requests` are denied; anon paid-content access resolver calls return safe unavailable/free/locked decisions without granting money access.
 - Paid creator checkout: foundation only, disabled.
 - Creator pricing: backed RPC foundation, disabled until server flag and Premium entitlement proof are ready.
 - Tips: data model and preflight foundation only, disabled.
