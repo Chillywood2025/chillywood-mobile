@@ -42,6 +42,12 @@ Client integration:
 - `components/creator-media/creator-video-card.tsx` shows creator-facing rendition status in Channel Studio Content cards.
 - `supabase/functions/media-storage` now authorizes rendition downloads by checking `video_renditions`, video public/moderation state, ownership/staff role, and Premium entitlement before signing S3 rendition paths.
 
+## Live Proof Status
+
+As of 2026-05-14, live VOD enforcement is not closed. The linked Supabase project was confirmed as `bmkkhihfbmsnnmcqkoly` / Chillywood2025's Project and relinked for IPv4 without printing secrets. A dry-run showed only `202605140010_vod_quality_ladder_resolver.sql` pending. The required post-relink `supabase migration list` and `supabase db lint --linked --schema public --fail-on error` then failed with Supabase pooler `(ECIRCUITBREAKER) too many authentication failures` for `cli_login_postgres.bmkkhihfbmsnnmcqkoly` and requested `SUPABASE_DB_PASSWORD`.
+
+Because linked migration list and linked lint did not both pass, migration `202605140010` has not been applied remotely, `media-storage` has not been deployed from this lane, no trusted rendition rows were inserted, and no real rendition files were created or proved. Do not apply, deploy, or write proof rows until linked migration list, linked lint, and `supabase db push --dry-run` all pass and the dry-run still shows only `202605140010`.
+
 ## Current Limits
 
 - This lane does not create a transcoder.

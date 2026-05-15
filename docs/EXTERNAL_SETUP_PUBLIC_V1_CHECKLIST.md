@@ -33,6 +33,8 @@ Repo-side Public v1 cost policy is implemented. Live publishing defaults to 720p
 
 Repo-side VOD quality ladder foundation now exists: `video_renditions`, `resolve_video_playback`, original-rendition recording, Player resolver integration, creator status display, and media-storage rendition authorization. External/product infrastructure is still required for real transcode/rendition generation, delivery proof, and Premium entitlement proof before launch can claim live Free/Premium VOD quality enforcement. No fake 360p/480p/720p/1080p files were created.
 
+Live enforcement is additionally blocked on Supabase linked DB CLI auth. The linked project was confirmed as `bmkkhihfbmsnnmcqkoly` / Chillywood2025's Project and relinked for IPv4, and a dry-run showed only `202605140010_vod_quality_ladder_resolver.sql` pending. Required post-relink migration list and linked lint failed with Supabase pooler `(ECIRCUITBREAKER) too many authentication failures` for `cli_login_postgres.bmkkhihfbmsnnmcqkoly` and requested `SUPABASE_DB_PASSWORD`. Do not apply `202605140010`, deploy `media-storage`, or create trusted rendition proof rows/files until migration list, linked lint, and dry-run all pass.
+
 ## Read-Only Audit Snapshot
 
 - Repo root: `/Users/loverslane/chillywood-mobile`
