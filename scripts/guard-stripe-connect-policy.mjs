@@ -52,6 +52,7 @@ assertIncludes(shared, "STRIPE_CONNECT_FOUNDATION_WEBHOOK_EVENT_TYPES", "foundat
   "payout.failed",
   "transfer.created",
   "transfer.reversed",
+  "transfer.canceled",
 ].forEach((eventType) => {
   assertIncludes(shared, eventType, `foundation webhook event ${eventType}`);
 });

@@ -156,6 +156,7 @@ export const STRIPE_CONNECT_FOUNDATION_WEBHOOK_EVENT_TYPES = [
   "payout.failed",
   "transfer.created",
   "transfer.reversed",
+  "transfer.canceled",
 ] as const;
 
 const STRIPE_API_BASE_URL = "https://api.stripe.com/v1";
