@@ -28,7 +28,7 @@ import {
     View,
 } from "react-native";
 import { titles as localTitles } from "../../_data/titles";
-import { reportRuntimeError } from "../../_lib/logger";
+import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
@@ -36,6 +36,8 @@ import {
   getRuntimeControlBlockedCopy,
   isRuntimeControlBlockedAccess,
   LIVE_FIRST_PREMIUM_UPSELL_COPY,
+  PREMIUM_LIVE_GATE_PROOF_HOLD,
+  PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE,
   WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
   requireLiveFirstPremium,
   requireWatchPartyLivePremium,
@@ -667,6 +669,8 @@ export default function WatchPartyIndexScreen() {
       userId,
       room: nextPreview.room,
     }).catch(() => null);
+    const proofHoldRoomAccessAllowed = PREMIUM_LIVE_GATE_PROOF_HOLD
+      && access?.reason === "premium_required";
 
     if (!access) {
       trackEvent("room_join_failure", {
@@ -678,7 +682,16 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    if (access.isAllowed) {
+    if (proofHoldRoomAccessAllowed) {
+      debugLog("livekit", "premium proof hold opened watch-party lobby room access", {
+        roomId: nextPartyId,
+        roomType: nextPreview.room.roomType,
+        sourceId: nextPreview.room.sourceId ?? nextPreview.room.titleId ?? null,
+        message: PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE,
+      });
+    }
+
+    if (access.isAllowed || proofHoldRoomAccessAllowed) {
       trackEvent("room_join_success", {
         surface: "watch-party-lobby",
         roomId: nextPartyId,

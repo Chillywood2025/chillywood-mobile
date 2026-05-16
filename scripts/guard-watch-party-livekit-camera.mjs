@@ -64,6 +64,18 @@ const playerFallbackHandler = sliceBetween(
   "useEffect(() => {\n    if (!activeParticipantId) return;",
   "Player Watch-Party LiveKit fallback handler boundary",
 );
+const playerWatchPartyEntryAccessCheck = sliceBetween(
+  player,
+  "const premiumAccess = await requireWatchPartyLivePremium({ accessKey: partyId })",
+  "return () => {\n      active = false;",
+  "Player Watch-Party entry access check boundary",
+);
+const lobbyJoinAccessCheck = sliceBetween(
+  watchPartyIndex,
+  "const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {",
+  "const onConfirmJoin = async () => {",
+  "Watch-Party lobby join access check boundary",
+);
 const liveStageEntryHandler = sliceBetween(
   liveStage,
   "const onEnterLiveStage = useCallback(async () => {",
@@ -243,6 +255,53 @@ assertBefore(
   "proofHoldRoomAccessAllowed",
   "setBlockedRoomAccess(access);",
   "Party Room route access must evaluate proof hold before setting a blocked-room gate.",
+);
+assertIncludes(
+  lobbyJoinAccessCheck,
+  "proofHoldRoomAccessAllowed",
+  "Watch-Party lobby must not let the Premium room-access gate block internal proof",
+);
+assertIncludes(
+  lobbyJoinAccessCheck,
+  'access?.reason === "premium_required"',
+  "Watch-Party lobby proof hold must only bypass Premium-required room gates",
+);
+assertIncludes(
+  lobbyJoinAccessCheck,
+  "premium proof hold opened watch-party lobby room access",
+  "Watch-Party lobby proof hold must log that it opened room access",
+);
+assertBefore(
+  lobbyJoinAccessCheck,
+  "proofHoldRoomAccessAllowed",
+  "setAccessSheetVisible(true);",
+  "Watch-Party lobby must evaluate proof hold before showing a Premium access sheet.",
+);
+assertIncludes(
+  playerWatchPartyEntryAccessCheck,
+  "proofHoldRoomAccessAllowed",
+  "Player Watch-Party entry must not let the Premium room-access gate block internal proof",
+);
+assertIncludes(
+  playerWatchPartyEntryAccessCheck,
+  'access?.reason === "premium_required"',
+  "Player Watch-Party entry proof hold must only bypass Premium-required room gates",
+);
+assertIncludes(
+  playerWatchPartyEntryAccessCheck,
+  "premium proof hold opened watch-party-live player access",
+  "Player Watch-Party entry proof hold must log that it opened player access",
+);
+assertIncludes(
+  playerWatchPartyEntryAccessCheck,
+  'reason: "allowed"',
+  "Player Watch-Party entry proof hold must convert the room access result to allowed for media proof",
+);
+assertBefore(
+  playerWatchPartyEntryAccessCheck,
+  "proofHoldRoomAccessAllowed",
+  "setWatchPartyEntryError(\"Unable to confirm watch-party access right now.\");",
+  "Player Watch-Party entry must evaluate proof hold inside the access check.",
 );
 
 assertIncludes(
