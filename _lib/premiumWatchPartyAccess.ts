@@ -46,6 +46,10 @@ export const WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY = {
   message: "Watch-Party Live is Premium. Upgrade to start or join watch-party rooms.",
 } as const;
 
+export const PREMIUM_LIVE_GATE_PROOF_HOLD = true;
+export const PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE =
+  "Premium live entry is temporarily open for proof while Google Play and RevenueCat access is rechecked. This does not grant Premium.";
+
 const RUNTIME_CONTROL_DISABLED_COPY: Record<RuntimeControlledLiveFeature["controlKey"], {
   title: string;
   message: string;
@@ -103,31 +107,51 @@ const requireRuntimeControlledPremiumAccess = async (
   const enabled = controls[feature.controlKey] !== false;
   const premiumAccess = await requirePremiumLiveFeatureAccess(feature.targetHint, options);
 
-  if (enabled) return premiumAccess;
-
   const copy = RUNTIME_CONTROL_DISABLED_COPY[feature.controlKey] ?? {
     title: feature.disabledTitle,
     message: feature.disabledMessage,
   };
 
-  return {
-    ...premiumAccess,
-    allowed: false,
-    reason: "feature_disabled",
-    requiresPremium: false,
-    requiresPartyPass: false,
-    featureDisabled: true,
-    runtimeControlKey: feature.controlKey,
-    disabledTitle: copy.title,
-    disabledMessage: copy.message,
-    monetization: {
-      ...premiumAccess.monetization,
-      issues: [
-        copy.message,
-        ...premiumAccess.monetization.issues.filter((issue) => issue !== copy.message),
-      ],
-    },
-  };
+  if (!enabled) {
+    return {
+      ...premiumAccess,
+      allowed: false,
+      reason: "feature_disabled",
+      requiresPremium: false,
+      requiresPartyPass: false,
+      featureDisabled: true,
+      runtimeControlKey: feature.controlKey,
+      disabledTitle: copy.title,
+      disabledMessage: copy.message,
+      monetization: {
+        ...premiumAccess.monetization,
+        issues: [
+          copy.message,
+          ...premiumAccess.monetization.issues.filter((issue) => issue !== copy.message),
+        ],
+      },
+    };
+  }
+
+  if (PREMIUM_LIVE_GATE_PROOF_HOLD) {
+    return {
+      ...premiumAccess,
+      allowed: true,
+      reason: "allowed",
+      requiresPremium: false,
+      requiresPartyPass: false,
+      monetization: {
+        ...premiumAccess.monetization,
+        canPurchase: false,
+        issues: [
+          PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE,
+          ...premiumAccess.monetization.issues.filter((issue) => issue !== PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE),
+        ],
+      },
+    };
+  }
+
+  return premiumAccess;
 };
 
 export async function requireLiveFirstPremium(

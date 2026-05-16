@@ -10,7 +10,9 @@ import {
 } from "../_lib/revenuecat";
 import {
   getCachedMonetizationSnapshot,
+  isPremiumPurchaseShellAvailable,
   openManageSubscriptionFlow,
+  PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE,
   purchaseMonetizationTarget,
   readMonetizationSnapshot,
   restoreMonetizationAccess,
@@ -92,17 +94,23 @@ export default function SubscribeScreen() {
 
   const premiumTarget = snapshot.targets.premium_subscription;
   const hasPremium = !!premiumTarget.hasEntitlement;
-  const canPurchase = isSignedIn
+  const premiumPurchaseShellAvailable = isPremiumPurchaseShellAvailable();
+  const canPurchase = premiumPurchaseShellAvailable
+    && isSignedIn
     && snapshot.configuration.shouldConfigure
     && snapshot.canMakePayments
     && premiumTarget.offeringAvailable
     && premiumTarget.packageCount > 0
     && !hasPremium;
-  const canRestore = isSignedIn && snapshot.configuration.shouldConfigure;
-  const canManage = isSignedIn && snapshot.configuration.shouldConfigure;
+  const canRestore = premiumPurchaseShellAvailable && isSignedIn && snapshot.configuration.shouldConfigure;
+  const canManage = premiumPurchaseShellAvailable && isSignedIn && snapshot.configuration.shouldConfigure;
 
-  const statusLabel = useMemo(() => buildStatusLabel(snapshot), [snapshot]);
-  const offerLabel = useMemo(() => buildOfferLabel(snapshot), [snapshot]);
+  const statusLabel = useMemo(() => (
+    premiumPurchaseShellAvailable ? buildStatusLabel(snapshot) : PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE
+  ), [premiumPurchaseShellAvailable, snapshot]);
+  const offerLabel = useMemo(() => (
+    premiumPurchaseShellAvailable ? buildOfferLabel(snapshot) : "Premium offers are hidden while proof is rechecked."
+  ), [premiumPurchaseShellAvailable, snapshot]);
   const revenueCatReadiness = getRevenueCatProductionReadiness();
   const activeProductLabel = useMemo(() => {
     if (!snapshot.activeProductIds.length) return "No active store product on this account.";
@@ -247,6 +255,14 @@ export default function SubscribeScreen() {
             <Text style={styles.cardKicker}>ACCESS STATUS</Text>
             <Text style={styles.cardTitle}>{hasPremium ? "Premium is active" : "Premium is not active"}</Text>
             <Text style={styles.body}>{statusLabel}</Text>
+            {!premiumPurchaseShellAvailable ? (
+              <View style={styles.warningCard}>
+                <Text style={styles.warningLabel}>Proof hold</Text>
+                <Text style={styles.warningText}>
+                  {PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE} This does not grant Premium or fake access.
+                </Text>
+              </View>
+            ) : null}
 
             <View style={styles.statusGrid}>
               <View style={styles.statusTile}>
@@ -297,7 +313,7 @@ export default function SubscribeScreen() {
             <Text style={styles.cardKicker}>ACTIONS</Text>
             <Text style={styles.cardTitle}>Purchase and restore</Text>
             <Text style={styles.body}>
-              Purchase and restore stay disabled until the store and offer are ready. Chi&apos;llywood will not unlock Premium from a local-only state.
+              Purchase, restore, and manage actions stay disabled while Premium proof is being rechecked. Chi&apos;llywood will not unlock Premium from a local-only state.
             </Text>
             <TouchableOpacity
               style={[styles.primaryButton, (!canPurchase || busy) && styles.primaryButtonDisabled]}
@@ -308,7 +324,9 @@ export default function SubscribeScreen() {
               {purchaseBusy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.primaryButtonText}>{hasPremium ? "Premium Active" : "Unlock Premium"}</Text>
+                <Text style={styles.primaryButtonText}>
+                  {hasPremium ? "Premium Active" : premiumPurchaseShellAvailable ? "Unlock Premium" : "Premium Proof Hold"}
+                </Text>
               )}
             </TouchableOpacity>
 

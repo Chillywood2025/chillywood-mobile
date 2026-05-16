@@ -57,12 +57,14 @@ import {
     isRuntimeControlBlockedAccess,
     LIVE_FIRST_PREMIUM_UPSELL_COPY,
     LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY,
+    PREMIUM_LIVE_GATE_PROOF_HOLD,
     requireLiveFirstPremium,
     requireLiveWatchPartyPremium,
     type PremiumWatchPartyFeatureAccessDecision,
 } from "../../../_lib/premiumWatchPartyAccess";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
 import {
+  type LiveKitTokenUnavailable,
   type LiveKitTokenReady,
 } from "../../../_lib/livekit/token-contract";
 import {
@@ -610,7 +612,17 @@ function LiveKitHybridCommunityRoomHost({
 // Live Stage surface lock: preserve docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md.
 // Do not visually change routes, comments, controls, player, composer, labels, or member tiles here without explicit approval.
 // Live First must not render the Chi'lly Party Members box; Live Watch-Party owns that deck.
-export default function WatchPartyLiveStageScreen() {
+type WatchPartyLiveStageScreenProps = {
+  routePartyId?: string;
+  routeMode?: string;
+  routeSource?: string;
+};
+
+export default function WatchPartyLiveStageScreen({
+  routePartyId,
+  routeMode,
+  routeSource,
+}: WatchPartyLiveStageScreenProps = {}) {
   const safeAreaInsets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const isFocused = useIsFocused();
@@ -618,9 +630,9 @@ export default function WatchPartyLiveStageScreen() {
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const { partyId: partyIdParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{ partyId?: string; mode?: string; source?: string }>();
   const router = useRouter();
-  const partyId = (Array.isArray(partyIdParam) ? partyIdParam[0] : partyIdParam) ?? "";
-  const modeParamValue = Array.isArray(modeParam) ? modeParam[0] : modeParam;
-  const source = String(Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "").trim().toLowerCase();
+  const partyId = routePartyId ?? (Array.isArray(partyIdParam) ? partyIdParam[0] : partyIdParam) ?? "";
+  const modeParamValue = routeMode ?? (Array.isArray(modeParam) ? modeParam[0] : modeParam);
+  const source = String(routeSource ?? (Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "")).trim().toLowerCase();
   const requestedRouteStageMode = normalizeSharedRoomMode(modeParamValue, "live");
   const initialStageMode = requestedRouteStageMode === "hybrid" ? "live" : requestedRouteStageMode;
   const canUseBetaStage = isSignedIn && isActive;
@@ -675,6 +687,7 @@ export default function WatchPartyLiveStageScreen() {
   const [reportTarget, setReportTarget] = useState<{ userId: string; label: string } | null>(null);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const [liveKitJoinContract, setLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
+  const [liveKitJoinUnavailable, setLiveKitJoinUnavailable] = useState<LiveKitTokenUnavailable | null>(null);
   const myCameraPreviewUrlRef = useRef<string>("");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
@@ -718,6 +731,7 @@ export default function WatchPartyLiveStageScreen() {
   useEffect(() => {
     setCommunicationRoomId("");
     setLiveKitJoinContract(null);
+    setLiveKitJoinUnavailable(null);
     setBlockedRoomAccess(null);
     setLiveWatchPartyPremiumGate(null);
     setLivePremiumGateKind("live_watch_party");
@@ -1078,9 +1092,26 @@ export default function WatchPartyLiveStageScreen() {
         }
 
         if (!access.isAllowed) {
-          setBlockedRoomAccess(access);
-          setLoading(false);
-          return;
+          const premiumProofHoldRouteAccessAllowed = PREMIUM_LIVE_GATE_PROOF_HOLD
+            && (access.reason === "premium_required" || access.reason === "party_pass_required")
+            && (await requireLiveStagePremium(
+              snapshot.room.roomType === "live" ? "live_first" : "live_watch_party",
+              "route",
+            ));
+
+          if (cancelled) return;
+
+          if (premiumProofHoldRouteAccessAllowed) {
+            debugLiveStage("premium proof hold opened live-stage route access", {
+              partyId,
+              reason: access.reason,
+              roomType: snapshot.room.roomType,
+            });
+          } else {
+            setBlockedRoomAccess(access);
+            setLoading(false);
+            return;
+          }
         }
 
         syncStageSnapshot(snapshot, trackedUserId);
@@ -2128,6 +2159,14 @@ export default function WatchPartyLiveStageScreen() {
     ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "live feed" : "live feeds"}`
     : "Feeds syncing";
   const heroFallbackInitial = String(heroParticipant?.displayName || "H").trim().slice(0, 1).toUpperCase();
+  const liveKitJoinUnavailableTitle = liveKitJoinUnavailable?.responseError === "no_eligible_livekit_server"
+    ? "LiveKit server unavailable"
+    : liveKitJoinUnavailable
+      ? "LiveKit join unavailable"
+      : "";
+  const liveKitJoinUnavailableBody = liveKitJoinUnavailable?.responseError === "no_eligible_livekit_server"
+    ? "No healthy LiveKit server heartbeat is available for new rooms. Restart the registry heartbeat, then retry."
+    : liveKitJoinUnavailable?.message ?? "";
   const selectedStageEffect = getLiveEffectById(selectedStageEffectId);
   const stageEffectAppliedToCamera = isLiveEffectAppliedToCamera(selectedStageEffect);
   const activeStageLookLabel = canUseStageEffects && stageEffectAppliedToCamera
@@ -2436,10 +2475,21 @@ export default function WatchPartyLiveStageScreen() {
   const onEnterLiveStage = useCallback(async () => {
     if (!(await requireLiveStagePremium(stageMode === "hybrid" ? "live_watch_party" : "live_first", "route"))) {
       setLiveKitJoinContract(null);
+      setLiveKitJoinUnavailable(null);
       return;
     }
 
+    console.log("[live-stage-proof] enter live stage", {
+      partyId,
+      isHost,
+      liveKitFoundationEnabled,
+      participantRole: liveKitParticipantRole,
+      stageMode,
+      trackedUserReady: !!trackedUserId && trackedUserId !== "anon",
+    });
+
     if (liveKitFoundationEnabled && partyId) {
+      setLiveKitJoinUnavailable(null);
       const participantRole = await resolveLiveKitStageEntryRole();
       const joinResult = await prepareLiveKitJoinBoundary({
         surface: "live-stage",
@@ -2456,6 +2506,13 @@ export default function WatchPartyLiveStageScreen() {
 
       if (joinResult.status === "ready") {
         setLiveKitJoinContract(joinResult);
+        setLiveKitJoinUnavailable(null);
+        console.log("[live-stage-proof] prepared live-stage join contract", {
+          roomName: joinResult.roomName,
+          participantRole: joinResult.participantRole,
+          canPublish: joinResult.requestedGrants.canPublish,
+          canSubscribe: joinResult.requestedGrants.canSubscribe,
+        });
         debugLog("livekit", "prepared live-stage join contract", {
           roomName: joinResult.roomName,
           endpoint: joinResult.endpoint,
@@ -2464,6 +2521,15 @@ export default function WatchPartyLiveStageScreen() {
         });
       } else {
         setLiveKitJoinContract(null);
+        setLiveKitJoinUnavailable(joinResult);
+        console.log("[live-stage-proof] live-stage join contract unavailable", {
+          reason: joinResult.reason,
+          responseStatus: joinResult.responseStatus ?? null,
+          responseError: joinResult.responseError ?? null,
+          message: joinResult.message,
+          roomName: joinResult.roomName,
+          participantRole: joinResult.participantRole,
+        });
         debugLog("livekit", "live-stage join contract unavailable", {
           reason: joinResult.reason,
           roomName: joinResult.roomName,
@@ -2477,7 +2543,12 @@ export default function WatchPartyLiveStageScreen() {
         }
       }
     } else {
+      console.log("[live-stage-proof] live-stage join skipped", {
+        partyId,
+        liveKitFoundationEnabled,
+      });
       setLiveKitJoinContract(null);
+      setLiveKitJoinUnavailable(null);
     }
 
     closeStageOverlayPanels();
@@ -2488,7 +2559,9 @@ export default function WatchPartyLiveStageScreen() {
     setLiveSurface("stage");
   }, [
     closeStageOverlayPanels,
+    isHost,
     liveKitFoundationEnabled,
+    liveKitParticipantRole,
     partyId,
     requireLiveStagePremium,
     resolveLiveKitStageEntryRole,
@@ -3766,6 +3839,11 @@ export default function WatchPartyLiveStageScreen() {
               preferLocalHero={isHost || isHybridMode}
               roomName={liveKitJoinContract.roomName}
             />
+          ) : liveKitJoinUnavailable ? (
+            <View style={styles.stageHeroFallback}>
+              <Text style={styles.stageHeroFallbackTitle}>{liveKitJoinUnavailableTitle}</Text>
+              <Text style={styles.stageHeroFallbackBody}>{liveKitJoinUnavailableBody}</Text>
+            </View>
           ) : isHybridMode ? (
             <View style={styles.stageHeroFallback}>
               <Text style={styles.stageHeroFallbackInitial}>{heroFallbackInitial}</Text>
@@ -5057,12 +5135,20 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1,
   },
+  stageHeroFallbackTitle: {
+    color: "#F4F7FF",
+    fontSize: 22,
+    fontWeight: "900",
+    textAlign: "center",
+  },
   stageHeroFallbackBody: {
     marginTop: 12,
     color: "#C9D4E9",
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "700",
+    maxWidth: 300,
+    textAlign: "center",
   },
   hybridLiveKitStatusPill: {
     position: "absolute",

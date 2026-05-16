@@ -177,6 +177,7 @@ function RootNavigator() {
         <Stack.Screen name="title/[id]" />
         <Stack.Screen name="watch-party/index" />
         <Stack.Screen name="watch-party/[partyId]" />
+        <Stack.Screen name="watch-party/live-stage/index" />
         <Stack.Screen name="watch-party/live-stage/[partyId]" />
         <Stack.Screen name="communication/index" />
         <Stack.Screen name="communication/[roomId]" />

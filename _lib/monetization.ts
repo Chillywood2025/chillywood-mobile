@@ -252,6 +252,18 @@ const LIVE_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_live_access", "
 const WATCH_PARTY_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_watch_party_access", "premium_subscription"];
 const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
 
+export const PREMIUM_PURCHASE_SHELL_ON_HOLD = true;
+export const PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
+  "Premium purchase is temporarily unavailable while Google Play and RevenueCat proof is rechecked.";
+
+export const isPremiumPurchaseShellAvailable = () => {
+  const runtime = getAppMonetizationRuntimeFeatures();
+  return FEATURE_FLAGS.monetization.subscriptions
+    && runtime.premiumEnabled
+    && runtime.premiumPurchaseEnabled
+    && !PREMIUM_PURCHASE_SHELL_ON_HOLD;
+};
+
 export const createEmptyMonetizationGateResolution = (
   snapshotStatus: MonetizationGateResolution["snapshotStatus"] = "disabled",
   issues: string[] = [],
@@ -821,6 +833,7 @@ export async function readMonetizationSnapshot(options?: {
   const userId = requestedUserId || signedInUserId || null;
   const configuration = configureRevenueCatOnce();
   const baseSnapshot = createEmptyMonetizationSnapshot(configuration, userId);
+  const purchaseShellAvailable = isPremiumPurchaseShellAvailable();
 
   if (!configuration.shouldConfigure) {
     const snapshot = setCachedMonetizationSnapshot(baseSnapshot);
@@ -831,24 +844,28 @@ export async function readMonetizationSnapshot(options?: {
   try {
     const identity = await syncRevenueCatCustomerIdentity(userId);
     const [canMakePayments, customerInfo, offerings] = await Promise.all([
-      canMakeRevenueCatPurchases(),
+      purchaseShellAvailable ? canMakeRevenueCatPurchases() : Promise.resolve(false),
       readRevenueCatCustomerInfo({ refresh: !!options?.forceRefresh }),
-      readRevenueCatOfferings(),
+      purchaseShellAvailable ? readRevenueCatOfferings() : Promise.resolve(null),
     ]);
 
     const issues = [...baseSnapshot.issues];
-    if (!canMakePayments) {
+    if (!purchaseShellAvailable) {
+      issues.push(PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE);
+    } else if (!canMakePayments) {
       issues.push("Billing is not currently available on this device/account.");
     }
     if (!customerInfo) {
       issues.push("Account entitlement status is unavailable right now.");
     }
-    if (!offerings) {
+    if (purchaseShellAvailable && !offerings) {
       issues.push("Offer configuration is unavailable right now.");
     }
 
     const snapshot: MonetizationSnapshot = {
-      status: !canMakePayments
+      status: !purchaseShellAvailable
+        ? "partial"
+        : !canMakePayments
         ? "store_unavailable"
         : customerInfo && offerings
           ? "ready"
@@ -859,9 +876,9 @@ export async function readMonetizationSnapshot(options?: {
       isAnonymousCustomer: identity.isAnonymous,
       canMakePayments,
       customerInfoLoaded: !!customerInfo,
-      offeringsLoaded: !!offerings,
-      currentOfferingId: offerings?.current?.identifier ?? null,
-      availableOfferingIds: Object.keys(offerings?.all ?? {}),
+      offeringsLoaded: purchaseShellAvailable && !!offerings,
+      currentOfferingId: purchaseShellAvailable ? offerings?.current?.identifier ?? null : null,
+      availableOfferingIds: purchaseShellAvailable ? Object.keys(offerings?.all ?? {}) : [],
       activeEntitlementIds: Object.keys(customerInfo?.entitlements.active ?? {}),
       activeProductIds: customerInfo?.activeSubscriptions ?? [],
       targets: {
@@ -914,6 +931,16 @@ export async function purchaseMonetizationTarget(
     userId: options?.userId,
   });
   const targetState = snapshot.targets[targetId];
+
+  if (!isPremiumPurchaseShellAvailable()) {
+    return {
+      ok: false,
+      target: targetId,
+      snapshot,
+      customerInfo: null,
+      message: PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE,
+    };
+  }
 
   if (!snapshot.configuration.shouldConfigure) {
     return {
@@ -1108,7 +1135,8 @@ export async function readMonetizationAccessSheetState(options: {
   const primaryTargetId = options.gate?.monetization?.primaryTargetId;
   const targetId = purchaseTargetId ?? primaryTargetId;
   const targetState = targetId ? snapshot.targets[targetId] : null;
-  const offerings = snapshot.offeringsLoaded ? await readRevenueCatOfferings() : null;
+  const purchaseShellAvailable = isPremiumPurchaseShellAvailable();
+  const offerings = snapshot.offeringsLoaded && purchaseShellAvailable ? await readRevenueCatOfferings() : null;
   const offer = targetId && targetState
     ? buildMonetizationAccessSheetOffer({
         targetId,
@@ -1117,6 +1145,27 @@ export async function readMonetizationAccessSheetState(options: {
         offerings,
       })
     : null;
+
+  if (!purchaseShellAvailable && !targetState?.hasEntitlement) {
+    return {
+      snapshot,
+      presentation: {
+        ...presentation,
+        title: "Premium proof is being rechecked",
+        body: "Premium purchase and restore actions are temporarily unavailable. This does not grant Premium; existing access still requires trusted entitlement truth.",
+        actionLabel: "Unavailable",
+      },
+      primaryAction: "retry",
+      primaryLabel: "Premium Unavailable",
+      primaryDisabled: true,
+      helperKicker: "PROOF HOLD",
+      helperBody: PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE,
+      helperTone: "warning",
+      offer: null,
+      canRestore: false,
+      canManage: false,
+    };
+  }
 
   if (!snapshot.configuration.shouldConfigure) {
     return {

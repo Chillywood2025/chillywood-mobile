@@ -49,6 +49,8 @@ export type LiveKitTokenUnavailable = {
   message: string;
   endpoint?: string;
   serverUrl?: string;
+  responseStatus?: number;
+  responseError?: string;
 };
 
 export type LiveKitTokenContractResult = LiveKitTokenReady | LiveKitTokenUnavailable;
@@ -185,6 +187,15 @@ export async function requestLiveKitParticipantToken(
   }
 
   if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null) as {
+      error?: unknown;
+      message?: unknown;
+    } | null;
+    const responseError = String(errorPayload?.error ?? "").trim();
+    const responseMessage = String(errorPayload?.message ?? "").trim();
+    const message = responseMessage
+      || `LiveKit token issuance failed with status ${response.status}. The backend token endpoint still needs to return a valid participant token.`;
+
     return {
       status: "unavailable",
       provider: "livekit",
@@ -192,9 +203,11 @@ export async function requestLiveKitParticipantToken(
       participantRole,
       requestedGrants,
       reason: "request_failed",
-      message: `LiveKit token issuance failed with status ${response.status}. The backend token endpoint still needs to return a valid participant token.`,
+      message,
       endpoint: config.tokenEndpoint,
       serverUrl: config.serverUrl,
+      responseStatus: response.status,
+      responseError: responseError || undefined,
     };
   }
 

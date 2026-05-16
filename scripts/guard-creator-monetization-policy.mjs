@@ -88,6 +88,8 @@ assertIncludes(migration, "calculate_creator_instant_cashout_fee", "cash-out fee
 assertIncludes(monetization, "premium_subscription: {", "RevenueCat premium target");
 assertIncludes(monetization, "offeringId: \"premium\"", "RevenueCat premium offering");
 assertIncludes(monetization, "entitlementIds: [\"premium\"]", "RevenueCat premium entitlement");
+assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = true", "Premium purchase shell proof hold");
+assertIncludes(monetization, "isPremiumPurchaseShellAvailable", "Premium purchase shell availability guard");
 assertIncludes(premiumEntitlements, "entitlement_key", "backed entitlement helper");
 assertIncludes(premiumEntitlements, "revoked_at", "revoked entitlement blocking");
 

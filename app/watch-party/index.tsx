@@ -61,6 +61,7 @@ import { AccessSheet, type AccessSheetReason } from "../../components/monetizati
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { PLAYER_WATCH_PARTY_SOURCE } from "../../_lib/watch-party/room-shared";
+import WatchPartyLiveStageScreen from "./live-stage/[partyId]";
 
 type RoomPreview = {
   room: WatchPartyState;
@@ -78,6 +79,11 @@ type IncomingHandoff = {
 type PremiumLiveUpsellCopy =
   | typeof LIVE_FIRST_PREMIUM_UPSELL_COPY
   | typeof WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY;
+
+type EmbeddedLiveStageEntry = {
+  partyId: string;
+  source: string;
+};
 
 const getWaitingRoomPreviewTitle = (preview: RoomPreview) => {
   if (preview.titleName) return preview.titleName;
@@ -199,6 +205,7 @@ export default function WatchPartyIndexScreen() {
   const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
   const [watchPartyPremiumSheetCopy, setWatchPartyPremiumSheetCopy] = useState<PremiumLiveUpsellCopy>(WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
+  const [embeddedLiveStageEntry, setEmbeddedLiveStageEntry] = useState<EmbeddedLiveStageEntry | null>(null);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
   const lastEntryLaneKeyRef = useRef(entryLaneKey);
@@ -593,9 +600,24 @@ export default function WatchPartyIndexScreen() {
 	    });
 
     if (options.roomType === "live") {
-      router.push({
-        pathname: "/watch-party/live-stage/[partyId]",
-        params,
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (key === "partyId" || value == null) continue;
+        query.set(key, String(value));
+      }
+      query.set("partyId", options.partyId);
+      const queryString = query.toString();
+      const liveStageRoute = `/watch-party/live-stage${queryString ? `?${queryString}` : ""}`;
+      console.log("[watch-party-proof] pushing live-stage route", {
+        route: liveStageRoute,
+      });
+      console.log("[watch-party-proof] opening embedded live-stage route", {
+        partyId: options.partyId,
+        source: isPlayerWatchPartyLiveFlow ? PLAYER_WATCH_PARTY_SOURCE : "watch-party-index-proof",
+      });
+      setEmbeddedLiveStageEntry({
+        partyId: options.partyId,
+        source: isPlayerWatchPartyLiveFlow ? PLAYER_WATCH_PARTY_SOURCE : "watch-party-index-proof",
       });
       return;
     }
@@ -792,6 +814,13 @@ export default function WatchPartyIndexScreen() {
   }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview, requirePremiumRoomEntry]);
 
   const onCreateRoom = async () => {
+    console.log("[watch-party-proof] create room pressed", {
+      roomType: inferredWaitingRoomType,
+      hasPreparedRoom: Boolean(preparedRoom?.room.partyId),
+      isPreparingInitialCode,
+      creating,
+      watchPartyEnabled: features.watchPartyEnabled,
+    });
     if (!features.watchPartyEnabled) {
       setCreateError("Watch Party is disabled in the current app configuration.");
       return;
@@ -831,22 +860,41 @@ export default function WatchPartyIndexScreen() {
     setCreating(true);
 
     try {
+      const hostUserId = await getSafePartyUserId();
       if (!effectiveTitleId && preparedTargetPartyId) {
-        const nextPartyId = preparedTargetPartyId;
-        if (nextPartyId) {
-          navigateToRoom({
-            partyId: nextPartyId,
+        const preparedHostUserId = String(preparedRoom?.room.hostUserId ?? "").trim();
+        const preparedRoomBelongsToCurrentUser = !!preparedHostUserId && preparedHostUserId === hostUserId;
+
+        if (!preparedRoomBelongsToCurrentUser) {
+          console.log("[watch-party-proof] stale prepared live room ignored", {
             roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
-            roomCode: preparedTargetRoomCode,
-            titleId: preparedTargetTitleId,
-            sourceType: defaultSourceType,
-            sourceId: defaultSourceId || null,
+            partyId: preparedTargetPartyId,
+            hostMatchesCurrentUser: false,
           });
-          return;
+          setPreparedRoom(null);
+          setIncomingHandoff(null);
+        } else {
+          const nextPartyId = preparedTargetPartyId;
+          if (nextPartyId) {
+            console.log("[watch-party-proof] navigating to prepared room", {
+              roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
+              partyId: nextPartyId,
+              roomCode: preparedTargetRoomCode,
+              sourceType: defaultSourceType ?? null,
+            });
+            navigateToRoom({
+              partyId: nextPartyId,
+              roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
+              roomCode: preparedTargetRoomCode,
+              titleId: preparedTargetTitleId,
+              sourceType: defaultSourceType,
+              sourceId: defaultSourceId || null,
+            });
+            return;
+          }
         }
       }
 
-      const hostUserId = await getSafePartyUserId();
       const roomType = effectiveTitleId ? "title" : activeWaitingRoomType;
 
       const room = await createPartyRoom(effectiveTitleId, hostUserId, 0, "paused", {
@@ -1173,6 +1221,16 @@ export default function WatchPartyIndexScreen() {
     );
   };
 
+  if (embeddedLiveStageEntry) {
+    return (
+      <WatchPartyLiveStageScreen
+        routePartyId={embeddedLiveStageEntry.partyId}
+        routeMode="live"
+        routeSource={embeddedLiveStageEntry.source}
+      />
+    );
+  }
+
   return (
     <View style={styles.outerFlex}>
       {backgroundSource ? (
@@ -1195,7 +1253,8 @@ export default function WatchPartyIndexScreen() {
         <ScrollView
           style={styles.screen}
           contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
         <Text style={styles.kicker}>{branding.appDisplayName.toUpperCase()}</Text>
@@ -1268,9 +1327,18 @@ export default function WatchPartyIndexScreen() {
             {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
             <TouchableOpacity
               style={[styles.primaryButton, createActionBusy && styles.primaryButtonDisabled]}
+              onPressIn={() => {
+                console.log("[watch-party-proof] create room press-in", {
+                  roomType: inferredWaitingRoomType,
+                  createActionBusy,
+                  watchPartyEnabled: features.watchPartyEnabled,
+                });
+              }}
               onPress={onCreateRoom}
               activeOpacity={0.85}
               disabled={createActionBusy || !features.watchPartyEnabled}
+              testID="watch-party-create-room"
+              accessibilityLabel={isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}
             >
               {createActionBusy ? (
                 <View style={styles.lookingRow}>

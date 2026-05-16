@@ -38,6 +38,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - Premium is the platform subscription. It uses Google Play plus RevenueCat, RevenueCat entitlement `premium`, and the current planned price is `$9.99/month` and `$99/year`.
 - Premium subscription revenue belongs to Chi'llywood/platform. It must not be split with creators, must not create a creator subscription revenue pool, and must not be treated as creator earnings.
 - RevenueCat remains the Premium subscription truth owner. Premium gates must be entitlement-backed, not local fake flags, local-only bypasses, manual Admin toggles, or client-only state.
+- Temporary internal proof holds may pause the purchase shell or live-entry requirement for a narrow device-proof lane, but they do not grant Premium, must be plainly documented, and must be removed/rechecked before launch-ready Premium gates are claimed.
 - RevenueCat/Google Play purchase proof remains pending until a release-like Android build proves product load, purchase sheet, purchase, restore, active entitlement, and expired/revoked blocking.
 - Premium purchases use Google Play plus RevenueCat only; Stripe must not sell or grant Premium.
 - Premium unlocks platform features, Premium-only live/watch-party access, creator tools, and future creator monetization tools where backed.
