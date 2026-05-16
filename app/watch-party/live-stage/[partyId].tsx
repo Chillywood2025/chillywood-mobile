@@ -351,14 +351,23 @@ function LiveKitHybridHeroVideo({
     ],
     { onlySubscribed: true },
   );
+  const renderableTracks = useMemo(
+    () => tracks.filter(isHybridLiveKitTrackReference),
+    [tracks],
+  );
   const remoteTracks = useMemo(
-    () => tracks.filter((trackRef) => (
-      isHybridLiveKitTrackReference(trackRef) && trackRef.participant.identity !== localParticipant.identity
-    )),
-    [localParticipant.identity, tracks],
+    () => renderableTracks.filter((trackRef) => trackRef.participant.identity !== localParticipant.identity),
+    [localParticipant.identity, renderableTracks],
   );
   const primaryRemoteTrack = remoteTracks[0] ?? null;
-  const localCameraTrackRef = useMemo(() => {
+  const publishedLocalCameraTrackRef = useMemo(
+    () => renderableTracks.find((trackRef) => (
+      trackRef.participant.identity === localParticipant.identity
+      && trackRef.source === Track.Source.Camera
+    )) ?? null,
+    [localParticipant.identity, renderableTracks],
+  );
+  const directLocalCameraTrackRef = useMemo(() => {
     if (!shouldPublishLocalCamera || !cameraTrack) return null;
     return {
       participant: localParticipant,
@@ -366,6 +375,7 @@ function LiveKitHybridHeroVideo({
       source: Track.Source.Camera,
     };
   }, [cameraTrack, localParticipant, shouldPublishLocalCamera]);
+  const localCameraTrackRef = publishedLocalCameraTrackRef ?? directLocalCameraTrackRef;
   const primaryTrack = useMemo(
     () => {
       if (preferLocalHero && shouldPublishLocalCamera && localCameraTrackRef) {
@@ -385,6 +395,7 @@ function LiveKitHybridHeroVideo({
       preferLocalHero,
       shouldPublishLocalCamera,
       hasLocalCameraTrack: !!cameraTrack,
+      hasPublishedLocalCameraTrack: !!publishedLocalCameraTrackRef,
       hasRemoteTrack: !!primaryRemoteTrack,
       remoteTrackCount: remoteTracks.length,
       visibleTrackCount,
@@ -398,6 +409,7 @@ function LiveKitHybridHeroVideo({
     participantRole,
     preferLocalHero,
     primaryRemoteTrack,
+    publishedLocalCameraTrackRef,
     remoteTracks.length,
     roomName,
     shouldPublishLocalCamera,
@@ -1381,8 +1393,8 @@ export default function WatchPartyLiveStageScreen() {
     && !!communicationRoomId
     && !shouldRenderLiveKitStage
     && stageMode !== "hybrid";
-  // Avoid loading the legacy RTC renderer inside the native LiveKit stage path on Android.
-  const shouldAllowLegacyStageRtcModule = !liveKitFoundationEnabled || Platform.OS === "web";
+  // Avoid loading the legacy RTC renderer only while the native LiveKit stage actually owns the camera path.
+  const shouldAllowLegacyStageRtcModule = Platform.OS === "web" || !shouldRenderLiveKitStage;
   const RTCView = useMemo<CommunicationRTCViewComponent | undefined>(() => {
     if (!shouldRenderLegacyStageRtc || !shouldAllowLegacyStageRtcModule) return undefined;
     return getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;

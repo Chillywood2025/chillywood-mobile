@@ -1682,8 +1682,6 @@ export default function WatchPartyRoomScreen() {
     );
     const participantRole = myRoleRef.current === "host" ? "host" : "speaker";
 
-    setPartyRoomCameraPreviewSuppressed(true);
-
     const joinResult = await prepareLiveKitJoinBoundary({
       surface: "watch-party-live",
       roomName: nextPartyId,
@@ -1718,7 +1716,15 @@ export default function WatchPartyRoomScreen() {
           roomName: joinResult.roomName,
         });
       }
+      setPartyRoomCameraPreviewSuppressed(false);
+      Alert.alert(
+        "Live feed unavailable",
+        joinResult.message || "The LiveKit room did not finish preparing. Stay in the room and try again.",
+      );
+      return;
     }
+
+    setPartyRoomCameraPreviewSuppressed(true);
 
     debugLog("watch-party", "open player", {
       sourceType: targetSourceType,

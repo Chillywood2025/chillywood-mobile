@@ -172,18 +172,27 @@ function LiveKitStageMediaContent({
     ],
     { onlySubscribed: true },
   );
+  const renderableTracks = useMemo(
+    () => tracks.filter(isRenderableTrackReference),
+    [tracks],
+  );
   const remoteTracks = useMemo(
-    () => tracks
-      .filter(isRenderableTrackReference)
-      .filter((trackRef) => trackRef.participant.identity !== localParticipant.identity),
-    [localParticipant.identity, tracks],
+    () => renderableTracks.filter((trackRef) => trackRef.participant.identity !== localParticipant.identity),
+    [localParticipant.identity, renderableTracks],
   );
   const remoteCameraTracks = useMemo(
     () => remoteTracks.filter((trackRef) => trackRef.source === Track.Source.Camera),
     [remoteTracks],
   );
   const primaryRemoteTrack = remoteTracks[0] ?? null;
-  const localCameraTrackRef = useMemo<RenderableLiveKitTrackReference | null>(() => {
+  const publishedLocalCameraTrackRef = useMemo(
+    () => renderableTracks.find((trackRef) => (
+      trackRef.participant.identity === localParticipant.identity
+      && trackRef.source === Track.Source.Camera
+    )) ?? null,
+    [localParticipant.identity, renderableTracks],
+  );
+  const directLocalCameraTrackRef = useMemo<RenderableLiveKitTrackReference | null>(() => {
     if (!shouldPublishLocalCamera || !cameraTrack) return null;
     const trackRef = {
       participant: localParticipant,
@@ -192,6 +201,7 @@ function LiveKitStageMediaContent({
     };
     return isRenderableTrackReference(trackRef) ? trackRef : null;
   }, [cameraTrack, localParticipant, shouldPublishLocalCamera]);
+  const localCameraTrackRef = publishedLocalCameraTrackRef ?? directLocalCameraTrackRef;
   const primaryTrack = useMemo(
     () => primaryRemoteTrack ?? localCameraTrackRef,
     [localCameraTrackRef, primaryRemoteTrack],
@@ -222,6 +232,7 @@ function LiveKitStageMediaContent({
       isCameraEnabled,
       isMicrophoneEnabled,
       hasLocalCameraTrack: !!cameraTrack,
+      hasPublishedLocalCameraTrack: !!publishedLocalCameraTrackRef,
       hasRemoteTrack: !!primaryRemoteTrack,
       remoteTrackCount: remoteTracks.length,
       visibleTrackCount,
@@ -240,6 +251,7 @@ function LiveKitStageMediaContent({
     lastMicrophoneError?.message,
     mediaDeviceFailure,
     publishLocalAudio,
+    publishedLocalCameraTrackRef,
     primaryRemoteTrack,
     bubbleGridTracks.length,
     remoteTracks.length,

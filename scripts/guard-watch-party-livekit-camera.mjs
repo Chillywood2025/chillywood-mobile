@@ -30,9 +30,26 @@ const assertBefore = (source, firstNeedle, secondNeedle, label) => {
   }
 };
 
+const sliceBetween = (source, startNeedle, endNeedle, label) => {
+  const startIndex = source.indexOf(startNeedle);
+  const endIndex = source.indexOf(endNeedle, startIndex + startNeedle.length);
+  if (startIndex < 0 || endIndex < 0 || endIndex <= startIndex) {
+    fail(label);
+    return "";
+  }
+  return source.slice(startIndex, endIndex);
+};
+
 const livekitSurface = readSource("components/watch-party-live/livekit-stage-media-surface.tsx");
 const partyRoom = readSource("app/watch-party/[partyId].tsx");
+const liveStage = readSource("app/watch-party/live-stage/[partyId].tsx");
 const player = readSource("app/player/[id].tsx");
+const partyRoomWatchTogether = sliceBetween(
+  partyRoom,
+  "const onWatchTogether = useCallback(async () => {",
+  "const onPickPartyRoomCommentAttachment = useCallback(async () => {",
+  "Party Room Watch Together handler boundary",
+);
 
 assertNotIncludes(
   livekitSurface,
@@ -49,6 +66,21 @@ assertIncludes(
   "mirror={isLocalParticipant}",
   "LiveKit bubble grid mirrored local VideoTrack rendering",
 );
+assertIncludes(
+  livekitSurface,
+  "const publishedLocalCameraTrackRef = useMemo(",
+  "LiveKit media surface must render the published local camera track from useTracks before showing fallback",
+);
+assertIncludes(
+  liveStage,
+  "const publishedLocalCameraTrackRef = useMemo(",
+  "Live Stage hero must render the published local LiveKit camera track from useTracks before showing fallback",
+);
+assertIncludes(
+  liveStage,
+  "const shouldAllowLegacyStageRtcModule = Platform.OS === \"web\" || !shouldRenderLiveKitStage;",
+  "Live Stage must allow legacy camera RTC fallback when native LiveKit is not actively rendering",
+);
 
 assertIncludes(
   partyRoom,
@@ -61,10 +93,22 @@ assertIncludes(
   "Party Room local preview focus/suppression gate",
 );
 assertBefore(
-  partyRoom,
-  "setPartyRoomCameraPreviewSuppressed(true);",
+  partyRoomWatchTogether,
   "const joinResult = await prepareLiveKitJoinBoundary({",
-  "Party Room must suppress expo-camera preview before preparing the LiveKit handoff.",
+  "setPartyRoomCameraPreviewSuppressed(true);",
+  "Party Room must not suppress expo-camera preview before the LiveKit handoff is ready.",
+);
+assertBefore(
+  partyRoomWatchTogether,
+  "setPartyRoomCameraPreviewSuppressed(false);",
+  "Alert.alert(\n        \"Live feed unavailable\"",
+  "Party Room must restore expo-camera preview before reporting an unavailable LiveKit handoff.",
+);
+assertBefore(
+  partyRoomWatchTogether,
+  "setPartyRoomCameraPreviewSuppressed(true);",
+  "router.push({",
+  "Party Room must suppress expo-camera preview only before routing into the LiveKit Player.",
 );
 assertIncludes(
   partyRoom,
