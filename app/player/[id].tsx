@@ -664,13 +664,23 @@ const touchDistance = (touches: readonly { pageX: number; pageY: number }[]) => 
 
 export default function PlayerScreen() {
   const { isSignedIn } = useSession();
-  const { id, partyId: partyIdParam, liveMode: liveModeParam, source: sourceParam } = useLocalSearchParams<{
+  const {
+    id,
+    partyId: partyIdParam,
+    liveKitIdentity: liveKitIdentityParam,
+    liveMode: liveModeParam,
+    source: sourceParam,
+  } = useLocalSearchParams<{
     id?: string;
     partyId?: string | string[];
+    liveKitIdentity?: string | string[];
     liveMode?: string | string[];
     source?: string | string[];
   }>();
   const partyId = Array.isArray(partyIdParam) ? String(partyIdParam[0] ?? "").trim() : String(partyIdParam ?? "").trim();
+  const watchPartyLiveKitIdentity = Array.isArray(liveKitIdentityParam)
+    ? String(liveKitIdentityParam[0] ?? "").trim()
+    : String(liveKitIdentityParam ?? "").trim();
   const inWatchParty = !!partyId;
   const liveModeRaw = Array.isArray(liveModeParam)
     ? String(liveModeParam[0] ?? "").trim().toLowerCase()
@@ -3912,12 +3922,13 @@ export default function PlayerScreen() {
       }
       return;
     }
-    if (!trackedUserId || trackedUserId === "anon") return;
+    const liveKitParticipantIdentity = watchPartyLiveKitIdentity || trackedUserId;
+    if (!liveKitParticipantIdentity || (!watchPartyLiveKitIdentity && liveKitParticipantIdentity === "anon")) return;
 
     const preparedContract = consumePreparedLiveKitJoinBoundary({
       surface: "watch-party-live",
       roomName: partyId,
-      participantIdentity: trackedUserId,
+      participantIdentity: liveKitParticipantIdentity,
     });
     if (!preparedContract) return;
 
@@ -3932,6 +3943,7 @@ export default function PlayerScreen() {
     inWatchParty,
     partyId,
     trackedUserId,
+    watchPartyLiveKitIdentity,
     watchPartyEntryAllowed,
     watchPartyLiveKitJoinContract?.participantRole,
     watchPartyLiveKitJoinContract?.roomName,

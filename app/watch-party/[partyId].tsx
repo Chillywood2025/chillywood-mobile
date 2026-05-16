@@ -1729,6 +1729,7 @@ export default function WatchPartyRoomScreen() {
       params: {
         id: targetSourceId,
         partyId: nextPartyId,
+        liveKitIdentity: participantIdentity,
         ...(targetSourceType === "creator_video" ? { source: "creator-video" } : {}),
       },
     });

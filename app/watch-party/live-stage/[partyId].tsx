@@ -4,7 +4,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Room, Track } from "livekit-client";
+import { ConnectionState, Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
@@ -249,9 +249,16 @@ type CommunicationRTCViewComponent = React.ComponentType<{
   mirror?: boolean;
 }>;
 
-const HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
+const HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 30_000;
 
 type LiveKitStageFallbackReason = "connection_timeout" | "disconnected" | "room_error";
+
+const isHybridLiveKitConnectedishState = (state: unknown) => (
+  state === ConnectionState.Connected
+  || state === ConnectionState.Connecting
+  || state === ConnectionState.Reconnecting
+  || state === ConnectionState.SignalReconnecting
+);
 
 function ConditionalWrap({
   condition,
@@ -509,6 +516,14 @@ function LiveKitHybridCommunityRoomHost({
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (!didConnectOnce) {
+        if (isHybridLiveKitConnectedishState(room.state)) {
+          debugLog("livekit", "hybrid community room still connecting after timeout window", {
+            roomName: joinContract.roomName,
+            participantRole: joinContract.participantRole,
+            connectionState: String(room.state ?? ""),
+          });
+          return;
+        }
         triggerFallback(
           "connection_timeout",
           new Error("LiveKit did not finish connecting before the hybrid community feed fallback deadline."),
@@ -519,7 +534,7 @@ function LiveKitHybridCommunityRoomHost({
     return () => {
       clearTimeout(timeout);
     };
-  }, [didConnectOnce, triggerFallback]);
+  }, [didConnectOnce, joinContract.participantRole, joinContract.roomName, room, triggerFallback]);
 
   const handleConnected = useCallback(() => {
     tearingDownRoomsRef.current.delete(room);

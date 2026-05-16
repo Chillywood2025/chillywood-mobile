@@ -68,6 +68,11 @@ assertBefore(
 );
 assertIncludes(
   partyRoom,
+  "liveKitIdentity: participantIdentity",
+  "Party Room must pass the prepared LiveKit participant identity through the Player route handoff",
+);
+assertIncludes(
+  partyRoom,
   "allowCameraPreview={allowLocalCameraPreview}",
   "Party Room bottom strip preview gate",
 );
@@ -91,6 +96,11 @@ assertIncludes(
   player,
   "&& !shouldRenderWatchPartyLiveKit",
   "Player participant strip must disable expo-camera preview while Watch-Party LiveKit is rendered",
+);
+assertIncludes(
+  player,
+  "const liveKitParticipantIdentity = watchPartyLiveKitIdentity || trackedUserId;",
+  "Player must consume the prepared Watch-Party LiveKit contract with the route handoff identity",
 );
 
 if (process.exitCode) {

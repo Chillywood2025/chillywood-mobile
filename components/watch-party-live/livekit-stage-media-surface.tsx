@@ -56,7 +56,7 @@ const isRenderableTrackReference = (trackRef: unknown): trackRef is RenderableLi
   isTrackReference(trackRef)
 );
 
-const LIVEKIT_CONNECT_TIMEOUT_MILLIS = 10_000;
+const LIVEKIT_CONNECT_TIMEOUT_MILLIS = 30_000;
 const LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS = 4_500;
 
 type LiveKitSignalClientPatchable = {
@@ -412,7 +412,9 @@ export function LiveKitStageMediaSurface({
   const effectivePublishLocalAudio = shouldConnectRoom && publishLocalAudio;
   const effectivePublishLocalCamera = shouldConnectRoom && publishLocalCamera;
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
+  const roomKey = `${joinContract.roomName}:${joinContract.participantToken}`;
   const room = useMemo(() => {
+    void roomKey;
     const nextRoom = new Room(createLiveKitV1RoomOptions({ adaptiveStream: layout !== "bubble-grid", dynacast: false }));
     patchLiveKitSignalReadingLoop(
       nextRoom,
@@ -420,7 +422,7 @@ export function LiveKitStageMediaSurface({
       () => tearingDownRoomsRef.current.has(nextRoom),
     );
     return nextRoom;
-  }, [joinContract.participantToken, joinContract.roomName, layout, surfaceLabel]);
+  }, [layout, roomKey, surfaceLabel]);
 
   const clearDisconnectFallbackTimeout = useCallback(() => {
     if (!disconnectFallbackTimeoutRef.current) return;
@@ -535,6 +537,15 @@ export function LiveKitStageMediaSurface({
 
     const timeout = setTimeout(() => {
       if (!didConnectOnce) {
+        if (isConnectedishState(room.state)) {
+          debugLog("livekit", "stage media connection still in progress after timeout window", {
+            surfaceLabel,
+            roomName: joinContract.roomName,
+            participantRole: joinContract.participantRole,
+            connectionState: String(room.state ?? ""),
+          });
+          return;
+        }
         triggerFallback(
           "connection_timeout",
           new Error("LiveKit did not finish connecting before the fallback deadline."),
@@ -545,7 +556,7 @@ export function LiveKitStageMediaSurface({
     return () => {
       clearTimeout(timeout);
     };
-  }, [didConnectOnce, shouldConnectRoom, triggerFallback]);
+  }, [didConnectOnce, joinContract.participantRole, joinContract.roomName, room, shouldConnectRoom, surfaceLabel, triggerFallback]);
 
   const handleConnected = useCallback(() => {
     clearDisconnectFallbackTimeout();
@@ -573,10 +584,17 @@ export function LiveKitStageMediaSurface({
       return;
     }
     if (!didConnectOnceRef.current) {
-      triggerFallback(
-        "disconnected",
-        new Error("LiveKit disconnected before the stage path connected once."),
-      );
+      clearDisconnectFallbackTimeout();
+      disconnectFallbackTimeoutRef.current = setTimeout(() => {
+        disconnectFallbackTimeoutRef.current = null;
+        if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current || isConnectedishState(room.state)) {
+          return;
+        }
+        triggerFallback(
+          "disconnected",
+          new Error("LiveKit disconnected before the stage path connected once."),
+        );
+      }, LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS);
       return;
     }
 
@@ -649,7 +667,7 @@ export function LiveKitStageMediaSurface({
       importantForAccessibility="no-hide-descendants"
     >
       <LiveKitRoom
-        key={`${joinContract.roomName}:${joinContract.participantToken}`}
+        key={roomKey}
         room={room}
         serverUrl={joinContract.serverUrl}
         token={joinContract.participantToken}
