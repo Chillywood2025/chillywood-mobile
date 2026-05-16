@@ -1,4 +1,10 @@
 import { supabase } from "./supabase";
+import {
+  CREATOR_INSTANT_CASHOUT_FEE_BPS,
+  CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS,
+  calculateScheduledPayoutFeeCents,
+  type CreatorMonetizationRuntimeFlags,
+} from "./creatorMonetization";
 
 export const CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE = "creator_payout_ledger_entries";
 export const CREATOR_PAYOUT_ELIGIBILITY_RECORDS_TABLE = "creator_payout_eligibility_records";
@@ -45,7 +51,10 @@ export type CreatorPayoutDashboardReadModel = {
   canRefreshProviderStatus: boolean;
   providerReady: boolean;
   eligibleForPayouts: boolean;
+  holdPeriodCleared: boolean;
   kycReady: boolean;
+  minimumPayoutMet: boolean;
+  payoutAccountReady: boolean;
   taxReady: boolean;
   fraudHoldActive: boolean;
   adminReviewStatus: string | null;
@@ -54,6 +63,24 @@ export type CreatorPayoutDashboardReadModel = {
   ledgerRowCount: number | null;
   latestRows: CreatorPayoutLedgerFoundationRow[];
   generatedAt: string;
+};
+
+export type CreatorPayoutReadinessResolution = {
+  canReceivePayouts: boolean;
+  canRequestScheduledPayout: boolean;
+  canRequestInstantCashout: boolean;
+  blockedReasons: string[];
+  nextRequiredActions: string[];
+  taxOrKycPending: boolean;
+  providerRestricted: boolean;
+  fraudOrDmcaHold: boolean;
+  suspendedAccount: boolean;
+  liveMoneyDisabled: boolean;
+  payoutFeatureDisabled: boolean;
+  cashoutFeatureDisabled: boolean;
+  scheduledPayoutFeeCents: number;
+  instantCashoutFeeBps: number;
+  instantCashoutHasDefaultCap: boolean;
 };
 
 type CreatorPayoutLedgerDbRow = {
@@ -80,7 +107,10 @@ type CreatorPayoutEligibilityDbRow = {
   eligibility_status?: string | null;
   eligible_for_payouts?: boolean | null;
   fraud_hold_active?: boolean | null;
+  hold_period_cleared?: boolean | null;
   kyc_ready?: boolean | null;
+  minimum_payout_met?: boolean | null;
+  payout_account_ready?: boolean | null;
   provider_ready?: boolean | null;
   tax_ready?: boolean | null;
 };
@@ -354,7 +384,10 @@ const toCreatorPayoutSetupFields = (
     eligibilityReason,
     eligibleForPayouts: eligibility?.eligible_for_payouts === true,
     fraudHoldActive: eligibility?.fraud_hold_active === true,
+    holdPeriodCleared: eligibility?.hold_period_cleared === true,
     kycReady: eligibility?.kyc_ready === true,
+    minimumPayoutMet: eligibility?.minimum_payout_met === true,
+    payoutAccountReady: eligibility?.payout_account_ready === true,
     providerReady: eligibility?.provider_ready === true,
     setupActionLabel: resolveSetupActionLabel(status),
     setupStatus: status,
@@ -410,7 +443,7 @@ async function readCreatorPayoutEligibility(creatorUserId: string) {
   const { data, error } = await payoutClient
     .from(CREATOR_PAYOUT_ELIGIBILITY_RECORDS_TABLE)
     .select(
-      "eligibility_status,eligibility_reason,eligible_for_payouts,fraud_hold_active,tax_ready,kyc_ready,provider_ready,admin_review_status",
+      "eligibility_status,eligibility_reason,eligible_for_payouts,fraud_hold_active,hold_period_cleared,minimum_payout_met,payout_account_ready,tax_ready,kyc_ready,provider_ready,admin_review_status",
     )
     .eq("creator_user_id", creatorUserId)
     .maybeSingle();
@@ -460,6 +493,84 @@ export async function readCreatorPayoutDashboardSummary(options: {
   } catch {
     return createEmptyCreatorPayoutDashboardReadModel();
   }
+}
+
+const uniqueStrings = (values: readonly string[]) => Array.from(new Set(values.filter(Boolean)));
+
+export function resolveCreatorPayoutReadiness(
+  summary: CreatorPayoutDashboardReadModel,
+  flags?: Pick<
+    CreatorMonetizationRuntimeFlags,
+    "cashoutEnabled" | "liveMoneyEnabled" | "payoutsEnabled" | "stripeConnectProductionEnabled"
+  > | null,
+): CreatorPayoutReadinessResolution {
+  const liveMoneyEnabled = flags?.liveMoneyEnabled === true;
+  const productionConnectEnabled = flags?.stripeConnectProductionEnabled === true;
+  const payoutFeatureEnabled = flags?.payoutsEnabled === true && liveMoneyEnabled && productionConnectEnabled;
+  const cashoutFeatureEnabled = flags?.cashoutEnabled === true && payoutFeatureEnabled;
+  const taxOrKycPending = !summary.kycReady || !summary.taxReady;
+  const providerRestricted =
+    !summary.providerReady
+    || ["action_required", "on_hold", "payouts_disabled", "setup_required"].includes(summary.setupStatus);
+  const fraudOrDmcaHold = summary.fraudHoldActive;
+  const suspendedAccount = summary.setupStatus === "payouts_disabled";
+  const payoutFeatureDisabled = !payoutFeatureEnabled;
+  const cashoutFeatureDisabled = !cashoutFeatureEnabled;
+  const hasPayableFoundationState =
+    summary.providerReady
+    && summary.eligibleForPayouts
+    && summary.minimumPayoutMet
+    && summary.holdPeriodCleared
+    && !taxOrKycPending
+    && !providerRestricted
+    && !fraudOrDmcaHold
+    && !suspendedAccount;
+
+  const blockedReasons = uniqueStrings([
+    liveMoneyEnabled ? "" : "Live money is disabled.",
+    productionConnectEnabled ? "" : "Stripe Connect production mode is disabled.",
+    payoutFeatureEnabled ? "" : "Payouts are disabled.",
+    cashoutFeatureEnabled ? "" : "Cash-out is disabled.",
+    summary.providerReady ? "" : "Stripe Connect provider readiness is not complete.",
+    summary.eligibleForPayouts ? "" : "Creator payout eligibility is not approved.",
+    summary.minimumPayoutMet ? "" : "Minimum payout is not met or not implemented.",
+    summary.holdPeriodCleared ? "" : "Required payout hold period is not cleared.",
+    summary.kycReady ? "" : "KYC readiness is pending.",
+    summary.taxReady ? "" : "Tax/1099 readiness is pending.",
+    fraudOrDmcaHold ? "Fraud, DMCA, or review hold blocks payout readiness." : "",
+    suspendedAccount ? "Provider account is disabled or restricted." : "",
+    "No payable balance can be created by the mobile app.",
+  ]);
+
+  const nextRequiredActions = uniqueStrings([
+    summary.setupStatus === "setup_required" ? "Create or continue Stripe Connect test-mode onboarding." : "",
+    summary.setupStatus === "onboarding_in_progress" ? "Finish Stripe Connect onboarding." : "",
+    summary.setupStatus === "action_required" ? "Resolve provider-required account information." : "",
+    taxOrKycPending ? "Complete provider-backed KYC/tax readiness before payouts." : "",
+    summary.minimumPayoutMet ? "" : "Wait for a real provider-backed payable balance and minimum payout rule.",
+    summary.holdPeriodCleared ? "" : "Wait for the configured hold period to clear.",
+    liveMoneyEnabled && productionConnectEnabled ? "" : "Complete provider, legal, tax, and Owner approval before live payouts.",
+  ]);
+
+  const canReceivePayouts = hasPayableFoundationState && payoutFeatureEnabled;
+
+  return {
+    canReceivePayouts,
+    canRequestScheduledPayout: canReceivePayouts,
+    canRequestInstantCashout: canReceivePayouts && cashoutFeatureEnabled,
+    blockedReasons,
+    nextRequiredActions,
+    taxOrKycPending,
+    providerRestricted,
+    fraudOrDmcaHold,
+    suspendedAccount,
+    liveMoneyDisabled: !liveMoneyEnabled,
+    payoutFeatureDisabled,
+    cashoutFeatureDisabled,
+    scheduledPayoutFeeCents: calculateScheduledPayoutFeeCents(),
+    instantCashoutFeeBps: CREATOR_INSTANT_CASHOUT_FEE_BPS,
+    instantCashoutHasDefaultCap: CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS !== null,
+  };
 }
 
 const assertSafePayoutFunctionPayload = (payload: CreatorPayoutFunctionPayload | null) => {

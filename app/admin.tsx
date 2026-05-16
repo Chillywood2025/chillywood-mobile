@@ -5473,7 +5473,7 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  Backend test-mode proof is read-only here. No creator-facing Connect Stripe setup, payout release, or money movement is active.
+                  Creator-facing Connect Stripe setup is test-mode only from Platform Studio. Admin remains read-only here; no payout release or money movement is active.
                 </Text>
                 <Text style={styles.configListBody}>
                   Test-mode accounts: {formatAdminFinanceCount(
@@ -5559,6 +5559,9 @@ export default function AdminStudioScreen() {
                     "record",
                     "records",
                   )}. Eligibility rows are not payable balances and do not release money.
+                </Text>
+                <Text style={styles.configListBody}>
+                  Provider readiness, KYC, tax/1099 readiness, hold clearance, and legal/accounting approval must all pass before any payout can be called available.
                 </Text>
               </View>
             </View>

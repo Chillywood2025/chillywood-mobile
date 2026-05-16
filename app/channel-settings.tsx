@@ -43,6 +43,7 @@ import {
   formatCreatorPayoutFoundationAmount,
   formatCreatorPayoutLedgerCount,
   readCreatorPayoutDashboardSummary,
+  resolveCreatorPayoutReadiness,
   syncCreatorPayoutProviderStatus,
   type CreatorPayoutDashboardReadModel,
 } from "../_lib/creatorPayouts";
@@ -1815,6 +1816,10 @@ export function ChannelStudioScreen() {
   const creatorMonetizationSettings =
     creatorMonetizationSummary?.settings ?? DEFAULT_CREATOR_MONETIZATION_RUNTIME_FLAGS;
   const calculateInstantCashoutFeePreviewCents = calculateInstantCashoutFeeCents(10_000);
+  const creatorPayoutReadiness = resolveCreatorPayoutReadiness(
+    creatorPayoutSummary,
+    creatorMonetizationSettings,
+  );
   const creatorMonetizationFoundationCards: readonly SummaryMetricCard[] = [
     {
       label: "Creator pricing",
@@ -2863,7 +2868,7 @@ export function ChannelStudioScreen() {
           <Text style={styles.panelStatusMuted}>READ-ONLY</Text>
         </View>
         <Text style={styles.permissionCopy}>
-          This dashboard is foundation-only. It does not create a balance, payout account, withdrawal, provider onboarding, KYC, tax form, approval, transfer, or payable obligation.
+          This dashboard is foundation-only. It can open backend test-mode Stripe setup, but it does not create a balance, withdrawal, KYC approval, tax form, payout approval, transfer, or payable obligation.
         </Text>
       </View>
 
@@ -2879,7 +2884,7 @@ export function ChannelStudioScreen() {
             {creatorPayoutSummary.setupStatusBody}
           </Text>
           <Text style={styles.accessSummaryBody}>
-            This is backend-only Stripe Connect test-mode setup. Withdrawals, payout release, transfers, checkout, KYC UI, and payable balances are not active.
+            This is backend-only Stripe Connect test-mode setup. Withdrawals, payout release, transfers, checkout, and payable balances are not active.
           </Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
@@ -2892,13 +2897,43 @@ export function ChannelStudioScreen() {
               <Text style={styles.summaryValue}>
                 {creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Provider ready" : "Not connected"}
               </Text>
-              <Text style={styles.summaryBody}>{"No Chi'llywood KYC or tax form flow exists in the app."}</Text>
+              <Text style={styles.summaryBody}>{"Stripe setup, tax readiness, and Chi'llywood legal/accounting review are required before payouts."}</Text>
             </View>
             <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
               <Text style={styles.summaryLabel}>Payout execution</Text>
               <Text style={styles.summaryValue}>Inactive</Text>
               <Text style={styles.summaryBody}>No withdrawal, approval, release, transfer, or cash-out action exists.</Text>
             </View>
+            <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
+              <Text style={styles.summaryLabel}>Scheduled payout</Text>
+              <Text style={styles.summaryValue}>
+                {creatorPayoutReadiness.canRequestScheduledPayout ? "Ready" : "Disabled"}
+              </Text>
+              <Text style={styles.summaryBody}>
+                Scheduled payout fee is ${formatCreatorPayoutFoundationAmount(creatorPayoutReadiness.scheduledPayoutFeeCents, "usd").replace("USD ", "")}; requests remain blocked until provider and platform proof pass.
+              </Text>
+            </View>
+            <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
+              <Text style={styles.summaryLabel}>Instant cash-out</Text>
+              <Text style={styles.summaryValue}>
+                {creatorPayoutReadiness.canRequestInstantCashout ? "Ready" : "Disabled"}
+              </Text>
+              <Text style={styles.summaryBody}>
+                Optional instant cash-out is {creatorPayoutReadiness.instantCashoutFeeBps / 100}% with no default cap, shown separately before confirmation when live.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.eventEmptyCard}>
+            <Text style={styles.eventEmptyTitle}>Blocked reasons</Text>
+            <Text style={styles.eventEmptyBody}>
+              {creatorPayoutReadiness.blockedReasons.slice(0, 6).map((reason) => `- ${reason}`).join("\n")}
+            </Text>
+          </View>
+          <View style={styles.eventEmptyCard}>
+            <Text style={styles.eventEmptyTitle}>Next required actions</Text>
+            <Text style={styles.eventEmptyBody}>
+              {creatorPayoutReadiness.nextRequiredActions.slice(0, 5).map((action) => `- ${action}`).join("\n")}
+            </Text>
           </View>
           <View style={styles.eventActionRow}>
             {creatorPayoutSummary.setupActionLabel ? (

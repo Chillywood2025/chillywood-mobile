@@ -1,12 +1,12 @@
 # Creator Payouts Policy
 
-Last updated: May 13, 2026
+Last updated: May 16, 2026
 
 > Repo launch note: Attorney review required before public launch. This policy must not be treated as payout activation. Live creator payouts are not active in the current repo truth.
 
 ## Current Status
 
-Creator payouts are planned/foundation-only unless Chi'llywood explicitly enables them in a proved release. The current repo has read-only/foundation payout surfaces, Stripe Connect test-mode backend functions, preflight gates, admin readouts, and a remote-applied default-off creator monetization systems foundation for future paid content, products, tips, immutable earnings ledger rows, payout requests, webhook idempotency, and audit logs. It does not activate live payouts, transfers, cash-out, payable balances, withdrawal, checkout, paid status, fake purchases, fake tips, fake orders, or fake earnings. Premium subscription revenue belongs to Chi'llywood/platform and is not split with creators.
+Creator payouts are planned/foundation-only unless Chi'llywood explicitly enables them in a proved release. The current repo has read-only/foundation payout surfaces, Stripe Connect test-mode backend functions, preflight gates, admin readouts, creator-facing test-mode Connect setup/readiness states in Platform Studio, and a remote-applied default-off creator monetization systems foundation for future paid content, products, tips, immutable earnings ledger rows, payout requests, webhook idempotency, and audit logs. It does not activate live payouts, transfers, cash-out, payable balances, withdrawal, checkout, paid status, fake purchases, fake tips, fake orders, or fake earnings. Premium subscription revenue belongs to Chi'llywood/platform and is not split with creators.
 
 ## Eligibility
 
@@ -47,6 +47,8 @@ These are planning rules, not active payout promises.
 ## Provider Direction And Permissions
 
 Stripe Connect or an equivalent marketplace payout provider is the preferred direction for creator payout onboarding, KYC/tax readiness, connected-account tracking, transfers, payout rails, 1099/tax tooling, tips, sponsor payments, marketplace/network money, paid content payouts, and merch/product payouts. Google Play plus RevenueCat remains the Premium subscription entitlement path and must not become the creator payout system.
+
+Current Stripe Connect status is test-mode readiness only. A creator may be able to start backend-created Stripe setup from Platform Studio, but Chi'llywood must not call money available until provider readiness, KYC, tax/1099 readiness, hold clearance, minimum payout, legal/accounting review, Owner-approved workflow, and live-money flags all pass. Admin readouts are review/status only and cannot release money.
 
 Future Owner/Admin money permissions must be role-controlled and server-side. Owners may configure payout/monetization settings later through backed workflows. Admins may view payout/readiness/status panels and flag payout issues where backed, but must not directly edit creator balances or release money without a backed Owner-approved server-side flow. Moderators have no money access.
 

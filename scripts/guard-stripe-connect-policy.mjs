@@ -27,6 +27,9 @@ const webhook = read("supabase/functions/stripe-connect-webhook/index.ts");
 const transferCreate = read("supabase/functions/stripe-connect-transfer-create/index.ts");
 const payoutRelease = read("supabase/functions/payout-release-preflight/index.ts");
 const creatorMonetization = read("_lib/creatorMonetization.ts");
+const creatorPayouts = read("_lib/creatorPayouts.ts");
+const channelSettings = read("app/channel-settings.tsx");
+const admin = read("app/admin.tsx");
 const packageJson = read("package.json");
 const foundationDoc = read("docs/CREATOR_MONETIZATION_SYSTEMS_FOUNDATION.md");
 
@@ -88,6 +91,19 @@ assertIncludes(creatorMonetization, "CREATOR_SCHEDULED_PAYOUT_FEE_BPS = 0", "sch
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 150", "instant cash-out fee");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: number | null = null", "no instant cap");
 assertNotIncludes(creatorMonetization, "499", "no $4.99 cash-out cap");
+
+assertIncludes(creatorPayouts, "resolveCreatorPayoutReadiness", "creator payout readiness resolver");
+assertIncludes(creatorPayouts, "canRequestScheduledPayout", "scheduled payout readiness");
+assertIncludes(creatorPayouts, "canRequestInstantCashout", "instant cash-out readiness");
+assertIncludes(creatorPayouts, "Live money is disabled.", "live money disabled blocker");
+assertIncludes(creatorPayouts, "Tax/1099 readiness is pending.", "tax readiness blocker");
+assertIncludes(creatorPayouts, "No payable balance can be created by the mobile app.", "mobile balance write blocker");
+
+assertIncludes(channelSettings, "backend test-mode Stripe setup", "Studio Connect setup copy");
+assertIncludes(channelSettings, "Blocked reasons", "Studio payout blocked reasons");
+assertIncludes(channelSettings, "Instant cash-out", "Studio instant cash-out readout");
+assertIncludes(admin, "Creator-facing Connect Stripe setup is test-mode only", "Admin Connect read-only copy");
+assertIncludes(admin, "tax/1099 readiness", "Admin tax readiness copy");
 
 assertIncludes(foundationDoc, "Stripe CLI / Connect Proof Status", "Stripe CLI proof docs");
 assertIncludes(foundationDoc, "production payouts remain disabled", "production payout disabled docs");
