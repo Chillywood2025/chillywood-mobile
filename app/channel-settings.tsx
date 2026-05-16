@@ -3184,7 +3184,7 @@ export function ChannelStudioScreen() {
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>{appDisplayName.toUpperCase()} · STUDIO</Text>
+          <Text style={styles.kicker}>{appDisplayName.toUpperCase()} · PLATFORM STUDIO</Text>
           <View style={{ width: 18 }} />
         </View>
 

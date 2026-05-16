@@ -360,7 +360,7 @@ export default function PublicChannelScreen() {
       <Text style={styles.navTitle}>Mini Platform</Text>
       {isOwner ? (
         <TouchableOpacity style={styles.navStudioButton} activeOpacity={0.86} onPress={openStudio}>
-          <Text style={styles.navStudioText}>Studio</Text>
+          <Text style={styles.navStudioText}>Platform Studio</Text>
         </TouchableOpacity>
       ) : (
         <View style={styles.navSpacer} />
