@@ -8,6 +8,11 @@ import {
 
 export const CREATOR_PAYOUT_LEDGER_ENTRIES_TABLE = "creator_payout_ledger_entries";
 export const CREATOR_PAYOUT_ELIGIBILITY_RECORDS_TABLE = "creator_payout_eligibility_records";
+export const STRIPE_CONNECT_TEST_ENABLED = true;
+export const PAYOUT_DRY_RUN_ENABLED = true;
+export const TEST_PAYOUT_WORKFLOW_ENABLED = true;
+
+export type CreatorPayoutRequestKind = "scheduled" | "instant";
 
 export type CreatorPayoutSetupStatus =
   | "not_active"
@@ -81,6 +86,27 @@ export type CreatorPayoutReadinessResolution = {
   scheduledPayoutFeeCents: number;
   instantCashoutFeeBps: number;
   instantCashoutHasDefaultCap: boolean;
+};
+
+export type CreatorPayoutPreproductionWorkflowPreview = {
+  amountCents: number;
+  payoutType: CreatorPayoutRequestKind;
+  scheduledFeeCents: number;
+  instantFeeCents: number;
+  totalFeeCents: number;
+  testMode: true;
+  dryRunEnabled: boolean;
+  testWorkflowEnabled: boolean;
+  stripeConnectTestEnabled: boolean;
+  ownerApprovalRequired: true;
+  adminReadOnly: true;
+  productionExecutionAllowed: false;
+  canCreateDryRunRequest: boolean;
+  canExecuteTestTransfer: false;
+  canExecuteProductionPayout: false;
+  blockedReasons: string[];
+  approvalSteps: string[];
+  safetyLabel: string;
 };
 
 type CreatorPayoutLedgerDbRow = {
@@ -570,6 +596,74 @@ export function resolveCreatorPayoutReadiness(
     scheduledPayoutFeeCents: calculateScheduledPayoutFeeCents(),
     instantCashoutFeeBps: CREATOR_INSTANT_CASHOUT_FEE_BPS,
     instantCashoutHasDefaultCap: CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS !== null,
+  };
+}
+
+export function previewCreatorPayoutPreproductionWorkflow(
+  summary: CreatorPayoutDashboardReadModel,
+  input: {
+    amountCents: number;
+    payoutType: CreatorPayoutRequestKind;
+  },
+  flags?: Pick<
+    CreatorMonetizationRuntimeFlags,
+    "cashoutEnabled" | "liveMoneyEnabled" | "payoutsEnabled" | "stripeConnectProductionEnabled"
+  > | null,
+): CreatorPayoutPreproductionWorkflowPreview {
+  const amountCents = Math.max(0, Math.trunc(Number.isFinite(input.amountCents) ? input.amountCents : 0));
+  const payoutType = input.payoutType === "instant" ? "instant" : "scheduled";
+  const readiness = resolveCreatorPayoutReadiness(summary, flags);
+  const scheduledFeeCents = calculateScheduledPayoutFeeCents();
+  const instantFeeCents = payoutType === "instant" ? Math.ceil((amountCents * CREATOR_INSTANT_CASHOUT_FEE_BPS) / 10_000) : 0;
+  const blockedReasons = uniqueStrings([
+    readiness.liveMoneyDisabled ? "Production live money is disabled." : "",
+    readiness.payoutFeatureDisabled ? "Production payout execution is disabled." : "",
+    payoutType === "instant" && readiness.cashoutFeatureDisabled ? "Production cash-out execution is disabled." : "",
+    STRIPE_CONNECT_TEST_ENABLED ? "" : "Stripe Connect test mode is disabled.",
+    TEST_PAYOUT_WORKFLOW_ENABLED ? "" : "Test payout workflow is disabled.",
+    PAYOUT_DRY_RUN_ENABLED ? "" : "Dry-run payout workflow is disabled.",
+    amountCents > 0 ? "" : "A positive test amount is required.",
+    summary.providerReady ? "" : "Stripe Connect provider readiness is not complete.",
+    summary.kycReady ? "" : "KYC readiness is pending.",
+    summary.taxReady ? "" : "Tax/1099 readiness is pending.",
+    summary.minimumPayoutMet ? "" : "Minimum payout is not met by a real provider-backed balance.",
+    summary.holdPeriodCleared ? "" : "Payout hold period has not cleared.",
+    summary.eligibleForPayouts ? "" : "Creator payout eligibility is not approved.",
+    "Owner approval is required before any payout execution lane can move beyond dry-run.",
+    "No Stripe production transfer or bank payout is allowed from this preview.",
+  ]);
+
+  const canCreateDryRunRequest =
+    PAYOUT_DRY_RUN_ENABLED
+    && TEST_PAYOUT_WORKFLOW_ENABLED
+    && STRIPE_CONNECT_TEST_ENABLED
+    && amountCents > 0;
+
+  return {
+    amountCents,
+    payoutType,
+    scheduledFeeCents,
+    instantFeeCents,
+    totalFeeCents: payoutType === "instant" ? instantFeeCents : scheduledFeeCents,
+    testMode: true,
+    dryRunEnabled: PAYOUT_DRY_RUN_ENABLED,
+    testWorkflowEnabled: TEST_PAYOUT_WORKFLOW_ENABLED,
+    stripeConnectTestEnabled: STRIPE_CONNECT_TEST_ENABLED,
+    ownerApprovalRequired: true,
+    adminReadOnly: true,
+    productionExecutionAllowed: false,
+    canCreateDryRunRequest,
+    canExecuteTestTransfer: false,
+    canExecuteProductionPayout: false,
+    blockedReasons,
+    approvalSteps: [
+      "Creator requests payout or cash-out in test/dry-run mode.",
+      "Server checks derived available balance, Connect readiness, KYC, tax/1099, holds, and minimum payout.",
+      "Admin can review readiness but cannot release money.",
+      "Owner approval is required before any later execution workflow.",
+      "Production execution remains blocked until provider, legal/accounting, and live-money flags are proved.",
+    ],
+    safetyLabel: "TEST / DRY-RUN ONLY",
   };
 }
 

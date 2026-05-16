@@ -5459,6 +5459,9 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListBody}>
                   Scheduled payouts are free later. Optional instant cash-out is planned at 1.5% with no default cap, but cash-out and payout execution remain disabled.
                 </Text>
+                <Text style={styles.configListBody}>
+                  Preproduction testing can preview scheduled payout fee $0 and instant cash-out fee examples of $1.50 on $100 or $15.00 on $1,000. These previews do not create payable balances.
+                </Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -5562,6 +5565,9 @@ export default function AdminStudioScreen() {
                 </Text>
                 <Text style={styles.configListBody}>
                   Provider readiness, KYC, tax/1099 readiness, hold clearance, and legal/accounting approval must all pass before any payout can be called available.
+                </Text>
+                <Text style={styles.configListBody}>
+                  Admin can review readiness only. Owner approval is required before any later payout execution workflow, and production execution remains blocked while live money is off.
                 </Text>
               </View>
             </View>

@@ -1,6 +1,6 @@
 # Creator Monetization Systems Foundation
 
-Last updated: May 15, 2026
+Last updated: May 16, 2026
 
 This is repo-side and live-schema foundation only. Remote migration `202605140011_creator_monetization_systems_foundation.sql` is applied on the linked Chi'llywood Supabase project, but it does not activate live money, paid-content checkout, tips, merch checkout, cash-out, payouts, production Stripe Connect, or RevenueCat/Google Play purchase proof.
 
@@ -80,15 +80,18 @@ Live proof after the May 16, 2026 secret repair: Supabase Edge Function secrets 
 
 Connect readiness proof after the payout-readiness pass: Stripe CLI test-mode account reads show provider accounts with `charges_enabled=false`, `payouts_enabled=false`, requirements due, and no completed KYC/tax readiness. `_lib/creatorPayouts.ts` now derives explicit blocked reasons and next actions from provider readiness, KYC, tax/1099, hold, minimum payout, live-money, payout, cash-out, and Stripe production flags. Platform Studio Payouts can open backend-created test-mode Stripe setup links, but it still shows payouts/cash-out disabled and does not expose provider ids, raw requirement JSON, available balances, withdrawals, transfers, or payout release. Admin Payouts remains read-only and calls out that provider readiness, KYC, tax/1099, hold clearance, legal/accounting approval, and Owner-approved payout workflow are required before any payout can be called available.
 
-`npm run guard:stripe-connect-policy` now pins the Stripe Connect boundary: test-mode-only provider functions, server-side-only Stripe secrets, signed webhook verification, idempotent event storage, no client-owned provider ids, no client money instructions, no transfer/payout/checkout creation, explicit payout-readiness blockers, scheduled payout fee `$0`, instant cash-out `1.5%` with no cap, and production payouts remain disabled.
+Preproduction test proof on May 16, 2026 moved this from copy-only readiness into real app-test readiness without live money. Using a normal signed-in test creator session, `stripe-connect-account` created a real Stripe test connected account, returned `liveMoneyAction: false`, and created no payout, transfer, or checkout. `stripe-connect-onboarding-link` created a short-lived `connect.stripe.com` onboarding URL when given allowlisted HTTPS return/refresh URLs and did not store the URL long-term. `stripe-connect-account-sync` synced the account back as non-payable: `charges_enabled=false`, `payouts_enabled=false`, `details_submitted=false`, `provider_ready=false`, and `onboarding_status=payouts_disabled`. The same signed-in creator can read only their own payout eligibility row, which remains `provider_ready=false`, `kyc_ready=false`, `tax_ready=false`, `eligible_for_payouts=false`, `minimum_payout_met=false`, and `hold_period_cleared=false`; attempts to directly insert ledger rows are denied by RLS. `request_creator_payout` returns `blocked/payouts_disabled` while live-money flags are off. `calculate_creator_instant_cashout_fee` returns `150` cents for `$100` and `1500` cents for `$1,000`, proving the 1.5% no-cap instant cash-out formula. No fake earnings, balances, payout rows, transfers, payouts, checkout sessions, bank payouts, or live money were created.
+
+`npm run guard:stripe-connect-policy` now pins the Stripe Connect boundary: test-mode-only provider functions, server-side-only Stripe secrets, signed webhook verification, idempotent event storage, no client-owned provider ids, no client money instructions, no transfer/payout/checkout creation, explicit payout-readiness blockers, preproduction dry-run/test labels, owner-approval requirements, scheduled payout fee `$0`, instant cash-out `1.5%` with no cap, and production payouts remain disabled.
 
 ## App Surfaces
 
 - Platform Studio has a `Monetize` tab with disabled/foundation states for paid content pricing, tips/support, merch/products, checkout, cash-out, payout rows, split doctrine, and Premium/Paid-content separation.
-- Platform Studio has a `Payouts` tab that can start backend-only Stripe Connect test-mode onboarding and refresh provider status, while showing blocked reasons and keeping payouts/cash-out disabled.
+- Platform Studio has a `Payouts` tab that can start backend-only Stripe Connect test-mode onboarding and refresh provider status, while showing blocked reasons, owner-approval requirements, `$0` scheduled payout math, `$1.50`/`$15.00` instant cash-out examples, and disabled production payout/cash-out execution.
 - The public Channel route is product-copy framed as the creator `Mini Platform` and can show a real active product shelf if backed product rows exist. It still says checkout is pending and does not create product orders.
 - The standalone Player checks the creator-paid-content resolver for creator videos. If a backed active paid-content price requires purchase, regular playback does not receive a playable URL and the Player shows a locked paid-creator-content state instead of guessing from the client.
 - Platform Studio remains the creator command center; Channel remains the public mini platform. Technical route/table names are unchanged in this lane.
+- A new AAB was not built in this lane. Because Platform Studio/Admin copy changed, a later batched internal-test AAB is needed before device testers see the updated payout readiness wording.
 
 ## Current Status
 
@@ -99,11 +102,28 @@ Connect readiness proof after the payout-readiness pass: Stripe CLI test-mode ac
 - Tips: data model and preflight foundation only, disabled.
 - Merch/products/clothing: product listing foundation only, disabled.
 - Creator earnings: append-only ledger foundation only, no fake rows.
-- Cash-out/payouts: request/fee foundation only, disabled.
-- Stripe CLI/Connect: sandbox CLI read proof is available; deployed webhook proof is repaired; unsigned webhook and no-auth account setup fail closed; payout readiness is explicit and non-payable. Real KYC/tax completion, production Connect, payout execution, and live money remain blocked.
+- Cash-out/payouts: fee and request foundation is preproduction-testable, but execution remains disabled. Test proof can create/reuse Connect test accounts, generate onboarding links, sync readiness, and prove blocked payout requests; no live payout or cash-out exists.
+- Stripe CLI/Connect: sandbox CLI read proof is available; deployed webhook proof is repaired; unsigned webhook and no-auth account setup fail closed; authenticated test creator account creation, onboarding-link creation, and account sync are proved; payout readiness is explicit and non-payable. Real KYC/tax completion, production Connect, owner-approved execution, provider/legal/accounting approval, and live money remain blocked.
 - Paid creator content playback enforcement: repo-side Player/resolver integration exists; live proof still requires remote migration apply, backed price rows, real purchase/access grants, and provider webhook proof.
 - Stripe Connect production: not live.
 - RevenueCat/Google Play Premium purchase proof: still externally blocked until release-like Android purchase/restore/entitlement proof passes.
+
+## Production Payout Readiness Checklist
+
+Production payout and live cash-out remain closed until every item below is proved and documented:
+
+- Stripe production account active and production secrets stored server-side only;
+- production webhook endpoint live with signature verification and idempotency;
+- production Connect onboarding works for real creators;
+- connected account KYC, tax, transfer, and payout capabilities are complete;
+- 1099/reporting plan and Chi'llywood legal/accounting responsibility are approved;
+- Owner-approved payout workflow is backed and audited;
+- refund, chargeback, reserve, fraud, DMCA, suspension, hold, and minimum payout policy is enforced;
+- failed payout reconciliation is proved;
+- `LIVE_MONEY_ENABLED`, `PAYOUTS_ENABLED`, `CASHOUT_ENABLED`, and `STRIPE_CONNECT_PRODUCTION_ENABLED` are reviewed and server-controlled;
+- no Stripe secret, service account JSON, or provider secret appears in the mobile bundle, repo, docs, proof artifacts, or logs.
+
+Until then, production payouts closed: **no**. Live cash-out closed: **no**. Full creator monetization production-live: **no**.
 
 ## Safety Rules
 

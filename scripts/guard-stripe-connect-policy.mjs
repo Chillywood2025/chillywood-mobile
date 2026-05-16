@@ -93,17 +93,26 @@ assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: numb
 assertNotIncludes(creatorMonetization, "499", "no $4.99 cash-out cap");
 
 assertIncludes(creatorPayouts, "resolveCreatorPayoutReadiness", "creator payout readiness resolver");
+assertIncludes(creatorPayouts, "STRIPE_CONNECT_TEST_ENABLED = true", "Stripe Connect test flag");
+assertIncludes(creatorPayouts, "PAYOUT_DRY_RUN_ENABLED = true", "payout dry-run flag");
+assertIncludes(creatorPayouts, "TEST_PAYOUT_WORKFLOW_ENABLED = true", "test payout workflow flag");
+assertIncludes(creatorPayouts, "previewCreatorPayoutPreproductionWorkflow", "preproduction payout preview");
 assertIncludes(creatorPayouts, "canRequestScheduledPayout", "scheduled payout readiness");
 assertIncludes(creatorPayouts, "canRequestInstantCashout", "instant cash-out readiness");
 assertIncludes(creatorPayouts, "Live money is disabled.", "live money disabled blocker");
 assertIncludes(creatorPayouts, "Tax/1099 readiness is pending.", "tax readiness blocker");
 assertIncludes(creatorPayouts, "No payable balance can be created by the mobile app.", "mobile balance write blocker");
+assertIncludes(creatorPayouts, "Owner approval is required before any payout execution lane can move beyond dry-run.", "owner approval blocker");
+assertIncludes(creatorPayouts, "canExecuteProductionPayout: false", "production payout execution disabled");
 
 assertIncludes(channelSettings, "backend test-mode Stripe setup", "Studio Connect setup copy");
 assertIncludes(channelSettings, "Blocked reasons", "Studio payout blocked reasons");
 assertIncludes(channelSettings, "Instant cash-out", "Studio instant cash-out readout");
+assertIncludes(channelSettings, "$100 instant preview = $1.50", "Studio cash-out fee proof copy");
+assertIncludes(channelSettings, "Owner-approved workflow", "Studio owner approval copy");
 assertIncludes(admin, "Creator-facing Connect Stripe setup is test-mode only", "Admin Connect read-only copy");
 assertIncludes(admin, "tax/1099 readiness", "Admin tax readiness copy");
+assertIncludes(admin, "Owner approval is required", "Admin owner approval copy");
 
 assertIncludes(foundationDoc, "Stripe CLI / Connect Proof Status", "Stripe CLI proof docs");
 assertIncludes(foundationDoc, "production payouts remain disabled", "production payout disabled docs");

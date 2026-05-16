@@ -42,6 +42,7 @@ import {
   createOrReuseCreatorPayoutProviderAccount,
   formatCreatorPayoutFoundationAmount,
   formatCreatorPayoutLedgerCount,
+  previewCreatorPayoutPreproductionWorkflow,
   readCreatorPayoutDashboardSummary,
   resolveCreatorPayoutReadiness,
   syncCreatorPayoutProviderStatus,
@@ -1820,6 +1821,21 @@ export function ChannelStudioScreen() {
     creatorPayoutSummary,
     creatorMonetizationSettings,
   );
+  const creatorScheduledPayoutDryRunPreview = previewCreatorPayoutPreproductionWorkflow(
+    creatorPayoutSummary,
+    { amountCents: 10_000, payoutType: "scheduled" },
+    creatorMonetizationSettings,
+  );
+  const creatorInstantCashoutDryRunPreview100 = previewCreatorPayoutPreproductionWorkflow(
+    creatorPayoutSummary,
+    { amountCents: 10_000, payoutType: "instant" },
+    creatorMonetizationSettings,
+  );
+  const creatorInstantCashoutDryRunPreview1000 = previewCreatorPayoutPreproductionWorkflow(
+    creatorPayoutSummary,
+    { amountCents: 100_000, payoutType: "instant" },
+    creatorMonetizationSettings,
+  );
   const creatorMonetizationFoundationCards: readonly SummaryMetricCard[] = [
     {
       label: "Creator pricing",
@@ -2922,17 +2938,48 @@ export function ChannelStudioScreen() {
                 Optional instant cash-out is {creatorPayoutReadiness.instantCashoutFeeBps / 100}% with no default cap, shown separately before confirmation when live.
               </Text>
             </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Test workflow</Text>
+              <Text style={styles.summaryValue}>{creatorInstantCashoutDryRunPreview100.safetyLabel}</Text>
+              <Text style={styles.summaryBody}>
+                Stripe Connect test setup and dry-run review can be tested. Production payout execution remains blocked.
+              </Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Cash-out math</Text>
+              <Text style={styles.summaryValue}>
+                {formatMonetizationCurrency(creatorInstantCashoutDryRunPreview100.instantFeeCents, "usd")}
+                {" / "}
+                {formatMonetizationCurrency(creatorInstantCashoutDryRunPreview1000.instantFeeCents, "usd")}
+              </Text>
+              <Text style={styles.summaryBody}>
+                $100 instant preview = $1.50. $1,000 instant preview = $15.00. Scheduled payout preview fee is {formatMonetizationCurrency(creatorScheduledPayoutDryRunPreview.scheduledFeeCents, "usd")}.
+              </Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Owner approval</Text>
+              <Text style={styles.summaryValue}>{creatorInstantCashoutDryRunPreview100.ownerApprovalRequired ? "Required" : "Not required"}</Text>
+              <Text style={styles.summaryBody}>
+                Admin can review payout readiness only. Owner-approved workflow and provider/legal proof are required before any execution lane.
+              </Text>
+            </View>
           </View>
           <View style={styles.eventEmptyCard}>
             <Text style={styles.eventEmptyTitle}>Blocked reasons</Text>
             <Text style={styles.eventEmptyBody}>
-              {creatorPayoutReadiness.blockedReasons.slice(0, 6).map((reason) => `- ${reason}`).join("\n")}
+              {[
+                ...creatorPayoutReadiness.blockedReasons,
+                ...creatorInstantCashoutDryRunPreview100.blockedReasons,
+              ].slice(0, 8).map((reason) => `- ${reason}`).join("\n")}
             </Text>
           </View>
           <View style={styles.eventEmptyCard}>
             <Text style={styles.eventEmptyTitle}>Next required actions</Text>
             <Text style={styles.eventEmptyBody}>
-              {creatorPayoutReadiness.nextRequiredActions.slice(0, 5).map((action) => `- ${action}`).join("\n")}
+              {[
+                ...creatorPayoutReadiness.nextRequiredActions,
+                ...creatorInstantCashoutDryRunPreview100.approvalSteps,
+              ].slice(0, 8).map((action) => `- ${action}`).join("\n")}
             </Text>
           </View>
           <View style={styles.eventActionRow}>
