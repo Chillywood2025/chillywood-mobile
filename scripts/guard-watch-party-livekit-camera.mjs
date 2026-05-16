@@ -76,6 +76,12 @@ const liveStageRouteAccessCheck = sliceBetween(
   "syncStageSnapshot(snapshot, trackedUserId);",
   "Live Stage route access check boundary",
 );
+const partyRoomRouteAccessCheck = sliceBetween(
+  partyRoom,
+  "const access = await resolveRoomAccess({",
+  "if (snapshot.room.roomType === \"live\") {",
+  "Party Room route access check boundary",
+);
 const liveStageFallbackHandler = sliceBetween(
   liveStage,
   "const onLiveKitStageFallback = useCallback(",
@@ -211,6 +217,32 @@ assertBefore(
   "PREMIUM_LIVE_GATE_PROOF_HOLD",
   "setBlockedRoomAccess(access);",
   "Live Stage route access must evaluate proof hold before setting a Premium blocked-room gate.",
+);
+assertIncludes(
+  partyRoomRouteAccessCheck,
+  "proofHoldRoomAccessAllowed",
+  "Party Room route access must not let the Premium room-access gate block Watch-Party Live internal proof",
+);
+assertIncludes(
+  partyRoomRouteAccessCheck,
+  'premiumAccessSource === "watch_party_live"',
+  "Party Room proof hold must be scoped to Watch-Party Live rooms",
+);
+assertIncludes(
+  partyRoomRouteAccessCheck,
+  'access?.reason === "premium_required"',
+  "Party Room proof hold must only bypass Premium-required room gates",
+);
+assertIncludes(
+  partyRoomRouteAccessCheck,
+  "premium proof hold opened watch-party-live room access",
+  "Party Room proof hold must log that it opened Watch-Party Live access",
+);
+assertBefore(
+  partyRoomRouteAccessCheck,
+  "proofHoldRoomAccessAllowed",
+  "setBlockedRoomAccess(access);",
+  "Party Room route access must evaluate proof hold before setting a blocked-room gate.",
 );
 
 assertIncludes(

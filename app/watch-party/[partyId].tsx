@@ -76,6 +76,8 @@ import {
     getRuntimeControlBlockedCopy,
     isRuntimeControlBlockedAccess,
     LIVE_FIRST_PREMIUM_UPSELL_COPY,
+    PREMIUM_LIVE_GATE_PROOF_HOLD,
+    PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE,
     WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
     requireLiveFirstPremium,
     requireWatchPartyLivePremium,
@@ -741,10 +743,23 @@ export default function WatchPartyRoomScreen() {
           room: snapshot.room,
           membership: currentMembership,
         }).catch(() => null);
+        const proofHoldRoomAccessAllowed = PREMIUM_LIVE_GATE_PROOF_HOLD
+          && premiumAccessSource === "watch_party_live"
+          && premiumAccess?.allowed
+          && access?.reason === "premium_required";
 
         if (cancelled) return;
 
-        if (access?.isAllowed) {
+        if (proofHoldRoomAccessAllowed) {
+          debugLog("livekit", "premium proof hold opened watch-party-live room access", {
+            roomId: snapshot.room.partyId,
+            roomType: snapshot.room.roomType,
+            sourceId: snapshot.room.sourceId ?? snapshot.room.titleId ?? null,
+            message: PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE,
+          });
+        }
+
+        if (access?.isAllowed || proofHoldRoomAccessAllowed) {
           await joinPartyRoomSession({
             partyId,
             userId,
