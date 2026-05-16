@@ -50,8 +50,11 @@ assertIncludes(creatorMonetization, "PREMIUM_PRODUCT_ID = \"premium_subscription
 assertIncludes(creatorMonetization, "CREATOR_PAID_CONTENT_CREATOR_SHARE_BPS = 8000", "paid content creator split");
 assertIncludes(creatorMonetization, "CREATOR_PAID_CONTENT_PLATFORM_SHARE_BPS = 2000", "paid content platform split");
 assertIncludes(creatorMonetization, "CREATOR_TIP_CREATOR_SHARE_BPS = 10000", "tip creator share");
+assertIncludes(creatorMonetization, "CREATOR_SCHEDULED_PAYOUT_FEE_BPS = 0", "scheduled payout bps");
+assertIncludes(creatorMonetization, "CREATOR_SCHEDULED_PAYOUT_FEE_CENTS = 0", "scheduled payout zero fee");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 150", "instant cash-out fee");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: number | null = null", "no instant cash-out cap");
+assertIncludes(creatorMonetization, "calculateScheduledPayoutFeeCents", "scheduled payout fee helper");
 assertIncludes(creatorMonetization, "readCreatorMiniPlatformCommerceSurface", "public mini platform commerce readout");
 assertIncludes(creatorMonetization, "setCreatorContentPrice", "creator pricing client helper");
 assertIncludes(creatorMonetization, "requestCreatorPayout", "cash-out request client helper");
@@ -65,6 +68,8 @@ assertIncludes(paymentRailPolicy, "tips_cannot_unlock_digital_access", "tips can
 assertIncludes(migration, 'create table if not exists public."monetization_system_settings"', "settings table");
 assertIncludes(migration, '"live_money_enabled" boolean not null default false', "live money default off");
 assertIncludes(migration, '"instant_cashout_fee_bps" integer not null default 150', "instant cash-out SQL fee");
+assertIncludes(migration, '"scheduled_payout_fee_bps" integer not null default 0', "scheduled payout SQL fee");
+assertIncludes(migration, '"scheduled_payout_fee_bps" = 0', "scheduled payout zero SQL guard");
 assertIncludes(migration, '"instant_cashout_fee_cap_cents" integer', "cash-out cap column");
 assertIncludes(migration, '"instant_cashout_fee_cap_cents" is null', "no cap SQL guard");
 assertIncludes(migration, 'create table if not exists public."creator_earnings_ledger"', "immutable ledger table");

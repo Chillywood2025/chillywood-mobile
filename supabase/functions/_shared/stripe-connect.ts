@@ -145,6 +145,18 @@ export const DB_PROVIDER = "stripe_connect";
 export const RESPONSE_PROVIDER = "stripe";
 export const PROVIDER_ENVIRONMENT = "test";
 export const STRIPE_API_VERSION = "2026-02-25.clover";
+export const STRIPE_CONNECT_FOUNDATION_WEBHOOK_EVENT_TYPES = [
+  "account.updated",
+  "checkout.session.completed",
+  "payment_intent.succeeded",
+  "payment_intent.payment_failed",
+  "charge.refunded",
+  "charge.dispute.created",
+  "payout.paid",
+  "payout.failed",
+  "transfer.created",
+  "transfer.reversed",
+] as const;
 
 const STRIPE_API_BASE_URL = "https://api.stripe.com/v1";
 const JSON_HEADERS = {
@@ -1164,6 +1176,11 @@ export const stripeAccountFromEvent = (event: StripeProviderEvent) => {
   if (!object || typeof object !== "object" || Array.isArray(object)) return null;
   return object as StripeAccountObject;
 };
+
+export const isStripeConnectFoundationWebhookEventType = (eventType: string) =>
+  STRIPE_CONNECT_FOUNDATION_WEBHOOK_EVENT_TYPES.includes(
+    eventType as (typeof STRIPE_CONNECT_FOUNDATION_WEBHOOK_EVENT_TYPES)[number],
+  );
 
 export const insertProviderWebhookEvent = async (
   adminClient: SupabaseClientLike,

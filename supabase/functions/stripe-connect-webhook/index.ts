@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   createAdminClient,
   insertProviderWebhookEvent,
+  isStripeConnectFoundationWebhookEventType,
   jsonResponse,
   normalizeStripeAccount,
   notConfiguredPayload,
@@ -146,14 +147,20 @@ Deno.serve(async (req) => {
       targetType: "stripe_connect_webhook",
     });
 
-    if (toText(event.type) !== "account.updated") {
+    const eventType = toText(event.type);
+    if (eventType !== "account.updated") {
+      const isFoundationEvent = isStripeConnectFoundationWebhookEventType(eventType);
+      const ignoredReason = isFoundationEvent
+        ? "foundation_event_recorded_no_live_money"
+        : "event_type_not_supported_in_s3c";
       const ignoredAuditId = await writeAuditLog(adminClient, {
         action: "stripe_connect_webhook_processed",
         metadata: {
           event_id: toText(event.id),
-          event_type: toText(event.type),
+          event_type: eventType,
           function_name: FUNCTION_NAME,
-          ignored_reason: "event_type_not_handled_in_s3c",
+          ignored_reason: ignoredReason,
+          supported_foundation_event: isFoundationEvent,
           provider_account_id: providerAccountId,
         },
         targetId: providerAccountId,
@@ -165,8 +172,9 @@ Deno.serve(async (req) => {
           auditLogId: ignoredAuditId,
           metadata: {
             event_id: toText(event.id),
-            event_type: toText(event.type),
-            ignored_reason: "event_type_not_handled_in_s3c",
+            event_type: eventType,
+            ignored_reason: ignoredReason,
+            supported_foundation_event: isFoundationEvent,
           },
           status: "ignored",
         });
@@ -179,9 +187,12 @@ Deno.serve(async (req) => {
         mode: "test",
         liveMoneyAction: false,
         eventStored: true,
+        foundationEventSupported: isFoundationEvent,
         signatureVerified: true,
         webhookProcessed: true,
-        message: "Stripe Connect webhook event was recorded but ignored because S3C only handles account.updated.",
+        message: isFoundationEvent
+          ? "Stripe Connect webhook event was recorded for monetization foundation proof. No checkout, order, ledger, payout, or live money action is active."
+          : "Stripe Connect webhook event was recorded but ignored because this foundation does not process that event type.",
       });
     }
 

@@ -16,6 +16,8 @@ export const MONETIZATION_AUDIT_LOG_TABLE = "monetization_audit_log";
 export const CREATOR_PAID_CONTENT_CREATOR_SHARE_BPS = 8000;
 export const CREATOR_PAID_CONTENT_PLATFORM_SHARE_BPS = 2000;
 export const CREATOR_TIP_CREATOR_SHARE_BPS = 10000;
+export const CREATOR_SCHEDULED_PAYOUT_FEE_BPS = 0;
+export const CREATOR_SCHEDULED_PAYOUT_FEE_CENTS = 0;
 export const CREATOR_INSTANT_CASHOUT_FEE_BPS = 150;
 export const CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: number | null = null;
 export const CREATOR_PAYOUT_HOLD_DAYS_MIN = 7;
@@ -119,6 +121,8 @@ export const CREATOR_MONETIZATION_DOCTRINE = {
   paidContentCreatorShareBps: CREATOR_PAID_CONTENT_CREATOR_SHARE_BPS,
   paidContentPlatformShareBps: CREATOR_PAID_CONTENT_PLATFORM_SHARE_BPS,
   tipCreatorShareBps: CREATOR_TIP_CREATOR_SHARE_BPS,
+  scheduledPayoutFeeBps: CREATOR_SCHEDULED_PAYOUT_FEE_BPS,
+  scheduledPayoutFeeCents: CREATOR_SCHEDULED_PAYOUT_FEE_CENTS,
   instantCashoutFeeBps: CREATOR_INSTANT_CASHOUT_FEE_BPS,
   instantCashoutFeeCapCents: CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS,
   payoutHoldDaysMin: CREATOR_PAYOUT_HOLD_DAYS_MIN,
@@ -228,6 +232,8 @@ export const calculateInstantCashoutFeeCents = (amountCents: number) => {
   const normalized = Math.max(0, Math.trunc(Number.isFinite(amountCents) ? amountCents : 0));
   return Math.ceil((normalized * CREATOR_INSTANT_CASHOUT_FEE_BPS) / 10_000);
 };
+
+export const calculateScheduledPayoutFeeCents = () => CREATOR_SCHEDULED_PAYOUT_FEE_CENTS;
 
 export const deriveCreatorEarningsBalances = (
   entries: readonly CreatorEarningsLedgerEntry[],

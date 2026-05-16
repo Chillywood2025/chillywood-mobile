@@ -66,8 +66,17 @@ Client helpers in `_lib/creatorMonetization.ts` now expose the safe repo-side pa
 - reading public mini platform commerce rows without checkout;
 - preflighting paid-content, tip, and product checkout while live money is off;
 - calculating creator balances from immutable ledger rows;
+- calculating scheduled payout fee as `$0`;
 - calculating the 1.5% no-cap instant cash-out fee;
 - requesting payout/cash-out only through server-side RPCs that remain disabled while live-money flags are off.
+
+## Stripe CLI / Connect Proof Status
+
+As of May 16, 2026, Stripe CLI is installed and logged into the Chi'llywood sandbox/test account. CLI read proof can list test-mode Connect accounts and test-mode provider events without printing or committing secret keys. The current local shell does not export `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, or `STRIPE_CONNECT_CLIENT_ID`, so local Edge Function payment/webhook replay proof cannot be honestly rerun from this shell. Existing deployed Stripe Connect Edge Function secrets remain documented only by secret name/digest in Supabase, not by value.
+
+The Stripe Connect Edge webhook foundation now explicitly recognizes the provider event classes needed by future creator monetization lanes: `checkout.session.completed`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `charge.dispute.created`, `account.updated`, `payout.paid`, `payout.failed`, `transfer.created`, and `transfer.reversed`. In this foundation state, non-`account.updated` events are signature-verified and idempotently recorded/ignored for audit only; they do not create checkout success, product orders, paid-content access grants, tip earnings, ledger rows, transfers, payouts, or live money.
+
+`npm run guard:stripe-connect-policy` now pins the Stripe Connect boundary: test-mode-only provider functions, server-side-only Stripe secrets, signed webhook verification, idempotent event storage, no client-owned provider ids, no client money instructions, no transfer/payout/checkout creation, scheduled payout fee `$0`, instant cash-out `1.5%` with no cap, and production payouts remain disabled.
 
 ## App Surfaces
 
@@ -86,6 +95,7 @@ Client helpers in `_lib/creatorMonetization.ts` now expose the safe repo-side pa
 - Merch/products/clothing: product listing foundation only, disabled.
 - Creator earnings: append-only ledger foundation only, no fake rows.
 - Cash-out/payouts: request/fee foundation only, disabled.
+- Stripe CLI/Connect: sandbox CLI read proof is available; local payment/webhook replay proof is blocked until Stripe test secret/webhook secret and a safe local/deployed function proof path are configured for the current shell.
 - Paid creator content playback enforcement: repo-side Player/resolver integration exists; live proof still requires remote migration apply, backed price rows, real purchase/access grants, and provider webhook proof.
 - Stripe Connect production: not live.
 - RevenueCat/Google Play Premium purchase proof: still externally blocked until release-like Android purchase/restore/entitlement proof passes.
