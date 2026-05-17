@@ -2120,7 +2120,7 @@ export default function WatchPartyLiveStageScreen({
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
   const communityCardParticipants = useMemo(() => {
     return visibleStripParticipants.filter((participant) => {
-      // The local/current device stays out of this box; real other host/viewer feeds stay in.
+      // The local/current device stays out of this box; real other room members stay in while their media catches up.
       if (!participant.userId || participant.userId === currentUserParticipantId) return false;
       const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
         role: participant.role,
@@ -2128,11 +2128,9 @@ export default function WatchPartyLiveStageScreen({
         isMuted: participant.isMuted,
       });
       if (participantState.isRemoved) return false;
-      const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
-      const hasRemoteCameraFeed = !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
-      return hasRemoteCameraFeed || participantState.role === "host" || participantState.role === "speaker";
+      return true;
     });
-  }, [currentUserParticipantId, participantStateById, stageMediaParticipantsByUserId, visibleStripParticipants]);
+  }, [currentUserParticipantId, participantStateById, visibleStripParticipants]);
   const communityCardRows = useMemo(() => {
     const rows: typeof communityCardParticipants[] = [];
     let pendingRow: typeof communityCardParticipants = [];
@@ -2156,7 +2154,7 @@ export default function WatchPartyLiveStageScreen({
     [communityCardParticipants],
   );
   const communityCardCountLabel = communityCardParticipants.length > 0
-    ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "live feed" : "live feeds"}`
+    ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "member" : "members"}`
     : "Feeds syncing";
   const heroFallbackInitial = String(heroParticipant?.displayName || "H").trim().slice(0, 1).toUpperCase();
   const liveKitJoinUnavailableTitle = liveKitJoinUnavailable?.responseError === "no_eligible_livekit_server"
