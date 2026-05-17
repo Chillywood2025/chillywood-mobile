@@ -61,14 +61,14 @@ Locked structure:
 - Live Watch-Party stays people-first.
 - Live First must not show the Chi'lly Party Members box.
 - Live Watch-Party mode owns the Chi'lly Party Members box.
-- The Chi'lly Party Members grid remains the approved visual home for other live user feeds.
+- The Chi'lly Party Members grid remains the approved visual home for other real room members and their live feeds.
 - The current user's own preview is not inside the Chi'lly Party Members grid.
-- In Live Watch-Party, the hero/focus feed should prefer the current device/local participant so the Chi'lly Party Members box can keep the real other feeds visible.
-- Live Watch-Party must keep real other host/viewer feeds in the Chi'lly Party Members box; do not empty the box to avoid a duplicate.
-- Other live user feeds render in the approved grid behavior: three across, two visible rows, then scroll for more live users.
+- In Live Watch-Party, the hero/focus feed should prefer the current device/local participant so the Chi'lly Party Members box can keep real other members visible.
+- Live Watch-Party must keep real other host/viewer members in the Chi'lly Party Members box while their media catches up; do not empty the box to avoid a duplicate or because a camera feed is not ready yet.
+- Other live members and feeds render in the approved grid behavior: three across, two visible rows, then scroll for more live users.
 - The host tile/badge behavior remains visually clear and consistent with the rest of the grid.
 - Host and participant tiles must not be replaced by fake placeholders as proof.
-- Camera-off and unavailable states must be honest.
+- Camera-off, feed-syncing, and unavailable states must be honest member tiles, not fake live video.
 - Viewers may watch free rooms or rooms they can access through monetization/access rules without automatically becoming a camera tile.
 - Request/join camera behavior stays inside Live Stage and must be honest when unsupported or pending.
 - The visible comments area stays in its current lower dock placement.
