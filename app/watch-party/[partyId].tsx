@@ -360,6 +360,8 @@ export default function WatchPartyRoomScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ type: "room" | "participant"; targetId: string; label: string } | null>(null);
+  // Watch-Party Live controls are intentionally persistent and must not auto-hide.
+  const [watchPartyLiveControlsVisible] = useState(true);
   const [joinRetryToken, setJoinRetryToken] = useState(0);
   const chatScrollRef = useRef<ScrollView>(null);
   const roomScrollRef = useRef<ScrollView>(null);
@@ -1873,8 +1875,6 @@ export default function WatchPartyRoomScreen() {
 
   const isPlaying = room?.playbackState === "playing";
   const isLiveRoom = room?.roomType === "live";
-  // Watch-Party Live controls are intentionally persistent and must not auto-hide.
-  const watchPartyLiveControlsVisible = true;
   const backgroundSource: ImageSourcePropType | null = (() => {
     const first = localTitles[0] as any;
     return first?.image || first?.poster || null;
@@ -2514,7 +2514,7 @@ export default function WatchPartyRoomScreen() {
   };
 
   const renderWatchPartyLiveDeck = () => {
-    if (isLiveRoom || !watchPartyLiveControlsVisible) return null;
+    if (isLiveRoom) return null;
 
     // Layout lock: preserve content-top Watch-Party Live structure per docs/LIVE_WATCH_PARTY_LAYOUT_LOCK.md.
     return (
@@ -2560,7 +2560,7 @@ export default function WatchPartyRoomScreen() {
   };
 
   const renderPartyRoomActionDock = () => {
-    if (isLiveRoom || !watchPartyLiveControlsVisible) return null;
+    if (isLiveRoom) return null;
 
     return (
       <View style={styles.partyRoomActionDockCard}>
