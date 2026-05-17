@@ -151,6 +151,7 @@ const MAX_ZOOM = 2.5;
 const MIN_ZOOM = 1;
 const PROGRESS_WRITE_INTERVAL = 4_000;
 const CONTROLS_AUTO_HIDE_MILLIS = 5_000;
+const PLAYBACK_END_REPLAY_THRESHOLD_MILLIS = 1_500;
 const NEXT_AUTOPLAY_DELAY_MILLIS = 1_500;
 const UP_NEXT_TRIGGER_MILLIS = 12_000;
 const UP_NEXT_COUNTDOWN_SECONDS = 5;
@@ -291,6 +292,7 @@ type PlayerController = {
   setPositionAsync: (positionMillis: number) => Promise<void>;
   playAsync: () => Promise<void>;
   pauseAsync: () => Promise<void>;
+  replayAsync?: () => Promise<void>;
   setRateAsync: (rate: number, shouldCorrectPitch: boolean) => Promise<void>;
 };
 
@@ -369,10 +371,20 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
           emitStatus({ positionMillis: safePositionMillis });
         },
         async playAsync() {
+          isPlayingRef.current = true;
           player.play();
+          emitStatus({ isPlaying: true });
         },
         async pauseAsync() {
+          isPlayingRef.current = false;
           player.pause();
+          emitStatus({ isPlaying: false });
+        },
+        async replayAsync() {
+          positionMillisRef.current = 0;
+          isPlayingRef.current = true;
+          player.replay();
+          emitStatus({ positionMillis: 0, isPlaying: true, didJustFinish: false });
         },
         async setRateAsync(rate: number) {
           player.playbackRate = rate;
@@ -692,6 +704,7 @@ export default function PlayerScreen() {
     : String(sourceParam ?? "").trim().toLowerCase();
   const expectsCreatorVideo = sourceRaw === "creator-video";
   const isLiveModeFlag = liveModeRaw === "1" || liveModeRaw === "true" || liveModeRaw === "yes" || liveModeRaw === "live";
+  const isSharedPartyPlayback = inWatchParty && !isLiveModeFlag;
   let rawId = id;
   if (typeof rawId !== "string") rawId = String(rawId ?? "");
   const cleanId = rawId.replace(/["']/g, "").trim();
@@ -769,6 +782,7 @@ export default function PlayerScreen() {
   const [creatorVideoCommentReportBusy, setCreatorVideoCommentReportBusy] = useState(false);
   const [creatorVideoCommentUserId, setCreatorVideoCommentUserId] = useState("");
   const [creatorVideoCommentKeyboardOpen, setCreatorVideoCommentKeyboardOpen] = useState(false);
+  const [watchPartyCommentKeyboardOpen, setWatchPartyCommentKeyboardOpen] = useState(false);
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -780,6 +794,7 @@ export default function PlayerScreen() {
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
   const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
+  // Watch-Party Live controls are intentionally persistent and must not auto-hide.
   const shouldPinWatchPartyControls = inWatchParty
     && !isLiveModeFlag
     && watchPartyEntryAllowed
@@ -1083,26 +1098,37 @@ export default function PlayerScreen() {
     const isStandaloneCreatorVideoPlayer = !inWatchParty
       && !isLiveModeFlag
       && (playbackSourceKind === "creator-video" || expectsCreatorVideo);
+    const shouldTrackSharedPartyKeyboard = isSharedPartyPlayback;
 
-    if (!isStandaloneCreatorVideoPlayer) {
+    if (!isStandaloneCreatorVideoPlayer && !shouldTrackSharedPartyKeyboard) {
       setCreatorVideoCommentKeyboardOpen(false);
+      setWatchPartyCommentKeyboardOpen(false);
       return undefined;
     }
 
     const showSubscription = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      () => setCreatorVideoCommentKeyboardOpen(true),
+      () => {
+        if (isStandaloneCreatorVideoPlayer) setCreatorVideoCommentKeyboardOpen(true);
+        if (shouldTrackSharedPartyKeyboard) {
+          setWatchPartyCommentKeyboardOpen(true);
+          setControlsVisible(true);
+        }
+      },
     );
     const hideSubscription = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setCreatorVideoCommentKeyboardOpen(false),
+      () => {
+        if (isStandaloneCreatorVideoPlayer) setCreatorVideoCommentKeyboardOpen(false);
+        if (shouldTrackSharedPartyKeyboard) setWatchPartyCommentKeyboardOpen(false);
+      },
     );
 
     return () => {
       showSubscription.remove();
       hideSubscription.remove();
     };
-  }, [expectsCreatorVideo, inWatchParty, isLiveModeFlag, playbackSourceKind]);
+  }, [expectsCreatorVideo, inWatchParty, isLiveModeFlag, isSharedPartyPlayback, playbackSourceKind]);
 
   useEffect(() => {
     let active = true;
@@ -2241,6 +2267,25 @@ export default function PlayerScreen() {
     [seekFeedbackOpacity],
   );
 
+  const syncHostSharedPlayback = useCallback(
+    (positionMillis: number, playbackState: "playing" | "paused", kind: "play" | "pause" | "seek") => {
+      if (!isSharedPartyPlayback || !partyId || partySyncRoleRef.current !== "host") return;
+
+      const safePositionMillis = Math.max(0, Math.floor(positionMillis));
+      updateRoomPlayback(partyId, safePositionMillis, playbackState).catch(() => {});
+
+      if (partySyncUserIdRef.current) {
+        emitSyncEvent(partyId, partySyncUserIdRef.current, kind, safePositionMillis).catch(() => {});
+      }
+
+      lastPartySyncWriteAtRef.current = Date.now();
+      lastPartySyncedPositionRef.current = safePositionMillis;
+      lastPartySyncedStateRef.current = playbackState;
+      setPartySyncStatus(`Host Controls · ${playbackState === "playing" ? "Playing" : "Paused"}`);
+    },
+    [isSharedPartyPlayback, partyId],
+  );
+
   const applySeekDelta = useCallback(
     async (deltaMillis: number) => {
       const duration = durationRef.current;
@@ -2258,8 +2303,12 @@ export default function PlayerScreen() {
       setPositionMillis(next);
       showSeekFeedback(deltaMillis);
       persistProgress(next, duration);
+      if (isSharedPartyPlayback) {
+        const nextState = isPlaying ? "playing" : "paused";
+        syncHostSharedPlayback(next, nextState, "seek");
+      }
     },
-    [persistProgress, showSeekFeedback],
+    [isPlaying, isSharedPartyPlayback, persistProgress, showSeekFeedback, syncHostSharedPlayback],
   );
 
   const animateZoomTo = useCallback(
@@ -2414,6 +2463,65 @@ export default function PlayerScreen() {
     }
   }, [broadcastPartySeatState, inWatchParty, partyId, partyUserId, syncCurrentPartyPresence]);
 
+  const handleSharedPlaybackTap = useCallback(async () => {
+    setControlsVisible(true);
+
+    if (!isVideoReady) return;
+    if (shouldAutoplayNextRef.current && nextTitleId) return;
+
+    const duration = durationRef.current;
+    const currentPosition = currentPositionRef.current;
+    const reachedEnd =
+      didJustFinishRef.current ||
+      (duration > 0 && currentPosition >= duration - PLAYBACK_END_REPLAY_THRESHOLD_MILLIS);
+
+    try {
+      if (reachedEnd) {
+        if (upNextIntervalRef.current) {
+          clearInterval(upNextIntervalRef.current);
+          upNextIntervalRef.current = null;
+        }
+        if (nextAutoplayTimeoutRef.current) {
+          clearTimeout(nextAutoplayTimeoutRef.current);
+          nextAutoplayTimeoutRef.current = null;
+        }
+
+        shouldAutoplayNextRef.current = false;
+        didJustFinishRef.current = false;
+        currentPositionRef.current = 0;
+        lastPersistedPositionRef.current = 0;
+        setPositionMillis(0);
+        setShowUpNext(false);
+        setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
+        setUpNextCanceled(false);
+
+        if (videoRef.current?.replayAsync) {
+          await videoRef.current.replayAsync();
+        } else {
+          await videoRef.current?.setPositionAsync(0);
+          await videoRef.current?.playAsync();
+        }
+        setIsPlaying(true);
+        if (titleId) writeProgressForTitle(titleId, 0, duration || undefined).catch(() => {});
+        syncHostSharedPlayback(0, "playing", "play");
+        return;
+      }
+
+      if (isPlaying) {
+        await videoRef.current?.pauseAsync();
+        setIsPlaying(false);
+        syncHostSharedPlayback(currentPosition, "paused", "pause");
+        return;
+      }
+
+      await videoRef.current?.playAsync();
+      setIsPlaying(true);
+      syncHostSharedPlayback(currentPosition, "playing", "play");
+    } catch {
+      // ignore transient player errors
+    }
+  }, [isPlaying, isVideoReady, nextTitleId, syncHostSharedPlayback, titleId]);
+
   const handleSingleTap = () => {
     if (isStandalonePlayer && standaloneAccessLoading) return;
     if (standalonePlaybackBlocked) {
@@ -2422,6 +2530,11 @@ export default function PlayerScreen() {
     }
     if (standalonePlaybackUnknown) {
       retryStandaloneAccessCheck();
+      return;
+    }
+
+    if (isSharedPartyPlayback) {
+      void handleSharedPlaybackTap();
       return;
     }
 
@@ -2437,7 +2550,7 @@ export default function PlayerScreen() {
 
     const reachedEnd =
       didJustFinishRef.current ||
-      (durationRef.current > 0 && currentPositionRef.current >= durationRef.current - 1500);
+      (durationRef.current > 0 && currentPositionRef.current >= durationRef.current - PLAYBACK_END_REPLAY_THRESHOLD_MILLIS);
 
     if (reachedEnd) {
       void replayFromStart();
@@ -2534,8 +2647,10 @@ export default function PlayerScreen() {
               .then(() => {
                 persistProgress(finalPosition, durationRef.current);
                 if (panWasPlayingBeforeScrubRef.current) {
+                  if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "playing", "seek");
                   return videoRef.current?.playAsync();
                 }
+                if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "paused", "seek");
               })
               .catch(() => {});
 
@@ -2592,8 +2707,10 @@ export default function PlayerScreen() {
               .then(() => {
                 persistProgress(finalPosition, durationRef.current);
                 if (panWasPlayingBeforeScrubRef.current) {
+                  if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "playing", "seek");
                   return videoRef.current?.playAsync();
                 }
+                if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "paused", "seek");
               })
               .catch(() => {});
 
@@ -2613,11 +2730,13 @@ export default function PlayerScreen() {
       handleSingleTap,
       isCreatorStandalonePlaybackSurface,
       isPlaying,
+      isSharedPartyPlayback,
       isVideoReady,
       persistProgress,
       resetAutoHideTimer,
       resetGestureState,
       showControlsAndResetAutoHideTimer,
+      syncHostSharedPlayback,
       zoomScale,
     ],
   );
@@ -2651,9 +2770,15 @@ export default function PlayerScreen() {
         onPanResponderRelease: async () => {
           resetAutoHideTimer();
           try {
-            await videoRef.current?.setPositionAsync(currentPositionRef.current);
-            persistProgress(currentPositionRef.current, durationRef.current);
-            if (wasPlayingBeforeScrubRef.current) await videoRef.current?.playAsync();
+            const finalPosition = currentPositionRef.current;
+            await videoRef.current?.setPositionAsync(finalPosition);
+            persistProgress(finalPosition, durationRef.current);
+            if (wasPlayingBeforeScrubRef.current) {
+              if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "playing", "seek");
+              await videoRef.current?.playAsync();
+            } else if (isSharedPartyPlayback) {
+              syncHostSharedPlayback(finalPosition, "paused", "seek");
+            }
           } catch {
             // ignore errors on seek
           }
@@ -2661,15 +2786,21 @@ export default function PlayerScreen() {
         onPanResponderTerminate: async () => {
           resetAutoHideTimer();
           try {
-            await videoRef.current?.setPositionAsync(currentPositionRef.current);
-            persistProgress(currentPositionRef.current, durationRef.current);
-            if (wasPlayingBeforeScrubRef.current) await videoRef.current?.playAsync();
+            const finalPosition = currentPositionRef.current;
+            await videoRef.current?.setPositionAsync(finalPosition);
+            persistProgress(finalPosition, durationRef.current);
+            if (wasPlayingBeforeScrubRef.current) {
+              if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "playing", "seek");
+              await videoRef.current?.playAsync();
+            } else if (isSharedPartyPlayback) {
+              syncHostSharedPlayback(finalPosition, "paused", "seek");
+            }
           } catch {
             // ignore errors on seek
           }
         },
       }),
-    [isPlaying, persistProgress, resetAutoHideTimer],
+    [isPlaying, isSharedPartyPlayback, persistProgress, resetAutoHideTimer, syncHostSharedPlayback],
   );
 
   const navigateToNext = useCallback(() => {
@@ -2785,7 +2916,7 @@ export default function PlayerScreen() {
         }
       }
 
-      if (duration > 0 && position < duration - 1500) {
+      if (duration > 0 && position < duration - PLAYBACK_END_REPLAY_THRESHOLD_MILLIS) {
         didJustFinishRef.current = false;
       }
 
@@ -4304,7 +4435,6 @@ export default function PlayerScreen() {
     return localVisual?.image || localVisual?.poster || null;
   }, [displayItem, isCreatorVideoPlayback, localTitle]);
   const isLiveMode = isLiveModeFlag;
-  const isSharedPartyPlayback = inWatchParty && !isLiveMode;
   const shouldUseSharedAndroidVideoSurface = Platform.OS === "android" && isSharedPartyPlayback;
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const shouldUseLiveSpeakerStage = isLiveMode;
@@ -4559,6 +4689,7 @@ export default function PlayerScreen() {
     !!livePresenceEvent && !partyCommentsOpen && !liveFilterSheetOpen && shouldUseLiveModeLowerDock;
   const roomCommentsTitle = isLiveMode ? "Live Room Comments" : "Room Comments";
   const roomCommentsEmptyText = isLiveMode ? "No live room comments yet." : "No room comments yet.";
+  const sharedPartyCommentsKeyboardActive = isSharedPartyPlayback && partyCommentsOpen && watchPartyCommentKeyboardOpen;
   const standaloneAccessPresentation = useMemo(() => {
     if (!isStandalonePlayer) return null;
     if (standaloneAccessLoading) {
@@ -5211,7 +5342,7 @@ export default function PlayerScreen() {
 
   const renderTitleParticipantExpandedPanel = () => (
     <View style={styles.titleParticipantFeedWrap}>
-      <View style={styles.watchPartySocialShell}>
+      <View style={[styles.watchPartySocialShell, sharedPartyCommentsKeyboardActive && styles.watchPartySocialShellKeyboardHidden]}>
         <View style={styles.watchPartySocialHeaderRow}>
           <View style={styles.watchPartyPlayerBandMeta}>
             <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
@@ -5257,6 +5388,7 @@ export default function PlayerScreen() {
         pointerEvents={effectiveControlsVisible ? "auto" : "none"}
         style={[
           styles.watchPartyDockOverlay,
+          sharedPartyCommentsKeyboardActive && styles.watchPartyDockOverlayKeyboard,
           {
             opacity: partyOverlayControlsOpacity,
             transform: [{ translateY: partyOverlayControlsTranslateY }],
@@ -5295,7 +5427,9 @@ export default function PlayerScreen() {
         </View>
 
         {partyCommentsOpen ? (
-          <View style={styles.watchPartyDockCard}>{renderPartyCommentsContent()}</View>
+          <View style={[styles.watchPartyDockCard, sharedPartyCommentsKeyboardActive && styles.watchPartyDockCardKeyboardComposer]}>
+            {renderPartyCommentsContent()}
+          </View>
         ) : null}
 
         {watchPartyMenuOpen ? (
@@ -5543,23 +5677,27 @@ export default function PlayerScreen() {
 
   const renderPartyCommentsContent = () => (
     <>
-      <Text style={styles.partyCommentsDrawerTitle}>{roomCommentsTitle}</Text>
-      <ScrollView
-        style={styles.partyCommentsList}
-        contentContainerStyle={styles.partyCommentsListContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {partyOverlayMessages.length > 0 ? (
-          partyOverlayMessages.map((msg) => (
-            <Text key={msg.id} style={styles.partyCommentsLine}>
-              <Text style={styles.partyCommentsAuthor}>{msg.author}: </Text>
-              {msg.body}
-            </Text>
-          ))
-        ) : (
-          <Text style={styles.partyCommentsLine}>{roomCommentsEmptyText}</Text>
-        )}
-      </ScrollView>
+      {sharedPartyCommentsKeyboardActive ? null : (
+        <>
+          <Text style={styles.partyCommentsDrawerTitle}>{roomCommentsTitle}</Text>
+          <ScrollView
+            style={styles.partyCommentsList}
+            contentContainerStyle={styles.partyCommentsListContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {partyOverlayMessages.length > 0 ? (
+              partyOverlayMessages.map((msg) => (
+                <Text key={msg.id} style={styles.partyCommentsLine}>
+                  <Text style={styles.partyCommentsAuthor}>{msg.author}: </Text>
+                  {msg.body}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.partyCommentsLine}>{roomCommentsEmptyText}</Text>
+            )}
+          </ScrollView>
+        </>
+      )}
       {inWatchParty ? (
         <View style={styles.partyCommentsInputRow}>
           <TextInput
@@ -5569,6 +5707,7 @@ export default function PlayerScreen() {
               resetAutoHideTimer();
             }}
             onFocus={() => {
+              if (isSharedPartyPlayback) setWatchPartyCommentKeyboardOpen(true);
               setControlsVisible(true);
               resetAutoHideTimer();
             }}
@@ -6019,7 +6158,7 @@ export default function PlayerScreen() {
       <KeyboardAvoidingView
         style={styles.playerKeyboardAvoider}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        enabled={isStandalonePlayer && isCreatorVideoPlayback}
+        enabled={(isStandalonePlayer && isCreatorVideoPlayback) || isSharedPartyPlayback}
       >
       <View style={styles.playerFrameworkRoot}>
         {isSharedPartyPlayback ? (
@@ -6073,7 +6212,7 @@ export default function PlayerScreen() {
               !inWatchParty && !isLiveMode && isCreatorVideoPlayback && creatorVideoCommentKeyboardOpen && styles.videoWrapCreatorDiscussionKeyboard,
               isLiveMode && styles.liveRoomWrap,
             ]}
-            {...(!isLiveMode ? panResponder.panHandlers : {})}
+            {...(!isLiveMode && !shouldUseSharedAndroidVideoSurface ? panResponder.panHandlers : {})}
             onLayout={(event) => {
               videoWidthRef.current = event.nativeEvent.layout.width;
             }}
@@ -6301,6 +6440,20 @@ export default function PlayerScreen() {
                 </View>
               )}
             </Animated.View>
+
+            {shouldUseSharedAndroidVideoSurface ? (
+              <View
+                collapsable={false}
+                pointerEvents="auto"
+                style={styles.sharedAndroidVideoTapTarget}
+                onStartShouldSetResponder={() => true}
+                onResponderRelease={() => {
+                  void handleSharedPlaybackTap();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Toggle shared playback"
+              />
+            ) : null}
 
             {isCreatorStandalonePlaybackSurface ? (
               <Pressable
@@ -7001,6 +7154,13 @@ const styles = StyleSheet.create({
   },
   creatorStandaloneSurfaceTapTarget: {
     ...StyleSheet.absoluteFillObject,
+  },
+  sharedAndroidVideoTapTarget: {
+    ...StyleSheet.absoluteFillObject,
+    bottom: 56,
+    zIndex: 4,
+    elevation: 4,
+    backgroundColor: "transparent",
   },
   videoLoadingFallback: {
     ...StyleSheet.absoluteFillObject,
@@ -7921,6 +8081,9 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
   },
+  watchPartySocialShellKeyboardHidden: {
+    display: "none",
+  },
   watchPartySocialHeaderRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -8135,6 +8298,9 @@ const styles = StyleSheet.create({
   watchPartyDockOverlay: {
     gap: 8,
   },
+  watchPartyDockOverlayKeyboard: {
+    gap: 6,
+  },
   watchPartyDockActionRow: {
     flexDirection: "row",
     gap: 8,
@@ -8166,6 +8332,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     gap: 10,
+  },
+  watchPartyDockCardKeyboardComposer: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 0,
   },
   watchPartyDockCardTitle: {
     color: "#F5F7FC",
