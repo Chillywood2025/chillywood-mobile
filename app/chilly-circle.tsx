@@ -216,7 +216,7 @@ export default function ChillyCircleScreen() {
     return (
       <View style={styles.loadingScreen}>
         <ActivityIndicator color="#DC143C" />
-        <Text style={styles.emptyText}>Loading Chi'lly Circle</Text>
+        <Text style={styles.emptyText}>{"Loading Chi'lly Circle"}</Text>
       </View>
     );
   }
@@ -237,17 +237,17 @@ export default function ChillyCircleScreen() {
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.kicker}>CHI'LLY CIRCLE</Text>
+        <Text style={styles.kicker}>{"CHI'LLY CIRCLE"}</Text>
         <TouchableOpacity activeOpacity={0.82} onPress={() => { void loadCircle(); }}>
           <Text style={styles.refreshText}>Refresh</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.heroCard}>
-        <Text style={styles.heroKicker}>CHI'LLY CIRCLE REQUESTS</Text>
+        <Text style={styles.heroKicker}>{"CHI'LLY CIRCLE REQUESTS"}</Text>
         <Text style={styles.heroTitle}>Manage mutual connections.</Text>
         <Text style={styles.heroBody}>
-          Follow stays separate. Chi'lly Circle is the mutual connection layer used by the existing mutual-connection system.
+          {"Follow stays separate. Chi'lly Circle is the mutual connection layer used by the existing mutual-connection system."}
         </Text>
         <View style={styles.summaryRow}>
           <View style={styles.summaryPill}>

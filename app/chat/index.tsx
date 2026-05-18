@@ -565,7 +565,7 @@ export default function ChillyChatInboxScreen() {
                   </View>
                   {isActiveFriend ? (
                     <View style={styles.friendHintPill}>
-                      <Text style={styles.friendHintPillText}>Chi'lly Circle</Text>
+                      <Text style={styles.friendHintPillText}>{"Chi'lly Circle"}</Text>
                     </View>
                   ) : null}
                 </View>
