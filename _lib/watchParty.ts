@@ -18,6 +18,11 @@ import {
   type PremiumWatchPartyFeatureAccessDecision,
 } from "./premiumWatchPartyAccess";
 import {
+  ROOM_ACTIVITY_ACTIVE_WINDOW_MS,
+  ROOM_HEARTBEAT_MS,
+  ROOM_MEMBERSHIP_ACTIVE_WINDOW_MS,
+} from "./performancePolicy";
+import {
   buildRoomCapabilities,
   deriveWatchPartyStageRole,
   evaluateRoomAccess,
@@ -26,7 +31,6 @@ import {
   normalizeJoinPolicy,
   normalizeReactionsPolicy,
   normalizeRoomMembershipState,
-  ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS,
   type CapturePolicy,
   type ContentAccessRule,
   type JoinPolicy,
@@ -61,6 +65,7 @@ export type WatchPartyState = {
   reactionsPolicy: ReactionsPolicy;
   contentAccessRule: ContentAccessRule;
   capturePolicy: CapturePolicy;
+  isActive: boolean;
   startedAt: string;
   updatedAt: string;
   lastActivityAt: string;
@@ -200,7 +205,9 @@ export const WATCH_PARTY_PARTICIPANTS_TABLE = "watch_party_participants";
 export const WATCH_PARTY_ROOM_MEMBERSHIPS_TABLE = "watch_party_room_memberships";
 export const WATCH_PARTY_MESSAGES_TABLE = "watch_party_room_messages";
 export const WATCH_PARTY_SYNC_TABLE = "watch_party_sync_events";
-export const WATCH_PARTY_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS;
+export const WATCH_PARTY_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MS;
+export const WATCH_PARTY_ROOM_ACTIVE_WINDOW_MILLIS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
+export const WATCH_PARTY_ROOM_HEARTBEAT_MILLIS = ROOM_HEARTBEAT_MS;
 
 type WatchPartySyncEventInsert = TablesInsert<"watch_party_sync_events">;
 type WatchPartyMessageInsert = TablesInsert<"watch_party_room_messages">;
@@ -219,6 +226,7 @@ type PartyRoomBaseInsert = Pick<
   | "source_id"
   | "playback_position_millis"
   | "playback_state"
+  | "is_active"
   | "started_at"
   | "updated_at"
 >;
@@ -236,6 +244,7 @@ type PartyRoomBaseRow = Pick<
   | "source_id"
   | "playback_position_millis"
   | "playback_state"
+  | "is_active"
   | "started_at"
   | "updated_at"
 >;
@@ -280,7 +289,7 @@ type PartyMembershipRow = Pick<
 >;
 
 const PARTY_ROOMS_LEGACY_BASE_SELECT =
-  "party_id,room_type,host_user_id,title_id,playback_position_millis,playback_state,started_at,updated_at";
+  "party_id,room_type,host_user_id,title_id,playback_position_millis,playback_state,is_active,started_at,updated_at";
 const PARTY_ROOMS_BASE_SELECT =
   `${PARTY_ROOMS_LEGACY_BASE_SELECT},source_type,source_id`;
 const PARTY_ROOMS_POLICY_SELECT =
@@ -512,10 +521,32 @@ export const createWatchPartyDraft = (draft: WatchPartyRoomDraft): WatchPartySta
     reactionsPolicy: "enabled",
     contentAccessRule: "open",
     capturePolicy: "best_effort",
+    isActive: true,
     startedAt: now,
     updatedAt: now,
     lastActivityAt: now,
   };
+};
+
+const toTimeMillis = (value?: string | null) => {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getWatchPartyRoomActivityMillis = (room: Pick<WatchPartyState, "lastActivityAt" | "updatedAt" | "startedAt">) => (
+  toTimeMillis(room.lastActivityAt)
+  ?? toTimeMillis(room.updatedAt)
+  ?? toTimeMillis(room.startedAt)
+);
+
+export const isWatchPartyRoomActive = (
+  room: Pick<WatchPartyState, "isActive" | "lastActivityAt" | "updatedAt" | "startedAt"> | null | undefined,
+  nowMillis = Date.now(),
+) => {
+  if (!room?.isActive) return false;
+  const activityMillis = getWatchPartyRoomActivityMillis(room);
+  if (activityMillis === null) return false;
+  return nowMillis - activityMillis <= WATCH_PARTY_ROOM_ACTIVE_WINDOW_MILLIS;
 };
 
 function rowToState(row: PartyRoomRow): WatchPartyState | null {
@@ -544,6 +575,7 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
   const reactionsPolicy = "reactions_policy" in row ? row.reactions_policy : undefined;
   const contentAccessRule = "content_access_rule" in row ? row.content_access_rule : undefined;
   const capturePolicy = "capture_policy" in row ? row.capture_policy : undefined;
+  const isActive = !("is_active" in row) || row.is_active !== false;
   const lastActivityAt = "last_activity_at" in row ? row.last_activity_at : undefined;
 
   if (!primaryId || !hostUserId) return null;
@@ -565,6 +597,7 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
     reactionsPolicy: normalizeReactionsPolicy(reactionsPolicy),
     contentAccessRule: normalizeContentAccessRule(contentAccessRule),
     capturePolicy: normalizeCapturePolicy(capturePolicy),
+    isActive,
     startedAt: String(row.started_at ?? now),
     updatedAt: String(row.updated_at ?? now),
     lastActivityAt: String(lastActivityAt ?? row.updated_at ?? row.started_at ?? now),
@@ -855,6 +888,7 @@ export async function createPartyRoom(
             source_id: sourceId,
             playback_position_millis: Math.max(0, Math.floor(positionMillis)),
             playback_state: state,
+            is_active: true,
             join_policy: joinPolicy,
             reactions_policy: reactionsPolicy,
             content_access_rule: contentAccessRule,
@@ -997,10 +1031,35 @@ export async function createPartyRoom(
   }
 }
 
+async function touchActivePartyRoomHeartbeat(room: WatchPartyState, userId?: string | null): Promise<void> {
+  const normalizedUserId = String(userId ?? "").trim();
+  if (!normalizedUserId || normalizedUserId !== room.hostUserId) return;
+  if (!isWatchPartyRoomActive(room)) return;
+
+  const activityMillis = getWatchPartyRoomActivityMillis(room);
+  if (activityMillis !== null && Date.now() - activityMillis < WATCH_PARTY_ROOM_HEARTBEAT_MILLIS * 2) return;
+
+  try {
+    const updates: PartyRoomUpdate = {
+      last_activity_at: new Date().toISOString(),
+    };
+
+    await supabase
+      .from(PARTY_ROOMS_TABLE)
+      .update(updates)
+      .eq("party_id", room.partyId)
+      .eq("host_user_id", normalizedUserId)
+      .eq("is_active", true);
+  } catch {
+    // Membership heartbeat still records presence; room activity is best-effort under RLS.
+  }
+}
+
 export async function getPartyRoom(partyId: string): Promise<WatchPartyState | null> {
   const row = await fetchPartyRoomRow(partyId);
   if (!row) return null;
-  return rowToState(row);
+  const room = rowToState(row);
+  return isWatchPartyRoomActive(room) ? room : null;
 }
 
 export async function listPartyRoomMemberships(partyId: string): Promise<WatchPartyRoomMembership[]> {
@@ -1074,12 +1133,14 @@ export async function joinPartyRoomSession(options: MembershipUpsertOptions): Pr
   const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
   if (!premiumAccess?.allowed) return null;
 
-  return upsertMembership({
+  const membership = await upsertMembership({
     ...options,
     membershipState: "active",
     markJoinedAt: true,
     markLeftAt: false,
   });
+  if (membership) void touchActivePartyRoomHeartbeat(room, membership.userId);
+  return membership;
 }
 
 export async function touchPartyRoomSession(options: MembershipUpsertOptions): Promise<WatchPartyRoomMembership | null> {
@@ -1088,12 +1149,14 @@ export async function touchPartyRoomSession(options: MembershipUpsertOptions): P
   const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
   if (!premiumAccess?.allowed) return null;
 
-  return upsertMembership({
+  const membership = await upsertMembership({
     ...options,
     membershipState: options.membershipState ?? "active",
     markJoinedAt: false,
     markLeftAt: false,
   });
+  if (membership) void touchActivePartyRoomHeartbeat(room, membership.userId);
+  return membership;
 }
 
 export async function leavePartyRoomSession(options: MembershipUpsertOptions): Promise<WatchPartyRoomMembership | null> {

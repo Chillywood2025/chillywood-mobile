@@ -36,13 +36,13 @@ import {
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
+import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import type { Tables } from "../../supabase/database.types";
 
 const ACCENT = "#DC143C";
-const LIVE_ACTIVITY_WINDOW_MILLIS = 15 * 60 * 1000;
 
 type TitleDbRow = Pick<
   Tables<"titles">,
@@ -74,7 +74,7 @@ type TitleLiveMetadata = {
 
 type WatchPartyRoomRow = Pick<
   Tables<"watch_party_rooms">,
-  "party_id" | "reactions_policy" | "last_activity_at" | "updated_at"
+  "party_id" | "reactions_policy" | "is_active" | "last_activity_at" | "updated_at"
 >;
 
 type WatchPartyRoomMessageRow = Pick<Tables<"watch_party_room_messages">, "party_id">;
@@ -270,7 +270,8 @@ export default function TitleDetails() {
       try {
         const { data: roomData, error: roomError } = await supabase
           .from("watch_party_rooms")
-          .select("party_id,reactions_policy,last_activity_at,updated_at")
+          .select("party_id,reactions_policy,is_active,last_activity_at,updated_at")
+          .eq("is_active", true)
           .eq("room_type", "title")
           .eq("title_id", safeTitleId)
           .returns<WatchPartyRoomRow[]>();
@@ -281,11 +282,12 @@ export default function TitleDetails() {
         }
 
         const activeRooms = roomData.filter((row) => {
+          if (row.is_active !== true) return false;
           const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
           if (!activitySource) return false;
           const activityAt = Date.parse(activitySource);
           if (!Number.isFinite(activityAt)) return false;
-          return Date.now() - activityAt <= LIVE_ACTIVITY_WINDOW_MILLIS;
+          return Date.now() - activityAt <= ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
         });
 
         if (!activeRooms.length) {

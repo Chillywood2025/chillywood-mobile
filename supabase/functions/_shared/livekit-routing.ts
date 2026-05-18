@@ -371,6 +371,8 @@ export const resolveLiveKitAssignment = async (
     metadata: safeMetadata(input.metadata),
     requestedRegion,
   };
+  const routerLimits = readRouterLimits();
+  const nowMillis = Date.now();
 
   const existingAssignment = await fetchExistingAssignment(adminClient, normalizedInput);
   if (existingAssignment) {
@@ -406,6 +408,25 @@ export const resolveLiveKitAssignment = async (
       return {
         error: "assigned_server_unavailable",
         message: "The assigned LiveKit server is unavailable for this existing room. Operator recovery is required.",
+        ok: false,
+        status: 503,
+      };
+    }
+
+    if (heartbeatAgeMillis(assignedServer, nowMillis) > routerLimits.staleHeartbeatSeconds * 1000) {
+      await writeLiveKitRoutingAudit(adminClient, {
+        actorUserId,
+        appRoomId,
+        eventType: "assignment_failed",
+        livekitRoomName,
+        metadata: { assigned_server_id: assignedServer.server_id },
+        reason: "assigned_server_stale_heartbeat",
+        serverRowId: assignedServer.id,
+      });
+
+      return {
+        error: "assigned_server_stale_heartbeat",
+        message: "The assigned LiveKit server heartbeat is stale for this existing room. Return to the lobby to retry.",
         ok: false,
         status: 503,
       };
@@ -461,7 +482,7 @@ export const resolveLiveKitAssignment = async (
   if (serversQuery.error) throw new Error(`LiveKit registry lookup failed: ${serversQuery.error.message}`);
 
   const servers = ((serversQuery.data ?? []) as JsonObject[]).map(normalizeServerRow);
-  const selection = chooseLiveKitServer(servers, requestedRegion, readRouterLimits());
+  const selection = chooseLiveKitServer(servers, requestedRegion, routerLimits, nowMillis);
 
   if (!selection.server) {
     await writeLiveKitRoutingAudit(adminClient, {

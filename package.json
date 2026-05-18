@@ -23,7 +23,8 @@
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs",
-    "typecheck": "tsc --noEmit && npm run guard:watch-party-livekit"
+    "guard:old-room-handling": "node ./scripts/guard-old-room-handling.mjs",
+    "typecheck": "tsc --noEmit && npm run guard:watch-party-livekit && npm run guard:old-room-handling"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

@@ -1,4 +1,5 @@
 import type { Tables } from "../supabase/database.types";
+import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "./performancePolicy";
 import { supabase } from "./supabase";
 
 export const PLATFORM_USAGE_METERING_EVENTS_TABLE = "platform_usage_metering_events";
@@ -540,6 +541,7 @@ export async function rollupCreatorVideoUploadUsageDaily(
 
 export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
   const startOfToday = startOfTodayIso();
+  const activeRoomCutoffIso = new Date(Date.now() - ROOM_ACTIVITY_ACTIVE_WINDOW_MS).toISOString();
 
   const [
     premiumActiveCount,
@@ -568,7 +570,8 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
           .from("watch_party_rooms")
           .select("party_id", { count: "exact", head: true })
           .eq("is_active", true)
-          .eq("room_type", "live"),
+          .eq("room_type", "live")
+          .gte("last_activity_at", activeRoomCutoffIso),
       ),
     ),
     safeRead(() =>
@@ -577,7 +580,8 @@ export async function readAdminUsageReadModel(): Promise<AdminUsageReadModel> {
           .from("watch_party_rooms")
           .select("party_id", { count: "exact", head: true })
           .eq("is_active", true)
-          .eq("room_type", "title"),
+          .eq("room_type", "title")
+          .gte("last_activity_at", activeRoomCutoffIso),
       ),
     ),
     safeRead(() =>

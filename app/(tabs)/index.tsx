@@ -65,6 +65,7 @@ import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { AccessSheet } from "../../components/monetization/access-sheet";
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
+import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 
 type TitleRow = Omit<
   Pick<
@@ -99,12 +100,11 @@ type TitleLiveMetadata = {
 
 type WatchPartyRoomRow = Pick<
   Tables<"watch_party_rooms">,
-  "party_id" | "title_id" | "reactions_policy" | "last_activity_at" | "updated_at"
+  "party_id" | "title_id" | "reactions_policy" | "is_active" | "last_activity_at" | "updated_at"
 >;
 
 type WatchPartyRoomMessageRow = Pick<Tables<"watch_party_room_messages">, "party_id">;
 
-const LIVE_ACTIVITY_WINDOW_MILLIS = 15 * 60 * 1000;
 const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
 const HOME_NATIVE_AD_FORBIDDEN_CONTEXTS = {
   activeVideoPlayback: false,
@@ -211,7 +211,8 @@ export default function HomeScreen() {
     try {
       const { data: roomData, error: roomError } = await supabase
         .from("watch_party_rooms")
-        .select("party_id,title_id,reactions_policy,last_activity_at,updated_at")
+        .select("party_id,title_id,reactions_policy,is_active,last_activity_at,updated_at")
+        .eq("is_active", true)
         .eq("room_type", "title")
         .in("title_id", titleIds)
         .returns<WatchPartyRoomRow[]>();
@@ -222,11 +223,12 @@ export default function HomeScreen() {
       }
 
       const activeRooms = roomData.filter((row) => {
+        if (row.is_active !== true) return false;
         const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
         if (!activitySource) return false;
         const activityAt = Date.parse(activitySource);
         if (!Number.isFinite(activityAt)) return false;
-        return Date.now() - activityAt <= LIVE_ACTIVITY_WINDOW_MILLIS;
+        return Date.now() - activityAt <= ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
       });
 
       if (!activeRooms.length) {

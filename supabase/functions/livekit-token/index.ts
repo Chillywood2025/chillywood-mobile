@@ -37,6 +37,10 @@ type ResolvedRoomRecord =
       roomName: string;
       hostUserId: string;
       roomType: string | null;
+      isActive: boolean;
+      startedAt: string | null;
+      updatedAt: string | null;
+      lastActivityAt: string | null;
     }
   | {
       kind: "communication";
@@ -54,6 +58,8 @@ const JSON_HEADERS = {
 
 const ACTIVE_MEMBERSHIP_STATES = new Set(["active", "reconnecting"]);
 const SOCIAL_WATCH_MODE_NAMES = new Set(["hybrid", "watch-party-live", "watch_party_live"]);
+const WATCH_PARTY_ROOM_ACTIVE_WINDOW_MS = 15 * 60_000;
+const WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS = 45_000;
 
 const json = (status: number, payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), {
@@ -62,6 +68,30 @@ const json = (status: number, payload: Record<string, unknown>) =>
   });
 
 const sanitizeText = (value: unknown) => String(value ?? "").trim();
+
+const parseTimeMillis = (value: unknown): number | null => {
+  const parsed = Date.parse(sanitizeText(value));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const firstValidTimeMillis = (...values: unknown[]) => {
+  for (const value of values) {
+    const parsed = parseTimeMillis(value);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+};
+
+const isRecentTime = (value: unknown, windowMillis: number, nowMillis = Date.now()) => {
+  const parsed = parseTimeMillis(value);
+  return parsed !== null && nowMillis - parsed <= windowMillis;
+};
+
+const isWatchPartyRoomCurrentlyActive = (room: Extract<ResolvedRoomRecord, { kind: "watch-party" }>) => {
+  if (!room.isActive) return false;
+  const activityMillis = firstValidTimeMillis(room.lastActivityAt, room.updatedAt, room.startedAt);
+  return activityMillis !== null && Date.now() - activityMillis <= WATCH_PARTY_ROOM_ACTIVE_WINDOW_MS;
+};
 
 const sanitizeMetadata = (value: unknown) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -189,7 +219,7 @@ async function resolveTargetRoom(
 
   const watchPartyRoom = await adminClient
     .from("watch_party_rooms")
-    .select("party_id,host_user_id,room_type")
+    .select("party_id,host_user_id,room_type,is_active,started_at,updated_at,last_activity_at")
     .eq("party_id", roomName)
     .maybeSingle();
 
@@ -200,6 +230,10 @@ async function resolveTargetRoom(
     roomName: sanitizeText(watchPartyRoom.data.party_id),
     hostUserId: sanitizeText(watchPartyRoom.data.host_user_id),
     roomType: sanitizeText(watchPartyRoom.data.room_type) || null,
+    isActive: watchPartyRoom.data.is_active === true,
+    startedAt: sanitizeText(watchPartyRoom.data.started_at) || null,
+    updatedAt: sanitizeText(watchPartyRoom.data.updated_at) || null,
+    lastActivityAt: sanitizeText(watchPartyRoom.data.last_activity_at) || null,
   };
 }
 
@@ -239,7 +273,7 @@ async function userCanJoinAsRequestedRole(
 
     const membership = await adminClient
       .from("watch_party_room_memberships")
-      .select("role,stage_role,can_speak,membership_state")
+      .select("role,stage_role,can_speak,membership_state,last_seen_at")
       .eq("party_id", room.roomName)
       .eq("user_id", userId)
       .maybeSingle();
@@ -249,6 +283,7 @@ async function userCanJoinAsRequestedRole(
     const role = sanitizeText(membership.data.role).toLowerCase();
     const stageRole = sanitizeText(membership.data.stage_role).toLowerCase();
     const membershipState = sanitizeText(membership.data.membership_state).toLowerCase();
+    const lastSeenAt = sanitizeText(membership.data.last_seen_at);
     const canSpeak = membership.data.can_speak === true;
     const stageMode = sanitizeText(metadata.stageMode).toLowerCase();
     const roomType = sanitizeText(room.roomType).toLowerCase();
@@ -256,6 +291,7 @@ async function userCanJoinAsRequestedRole(
     const isSocialWatchMode = SOCIAL_WATCH_MODE_NAMES.has(stageMode) || SOCIAL_WATCH_MODE_NAMES.has(roomType);
 
     if (!ACTIVE_MEMBERSHIP_STATES.has(membershipState)) return false;
+    if (!isRecentTime(lastSeenAt, WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS)) return false;
     if (participantRole === "host") return role === "host";
     return role === "host"
       || stageRole === "host"
@@ -339,6 +375,13 @@ Deno.serve(async (req) => {
     }
 
     if (room.kind === "watch-party") {
+      if (!isWatchPartyRoomCurrentlyActive(room)) {
+        return json(410, {
+          error: "room_expired",
+          message: "This Chi'llywood room has ended or expired. Return to the lobby to start or join a fresh room.",
+        });
+      }
+
       const roomType = sanitizeText(room.roomType).toLowerCase();
       if (surface === "live-stage" && roomType !== "live") {
         return json(409, {

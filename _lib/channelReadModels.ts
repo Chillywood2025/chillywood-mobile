@@ -12,6 +12,7 @@ import {
   type SafetyReportQueueItem,
 } from "./moderation";
 import { getOfficialPlatformAccount } from "./officialAccounts";
+import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "./performancePolicy";
 import { supabase } from "./supabase";
 
 export const CHANNEL_FOLLOWERS_TABLE = "channel_followers";
@@ -333,6 +334,7 @@ export async function readChannelSafetyAdminSummary(channelUserId: string): Prom
 export async function readCreatorAnalyticsSummary(channelUserId: string): Promise<CreatorAnalyticsReadModel> {
   const context = await readChannelHelperContext(channelUserId);
   const accessScope: ChannelCreatorAnalyticsAccessScope = context.isOwner ? "owner" : "unavailable";
+  const activeWatchPartyCutoffIso = new Date(Date.now() - ROOM_ACTIVITY_ACTIVE_WINDOW_MS).toISOString();
 
   if (accessScope === "unavailable") {
     return {
@@ -384,7 +386,8 @@ export async function readCreatorAnalyticsSummary(channelUserId: string): Promis
       .from(WATCH_PARTY_ROOMS_TABLE)
       .select("*", { count: "exact", head: true })
       .eq("host_user_id", context.channelUserId)
-      .eq("is_active", true),
+      .eq("is_active", true)
+      .gte("last_activity_at", activeWatchPartyCutoffIso),
     supabase
       .from(COMMUNICATION_ROOMS_TABLE)
       .select("*", { count: "exact", head: true })

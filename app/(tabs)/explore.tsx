@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
 import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../../_lib/supabase";
+import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 
 type TitleRow = Pick<
   Tables<"titles">,
@@ -42,14 +43,13 @@ type TitleRow = Pick<
 
 type WatchPartyRoomRow = Pick<
   Tables<"watch_party_rooms">,
-  "title_id" | "last_activity_at" | "updated_at"
+  "title_id" | "is_active" | "last_activity_at" | "updated_at"
 >;
 
 type TitleLiveMetadata = {
   liveRoomCount: number;
 };
 
-const LIVE_ACTIVITY_WINDOW_MILLIS = 15 * 60 * 1000;
 const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
 
 const toTimestamp = (value?: string | null) => {
@@ -151,7 +151,8 @@ export default function ExploreScreen() {
     try {
       const { data: roomData, error: roomError } = await supabase
         .from("watch_party_rooms")
-        .select("title_id,last_activity_at,updated_at")
+        .select("title_id,is_active,last_activity_at,updated_at")
+        .eq("is_active", true)
         .eq("room_type", "title")
         .in("title_id", titleIds)
         .returns<WatchPartyRoomRow[]>();
@@ -162,11 +163,12 @@ export default function ExploreScreen() {
       }
 
       const activeRooms = roomData.filter((row) => {
+        if (row.is_active !== true) return false;
         const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
         if (!activitySource) return false;
         const activityAt = Date.parse(activitySource);
         if (!Number.isFinite(activityAt)) return false;
-        return Date.now() - activityAt <= LIVE_ACTIVITY_WINDOW_MILLIS;
+        return Date.now() - activityAt <= ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
       });
 
       if (!activeRooms.length) {
