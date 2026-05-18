@@ -90,6 +90,29 @@ const sanitizeMetadata = (value: LiveKitTokenRequest["metadata"]) => {
   );
 };
 
+const normalizeLiveKitParticipantRole = (
+  value: unknown,
+  fallback: LiveKitParticipantRole,
+): LiveKitParticipantRole => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "host" || normalized === "speaker" || normalized === "viewer") return normalized;
+  return fallback;
+};
+
+const normalizeLiveKitRequestedGrants = (
+  value: unknown,
+  fallback: LiveKitRequestedGrants,
+): LiveKitRequestedGrants => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
+  const grants = value as Partial<Record<keyof LiveKitRequestedGrants, unknown>>;
+  return {
+    roomJoin: typeof grants.roomJoin === "boolean" ? grants.roomJoin : fallback.roomJoin,
+    canPublish: typeof grants.canPublish === "boolean" ? grants.canPublish : fallback.canPublish,
+    canSubscribe: typeof grants.canSubscribe === "boolean" ? grants.canSubscribe : fallback.canSubscribe,
+    canPublishData: typeof grants.canPublishData === "boolean" ? grants.canPublishData : fallback.canPublishData,
+  };
+};
+
 export const getRequestedLiveKitGrants = (
   participantRole: LiveKitParticipantRole,
 ): LiveKitRequestedGrants => {
@@ -213,10 +236,17 @@ export async function requestLiveKitParticipantToken(
 
   const payload = await response.json().catch(() => null) as {
     participantToken?: unknown;
+    participantRole?: unknown;
+    requestedGrants?: unknown;
     serverUrl?: unknown;
   } | null;
   const participantToken = String(payload?.participantToken ?? "").trim();
   const serverUrl = String(payload?.serverUrl ?? config.serverUrl).trim();
+  const effectiveParticipantRole = normalizeLiveKitParticipantRole(payload?.participantRole, participantRole);
+  const effectiveRequestedGrants = normalizeLiveKitRequestedGrants(
+    payload?.requestedGrants,
+    getRequestedLiveKitGrants(effectiveParticipantRole),
+  );
 
   if (!participantToken || !serverUrl) {
     return {
@@ -239,8 +269,8 @@ export async function requestLiveKitParticipantToken(
     roomName,
     serverUrl,
     participantToken,
-    participantRole,
-    requestedGrants,
+    participantRole: effectiveParticipantRole,
+    requestedGrants: effectiveRequestedGrants,
     endpoint: config.tokenEndpoint,
   };
 }

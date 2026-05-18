@@ -1708,7 +1708,12 @@ export default function WatchPartyRoomScreen() {
         myUsernameRef.current,
         "Guest",
       );
-      const participantRole = myRoleRef.current === "host" ? "host" : "speaker";
+      const currentMembership = membershipMapRef.current[participantIdentity];
+      const participantRole = myRoleRef.current === "host"
+        ? "host"
+        : currentMembership?.canSpeak || currentMembership?.stageRole === "speaker"
+          ? "speaker"
+          : "viewer";
 
       const joinResult = await prepareLiveKitJoinBoundary({
         surface: "watch-party-live",

@@ -110,8 +110,48 @@ assertBefore(
 );
 assertIncludes(
   livekitToken,
-  "isRecentTime(lastSeenAt, WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS)",
+  "isRecentTime(membership.lastSeenAt, WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS",
   "LiveKit token fresh membership presence check",
+);
+assertIncludes(
+  livekitToken,
+  "const LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS = 4;",
+  "LiveKit token speaker-seat cap",
+);
+assertIncludes(
+  livekitToken,
+  "getAuthorizedWatchPartySpeakerSeatIds",
+  "LiveKit token deterministic speaker-seat authorization",
+);
+assertIncludes(
+  livekitToken,
+  "speaker_not_approved_or_over_cap",
+  "LiveKit token unapproved or over-cap speaker downgrade",
+);
+assertIncludes(
+  livekitToken,
+  "currentMembership?.isMuted ? \"approved_speaker_muted\"",
+  "LiveKit token muted approved speaker no-publish role reason",
+);
+assertIncludes(
+  livekitToken,
+  "getRequestedLiveKitGrants(effectiveParticipantRole, effectiveRole.canPublish)",
+  "LiveKit token backend canPublish grant authority",
+);
+assertIncludes(
+  livekitToken,
+  "requestedParticipantRole: participantRole",
+  "LiveKit token response must expose requested role separately from effective backend role",
+);
+assertIncludes(
+  livekitToken,
+  "\"enforce-participant-state\"",
+  "LiveKit token endpoint participant-state enforcement action",
+);
+assertIncludes(
+  livekitToken,
+  "removeParticipant(room.roomName, targetUserId)",
+  "LiveKit token endpoint old publish-capable session disconnect",
 );
 assertIncludes(
   livekitToken,

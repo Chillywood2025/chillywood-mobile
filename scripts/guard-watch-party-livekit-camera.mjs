@@ -191,6 +191,16 @@ assertIncludes(
 );
 assertIncludes(
   livekitSurface,
+  "publishLocalVideo",
+  "LiveKit media surface must accept an explicit publish-local-video authority flag",
+);
+assertIncludes(
+  livekitSurface,
+  "joinContract.requestedGrants.canPublish",
+  "LiveKit media surface must honor backend canPublish grants before enabling camera publish",
+);
+assertIncludes(
+  livekitSurface,
   "participantRole: joinContract.participantRole",
   "LiveKit media proof logs must include participantRole",
 );
@@ -350,8 +360,8 @@ assertBefore(
 );
 assertIncludes(
   partyRoomWatchTogether,
-  "const participantRole = myRoleRef.current === \"host\" ? \"host\" : \"speaker\";",
-  "Watch-Party Live proof handoff must not downgrade a visible proof participant to viewer",
+  "currentMembership?.canSpeak || currentMembership?.stageRole === \"speaker\"",
+  "Watch-Party Live proof handoff must request speaker only from host-approved speaker membership",
 );
 assertIncludes(
   partyRoomWatchTogether,
@@ -398,6 +408,26 @@ assertIncludes(
   player,
   "participantRole: preparedContract.participantRole",
   "Player consumed Watch-Party LiveKit contract log must include participantRole",
+);
+assertIncludes(
+  player,
+  "desiredWatchPartyLiveKitParticipantRole",
+  "Player must resolve Watch-Party Live effective participant role from membership before token refresh",
+);
+assertIncludes(
+  player,
+  "publishLocalVideo={publishWatchPartyLiveKitVideo}",
+  "Player must disable local LiveKit camera publish when backend canPublish is false or the speaker is muted",
+);
+assertIncludes(
+  player,
+  "numColumns={liveLayout ? 5 : undefined}",
+  "Watch-Party Live player participant surface must use a five-column grid",
+);
+assertIncludes(
+  player,
+  "LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS",
+  "Player must cap approved active speakers through the shared launch seat cap",
 );
 assertIncludes(
   playerFallbackHandler,

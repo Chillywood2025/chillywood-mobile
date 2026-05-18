@@ -19,6 +19,7 @@ export type WaitingRoomParticipantEntry = {
 
 export const LIVE_WATCH_PARTY_LABEL = "Live Watch-Party";
 export const PLAYER_WATCH_PARTY_SOURCE = "player-watch-party-live";
+export const LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS = 4;
 
 export type SharedRoomLabels = {
   watchPartyLabel: string;

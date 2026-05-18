@@ -64,7 +64,8 @@ import {
     requireWatchPartyLivePremium,
     type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
-import { consumePreparedLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
+import { consumePreparedLiveKitJoinBoundary, prepareLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
+import { enforceLiveKitParticipantState } from "../../_lib/livekit/participant-permissions";
 import {
     isLiveKitParticipantTokenExpired,
     type LiveKitTokenReady,
@@ -142,7 +143,13 @@ import {
     type SafetyReportCategory,
 } from "../../_lib/moderation";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getInitials, getLiveParticipantStatusText, PLAYER_WATCH_PARTY_SOURCE, resolveIdentityName } from "../../_lib/watch-party/room-shared";
+import {
+  getInitials,
+  getLiveParticipantStatusText,
+  LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS,
+  PLAYER_WATCH_PARTY_SOURCE,
+  resolveIdentityName,
+} from "../../_lib/watch-party/room-shared";
 
 const ACCENT = "#DC143C";
 const BG = "#0B0B10";
@@ -843,6 +850,7 @@ export default function PlayerScreen() {
   const livePresenceEventTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousParticipantsRef = useRef<{ id: string; name: string; isSpeaking: boolean }[]>([]);
   const suppressNextSpeakingEventRef = useRef<Record<string, "start" | "stop" | undefined>>({});
+  const watchPartyLiveKitContractRequestKeyRef = useRef("");
   const participantReactionScaleMapRef = useRef<Record<string, Animated.Value>>({});
   const participantReactionTranslateYMapRef = useRef<Record<string, Animated.Value>>({});
   const participantReactionOpacityMapRef = useRef<Record<string, Animated.Value>>({});
@@ -1510,6 +1518,7 @@ export default function PlayerScreen() {
     canSpeak: boolean;
     stageRole: "host" | "speaker" | "listener";
     isRequestingToSpeak: boolean;
+    muted: boolean;
   }>) => {
     const channel = partySocialChannelRef.current;
     const trackedUserId = String(partySyncUserIdRef.current ?? partyUserId ?? "").trim();
@@ -1536,6 +1545,7 @@ export default function PlayerScreen() {
       avatarIndex: Number.parseInt(trackedUserId.slice(-3), 16) % 70,
       canSpeak,
       stageRole,
+      muted: overrides?.muted ?? membership?.isMuted ?? currentParticipant?.muted ?? false,
       isRequestingToSpeak: overrides?.isRequestingToSpeak ?? currentParticipant?.isRequestingToSpeak ?? false,
     }).catch(() => {});
   }, [partyParticipants, partyUserId]);
@@ -1556,6 +1566,7 @@ export default function PlayerScreen() {
     canSpeak: boolean;
     stageRole: "host" | "speaker" | "listener";
     isRequestingToSpeak?: boolean;
+    isMuted?: boolean;
   }) => {
     if (!partySocialChannelRef.current) return;
     await partySocialChannelRef.current.send({
@@ -1566,6 +1577,7 @@ export default function PlayerScreen() {
         canSpeak: options.canSpeak,
         stageRole: options.stageRole,
         isRequestingToSpeak: !!options.isRequestingToSpeak,
+        isMuted: options.isMuted,
       },
     }).catch(() => {});
   }, []);
@@ -2009,6 +2021,8 @@ export default function PlayerScreen() {
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const nextCanSpeak = !!payload?.canSpeak;
+        const hasMutedPayload = typeof payload?.isMuted === "boolean";
+        const nextMuted = hasMutedPayload ? !!payload.isMuted : undefined;
         const nextStageRole = derivePartyStageRole({
           role: partyMembershipMapRef.current[participantId]?.role === "host" ? "host" : "viewer",
           canSpeak: nextCanSpeak,
@@ -2021,6 +2035,7 @@ export default function PlayerScreen() {
             ...currentMembership,
             canSpeak: nextCanSpeak,
             stageRole: nextStageRole,
+            isMuted: nextMuted ?? currentMembership.isMuted,
           };
         }
 
@@ -2031,6 +2046,7 @@ export default function PlayerScreen() {
                   ...entry,
                   canSpeak: nextCanSpeak,
                   stageRole: nextStageRole,
+                  muted: nextMuted ?? entry.muted,
                   isRequestingToSpeak: !!payload?.isRequestingToSpeak,
                   isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
                 }
@@ -2042,6 +2058,7 @@ export default function PlayerScreen() {
           syncCurrentPartyPresence({
             canSpeak: nextCanSpeak,
             stageRole: nextStageRole,
+            muted: nextMuted,
             isRequestingToSpeak: !!payload?.isRequestingToSpeak,
           }).catch(() => {});
         }
@@ -2427,6 +2444,7 @@ export default function PlayerScreen() {
     canSpeak: boolean;
     stageRole: "host" | "speaker" | "listener";
     isRequestingToSpeak?: boolean;
+    isMuted?: boolean;
   }) => {
     if (!inWatchParty || !partyId || !participantId || partySyncRoleRef.current !== "host") return;
 
@@ -2435,7 +2453,7 @@ export default function PlayerScreen() {
       role: existingMembership?.role ?? "viewer",
       stageRole: options.stageRole,
       canSpeak: options.canSpeak,
-      isMuted: options.canSpeak ? existingMembership?.isMuted : false,
+      isMuted: options.isMuted ?? (options.canSpeak ? existingMembership?.isMuted : false),
       membershipState: existingMembership?.membershipState ?? "active",
     }).catch(() => null);
 
@@ -2450,6 +2468,7 @@ export default function PlayerScreen() {
               ...entry,
               canSpeak: options.canSpeak,
               stageRole: options.stageRole,
+              muted: options.isMuted ?? entry.muted,
               isRequestingToSpeak: !!options.isRequestingToSpeak,
               isSpeaking: options.canSpeak ? entry.isSpeaking : false,
             }
@@ -2458,8 +2477,22 @@ export default function PlayerScreen() {
     );
 
     await broadcastPartySeatState(participantId, options);
+    await enforceLiveKitParticipantState({
+      surface: "watch-party-live",
+      roomName: partyId,
+      targetParticipantIdentity: participantId,
+      metadata: {
+        source: "watch-party-live-seat-control",
+        stageRole: options.stageRole,
+        canSpeak: options.canSpeak,
+        muted: options.isMuted ?? null,
+      },
+    }).catch(() => false);
     if (participantId === String(partyUserId || partySyncUserIdRef.current || "").trim()) {
-      await syncCurrentPartyPresence(options).catch(() => {});
+      await syncCurrentPartyPresence({
+        ...options,
+        muted: options.isMuted,
+      }).catch(() => {});
     }
   }, [broadcastPartySeatState, inWatchParty, partyId, partyUserId, syncCurrentPartyPresence]);
 
@@ -3986,7 +4019,7 @@ export default function PlayerScreen() {
   );
   const primaryActiveParticipantIds = useMemo(() => {
     const merged = [...speakingParticipantIds, ...activeParticipantIds.filter((id) => !speakingParticipantIds.includes(id))];
-    return merged.slice(0, 2);
+    return merged.slice(0, LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS);
   }, [activeParticipantIds, speakingParticipantIds]);
   const trackedUserId = useMemo(() => String(partyUserId || "").trim() || "anon", [partyUserId]);
   const liveBubbleParticipants = useMemo(() => {
@@ -4007,8 +4040,28 @@ export default function PlayerScreen() {
       return a.name.localeCompare(b.name);
     });
   }, [partyParticipants, trackedUserId]);
+  const activePartySpeakerSeatCount = useMemo(
+    () => liveBubbleParticipants.filter((participant) => (
+      participant.role === "host"
+      || participant.stageRole === "host"
+      || participant.stageRole === "speaker"
+      || participant.canSpeak
+    )).length,
+    [liveBubbleParticipants],
+  );
+  const canAddPartySpeakerSeat = useCallback((participant: PartyParticipant) => {
+    if (
+      participant.role === "host"
+      || participant.stageRole === "host"
+      || participant.stageRole === "speaker"
+      || participant.canSpeak
+    ) {
+      return true;
+    }
+    return activePartySpeakerSeatCount < LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS;
+  }, [activePartySpeakerSeatCount]);
   const livePrimarySpeakers = useMemo(
-    () => liveBubbleParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, 2),
+    () => liveBubbleParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).slice(0, LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS),
     [liveBubbleParticipants],
   );
   const currentWatchPartyParticipantName = useMemo(
@@ -4047,13 +4100,23 @@ export default function PlayerScreen() {
     if (currentParticipant) return !!currentParticipant.muted;
     return !!partyMembershipMapRef.current[trackedUserId]?.isMuted;
   }, [partyParticipants, trackedUserId]);
-  const publishWatchPartyLiveKitAudio = !!watchPartyLiveKitJoinContract
-    && watchPartyLiveKitJoinContract.participantRole !== "viewer"
-    && !currentWatchPartyParticipantMuted;
+  const desiredWatchPartyLiveKitParticipantRole = useMemo<LiveKitTokenReady["participantRole"]>(() => {
+    const currentParticipant = partyParticipants.find((participant) => participant.id === trackedUserId);
+    const currentMembership = partyMembershipMapRef.current[trackedUserId];
+    if (currentParticipant?.role === "host" || currentMembership?.role === "host" || partySyncRole === "host") return "host";
+    if (currentParticipant?.canSpeak || currentParticipant?.stageRole === "speaker" || currentMembership?.canSpeak || currentMembership?.stageRole === "speaker") {
+      return "speaker";
+    }
+    return "viewer";
+  }, [partyParticipants, partySyncRole, trackedUserId]);
+  const watchPartyLiveKitCanPublish = !!watchPartyLiveKitJoinContract?.requestedGrants.canPublish
+    && watchPartyLiveKitJoinContract.participantRole !== "viewer";
+  const publishWatchPartyLiveKitAudio = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
+  const publishWatchPartyLiveKitVideo = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
     if (livePrimarySpeakers.length === 1) return `🎤 ${livePrimarySpeakers[0].name} speaking`;
-    return `🎤 ${livePrimarySpeakers[0].name} +1 speaking`;
+    return `🎤 ${livePrimarySpeakers[0].name} +${livePrimarySpeakers.length - 1} speaking`;
   }, [livePrimarySpeakers]);
 
   useEffect(() => {
@@ -4062,40 +4125,115 @@ export default function PlayerScreen() {
       return;
     }
 
-    if (watchPartyLiveKitJoinContract?.roomName === partyId) {
-      if (watchPartyLiveKitJoinContractExpired) {
-        debugLog("livekit", "dropping expired watch-party-live join contract", {
-          roomName: watchPartyLiveKitJoinContract.roomName,
-          participantRole: watchPartyLiveKitJoinContract.participantRole,
-        });
-        setWatchPartyLiveKitJoinContract(null);
-      }
-      return;
-    }
     const liveKitParticipantIdentity = watchPartyLiveKitIdentity || trackedUserId;
     if (!liveKitParticipantIdentity || (!watchPartyLiveKitIdentity && liveKitParticipantIdentity === "anon")) return;
+
+    const desiredCanPublish = desiredWatchPartyLiveKitParticipantRole !== "viewer" && !currentWatchPartyParticipantMuted;
+    const stalePublishContract = !!watchPartyLiveKitJoinContract
+      && watchPartyLiveKitJoinContract.requestedGrants.canPublish
+      && !desiredCanPublish;
+    const staleRoleContract = !!watchPartyLiveKitJoinContract
+      && desiredWatchPartyLiveKitParticipantRole === "viewer"
+      && watchPartyLiveKitJoinContract.participantRole !== "viewer";
+
+    if (watchPartyLiveKitJoinContract?.roomName === partyId && !watchPartyLiveKitJoinContractExpired && !stalePublishContract && !staleRoleContract) {
+      return;
+    }
+
+    if (watchPartyLiveKitJoinContractExpired || stalePublishContract || staleRoleContract) {
+      debugLog("livekit", "dropping stale watch-party-live join contract", {
+        roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
+        participantRole: watchPartyLiveKitJoinContract?.participantRole ?? null,
+        desiredParticipantRole: desiredWatchPartyLiveKitParticipantRole,
+        stalePublishContract,
+        staleRoleContract,
+      });
+      setWatchPartyLiveKitJoinContract(null);
+    }
 
     const preparedContract = consumePreparedLiveKitJoinBoundary({
       surface: "watch-party-live",
       roomName: partyId,
       participantIdentity: liveKitParticipantIdentity,
     });
-    if (!preparedContract) return;
+    if (preparedContract) {
+      const preparedContractTooBroad = (
+        (preparedContract.requestedGrants.canPublish && !desiredCanPublish)
+        || (desiredWatchPartyLiveKitParticipantRole === "viewer" && preparedContract.participantRole !== "viewer")
+      );
+	      if (preparedContractTooBroad) {
+	        setWatchPartyLiveKitJoinContract(null);
+	      } else {
+	        setWatchPartyLiveKitJoinContract(preparedContract);
+	        debugLog("livekit", "consumed watch-party-live join contract", {
+	          roomName: preparedContract.roomName,
+	          endpoint: preparedContract.endpoint,
+	          participantRole: preparedContract.participantRole,
+	          requestedGrants: preparedContract.requestedGrants,
+	        });
+	        return;
+	      }
+	    }
 
-    setWatchPartyLiveKitJoinContract(preparedContract);
-    debugLog("livekit", "consumed watch-party-live join contract", {
-      roomName: preparedContract.roomName,
-      endpoint: preparedContract.endpoint,
-      participantRole: preparedContract.participantRole,
-      requestedGrants: preparedContract.requestedGrants,
+    const requestKey = [
+      partyId,
+      liveKitParticipantIdentity,
+      desiredWatchPartyLiveKitParticipantRole,
+      desiredCanPublish ? "publish" : "viewer",
+      watchPartyLiveKitJoinContractExpired || stalePublishContract || staleRoleContract ? "refresh" : "missing",
+    ].join(":");
+    if (watchPartyLiveKitContractRequestKeyRef.current === requestKey) return;
+    watchPartyLiveKitContractRequestKeyRef.current = requestKey;
+
+    let active = true;
+    prepareLiveKitJoinBoundary({
+      surface: "watch-party-live",
+      roomName: partyId,
+      participantIdentity: liveKitParticipantIdentity,
+      participantName: currentWatchPartyParticipantName,
+      participantRole: desiredWatchPartyLiveKitParticipantRole,
+      metadata: {
+        source: "player-watch-party-live-authority-refresh",
+        muted: currentWatchPartyParticipantMuted,
+      },
+    }).then((joinResult) => {
+      if (!active) return;
+      if (joinResult.status === "ready") {
+        setWatchPartyLiveKitJoinContract(joinResult);
+        debugLog("livekit", "prepared watch-party-live join contract from membership authority", {
+          roomName: joinResult.roomName,
+          endpoint: joinResult.endpoint,
+          participantRole: joinResult.participantRole,
+          requestedGrants: joinResult.requestedGrants,
+        });
+        return;
+      }
+
+      setWatchPartyLiveKitJoinContract(null);
+      debugLog("livekit", "watch-party-live authority contract unavailable", {
+        reason: joinResult.reason,
+        roomName: joinResult.roomName,
+        responseStatus: joinResult.responseStatus ?? null,
+        responseError: joinResult.responseError ?? null,
+      });
+    }).catch(() => {
+      if (active) setWatchPartyLiveKitJoinContract(null);
     });
+
+    return () => {
+      active = false;
+    };
   }, [
+    currentWatchPartyParticipantMuted,
+    currentWatchPartyParticipantName,
+    desiredWatchPartyLiveKitParticipantRole,
     inWatchParty,
     partyId,
     trackedUserId,
     watchPartyLiveKitIdentity,
     watchPartyEntryAllowed,
     watchPartyLiveKitJoinContract?.participantRole,
+    watchPartyLiveKitJoinContract?.requestedGrants.canPublish,
     watchPartyLiveKitJoinContract?.roomName,
     watchPartyLiveKitJoinContractExpired,
   ]);
@@ -4188,7 +4326,7 @@ export default function PlayerScreen() {
 
     const speakingNow = partyParticipants
       .filter((participant) => participant.isSpeaking && participant.canSpeak)
-      .slice(0, 2);
+      .slice(0, LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS);
     speakingNow.forEach((participant) => {
       triggerParticipantReactionBoost(participant.id, 1500);
       markParticipantActive(participant.id, 1500);
@@ -4929,6 +5067,10 @@ export default function PlayerScreen() {
               <TouchableOpacity
                 style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
                 onPress={() => {
+                  if (!canAddPartySpeakerSeat(participant)) {
+                    showLivePresenceEvent(`Speaker seats are full (${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} max)`);
+                    return;
+                  }
                   suppressNextSpeakingEventRef.current[participant.id] = "start";
                   setPartyParticipants((prev) =>
                     prev.map((entry) =>
@@ -5006,9 +5148,9 @@ export default function PlayerScreen() {
                   .filter((entry) => entry.canSpeak && entry.isSpeaking)
                   .map((entry) => entry.id);
 
-                if (currentlySpeakingIds.length > 2) {
+                if (currentlySpeakingIds.length > LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS) {
                   const orderedSpeaking = speakingOrderRef.current.filter((id) => currentlySpeakingIds.includes(id));
-                  const toDropCount = orderedSpeaking.length - 2;
+                  const toDropCount = orderedSpeaking.length - LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS;
                   const dropIds = new Set(orderedSpeaking.slice(0, toDropCount));
 
                   nextParticipants = nextParticipants.map((entry) =>
@@ -5034,6 +5176,10 @@ export default function PlayerScreen() {
             style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
             onPress={() => {
               const nextCanSpeak = !participant.canSpeak;
+              if (nextCanSpeak && !canAddPartySpeakerSeat(participant)) {
+                showLivePresenceEvent(`Speaker seats are full (${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} max)`);
+                return;
+              }
               setPartyParticipants((prev) =>
                 prev.map((entry) => {
                   if (entry.id !== participant.id) return entry;
@@ -5066,11 +5212,18 @@ export default function PlayerScreen() {
           <TouchableOpacity
             style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
             onPress={() => {
+              const nextMuted = !participant.muted;
               setPartyParticipants((prev) =>
                 prev.map((entry) =>
-                  entry.id === participant.id ? { ...entry, muted: !entry.muted } : entry,
+                  entry.id === participant.id ? { ...entry, muted: nextMuted, isSpeaking: nextMuted ? false : entry.isSpeaking } : entry,
                 ),
               );
+              persistPartySeatState(participant.id, {
+                canSpeak: participant.canSpeak,
+                stageRole: participant.stageRole,
+                isRequestingToSpeak: participant.isRequestingToSpeak,
+                isMuted: nextMuted,
+              }).catch(() => {});
               bumpRoomEnergy(0.03);
             }}
             activeOpacity={0.85}
@@ -5092,17 +5245,21 @@ export default function PlayerScreen() {
           !liveLayout && styles.partyFeedCardTitleCompact,
         ]}
       >
-      <FlatList
-        horizontal
-        data={liveBubbleParticipants}
-        keyExtractor={(participant) => participant.id}
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        removeClippedSubviews={Platform.OS === "android"}
-        initialNumToRender={dockLayout ? 18 : liveLayout ? 12 : 10}
-        maxToRenderPerBatch={dockLayout ? 20 : 16}
-        windowSize={7}
-        extraData={{
+        <FlatList
+          key={liveLayout ? "watch-party-live-grid" : "watch-party-title-rail"}
+          horizontal={!liveLayout}
+          numColumns={liveLayout ? 5 : undefined}
+          data={liveBubbleParticipants}
+          keyExtractor={(participant) => participant.id}
+          showsHorizontalScrollIndicator={!liveLayout}
+          showsVerticalScrollIndicator={liveLayout}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={Platform.OS === "android"}
+          initialNumToRender={dockLayout ? 18 : liveLayout ? 12 : 10}
+          maxToRenderPerBatch={dockLayout ? 20 : 16}
+          windowSize={7}
+          columnWrapperStyle={liveLayout ? styles.participantBubbleGridRow : undefined}
+          extraData={{
           trackedUserId,
           partySyncRole,
           activeParticipantId,
@@ -5111,11 +5268,12 @@ export default function PlayerScreen() {
           partyParticipantReactions,
           liveFaceFilter,
           cameraGranted: !!cameraPermission?.granted,
-        }}
-        contentContainerStyle={[
-          styles.participantBubbleScroll,
-          liveLayout && styles.participantBubbleScrollLive,
-          dockLayout && styles.participantBubbleScrollLiveDock,
+          }}
+          contentContainerStyle={[
+            styles.participantBubbleScroll,
+            liveLayout && styles.participantBubbleScrollLive,
+            liveLayout && styles.participantBubbleScrollLiveGrid,
+            dockLayout && styles.participantBubbleScrollLiveDock,
           !liveLayout && styles.participantBubbleScrollTitleCompact,
         ]}
         renderItem={({ item: participant }) => {
@@ -5162,6 +5320,7 @@ export default function PlayerScreen() {
               style={[
                 styles.participantBubbleItem,
                 liveLayout && styles.participantBubbleItemLive,
+                liveLayout && styles.participantBubbleItemLiveGrid,
                 dockLayout && styles.participantBubbleItemLiveDock,
                 !liveLayout && styles.participantBubbleItemTitleCompact,
                 shouldDim && styles.participantBubbleInactive,
@@ -5367,6 +5526,7 @@ export default function PlayerScreen() {
               layout="bubble-grid"
               surfaceLabel="Watch-Party Live"
               publishLocalAudio={publishWatchPartyLiveKitAudio}
+              publishLocalVideo={publishWatchPartyLiveKitVideo}
               containerStyle={styles.watchPartySocialMediaFrameInner}
             />
           </View>
@@ -5877,7 +6037,7 @@ export default function PlayerScreen() {
         ) : undefined}
         participantStrip={(
           <View style={styles.watchPartyLiveStripWrap}>
-            {renderParticipantPanel(true)}
+            {renderParticipantPanel(true, true)}
           </View>
         )}
         leftAction={{
@@ -6213,7 +6373,14 @@ export default function PlayerScreen() {
             <Text style={styles.liveSpeakingLabel}>{liveSpeakingLabel}</Text>
 
             {livePrimarySpeakers.length > 0 ? (
-              <View style={[styles.liveSpeakerStage, livePrimarySpeakers.length === 1 ? styles.liveSpeakerStageSolo : styles.liveSpeakerStageDual]}>
+              <View style={[
+                styles.liveSpeakerStage,
+                livePrimarySpeakers.length === 1
+                  ? styles.liveSpeakerStageSolo
+                  : livePrimarySpeakers.length > 2
+                    ? styles.liveSpeakerStageMulti
+                    : styles.liveSpeakerStageDual,
+              ]}>
                 {livePrimarySpeakers.map((participant) => {
                   const isSpeaking = participant.isSpeaking && participant.canSpeak;
                   const isActive = primaryActiveParticipantIds.includes(participant.id);
@@ -6240,7 +6407,14 @@ export default function PlayerScreen() {
                       style={{ opacity: focusOpacity, transform: [{ scale: focusScale }, { scale: joinScale }, { scale: pressScale }] }}
                     >
                       <TouchableOpacity
-                        style={[styles.liveSpeakerCard, livePrimarySpeakers.length === 1 ? styles.liveSpeakerCardSolo : styles.liveSpeakerCardDual]}
+                        style={[
+                          styles.liveSpeakerCard,
+                          livePrimarySpeakers.length === 1
+                            ? styles.liveSpeakerCardSolo
+                            : livePrimarySpeakers.length > 2
+                              ? styles.liveSpeakerCardMulti
+                              : styles.liveSpeakerCardDual,
+                        ]}
                         onPressIn={() => {
                           const press = participantPressScaleMapRef.current[participant.id];
                           if (!press) return;
@@ -6566,7 +6740,7 @@ export default function PlayerScreen() {
             />
 
             {seekFeedback ? (
-              <Animated.View style={[styles.seekFeedback, { opacity: seekFeedbackOpacity }]}> 
+              <Animated.View style={[styles.seekFeedback, { opacity: seekFeedbackOpacity }]}>
                 <Text style={styles.seekFeedbackText}>{seekFeedback}</Text>
               </Animated.View>
             ) : null}
@@ -6590,7 +6764,7 @@ export default function PlayerScreen() {
               {inWatchParty ? (
                 <>
                 <View style={[styles.partyOverlayTopRow, styles.partyOverlayTopRowWatchParty]} pointerEvents="box-none">
-                  <Animated.View style={[styles.partyPresencePill, styles.partyPresencePillWatchPartyTitle, { opacity: partyPresenceOpacity }]}> 
+                  <Animated.View style={[styles.partyPresencePill, styles.partyPresencePillWatchPartyTitle, { opacity: partyPresenceOpacity }]}>
                     <View style={styles.partyPresenceRow}>
                       <Text style={styles.partyPresenceIcon}>👥</Text>
                       <Text style={styles.partyPresenceCount}>{viewerCount}</Text>
@@ -7000,6 +7174,7 @@ const styles = StyleSheet.create({
   liveSpeakerStage: {
     width: "100%",
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     marginBottom: 10,
   },
@@ -7010,6 +7185,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 16,
   },
+  liveSpeakerStageMulti: {
+    justifyContent: "center",
+    gap: 10,
+    rowGap: 8,
+  },
   liveSpeakerCard: {
     alignItems: "center",
   },
@@ -7018,6 +7198,10 @@ const styles = StyleSheet.create({
   },
   liveSpeakerCardDual: {
     minWidth: 112,
+  },
+  liveSpeakerCardMulti: {
+    minWidth: 74,
+    maxWidth: 84,
   },
   liveSpeakerAvatarWrap: {
     position: "relative",
@@ -8256,13 +8440,13 @@ const styles = StyleSheet.create({
   },
   partyFeedCardLive: {
     minHeight: 96,
-    maxHeight: 126,
+    maxHeight: 172,
     marginBottom: 0,
     alignSelf: "stretch",
   },
   partyFeedCardLiveDock: {
-    minHeight: 124,
-    maxHeight: 188,
+    minHeight: 132,
+    maxHeight: 190,
     backgroundColor: "transparent",
     borderWidth: 0,
     paddingHorizontal: 0,
@@ -8382,17 +8566,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   participantBubbleScrollLive: {
-    gap: 14,
-    alignItems: "center",
-    justifyContent: "center",
+    rowGap: 8,
+    paddingVertical: 2,
     flexGrow: 1,
   },
+  participantBubbleScrollLiveGrid: {
+    paddingRight: 0,
+  },
   participantBubbleScrollLiveDock: {
-    gap: 5,
-    alignItems: "flex-start",
+    rowGap: 6,
     paddingHorizontal: 0,
     paddingVertical: 2,
-    minHeight: 80,
+    minHeight: 118,
+  },
+  participantBubbleGridRow: {
+    justifyContent: "space-between",
   },
   participantBubbleItem: {
     width: 74,
@@ -8421,12 +8609,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   participantBubbleItemLive: {
-    width: 94,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    width: "19.2%",
+    paddingHorizontal: 3,
+    paddingVertical: 6,
+  },
+  participantBubbleItemLiveGrid: {
+    minHeight: 72,
   },
   participantBubbleItemLiveDock: {
-    width: 68,
+    width: "19.2%",
     borderRadius: 0,
     borderWidth: 0,
     paddingHorizontal: 0,

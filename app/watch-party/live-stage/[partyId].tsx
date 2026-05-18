@@ -77,6 +77,7 @@ import {
   useLiveKitTracks as useHybridLiveKitTracks,
 } from "../../../_lib/livekit/react-native-module";
 import { prepareLiveKitJoinBoundary } from "../../../_lib/livekit/join-boundary";
+import { enforceLiveKitParticipantState } from "../../../_lib/livekit/participant-permissions";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
 import { isLiveKitRuntimeConfigured } from "../../../_lib/runtimeConfig";
@@ -138,6 +139,7 @@ import {
     canRequestSeat,
     createDefaultParticipantState,
     getParticipantLayerLabel,
+    LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS,
     mergeMissingParticipantStates,
     normalizeSharedRoomMode,
     prioritizeParticipantStripOrder,
@@ -450,18 +452,19 @@ function LiveKitHybridCommunityRoomHost({
   joinContract,
   onFallback,
   publishLocalAudio,
+  publishLocalCamera,
   children,
 }: {
   joinContract: LiveKitTokenReady;
   onFallback: (reason: LiveKitStageFallbackReason) => void;
   publishLocalAudio: boolean;
+  publishLocalCamera: boolean;
   children: React.ReactNode;
 }) {
   const fallbackTriggeredRef = useRef(false);
   const tearingDownRoomsRef = useRef(new Set<Room>());
   const [didConnectOnce, setDidConnectOnce] = useState(false);
   const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
-  const publishLocalCamera = joinContract.participantRole !== "viewer";
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const roomKey = `${joinContract.roomName}:${joinContract.participantToken}`;
   const room = useMemo(() => {
@@ -706,6 +709,7 @@ export default function WatchPartyLiveStageScreen({
   const micRecordingRef = useRef<Audio.Recording | null>(null);
   const micSpeakingRef = useRef(false);
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveKitStageContractRefreshKeyRef = useRef("");
   const stripOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
@@ -1737,6 +1741,17 @@ export default function WatchPartyLiveStageScreen({
       membershipState: shouldRemove ? "removed" : "active",
       leftAt: shouldRemove ? new Date().toISOString() : null,
     }).catch(() => null);
+    await enforceLiveKitParticipantState({
+      surface: "live-stage",
+      roomName: partyId,
+      targetParticipantIdentity: participantId,
+      metadata: {
+        source: "live-stage-seat-control",
+        stageRole: nextStageRole ?? null,
+        muted: typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership?.isMuted ?? null,
+        removed: !!shouldRemove,
+      },
+    }).catch(() => false);
     await refreshStageSnapshot(myUserId).catch(() => null);
   }, [isHost, myUserId, partyId, refreshStageSnapshot]);
 
@@ -2047,19 +2062,27 @@ export default function WatchPartyLiveStageScreen({
   const liveRoomShareTitle = "Share the room code.";
   const liveRoomShareBody = "Invite in app first, then use system share only if you need it.";
   const liveRoomEntryLabel = isHost ? "Continue to Live Stage" : "Join Live Stage";
+  const currentStageMembership = membershipMapRef.current[trackedUserId];
+  const currentTrackedParticipantState = participantStateById[trackedUserId];
+  const currentUserHasApprovedSpeakerSeat = !!(
+    currentTrackedParticipantState?.role === "speaker"
+    || currentStageMembership?.canSpeak
+    || currentStageMembership?.stageRole === "speaker"
+  );
   const liveKitParticipantRole = isHost
     ? "host"
-    : !isLiveFirstMode
+    : currentUserHasApprovedSpeakerSeat
       ? "speaker"
-      : participantStateById[trackedUserId]?.role === "speaker"
-        || membershipMapRef.current[trackedUserId]?.canSpeak
-        ? "speaker"
-        : "viewer";
+      : "viewer";
   const isCurrentStageParticipantMuted = !!(
     participantStateById[trackedUserId]?.isMuted
     ?? membershipMapRef.current[trackedUserId]?.isMuted
   );
-  const publishLocalStageAudio = liveKitParticipantRole !== "viewer" && !isCurrentStageParticipantMuted;
+  const liveKitContractAllowsStagePublish = liveKitJoinContract
+    ? liveKitJoinContract.requestedGrants.canPublish
+    : liveKitParticipantRole !== "viewer";
+  const publishLocalStageAudio = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;
+  const publishLocalStageCamera = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;
   const canUseStageEffects = liveKitParticipantRole !== "viewer";
   const stageModeTitle = isLiveFirstMode
     ? "Host-led live focus"
@@ -2151,6 +2174,26 @@ export default function WatchPartyLiveStageScreen({
 
     return rows;
   }, [communityCardParticipants]);
+  const activeSpeakerSeatCount = useMemo(() => {
+    const seen = new Set<string>();
+    return visibleStripParticipants.reduce((count, participant) => {
+      const participantId = String(participant.userId ?? "").trim();
+      if (!participantId || seen.has(participantId)) return count;
+      seen.add(participantId);
+      const participantState = participantStateById[participantId] ?? createDefaultParticipantState({
+        role: participant.role,
+        isSpeaking: participant.isSpeaking,
+        isMuted: participant.isMuted,
+      });
+      if (participantState.isRemoved) return count;
+      return participantState.role === "host" || participantState.role === "speaker" ? count + 1 : count;
+    }, 0);
+  }, [participantStateById, visibleStripParticipants]);
+  const canAddSpeakerSeat = useCallback((participantId: string) => {
+    const participantState = participantStateById[participantId];
+    if (participantState?.role === "host" || participantState?.role === "speaker") return true;
+    return activeSpeakerSeatCount < LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS;
+  }, [activeSpeakerSeatCount, participantStateById]);
   const communityCardParticipantIndexById = useMemo(
     () => Object.fromEntries(communityCardParticipants.map((participant, index) => [participant.userId, index])),
     [communityCardParticipants],
@@ -2474,10 +2517,7 @@ export default function WatchPartyLiveStageScreen({
 
   const onEnterLiveStage = useCallback(async () => {
     const entryStageMode: SharedRoomMode = isHost ? stageMode : "hybrid";
-    const entryParticipantRole: LiveKitTokenReady["participantRole"] =
-      !isHost && entryStageMode === "hybrid"
-        ? "speaker"
-        : liveKitParticipantRole;
+    const entryParticipantRole: LiveKitTokenReady["participantRole"] = liveKitParticipantRole;
 
     if (!isHost && stageMode !== "hybrid") {
       setStageMode("hybrid");
@@ -2587,6 +2627,89 @@ export default function WatchPartyLiveStageScreen({
     source,
     stageMode,
     stageOverlayMotion,
+    trackedUserId,
+  ]);
+
+  useEffect(() => {
+    if (
+      !liveKitFoundationEnabled
+      || liveSurface !== "stage"
+      || Platform.OS === "web"
+      || !partyId
+      || !trackedUserId
+      || trackedUserId === "anon"
+    ) {
+      return;
+    }
+
+    const desiredCanPublish = liveKitParticipantRole !== "viewer" && !isCurrentStageParticipantMuted;
+    const existingCanPublish = liveKitJoinContract?.requestedGrants.canPublish === true;
+    const stalePublishContract = !!liveKitJoinContract && existingCanPublish && !desiredCanPublish;
+    const staleRoleContract = !!liveKitJoinContract
+      && liveKitParticipantRole === "viewer"
+      && liveKitJoinContract.participantRole !== "viewer";
+
+    if (liveKitJoinContract && !stalePublishContract && !staleRoleContract) return;
+
+    const refreshKey = [
+      partyId,
+      trackedUserId,
+      liveKitParticipantRole,
+      desiredCanPublish ? "publish" : "viewer",
+      liveKitJoinContract ? "downgrade" : "missing",
+    ].join(":");
+    if (liveKitStageContractRefreshKeyRef.current === refreshKey) return;
+    liveKitStageContractRefreshKeyRef.current = refreshKey;
+
+    let active = true;
+    if (stalePublishContract || staleRoleContract) {
+      setLiveKitJoinContract(null);
+    }
+
+    prepareLiveKitJoinBoundary({
+      surface: "live-stage",
+      roomName: partyId,
+      participantIdentity: trackedUserId,
+      participantName: resolvedCurrentUsername,
+      participantRole: liveKitParticipantRole,
+      metadata: {
+        roomCode: room?.roomCode ?? null,
+        source: "live-stage-authority-refresh",
+        muted: isCurrentStageParticipantMuted,
+      },
+    }).then((joinResult) => {
+      if (!active) return;
+      if (joinResult.status === "ready") {
+        setLiveKitJoinContract(joinResult);
+        setLiveKitJoinUnavailable(null);
+        debugLog("livekit", "refreshed live-stage join contract from membership authority", {
+          roomName: joinResult.roomName,
+          participantRole: joinResult.participantRole,
+          requestedGrants: joinResult.requestedGrants,
+        });
+        return;
+      }
+
+      setLiveKitJoinContract(null);
+      setLiveKitJoinUnavailable(joinResult);
+    }).catch((error) => {
+      if (!active) return;
+      setLiveKitJoinContract(null);
+      reportRuntimeError("livekit-stage-authority-refresh", error, { partyId, trackedUserId });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    isCurrentStageParticipantMuted,
+    liveKitFoundationEnabled,
+    liveKitJoinContract,
+    liveKitParticipantRole,
+    liveSurface,
+    partyId,
+    resolvedCurrentUsername,
+    room?.roomCode,
     trackedUserId,
   ]);
 
@@ -3657,6 +3780,7 @@ export default function WatchPartyLiveStageScreen({
               joinContract={liveKitJoinContract as LiveKitTokenReady}
               onFallback={onLiveKitStageFallback}
               publishLocalAudio={publishLocalStageAudio}
+              publishLocalCamera={publishLocalStageCamera}
             >
               {children}
             </LiveKitHybridCommunityRoomHost>
@@ -3910,6 +4034,13 @@ export default function WatchPartyLiveStageScreen({
                                     style={styles.stageParticipantActionBtn}
                                     activeOpacity={0.82}
                                     onPress={() => {
+                                      if (!canAddSpeakerSeat(participant.userId)) {
+                                        Alert.alert(
+                                          "Speaker seats full",
+                                          `Live rooms allow up to ${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} active speaker seats. Move someone to audience before approving another speaker.`,
+                                        );
+                                        return;
+                                      }
                                       setParticipantStateById((prev) => ({
                                         ...prev,
                                         [participant.userId]: {
@@ -3954,6 +4085,13 @@ export default function WatchPartyLiveStageScreen({
                                 style={styles.stageParticipantActionBtn}
                                 activeOpacity={0.82}
                                 onPress={() => {
+                                  if (!isSpeakerRole && !canAddSpeakerSeat(participant.userId)) {
+                                    Alert.alert(
+                                      "Speaker seats full",
+                                      `Live rooms allow up to ${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} active speaker seats. Move someone to audience before seating another speaker.`,
+                                    );
+                                    return;
+                                  }
                                   setParticipantStateById((prev) => {
                                     const current = prev[participant.userId] ?? {
                                       isMuted: !!participant.isMuted,

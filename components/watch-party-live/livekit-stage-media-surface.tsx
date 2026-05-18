@@ -40,6 +40,7 @@ type LiveKitStageMediaSurfaceProps = {
   layout?: "stage" | "bubble-grid";
   surfaceLabel?: string;
   publishLocalAudio?: boolean;
+  publishLocalVideo?: boolean;
 };
 
 type LiveKitStageMediaContentProps = {
@@ -407,6 +408,7 @@ export function LiveKitStageMediaSurface({
   layout = "stage",
   surfaceLabel = "Live Stage",
   publishLocalAudio = joinContract.participantRole !== "viewer",
+  publishLocalVideo,
 }: LiveKitStageMediaSurfaceProps) {
   const fallbackTriggeredRef = useRef(false);
   const didConnectOnceRef = useRef(false);
@@ -417,7 +419,9 @@ export function LiveKitStageMediaSurface({
   const [appState, setAppState] = useState<AppStateStatus>(() => AppState.currentState);
   const [hasAndroidFocus, setHasAndroidFocus] = useState(true);
   const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
-  const publishLocalCamera = joinContract.participantRole !== "viewer";
+  const publishLocalCamera = publishLocalVideo ?? (
+    joinContract.participantRole !== "viewer" && joinContract.requestedGrants.canPublish
+  );
   const appIsInteractive = appState === "active" && (Platform.OS !== "android" || hasAndroidFocus);
   const shouldConnectRoom = active && appIsInteractive;
   shouldConnectRoomRef.current = shouldConnectRoom;

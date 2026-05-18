@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { AccessToken } from "npm:livekit-server-sdk@2";
+import { AccessToken, RoomServiceClient } from "npm:livekit-server-sdk@2";
 import {
   normalizeLiveKitRoutingRoomType,
   resolveLiveKitAssignment,
@@ -10,6 +10,7 @@ import { readLiveCostGuardTokenDecision } from "../_shared/live-cost-guard.ts";
 
 type LiveKitJoinSurface = "live-stage" | "watch-party-live" | "chat-call";
 type LiveKitParticipantRole = "host" | "speaker" | "viewer";
+type LiveKitTokenAction = "mint-token" | "enforce-participant-state";
 
 type LiveKitRequestedGrants = {
   roomJoin: boolean;
@@ -19,6 +20,7 @@ type LiveKitRequestedGrants = {
 };
 
 type TokenRequestPayload = {
+  action?: unknown;
   surface?: unknown;
   roomName?: unknown;
   role?: unknown;
@@ -26,10 +28,38 @@ type TokenRequestPayload = {
   participantIdentity?: unknown;
   participantName?: unknown;
   requestedGrants?: unknown;
+  targetParticipantIdentity?: unknown;
   metadata?: unknown;
 };
 
 type ScalarMetadataValue = boolean | number | string | null;
+
+type WatchPartyMembershipRecord = {
+  userId: string;
+  role: string;
+  stageRole: string;
+  canSpeak: boolean;
+  isMuted: boolean;
+  membershipState: string;
+  joinedAt: string | null;
+  updatedAt: string | null;
+  lastSeenAt: string | null;
+};
+
+type EffectiveRoleResolution =
+  | {
+      ok: true;
+      participantRole: LiveKitParticipantRole;
+      canPublish: boolean;
+      membership: WatchPartyMembershipRecord | null;
+      reason: string;
+    }
+  | {
+      ok: false;
+      error: string;
+      message: string;
+      status: number;
+    };
 
 type ResolvedRoomRecord =
   | {
@@ -61,12 +91,12 @@ const JSON_HEADERS = {
 } as const;
 
 const ACTIVE_MEMBERSHIP_STATES = new Set(["active", "reconnecting"]);
-const SOCIAL_WATCH_MODE_NAMES = new Set(["hybrid", "watch-party-live", "watch_party_live"]);
 const ROOM_ACTIVITY_ACTIVE_WINDOW_MS = 15 * 60_000;
 const WATCH_PARTY_ROOM_ACTIVE_WINDOW_MS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
 const COMMUNICATION_ROOM_ACTIVE_WINDOW_MS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
 const WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS = 45_000;
 const COMMUNICATION_MEMBERSHIP_ACTIVE_WINDOW_MS = 45_000;
+const LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS = 4;
 
 const json = (status: number, payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), {
@@ -127,6 +157,13 @@ const normalizeSurface = (value: unknown): LiveKitJoinSurface | null => {
   return null;
 };
 
+const normalizeAction = (value: unknown): LiveKitTokenAction | null => {
+  const normalized = sanitizeText(value || "mint-token").toLowerCase();
+  if (!normalized || normalized === "mint-token" || normalized === "token") return "mint-token";
+  if (normalized === "enforce-participant-state") return "enforce-participant-state";
+  return null;
+};
+
 const normalizeRole = (payload: TokenRequestPayload): LiveKitParticipantRole | null => {
   const raw = sanitizeText(payload.participantRole ?? payload.role).toLowerCase();
   if (raw === "host") return "host";
@@ -137,11 +174,16 @@ const normalizeRole = (payload: TokenRequestPayload): LiveKitParticipantRole | n
 
 const getRequestedLiveKitGrants = (
   participantRole: LiveKitParticipantRole,
+  canPublishOverride?: boolean,
 ): LiveKitRequestedGrants => {
+  const canPublish = typeof canPublishOverride === "boolean"
+    ? canPublishOverride
+    : participantRole === "host" || participantRole === "speaker";
+
   if (participantRole === "host" || participantRole === "speaker") {
     return {
       roomJoin: true,
-      canPublish: true,
+      canPublish,
       canSubscribe: true,
       canPublishData: true,
     };
@@ -167,6 +209,195 @@ const resolveParticipantName = (payload: TokenRequestPayload, user: { email?: st
 
   return "Chi'llywood Member";
 };
+
+const normalizeWatchPartyMembership = (row: Record<string, unknown>): WatchPartyMembershipRecord => ({
+  userId: sanitizeText(row.user_id),
+  role: sanitizeText(row.role).toLowerCase(),
+  stageRole: sanitizeText(row.stage_role).toLowerCase(),
+  canSpeak: row.can_speak === true,
+  isMuted: row.is_muted === true,
+  membershipState: sanitizeText(row.membership_state).toLowerCase(),
+  joinedAt: sanitizeText(row.joined_at) || null,
+  updatedAt: sanitizeText(row.updated_at) || null,
+  lastSeenAt: sanitizeText(row.last_seen_at) || null,
+});
+
+const isFreshWatchPartyMembership = (
+  membership: WatchPartyMembershipRecord | null | undefined,
+  nowMillis = Date.now(),
+) => !!membership
+  && ACTIVE_MEMBERSHIP_STATES.has(membership.membershipState)
+  && isRecentTime(membership.lastSeenAt, WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS, nowMillis);
+
+const isWatchPartySpeakerSeatMembership = (membership: WatchPartyMembershipRecord | null | undefined) => !!membership
+  && (
+    membership.role === "host"
+    || membership.stageRole === "host"
+    || membership.stageRole === "speaker"
+    || membership.canSpeak
+  );
+
+const membershipSeatMillis = (membership: WatchPartyMembershipRecord) => (
+  firstValidTimeMillis(membership.updatedAt, membership.joinedAt, membership.lastSeenAt) ?? Number.MAX_SAFE_INTEGER
+);
+
+const getAuthorizedWatchPartySpeakerSeatIds = (
+  memberships: WatchPartyMembershipRecord[],
+  hostUserId: string,
+  nowMillis = Date.now(),
+) => {
+  const authorizedSeatIds = new Set<string>();
+  if (hostUserId) authorizedSeatIds.add(hostUserId);
+
+  const speakerMemberships = memberships
+    .filter((membership) => (
+      membership.userId
+      && membership.userId !== hostUserId
+      && isFreshWatchPartyMembership(membership, nowMillis)
+      && isWatchPartySpeakerSeatMembership(membership)
+    ))
+    .sort((a, b) => {
+      const timeDiff = membershipSeatMillis(a) - membershipSeatMillis(b);
+      if (timeDiff !== 0) return timeDiff;
+      return a.userId.localeCompare(b.userId);
+    });
+
+  for (const membership of speakerMemberships) {
+    if (authorizedSeatIds.size >= LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS) break;
+    authorizedSeatIds.add(membership.userId);
+  }
+
+  return authorizedSeatIds;
+};
+
+async function fetchWatchPartyMemberships(
+  adminClient: ReturnType<typeof createClient>,
+  roomName: string,
+) {
+  const memberships = await adminClient
+    .from("watch_party_room_memberships")
+    .select("user_id,role,stage_role,can_speak,is_muted,membership_state,joined_at,last_seen_at,updated_at")
+    .eq("party_id", roomName);
+
+  if (memberships.error) return null;
+  return ((memberships.data ?? []) as Record<string, unknown>[]).map(normalizeWatchPartyMembership);
+}
+
+const deriveLiveKitApiUrl = (serverUrl: string, internalApiUrl?: string | null) => {
+  const configured = sanitizeText(internalApiUrl) || sanitizeText(Deno.env.get("LIVEKIT_API_URL"));
+  if (configured) return configured;
+  const publicUrl = sanitizeText(serverUrl);
+  if (publicUrl.startsWith("wss://")) return `https://${publicUrl.slice("wss://".length)}`;
+  if (publicUrl.startsWith("ws://")) return `http://${publicUrl.slice("ws://".length)}`;
+  return publicUrl;
+};
+
+async function fetchExistingLiveKitAssignmentEndpoint(
+  adminClient: ReturnType<typeof createClient>,
+  roomName: string,
+) {
+  const assignment = await adminClient
+    .from("livekit_room_assignments")
+    .select("assigned_server_id")
+    .eq("app_room_id", roomName)
+    .eq("livekit_room_name", roomName)
+    .in("assignment_status", ["assigned", "active"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const serverRowId = sanitizeText(assignment.data?.assigned_server_id);
+  if (assignment.error || !serverRowId) return null;
+
+  const server = await adminClient
+    .from("livekit_servers")
+    .select("public_ws_url,internal_api_url")
+    .eq("id", serverRowId)
+    .maybeSingle();
+
+  if (server.error || !server.data) return null;
+
+  const publicWsUrl = sanitizeText(server.data.public_ws_url);
+  if (!publicWsUrl) return null;
+
+  return {
+    apiUrl: deriveLiveKitApiUrl(publicWsUrl, sanitizeText(server.data.internal_api_url) || null),
+    serverUrl: publicWsUrl,
+  };
+}
+
+async function enforceParticipantState(
+  adminClient: ReturnType<typeof createClient>,
+  room: ResolvedRoomRecord,
+  surface: LiveKitJoinSurface,
+  targetUserId: string,
+  actorUserId: string,
+  livekitApiKey: string,
+  livekitApiSecret: string,
+) {
+  if (room.kind !== "watch-party") {
+    return json(400, {
+      error: "unsupported_surface",
+      message: "Participant state enforcement is currently scoped to Live Stage and Watch-Party Live rooms.",
+    });
+  }
+
+  if (actorUserId !== targetUserId && actorUserId !== room.hostUserId) {
+    return json(403, {
+      error: "insufficient_role",
+      message: "Only the room host or the affected participant can enforce this LiveKit participant state.",
+    });
+  }
+
+  const roomActive = isWatchPartyRoomCurrentlyActive(room);
+  const roleResolution = roomActive
+    ? await resolveEffectiveParticipantRole(adminClient, room, surface, "speaker", targetUserId)
+    : null;
+  const participantRole = roleResolution?.ok ? roleResolution.participantRole : "viewer";
+  const canPublish = roleResolution?.ok ? roleResolution.canPublish : false;
+  const requestedGrants = getRequestedLiveKitGrants(participantRole, canPublish);
+
+  if (canPublish) {
+    return json(200, {
+      ok: true,
+      disconnected: false,
+      participantRole,
+      requestedGrants,
+      reason: roleResolution?.ok ? roleResolution.reason : "publish_allowed",
+    });
+  }
+
+  const assignmentEndpoint = await fetchExistingLiveKitAssignmentEndpoint(adminClient, room.roomName);
+  if (!assignmentEndpoint?.apiUrl) {
+    return json(200, {
+      ok: true,
+      disconnected: false,
+      participantRole,
+      requestedGrants,
+      reason: "no_existing_livekit_assignment",
+    });
+  }
+
+  try {
+    const roomService = new RoomServiceClient(assignmentEndpoint.apiUrl, livekitApiKey, livekitApiSecret);
+    await roomService.removeParticipant(room.roomName, targetUserId);
+    return json(200, {
+      ok: true,
+      disconnected: true,
+      participantRole,
+      requestedGrants,
+      reason: roleResolution?.ok ? roleResolution.reason : "room_inactive_or_membership_stale",
+    });
+  } catch (error) {
+    console.error("livekit participant enforcement failure", error);
+    return json(502, {
+      error: "participant_enforcement_failed",
+      message: "Chi'llywood could not enforce the LiveKit participant downgrade on the assigned server.",
+      participantRole,
+      requestedGrants,
+    });
+  }
+}
 
 const readRequiredEnv = (key: string) => {
   const value = sanitizeText(Deno.env.get(key));
@@ -269,53 +500,96 @@ async function userCanAccessChatThread(
   return !membership.error && !!membership.data;
 }
 
-async function userCanJoinAsRequestedRole(
+async function resolveEffectiveParticipantRole(
   adminClient: ReturnType<typeof createClient>,
   room: ResolvedRoomRecord,
   surface: LiveKitJoinSurface,
-  participantRole: LiveKitParticipantRole,
+  requestedParticipantRole: LiveKitParticipantRole,
   userId: string,
-  metadata: Record<string, ScalarMetadataValue>,
-) {
+) : Promise<EffectiveRoleResolution> {
   if (room.kind === "communication" && surface === "chat-call") {
-    if (!room.chatThreadId) return false;
+    if (!room.chatThreadId) {
+      return {
+        ok: false,
+        error: "missing_chat_thread",
+        message: "This call is not linked to an active Chi'lly Chat thread.",
+        status: 404,
+      };
+    }
     const canAccessChatThread = await userCanAccessChatThread(adminClient, room.chatThreadId, userId);
-    if (!canAccessChatThread) return false;
+    if (!canAccessChatThread) {
+      return {
+        ok: false,
+        error: "insufficient_role",
+        message: "The current authenticated user is not allowed to join this Chi'lly Chat call.",
+        status: 403,
+      };
+    }
   }
 
-  if (room.hostUserId === userId) return true;
+  if (room.hostUserId === userId) {
+    return {
+      ok: true,
+      participantRole: "host",
+      canPublish: true,
+      membership: null,
+      reason: "room_host",
+    };
+  }
 
   if (room.kind === "watch-party") {
-    if (participantRole === "viewer") return true;
+    const memberships = await fetchWatchPartyMemberships(adminClient, room.roomName);
+    if (!memberships) {
+      return {
+        ok: false,
+        error: "membership_lookup_failed",
+        message: "Chi'llywood could not verify this room membership before issuing a LiveKit token.",
+        status: 503,
+      };
+    }
 
-    const membership = await adminClient
-      .from("watch_party_room_memberships")
-      .select("role,stage_role,can_speak,membership_state,last_seen_at")
-      .eq("party_id", room.roomName)
-      .eq("user_id", userId)
-      .maybeSingle();
+    const nowMillis = Date.now();
+    const currentMembership = memberships.find((membership) => membership.userId === userId) ?? null;
+    if (!isFreshWatchPartyMembership(currentMembership, nowMillis)) {
+      return {
+        ok: false,
+        error: "insufficient_role",
+        message: "The current authenticated user does not have a fresh active membership for this room.",
+        status: 403,
+      };
+    }
 
-    if (membership.error || !membership.data) return false;
+    if (requestedParticipantRole === "viewer") {
+      return {
+        ok: true,
+        participantRole: "viewer",
+        canPublish: false,
+        membership: currentMembership,
+        reason: "viewer_requested",
+      };
+    }
 
-    const role = sanitizeText(membership.data.role).toLowerCase();
-    const stageRole = sanitizeText(membership.data.stage_role).toLowerCase();
-    const membershipState = sanitizeText(membership.data.membership_state).toLowerCase();
-    const lastSeenAt = sanitizeText(membership.data.last_seen_at);
-    const canSpeak = membership.data.can_speak === true;
-    const stageMode = sanitizeText(metadata.stageMode).toLowerCase();
-    const roomType = sanitizeText(room.roomType).toLowerCase();
-    const isSocialWatchSurface = surface === "watch-party-live";
-    const isSocialWatchMode = SOCIAL_WATCH_MODE_NAMES.has(stageMode) || SOCIAL_WATCH_MODE_NAMES.has(roomType);
+    const speakerSeatIds = getAuthorizedWatchPartySpeakerSeatIds(memberships, room.hostUserId, nowMillis);
+    const canUseSpeakerSeat = isWatchPartySpeakerSeatMembership(currentMembership)
+      && speakerSeatIds.has(userId);
 
-    if (!ACTIVE_MEMBERSHIP_STATES.has(membershipState)) return false;
-    if (!isRecentTime(lastSeenAt, WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS)) return false;
-    if (participantRole === "host") return role === "host";
-    return role === "host"
-      || stageRole === "host"
-      || stageRole === "speaker"
-      || canSpeak
-      || isSocialWatchSurface
-      || isSocialWatchMode;
+    if (!canUseSpeakerSeat) {
+      return {
+        ok: true,
+        participantRole: "viewer",
+        canPublish: false,
+        membership: currentMembership,
+        reason: "speaker_not_approved_or_over_cap",
+      };
+    }
+
+    return {
+      ok: true,
+      participantRole: "speaker",
+      canPublish: !currentMembership?.isMuted,
+      membership: currentMembership,
+      reason: currentMembership?.isMuted ? "approved_speaker_muted" : "approved_speaker",
+    };
   }
 
   const membership = await adminClient
@@ -325,17 +599,48 @@ async function userCanJoinAsRequestedRole(
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (membership.error || !membership.data) return false;
+  if (membership.error || !membership.data) {
+    return {
+      ok: false,
+      error: "insufficient_role",
+      message: "The current authenticated user does not have a fresh active membership for this call.",
+      status: 403,
+    };
+  }
 
   const role = sanitizeText(membership.data.role).toLowerCase();
   const membershipState = sanitizeText(membership.data.membership_state).toLowerCase();
   const lastSeenAt = sanitizeText(membership.data.last_seen_at);
 
-  if (!ACTIVE_MEMBERSHIP_STATES.has(membershipState)) return false;
-  if (!isRecentTime(lastSeenAt, COMMUNICATION_MEMBERSHIP_ACTIVE_WINDOW_MS)) return false;
-  if (participantRole === "viewer") return role === "host" || role === "participant";
-  if (participantRole === "host") return role === "host";
-  return role === "host";
+  if (
+    !ACTIVE_MEMBERSHIP_STATES.has(membershipState)
+    || !isRecentTime(lastSeenAt, COMMUNICATION_MEMBERSHIP_ACTIVE_WINDOW_MS)
+    || (role !== "host" && role !== "participant")
+  ) {
+    return {
+      ok: false,
+      error: "insufficient_role",
+      message: "The current authenticated user does not have a fresh active membership for this call.",
+      status: 403,
+    };
+  }
+
+  if (requestedParticipantRole === "host" || requestedParticipantRole === "speaker") {
+    return {
+      ok: false,
+      error: "insufficient_role",
+      message: "Only the call host can mint a publish-capable Chi'lly Chat LiveKit token.",
+      status: 403,
+    };
+  }
+
+  return {
+    ok: true,
+    participantRole: "viewer",
+    canPublish: false,
+    membership: null,
+    reason: "communication_participant_viewer",
+  };
 }
 
 Deno.serve(async (req) => {
@@ -363,8 +668,13 @@ Deno.serve(async (req) => {
     }
 
     const surface = normalizeSurface(payload.surface);
+    const action = normalizeAction(payload.action);
     const roomName = sanitizeText(payload.roomName).toUpperCase();
     const participantRole = normalizeRole(payload);
+
+    if (!action) {
+      return json(400, { error: "invalid_action", message: "action must be mint-token or enforce-participant-state." });
+    }
 
     if (!surface) {
       return json(400, { error: "invalid_surface", message: "surface must be live-stage, watch-party-live, or chat-call." });
@@ -374,7 +684,7 @@ Deno.serve(async (req) => {
       return json(400, { error: "missing_room_name", message: "roomName is required." });
     }
 
-    if (!participantRole) {
+    if (action === "mint-token" && !participantRole) {
       return json(400, { error: "invalid_role", message: "role must be host, speaker, or viewer." });
     }
 
@@ -391,6 +701,32 @@ Deno.serve(async (req) => {
         error: "room_not_found",
         message: "The requested Chi'llywood room does not exist in the current backend truth.",
       });
+    }
+
+    const userId = sanitizeText(authResult.user.id);
+
+    if (action === "enforce-participant-state") {
+      const targetUserId = sanitizeText(payload.targetParticipantIdentity ?? payload.participantIdentity);
+      if (!targetUserId) {
+        return json(400, {
+          error: "missing_target_participant",
+          message: "targetParticipantIdentity is required for participant state enforcement.",
+        });
+      }
+
+      return await enforceParticipantState(
+        adminClient,
+        room,
+        surface,
+        targetUserId,
+        userId,
+        livekitApiKey,
+        livekitApiSecret,
+      );
+    }
+
+    if (!participantRole) {
+      return json(400, { error: "invalid_role", message: "role must be host, speaker, or viewer." });
     }
 
     if (room.kind === "watch-party") {
@@ -424,27 +760,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    const userId = sanitizeText(authResult.user.id);
     const tokenMetadata = sanitizeMetadata(payload.metadata);
-    const canJoinRequestedRole = await userCanJoinAsRequestedRole(
+    const effectiveRole = await resolveEffectiveParticipantRole(
       adminClient,
       room,
       surface,
       participantRole,
       userId,
-      tokenMetadata,
     );
 
-    if (!canJoinRequestedRole) {
-      return json(403, {
-        error: "insufficient_role",
-        message:
-          "The current authenticated user is not allowed to mint the requested LiveKit participant role for this room.",
+    if (!effectiveRole.ok) {
+      return json(effectiveRole.status, {
+        error: effectiveRole.error,
+        message: effectiveRole.message,
       });
     }
 
     const participantName = resolveParticipantName(payload, authResult.user);
-    const requestedGrants = getRequestedLiveKitGrants(participantRole);
+    const effectiveParticipantRole = effectiveRole.participantRole;
+    const requestedGrants = getRequestedLiveKitGrants(effectiveParticipantRole, effectiveRole.canPublish);
     const participantIdentity = userId;
     const routingRoomType = normalizeLiveKitRoutingRoomType(
       surface,
@@ -488,6 +822,9 @@ Deno.serve(async (req) => {
         roomName: room.roomName,
         surface,
         userId,
+        participantRole: effectiveParticipantRole,
+        requestedParticipantRole: participantRole,
+        roleResolution: effectiveRole.reason,
         ...tokenMetadata,
       }),
       name: participantName,
@@ -506,6 +843,9 @@ Deno.serve(async (req) => {
 
     return json(200, {
       participantToken,
+      participantRole: effectiveParticipantRole,
+      requestedParticipantRole: participantRole,
+      requestedGrants,
       serverUrl: routing.serverUrl,
     });
   } catch (error) {
