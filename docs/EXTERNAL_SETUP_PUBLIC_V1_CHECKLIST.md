@@ -475,7 +475,7 @@ Repo-ready facts:
 - `_lib/runtimeConfig.ts`, `_lib/livekit/token-contract.ts`, and `_lib/livekit/join-boundary.ts` own the runtime token contract and prepared join handoff.
 - `supabase/functions/livekit-token/index.ts` validates the Supabase bearer session, supports `live-stage`, `watch-party-live`, and `chat-call` surfaces, and mints roles `host`, `speaker`, or `viewer` according to room membership truth.
 - The mobile client does not mint LiveKit tokens locally.
-- `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly` previously showed `livekit-token` ACTIVE, version 7.
+- `supabase functions list --project-ref bmkkhihfbmsnnmcqkoly` showed `livekit-token` ACTIVE, version 54 after the May 18 old-room token-guard deploy.
 - `docs/hetzner-first-deployment-implementation-spec.md` records prior Hetzner/Caddy/TLS/LiveKit host truth for `live.chillywoodstream.com`, but this lane did not SSH to the server or re-prove it.
 - Static logging audit found no mobile code path printing `participantToken`, LiveKit API keys, or LiveKit API secrets. Release log proof is still required.
 
