@@ -391,6 +391,8 @@ Locked meanings:
 
 Live Stage role/access hardening is pushed at `4b90e09`. Mode switching is host-only, non-host route-param attempts must not mutate mode, Live First viewers cannot self-promote into camera/speaker seats on stage entry, and shared participant-state writes that affect speaker/camera/mute/remove state require the authenticated room host. Watch-Party Live remains title/player-based and separate from Live Stage.
 
+Live Stage top chrome keeps `Lock controls` and the existing `Live Room` return action only. The old top `Menu` sheet is removed; do not reintroduce a menu-only comments/studio/effects surface unless a future prompt explicitly reopens that UI lane.
+
 ## Premium Live Access Rule
 Full `Live First`, `Live Watch-Party`, and `Watch-Party Live` access is Premium.
 

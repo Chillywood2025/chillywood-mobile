@@ -233,7 +233,6 @@ const MIC_SPEAKING_RELEASE_MS = 420;
 const STAGE_HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
 const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 10_000;
 const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as const;
-const STAGE_MENU_ITEM_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
 const LIVE_STAGE_REMOTE_GRID_COLUMNS = 3;
 const LIVE_STAGE_REMOTE_GRID_VISIBLE_ROWS = 2;
 const LIVE_STAGE_VERBOSE_LOGGING = false;
@@ -656,7 +655,6 @@ export default function WatchPartyLiveStageScreen({
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [stageControlsOpen, setStageControlsOpen] = useState(false);
   const [faceFilterSheetOpen, setFaceFilterSheetOpen] = useState(false);
-  const [stageMenuOpen, setStageMenuOpen] = useState(false);
   const [hybridCommentFocused, setHybridCommentFocused] = useState(false);
   const [hybridComments, setHybridComments] = useState<LiveStageComment[]>([]);
   const [hybridCommentDraft, setHybridCommentDraft] = useState("");
@@ -911,7 +909,6 @@ export default function WatchPartyLiveStageScreen({
       clearTimeout(stageOverlayFinalizeHideTimeoutRef.current);
       stageOverlayFinalizeHideTimeoutRef.current = null;
     }
-    setStageMenuOpen(false);
     setCommentsOpen(false);
     setReactionPickerOpen(false);
     setStageControlsOpen(false);
@@ -1675,7 +1672,6 @@ export default function WatchPartyLiveStageScreen({
   }, []);
 
   const closeStageOverlayPanels = useCallback(() => {
-    setStageMenuOpen(false);
     setCommentsOpen(false);
     setReactionPickerOpen(false);
     setStageControlsOpen(false);
@@ -1951,7 +1947,6 @@ export default function WatchPartyLiveStageScreen({
   const liveGlowOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.24, 0.48] });
   const stageOverlayOpacity = stageOverlayMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
   const stageOverlayTranslate = stageOverlayMotion.interpolate({ inputRange: [0, 1], outputRange: [26, 0] });
-  const stageMenuSheetVisible = stageMenuOpen && !commentsOpen && !reactionPickerOpen && !stageControlsOpen && !faceFilterSheetOpen;
   const liveDockBottomInset = Math.max(28, safeAreaInsets.bottom + 14);
   const liveRoomFooterInset = Math.max(16, safeAreaInsets.bottom + 8);
   const hybridDeckTop = safeAreaInsets.top + 140;
@@ -2605,39 +2600,10 @@ export default function WatchPartyLiveStageScreen({
     setLiveSurface("room");
   }, [closeStageOverlayPanels, stageOverlayMotion]);
 
-  const onToggleStageControls = useCallback(() => {
-    revealStageOverlay();
-    setStageMenuOpen(false);
-    setCommentsOpen(false);
-    setReactionPickerOpen(false);
-    setFaceFilterSheetOpen(false);
-    setStageControlsOpen((value) => !value);
-  }, [revealStageOverlay]);
-
-  const onToggleFaceFilters = useCallback(() => {
-    if (!canUseStageEffects) return;
-    revealStageOverlay();
-    setStageMenuOpen(false);
-    setCommentsOpen(false);
-    setReactionPickerOpen(false);
-    setStageControlsOpen(false);
-    setFaceFilterSheetOpen((value) => !value);
-  }, [canUseStageEffects, revealStageOverlay]);
-
-  const onToggleStageMenu = useCallback(() => {
-    revealStageOverlay();
-    setCommentsOpen(false);
-    setReactionPickerOpen(false);
-    setStageControlsOpen(false);
-    setFaceFilterSheetOpen(false);
-    setStageMenuOpen((value) => !value);
-  }, [revealStageOverlay]);
-
   const onOpenStageReactionPicker = useCallback(() => {
     if (!stageReactionsEnabled) return;
     revealStageOverlay();
     hybridCommentInputRef.current?.blur();
-    setStageMenuOpen(false);
     setStageControlsOpen(false);
     setFaceFilterSheetOpen(false);
     setCommentsOpen(false);
@@ -2648,31 +2614,11 @@ export default function WatchPartyLiveStageScreen({
     if (!stageReactionsEnabled) return;
     revealStageOverlay();
     hybridCommentInputRef.current?.blur();
-    setStageMenuOpen(false);
     setStageControlsOpen(false);
     setFaceFilterSheetOpen(false);
     setReactionPickerOpen(false);
     onSelectReactionFromPicker(emoji);
   }, [onSelectReactionFromPicker, revealStageOverlay, stageReactionsEnabled]);
-
-  const onOpenStageComments = useCallback(() => {
-    revealStageOverlay();
-    setStageMenuOpen(false);
-    setStageControlsOpen(false);
-    setFaceFilterSheetOpen(false);
-    setReactionPickerOpen(false);
-
-    if (usesSharedStageCommentLane) {
-      setCommentsOpen(true);
-      setTimeout(() => {
-        hybridCommentInputRef.current?.focus();
-        hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
-      }, 80);
-      return;
-    }
-
-    setCommentsOpen((value) => !value);
-  }, [revealStageOverlay, usesSharedStageCommentLane]);
 
   const onPickHybridCommentAttachment = useCallback(async () => {
     try {
@@ -2827,7 +2773,6 @@ export default function WatchPartyLiveStageScreen({
       || reactionPickerOpen
       || stageControlsOpen
       || faceFilterSheetOpen
-      || stageMenuOpen
       )
     ) {
       clearStageOverlayAutoHideTimeout();
@@ -2852,19 +2797,10 @@ export default function WatchPartyLiveStageScreen({
     isLiveRoomSurface,
     reactionPickerOpen,
     stageControlsOpen,
-    stageMenuOpen,
     stageOverlayAutoHideArmed,
     stageOverlayVisible,
     stageMode,
   ]);
-
-  useEffect(() => {
-    if (!commentsOpen && !reactionPickerOpen && !stageControlsOpen && !faceFilterSheetOpen) {
-      return;
-    }
-
-    setStageMenuOpen(false);
-  }, [commentsOpen, faceFilterSheetOpen, reactionPickerOpen, stageControlsOpen]);
 
   useEffect(() => {
     return () => undefined;
@@ -3091,109 +3027,6 @@ export default function WatchPartyLiveStageScreen({
     </View>
   );
 
-  const renderStageTopMenuSheet = () => {
-    if (!stageMenuSheetVisible) return null;
-
-    return (
-      <View style={styles.stageTopMenuSheet}>
-        <TouchableOpacity
-          style={[styles.stageTopMenuItem, commentsOpen && styles.stageTopMenuItemActive]}
-          activeOpacity={0.84}
-          accessible
-          focusable
-          accessibilityRole="button"
-          accessibilityLabel="Open Live Stage Comments"
-          hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-          onPress={onOpenStageComments}
-          testID="live-stage-comments-button"
-        >
-          <Text style={styles.stageTopMenuItemIcon}>🗨️</Text>
-          <View style={styles.stageTopMenuItemCopy}>
-            <Text style={styles.stageTopMenuItemTitle}>Comments</Text>
-            <Text style={styles.stageTopMenuItemBody}>
-              {usesSharedStageCommentLane ? "Open the comment lane." : "Open the room response lane."}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.stageTopMenuItem, stageControlsOpen && styles.stageTopMenuItemActive]}
-          activeOpacity={0.84}
-          accessible
-          focusable
-          accessibilityRole="button"
-          accessibilityLabel="Open Live Stage Studio Controls"
-          hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-          onPress={onToggleStageControls}
-          testID="live-stage-studio-button"
-        >
-          <Text style={styles.stageTopMenuItemIcon}>🎛️</Text>
-          <View style={styles.stageTopMenuItemCopy}>
-            <Text style={styles.stageTopMenuItemTitle}>Studio</Text>
-            <Text style={styles.stageTopMenuItemBody}>Focus and stage tools.</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.stageTopMenuItem,
-            (faceFilterSheetOpen || selectedStageEffectId !== LIVE_EFFECT_OFF_ID) && styles.stageTopMenuItemActive,
-            !canUseStageEffects && styles.stageTopMenuItemDisabled,
-          ]}
-          activeOpacity={0.84}
-          accessible
-          focusable
-          accessibilityRole="button"
-          accessibilityLabel="Open Live Stage Chi’llyfects"
-          hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-          disabled={!canUseStageEffects}
-          onPress={onToggleFaceFilters}
-          testID="live-stage-filters-button"
-        >
-          <Text style={styles.stageTopMenuItemIcon}>FX</Text>
-          <View style={styles.stageTopMenuItemCopy}>
-            <Text style={styles.stageTopMenuItemTitle}>{CHILLYFECTS_BRAND_NAME}</Text>
-            <Text
-              style={[
-                styles.stageTopMenuItemBody,
-                !canUseStageEffects && styles.stageTopMenuItemBodyDisabled,
-              ]}
-            >
-              {canUseStageEffects ? "Browse honest Chi’llyfect readiness." : "Turns on once you're on camera."}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.stageTopMenuItem,
-            reactionPickerOpen && styles.stageTopMenuItemActive,
-            !stageReactionsEnabled && styles.stageTopMenuItemDisabled,
-          ]}
-          activeOpacity={0.84}
-          accessible
-          focusable
-          accessibilityRole="button"
-          accessibilityLabel="Open Live Stage Reactions"
-          hitSlop={STAGE_MENU_ITEM_HIT_SLOP}
-          disabled={!stageReactionsEnabled}
-          onPress={onOpenStageReactionPicker}
-          testID="live-stage-react-button"
-        >
-          <Text style={styles.stageTopMenuItemIcon}>✨</Text>
-          <View style={styles.stageTopMenuItemCopy}>
-            <Text style={styles.stageTopMenuItemTitle}>React</Text>
-            <Text
-              style={[
-                styles.stageTopMenuItemBody,
-                !stageReactionsEnabled && styles.stageTopMenuItemBodyDisabled,
-              ]}
-            >
-              {stageReactionsEnabled ? "Send a reaction." : "The host has reactions muted."}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
   const renderStageTopChrome = () => (
     <View style={[styles.stageTopChrome, { top: safeAreaInsets.top + 50 }]} pointerEvents="box-none">
       <View style={styles.stageTopChromeRow}>
@@ -3233,20 +3066,6 @@ export default function WatchPartyLiveStageScreen({
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.stageTopMenuButton, stageMenuSheetVisible && styles.stageTopMenuButtonActive]}
-            activeOpacity={0.84}
-            accessible
-            focusable
-            accessibilityRole="button"
-            accessibilityLabel="Live Stage Menu"
-            hitSlop={STAGE_CONTROL_HIT_SLOP}
-            onPressIn={armAndRevealStageOverlay}
-            onPress={onToggleStageMenu}
-            testID="live-stage-menu-button"
-          >
-            <Text style={styles.stageTopMenuButtonText}>Menu</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={styles.stageSurfaceBackButton}
             activeOpacity={0.84}
             accessible
@@ -3263,7 +3082,6 @@ export default function WatchPartyLiveStageScreen({
         </View>
       </View>
 
-      {renderStageTopMenuSheet()}
     </View>
   );
 
@@ -3519,7 +3337,6 @@ export default function WatchPartyLiveStageScreen({
               }}
               onFocus={() => {
                 revealStageOverlay();
-                setStageMenuOpen(false);
                 setStageControlsOpen(false);
                 setFaceFilterSheetOpen(false);
                 setReactionPickerOpen(false);
@@ -4858,62 +4675,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   stageSurfaceBackText: { color: "#E7EEFF", fontSize: 11, fontWeight: "800" },
-  stageTopMenuSheet: {
-    alignSelf: "flex-end",
-    width: 248,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(154,182,246,0.24)",
-    backgroundColor: "rgba(6,10,18,0.92)",
-    padding: 10,
-    gap: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 24,
-  },
-  stageTopMenuItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    paddingHorizontal: 11,
-    paddingVertical: 10,
-  },
-  stageTopMenuItemActive: {
-    borderColor: "rgba(172,196,255,0.34)",
-    backgroundColor: "rgba(120,156,245,0.14)",
-  },
-  stageTopMenuItemDisabled: {
-    opacity: 0.48,
-  },
-  stageTopMenuItemIcon: {
-    color: "#F4F7FF",
-    fontSize: 16,
-    lineHeight: 18,
-  },
-  stageTopMenuItemCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  stageTopMenuItemTitle: {
-    color: "#F5F8FF",
-    fontSize: 12.5,
-    fontWeight: "800",
-  },
-  stageTopMenuItemBody: {
-    color: "#B8C6E0",
-    fontSize: 10.5,
-    lineHeight: 14,
-    fontWeight: "600",
-  },
-  stageTopMenuItemBodyDisabled: {
-    color: "rgba(184,198,224,0.78)",
-  },
   stageSectionIntro: {
     borderRadius: 18,
     borderWidth: 1,
