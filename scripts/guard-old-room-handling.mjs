@@ -21,6 +21,9 @@ const assertBefore = (source, firstNeedle, secondNeedle, label) => {
 
 const performancePolicy = readSource("_lib/performancePolicy.ts");
 const watchParty = readSource("_lib/watchParty.ts");
+const communication = readSource("_lib/communication.ts");
+const chat = readSource("_lib/chat.ts");
+const communicationSession = readSource("hooks/use-communication-room-session.ts");
 const livekitToken = readSource("supabase/functions/livekit-token/index.ts");
 const livekitRouting = readSource("supabase/functions/_shared/livekit-routing.ts");
 const home = readSource("app/(tabs)/index.tsx");
@@ -56,6 +59,43 @@ assertIncludes(
 );
 
 assertIncludes(
+  communication,
+  "export const COMMUNICATION_ROOM_ACTIVE_WINDOW_MILLIS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;",
+  "Communication shared 15-minute room activity window",
+);
+assertIncludes(communication, "export const isCommunicationRoomActive", "shared communication room liveness helper");
+assertIncludes(
+  communication,
+  "return isCommunicationRoomActive(room) ? room : null;",
+  "getCommunicationRoom stale/ended guard",
+);
+assertIncludes(
+  communication,
+  "last_activity_at: new Date().toISOString()",
+  "communication room heartbeat last_activity_at refresh",
+);
+assertIncludes(
+  communication,
+  ".eq(\"status\", \"active\")",
+  "communication room heartbeat active-status guard",
+);
+assertIncludes(
+  chat,
+  "isCommunicationRoomActive(snapshot.room)",
+  "Chat thread active-call reuse stale-room guard",
+);
+assertIncludes(
+  chat,
+  "await clearEndedChatThreadCall(thread.threadId);",
+  "Chat thread stale active-call reference cleanup",
+);
+assertIncludes(
+  communicationSession,
+  "onRoomEndedRef.current?.(\"ended\");",
+  "Chat call unavailable room clears active thread state",
+);
+
+assertIncludes(
   livekitToken,
   ".select(\"party_id,host_user_id,room_type,is_active,started_at,updated_at,last_activity_at\")",
   "LiveKit token room liveness select",
@@ -72,6 +112,26 @@ assertIncludes(
   livekitToken,
   "isRecentTime(lastSeenAt, WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS)",
   "LiveKit token fresh membership presence check",
+);
+assertIncludes(
+  livekitToken,
+  ".select(\"room_id,host_user_id,status,created_at,updated_at,last_activity_at\")",
+  "Chat-call token communication room liveness select",
+);
+assertIncludes(
+  livekitToken,
+  "isCommunicationRoomCurrentlyActive(room)",
+  "Chat-call token stale communication room check",
+);
+assertIncludes(
+  livekitToken,
+  "This Chi'llywood call has ended or expired.",
+  "Chat-call token room_expired rejection copy",
+);
+assertIncludes(
+  livekitToken,
+  "isRecentTime(lastSeenAt, COMMUNICATION_MEMBERSHIP_ACTIVE_WINDOW_MS)",
+  "Chat-call token fresh membership presence check",
 );
 
 assertIncludes(

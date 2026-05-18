@@ -5,6 +5,7 @@ import {
   createCommunicationRoom,
   formatCommunicationRoomCode,
   getCommunicationRoomSnapshot,
+  isCommunicationRoomActive,
   readCommunicationIdentity,
 } from "./communication";
 import {
@@ -737,7 +738,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   const existingRoomId = toText(thread.activeCommunicationRoomId);
   if (existingRoomId) {
     const snapshot = await getCommunicationRoomSnapshot(existingRoomId);
-    if (snapshot?.room.status === "active") {
+    if (snapshot?.room && isCommunicationRoomActive(snapshot.room)) {
       logChatCall("thread_call_reuse_active_room", {
         currentUserId,
         threadId: thread.threadId,
@@ -756,6 +757,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       threadId: thread.threadId,
       roomId: existingRoomId,
       snapshotStatus: snapshot?.room.status ?? "missing",
+      stale: snapshot?.room ? !isCommunicationRoomActive(snapshot.room) : true,
     });
     await clearEndedChatThreadCall(thread.threadId);
   }

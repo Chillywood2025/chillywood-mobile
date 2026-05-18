@@ -17,6 +17,10 @@ import {
   type RoomAccessDecision,
   type RoomMembershipState,
 } from "./roomRules";
+import {
+  ROOM_ACTIVITY_ACTIVE_WINDOW_MS,
+  ROOM_HEARTBEAT_MS,
+} from "./performancePolicy";
 import { supabase } from "./supabase";
 import { buildUserChannelProfile, readUserProfile } from "./userData";
 import { createPartyIdentifier, getSafePartyUserId, getWritablePartyUserId } from "./watchParty";
@@ -26,6 +30,7 @@ export const COMMUNICATION_ROOM_MEMBERSHIPS_TABLE = "communication_room_membersh
 export const COMMUNICATION_ROOM_MAX_PARTICIPANTS = 4;
 export const COMMUNICATION_CHANNEL_PREFIX = "comm-room-";
 export const COMMUNICATION_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS;
+export const COMMUNICATION_ROOM_ACTIVE_WINDOW_MILLIS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
 
 type CommunicationIceServer = {
   urls: string | string[];
@@ -186,6 +191,29 @@ const COMMUNICATION_FALLBACK_ICE_SERVERS: CommunicationIceServer[] = [
 ];
 
 const isDefined = <T>(value: T | null): value is T => value !== null;
+
+const toTimeMillis = (value?: string | null) => {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getCommunicationRoomActivityMillis = (
+  room: Pick<CommunicationRoomState, "lastActivityAt" | "updatedAt" | "createdAt">,
+) => (
+  toTimeMillis(room.lastActivityAt)
+  ?? toTimeMillis(room.updatedAt)
+  ?? toTimeMillis(room.createdAt)
+);
+
+export const isCommunicationRoomActive = (
+  room: Pick<CommunicationRoomState, "status" | "lastActivityAt" | "updatedAt" | "createdAt"> | null | undefined,
+  nowMillis = Date.now(),
+) => {
+  if (room?.status !== "active") return false;
+  const activityMillis = getCommunicationRoomActivityMillis(room);
+  if (activityMillis === null) return false;
+  return nowMillis - activityMillis <= COMMUNICATION_ROOM_ACTIVE_WINDOW_MILLIS;
+};
 
 const normalizeIceUrlList = (value: unknown): string[] => {
   if (Array.isArray(value)) {
@@ -529,7 +557,8 @@ export async function createCommunicationRoom(hostUserIdOrOptions?: string | Com
 export async function getCommunicationRoom(roomId: string): Promise<CommunicationRoomState | null> {
   const row = await fetchCommunicationRoomRow(roomId);
   if (!row) return null;
-  return parseCommunicationRoomPayload(row);
+  const room = parseCommunicationRoomPayload(row);
+  return isCommunicationRoomActive(room) ? room : null;
 }
 
 export async function getCommunicationRoomByCode(roomCode: string): Promise<CommunicationRoomState | null> {
@@ -543,7 +572,10 @@ export async function getCommunicationRoomByCode(roomCode: string): Promise<Comm
     .returns<CommunicationRoomFullRow>()
     .maybeSingle();
 
-  if (!query.error && query.data) return parseCommunicationRoomPayload(query.data);
+  if (!query.error && query.data) {
+    const room = parseCommunicationRoomPayload(query.data);
+    return isCommunicationRoomActive(room) ? room : null;
+  }
 
   if (query.error && isMissingColumnError(query.error, "content_access_rule")) {
     const fallback = await supabase
@@ -552,7 +584,10 @@ export async function getCommunicationRoomByCode(roomCode: string): Promise<Comm
       .eq("room_code", normalizedRoomCode)
       .returns<CommunicationRoomBaseRow>()
       .maybeSingle();
-    if (!fallback.error && fallback.data) return parseCommunicationRoomPayload(fallback.data);
+    if (!fallback.error && fallback.data) {
+      const room = parseCommunicationRoomPayload(fallback.data);
+      return isCommunicationRoomActive(room) ? room : null;
+    }
   }
 
   return null;
@@ -595,6 +630,27 @@ export const getActiveCommunicationMemberships = (memberships: CommunicationRoom
     if (!Number.isFinite(lastSeenAt)) return state === "active";
     return Date.now() - lastSeenAt <= COMMUNICATION_ACTIVE_MEMBER_WINDOW_MILLIS;
   });
+
+async function touchActiveCommunicationRoomHeartbeat(room: CommunicationRoomState): Promise<void> {
+  if (!isCommunicationRoomActive(room)) return;
+
+  const activityMillis = getCommunicationRoomActivityMillis(room);
+  if (activityMillis !== null && Date.now() - activityMillis < ROOM_HEARTBEAT_MS * 2) return;
+
+  try {
+    const updates: CommunicationRoomUpdate = {
+      last_activity_at: new Date().toISOString(),
+    };
+
+    await supabase
+      .from(COMMUNICATION_ROOMS_TABLE)
+      .update(updates)
+      .eq("room_id", room.roomId)
+      .eq("status", "active");
+  } catch {
+    // Membership heartbeat still records presence; room activity is best-effort under RLS.
+  }
+}
 
 export async function evaluateCommunicationRoomAccess(options: {
   room: CommunicationRoomState;
@@ -682,8 +738,11 @@ export async function touchCommunicationRoomSession(options: {
   if (!roomId || !writableUserId) return null;
 
   const now = new Date().toISOString();
+  const membershipState = normalizeRoomMembershipState(options.membershipState);
+  const room = await getCommunicationRoom(roomId).catch(() => null);
+  if (!room && membershipState !== "left") return null;
   const updates: CommunicationMembershipUpdate = {
-    membership_state: normalizeRoomMembershipState(options.membershipState),
+    membership_state: membershipState,
     last_seen_at: now,
     updated_at: now,
   };
@@ -703,7 +762,11 @@ export async function touchCommunicationRoomSession(options: {
     .single();
 
   if (error || !data) return null;
-  return parseCommunicationMembershipPayload(data);
+  const membership = parseCommunicationMembershipPayload(data);
+  if (room && membership && (membershipState === "active" || membershipState === "reconnecting")) {
+    void touchActiveCommunicationRoomHeartbeat(room);
+  }
+  return membership;
 }
 
 export async function leaveCommunicationRoomSession(options: {
@@ -733,7 +796,10 @@ export async function getLinkedCommunicationRoom(linkedPartyId: string): Promise
     .returns<CommunicationRoomFullRow>()
     .maybeSingle();
 
-  if (!query.error && query.data) return parseCommunicationRoomPayload(query.data);
+  if (!query.error && query.data) {
+    const room = parseCommunicationRoomPayload(query.data);
+    return isCommunicationRoomActive(room) ? room : null;
+  }
 
   if (query.error && isMissingColumnError(query.error, "content_access_rule")) {
     const fallback = await supabase
@@ -745,7 +811,10 @@ export async function getLinkedCommunicationRoom(linkedPartyId: string): Promise
       .limit(1)
       .returns<CommunicationRoomBaseRow>()
       .maybeSingle();
-    if (!fallback.error && fallback.data) return parseCommunicationRoomPayload(fallback.data);
+    if (!fallback.error && fallback.data) {
+      const room = parseCommunicationRoomPayload(fallback.data);
+      return isCommunicationRoomActive(room) ? room : null;
+    }
   }
 
   return null;

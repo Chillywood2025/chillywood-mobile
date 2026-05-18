@@ -46,6 +46,10 @@ type ResolvedRoomRecord =
       kind: "communication";
       roomName: string;
       hostUserId: string;
+      status: string;
+      createdAt: string | null;
+      updatedAt: string | null;
+      lastActivityAt: string | null;
       chatThreadId: string | null;
     };
 
@@ -58,8 +62,11 @@ const JSON_HEADERS = {
 
 const ACTIVE_MEMBERSHIP_STATES = new Set(["active", "reconnecting"]);
 const SOCIAL_WATCH_MODE_NAMES = new Set(["hybrid", "watch-party-live", "watch_party_live"]);
-const WATCH_PARTY_ROOM_ACTIVE_WINDOW_MS = 15 * 60_000;
+const ROOM_ACTIVITY_ACTIVE_WINDOW_MS = 15 * 60_000;
+const WATCH_PARTY_ROOM_ACTIVE_WINDOW_MS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
+const COMMUNICATION_ROOM_ACTIVE_WINDOW_MS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
 const WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS = 45_000;
+const COMMUNICATION_MEMBERSHIP_ACTIVE_WINDOW_MS = 45_000;
 
 const json = (status: number, payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), {
@@ -91,6 +98,12 @@ const isWatchPartyRoomCurrentlyActive = (room: Extract<ResolvedRoomRecord, { kin
   if (!room.isActive) return false;
   const activityMillis = firstValidTimeMillis(room.lastActivityAt, room.updatedAt, room.startedAt);
   return activityMillis !== null && Date.now() - activityMillis <= WATCH_PARTY_ROOM_ACTIVE_WINDOW_MS;
+};
+
+const isCommunicationRoomCurrentlyActive = (room: Extract<ResolvedRoomRecord, { kind: "communication" }>) => {
+  if (sanitizeText(room.status).toLowerCase() !== "active") return false;
+  const activityMillis = firstValidTimeMillis(room.lastActivityAt, room.updatedAt, room.createdAt);
+  return activityMillis !== null && Date.now() - activityMillis <= COMMUNICATION_ROOM_ACTIVE_WINDOW_MS;
 };
 
 const sanitizeMetadata = (value: unknown) => {
@@ -195,7 +208,7 @@ async function resolveTargetRoom(
   if (surface === "chat-call") {
     const communicationRoom = await adminClient
       .from("communication_rooms")
-      .select("room_id,host_user_id")
+      .select("room_id,host_user_id,status,created_at,updated_at,last_activity_at")
       .eq("room_id", roomName)
       .maybeSingle();
 
@@ -213,6 +226,10 @@ async function resolveTargetRoom(
       kind: "communication",
       roomName: sanitizeText(communicationRoom.data.room_id),
       hostUserId: sanitizeText(communicationRoom.data.host_user_id),
+      status: sanitizeText(communicationRoom.data.status) || "ended",
+      createdAt: sanitizeText(communicationRoom.data.created_at) || null,
+      updatedAt: sanitizeText(communicationRoom.data.updated_at) || null,
+      lastActivityAt: sanitizeText(communicationRoom.data.last_activity_at) || null,
       chatThreadId: chatThread.data ? sanitizeText(chatThread.data.id) : null,
     };
   }
@@ -303,7 +320,7 @@ async function userCanJoinAsRequestedRole(
 
   const membership = await adminClient
     .from("communication_room_memberships")
-    .select("role,membership_state")
+    .select("role,membership_state,last_seen_at")
     .eq("room_id", room.roomName)
     .eq("user_id", userId)
     .maybeSingle();
@@ -312,8 +329,10 @@ async function userCanJoinAsRequestedRole(
 
   const role = sanitizeText(membership.data.role).toLowerCase();
   const membershipState = sanitizeText(membership.data.membership_state).toLowerCase();
+  const lastSeenAt = sanitizeText(membership.data.last_seen_at);
 
   if (!ACTIVE_MEMBERSHIP_STATES.has(membershipState)) return false;
+  if (!isRecentTime(lastSeenAt, COMMUNICATION_MEMBERSHIP_ACTIVE_WINDOW_MS)) return false;
   if (participantRole === "viewer") return role === "host" || role === "participant";
   if (participantRole === "host") return role === "host";
   return role === "host";
@@ -396,6 +415,13 @@ Deno.serve(async (req) => {
           message: "Watch-Party Live tokens can only be issued for Party Room sources.",
         });
       }
+    }
+
+    if (room.kind === "communication" && !isCommunicationRoomCurrentlyActive(room)) {
+      return json(410, {
+        error: "room_expired",
+        message: "This Chi'llywood call has ended or expired. Return to the thread to start or join a fresh call.",
+      });
     }
 
     const userId = sanitizeText(authResult.user.id);

@@ -1215,6 +1215,7 @@ export function useCommunicationRoomSession({
         });
         setError("This communication room is unavailable.");
         setLoading(false);
+        onRoomEndedRef.current?.("ended");
         return;
       }
 
