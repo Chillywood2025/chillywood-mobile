@@ -320,7 +320,8 @@ Relationship to other rooms: Live Room is the canonical live-session shell on `/
 
 ### C. Exit path / transitions
 - Users can leave to the prior source surface, Home, or a related profile context.
-- In-room transitions can move between `Live First` and `Live Watch-Party` without leaving the route.
+- Host in-room transitions can move between `Live First` and `Live Watch-Party` without leaving the route.
+- Non-host entry into Live Stage resolves straight to `Live Watch-Party`; stale route state must not take viewers into `Live First` first.
 - Post-session flows can point to Profile / Channel, Chi'lly Chat follow-up, or rejoin reminders.
 - It must never hand off to Party Room or create a ghost communication destination.
 
@@ -335,6 +336,7 @@ Relationship to other rooms: Live Room is the canonical live-session shell on `/
 ### E. Permissions / visibility / roles
 - Host authority governs live state, mode transitions, and room policy.
 - Mode transitions are host-only. Non-host route params or local controls must not mutate `Live First` / `Live Watch-Party` state.
+- Non-hosts entering Live Stage should be corrected into `Live Watch-Party` before join/token preparation when stale route state disagrees.
 - Viewers can see and do only what the active room mode permits.
 - Participant state writes that affect speaker/camera/mute/remove authority must be backed by the authenticated room host.
 - Co-host or speaker-style roles can exist later, but role boundaries must stay visible and explicit.
@@ -423,7 +425,8 @@ Relationship to other rooms: Live Stage is the in-room presentation layer inside
 - Preconditions are successful Live Room entry and a valid stage mode determined by host or room state.
 
 ### C. Exit path / transitions
-- Users can move between `Live First` and `Live Watch-Party` inside the same room.
+- Hosts can move between `Live First` and `Live Watch-Party` inside the same room.
+- Viewers enter the Live Stage presentation through `Live Watch-Party`, not by visiting `Live First` first.
 - Leaving the stage means leaving the room or returning focus to the Live Room shell, not navigating elsewhere.
 - It must never hand off to Party Room or masquerade as a standalone player flow.
 

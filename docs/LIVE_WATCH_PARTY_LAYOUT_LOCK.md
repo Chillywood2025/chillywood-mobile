@@ -61,6 +61,7 @@ Locked structure:
 - Live Watch-Party stays people-first.
 - Live First must not show the Chi'lly Party Members box.
 - Live Watch-Party mode owns the Chi'lly Party Members box.
+- Viewer entry into Live Stage must resolve to Live Watch-Party mode; viewers must not be routed through Live First first.
 - The Chi'lly Party Members grid remains the approved visual home for other real room members and their live feeds.
 - The current user's own preview is not inside the Chi'lly Party Members grid.
 - In Live Watch-Party, the hero/focus feed should prefer the current device/local participant so the Chi'lly Party Members box can keep real other members visible.
@@ -86,6 +87,7 @@ Must not happen:
 
 - Do not redesign Live Stage.
 - Do not compact Live Stage into a different structure.
+- Do not make viewer Live Stage entry pass through Live First before Live Watch-Party.
 - Do not show the Chi'lly Party Members box in Live First.
 - Do not replace the Chi'lly Party Members grid with another visual model.
 - Do not move or hide visible comments.
@@ -208,6 +210,7 @@ Relevant files:
 Manual proof items:
 
 - Live Stage route opens at `/watch-party/live-stage/[partyId]`.
+- Viewer Live Stage entry resolves directly to Live Watch-Party mode.
 - Live Watch-Party layout still matches the approved current screen.
 - Live First does not show the Chi'lly Party Members box.
 - Live Watch-Party shows the Chi'lly Party Members box as the people-first visual home for other live feeds.

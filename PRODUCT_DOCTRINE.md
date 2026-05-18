@@ -82,7 +82,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - Premium access, ticketed events, and paid room entry are approved Chi'llywood directions, but they must stay compatible with the layered room-participation model defined in `ROOM_BLUEPRINT.md`.
 - Paid or premium access should grant room entry, entitlements, and audience privileges first; it should not automatically imply equal live-camera rights, equal visible tiles, or equal room authority.
 - Public v1 and near-term room truth must stay honest that large membership scale and true live-seat scale are different.
-- Live Stage role/access hardening is pushed: Live Room / Live Stage mode switching is host-only, Live First viewers cannot self-promote into camera/speaker seats, and participant-state writes that affect speaker/camera/mute/remove authority require the authenticated room host.
+- Live Stage role/access hardening is pushed: Live Room / Live Stage mode switching is host-only, non-host Live Stage entry resolves straight into Live Watch-Party instead of Live First, Live First viewers cannot self-promote into camera/speaker seats, and participant-state writes that affect speaker/camera/mute/remove authority require the authenticated room host.
 - Future premium rooms may expand featured capacity, moderation tooling, entitlements, and audience controls, but should still treat host, seated, featured, and audience layers as distinct.
 - Future infrastructure may raise simultaneous live-seat limits over time, but ticketed or premium growth should not be described as `500+` equal live feeds until the media stack actually supports that.
 

@@ -50,6 +50,7 @@ Do not mix `Watch-Party Live` and `Live Watch-Party`.
 
 Current live/watch-party role truth:
 - Live Stage / Live Room mode switching is host-only; non-host route-param attempts must resolve back to non-mutating viewer state.
+- Non-host Live Stage entry resolves to `Live Watch-Party` / hybrid before LiveKit join preparation; stale `Live First` route state must not make viewers enter Live First first.
 - Live First viewers cannot self-promote into camera/speaker seats on stage entry.
 - Shared participant-state writes that affect speaker/camera/mute/remove state require the authenticated room host.
 

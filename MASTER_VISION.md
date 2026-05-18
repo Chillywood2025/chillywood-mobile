@@ -61,6 +61,7 @@ Do not:
 - `Watch-Party Live` means watch content together while viewers can see each other.
 - Full access to `Live First`, `Live Watch-Party`, and `Watch-Party Live` is Premium. Free users do not get full room/session/token/connect access.
 - Live Room / Live Stage mode switching is host-only; non-host route-param attempts must not mutate `Live First` / `Live Watch-Party` mode.
+- Non-host Live Stage entry resolves straight into `Live Watch-Party`; viewers must not pass through or enter `Live First` because stale route state says `live`.
 - Live First viewers must not self-promote into camera/speaker seats; speaker/camera access requires host-granted room role/state.
 - Party flow is `Player -> Watch-Party Live -> Party Waiting Room -> Party Room -> shared watch-party player`.
 - Live Stage belongs only to the separate Live flow.
