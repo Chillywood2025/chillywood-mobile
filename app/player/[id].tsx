@@ -13,6 +13,7 @@ import {
     ActivityIndicator,
     Animated,
     AppState,
+    BackHandler,
     Easing,
     FlatList,
     Image,
@@ -817,7 +818,6 @@ export default function PlayerScreen() {
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [partyCommentSending, setPartyCommentSending] = useState(false);
-  const [watchPartyPeopleOpen, setWatchPartyPeopleOpen] = useState(false);
   const [watchPartyMenuOpen, setWatchPartyMenuOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [liveFilterSheetOpen, setLiveFilterSheetOpen] = useState(false);
@@ -3555,6 +3555,17 @@ export default function PlayerScreen() {
     });
   }, [partyId, titleId]);
 
+  useEffect(() => {
+    if (Platform.OS !== "android" || !inWatchParty || isLiveModeFlag || !partyId) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      onReturnToPartyRoom();
+      return true;
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [inWatchParty, isLiveModeFlag, onReturnToPartyRoom, partyId]);
+
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
     setPlaybackRate(rate);
@@ -3569,25 +3580,13 @@ export default function PlayerScreen() {
   const onToggleWatchPartyComments = useCallback(() => {
     if (!inWatchParty || isLiveModeFlag) return;
     resetAutoHideTimer();
-    setWatchPartyPeopleOpen(false);
     setWatchPartyMenuOpen(false);
     setPartyCommentsOpen((value) => !value);
-  }, [inWatchParty, isLiveModeFlag, resetAutoHideTimer]);
-
-  const onToggleWatchPartyPeople = useCallback(() => {
-    if (!inWatchParty || isLiveModeFlag) return;
-    resetAutoHideTimer();
-    setPartyCommentsOpen(false);
-    setWatchPartyMenuOpen(false);
-    setActiveParticipantId(null);
-    setActiveParticipantToolsId(null);
-    setWatchPartyPeopleOpen((value) => !value);
   }, [inWatchParty, isLiveModeFlag, resetAutoHideTimer]);
 
   const onToggleWatchPartyMenu = useCallback(() => {
     if (!inWatchParty || isLiveModeFlag) return;
     resetAutoHideTimer();
-    setWatchPartyPeopleOpen(false);
     setPartyCommentsOpen(false);
     setWatchPartyMenuOpen((value) => !value);
   }, [inWatchParty, isLiveModeFlag, resetAutoHideTimer]);
@@ -3605,7 +3604,6 @@ export default function PlayerScreen() {
   }, [onToggleMyList, resetAutoHideTimer]);
 
   const onPressWatchPartyRoom = useCallback(() => {
-    setWatchPartyPeopleOpen(false);
     setPartyCommentsOpen(false);
     setWatchPartyMenuOpen(false);
     onReturnToPartyRoom();
@@ -4640,7 +4638,6 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!isSharedPartyPlayback) {
-      setWatchPartyPeopleOpen(false);
       setWatchPartyMenuOpen(false);
       return;
     }
@@ -4648,7 +4645,6 @@ export default function PlayerScreen() {
     setSpeedMenuOpen(false);
 
     if (!effectiveControlsVisible) {
-      setWatchPartyPeopleOpen(false);
       setWatchPartyMenuOpen(false);
       setPartyCommentsOpen(false);
     }
@@ -5411,13 +5407,6 @@ export default function PlayerScreen() {
             <Text style={[styles.watchPartyDockActionText, partyCommentsOpen && styles.watchPartyDockActionTextActive]}>Room Comments</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.watchPartyDockActionBtn, watchPartyPeopleOpen && styles.watchPartyDockActionBtnActive]}
-            onPress={onToggleWatchPartyPeople}
-            activeOpacity={0.88}
-          >
-            <Text style={[styles.watchPartyDockActionText, watchPartyPeopleOpen && styles.watchPartyDockActionTextActive]}>People</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.watchPartyDockActionBtn, watchPartyMenuOpen && styles.watchPartyDockActionBtnActive]}
             onPress={onToggleWatchPartyMenu}
             activeOpacity={0.88}
@@ -5467,15 +5456,6 @@ export default function PlayerScreen() {
           </View>
         ) : null}
 
-        {watchPartyPeopleOpen ? (
-          <View style={[styles.watchPartyDockCard, styles.watchPartyPeopleCard]}>
-            <Text style={styles.watchPartyDockCardTitle}>Room Context</Text>
-            <Text style={styles.watchPartyPeopleCardBody}>
-              Playback stays primary here. Open Party Room for the full room shell, or use the people rail below for lightweight context.
-            </Text>
-            {renderParticipantPanel(true, true)}
-          </View>
-        ) : null}
       </Animated.View>
     </View>
   );
@@ -6057,7 +6037,7 @@ export default function PlayerScreen() {
             <Text style={styles.playerAccessTitle}>{title}</Text>
             <Text style={styles.playerAccessBody}>{body}</Text>
             <View style={styles.playerAccessActions}>
-              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
                 <Text style={styles.playerAccessSecondaryText}>Back</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -6068,14 +6048,11 @@ export default function PlayerScreen() {
                     return;
                   }
                   if (runtimeBlockedCopy) {
-                    router.back();
+                    onReturnToPartyRoom();
                     return;
                   }
                   if (blockedAccess || watchPartyEntryMissing) {
-                    router.replace({
-                      pathname: "/watch-party/[partyId]",
-                      params: { partyId },
-                    });
+                    onReturnToPartyRoom();
                     return;
                   }
 
@@ -8350,15 +8327,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     lineHeight: 17,
-  },
-  watchPartyPeopleCard: {
-    paddingBottom: 10,
-  },
-  watchPartyPeopleCardBody: {
-    color: "#BCC6D8",
-    fontSize: 10.5,
-    fontWeight: "700",
-    lineHeight: 15,
   },
   watchPartyDockMenuRow: {
     flexDirection: "row",

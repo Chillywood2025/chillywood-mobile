@@ -406,6 +406,8 @@ No free live/watch-party preview mode exists. Do not add preview behavior unless
 - Party flow is `Player -> Watch-Party Live -> Party Waiting Room -> Party Room -> shared watch-party player`
 - Live Stage belongs only to the separate Live flow
 - Party Room must not hand off to Live Stage
+- Party Room must not show the Chi'llyfects foundation box for launch users; real Chi'llyfect processing remains a later explicit lane
+- Watch-Party Live Player dock keeps `Party Room`, `Room Comments`, and `Controls`; people management belongs in Party Room
 
 ## Room Blueprint Rule
 - `ROOM_BLUEPRINT.md` is the durable room-by-room product reference for Chi'llywood's major rooms and surfaces

@@ -59,11 +59,6 @@ import {
     reportDebugQuery,
 } from "../../_lib/devDebug";
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
-import {
-  LIVE_EFFECT_OFF_ID,
-  getLiveEffectById,
-  getLiveEffectStatusCopy,
-} from "../../_lib/liveEffects";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
     getMonetizationAccessSheetPresentation,
@@ -128,7 +123,6 @@ import { AccessSheet, type AccessSheetReason } from "../../components/monetizati
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
-import { LiveEffectsPanel } from "../../components/live/live-effects-sheet";
 import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
@@ -334,7 +328,6 @@ export default function WatchPartyRoomScreen() {
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState("");
   const [chatAttachmentFile, setChatAttachmentFile] = useState<SocialAttachmentFile | null>(null);
-  const [selectedPartyEffectId, setSelectedPartyEffectId] = useState(LIVE_EFFECT_OFF_ID);
   const isLive = true;
   const [, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [participantReactions, setParticipantReactions] = useState<Record<string, ParticipantReaction>>({});
@@ -362,6 +355,7 @@ export default function WatchPartyRoomScreen() {
   const [reportTarget, setReportTarget] = useState<{ type: "room" | "participant"; targetId: string; label: string } | null>(null);
   // Watch-Party Live controls are intentionally persistent and must not auto-hide.
   const [watchPartyLiveControlsVisible] = useState(true);
+  const [watchPartyLiveOpening, setWatchPartyLiveOpening] = useState(false);
   const [joinRetryToken, setJoinRetryToken] = useState(0);
   const chatScrollRef = useRef<ScrollView>(null);
   const roomScrollRef = useRef<ScrollView>(null);
@@ -392,6 +386,7 @@ export default function WatchPartyRoomScreen() {
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const pinCoachTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const watchPartyLiveOpeningRef = useRef(false);
   const activityPulse = useRef(new Animated.Value(0)).current;
   const liveBubbleOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
@@ -1082,7 +1077,10 @@ export default function WatchPartyRoomScreen() {
   const allowLocalCameraPreview = isNativeCameraPlatform && isFocused && !partyRoomCameraPreviewSuppressed;
 
   useEffect(() => {
-    if (isFocused) setPartyRoomCameraPreviewSuppressed(false);
+    if (!isFocused) return;
+    setPartyRoomCameraPreviewSuppressed(false);
+    watchPartyLiveOpeningRef.current = false;
+    setWatchPartyLiveOpening(false);
   }, [isFocused]);
 
   useEffect(() => {
@@ -1638,124 +1636,147 @@ export default function WatchPartyRoomScreen() {
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async () => {
-    const nextPartyId = String(room?.partyId ?? partyId ?? "").trim();
-    let targetSourceType = resolveWatchPartySourceType(room);
-    let targetSourceId = resolveWatchPartySourceId(room);
-    let targetTitleId = String(room?.titleId ?? "").trim();
+    if (watchPartyLiveOpeningRef.current) return;
 
-    if ((!targetSourceId || !targetSourceType) && nextPartyId) {
-      const latestRoom = await getPartyRoom(nextPartyId).catch(() => null);
-      targetSourceType = resolveWatchPartySourceType(latestRoom);
-      targetSourceId = resolveWatchPartySourceId(latestRoom);
-      targetTitleId = String(latestRoom?.titleId ?? "").trim();
-    }
+    watchPartyLiveOpeningRef.current = true;
+    setWatchPartyLiveOpening(true);
 
-    if (!targetSourceId) {
-      targetTitleId = String(titleIdHint ?? "").trim();
-      targetSourceType = targetTitleId ? "platform_title" : targetSourceType;
-      targetSourceId = targetTitleId || null;
-    }
+    const resetWatchPartyLiveOpening = () => {
+      watchPartyLiveOpeningRef.current = false;
+      setWatchPartyLiveOpening(false);
+    };
 
-    if (!nextPartyId || !targetSourceId) {
-      Alert.alert("Unable to go live", "This room is missing required watch-party context.");
-      return;
-    }
+    try {
+      const nextPartyId = String(room?.partyId ?? partyId ?? "").trim();
+      let targetSourceType = resolveWatchPartySourceType(room);
+      let targetSourceId = resolveWatchPartySourceId(room);
+      let targetTitleId = String(room?.titleId ?? "").trim();
 
-    const premiumAccess = await requireWatchPartyLivePremium({ accessKey: targetSourceId || nextPartyId }).catch(() => null);
-    if (!premiumAccess?.allowed) {
-      if (isRuntimeControlBlockedAccess(premiumAccess)) {
-        const blockedCopy = getRuntimeControlBlockedCopy(premiumAccess);
-        Alert.alert(blockedCopy.title, blockedCopy.message);
-        setAccessGate(null);
-        setAccessSheetVisible(false);
-        trackEvent("runtime_control_blocked", {
+      if ((!targetSourceId || !targetSourceType) && nextPartyId) {
+        const latestRoom = await getPartyRoom(nextPartyId).catch(() => null);
+        targetSourceType = resolveWatchPartySourceType(latestRoom);
+        targetSourceId = resolveWatchPartySourceId(latestRoom);
+        targetTitleId = String(latestRoom?.titleId ?? "").trim();
+      }
+
+      if (!targetSourceId) {
+        targetTitleId = String(titleIdHint ?? "").trim();
+        targetSourceType = targetTitleId ? "platform_title" : targetSourceType;
+        targetSourceId = targetTitleId || null;
+      }
+
+      if (!nextPartyId || !targetSourceId) {
+        resetWatchPartyLiveOpening();
+        Alert.alert("Unable to go live", "This room is missing required watch-party context.");
+        return;
+      }
+
+      const premiumAccess = await requireWatchPartyLivePremium({ accessKey: targetSourceId || nextPartyId }).catch(() => null);
+      if (!premiumAccess?.allowed) {
+        resetWatchPartyLiveOpening();
+        if (isRuntimeControlBlockedAccess(premiumAccess)) {
+          const blockedCopy = getRuntimeControlBlockedCopy(premiumAccess);
+          Alert.alert(blockedCopy.title, blockedCopy.message);
+          setAccessGate(null);
+          setAccessSheetVisible(false);
+          trackEvent("runtime_control_blocked", {
+            surface: "party-room-watch-party-live",
+            controlKey: premiumAccess?.runtimeControlKey ?? "watch_party_live_enabled",
+            roomId: nextPartyId,
+          });
+          return;
+        }
+        if (premiumAccess) {
+          setAccessGate({
+            source: "watch_party_live",
+            access: premiumAccess,
+            accessKey: targetSourceId || nextPartyId,
+          });
+        }
+        setAccessSheetVisible(true);
+        trackEvent("monetization_gate_shown", {
           surface: "party-room-watch-party-live",
-          controlKey: premiumAccess?.runtimeControlKey ?? "watch_party_live_enabled",
+          reason: premiumAccess?.reason ?? "premium_required",
           roomId: nextPartyId,
         });
         return;
       }
-      if (premiumAccess) {
-        setAccessGate({
-          source: "watch_party_live",
-          access: premiumAccess,
-          accessKey: targetSourceId || nextPartyId,
+
+      const participantIdentity = String(myUserIdRef.current ?? "").trim() || "anon";
+      const participantName = resolveIdentityName(
+        myProfileUsernameRef.current,
+        myUsernameRef.current,
+        "Guest",
+      );
+      const participantRole = myRoleRef.current === "host" ? "host" : "speaker";
+
+      const joinResult = await prepareLiveKitJoinBoundary({
+        surface: "watch-party-live",
+        roomName: nextPartyId,
+        participantIdentity,
+        participantName,
+        participantRole,
+        metadata: {
+          roomCode: room?.roomCode ?? null,
+          titleId: targetSourceType === "platform_title" ? targetSourceId : null,
+          sourceType: targetSourceType,
+          sourceId: targetSourceId,
+          source: "party-room-watch-party-live",
+        },
+      });
+
+      if (joinResult.status === "ready") {
+        debugLog("livekit", "prepared watch-party-live join contract", {
+          roomName: joinResult.roomName,
+          endpoint: joinResult.endpoint,
+          participantRole: joinResult.participantRole,
+          requestedGrants: joinResult.requestedGrants,
         });
-      }
-      setAccessSheetVisible(true);
-      trackEvent("monetization_gate_shown", {
-        surface: "party-room-watch-party-live",
-        reason: premiumAccess?.reason ?? "premium_required",
-        roomId: nextPartyId,
-      });
-      return;
-    }
-
-    const participantIdentity = String(myUserIdRef.current ?? "").trim() || "anon";
-    const participantName = resolveIdentityName(
-      myProfileUsernameRef.current,
-      myUsernameRef.current,
-      "Guest",
-    );
-    const participantRole = myRoleRef.current === "host" ? "host" : "speaker";
-
-    const joinResult = await prepareLiveKitJoinBoundary({
-      surface: "watch-party-live",
-      roomName: nextPartyId,
-      participantIdentity,
-      participantName,
-      participantRole,
-      metadata: {
-        roomCode: room?.roomCode ?? null,
-        titleId: targetSourceType === "platform_title" ? targetSourceId : null,
-        sourceType: targetSourceType,
-        sourceId: targetSourceId,
-        source: "party-room-watch-party-live",
-      },
-    });
-
-    if (joinResult.status === "ready") {
-      debugLog("livekit", "prepared watch-party-live join contract", {
-        roomName: joinResult.roomName,
-        endpoint: joinResult.endpoint,
-        participantRole: joinResult.participantRole,
-        requestedGrants: joinResult.requestedGrants,
-      });
-    } else {
-      debugLog("livekit", "watch-party-live join contract unavailable", {
-        reason: joinResult.reason,
-        roomName: joinResult.roomName,
-        endpoint: joinResult.endpoint,
-      });
-      if (joinResult.reason === "request_failed" || joinResult.reason === "invalid_response") {
-        reportRuntimeError("livekit-watch-party-contract", new Error(joinResult.message), {
+      } else {
+        debugLog("livekit", "watch-party-live join contract unavailable", {
           reason: joinResult.reason,
           roomName: joinResult.roomName,
+          endpoint: joinResult.endpoint,
         });
+        if (joinResult.reason === "request_failed" || joinResult.reason === "invalid_response") {
+          reportRuntimeError("livekit-watch-party-contract", new Error(joinResult.message), {
+            reason: joinResult.reason,
+            roomName: joinResult.roomName,
+          });
+        }
+        resetWatchPartyLiveOpening();
+        setPartyRoomCameraPreviewSuppressed(false);
+        Alert.alert(
+          "Live feed unavailable",
+          joinResult.message || "The LiveKit room did not finish preparing. Stay in the room and try again.",
+        );
+        return;
       }
+
+      setPartyRoomCameraPreviewSuppressed(true);
+
+      debugLog("watch-party", "open player", {
+        sourceType: targetSourceType,
+        sourceId: targetSourceId,
+      });
+      router.push({
+        pathname: "/player/[id]",
+        params: {
+          id: targetSourceId,
+          partyId: nextPartyId,
+          liveKitIdentity: participantIdentity,
+          ...(targetSourceType === "creator_video" ? { source: "creator-video" } : {}),
+        },
+      });
+    } catch (error) {
+      resetWatchPartyLiveOpening();
       setPartyRoomCameraPreviewSuppressed(false);
+      reportRuntimeError("watch-party-live-open", error, { partyId });
       Alert.alert(
-        "Live feed unavailable",
-        joinResult.message || "The LiveKit room did not finish preparing. Stay in the room and try again.",
+        "Unable to open Watch-Party Live",
+        "The shared Player did not finish opening. Stay in the room and try again.",
       );
-      return;
     }
-
-    setPartyRoomCameraPreviewSuppressed(true);
-
-    debugLog("watch-party", "open player", {
-      sourceType: targetSourceType,
-      sourceId: targetSourceId,
-    });
-    router.push({
-      pathname: "/player/[id]",
-      params: {
-        id: targetSourceId,
-        partyId: nextPartyId,
-        liveKitIdentity: participantIdentity,
-        ...(targetSourceType === "creator_video" ? { source: "creator-video" } : {}),
-      },
-    });
   }, [
     partyId,
     room,
@@ -2374,8 +2395,6 @@ export default function WatchPartyRoomScreen() {
   const partyRoomSourceId = resolveWatchPartySourceId(room);
   const partyRoomSourceLabel = partyRoomSourceType === "creator_video" ? "creator_video" : "platform_title";
   const latestRoomMessages = messages.slice(-4);
-  const selectedPartyEffect = getLiveEffectById(selectedPartyEffectId);
-  const selectedPartyEffectCopy = getLiveEffectStatusCopy(selectedPartyEffect);
   const roomLabels = buildSharedRoomLabels({
     isLiveRoom,
     branding: {
@@ -2551,8 +2570,13 @@ export default function WatchPartyRoomScreen() {
               <Text numberOfLines={1} style={styles.watchPartyScreenMetaValue}>{roomCodeCardValue}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.watchCTA} onPress={onWatchTogether} activeOpacity={0.88}>
-            <Text style={styles.watchCTAText}>Open Shared Player</Text>
+          <TouchableOpacity
+            style={[styles.watchCTA, watchPartyLiveOpening && styles.watchCTADisabled]}
+            onPress={onWatchTogether}
+            disabled={watchPartyLiveOpening}
+            activeOpacity={0.88}
+          >
+            <Text style={styles.watchCTAText}>{watchPartyLiveOpening ? "Opening Player..." : "Open Shared Player"}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -2566,12 +2590,17 @@ export default function WatchPartyRoomScreen() {
       <View style={styles.partyRoomActionDockCard}>
         <View style={styles.partyRoomActionDock}>
           <TouchableOpacity
-            style={[styles.partyRoomDockButton, styles.partyRoomDockButtonPrimary]}
+            style={[
+              styles.partyRoomDockButton,
+              styles.partyRoomDockButtonPrimary,
+              watchPartyLiveOpening && styles.partyRoomDockButtonDisabled,
+            ]}
             activeOpacity={0.84}
             onPress={onWatchTogether}
+            disabled={watchPartyLiveOpening}
           >
             <MaterialIcons name="play-arrow" size={20} color="#FFFFFF" />
-            <Text style={styles.partyRoomDockButtonText}>Player</Text>
+            <Text style={styles.partyRoomDockButtonText}>{watchPartyLiveOpening ? "Opening" : "Player"}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.partyRoomDockButton}
@@ -2698,22 +2727,6 @@ export default function WatchPartyRoomScreen() {
           </TouchableOpacity>
         </View>
         {chatError ? <Text style={styles.partyCommentError}>{chatError}</Text> : null}
-      </View>
-    );
-  };
-
-  const renderPartyRoomEffectsCard = () => {
-    if (isLiveRoom) return null;
-
-    return (
-      <View style={styles.partyEffectsCard}>
-        <LiveEffectsPanel
-          selectedEffectId={selectedPartyEffectId}
-          onSelectEffect={setSelectedPartyEffectId}
-          cameraAvailable={false}
-          surfaceLabel="Watch-Party Live"
-        />
-        <Text style={styles.partyEffectsFootnote}>{selectedPartyEffectCopy}</Text>
       </View>
     );
   };
@@ -3199,7 +3212,6 @@ export default function WatchPartyRoomScreen() {
 
         {!isLiveRoom ? renderPartyRoomSetupShell() : null}
         {renderPartyRoomCommentsCard()}
-        {renderPartyRoomEffectsCard()}
 
         {/* ── Participant list ────────────────────────────────────────── */}
         {isLiveRoom && waitingRoomParticipantSummary.totalCount > 0 ? (
@@ -4423,6 +4435,9 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
+  watchCTADisabled: {
+    opacity: 0.58,
+  },
   watchCTALiveOn: {
     backgroundColor: "#B80F31",
   },
@@ -4466,6 +4481,9 @@ const styles = StyleSheet.create({
   partyRoomDockButtonLeave: {
     borderColor: "rgba(255,115,140,0.34)",
     backgroundColor: "rgba(220,20,60,0.13)",
+  },
+  partyRoomDockButtonDisabled: {
+    opacity: 0.58,
   },
   partyRoomDockButtonText: {
     color: "#EAF1FF",
@@ -4672,22 +4690,6 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     fontWeight: "700",
   },
-  partyEffectsCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.14)",
-    backgroundColor: "rgba(8,10,16,0.72)",
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 10,
-  },
-  partyEffectsFootnote: {
-    color: "#AEB9CF",
-    fontSize: 11.5,
-    lineHeight: 16,
-    fontWeight: "700",
-  },
-
   // Reactions
   interactionWrap: { gap: 0 },
   reactionsPanel: {

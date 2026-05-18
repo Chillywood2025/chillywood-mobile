@@ -339,7 +339,7 @@ assertBefore(
 assertBefore(
   partyRoomWatchTogether,
   "setPartyRoomCameraPreviewSuppressed(false);",
-  "Alert.alert(\n        \"Live feed unavailable\"",
+  "\"Live feed unavailable\"",
   "Party Room must restore expo-camera preview before reporting an unavailable LiveKit handoff.",
 );
 assertBefore(
