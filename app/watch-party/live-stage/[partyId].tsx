@@ -931,16 +931,23 @@ export default function WatchPartyLiveStageScreen({
 
   useEffect(() => {
     const normalizedRouteMode = normalizeSharedRoomMode(modeParamValue, "live");
-    if (normalizedRouteMode !== "hybrid") {
-      setStageMode((currentMode) => (currentMode === normalizedRouteMode ? currentMode : normalizedRouteMode));
+    if (!room || !myUserId) {
+      if (normalizedRouteMode !== "hybrid") {
+        setStageMode((currentMode) => (currentMode === normalizedRouteMode ? currentMode : normalizedRouteMode));
+      }
       return;
     }
 
-    if (!room || !myUserId) return;
-
     if (!isHost) {
-      setStageMode("live");
-      router.setParams({ mode: "live" });
+      setStageMode((currentMode) => (currentMode === "hybrid" ? currentMode : "hybrid"));
+      if (normalizedRouteMode !== "hybrid") {
+        router.setParams({ mode: "hybrid" });
+      }
+      return;
+    }
+
+    if (normalizedRouteMode !== "hybrid") {
+      setStageMode((currentMode) => (currentMode === normalizedRouteMode ? currentMode : normalizedRouteMode));
       return;
     }
 
@@ -2471,7 +2478,20 @@ export default function WatchPartyLiveStageScreen({
   ]);
 
   const onEnterLiveStage = useCallback(async () => {
-    if (!(await requireLiveStagePremium(stageMode === "hybrid" ? "live_watch_party" : "live_first", "route"))) {
+    const entryStageMode: SharedRoomMode = isHost ? stageMode : "hybrid";
+    const entryParticipantRole: LiveKitTokenReady["participantRole"] =
+      !isHost && entryStageMode === "hybrid"
+        ? "speaker"
+        : liveKitParticipantRole;
+
+    if (!isHost && stageMode !== "hybrid") {
+      setStageMode("hybrid");
+      if (modeParamValue !== "hybrid") {
+        router.setParams({ mode: "hybrid" });
+      }
+    }
+
+    if (!(await requireLiveStagePremium(entryStageMode === "hybrid" ? "live_watch_party" : "live_first", "route"))) {
       setLiveKitJoinContract(null);
       setLiveKitJoinUnavailable(null);
       return;
@@ -2481,14 +2501,16 @@ export default function WatchPartyLiveStageScreen({
       partyId,
       isHost,
       liveKitFoundationEnabled,
-      participantRole: liveKitParticipantRole,
-      stageMode,
+      participantRole: entryParticipantRole,
+      stageMode: entryStageMode,
       trackedUserReady: !!trackedUserId && trackedUserId !== "anon",
     });
 
     if (liveKitFoundationEnabled && partyId) {
       setLiveKitJoinUnavailable(null);
-      const participantRole = await resolveLiveKitStageEntryRole();
+      const participantRole = entryParticipantRole === liveKitParticipantRole
+        ? await resolveLiveKitStageEntryRole()
+        : entryParticipantRole;
       const joinResult = await prepareLiveKitJoinBoundary({
         surface: "live-stage",
         roomName: partyId,
@@ -2497,7 +2519,7 @@ export default function WatchPartyLiveStageScreen({
         participantRole,
         metadata: {
           roomCode: room?.roomCode ?? null,
-          stageMode,
+          stageMode: entryStageMode,
           source: source || null,
         },
       });
@@ -2560,11 +2582,13 @@ export default function WatchPartyLiveStageScreen({
     isHost,
     liveKitFoundationEnabled,
     liveKitParticipantRole,
+    modeParamValue,
     partyId,
     requireLiveStagePremium,
     resolveLiveKitStageEntryRole,
     resolvedCurrentUsername,
     room?.roomCode,
+    router,
     source,
     stageMode,
     stageOverlayMotion,
