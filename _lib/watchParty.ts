@@ -165,6 +165,7 @@ type MembershipUpsertOptions = {
   cameraPreviewUrl?: string;
   markJoinedAt?: boolean;
   markLeftAt?: boolean;
+  preserveHostAuthority?: boolean;
 };
 
 type WatchPartyRoomCreateOptions = {
@@ -696,6 +697,27 @@ async function fetchPartyRoomRow(lookupPartyId: string): Promise<PartyRoomRow | 
   return null;
 }
 
+async function fetchPartyMembershipRow(partyId: string, userId: string): Promise<PartyMembershipRow | null> {
+  const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
+  const normalizedUserId = String(userId ?? "").trim();
+  if (!normalizedPartyId || !normalizedUserId) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from(WATCH_PARTY_ROOM_MEMBERSHIPS_TABLE)
+      .select(PARTY_ROOM_MEMBERSHIP_SELECT)
+      .eq("party_id", normalizedPartyId)
+      .eq("user_id", normalizedUserId)
+      .returns<PartyMembershipRow>()
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveWritableUserId(explicitUserId?: string): Promise<string | null> {
   const authBackedId = await getAuthBackedUserId();
   if (authBackedId) return authBackedId;
@@ -714,13 +736,43 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
   const room = await getPartyRoom(partyId);
   if (!room) return null;
 
-  const role: WatchPartyRole = options.role ?? (writableUserId === room.hostUserId ? "host" : "viewer");
-  const canSpeak = typeof options.canSpeak === "boolean" ? options.canSpeak : role === "host";
-  const stageRole = options.stageRole ?? deriveWatchPartyStageRole({
-    role,
-    canSpeak,
-  });
-  const membershipState = options.membershipState ?? "active";
+  const isLeaving = options.markLeftAt === true;
+  const isRoomHost = writableUserId === room.hostUserId;
+  const existingMembershipRow = options.preserveHostAuthority
+    ? await fetchPartyMembershipRow(partyId, writableUserId)
+    : null;
+  const existingMembership = existingMembershipRow ? rowToMembership(existingMembershipRow) : null;
+  const shouldPreserveHostAuthority = !!options.preserveHostAuthority && !!existingMembership && !isRoomHost && !isLeaving;
+  const preservedStageRole = existingMembership?.stageRole === "host" ? "listener" : existingMembership?.stageRole;
+  const preservedCanSpeak = existingMembership?.stageRole === "host" || existingMembership?.role === "host"
+    ? false
+    : !!existingMembership?.canSpeak;
+  const role: WatchPartyRole = isRoomHost ? "host" : "viewer";
+  const canSpeak = isRoomHost && !isLeaving
+    ? true
+    : shouldPreserveHostAuthority
+      ? preservedCanSpeak
+      : typeof options.canSpeak === "boolean"
+        ? options.canSpeak
+        : false;
+  const stageRole = isRoomHost && !isLeaving
+    ? "host"
+    : shouldPreserveHostAuthority
+      ? (preservedStageRole ?? "listener")
+      : options.stageRole ?? deriveWatchPartyStageRole({
+        role,
+        canSpeak,
+      });
+  const isMuted = shouldPreserveHostAuthority ? existingMembership.isMuted : !!options.isMuted;
+  const requestedMembershipState = options.membershipState ?? "active";
+  const membershipState = shouldPreserveHostAuthority && existingMembership.membershipState === "removed"
+    ? "removed"
+    : requestedMembershipState;
+  const leftAt = options.markLeftAt
+    ? now
+    : shouldPreserveHostAuthority && existingMembership.membershipState === "removed"
+      ? existingMembership.leftAt ?? null
+      : null;
 
   const payload: PartyMembershipInsert = {
     party_id: partyId,
@@ -728,7 +780,7 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
     role,
     stage_role: stageRole,
     can_speak: canSpeak,
-    is_muted: !!options.isMuted,
+    is_muted: isMuted,
     membership_state: membershipState,
     camera_enabled: !!options.cameraEnabled,
     mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
@@ -737,7 +789,7 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
     camera_preview_url: String(options.cameraPreviewUrl ?? "").trim() || null,
     joined_at: options.markJoinedAt === false ? undefined : now,
     last_seen_at: now,
-    left_at: options.markLeftAt ? now : null,
+    left_at: leftAt,
     updated_at: now,
   };
 
@@ -1138,6 +1190,7 @@ export async function joinPartyRoomSession(options: MembershipUpsertOptions): Pr
     membershipState: "active",
     markJoinedAt: true,
     markLeftAt: false,
+    preserveHostAuthority: true,
   });
   if (membership) void touchActivePartyRoomHeartbeat(room, membership.userId);
   return membership;
@@ -1154,6 +1207,7 @@ export async function touchPartyRoomSession(options: MembershipUpsertOptions): P
     membershipState: options.membershipState ?? "active",
     markJoinedAt: false,
     markLeftAt: false,
+    preserveHostAuthority: true,
   });
   if (membership) void touchActivePartyRoomHeartbeat(room, membership.userId);
   return membership;
@@ -1233,6 +1287,8 @@ export async function setPartyParticipantState(
     return null;
   }
 
+  const currentMembershipRow = await fetchPartyMembershipRow(normalizedPartyId, normalizedTargetUserId);
+  const currentMembership = currentMembershipRow ? rowToMembership(currentMembershipRow) : null;
   const now = new Date().toISOString();
   const updates: PartyMembershipUpdate = {
     updated_at: now,
@@ -1250,11 +1306,15 @@ export async function setPartyParticipantState(
   if (changes.cameraPreviewUrl !== undefined) updates.camera_preview_url = String(changes.cameraPreviewUrl ?? "").trim() || null;
   if (changes.leftAt !== undefined) updates.left_at = changes.leftAt;
 
-  const nextRole = String(updates.role ?? "").trim().toLowerCase();
-  const nextCanSpeak = typeof updates.can_speak === "boolean" ? updates.can_speak : changes.canSpeak;
+  const nextRole = String(updates.role ?? currentMembership?.role ?? "viewer").trim().toLowerCase();
+  const nextCanSpeak = typeof updates.can_speak === "boolean" ? updates.can_speak : currentMembership?.canSpeak;
+  const shouldPreserveStageRole = changes.stageRole === undefined
+    && changes.canSpeak === undefined
+    && changes.role === undefined;
   updates.stage_role = changes.stageRole ?? deriveWatchPartyStageRole({
     role: nextRole || undefined,
     canSpeak: nextCanSpeak,
+    currentStageRole: shouldPreserveStageRole ? currentMembership?.stageRole : undefined,
   });
 
   const { data, error } = await supabase
