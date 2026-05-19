@@ -83,6 +83,7 @@ import { supabase } from "../../_lib/supabase";
 import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
 import {
     applyHostAction,
+    decodePartySeatRequestMessage,
     deletePartyMessage,
     getActivePartyMemberships,
     getPartyRoom,
@@ -335,6 +336,7 @@ export default function WatchPartyRoomScreen() {
   const [activeParticipantId, setActiveParticipantId] = useState<string>("");
   const [participantPresentationById, setParticipantPresentationById] = useState<Record<string, "compact" | "expanded">>({});
   const [participantStateById, setParticipantStateById] = useState<Record<string, SharedParticipantLocalState>>({});
+  const [participantSeatRequestById, setParticipantSeatRequestById] = useState<Record<string, boolean>>({});
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [tapPulseById, setTapPulseById] = useState<Record<string, boolean>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<LiveBubbleParticipant | null>(null);
@@ -568,6 +570,15 @@ export default function WatchPartyRoomScreen() {
       };
     });
     setParticipantStateById(nextParticipantStateById);
+    setParticipantSeatRequestById((prev) => {
+      const next = { ...prev };
+      snapshot.memberships.forEach((membership) => {
+        if (membership.stageRole === "speaker" || membership.stageRole === "host" || membership.membershipState !== "active") {
+          next[membership.userId] = false;
+        }
+      });
+      return next;
+    });
   }, []);
 
   const refreshRoomSnapshot = useCallback(async (userId?: string | null) => {
@@ -812,11 +823,12 @@ export default function WatchPartyRoomScreen() {
 
         if (!cancelled && recentRows?.length) {
           const orderedRows = [...recentRows].reverse();
+          const visibleRows = orderedRows.filter((row) => !decodePartySeatRequestMessage(row.text));
           const attachmentsByMessageId = await readSocialAttachmentsForSurfaces(
             "watch_party_room_message",
-            orderedRows.map((row) => String(row.id ?? "")),
+            visibleRows.map((row) => String(row.id ?? "")),
           );
-          const loaded: LocalMsg[] = orderedRows
+          const loaded: LocalMsg[] = visibleRows
             .map((row) => ({
               id: String(row.id),
               kind: "chat",
@@ -991,6 +1003,40 @@ export default function WatchPartyRoomScreen() {
         }));
       });
 
+      channel.on("broadcast", { event: "participant:seat-request" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const pending = !!payload?.pending;
+        setParticipantSeatRequestById((prev) => ({
+          ...prev,
+          [participantId]: pending,
+        }));
+        debugLog("watch-party", "participant visible seat request received", {
+          partyId,
+          participantId,
+          pending,
+        });
+      });
+
+      channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const participantId = String(payload?.participantId ?? "").trim();
+        if (!participantId) return;
+        const nextRoleRaw = String(payload?.role ?? "").trim();
+        const nextRole: SharedParticipantLocalState["role"] =
+          nextRoleRaw === "host" || nextRoleRaw === "speaker" ? nextRoleRaw : "listener";
+        const nextState: SharedParticipantLocalState = {
+          role: nextRole,
+          isMuted: !!payload?.isMuted,
+          isRemoved: !!payload?.isRemoved,
+        };
+        setParticipantSeatRequestById((prev) => ({ ...prev, [participantId]: false }));
+        setParticipantStateById((prev) => ({ ...prev, [participantId]: nextState }));
+        if (nextState.role !== "speaker") {
+          setIsSpeakingById((prev) => ({ ...prev, [participantId]: false }));
+        }
+        refreshRoomSnapshot(myUserIdRef.current).catch(() => null);
+      });
+
       // Subscribe → track presence once confirmed
       channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -1024,7 +1070,7 @@ export default function WatchPartyRoomScreen() {
 
       chatChannelRef.current = channel;
     },
-    [partyId, addMsg, attachReactionToParticipant, buildPresenceParticipants, flashReaction, isLive],
+    [partyId, addMsg, attachReactionToParticipant, buildPresenceParticipants, flashReaction, isLive, refreshRoomSnapshot],
   );
 
   const startRoomChatRealtimeSync = useCallback(() => {
@@ -1052,6 +1098,7 @@ export default function WatchPartyRoomScreen() {
           const rowUsername = resolveIdentityName(row.username, "Guest");
           const rowText = String(row.text ?? "");
           if (!rowId || !rowText) return;
+          if (decodePartySeatRequestMessage(rowText)) return;
 
           addMsg({
             id: rowId,
@@ -1265,12 +1312,42 @@ export default function WatchPartyRoomScreen() {
     await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
   }, [partyId, refreshRoomSnapshot, room]);
 
+  const broadcastParticipantSeatRequest = useCallback(async (participantId: string, pending: boolean) => {
+    const channel = chatChannelRef.current;
+    if (!channel || !participantId) return;
+    await channel.send({
+      type: "broadcast",
+      event: "participant:seat-request",
+      payload: {
+        participantId,
+        pending,
+      },
+    }).catch(() => {});
+  }, []);
+
+  const broadcastParticipantSeatState = useCallback(async (participantId: string, state: SharedParticipantLocalState) => {
+    const channel = chatChannelRef.current;
+    if (!channel || !participantId) return;
+    await channel.send({
+      type: "broadcast",
+      event: "participant:seat-state",
+      payload: {
+        participantId,
+        role: state.role,
+        isMuted: state.isMuted,
+        isRemoved: state.isRemoved,
+      },
+    }).catch(() => {});
+  }, []);
+
   const emitParticipantUpdate = useCallback(async (participantId: string, changes: Partial<SharedParticipantLocalState>) => {
-    if (!partyId || !participantId || myRoleRef.current !== "host") return;
+    if (!partyId || !participantId || myRoleRef.current !== "host") return false;
     const currentMembership = membershipMapRef.current[participantId];
     const nextStageRole = changes.role
       ? (changes.role === "host" ? "host" : changes.role)
       : currentMembership?.stageRole;
+    if (!nextStageRole) return false;
+    const nextIsMuted = typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership?.isMuted ?? false;
     const shouldRemove = typeof changes.isRemoved === "boolean" ? changes.isRemoved : currentMembership?.membershipState === "removed";
     trackModerationActionUsed({
       surface: "watch-party-room",
@@ -1288,15 +1365,36 @@ export default function WatchPartyRoomScreen() {
       sourceRoute: `/watch-party/${partyId}`,
     });
 
-    await setPartyParticipantState(partyId, participantId, {
-      isMuted: typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership?.isMuted,
+    const nextMembership = await setPartyParticipantState(partyId, participantId, {
+      isMuted: nextIsMuted,
       stageRole: nextStageRole,
       canSpeak: nextStageRole === "host" || nextStageRole === "speaker",
       membershipState: shouldRemove ? "removed" : "active",
       leftAt: shouldRemove ? new Date().toISOString() : null,
     }).catch(() => null);
+    if (!nextMembership) {
+      debugLog("watch-party", "blocked participant seat-state broadcast before membership persisted", {
+        partyId,
+        participantId,
+        role: nextStageRole,
+        isMuted: nextIsMuted,
+        isRemoved: shouldRemove,
+      });
+      return false;
+    }
+
+    membershipMapRef.current[participantId] = nextMembership;
+    const nextState: SharedParticipantLocalState = {
+      isMuted: nextMembership.isMuted,
+      role: nextMembership.stageRole,
+      isRemoved: nextMembership.membershipState === "removed",
+    };
+    setParticipantStateById((prev) => ({ ...prev, [participantId]: nextState }));
+    setParticipantSeatRequestById((prev) => ({ ...prev, [participantId]: false }));
+    await broadcastParticipantSeatState(participantId, nextState);
     await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
-  }, [partyId, refreshRoomSnapshot, room?.titleId]);
+    return true;
+  }, [broadcastParticipantSeatState, partyId, refreshRoomSnapshot, room?.titleId]);
 
   const emitParticipantSpeaking = useCallback((participantId: string, isSpeaking: boolean) => {
     const channel = chatChannelRef.current;
@@ -1305,6 +1403,20 @@ export default function WatchPartyRoomScreen() {
       .send({ type: "broadcast", event: "participant:speaking", payload: { participantId, isSpeaking } })
       .catch(() => {});
   }, []);
+
+  const requestVisibleSeat = useCallback(async (participantId: string) => {
+    const currentUserId = String(myUserIdRef.current ?? "").trim();
+    if (!partyId || !participantId || participantId !== currentUserId || myRoleRef.current === "host") return;
+    const currentMembership = membershipMapRef.current[participantId];
+    if (currentMembership?.stageRole === "speaker" || currentMembership?.canSpeak) return;
+
+    setParticipantSeatRequestById((prev) => ({ ...prev, [participantId]: true }));
+    await broadcastParticipantSeatRequest(participantId, true);
+    debugLog("watch-party", "requested visible speaker seat", {
+      partyId,
+      participantId,
+    });
+  }, [broadcastParticipantSeatRequest, partyId]);
 
   useEffect(() => {
     if (!isNativeCameraPlatform) return;
@@ -2088,9 +2200,20 @@ export default function WatchPartyRoomScreen() {
     const participant = visibleLiveBubbleParticipants.find((entry) => entry.userId === participantId)
       ?? bottomStripParticipants.find((entry) => entry.userId === participantId);
     if (!participant) return;
+    const participantState = participantStateById[participantId];
+    if (participantId === currentUserBubbleId && myRoleRef.current !== "host" && participantState?.role !== "speaker") {
+      requestVisibleSeat(participantId).catch(() => {});
+    }
     triggerBubbleTapPulse(participantId);
     setSelectedParticipant(participant);
-  }, [visibleLiveBubbleParticipants, bottomStripParticipants, triggerBubbleTapPulse]);
+  }, [
+    bottomStripParticipants,
+    currentUserBubbleId,
+    participantStateById,
+    requestVisibleSeat,
+    triggerBubbleTapPulse,
+    visibleLiveBubbleParticipants,
+  ]);
   const tailoredFocusParticipant = useMemo(
     () => visibleLiveBubbleParticipants.find((participant) => participant.userId === activeParticipantId)
       ?? hostParticipant
@@ -2988,6 +3111,7 @@ export default function WatchPartyRoomScreen() {
               const isFocused = participant.userId === activeParticipantId;
               const isMuted = participantState.isMuted;
               const isSpeakerRole = participantState.role === "speaker";
+              const isRequestingSeat = !!participantSeatRequestById[participant.userId] && !isSpeakerRole;
               const isRemoved = participantState.isRemoved;
               const presentation = participantPresentationById[participant.userId] ?? "compact";
               const isExpanded = presentation === "expanded";
@@ -3012,8 +3136,10 @@ export default function WatchPartyRoomScreen() {
                     triggerBubbleTapPulse(participant.userId);
                     if (isHost) {
                       debugLog("watch-party", "host tap user", { userId: participant.userId });
+                    } else if (isCurrentUser && !isSpeakerRole) {
+                      requestVisibleSeat(participant.userId).catch(() => {});
                     } else {
-                      debugLog("watch-party", "request mic", { userId: participant.userId });
+                      debugLog("watch-party", "viewer tap user", { userId: participant.userId });
                     }
                     setActiveParticipantId(participant.userId);
                     setParticipantPresentationById((prev) => ({
@@ -3047,68 +3173,35 @@ export default function WatchPartyRoomScreen() {
                       <TouchableOpacity
                         style={styles.liveBubbleActionBtn}
                         activeOpacity={0.82}
-                        onPress={() => {
-                          setParticipantStateById((prev) => {
-                            const current = prev[participant.userId] ?? {
-                              isMuted: !!participant.isMuted,
-                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                              isRemoved: false,
-                            };
-                            return {
-                              ...prev,
-                              [participant.userId]: {
-                                ...current,
-                                isMuted: current.role === "host" ? current.isMuted : !current.isMuted,
-                              },
-                            };
-                          });
-                          emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
+                        onPress={async () => {
+                          const updated = await emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
+                          if (!updated) {
+                            Alert.alert("Seat update unavailable", "The room could not save that mute change yet.");
+                          }
                         }}
                       >
                         <Text style={styles.liveBubbleActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={styles.liveBubbleActionBtn}
+                        style={[styles.liveBubbleActionBtn, isRequestingSeat && styles.liveBubbleActionBtnApprove]}
                         activeOpacity={0.82}
-                        onPress={() => {
-                          setParticipantStateById((prev) => {
-                            const current = prev[participant.userId] ?? {
-                              isMuted: !!participant.isMuted,
-                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                              isRemoved: false,
-                            };
-                            return {
-                              ...prev,
-                              [participant.userId]: {
-                                ...current,
-                                role: current.role === "host" ? "host" : current.role === "speaker" ? "listener" : "speaker",
-                              },
-                            };
-                          });
-                          emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
+                        onPress={async () => {
+                          const updated = await emitParticipantUpdate(participant.userId, { role: isSpeakerRole ? "listener" : "speaker" });
+                          if (!updated) {
+                            Alert.alert("Seat update unavailable", "The room could not save that camera/mic seat yet.");
+                          }
                         }}
                       >
-                        <Text style={styles.liveBubbleActionText}>{isSpeakerRole ? "Listener" : "Speaker"}</Text>
+                        <Text style={styles.liveBubbleActionText}>{isSpeakerRole ? "Listener" : isRequestingSeat ? "Approve" : "Speaker"}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.liveBubbleActionBtn, styles.liveBubbleActionBtnDanger]}
                         activeOpacity={0.82}
-                        onPress={() => {
-                          setParticipantStateById((prev) => {
-                            const current = prev[participant.userId] ?? {
-                              isMuted: !!participant.isMuted,
-                              role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                              isRemoved: false,
-                            };
-                            return {
-                              ...prev,
-                              [participant.userId]: {
-                                ...current,
-                                isRemoved: current.role === "host" ? current.isRemoved : !current.isRemoved,
-                              },
-                            };
-                          });
-                          emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
+                        onPress={async () => {
+                          const updated = await emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
+                          if (!updated) {
+                            Alert.alert("Seat update unavailable", "The room could not save that participant change yet.");
+                          }
                         }}
                       >
                         <Text style={[styles.liveBubbleActionText, styles.liveBubbleActionTextDanger]}>
@@ -3160,6 +3253,11 @@ export default function WatchPartyRoomScreen() {
                           participant.isLive && !isMuted ? styles.liveBubbleOnlineDotLive : styles.liveBubbleOnlineDotIdle,
                         ]}
                       />
+                      {isRequestingSeat ? (
+                        <View style={styles.liveBubbleRequestBadge}>
+                          <Text style={styles.liveBubbleRequestBadgeText}>REQ</Text>
+                        </View>
+                      ) : null}
                       {isMuted ? <Text style={styles.liveBubbleMutedIcon}>🔇</Text> : null}
                     </View>
                   </View>
@@ -3201,7 +3299,7 @@ export default function WatchPartyRoomScreen() {
                     ]}
                     numberOfLines={1}
                   >
-                    {isMuted ? `${roleLabel} · Muted` : roleLabel}
+                    {isRequestingSeat ? "Requesting camera" : isMuted ? `${roleLabel} · Muted` : roleLabel}
                   </Text>
                 </TouchableOpacity>
               );
@@ -3854,6 +3952,22 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   liveBubbleHostBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  liveBubbleRequestBadge: {
+    position: "absolute",
+    right: -12,
+    top: -7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(141,182,255,0.68)",
+    backgroundColor: "rgba(52,92,166,0.92)",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  liveBubbleRequestBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 7.5,
+    fontWeight: "900",
+  },
   liveBubblePinAction: {
     minHeight: 26,
     minWidth: 52,
@@ -3950,6 +4064,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 7,
     paddingVertical: 3,
+  },
+  liveBubbleActionBtnApprove: {
+    borderColor: "rgba(141,182,255,0.62)",
+    backgroundColor: "rgba(52,92,166,0.42)",
   },
   liveBubbleActionBtnDanger: {
     borderColor: "rgba(220,20,60,0.5)",

@@ -45,6 +45,8 @@ const watchPartyIndex = readSource("app/watch-party/index.tsx");
 const partyRoom = readSource("app/watch-party/[partyId].tsx");
 const liveStage = readSource("app/watch-party/live-stage/[partyId].tsx");
 const player = readSource("app/player/[id].tsx");
+const watchParty = readSource("_lib/watchParty.ts");
+const watchPartySeatRequestProof = readSource("scripts/proof-watch-party-seat-request.mjs");
 const premiumWatchPartyAccess = readSource("_lib/premiumWatchPartyAccess.ts");
 const partyRoomWatchTogether = sliceBetween(
   partyRoom,
@@ -63,6 +65,42 @@ const playerFallbackHandler = sliceBetween(
   "const onWatchPartyLiveKitFallback = useCallback(",
   "useEffect(() => {\n    if (!activeParticipantId) return;",
   "Player Watch-Party LiveKit fallback handler boundary",
+);
+const playerWatchPartyLiveKitContractRefresh = sliceBetween(
+  player,
+  "useEffect(() => {\n    if (!inWatchParty || !partyId || !watchPartyEntryAllowed || Platform.OS === \"web\") {",
+  "const onWatchPartyLiveKitFallback = useCallback(",
+  "Player Watch-Party LiveKit contract refresh boundary",
+);
+const playerWatchPartySeatPersistence = sliceBetween(
+  player,
+  "const persistPartySeatState = useCallback(async (participantId: string, options: {",
+  "const handleSharedPlaybackTap = useCallback(async () => {",
+  "Player Watch-Party seat persistence boundary",
+);
+const playerWatchPartyPresenceSync = sliceBetween(
+  player,
+  "const syncCurrentPartyPresence = useCallback(async (overrides?: Partial<{",
+  "const persistPartySeatRequestMarker = useCallback(async (participantId: string, pending: boolean) => {",
+  "Player Watch-Party presence sync boundary",
+);
+const playerWatchPartyHostSeatRequestPolling = sliceBetween(
+  player,
+  "useEffect(() => {\n    if (!inWatchParty || !partyId || !watchPartyEntryAllowed) {\n      if (partySeatRequestPollRef.current)",
+  "useEffect(() => {\n    return () => {\n      if (seekFeedbackTimeoutRef.current)",
+  "Player Watch-Party host seat request polling boundary",
+);
+const playerWatchPartyHostControls = sliceBetween(
+  player,
+  "const renderParticipantExpandedHostShell = ({",
+  "const renderParticipantPanel = (liveLayout = false, dockLayout = false) => {",
+  "Player Watch-Party host controls boundary",
+);
+const playerWatchPartyHostSeatApproval = sliceBetween(
+  player,
+  "const approvePartyParticipantSeat = useCallback(async (participant: PartyParticipant) => {",
+  "const renderParticipantExpandedHostShell = ({",
+  "Player Watch-Party host seat approval boundary",
 );
 const playerWatchPartyEntryAccessCheck = sliceBetween(
   player,
@@ -203,6 +241,96 @@ assertIncludes(
   livekitSurface,
   "participantRole: joinContract.participantRole",
   "LiveKit media proof logs must include participantRole",
+);
+assertIncludes(
+  livekitSurface,
+  "participantLabelsByIdentity",
+  "LiveKit media surface must accept participant labels keyed by identity",
+);
+assertIncludes(
+  livekitSurface,
+  "participantRoster?: LiveKitStageParticipantRosterEntry[]",
+  "LiveKit media surface must accept a roster for participants without camera tracks",
+);
+assertIncludes(
+  livekitSurface,
+  "isRequestingToSpeak?: boolean",
+  "LiveKit media surface roster must carry host-visible camera request state",
+);
+assertIncludes(
+  livekitSurface,
+  "onParticipantPress?: (identity: string) => void",
+  "LiveKit media surface bubble grid must expose participant tap callbacks",
+);
+assertIncludes(
+  livekitSurface,
+  "pointerEvents={onParticipantPress ? \"auto\" : \"none\"}",
+  "LiveKit media surface must allow taps when the player wires participant press handling",
+);
+assertIncludes(
+  livekitSurface,
+  "onPress={() => onParticipantPress?.(item.identity)}",
+  "LiveKit bubble-grid items must call the participant press handler",
+);
+assertIncludes(
+  livekitSurface,
+  "normalizedCandidate !== \"you\" && normalizedCandidate !== \"me\"",
+  "LiveKit media surface must never trust local-only labels for remote participants",
+);
+assertIncludes(
+  livekitSurface,
+  "const bubbleGridItems = useMemo<BubbleGridItem[]>(() => {",
+  "LiveKit media surface must build roster-aware bubble-grid items",
+);
+assertIncludes(
+  livekitSurface,
+  "styles.bubblePlaceholderWrap",
+  "LiveKit bubble grid must render placeholders for known participants without camera tracks",
+);
+assertIncludes(
+  livekitSurface,
+  "item.isRequestingToSpeak ? \"Request\"",
+  "LiveKit bubble-grid placeholders must show pending camera requests",
+);
+assertIncludes(
+  livekitSurface,
+  "styles.bubbleRequestBadge",
+  "LiveKit bubble grid must show a visible request badge for host review",
+);
+assertIncludes(
+  livekitSurface,
+  "remoteCameraIdentities",
+  "LiveKit media proof logs must include remote camera identities",
+);
+assertIncludes(
+  livekitSurface,
+  "bubbleGridIdentities",
+  "LiveKit media proof logs must include bubble-grid identity mapping",
+);
+assertIncludes(
+  livekitSurface,
+  "bubbleGridTrackMappings",
+  "LiveKit media proof logs must include readable identity-to-track mappings",
+);
+assertIncludes(
+  livekitSurface,
+  "participantLabelEntries",
+  "LiveKit media proof logs must include readable identity-to-label mappings",
+);
+assertIncludes(
+  livekitSurface,
+  "isRequestingToSpeak: showRequestIndicators && !!participantRosterByIdentity.get(identity)?.isRequestingToSpeak",
+  "LiveKit media proof logs must include readable request-state mappings",
+);
+assertIncludes(
+  livekitSurface,
+  "setCameraEnabled?.(shouldPublishLocalCamera, LIVE_VIDEO_CAPTURE_OPTIONS)",
+  "LiveKit media surface must explicitly toggle camera publish after speaker upgrades",
+);
+assertIncludes(
+  livekitSurface,
+  "setMicrophoneEnabled?.(publishLocalAudio)",
+  "LiveKit media surface must explicitly toggle microphone publish after speaker upgrades",
 );
 assertIncludes(
   liveStage,
@@ -367,6 +495,318 @@ assertIncludes(
   partyRoomWatchTogether,
   "participantRole: joinResult.participantRole",
   "Watch-Party Live prepared contract log must include participantRole",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "watchPartyLiveKitJoinContract.participantRole !== desiredWatchPartyLiveKitParticipantRole",
+  "Player Watch-Party LiveKit refresh must treat role upgrades and downgrades as stale",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "existingCanPublish !== desiredWatchPartyLiveKitCanPublish",
+  "Player Watch-Party LiveKit refresh must treat canPublish upgrades and downgrades as stale",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "rejected stale prepared watch-party-live join contract",
+  "Player Watch-Party LiveKit must reject prepared contracts that do not match current authority",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "watch-party-live publish contract still downgraded; refreshing snapshot before one retry",
+  "Player Watch-Party LiveKit must retry once after refreshing membership authority",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "watchPartyLiveKitContractRequestKeyRef.current = \"\";",
+  "Player Watch-Party LiveKit must reset request keys after matching authority",
+);
+assertIncludes(
+  player,
+  "watch-party-live authority state",
+  "Player Watch-Party LiveKit must log authority state for two-device proof",
+);
+assertIncludes(
+  player,
+  "const resolvePartyParticipantDisplayName = (options: {",
+  "Player Watch-Party participant labels must resolve through one sanitizer",
+);
+assertIncludes(
+  player,
+  "isLocalOnlyPartyParticipantLabel(label)",
+  "Player Watch-Party participant labels must reject local-only remote labels",
+);
+assertIncludes(
+  player,
+  "const refreshMembershipRosterFromAuthority = async (force = false) => {",
+  "Player Watch-Party roster must refresh membership authority for placeholder bubbles",
+);
+assertIncludes(
+  player,
+  "participantRoster={watchPartyLiveKitParticipantRoster}",
+  "Player Watch-Party LiveKit surface must receive a roster for camera-less participants",
+);
+assertIncludes(
+  player,
+  "const onWatchPartyLiveKitParticipantPress = useCallback((identity: string) => {",
+  "Player Watch-Party LiveKit bubble taps must route to participant handling",
+);
+assertIncludes(
+  player,
+  "watch-party-live bubble tapped",
+  "Player Watch-Party LiveKit bubble taps must be logged for proof",
+);
+assertIncludes(
+  player,
+  "onParticipantPress={onWatchPartyLiveKitParticipantPress}",
+  "Player Watch-Party LiveKit surface must wire bubble taps to seat requests",
+);
+assertIncludes(
+  player,
+  "requestPartySeat().catch",
+  "Player Watch-Party LiveKit current-user bubble tap must send the visible camera request quietly",
+);
+assertIncludes(
+  player,
+  "watch-party-live seat request sent",
+  "Player Watch-Party LiveKit viewer requests must log Realtime broadcast send status",
+);
+assertIncludes(
+  watchParty,
+  "PARTY_SEAT_REQUEST_MESSAGE_PREFIX",
+  "Watch-Party shared helpers must define the durable hidden seat-request marker prefix",
+);
+assertIncludes(
+  watchParty,
+  "export const encodePartySeatRequestMessage",
+  "Watch-Party shared helpers must encode durable seat-request markers",
+);
+assertIncludes(
+  watchParty,
+  "export const decodePartySeatRequestMessage",
+  "Watch-Party shared helpers must decode durable seat-request markers",
+);
+assertIncludes(
+  player,
+  "watch-party-live seat request marker persisted",
+  "Player Watch-Party LiveKit viewer requests must persist a fallback marker for host receipt",
+);
+assertIncludes(
+  player,
+  "watch_party_live_seat_request_marker_unavailable",
+  "Player Watch-Party LiveKit viewer requests must fail when the durable marker cannot persist",
+);
+assertIncludes(
+  player,
+  "watch-party-live seat request broadcast skipped; durable marker already persisted",
+  "Player Watch-Party LiveKit viewer requests must not treat an unavailable social channel as delivery failure after marker persistence",
+);
+assertIncludes(
+  player,
+  "partyParticipantsRef.current.find",
+  "Player Watch-Party presence sync must read participant state from a ref",
+);
+assertNotIncludes(
+  playerWatchPartyPresenceSync,
+  "partyParticipants.find",
+  "Player Watch-Party presence sync must not close over participant state",
+);
+assertIncludes(
+  playerWatchPartyPresenceSync,
+  "}, []);",
+  "Player Watch-Party presence sync callback must be stable so participant state changes do not tear down the social channel",
+);
+assertIncludes(
+  player,
+  "watch-party-live seat request received",
+  "Player Watch-Party LiveKit host must log incoming visible-camera requests",
+);
+assertIncludes(
+  player,
+  "watch-party-live seat request message received",
+  "Player Watch-Party LiveKit host must listen for persisted request markers",
+);
+assertIncludes(
+  player,
+  "applyPersistedSeatRequestMessages",
+  "Player Watch-Party LiveKit host must process persisted camera request markers",
+);
+assertIncludes(
+  player,
+  "partySeatRequestPollRef.current = setInterval",
+  "Player Watch-Party LiveKit host must poll persisted request markers as a Realtime fallback",
+);
+assertNotIncludes(
+  playerWatchPartyHostSeatRequestPolling,
+  "partySyncRole !== \"host\"",
+  "Player Watch-Party LiveKit host polling must not be gated only by fragile partySyncRole state",
+);
+assertIncludes(
+  playerWatchPartyHostSeatRequestPolling,
+  "getWatchPartyHostAuthority()",
+  "Player Watch-Party LiveKit host polling must use consolidated host authority",
+);
+assertIncludes(
+  playerWatchPartyHostSeatRequestPolling,
+  "applyPersistedHostSeatRequestMessages",
+  "Player Watch-Party LiveKit host polling must process durable request markers independently of the social channel",
+);
+assertIncludes(
+  playerWatchPartyHostSeatRequestPolling,
+  "setPendingPartySeatRequest(participantId, pending, source, sentAt)",
+  "Player Watch-Party LiveKit host polling must persist pending request state across roster refresh",
+);
+assertIncludes(
+  player,
+  "pendingPartySeatRequestsRef",
+  "Player Watch-Party LiveKit host must keep pending camera requests in a durable component ref",
+);
+assertIncludes(
+  playerWatchPartySeatPersistence,
+  "broadcastPartySeatRequest(participantId, false)",
+  "Player Watch-Party LiveKit host approvals must persistently clear pending camera request markers",
+);
+assertIncludes(
+  player,
+  "!decodePartySeatRequestMessage(m.body)",
+  "Player Watch-Party LiveKit hidden request markers must not render as chat",
+);
+assertIncludes(
+  partyRoom,
+  "visibleRows = orderedRows.filter((row) => !decodePartySeatRequestMessage(row.text))",
+  "Party Room chat history must filter hidden Watch-Party Live request markers",
+);
+assertIncludes(
+  partyRoom,
+  "if (decodePartySeatRequestMessage(rowText)) return;",
+  "Party Room chat listener must filter hidden Watch-Party Live request markers",
+);
+assertIncludes(
+  player,
+  "currentUserIsHost",
+  "Player Watch-Party LiveKit request receipt logs must show whether the receiver can approve",
+);
+assertIncludes(
+  player,
+  "setActiveParticipantToolsId(hostVisibleSeatRequester.id)",
+  "Player Watch-Party LiveKit host must auto-open tools for pending camera requests",
+);
+assertIncludes(
+  player,
+  "watch-party-live host focused seat request",
+  "Player Watch-Party LiveKit host must log request focus from roster/presence state",
+);
+assertIncludes(
+  player,
+  "isRequestingToSpeak: currentWatchPartyHostAuthority.isHost && !!participant.isRequestingToSpeak && role === \"viewer\"",
+  "Player Watch-Party LiveKit roster must only expose pending viewer request state to hosts",
+);
+assertIncludes(
+  player,
+  "showRequestIndicators={currentWatchPartyHostAuthority.isHost}",
+  "Player Watch-Party LiveKit media surface must hide request badges for viewers",
+);
+assertIncludes(
+  livekitSurface,
+  "showRequestIndicators?: boolean",
+  "LiveKit media surface must accept a host-only request indicator flag",
+);
+assertIncludes(
+  livekitSurface,
+  "isRequestingToSpeak: showRequestIndicators &&",
+  "LiveKit media surface must suppress request indicators when hidden",
+);
+assertNotIncludes(
+  player,
+  "Camera request sent to host.",
+  "Viewer Watch-Party Live request success must not show a new overlay message",
+);
+assertNotIncludes(
+  player,
+  "Camera request is already waiting for the host.",
+  "Viewer Watch-Party Live duplicate request must stay quiet",
+);
+assertIncludes(
+  player,
+  "participantLabelEntries: JSON.stringify(watchPartyLiveKitParticipantRoster.map",
+  "Player Watch-Party authority logs must include readable roster label mappings",
+);
+assertIncludes(
+  watchPartySeatRequestProof,
+  "deviceOrEmulatorUsed: false",
+  "Watch-Party seat request proof must not use attached devices or emulators",
+);
+assertIncludes(
+  watchPartySeatRequestProof,
+  "viewer roster should hide request indicators",
+  "Watch-Party seat request proof must cover restored viewer-side request UX",
+);
+assertIncludes(
+  watchPartySeatRequestProof,
+  "pending request should survive a roster refresh",
+  "Watch-Party seat request proof must cover durable host pending state",
+);
+assertIncludes(
+  partyRoom,
+  "event: \"participant:seat-request\"",
+  "Party Room viewer taps must broadcast a camera/mic seat request",
+);
+assertIncludes(
+  partyRoom,
+  "requested visible speaker seat",
+  "Party Room viewer request flow must log visible-seat requests",
+);
+assertIncludes(
+  partyRoom,
+  "participant:seat-state",
+  "Party Room host approvals must broadcast the persisted seat state",
+);
+assertIncludes(
+  partyRoom,
+  "blocked participant seat-state broadcast before membership persisted",
+  "Party Room host approvals must not broadcast active seat state before persistence",
+);
+assertIncludes(
+  playerWatchPartySeatPersistence,
+  "return false;",
+  "Player Watch-Party seat persistence must return failure when authority is not saved",
+);
+assertIncludes(
+  playerWatchPartySeatPersistence,
+  "blocked watch-party-live seat broadcast before membership authority persisted",
+  "Player Watch-Party seat persistence must log blocked active-seat broadcasts",
+);
+assertBefore(
+  playerWatchPartySeatPersistence,
+  "if (!nextMembership)",
+  "await broadcastPartySeatState(participantId, options);",
+  "Player Watch-Party seat broadcasts must wait until membership authority is persisted.",
+);
+assertBefore(
+  playerWatchPartyHostSeatApproval,
+  "const seatPersisted = await persistPartySeatState(participant.id, {",
+  "setPartyParticipants((prev) =>",
+  "Player Watch-Party host controls must await seat persistence before committing speaker UI.",
+);
+assertIncludes(
+  player,
+  "const renderWatchPartyLiveHostReviewCard = () => {",
+  "Player Watch-Party Live title player must render host request review controls",
+);
+assertIncludes(
+  player,
+  "{renderWatchPartyLiveHostReviewCard()}",
+  "Player Watch-Party Live title player must mount host request review controls under the media deck",
+);
+assertIncludes(
+  player,
+  "watchPartyHostReviewPrimaryBtn",
+  "Player Watch-Party Live title host request controls must expose a tappable primary action",
+);
+assertIncludes(
+  player,
+  "pointerEvents=\"none\" style={styles.livePresenceEventToast}",
+  "Player Watch-Party Live request toast must not block host control taps",
 );
 assertIncludes(
   partyRoom,

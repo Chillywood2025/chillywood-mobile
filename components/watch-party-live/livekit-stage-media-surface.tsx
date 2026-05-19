@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   AppState,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +32,14 @@ import {
 } from "../../_lib/livekit/react-native-module";
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 
+export type LiveKitStageParticipantRosterEntry = {
+  identity: string;
+  label: string;
+  role?: "host" | "speaker" | "viewer" | "listener";
+  canPublish?: boolean;
+  isRequestingToSpeak?: boolean;
+};
+
 type LiveKitStageMediaSurfaceProps = {
   joinContract: LiveKitTokenReady;
   onFallback: (reason: "connection_timeout" | "disconnected" | "room_error") => void;
@@ -38,6 +47,10 @@ type LiveKitStageMediaSurfaceProps = {
   containerStyle?: StyleProp<ViewStyle>;
   fillParent?: boolean;
   layout?: "stage" | "bubble-grid";
+  participantLabelsByIdentity?: Record<string, string>;
+  participantRoster?: LiveKitStageParticipantRosterEntry[];
+  onParticipantPress?: (identity: string) => void;
+  showRequestIndicators?: boolean;
   surfaceLabel?: string;
   publishLocalAudio?: boolean;
   publishLocalVideo?: boolean;
@@ -46,12 +59,27 @@ type LiveKitStageMediaSurfaceProps = {
 type LiveKitStageMediaContentProps = {
   joinContract: LiveKitTokenReady;
   layout: "stage" | "bubble-grid";
+  participantLabelsByIdentity?: Record<string, string>;
+  participantRoster?: LiveKitStageParticipantRosterEntry[];
+  onParticipantPress?: (identity: string) => void;
+  showRequestIndicators: boolean;
   surfaceLabel: string;
   publishLocalAudio: boolean;
+  publishLocalVideo: boolean;
   mediaDeviceFailure: string | null;
 };
 
 type RenderableLiveKitTrackReference = NonNullable<React.ComponentProps<typeof VideoTrack>["trackRef"]>;
+
+type BubbleGridItem = {
+  identity: string;
+  key: string;
+  label: string;
+  role: LiveKitStageParticipantRosterEntry["role"] | null;
+  canPublish: boolean;
+  isRequestingToSpeak: boolean;
+  trackRef: RenderableLiveKitTrackReference | null;
+};
 
 const isRenderableTrackReference = (trackRef: unknown): trackRef is RenderableLiveKitTrackReference => (
   isTrackReference(trackRef)
@@ -145,15 +173,40 @@ const toConnectionLabel = (connectionState: unknown) => {
   return normalized.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
-const getParticipantLabel = (identity: string, currentIdentity: string) => (
-  identity === currentIdentity ? "You" : "Guest"
-);
+const getParticipantLabel = (
+  identity: string,
+  currentIdentity: string,
+  participantLabelsByIdentity?: Record<string, string>,
+  participantRosterByIdentity?: Map<string, LiveKitStageParticipantRosterEntry>,
+) => {
+  if (identity === currentIdentity) return "You";
+  const rosterEntry = participantRosterByIdentity?.get(identity);
+  const candidate = String(rosterEntry?.label ?? participantLabelsByIdentity?.[identity] ?? "").trim();
+  const normalizedCandidate = candidate.toLowerCase();
+  if (candidate && normalizedCandidate !== "you" && normalizedCandidate !== "me") {
+    return candidate;
+  }
+  return rosterEntry?.role === "host" ? "Host" : "Guest";
+};
+
+const getParticipantInitials = (label: string) => {
+  const clean = String(label || "").trim();
+  if (!clean) return "?";
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
+  return clean.slice(0, 2).toUpperCase();
+};
 
 function LiveKitStageMediaContent({
   joinContract,
   layout,
+  participantLabelsByIdentity,
+  participantRoster,
+  onParticipantPress,
+  showRequestIndicators,
   surfaceLabel,
   publishLocalAudio,
+  publishLocalVideo,
   mediaDeviceFailure,
 }: LiveKitStageMediaContentProps) {
   const connectionState = useConnectionState();
@@ -165,7 +218,7 @@ function LiveKitStageMediaContent({
     lastMicrophoneError,
     localParticipant,
   } = useLocalParticipant();
-  const shouldPublishLocalCamera = joinContract.participantRole !== "viewer";
+  const shouldPublishLocalCamera = publishLocalVideo && joinContract.participantRole !== "viewer";
   const tracks = useTracks(
     [
       { source: Track.Source.ScreenShare, withPlaceholder: false },
@@ -185,6 +238,19 @@ function LiveKitStageMediaContent({
     () => remoteTracks.filter((trackRef) => trackRef.source === Track.Source.Camera),
     [remoteTracks],
   );
+  const participantRosterByIdentity = useMemo(() => {
+    const next = new Map<string, LiveKitStageParticipantRosterEntry>();
+    (participantRoster ?? []).forEach((entry) => {
+      const identity = String(entry.identity ?? "").trim();
+      if (!identity || next.has(identity)) return;
+      next.set(identity, {
+        ...entry,
+        identity,
+        label: String(entry.label ?? "").trim(),
+      });
+    });
+    return next;
+  }, [participantRoster]);
   const primaryRemoteTrack = remoteTracks[0] ?? null;
   const publishedLocalCameraTrackRef = useMemo(
     () => renderableTracks.find((trackRef) => (
@@ -215,6 +281,47 @@ function LiveKitStageMediaContent({
   const isShowingLocalPreview = !!primaryTrack && primaryTrack.participant.identity === localParticipant.identity;
   const isShowingSecondaryLocalPreview = !!secondaryTrack && secondaryTrack.participant.identity === localParticipant.identity;
   const visibleTrackCount = (primaryTrack ? 1 : 0) + (secondaryTrack ? 1 : 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const participant = localParticipant as {
+      setCameraEnabled?: (enabled: boolean, options?: unknown) => Promise<unknown>;
+      setMicrophoneEnabled?: (enabled: boolean) => Promise<unknown>;
+    };
+
+    participant.setCameraEnabled?.(shouldPublishLocalCamera, LIVE_VIDEO_CAPTURE_OPTIONS).catch((error) => {
+      if (cancelled) return;
+      debugLog("livekit", "explicit local camera publish toggle failed", {
+        surfaceLabel,
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        shouldPublishLocalCamera,
+        error: getErrorMessage(error),
+      });
+    });
+    participant.setMicrophoneEnabled?.(publishLocalAudio).catch((error) => {
+      if (cancelled) return;
+      debugLog("livekit", "explicit local microphone publish toggle failed", {
+        surfaceLabel,
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        publishLocalAudio,
+        error: getErrorMessage(error),
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    joinContract.participantRole,
+    joinContract.roomName,
+    localParticipant,
+    publishLocalAudio,
+    shouldPublishLocalCamera,
+    surfaceLabel,
+  ]);
+
   const bubbleGridTracks = useMemo(() => {
     const nextTracks = [
       ...(localCameraTrackRef ? [localCameraTrackRef] : []),
@@ -222,6 +329,87 @@ function LiveKitStageMediaContent({
     ];
     return nextTracks.slice(0, 25);
   }, [localCameraTrackRef, remoteCameraTracks]);
+  const bubbleGridItems = useMemo<BubbleGridItem[]>(() => {
+    const trackByIdentity = new Map<string, RenderableLiveKitTrackReference>();
+    bubbleGridTracks.forEach((trackRef) => {
+      const identity = String(trackRef.participant.identity ?? "").trim();
+      if (!identity || trackByIdentity.has(identity)) return;
+      trackByIdentity.set(identity, trackRef);
+    });
+
+    const nextItems: BubbleGridItem[] = [];
+    const seenIdentities = new Set<string>();
+    participantRosterByIdentity.forEach((entry, identity) => {
+      if (seenIdentities.has(identity)) return;
+      const trackRef = trackByIdentity.get(identity) ?? null;
+      const label = getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity);
+      nextItems.push({
+        identity,
+        key: `${identity}:${trackRef?.source ?? "placeholder"}`,
+        label,
+        role: entry.role ?? null,
+        canPublish: !!entry.canPublish,
+        isRequestingToSpeak: showRequestIndicators && !!entry.isRequestingToSpeak,
+        trackRef,
+      });
+      seenIdentities.add(identity);
+    });
+
+    bubbleGridTracks.forEach((trackRef) => {
+      const identity = String(trackRef.participant.identity ?? "").trim();
+      if (!identity || seenIdentities.has(identity)) return;
+      const label = getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity);
+      nextItems.push({
+        identity,
+        key: `${identity}:${trackRef.source}`,
+        label,
+        role: participantRosterByIdentity.get(identity)?.role ?? null,
+        canPublish: !!participantRosterByIdentity.get(identity)?.canPublish,
+        isRequestingToSpeak: showRequestIndicators && !!participantRosterByIdentity.get(identity)?.isRequestingToSpeak,
+        trackRef,
+      });
+      seenIdentities.add(identity);
+    });
+
+    return nextItems.slice(0, 25);
+  }, [
+    bubbleGridTracks,
+    localParticipant.identity,
+    participantLabelsByIdentity,
+    participantRosterByIdentity,
+    showRequestIndicators,
+  ]);
+  const participantLabelEntries = useMemo(() => {
+    const identities = new Set<string>([
+      ...Array.from(participantRosterByIdentity.keys()),
+      ...Object.keys(participantLabelsByIdentity ?? {}),
+      ...bubbleGridTracks.map((trackRef) => trackRef.participant.identity),
+    ]);
+    return Array.from(identities).map((identity) => ({
+      identity,
+      label: getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity),
+      role: participantRosterByIdentity.get(identity)?.role ?? null,
+      canPublish: !!participantRosterByIdentity.get(identity)?.canPublish,
+      isRequestingToSpeak: showRequestIndicators && !!participantRosterByIdentity.get(identity)?.isRequestingToSpeak,
+    }));
+  }, [
+    bubbleGridTracks,
+    localParticipant.identity,
+    participantLabelsByIdentity,
+    participantRosterByIdentity,
+    showRequestIndicators,
+  ]);
+  const bubbleGridTrackMappings = useMemo(
+    () => bubbleGridItems.map((item) => ({
+      identity: item.identity,
+      label: item.label,
+      role: item.role,
+      hasCameraTrack: !!item.trackRef,
+      canPublish: item.canPublish,
+      isRequestingToSpeak: item.isRequestingToSpeak,
+    })),
+    [bubbleGridItems],
+  );
 
   useEffect(() => {
     debugLog("livekit", "stage media publish state", {
@@ -238,6 +426,13 @@ function LiveKitStageMediaContent({
       remoteTrackCount: remoteTracks.length,
       visibleTrackCount,
       bubbleGridTrackCount: bubbleGridTracks.length,
+      bubbleGridItemCount: bubbleGridItems.length,
+      localParticipantIdentity: localParticipant.identity,
+      remoteCameraIdentities: remoteCameraTracks.map((trackRef) => trackRef.participant.identity),
+      bubbleGridIdentities: bubbleGridTracks.map((trackRef) => trackRef.participant.identity),
+      bubbleGridTrackMappings: JSON.stringify(bubbleGridTrackMappings),
+      participantLabelEntries: JSON.stringify(participantLabelEntries),
+      showRequestIndicators,
       connectionState: String(connectionState ?? ""),
       lastMicrophoneError: lastMicrophoneError?.message ?? null,
       mediaDeviceFailure,
@@ -250,40 +445,68 @@ function LiveKitStageMediaContent({
     joinContract.participantRole,
     joinContract.roomName,
     lastMicrophoneError?.message,
+    localParticipant.identity,
     mediaDeviceFailure,
+    participantLabelEntries,
     publishLocalAudio,
     publishedLocalCameraTrackRef,
     primaryRemoteTrack,
+    bubbleGridItems.length,
     bubbleGridTracks.length,
+    bubbleGridTracks,
+    bubbleGridTrackMappings,
+    remoteCameraTracks,
     remoteTracks.length,
     shouldPublishLocalCamera,
+    showRequestIndicators,
     surfaceLabel,
     visibleTrackCount,
   ]);
 
   if (layout === "bubble-grid") {
-    if (bubbleGridTracks.length > 0) {
+    if (bubbleGridItems.length > 0) {
       const bubbleGridContent = (
         <View style={styles.bubbleGridContent} collapsable={false}>
-          {bubbleGridTracks.map((trackRef) => {
-            const isLocalParticipant = trackRef.participant.identity === localParticipant.identity;
-            const trackKey = `${trackRef.participant.identity}:${trackRef.source}`;
+          {bubbleGridItems.map((item) => {
+            const isLocalParticipant = item.identity === localParticipant.identity;
 
             return (
-              <View key={trackKey} style={styles.bubbleGridItem} collapsable={false}>
-                <View style={styles.bubbleVideoWrap} collapsable={false}>
-                  <VideoTrack
-                    trackRef={trackRef}
-                    style={styles.bubbleVideo}
-                    objectFit="cover"
-                    mirror={isLocalParticipant}
-                    zOrder={0}
-                  />
-                </View>
+              <Pressable
+                key={item.key}
+                style={styles.bubbleGridItem}
+                collapsable={false}
+                disabled={!onParticipantPress}
+                onPress={() => onParticipantPress?.(item.identity)}
+              >
+                {item.trackRef ? (
+                  <View style={styles.bubbleVideoWrap} collapsable={false}>
+                    <VideoTrack
+                      trackRef={item.trackRef}
+                      style={styles.bubbleVideo}
+                      objectFit="cover"
+                      mirror={isLocalParticipant}
+                      zOrder={0}
+                    />
+                  </View>
+                ) : (
+                  <View style={[styles.bubbleVideoWrap, styles.bubblePlaceholderWrap]} collapsable={false}>
+                    <Text style={styles.bubblePlaceholderInitials} numberOfLines={1}>
+                      {getParticipantInitials(item.label)}
+                    </Text>
+                    <Text style={styles.bubblePlaceholderStatus} numberOfLines={1}>
+                      {item.isRequestingToSpeak ? "Request" : item.role === "host" ? "Host" : item.canPublish ? "Seated" : "Audience"}
+                    </Text>
+                  </View>
+                )}
+                {item.isRequestingToSpeak ? (
+                  <View style={styles.bubbleRequestBadge}>
+                    <Text style={styles.bubbleRequestBadgeText}>REQ</Text>
+                  </View>
+                ) : null}
                 <Text style={styles.bubbleLabel} numberOfLines={1}>
-                  {getParticipantLabel(trackRef.participant.identity, localParticipant.identity)}
+                  {item.label}
                 </Text>
-              </View>
+              </Pressable>
             );
           })}
         </View>
@@ -291,7 +514,7 @@ function LiveKitStageMediaContent({
 
       return (
         <View style={styles.bubbleGridSurface} collapsable={false}>
-          {bubbleGridTracks.length > 10 ? (
+          {bubbleGridItems.length > 10 ? (
             <ScrollView
               style={styles.bubbleGridScroll}
               showsVerticalScrollIndicator
@@ -327,7 +550,7 @@ function LiveKitStageMediaContent({
         <View pointerEvents="none" style={styles.videoOverlay}>
           <View style={styles.videoBadge}>
             <Text style={styles.videoBadgeText}>
-              {getParticipantLabel(primaryTrack.participant.identity, localParticipant.identity)}
+              {getParticipantLabel(primaryTrack.participant.identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity)}
             </Text>
           </View>
         </View>
@@ -341,7 +564,7 @@ function LiveKitStageMediaContent({
             />
             <View style={styles.secondaryVideoBadge}>
               <Text style={styles.secondaryVideoBadgeText}>
-                {getParticipantLabel(secondaryTrack.participant.identity, localParticipant.identity)}
+                {getParticipantLabel(secondaryTrack.participant.identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity)}
               </Text>
             </View>
           </View>
@@ -406,6 +629,10 @@ export function LiveKitStageMediaSurface({
   containerStyle,
   fillParent = true,
   layout = "stage",
+  participantLabelsByIdentity,
+  participantRoster,
+  onParticipantPress,
+  showRequestIndicators = true,
   surfaceLabel = "Live Stage",
   publishLocalAudio = joinContract.participantRole !== "viewer",
   publishLocalVideo,
@@ -678,7 +905,7 @@ export function LiveKitStageMediaSurface({
   return (
     <View
       style={[styles.surface, fillParent && styles.surfaceFill, containerStyle]}
-      pointerEvents="none"
+      pointerEvents={onParticipantPress ? "auto" : "none"}
       accessible={false}
       importantForAccessibility="no-hide-descendants"
     >
@@ -699,8 +926,13 @@ export function LiveKitStageMediaSurface({
         <LiveKitStageMediaContent
           joinContract={joinContract}
           layout={layout}
+          participantLabelsByIdentity={participantLabelsByIdentity}
+          participantRoster={participantRoster}
+          onParticipantPress={onParticipantPress}
+          showRequestIndicators={showRequestIndicators}
           surfaceLabel={surfaceLabel}
           publishLocalAudio={effectivePublishLocalAudio}
+          publishLocalVideo={effectivePublishLocalCamera}
           mediaDeviceFailure={mediaDeviceFailure}
         />
       </LiveKitRoom>
@@ -754,6 +986,41 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     borderRadius: 39,
+  },
+  bubblePlaceholderWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  bubblePlaceholderInitials: {
+    color: "#FFFFFF",
+    fontSize: 21,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  bubblePlaceholderStatus: {
+    marginTop: 2,
+    color: "rgba(233,236,245,0.68)",
+    fontSize: 8,
+    fontWeight: "800",
+    textAlign: "center",
+    textTransform: "uppercase",
+  },
+  bubbleRequestBadge: {
+    position: "absolute",
+    top: -4,
+    right: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(141,182,255,0.68)",
+    backgroundColor: "rgba(52,92,166,0.94)",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  bubbleRequestBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 7.5,
+    fontWeight: "900",
   },
   bubbleLabel: {
     width: "100%",

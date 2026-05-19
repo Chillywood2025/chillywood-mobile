@@ -209,6 +209,44 @@ export const WATCH_PARTY_SYNC_TABLE = "watch_party_sync_events";
 export const WATCH_PARTY_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MS;
 export const WATCH_PARTY_ROOM_ACTIVE_WINDOW_MILLIS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
 export const WATCH_PARTY_ROOM_HEARTBEAT_MILLIS = ROOM_HEARTBEAT_MS;
+export const PARTY_SEAT_REQUEST_MESSAGE_PREFIX = "__chillywood_party_seat_request_v1__:";
+export const PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS = 5 * 60 * 1000;
+
+export type WatchPartySeatRequestMarker = {
+  participantId: string;
+  pending: boolean;
+  sentAt: number;
+};
+
+export const encodePartySeatRequestMessage = (participantId: string, pending: boolean) => (
+  `${PARTY_SEAT_REQUEST_MESSAGE_PREFIX}${JSON.stringify({
+    participantId,
+    pending,
+    sentAt: Date.now(),
+  })}`
+);
+
+export const decodePartySeatRequestMessage = (body: unknown): WatchPartySeatRequestMarker | null => {
+  const raw = String(body ?? "").trim();
+  if (!raw.startsWith(PARTY_SEAT_REQUEST_MESSAGE_PREFIX)) return null;
+  try {
+    const payload = JSON.parse(raw.slice(PARTY_SEAT_REQUEST_MESSAGE_PREFIX.length)) as {
+      participantId?: unknown;
+      pending?: unknown;
+      sentAt?: unknown;
+    };
+    const participantId = String(payload.participantId ?? "").trim();
+    if (!participantId) return null;
+    const sentAt = Number(payload.sentAt);
+    return {
+      participantId,
+      pending: payload.pending === true,
+      sentAt: Number.isFinite(sentAt) ? sentAt : 0,
+    };
+  } catch {
+    return null;
+  }
+};
 
 type WatchPartySyncEventInsert = TablesInsert<"watch_party_sync_events">;
 type WatchPartyMessageInsert = TablesInsert<"watch_party_room_messages">;
