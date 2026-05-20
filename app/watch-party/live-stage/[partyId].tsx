@@ -253,6 +253,7 @@ type CommunicationRTCViewComponent = React.ComponentType<{
 }>;
 
 const HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 30_000;
+const HYBRID_LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS = 4_500;
 
 type LiveKitStageFallbackReason = "connection_timeout" | "disconnected" | "room_error";
 
@@ -262,6 +263,11 @@ const isHybridLiveKitConnectedishState = (state: unknown) => (
   || state === ConnectionState.Reconnecting
   || state === ConnectionState.SignalReconnecting
 );
+
+const isHybridLiveKitClientDisconnectReason = (reason: unknown) => {
+  const normalizedReason = String(reason ?? "").toLowerCase();
+  return normalizedReason.includes("client") || normalizedReason.includes("user initiated");
+};
 
 function ConditionalWrap({
   condition,
@@ -491,6 +497,8 @@ function LiveKitHybridCommunityRoomHost({
 }) {
   const fallbackTriggeredRef = useRef(false);
   const tearingDownRoomsRef = useRef(new Set<Room>());
+  const didConnectOnceRef = useRef(false);
+  const disconnectFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [didConnectOnce, setDidConnectOnce] = useState(false);
   const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
@@ -506,10 +514,40 @@ function LiveKitHybridCommunityRoomHost({
     return nextRoom;
   }, [roomKey]);
 
+  const clearDisconnectFallbackTimeout = useCallback(() => {
+    if (!disconnectFallbackTimeoutRef.current) return;
+    clearTimeout(disconnectFallbackTimeoutRef.current);
+    disconnectFallbackTimeoutRef.current = null;
+  }, []);
+
+  const disableHybridLocalMediaQuietly = useCallback((reason: string, options?: { audio?: boolean; camera?: boolean }) => {
+    const localParticipant = room.localParticipant as {
+      setCameraEnabled?: (enabled: boolean, options?: unknown) => Promise<unknown>;
+      setMicrophoneEnabled?: (enabled: boolean) => Promise<unknown>;
+    };
+    const shouldDisableAudio = options?.audio !== false;
+    const shouldDisableCamera = options?.camera !== false;
+
+    Promise.all([
+      shouldDisableCamera ? localParticipant.setCameraEnabled?.(false, LIVE_VIDEO_CAPTURE_OPTIONS) ?? Promise.resolve() : Promise.resolve(),
+      shouldDisableAudio ? localParticipant.setMicrophoneEnabled?.(false) ?? Promise.resolve() : Promise.resolve(),
+    ]).catch((error) => {
+      debugLog("livekit", "hybrid community local media disable failed", {
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        reason,
+        audio: shouldDisableAudio,
+        camera: shouldDisableCamera,
+        error: error instanceof Error ? error.message : String(error ?? ""),
+      });
+    });
+  }, [joinContract.participantRole, joinContract.roomName, room]);
+
   const triggerFallback = useCallback(
     (reason: LiveKitStageFallbackReason, error?: unknown) => {
       if (fallbackTriggeredRef.current) return;
       fallbackTriggeredRef.current = true;
+      clearDisconnectFallbackTimeout();
 
       if (error) {
         reportRuntimeError("livekit-hybrid-community-room", error, {
@@ -522,23 +560,39 @@ function LiveKitHybridCommunityRoomHost({
 
       onFallback(reason);
     },
-    [joinContract.endpoint, joinContract.participantRole, joinContract.roomName, onFallback],
+    [clearDisconnectFallbackTimeout, joinContract.endpoint, joinContract.participantRole, joinContract.roomName, onFallback],
   );
 
   useEffect(() => {
     fallbackTriggeredRef.current = false;
+    didConnectOnceRef.current = false;
     tearingDownRoomsRef.current.delete(room);
+    clearDisconnectFallbackTimeout();
     setDidConnectOnce(false);
     setMediaDeviceFailure(null);
-  }, [room]);
+  }, [clearDisconnectFallbackTimeout, room]);
 
   useEffect(() => {
     const tearingDownRooms = tearingDownRoomsRef.current;
     return () => {
       tearingDownRooms.add(room);
       fallbackTriggeredRef.current = true;
+      clearDisconnectFallbackTimeout();
+      disableHybridLocalMediaQuietly("unmount");
     };
-  }, [room]);
+  }, [clearDisconnectFallbackTimeout, disableHybridLocalMediaQuietly, room]);
+
+  useEffect(() => {
+    if (!publishLocalAudio || joinContract.participantRole === "viewer") {
+      disableHybridLocalMediaQuietly("audio-authority-downgrade", { camera: false });
+    }
+  }, [disableHybridLocalMediaQuietly, joinContract.participantRole, publishLocalAudio]);
+
+  useEffect(() => {
+    if (!publishLocalCamera || joinContract.participantRole === "viewer") {
+      disableHybridLocalMediaQuietly("camera-authority-downgrade", { audio: false });
+    }
+  }, [disableHybridLocalMediaQuietly, joinContract.participantRole, publishLocalCamera]);
 
   useEffect(() => {
     let active = true;
@@ -581,22 +635,54 @@ function LiveKitHybridCommunityRoomHost({
   }, [didConnectOnce, joinContract.participantRole, joinContract.roomName, room, triggerFallback]);
 
   const handleConnected = useCallback(() => {
+    clearDisconnectFallbackTimeout();
     tearingDownRoomsRef.current.delete(room);
+    didConnectOnceRef.current = true;
     setDidConnectOnce(true);
     debugLog("livekit", "hybrid community room connected", {
       roomName: joinContract.roomName,
       participantRole: joinContract.participantRole,
       publishLocalCamera,
     });
-  }, [joinContract.participantRole, joinContract.roomName, publishLocalCamera, room]);
+  }, [clearDisconnectFallbackTimeout, joinContract.participantRole, joinContract.roomName, publishLocalCamera, room]);
 
-  const handleDisconnected = useCallback(() => {
-    if (tearingDownRoomsRef.current.has(room)) return;
-    triggerFallback(
-      "disconnected",
-      new Error("LiveKit disconnected before the hybrid community feed could stay stable."),
-    );
-  }, [room, triggerFallback]);
+  const handleDisconnected = useCallback((reason?: unknown) => {
+    if (tearingDownRoomsRef.current.has(room) || isHybridLiveKitClientDisconnectReason(reason)) {
+      debugLog("livekit", "hybrid community room disconnected without fallback", {
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        reason: String(reason ?? "unknown"),
+      });
+      return;
+    }
+
+    clearDisconnectFallbackTimeout();
+    disconnectFallbackTimeoutRef.current = setTimeout(() => {
+      disconnectFallbackTimeoutRef.current = null;
+      if (tearingDownRoomsRef.current.has(room) || isHybridLiveKitConnectedishState(room.state)) {
+        return;
+      }
+      triggerFallback(
+        "disconnected",
+        new Error(didConnectOnceRef.current
+          ? "LiveKit stayed disconnected after the hybrid community reconnect grace period."
+          : "LiveKit disconnected before the hybrid community feed could stay stable."),
+      );
+    }, HYBRID_LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS);
+
+    debugLog("livekit", "hybrid community room disconnected during reconnect grace", {
+      roomName: joinContract.roomName,
+      participantRole: joinContract.participantRole,
+      reason: String(reason ?? "unknown"),
+      didConnectOnce: didConnectOnceRef.current,
+    });
+  }, [
+    clearDisconnectFallbackTimeout,
+    joinContract.participantRole,
+    joinContract.roomName,
+    room,
+    triggerFallback,
+  ]);
 
   const handleError = useCallback((error: Error) => {
     if (tearingDownRoomsRef.current.has(room)) return;
