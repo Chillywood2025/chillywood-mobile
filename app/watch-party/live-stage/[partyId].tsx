@@ -1576,6 +1576,22 @@ export default function WatchPartyLiveStageScreen({
   const closeParticipantModal = useCallback(() => {
     setSelectedParticipantId("");
   }, []);
+  const collapseHostParticipantControls = useCallback((participantId?: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    setSelectedParticipantId("");
+    if (!nextParticipantId) {
+      setActiveParticipantId("");
+      return;
+    }
+    setActiveParticipantId((currentParticipantId) => (currentParticipantId === nextParticipantId ? "" : currentParticipantId));
+    setParticipantPresentationById((prev) => {
+      if (prev[nextParticipantId] !== "expanded") return prev;
+      return {
+        ...prev,
+        [nextParticipantId]: "compact",
+      };
+    });
+  }, []);
   const featureParticipantFirst = useCallback((participantId: string) => {
     const nextParticipantId = String(participantId ?? "").trim();
     if (!nextParticipantId) return;
@@ -4182,6 +4198,9 @@ export default function WatchPartyLiveStageScreen({
                           onPress={() => {
                             if (isHost) {
                               debugLiveStage("host tap user", { userId: participant.userId });
+                              if (canModerateParticipant) {
+                                setSelectedParticipantId("");
+                              }
                             } else {
                               debugLiveStage("request mic", { userId: participant.userId });
                               if (isCurrentUser && canRequestSeat(participantState) && !isRequesting) {
@@ -4194,7 +4213,9 @@ export default function WatchPartyLiveStageScreen({
                               ...prev,
                               [participant.userId]: (prev[participant.userId] ?? "compact") === "expanded" ? "compact" : "expanded",
                             }));
-                            setSelectedParticipantId(participant.userId);
+                            if (!isHost || !canModerateParticipant) {
+                              setSelectedParticipantId(participant.userId);
+                            }
                           }}
                           onLongPress={() => {
                             setFeaturedParticipantById((prev) => ({
@@ -4211,7 +4232,8 @@ export default function WatchPartyLiveStageScreen({
                                   <TouchableOpacity
                                     style={styles.stageParticipantActionBtn}
                                     activeOpacity={0.82}
-                                    onPress={async () => {
+                                    onPress={async (event) => {
+                                      event.stopPropagation();
                                       if (!canAddSpeakerSeat(participant.userId)) {
                                         Alert.alert(
                                           "Speaker seats full",
@@ -4243,6 +4265,7 @@ export default function WatchPartyLiveStageScreen({
                                         isMuted,
                                         pending: false,
                                       });
+                                      collapseHostParticipantControls(participant.userId);
                                     }}
                                   >
                                     <Text style={styles.stageParticipantActionText}>Approve Seat</Text>
@@ -4250,7 +4273,8 @@ export default function WatchPartyLiveStageScreen({
                                   <TouchableOpacity
                                     style={styles.stageParticipantActionBtn}
                                     activeOpacity={0.82}
-                                    onPress={() => {
+                                    onPress={(event) => {
+                                      event.stopPropagation();
                                       setSeatRequestsById((prev) => {
                                         if (!prev[participant.userId]) return prev;
                                         const next = { ...prev };
@@ -4258,6 +4282,7 @@ export default function WatchPartyLiveStageScreen({
                                         return next;
                                       });
                                       broadcastSeatRequest(participant.userId, false);
+                                      collapseHostParticipantControls(participant.userId);
                                     }}
                                   >
                                     <Text style={styles.stageParticipantActionText}>Deny</Text>
@@ -4267,12 +4292,19 @@ export default function WatchPartyLiveStageScreen({
                               <TouchableOpacity
                                 style={styles.stageParticipantActionBtn}
                                 activeOpacity={0.82}
-                                onPress={() => {
+                                onPress={async (event) => {
+                                  event.stopPropagation();
                                   if (!isSpeakerRole && !canAddSpeakerSeat(participant.userId)) {
                                     Alert.alert(
                                       "Speaker seats full",
                                       `Live rooms allow up to ${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} active speaker seats. Move someone to audience before seating another speaker.`,
                                     );
+                                    return;
+                                  }
+                                  const mutePersisted = await emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
+                                  if (!mutePersisted) {
+                                    Alert.alert("Seat update unavailable", "The mute change could not be saved yet. Try again in a moment.");
+                                    await refreshStageSnapshot(myUserId).catch(() => null);
                                     return;
                                   }
                                   setParticipantStateById((prev) => {
@@ -4289,7 +4321,6 @@ export default function WatchPartyLiveStageScreen({
                                       },
                                     };
                                   });
-                                  emitParticipantUpdate(participant.userId, { isMuted: !isMuted });
                                 }}
                               >
                                 <Text style={styles.stageParticipantActionText}>{isMuted ? "Unmute" : "Mute"}</Text>
@@ -4297,7 +4328,8 @@ export default function WatchPartyLiveStageScreen({
                               <TouchableOpacity
                                 style={styles.stageParticipantActionBtn}
                                 activeOpacity={0.82}
-                                onPress={async () => {
+                                onPress={async (event) => {
+                                  event.stopPropagation();
                                   if (!isSpeakerRole && !canAddSpeakerSeat(participant.userId)) {
                                     Alert.alert(
                                       "Speaker seats full",
@@ -4337,6 +4369,7 @@ export default function WatchPartyLiveStageScreen({
                                     delete next[participant.userId];
                                     return next;
                                   });
+                                  collapseHostParticipantControls(participant.userId);
                                 }}
                               >
                                 <Text style={styles.stageParticipantActionText}>{isSpeakerRole ? "Move to Audience" : "Seat Participant"}</Text>
@@ -4344,7 +4377,14 @@ export default function WatchPartyLiveStageScreen({
                               <TouchableOpacity
                                 style={[styles.stageParticipantActionBtn, styles.stageParticipantActionBtnDanger]}
                                 activeOpacity={0.82}
-                                onPress={() => {
+                                onPress={async (event) => {
+                                  event.stopPropagation();
+                                  const removePersisted = await emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
+                                  if (!removePersisted) {
+                                    Alert.alert("Seat update unavailable", "The participant change could not be saved yet. Try again in a moment.");
+                                    await refreshStageSnapshot(myUserId).catch(() => null);
+                                    return;
+                                  }
                                   setParticipantStateById((prev) => {
                                     const current = prev[participant.userId] ?? {
                                       isMuted: !!participant.isMuted,
@@ -4359,7 +4399,6 @@ export default function WatchPartyLiveStageScreen({
                                       },
                                     };
                                   });
-                                  emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });
                                   broadcastSeatState(participant.userId, {
                                     role: participantState.role,
                                     isMuted,
@@ -4372,6 +4411,7 @@ export default function WatchPartyLiveStageScreen({
                                     delete next[participant.userId];
                                     return next;
                                   });
+                                  collapseHostParticipantControls(participant.userId);
                                 }}
                               >
                                 <Text style={[styles.stageParticipantActionText, styles.stageParticipantActionTextDanger]}>

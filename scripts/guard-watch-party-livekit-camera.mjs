@@ -30,6 +30,13 @@ const assertBefore = (source, firstNeedle, secondNeedle, label) => {
   }
 };
 
+const assertCountAtLeast = (source, needle, minimumCount, label) => {
+  const count = source.split(needle).length - 1;
+  if (count < minimumCount) {
+    fail(`${label} Expected at least ${minimumCount}, found ${count}.`);
+  }
+};
+
 const sliceBetween = (source, startNeedle, endNeedle, label) => {
   const startIndex = source.indexOf(startNeedle);
   const endIndex = source.indexOf(endNeedle, startIndex + startNeedle.length);
@@ -47,6 +54,7 @@ const liveStage = readSource("app/watch-party/live-stage/[partyId].tsx");
 const player = readSource("app/player/[id].tsx");
 const watchParty = readSource("_lib/watchParty.ts");
 const watchPartySeatRequestProof = readSource("scripts/proof-watch-party-seat-request.mjs");
+const liveStageSeatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
 const premiumWatchPartyAccess = readSource("_lib/premiumWatchPartyAccess.ts");
 const partyRoomWatchTogether = sliceBetween(
   partyRoom,
@@ -119,6 +127,36 @@ const liveStageEntryHandler = sliceBetween(
   "const onEnterLiveStage = useCallback(async () => {",
   "const onReturnToLiveRoom = useCallback",
   "Live Stage entry handler boundary",
+);
+const liveStageHostCardPress = sliceBetween(
+  liveStage,
+  "debugLiveStage(\"host tap user\", { userId: participant.userId });",
+  "onLongPress={() => {",
+  "Live Stage host card press boundary",
+);
+const liveStageHostActionMenu = sliceBetween(
+  liveStage,
+  "{isHost && isActiveParticipant && canModerateParticipant ? (",
+  "<View style={[styles.stagePresenceTapWrap",
+  "Live Stage host action menu boundary",
+);
+const liveStageHostApproveAction = sliceBetween(
+  liveStageHostActionMenu,
+  "const seatPersisted = await emitParticipantUpdate(participant.userId, { role: \"speaker\" });",
+  "<Text style={styles.stageParticipantActionText}>Deny</Text>",
+  "Live Stage host approve action boundary",
+);
+const liveStageHostMuteAction = sliceBetween(
+  liveStageHostActionMenu,
+  "const mutePersisted = await emitParticipantUpdate(participant.userId, { isMuted: !isMuted });",
+  "<Text style={styles.stageParticipantActionText}>{isMuted ? \"Unmute\" : \"Mute\"}</Text>",
+  "Live Stage host mute action boundary",
+);
+const liveStageHostRemoveAction = sliceBetween(
+  liveStageHostActionMenu,
+  "const removePersisted = await emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });",
+  "<Text style={[styles.stageParticipantActionText, styles.stageParticipantActionTextDanger]}",
+  "Live Stage host remove action boundary",
 );
 const liveStageRouteAccessCheck = sliceBetween(
   liveStage,
@@ -908,6 +946,81 @@ assertIncludes(
   liveStageFallbackHandler,
   "setLiveKitJoinContract(null);",
   "Live Stage fallback must explicitly clear the prepared contract",
+);
+assertIncludes(
+  liveStage,
+  "const collapseHostParticipantControls = useCallback",
+  "Live Stage must provide a host-control collapse path after seat actions",
+);
+assertIncludes(
+  liveStageHostCardPress,
+  "if (!isHost || !canModerateParticipant)",
+  "Live Stage host moderation taps must not open the participant detail sheet",
+);
+assertIncludes(
+  liveStageHostCardPress,
+  "setSelectedParticipantId(\"\");",
+  "Live Stage host moderation taps must close any open participant detail sheet",
+);
+assertCountAtLeast(
+  liveStageHostActionMenu,
+  "event.stopPropagation();",
+  5,
+  "Live Stage host action buttons must stop parent card tap propagation.",
+);
+assertBefore(
+  liveStageHostApproveAction,
+  "const seatPersisted = await emitParticipantUpdate(participant.userId, { role: \"speaker\" });",
+  "broadcastSeatState(participant.userId, {",
+  "Live Stage approve broadcasts must wait until membership authority is persisted.",
+);
+assertBefore(
+  liveStageHostApproveAction,
+  "broadcastSeatState(participant.userId, {",
+  "collapseHostParticipantControls(participant.userId);",
+  "Live Stage approve must collapse host controls after broadcasting the persisted seat state.",
+);
+assertBefore(
+  liveStageHostMuteAction,
+  "const mutePersisted = await emitParticipantUpdate(participant.userId, { isMuted: !isMuted });",
+  "setParticipantStateById((prev) => {",
+  "Live Stage mute UI must wait until membership authority is persisted.",
+);
+assertBefore(
+  liveStageHostRemoveAction,
+  "const removePersisted = await emitParticipantUpdate(participant.userId, { isRemoved: !isRemoved });",
+  "broadcastSeatState(participant.userId, {",
+  "Live Stage remove broadcasts must wait until membership authority is persisted.",
+);
+assertIncludes(
+  liveStageSeatApprovalProof,
+  "proof-live-stage-host-0001",
+  "Live Stage proof must use a deterministic fake host identity",
+);
+assertIncludes(
+  liveStageSeatApprovalProof,
+  "proof-live-stage-viewer-0001",
+  "Live Stage proof must use a deterministic fake viewer identity",
+);
+assertIncludes(
+  liveStageSeatApprovalProof,
+  "detail modal should stay closed for host moderation taps",
+  "Live Stage proof must cover the host detail-sheet regression",
+);
+assertIncludes(
+  liveStageSeatApprovalProof,
+  "viewer should become publish-capable after host approval",
+  "Live Stage proof must cover approved viewer publish authority",
+);
+assertIncludes(
+  liveStageSeatApprovalProof,
+  "deviceOrEmulatorUsed: false",
+  "Live Stage proof must not use attached devices or emulators",
+);
+assertIncludes(
+  liveStageSeatApprovalProof,
+  "realAuthAccountCreated: false",
+  "Live Stage proof must not create real auth accounts",
 );
 
 if (process.exitCode) {
