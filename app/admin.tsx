@@ -3426,7 +3426,7 @@ export default function AdminStudioScreen() {
 
         const payload = toDbPatch(nextPatch);
 
-        const { error } = await supabase.from("titles").update(payload).eq("id", id);
+        const { error } = await supabase.from("titles").update(payload as any).eq("id", id);
         if (error) throw error;
 
         setTitles((prev) =>
@@ -3471,13 +3471,13 @@ export default function AdminStudioScreen() {
         setSaving(true);
         const clearOthers = await supabase
           .from("titles")
-          .update({ [capabilities.heroCol]: false })
+          .update({ [capabilities.heroCol]: false } as any)
           .neq("id", item.id);
         if (clearOthers.error) throw clearOthers.error;
 
         const setCurrent = await supabase
           .from("titles")
-          .update({ [capabilities.heroCol]: true })
+          .update({ [capabilities.heroCol]: true } as any)
           .eq("id", item.id);
         if (setCurrent.error) throw setCurrent.error;
 
@@ -3566,18 +3566,18 @@ export default function AdminStudioScreen() {
       setSaving(true);
 
       if (editorMode === "create") {
-        const { data, error } = await supabase.from("titles").insert(payload).select("id").single();
+        const { data, error } = await supabase.from("titles").insert(payload as any).select("id").single();
         if (error) throw error;
 
         if (capabilities.heroCol && form.is_hero && data?.id != null) {
           const clearOthers = await supabase
             .from("titles")
-            .update({ [capabilities.heroCol]: false })
+            .update({ [capabilities.heroCol]: false } as any)
             .neq("id", data.id);
           if (clearOthers.error) throw clearOthers.error;
           const setCurrent = await supabase
             .from("titles")
-            .update({ [capabilities.heroCol]: true })
+            .update({ [capabilities.heroCol]: true } as any)
             .eq("id", data.id);
           if (setCurrent.error) throw setCurrent.error;
         }
@@ -3594,12 +3594,12 @@ export default function AdminStudioScreen() {
         if (capabilities.heroCol && form.is_hero) {
           const clearOthers = await supabase
             .from("titles")
-            .update({ [capabilities.heroCol]: false })
+            .update({ [capabilities.heroCol]: false } as any)
             .neq("id", form.id);
           if (clearOthers.error) throw clearOthers.error;
         }
 
-        const { error } = await supabase.from("titles").update(payload).eq("id", form.id);
+        const { error } = await supabase.from("titles").update(payload as any).eq("id", form.id);
         if (error) throw error;
         setNotice({
           type: "success",
