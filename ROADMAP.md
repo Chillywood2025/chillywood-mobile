@@ -10,6 +10,7 @@
 
 ## Public v1
 - login, settings, and logout
+- Settings now keeps account controls, notification preferences, Admin Dashboard discoverability for authorized staff only, and signed-in Change Password; private recent/backed activity lives on the signed-in user's own Profile News Feed, while public profile feeds stay public-only.
 - home and discovery, including Explore client-side title filtering over already loaded platform `titles` rows
 - customizable basic profiles
 - public Channel route at `/channel/[userId]`

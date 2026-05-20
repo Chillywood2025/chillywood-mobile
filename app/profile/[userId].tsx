@@ -3670,14 +3670,14 @@ export default function ProfileScreen() {
       {renderProfilePostComposer()}
       <View style={styles.profileSocialFeedHeader}>
         <Text style={styles.profileSocialFeedKicker}>
-          {profileSocialFeedMode === "own_profile_social_feed" ? "YOUR CHI'LLYWOOD FEED" : "PUBLIC ACTIVITY"}
+          {profileSocialFeedMode === "own_profile_social_feed" ? "YOUR NEWS FEED" : "PUBLIC ACTIVITY"}
         </Text>
         <Text style={styles.profileSocialFeedTitle}>
-          {profileSocialFeedMode === "own_profile_social_feed" ? "Profile Social Feed" : `${profile.displayName}'s Profile Feed`}
+          {profileSocialFeedMode === "own_profile_social_feed" ? "News Feed" : `${profile.displayName}'s Profile Feed`}
         </Text>
         <Text style={styles.profileSocialFeedBody}>
           {profileSocialFeedMode === "own_profile_social_feed"
-            ? "Your posts, creator uploads, Chi'lly Circle, followed creators, and backed activity appear here when real rows exist."
+            ? "Your posts, creator uploads, Chi'lly Circle, followed creators, and private backed activity appear here when real rows exist."
             : "This feed only shows this profile owner's public posts, uploads, and safe live or replay entries."}
         </Text>
       </View>
@@ -3703,7 +3703,7 @@ export default function ProfileScreen() {
         <View style={styles.feedEmptyCard}>
           <Text style={styles.feedEmptyTitle}>
             {profileSocialFeedMode === "own_profile_social_feed"
-              ? "Follow creators and build your Chi'lly Circle to fill your Chi'llywood feed."
+              ? "Follow creators and build your Chi'lly Circle to fill your News Feed."
               : "No public activity yet."}
           </Text>
           <Text style={styles.feedEmptyText}>

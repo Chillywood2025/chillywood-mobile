@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ActivityIndicator, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ActivityIndicator, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
@@ -10,9 +10,6 @@ import {
   subscribeToMonetizationSnapshot,
 } from "../_lib/monetization";
 import {
-  dismissNotification,
-  markNotificationRead,
-  readNotificationList,
   readNotificationPreferences,
   readPushPermissionState,
   requestAndroidPushPermissionAndRegister,
@@ -20,9 +17,13 @@ import {
   updateNotificationPreferences,
   type NotificationPreferencePatch,
   type NotificationPreferenceSettings,
-  type NotificationRecord,
   type PushRegistrationState,
 } from "../_lib/notifications";
+import {
+  canAccessAdminConsole,
+  getModerationAccess,
+  readMyPlatformRoleMemberships,
+} from "../_lib/moderation";
 import {
   getProfileVisibilityLabel,
   PROFILE_VISIBILITY_OPTIONS,
@@ -45,11 +46,20 @@ export default function SettingsScreen() {
   const [profileVisibilitySaving, setProfileVisibilitySaving] = useState<ProfileVisibility | null>(null);
   const [profileVisibilityNotice, setProfileVisibilityNotice] = useState<string | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferenceSettings | null>(null);
-  const [notificationActivity, setNotificationActivity] = useState<NotificationRecord[]>([]);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
   const [pushRegistration, setPushRegistration] = useState<PushRegistrationState | null>(null);
+  const [canOpenAdminDashboard, setCanOpenAdminDashboard] = useState(false);
+  const [adminAccessLoading, setAdminAccessLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
   const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
+  const moderationAccess = useMemo(() => getModerationAccess({
+    email: user?.email ?? null,
+    userId: user?.id ?? null,
+  }), [user?.email, user?.id]);
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;
@@ -81,6 +91,35 @@ export default function SettingsScreen() {
   useEffect(() => {
     let active = true;
 
+    if (isLoading || !isSignedIn) {
+      setCanOpenAdminDashboard(false);
+      setAdminAccessLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setAdminAccessLoading(true);
+    void readMyPlatformRoleMemberships()
+      .then((memberships) => {
+        if (!active) return;
+        setCanOpenAdminDashboard(canAccessAdminConsole(moderationAccess, memberships));
+      })
+      .catch(() => {
+        if (active) setCanOpenAdminDashboard(false);
+      })
+      .finally(() => {
+        if (active) setAdminAccessLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isLoading, isSignedIn, moderationAccess]);
+
+  useEffect(() => {
+    let active = true;
+
     if (isLoading || !isSignedIn) return () => {
       active = false;
     };
@@ -106,13 +145,11 @@ export default function SettingsScreen() {
     if (!isSignedIn) return;
     setNotificationLoading(true);
     try {
-      const [preferences, activity, permissionState] = await Promise.all([
+      const [preferences, permissionState] = await Promise.all([
         readNotificationPreferences(),
-        readNotificationList(undefined, 8),
         readPushPermissionState(),
       ]);
       setNotificationPreferences(preferences);
-      setNotificationActivity(activity);
       setPushRegistration((current) => current ?? {
         message: permissionState === "granted"
           ? "Notifications are allowed on this Android device. Register this device to receive push alerts."
@@ -171,18 +208,6 @@ export default function SettingsScreen() {
       setNotificationSavingKey(null);
     }
   }, [notificationSavingKey]);
-
-  const onPressNotification = useCallback((notification: NotificationRecord) => {
-    void markNotificationRead(notification.id).then(() => refreshNotifications());
-    const path = notification.deepLink?.replace(/^chillywoodmobile:\/\//u, "/") || "";
-    if (path.startsWith("/")) {
-      router.push(path as Parameters<typeof router.push>[0]);
-    }
-  }, [refreshNotifications, router]);
-
-  const onPressDismissNotification = useCallback((notificationId: string) => {
-    void dismissNotification(notificationId).then(() => refreshNotifications());
-  }, [refreshNotifications]);
 
   const monetizationStatusLabel = useMemo(() => {
     if (!monetizationSnapshot.configuration.shouldConfigure) return "Premium is not enabled on this build";
@@ -255,6 +280,10 @@ export default function SettingsScreen() {
     router.push({ pathname: "/profile/[userId]", params: { userId: user.id, self: "1" } });
   }, [router, user?.id]);
 
+  const onPressAdminDashboard = useCallback(() => {
+    router.push("/admin" as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   const onPressManageChannel = useCallback(() => {
     router.push("/channel-studio");
   }, [router]);
@@ -280,6 +309,45 @@ export default function SettingsScreen() {
       setProfileVisibilitySaving(null);
     }
   }, [profileVisibility, profileVisibilitySaving]);
+
+  const onPressChangePassword = useCallback(async () => {
+    if (passwordSaving) return;
+
+    setPasswordNotice(null);
+    if (!newPassword || !confirmPassword) {
+      Alert.alert("Change Password", "Enter and confirm your new password.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      Alert.alert("Change Password", "Use at least 8 characters for your new password.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Change Password", "The new passwords do not match.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPasswordNotice(error.message);
+        Alert.alert("Change Password", error.message);
+        return;
+      }
+
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordNotice("Password updated.");
+      Alert.alert("Change Password", "Your password has been updated.");
+    } catch {
+      const message = "Unable to update your password right now.";
+      setPasswordNotice(message);
+      Alert.alert("Change Password", message);
+    } finally {
+      setPasswordSaving(false);
+    }
+  }, [confirmPassword, newPassword, passwordSaving]);
 
   const openExternalDestination = useCallback(async (url: string, label: string) => {
     try {
@@ -447,9 +515,63 @@ export default function SettingsScreen() {
             <Text style={styles.utilityButtonText}>Channel Studio</Text>
           </TouchableOpacity>
         </View>
+        {canOpenAdminDashboard ? (
+          <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressAdminDashboard}>
+            <Text style={styles.secondaryActionButtonText}>Admin Dashboard</Text>
+          </TouchableOpacity>
+        ) : adminAccessLoading ? (
+          <Text style={styles.metaText}>Checking admin access...</Text>
+        ) : null}
         <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressChillyCircle}>
           <Text style={styles.secondaryActionButtonText}>{"Chi'lly Circle"}</Text>
         </TouchableOpacity>
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityLabel}>Change password</Text>
+          <Text style={styles.statusNote}>Update the password for this signed-in account.</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="New password"
+            placeholderTextColor="#7A859A"
+            secureTextEntry
+            value={newPassword}
+            onChangeText={(value) => {
+              setNewPassword(value);
+              setPasswordNotice(null);
+            }}
+            editable={!passwordSaving}
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Confirm new password"
+            placeholderTextColor="#7A859A"
+            secureTextEntry
+            value={confirmPassword}
+            onChangeText={(value) => {
+              setConfirmPassword(value);
+              setPasswordNotice(null);
+            }}
+            editable={!passwordSaving}
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+          />
+          <TouchableOpacity
+            style={[styles.utilityButton, styles.fullWidthButton, passwordSaving && styles.utilityButtonDisabled]}
+            activeOpacity={0.86}
+            onPress={() => {
+              void onPressChangePassword();
+            }}
+            disabled={passwordSaving}
+          >
+            {passwordSaving
+              ? <ActivityIndicator color="#E5ECF8" size="small" />
+              : <Text style={styles.utilityButtonText}>Change Password</Text>}
+          </TouchableOpacity>
+          {passwordNotice ? <Text style={styles.metaText}>{passwordNotice}</Text> : null}
+        </View>
         <View style={styles.identityBlock}>
           <Text style={styles.identityLabel}>Profile privacy</Text>
           <Text style={styles.identityValue}>
@@ -551,7 +673,7 @@ export default function SettingsScreen() {
           <View style={styles.preferenceList}>
             {[
               ["pushEnabled", "Push alerts", "Allow this device to receive Android push notifications."],
-              ["inAppEnabled", "In-app activity", "Keep recent activity visible in Settings."],
+              ["inAppEnabled", "In-app activity", "Keep recent activity visible in your Profile News Feed."],
               ["followedCreatorLiveEnabled", "Followed creators live", "A followed creator starts an eligible public live session."],
               ["circleFriendLiveEnabled", "Chi'lly Circle live", "A mutual Chi'lly Circle connection starts an eligible public live session."],
               ["eventStartsSoonEnabled", "Events starting soon", "A saved public event is about 15 minutes away."],
@@ -580,34 +702,6 @@ export default function SettingsScreen() {
             })}
           </View>
         ) : null}
-
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Recent activity</Text>
-          {notificationActivity.length ? notificationActivity.map((notification) => (
-            <View key={notification.id} style={styles.activityRow}>
-              <TouchableOpacity
-                style={styles.activityMain}
-                activeOpacity={0.84}
-                onPress={() => onPressNotification(notification)}
-              >
-                <Text style={styles.activityTitle}>{notification.title}</Text>
-                {notification.body ? <Text style={styles.activityBody}>{notification.body}</Text> : null}
-                <Text style={styles.activityMeta}>
-                  {notification.isRead ? "Read" : "Unread"} · {new Date(notification.createdAt).toLocaleString()}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.activityDismissButton}
-                activeOpacity={0.84}
-                onPress={() => onPressDismissNotification(notification.id)}
-              >
-                <Text style={styles.activityDismissText}>Dismiss</Text>
-              </TouchableOpacity>
-            </View>
-          )) : (
-            <Text style={styles.statusNote}>No backed notification activity yet.</Text>
-          )}
-        </View>
       </View>
 
       <View style={styles.card}>
@@ -841,6 +935,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
   },
+  fullWidthButton: {
+    flex: 0,
+    width: "100%",
+  },
   utilityButtonDisabled: {
     opacity: 0.72,
   },
@@ -908,6 +1006,18 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
     fontWeight: "600",
+  },
+  input: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: "#F4F7FC",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: "700",
   },
   activityRow: {
     borderTopWidth: 1,
