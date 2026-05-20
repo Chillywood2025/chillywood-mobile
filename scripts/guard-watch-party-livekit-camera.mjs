@@ -86,6 +86,18 @@ const playerWatchPartySeatPersistence = sliceBetween(
   "const handleSharedPlaybackTap = useCallback(async () => {",
   "Player Watch-Party seat persistence boundary",
 );
+const playerSharedAndroidVideoSurface = sliceBetween(
+  player,
+  "const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVideoSurfaceProps>(",
+  "type StandalonePlayerTopChromeProps = {",
+  "Player shared Android video surface boundary",
+);
+const playerVideoLoadHandler = sliceBetween(
+  player,
+  "const onVideoLoad = useCallback(",
+  "const onVideoError = useCallback(",
+  "Player video load handler boundary",
+);
 const playerWatchPartyPresenceSync = sliceBetween(
   player,
   "const syncCurrentPartyPresence = useCallback(async (overrides?: Partial<{",
@@ -109,6 +121,84 @@ const playerWatchPartyHostSeatApproval = sliceBetween(
   "const approvePartyParticipantSeat = useCallback(async (participant: PartyParticipant) => {",
   "const renderParticipantExpandedHostShell = ({",
   "Player Watch-Party host seat approval boundary",
+);
+const playerSharedPlaybackControlAuthority = sliceBetween(
+  player,
+  "const getSharedPlaybackControlAuthority = useCallback(() => {",
+  "const setPendingPartySeatRequest = useCallback((",
+  "Player Watch-Party shared playback control authority boundary",
+);
+const playerSharedPlaybackSync = sliceBetween(
+  player,
+  "const syncHostSharedPlayback = useCallback(",
+  "const applySeekDelta = useCallback(",
+  "Player Watch-Party shared playback sync boundary",
+);
+const playerSharedPlaybackSeekDelta = sliceBetween(
+  player,
+  "const applySeekDelta = useCallback(",
+  "const animateZoomTo = useCallback(",
+  "Player Watch-Party shared playback seek boundary",
+);
+const playerSharedPlaybackTap = sliceBetween(
+  player,
+  "const handleSharedPlaybackTap = useCallback(async () => {",
+  "const handleSingleTap = () => {",
+  "Player Watch-Party shared playback tap boundary",
+);
+const playerSharedPlaybackPanResponder = sliceBetween(
+  player,
+  "const panResponder = useMemo(",
+  "const progressScrubResponder = useMemo(",
+  "Player Watch-Party shared playback pan responder boundary",
+);
+const playerSharedPlaybackProgressResponder = sliceBetween(
+  player,
+  "const progressScrubResponder = useMemo(",
+  "const navigateToNext = useCallback",
+  "Player Watch-Party shared playback progress responder boundary",
+);
+const playerSharedPlaybackUpNext = sliceBetween(
+  player,
+  "const navigateToNext = useCallback(() => {",
+  "const onPlaybackStatusUpdate = useCallback(",
+  "Player Watch-Party shared playback up-next boundary",
+);
+const playerSharedPlaybackStatusSync = sliceBetween(
+  player,
+  "const onPlaybackStatusUpdate = useCallback(",
+  "const onVideoLoad = useCallback(",
+  "Player Watch-Party shared playback status sync boundary",
+);
+const playerWatchPartyRateControl = sliceBetween(
+  player,
+  "const onSelectWatchPartyRate = useCallback((rate: number) => {",
+  "const onToggleWatchPartyMyList = useCallback(() => {",
+  "Player Watch-Party shared playback rate control boundary",
+);
+const playerWatchPartyCommentsToggle = sliceBetween(
+  player,
+  "const onToggleWatchPartyComments = useCallback(() => {",
+  "const onToggleWatchPartyMenu = useCallback(() => {",
+  "Player Watch-Party comments toggle boundary",
+);
+const playerWatchPartyRoomButton = sliceBetween(
+  player,
+  "const onPressWatchPartyRoom = useCallback(() => {",
+  "const showLivePresenceEvent = useCallback((message: string) => {",
+  "Player Watch-Party room button boundary",
+);
+const playerWatchPartyReactionSelect = sliceBetween(
+  player,
+  "const onSelectReactionFromPicker = useCallback((emoji: string) => {",
+  "const onToggleLiveFilters = useCallback(() => {",
+  "Player Watch-Party reaction select boundary",
+);
+const playerWatchPartySeatRequest = sliceBetween(
+  player,
+  "const requestPartySeat = useCallback(async () => {",
+  "const persistPartySeatState = useCallback(async (participantId: string, options: {",
+  "Player Watch-Party seat request boundary",
 );
 const playerWatchPartyEntryAccessCheck = sliceBetween(
   player,
@@ -825,6 +915,176 @@ assertBefore(
   "const seatPersisted = await persistPartySeatState(participant.id, {",
   "setPartyParticipants((prev) =>",
   "Player Watch-Party host controls must await seat persistence before committing speaker UI.",
+);
+assertIncludes(
+  playerSharedAndroidVideoSurface,
+  "const runSharedVideoOperation = useCallback(async (operation: string, action: () => unknown) => {",
+  "Player shared Android video operations must be caught and logged",
+);
+assertIncludes(
+  playerSharedAndroidVideoSurface,
+  "logSharedVideoOperationFailure(\"source-load-callback\", error);",
+  "Player shared Android sourceLoad callback promise rejections must be logged",
+);
+assertIncludes(
+  player,
+  "const logPlayerVideoOperationFailure = useCallback((operation: string, error: unknown, extra?: Record<string, unknown>) => {",
+  "Player video operation failures must have safe logging",
+);
+assertIncludes(
+  playerVideoLoadHandler,
+  "void (async () => {",
+  "Player video load handler must not return an unhandled promise to native onLoad",
+);
+assertIncludes(
+  playerVideoLoadHandler,
+  "runPlayerVideoOperation(\n            \"load-resume-seek\"",
+  "Player resume seek during load must catch rejected native video promises",
+);
+assertIncludes(
+  playerVideoLoadHandler,
+  "runPlayerVideoOperation(\n          \"load-set-rate\"",
+  "Player rate application during load must catch rejected native video promises",
+);
+assertIncludes(
+  playerSharedPlaybackControlAuthority,
+  "canControl: !isSharedPartyPlayback || authority.isHost",
+  "Player Watch-Party shared playback control authority must allow only host mutation while shared",
+);
+assertIncludes(
+  playerSharedPlaybackControlAuthority,
+  "blocked viewer shared playback control",
+  "Player Watch-Party shared playback viewer blocks must be logged for proof",
+);
+assertIncludes(
+  playerSharedPlaybackControlAuthority,
+  "setPartySyncStatus(\"Synced to Host · Controls locked\")",
+  "Player Watch-Party shared playback viewer blocks must preserve sync-facing feedback",
+);
+assertIncludes(
+  playerSharedPlaybackSync,
+  "getSharedPlaybackControlAuthority().canControl",
+  "Player Watch-Party shared playback sync writes must use host control authority",
+);
+assertBefore(
+  playerSharedPlaybackStatusSync,
+  "const canControlSharedPlayback = getSharedPlaybackControlAuthority().canControl;",
+  "updateRoomPlayback(partyId, position, hostState).catch(() => {});",
+  "Player Watch-Party status sync writes must read host control authority before writing playback.",
+);
+assertIncludes(
+  playerSharedPlaybackStatusSync,
+  "inWatchParty && partyId && canControlSharedPlayback && partySyncRoleRef.current === \"host\"",
+  "Player Watch-Party status sync writes must stay host-only",
+);
+assertIncludes(
+  playerSharedPlaybackTap,
+  "blockViewerSharedPlaybackControl(\"tap-toggle\")",
+  "Player Watch-Party shared playback taps must be host-only mutations",
+);
+assertBefore(
+  playerSharedPlaybackTap,
+  "blockViewerSharedPlaybackControl(\"tap-toggle\")",
+  "await videoRef.current?.playAsync();",
+  "Player Watch-Party viewer taps must be blocked before local play/pause mutation.",
+);
+assertIncludes(
+  playerSharedPlaybackSeekDelta,
+  "blockViewerSharedPlaybackControl(\"double-tap-seek\")",
+  "Player Watch-Party shared playback double-tap seek must be host-only",
+);
+assertBefore(
+  playerSharedPlaybackSeekDelta,
+  "blockViewerSharedPlaybackControl(\"double-tap-seek\")",
+  "await videoRef.current?.setPositionAsync(next);",
+  "Player Watch-Party viewer double-tap seek must be blocked before local seek mutation.",
+);
+assertIncludes(
+  playerSharedPlaybackPanResponder,
+  "blockViewerSharedPlaybackControl(\"pan-scrub\")",
+  "Player Watch-Party shared playback drag scrub must be host-only",
+);
+assertBefore(
+  playerSharedPlaybackPanResponder,
+  "blockViewerSharedPlaybackControl(\"pan-scrub\")",
+  "videoRef.current\n            ?.setPositionAsync(nextPosition)",
+  "Player Watch-Party viewer drag scrub must be blocked before local scrub mutation.",
+);
+assertIncludes(
+  playerSharedPlaybackProgressResponder,
+  "blockViewerSharedPlaybackControl(\"progress-scrub\")",
+  "Player Watch-Party shared playback progress scrub must be host-only",
+);
+assertBefore(
+  playerSharedPlaybackProgressResponder,
+  "blockViewerSharedPlaybackControl(\"progress-scrub\")",
+  "await videoRef.current?.setPositionAsync(finalPosition);",
+  "Player Watch-Party viewer progress scrub must be blocked before local seek mutation.",
+);
+assertIncludes(
+  playerSharedPlaybackUpNext,
+  "blockViewerSharedPlaybackControl(\"up-next-navigate\")",
+  "Player Watch-Party shared playback up-next navigation must be host-only",
+);
+assertIncludes(
+  playerSharedPlaybackUpNext,
+  "blockViewerSharedPlaybackControl(\"up-next-countdown\")",
+  "Player Watch-Party shared playback up-next countdown must be host-only",
+);
+assertIncludes(
+  player,
+  "const canControlSharedPlayback = getSharedPlaybackControlAuthority().canControl;",
+  "Player Watch-Party shared playback up-next status must read host authority",
+);
+assertIncludes(
+  player,
+  "canControlSharedPlayback &&",
+  "Player Watch-Party shared playback up-next overlay must be host-only",
+);
+assertIncludes(
+  playerWatchPartyRateControl,
+  "blockViewerSharedPlaybackControl(\"rate-change\")",
+  "Player Watch-Party shared playback speed changes must be host-only",
+);
+assertIncludes(
+  player,
+  "const watchPartyLiveSharedPlaybackControlsLocked = isSharedPartyPlayback && !currentWatchPartyHostAuthority.isHost;",
+  "Player Watch-Party shared playback controls must expose a viewer-locked render state",
+);
+assertIncludes(
+  player,
+  "!watchPartyLiveSharedPlaybackControlsLocked ? progressScrubResponder.panHandlers : {}",
+  "Player Watch-Party viewer progress scrub handlers must be removed while shared playback is locked",
+);
+assertIncludes(
+  player,
+  "!shouldUseSharedAndroidVideoSurface && !watchPartyLiveSharedPlaybackControlsLocked ? panResponder.panHandlers : {}",
+  "Player Watch-Party viewer surface scrub handlers must be removed while shared playback is locked",
+);
+assertIncludes(
+  player,
+  "disabled={watchPartyLiveSharedPlaybackControlsLocked}",
+  "Player Watch-Party viewer speed chips must be disabled while shared playback is locked",
+);
+assertNotIncludes(
+  playerWatchPartyCommentsToggle,
+  "blockViewerSharedPlaybackControl",
+  "Player Watch-Party comments must not become host-only",
+);
+assertNotIncludes(
+  playerWatchPartyRoomButton,
+  "blockViewerSharedPlaybackControl",
+  "Player Watch-Party room navigation must not become host-only",
+);
+assertNotIncludes(
+  playerWatchPartyReactionSelect,
+  "blockViewerSharedPlaybackControl",
+  "Player Watch-Party reactions must not become host-only",
+);
+assertNotIncludes(
+  playerWatchPartySeatRequest,
+  "blockViewerSharedPlaybackControl",
+  "Player Watch-Party camera/mic requests must not become host-only",
 );
 assertIncludes(
   player,

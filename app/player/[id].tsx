@@ -364,6 +364,44 @@ const buildLoadedPlaybackStatus = ({
     didJustFinish,
   }) as AVPlaybackStatus;
 
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> => (
+  !!value
+  && (typeof value === "object" || typeof value === "function")
+  && typeof (value as { then?: unknown }).then === "function"
+);
+
+const getPlaybackOperationErrorMeta = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      errorName: error.name || "Error",
+      errorMessage: error.message || "Playback operation failed",
+      errorType: null,
+      errorCode: null,
+    };
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const name = String(record.name ?? "").trim();
+    const message = String(record.message ?? record.reason ?? record.details ?? "").trim();
+    const type = String(record.type ?? "").trim();
+    const code = String(record.code ?? "").trim();
+    return {
+      errorName: name || (type ? "Event" : "Error"),
+      errorMessage: message || (type ? `Playback event rejected: ${type}` : "Playback operation rejected"),
+      errorType: type || null,
+      errorCode: code || null,
+    };
+  }
+
+  return {
+    errorName: "Error",
+    errorMessage: String(error ?? "Playback operation rejected"),
+    errorType: null,
+    errorCode: null,
+  };
+};
+
 const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVideoSurfaceProps>(
   function SharedAndroidVideoSurface(
     { source, style, contentFit, shouldPlay, playbackRate, onPlaybackStatusUpdate, onLoad },
@@ -386,6 +424,27 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
     const durationMillisRef = useRef(0);
     const positionMillisRef = useRef(0);
     const isPlayingRef = useRef(false);
+    const sourceKind = typeof source === "number" ? "asset" : "remote";
+
+    const logSharedVideoOperationFailure = useCallback((operation: string, error: unknown) => {
+      debugLog("player", "shared android video operation rejected", {
+        operation,
+        surface: "shared-android-video",
+        sourceKind,
+        ...getPlaybackOperationErrorMeta(error),
+      });
+    }, [sourceKind]);
+
+    const runSharedVideoOperation = useCallback(async (operation: string, action: () => unknown) => {
+      try {
+        const result = action();
+        if (isPromiseLike(result)) await result;
+        return true;
+      } catch (error) {
+        logSharedVideoOperationFailure(operation, error);
+        return false;
+      }
+    }, [logSharedVideoOperationFailure]);
 
     const emitStatus = useCallback(
       (overrides?: Partial<{ durationMillis: number; positionMillis: number; isPlaying: boolean; didJustFinish: boolean }>) => {
@@ -405,46 +464,54 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
       () => ({
         async setPositionAsync(positionMillis: number) {
           const safePositionMillis = Math.max(0, positionMillis);
+          const didApply = await runSharedVideoOperation("set-position", () => {
+            player.currentTime = safePositionMillis / 1000;
+          });
+          if (!didApply) return;
           positionMillisRef.current = safePositionMillis;
-          player.currentTime = safePositionMillis / 1000;
           emitStatus({ positionMillis: safePositionMillis });
         },
         async playAsync() {
+          const didPlay = await runSharedVideoOperation("play", () => player.play());
+          if (!didPlay) return;
           isPlayingRef.current = true;
-          player.play();
           emitStatus({ isPlaying: true });
         },
         async pauseAsync() {
+          const didPause = await runSharedVideoOperation("pause", () => player.pause());
+          if (!didPause) return;
           isPlayingRef.current = false;
-          player.pause();
           emitStatus({ isPlaying: false });
         },
         async replayAsync() {
+          const didReplay = await runSharedVideoOperation("replay", () => player.replay());
+          if (!didReplay) return;
           positionMillisRef.current = 0;
           isPlayingRef.current = true;
-          player.replay();
           emitStatus({ positionMillis: 0, isPlaying: true, didJustFinish: false });
         },
         async setRateAsync(rate: number) {
-          player.playbackRate = rate;
+          await runSharedVideoOperation("set-rate", () => {
+            player.playbackRate = rate;
+          });
         },
       }),
-      [emitStatus, player],
+      [emitStatus, player, runSharedVideoOperation],
     );
 
     useEffect(() => {
-      player.playbackRate = playbackRate;
-      player.preservesPitch = true;
-      player.timeUpdateEventInterval = 0.25;
-    }, [player, playbackRate]);
+      void runSharedVideoOperation("apply-rate", () => {
+        player.playbackRate = playbackRate;
+        player.preservesPitch = true;
+        player.timeUpdateEventInterval = 0.25;
+      });
+    }, [player, playbackRate, runSharedVideoOperation]);
 
     useEffect(() => {
-      if (shouldPlay) {
-        player.play();
-      } else {
-        player.pause();
-      }
-    }, [player, shouldPlay]);
+      void runSharedVideoOperation(shouldPlay ? "effect-play" : "effect-pause", () => (
+        shouldPlay ? player.play() : player.pause()
+      ));
+    }, [player, runSharedVideoOperation, shouldPlay]);
 
     useEventListener(player, "sourceLoad", ({ duration }) => {
       const nextDurationMillis = Math.max(0, Math.round((duration ?? 0) * 1000));
@@ -454,7 +521,16 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
         positionMillis: positionMillisRef.current,
         isPlaying: isPlayingRef.current,
       });
-      onLoad(status);
+      try {
+        const loadResult = onLoad(status) as unknown;
+        if (isPromiseLike(loadResult)) {
+          void Promise.resolve(loadResult).catch((error) => {
+            logSharedVideoOperationFailure("source-load-callback", error);
+          });
+        }
+      } catch (error) {
+        logSharedVideoOperationFailure("source-load-callback", error);
+      }
       onPlaybackStatusUpdate(status);
     });
 
@@ -972,6 +1048,7 @@ export default function PlayerScreen() {
   const lastPartySyncWriteAtRef = useRef(0);
   const lastPartySyncedPositionRef = useRef(0);
   const lastPartySyncedStateRef = useRef<"playing" | "paused" | null>(null);
+  const lastBlockedSharedPlaybackControlLogAtRef = useRef(0);
   const partyReactionTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const partyOverlayControlsOpacity = useRef(new Animated.Value(1)).current;
   const partyOverlayControlsTranslateY = useRef(new Animated.Value(0)).current;
@@ -1604,6 +1681,38 @@ export default function PlayerScreen() {
       roomHostUserId,
     };
   }, []);
+
+  const getSharedPlaybackControlAuthority = useCallback(() => {
+    const authority = getWatchPartyHostAuthority();
+    return {
+      ...authority,
+      canControl: !isSharedPartyPlayback || authority.isHost,
+    };
+  }, [getWatchPartyHostAuthority, isSharedPartyPlayback]);
+
+  const blockViewerSharedPlaybackControl = useCallback((control: string) => {
+    const authority = getSharedPlaybackControlAuthority();
+    if (authority.canControl) return false;
+
+    setControlsVisible(true);
+    setPartySyncStatus("Synced to Host · Controls locked");
+
+    const now = Date.now();
+    if (now - lastBlockedSharedPlaybackControlLogAtRef.current > 1000) {
+      lastBlockedSharedPlaybackControlLogAtRef.current = now;
+      debugLog("player", "blocked viewer shared playback control", {
+        control,
+        roomName: partyId ?? null,
+        currentUserId: authority.currentUserId || null,
+        hostAuthoritySource: authority.source,
+        partySyncRole: authority.partySyncRole,
+        membershipRole: authority.membershipRole,
+        roomHostUserId: authority.roomHostUserId || null,
+      });
+    }
+
+    return true;
+  }, [getSharedPlaybackControlAuthority, partyId]);
 
   const setPendingPartySeatRequest = useCallback((
     participantId: string,
@@ -2785,7 +2894,7 @@ export default function PlayerScreen() {
 
   const syncHostSharedPlayback = useCallback(
     (positionMillis: number, playbackState: "playing" | "paused", kind: "play" | "pause" | "seek") => {
-      if (!isSharedPartyPlayback || !partyId || !getWatchPartyHostAuthority().isHost) return;
+      if (!isSharedPartyPlayback || !partyId || !getSharedPlaybackControlAuthority().canControl) return;
 
       const safePositionMillis = Math.max(0, Math.floor(positionMillis));
       updateRoomPlayback(partyId, safePositionMillis, playbackState).catch(() => {});
@@ -2799,11 +2908,13 @@ export default function PlayerScreen() {
       lastPartySyncedStateRef.current = playbackState;
       setPartySyncStatus(`Host Controls · ${playbackState === "playing" ? "Playing" : "Paused"}`);
     },
-    [getWatchPartyHostAuthority, isSharedPartyPlayback, partyId],
+    [getSharedPlaybackControlAuthority, isSharedPartyPlayback, partyId],
   );
 
   const applySeekDelta = useCallback(
     async (deltaMillis: number) => {
+      if (blockViewerSharedPlaybackControl("double-tap-seek")) return;
+
       const duration = durationRef.current;
       const current = currentPositionRef.current;
       const max = duration > 0 ? duration : current + Math.abs(deltaMillis) + STEP_MILLIS;
@@ -2824,7 +2935,7 @@ export default function PlayerScreen() {
         syncHostSharedPlayback(next, nextState, "seek");
       }
     },
-    [isPlaying, isSharedPartyPlayback, persistProgress, showSeekFeedback, syncHostSharedPlayback],
+    [blockViewerSharedPlaybackControl, isPlaying, isSharedPartyPlayback, persistProgress, showSeekFeedback, syncHostSharedPlayback],
   );
 
   const animateZoomTo = useCallback(
@@ -3053,6 +3164,7 @@ export default function PlayerScreen() {
 
   const handleSharedPlaybackTap = useCallback(async () => {
     setControlsVisible(true);
+    if (blockViewerSharedPlaybackControl("tap-toggle")) return;
 
     if (!isVideoReady) return;
     if (shouldAutoplayNextRef.current && nextTitleId) return;
@@ -3108,7 +3220,7 @@ export default function PlayerScreen() {
     } catch {
       // ignore transient player errors
     }
-  }, [isPlaying, isVideoReady, nextTitleId, syncHostSharedPlayback, titleId]);
+  }, [blockViewerSharedPlaybackControl, isPlaying, isVideoReady, nextTitleId, syncHostSharedPlayback, titleId]);
 
   const handleSingleTap = () => {
     if (isStandalonePlayer && standaloneAccessLoading) return;
@@ -3197,6 +3309,7 @@ export default function PlayerScreen() {
           if (duration <= 0) return;
           if (Math.abs(gestureState.dx) < PAN_SCRUB_MIN_DRAG_PIXELS) return;
           if (Math.abs(gestureState.dx) < Math.abs(gestureState.dy)) return;
+          if (blockViewerSharedPlaybackControl("pan-scrub")) return;
 
           if (!panIsScrubbingRef.current) {
             panIsScrubbingRef.current = true;
@@ -3315,6 +3428,7 @@ export default function PlayerScreen() {
     [
       animateZoomTo,
       applySeekDelta,
+      blockViewerSharedPlaybackControl,
       handleSingleTap,
       isCreatorStandalonePlaybackSurface,
       isPlaying,
@@ -3338,11 +3452,13 @@ export default function PlayerScreen() {
         },
         onPanResponderGrant: async () => {
           resetAutoHideTimer();
+          if (blockViewerSharedPlaybackControl("progress-scrub")) return;
           wasPlayingBeforeScrubRef.current = isPlaying;
           if (isPlaying) await videoRef.current?.pauseAsync().catch(() => {});
         },
         onPanResponderMove: (event: GestureResponderEvent) => {
           resetAutoHideTimer();
+          if (blockViewerSharedPlaybackControl("progress-scrub")) return;
           const layout = progressTrackLayoutRef.current;
           if (!layout) return;
 
@@ -3357,6 +3473,7 @@ export default function PlayerScreen() {
         },
         onPanResponderRelease: async () => {
           resetAutoHideTimer();
+          if (blockViewerSharedPlaybackControl("progress-scrub")) return;
           try {
             const finalPosition = currentPositionRef.current;
             await videoRef.current?.setPositionAsync(finalPosition);
@@ -3373,6 +3490,7 @@ export default function PlayerScreen() {
         },
         onPanResponderTerminate: async () => {
           resetAutoHideTimer();
+          if (blockViewerSharedPlaybackControl("progress-scrub")) return;
           try {
             const finalPosition = currentPositionRef.current;
             await videoRef.current?.setPositionAsync(finalPosition);
@@ -3388,10 +3506,11 @@ export default function PlayerScreen() {
           }
         },
       }),
-    [isPlaying, isSharedPartyPlayback, persistProgress, resetAutoHideTimer, syncHostSharedPlayback],
+    [blockViewerSharedPlaybackControl, isPlaying, isSharedPartyPlayback, persistProgress, resetAutoHideTimer, syncHostSharedPlayback],
   );
 
   const navigateToNext = useCallback(() => {
+    if (blockViewerSharedPlaybackControl("up-next-navigate")) return;
     if (!nextTitleId || hasNavigatedToNextRef.current) return;
 
     hasNavigatedToNextRef.current = true;
@@ -3410,9 +3529,10 @@ export default function PlayerScreen() {
     setShowUpNext(false);
     setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
     router.replace({ pathname: "/player/[id]", params: { id: nextTitleId } });
-  }, [nextTitleId]);
+  }, [blockViewerSharedPlaybackControl, nextTitleId]);
 
   const startUpNextCountdown = useCallback(() => {
+    if (blockViewerSharedPlaybackControl("up-next-countdown")) return;
     if (!nextTitleId || upNextCanceled || hasNavigatedToNextRef.current) return;
 
     shouldAutoplayNextRef.current = true;
@@ -3438,7 +3558,7 @@ export default function PlayerScreen() {
         return current - 1;
       });
     }, 1000);
-  }, [navigateToNext, nextTitleId, upNextCanceled]);
+  }, [blockViewerSharedPlaybackControl, navigateToNext, nextTitleId, upNextCanceled]);
 
   const cancelUpNext = useCallback(() => {
     setUpNextCanceled(true);
@@ -3480,7 +3600,9 @@ export default function PlayerScreen() {
       const wasPlaying = lastPlaybackIsPlayingRef.current;
       lastPlaybackIsPlayingRef.current = status.isPlaying;
 
-      if (inWatchParty && partyId && partySyncRoleRef.current === "host" && !partySyncApplyingRef.current) {
+      const canControlSharedPlayback = getSharedPlaybackControlAuthority().canControl;
+
+      if (inWatchParty && partyId && canControlSharedPlayback && partySyncRoleRef.current === "host" && !partySyncApplyingRef.current) {
         const now = Date.now();
         const playingChanged = wasPlaying !== status.isPlaying;
         const movedEnough = Math.abs(position - lastPartySyncedPositionRef.current) >= 900;
@@ -3510,6 +3632,7 @@ export default function PlayerScreen() {
 
       const remainingMillis = duration > 0 ? Math.max(0, duration - position) : 0;
       const shouldShowUpNext =
+        canControlSharedPlayback &&
         !!nextTitleId &&
         !upNextCanceled &&
         !didJustFinishRef.current &&
@@ -3551,7 +3674,7 @@ export default function PlayerScreen() {
         videoRef.current?.pauseAsync().catch(() => {});
         if (titleId) clearProgressForTitle(titleId).catch(() => {});
 
-        if (nextTitleId) {
+        if (canControlSharedPlayback && nextTitleId) {
           if (!upNextCanceled && !hasNavigatedToNextRef.current) {
             shouldAutoplayNextRef.current = true;
             if (nextAutoplayTimeoutRef.current) clearTimeout(nextAutoplayTimeoutRef.current);
@@ -3565,40 +3688,80 @@ export default function PlayerScreen() {
         }
       }
     },
-    [inWatchParty, navigateToNext, nextTitleId, partyId, persistProgress, startUpNextCountdown, titleId, upNextCanceled],
+    [getSharedPlaybackControlAuthority, inWatchParty, navigateToNext, nextTitleId, partyId, persistProgress, startUpNextCountdown, titleId, upNextCanceled],
   );
 
+  const logPlayerVideoOperationFailure = useCallback((operation: string, error: unknown, extra?: Record<string, unknown>) => {
+    debugLog("player", "player video operation rejected", {
+      operation,
+      titleId: titleId ?? null,
+      inWatchParty,
+      sharedPlayback: isSharedPartyPlayback,
+      ...getPlaybackOperationErrorMeta(error),
+      ...(extra ?? {}),
+    });
+  }, [inWatchParty, isSharedPartyPlayback, titleId]);
+
+  const runPlayerVideoOperation = useCallback(async (
+    operation: string,
+    action: () => Promise<unknown> | unknown,
+    extra?: Record<string, unknown>,
+  ) => {
+    try {
+      const result = action();
+      if (isPromiseLike(result)) await result;
+      return true;
+    } catch (error) {
+      logPlayerVideoOperationFailure(operation, error, extra);
+      return false;
+    }
+  }, [logPlayerVideoOperationFailure]);
+
   const onVideoLoad = useCallback(
-    async (status: AVPlaybackStatus) => {
+    (status: AVPlaybackStatus) => {
       if (!status.isLoaded) return;
 
-      setPlaybackLoadError(null);
-      setIsVideoReady(true);
-      setIsPlaying(status.isPlaying);
+      void (async () => {
+        setPlaybackLoadError(null);
+        setIsVideoReady(true);
+        setIsPlaying(status.isPlaying);
 
-      const duration = status.durationMillis ?? 0;
-      durationRef.current = duration;
-      setDurationMillis(duration);
+        const duration = status.durationMillis ?? 0;
+        durationRef.current = duration;
+        setDurationMillis(duration);
 
-      let startAt = 0;
-      const resume = Math.max(0, resumePositionRef.current || 0);
-      const resumePercent = duration > 0 ? resume / duration : 0;
-      if (duration > 0 && resume > 0 && resumePercent < 0.95) {
-        startAt = resume;
-      }
+        let startAt = 0;
+        const resume = Math.max(0, resumePositionRef.current || 0);
+        const resumePercent = duration > 0 ? resume / duration : 0;
+        if (duration > 0 && resume > 0 && resumePercent < 0.95) {
+          startAt = resume;
+        }
 
-      if (startAt > 0) {
-        await videoRef.current?.setPositionAsync(startAt);
-        currentPositionRef.current = startAt;
-        setPositionMillis(startAt);
-        lastPersistedPositionRef.current = startAt;
-      } else {
-        lastPersistedPositionRef.current = 0;
-      }
+        if (startAt > 0) {
+          const didSeek = await runPlayerVideoOperation(
+            "load-resume-seek",
+            () => videoRef.current?.setPositionAsync(startAt),
+            { startAtMillis: startAt },
+          );
+          if (didSeek) {
+            currentPositionRef.current = startAt;
+            setPositionMillis(startAt);
+            lastPersistedPositionRef.current = startAt;
+          }
+        } else {
+          lastPersistedPositionRef.current = 0;
+        }
 
-      await videoRef.current?.setRateAsync(playbackRate, true);
+        await runPlayerVideoOperation(
+          "load-set-rate",
+          () => videoRef.current?.setRateAsync(playbackRate, true),
+          { playbackRate },
+        );
+      })().catch((error) => {
+        logPlayerVideoOperationFailure("load-handler", error);
+      });
     },
-    [playbackRate],
+    [logPlayerVideoOperationFailure, playbackRate, runPlayerVideoOperation],
   );
 
   const onVideoError = useCallback((error: string) => {
@@ -4181,9 +4344,10 @@ export default function PlayerScreen() {
 
   const onSelectWatchPartyRate = useCallback((rate: number) => {
     resetAutoHideTimer();
+    if (blockViewerSharedPlaybackControl("rate-change")) return;
     setWatchPartyMenuOpen(false);
     void onSelectRate(rate);
-  }, [onSelectRate, resetAutoHideTimer]);
+  }, [blockViewerSharedPlaybackControl, onSelectRate, resetAutoHideTimer]);
 
   const onToggleWatchPartyMyList = useCallback(() => {
     resetAutoHideTimer();
@@ -4678,6 +4842,7 @@ export default function PlayerScreen() {
       source: sources.join("+") || "none",
     };
   }, [currentWatchPartyParticipant?.role, partySyncRole, trackedUserId]);
+  const watchPartyLiveSharedPlaybackControlsLocked = isSharedPartyPlayback && !currentWatchPartyHostAuthority.isHost;
   const desiredWatchPartyLiveKitParticipantRole = useMemo<LiveKitTokenReady["participantRole"]>(() => {
     const currentMembership = partyMembershipMapRef.current[trackedUserId];
     if (currentWatchPartyParticipant?.role === "host" || currentMembership?.role === "host" || partySyncRole === "host") return "host";
@@ -6635,8 +6800,13 @@ export default function PlayerScreen() {
                 return (
                   <TouchableOpacity
                     key={option}
-                    style={[styles.watchPartyDockRateChip, active && styles.watchPartyDockRateChipActive]}
+                    style={[
+                      styles.watchPartyDockRateChip,
+                      active && styles.watchPartyDockRateChipActive,
+                      watchPartyLiveSharedPlaybackControlsLocked && styles.secondaryBtnDisabled,
+                    ]}
                     onPress={() => onSelectWatchPartyRate(option)}
+                    disabled={watchPartyLiveSharedPlaybackControlsLocked}
                     activeOpacity={0.88}
                   >
                     <Text style={[styles.watchPartyDockRateChipText, active && styles.watchPartyDockRateChipTextActive]}>
@@ -7382,7 +7552,7 @@ export default function PlayerScreen() {
               !inWatchParty && !isLiveMode && isCreatorVideoPlayback && creatorVideoCommentKeyboardOpen && styles.videoWrapCreatorDiscussionKeyboard,
               isLiveMode && styles.liveRoomWrap,
             ]}
-            {...(!isLiveMode && !shouldUseSharedAndroidVideoSurface ? panResponder.panHandlers : {})}
+            {...(!isLiveMode && !shouldUseSharedAndroidVideoSurface && !watchPartyLiveSharedPlaybackControlsLocked ? panResponder.panHandlers : {})}
             onLayout={(event) => {
               videoWidthRef.current = event.nativeEvent.layout.width;
             }}
@@ -7922,7 +8092,7 @@ export default function PlayerScreen() {
                   </View>
                   <View
                     style={styles.progressTrack}
-                    {...progressScrubResponder.panHandlers}
+                    {...(!watchPartyLiveSharedPlaybackControlsLocked ? progressScrubResponder.panHandlers : {})}
                     onLayout={(event) => {
                       progressTrackLayoutRef.current = { width: event.nativeEvent.layout.width };
                     }}
