@@ -34,6 +34,8 @@ This runbook records current repo truth, what is only documented from previous i
 | Live Stage route owner | `app/watch-party/live-stage/[partyId].tsx` owns Live Room / Live Stage behavior. | Implemented / Proof Pending |
 | Stage media surface | `components/watch-party-live/livekit-stage-media-surface.tsx` owns LiveKit media rendering and stale signal-loop containment. | Implemented / Proof Pending |
 | Watch-Party Live camera sidecar | `app/watch-party/[partyId].tsx` prepares `surface=watch-party-live`; `app/player/[id].tsx` consumes it for Party Room shared-player camera presence. | Implemented / Proof Pending |
+| Watch-Party Live seat request hardening | Commit `724f94c` keeps request delivery DB-backed first, preserves host-side pending request state, hides viewer-side request indicators, and keeps host approval required before viewer camera/mic publishing. Guarded by `npm run guard:watch-party-livekit` and `npm run proof:watch-party-seat-request`. | Implemented / Local Proof Passed |
+| Live Stage seat approval hardening | Commit `76fefbf` keeps host approval on inline Live Stage card controls, prevents participant-detail overlays from intercepting approve, waits for membership authority before speaker/mute/remove UI commits, and clears stuck host card overlays after success. Guarded by `npm run guard:watch-party-livekit` and `npm run proof:live-stage-seat-approval`. | Implemented / Local Proof Passed |
 | Infrastructure scaffold | `infra/hetzner/livekit.env.example`, `infra/hetzner/host.env.example`, `infra/hetzner/cutover.env.example`, `infra/hetzner/docker-compose.livekit.yml`, and `infra/hetzner/livekit-egress.yaml.example` document a self-hosted LiveKit + optional Egress layout without real secrets. | Partial |
 
 Current app config is environment-aware. The public mobile runtime value is safe to ship as a public endpoint, but all API keys, API secrets, service-role keys, and TURN credentials must stay server-side or in approved external secret stores.
@@ -81,6 +83,13 @@ Role truth:
 - Speaker-capable non-host users require active room membership state, stage role, `canSpeak`, or supported social watch mode.
 - Communication rooms check communication membership state and role.
 - LiveKit token role is a room/media role only; it is not a Channel Audience Role Roster role.
+- Watch-Party Live and Live Stage both require host approval/seating before viewer camera/mic publishing; local request/approval proofs do not loosen token authority.
+
+Current guard/proof coverage:
+
+- `npm run guard:watch-party-livekit` checks LiveKit contract refresh expectations, Watch-Party Live request delivery/label guards, Live Stage token proof blockers, and Live Stage host action persistence/tap-propagation guards.
+- `npm run proof:watch-party-seat-request` runs a local fake-host/fake-viewer proof for durable Watch-Party Live host request receipt without devices or real account creation.
+- `npm run proof:live-stage-seat-approval` runs a local fake-host/fake-viewer proof for Live Stage host approve controls without devices or real account creation.
 
 Proof still required:
 

@@ -391,6 +391,10 @@ Locked meanings:
 
 Live Stage role/access hardening is pushed at `4b90e09`. Mode switching is host-only, non-host route-param attempts must not mutate mode, Live First viewers cannot self-promote into camera/speaker seats on stage entry, and shared participant-state writes that affect speaker/camera/mute/remove state require the authenticated room host. Watch-Party Live remains title/player-based and separate from Live Stage.
 
+Watch-Party Live host seat request hardening is pushed at `724f94c`. The title/player Watch-Party Live lane keeps host approval required before viewer camera/mic publishing, persists request delivery outside volatile realtime broadcasts, hides viewer-side request badges/overlays, and preserves the approved bubble/feed layout. Guard coverage lives in `npm run guard:watch-party-livekit` and the local no-device proof script `npm run proof:watch-party-seat-request`.
+
+Live Stage seat approval control hardening is pushed at `76fefbf`. The Live Stage lane keeps host approval required before viewer camera/mic publishing, keeps host moderation taps on inline card controls instead of the participant detail sheet, stops parent card tap propagation from approve/deny/mute/seat/remove controls, waits for membership authority before committing local speaker/mute/remove UI, and collapses the host card overlay after approve/deny/seat/move/remove success. Guard coverage lives in `npm run guard:watch-party-livekit` and the local no-device proof script `npm run proof:live-stage-seat-approval`.
+
 Live Stage top chrome keeps `Lock controls` and the existing `Live Room` return action only. The old top `Menu` sheet is removed; do not reintroduce a menu-only comments/studio/effects surface unless a future prompt explicitly reopens that UI lane.
 
 ## Premium Live Access Rule
