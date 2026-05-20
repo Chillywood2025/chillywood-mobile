@@ -7,6 +7,7 @@ export type AuditEventType =
   | "dry_run"
   | "approval_requested"
   | "approved"
+  | "create_pr_only"
   | "denied"
   | "executed"
   | "blocked_by_safety"

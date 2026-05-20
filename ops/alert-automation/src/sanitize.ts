@@ -1,8 +1,56 @@
 import type { ActionPlan } from "./actions.js";
 import { getAlertName, type OpsJob } from "./jobs.js";
 
-const SAFE_LABEL_KEYS = new Set(["alertname", "severity", "room", "identity", "instance", "job", "service"]);
-const SAFE_TARGET_KEYS = new Set(["room", "identity", "instance", "job", "service", "interface", "rate"]);
+const SAFE_LABEL_KEYS = new Set([
+  "alertname",
+  "severity",
+  "room",
+  "identity",
+  "instance",
+  "job",
+  "service",
+  "route",
+  "affected_route",
+  "purpose",
+  "affected_purpose",
+  "surface",
+  "room_type",
+  "platform",
+  "affected_platform",
+  "server_id",
+  "app_room_id",
+  "assignment_id",
+  "github_job_id",
+  "thread_id",
+  "chat_thread_id",
+  "call_id",
+  "communication_room_id",
+  "call_mode",
+  "media_kind"
+]);
+const SAFE_TARGET_KEYS = new Set([
+  "room",
+  "identity",
+  "instance",
+  "job",
+  "service",
+  "interface",
+  "rate",
+  "serverId",
+  "standbyServerId",
+  "assignmentId",
+  "appRoomId",
+  "livekitRoomName",
+  "githubJobId",
+  "affectedRoute",
+  "affectedPurpose",
+  "affectedPlatform",
+  "affectedCallId",
+  "affectedThreadId",
+  "callId",
+  "callMode",
+  "threadId"
+]);
 
 const SENSITIVE_KEY_PATTERN =
   /(authorization|credential|header|hls|jwt|key|password|provider|secret|service_role|smtp|token|url|uri)/i;
@@ -42,6 +90,7 @@ export type SafeActionPlan = Pick<
   | "valid"
 > & {
   blockedReason?: string;
+  liveOpsIncident?: unknown;
   target?: Record<string, string>;
   plannedCommands?: string[];
 };
@@ -109,6 +158,7 @@ export function sanitizeActionPlan(plan: ActionPlan): SafeActionPlan {
     destructive: plan.destructive,
     valid: plan.valid,
     blockedReason: plan.blockedReason ? redactText(plan.blockedReason) : undefined,
+    liveOpsIncident: sanitizeValue(plan.liveOpsIncident),
     target: safeTarget,
     plannedCommands: plan.plannedCommands?.map(redactText)
   };

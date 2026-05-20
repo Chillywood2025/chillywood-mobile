@@ -72,3 +72,6 @@ verify_jwt = false
 
 [functions.admin-live-cost-guard-action]
 verify_jwt = false
+
+[functions.admin-live-ops-fix-center]
+verify_jwt = false

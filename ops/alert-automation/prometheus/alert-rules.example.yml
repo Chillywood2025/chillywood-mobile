@@ -46,3 +46,71 @@ groups:
           severity: warning
         annotations:
           summary: Server CPU or memory pressure example
+
+      # Live Ops Fix Center examples. Metric names are placeholders until production
+      # LiveKit/exporter/mobile telemetry names are proven. Do not enable without tuning.
+      - alert: LiveOpsTokenSignalingJoinFailures
+        expr: sum(rate(chillywood_live_join_failures_total{reason=~"token|signaling"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          affected_route: live_watch_party
+          platform: mobile
+          token_errors: "{{ $value }}"
+        annotations:
+          summary: High Live join failures with token/signaling errors
+
+      - alert: LiveOpsBlankFeedsLowRelayBytes
+        expr: sum(chillywood_live_blank_feeds) > 0 and sum(rate(livekit_turn_relay_bytes_total[5m])) == 0
+        for: 5m
+        labels:
+          severity: warning
+          affected_route: watch_party_live
+          platform: mobile
+          low_relay_bytes: "true"
+        annotations:
+          summary: Joined users have blank feeds with low TURN relay bytes
+
+      - alert: LiveKitNodeUnhealthy
+        expr: up{job="livekit"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          affected_route: live_watch_party
+          bad_node: "true"
+          server_id: "{{ $labels.server_id }}"
+        annotations:
+          summary: One LiveKit node is unhealthy and should be drained after approval
+
+      - alert: ChatCallTokenIssueFailed
+        expr: sum(rate(chillywood_chat_call_failures_total{reason="token"}[5m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+          affected_purpose: chat-call
+          call_mode: "{{ $labels.call_mode }}"
+          platform: "{{ $labels.platform }}"
+        annotations:
+          summary: Chi'lly Chat call token issue failures
+
+      - alert: ChatCallNoRemoteMediaLowRelay
+        expr: sum(chillywood_chat_call_no_remote_media) > 0 and sum(rate(livekit_turn_relay_bytes_total{purpose="chat-call"}[5m])) == 0
+        for: 5m
+        labels:
+          severity: warning
+          affected_purpose: chat-call
+          low_relay_bytes: "true"
+          platform: "{{ $labels.platform }}"
+        annotations:
+          summary: Chi'lly Chat users joined but remote media never established with low relay bytes
+
+      - alert: ChatCallCleanupFailed
+        expr: sum(chillywood_chat_call_cleanup_failures_total) > 0
+        for: 10m
+        labels:
+          severity: warning
+          affected_purpose: chat-call
+          call_id: "{{ $labels.call_id }}"
+          thread_id: "{{ $labels.thread_id }}"
+        annotations:
+          summary: Chi'lly Chat stale call cleanup needs owner/admin dry-run proof

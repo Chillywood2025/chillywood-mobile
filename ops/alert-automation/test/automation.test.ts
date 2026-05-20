@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildOpsJobEmail } from "../src/email.js";
 import { createApp } from "../src/server.js";
 
@@ -63,6 +63,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   await rm(tempDir, { recursive: true, force: true });
 });
 
@@ -99,6 +101,292 @@ describe("ops alert automation", () => {
     expect(response.status).toBe(202);
     expect(response.body.jobs[0].plan.actionType).toBe("noop");
     expect(response.body.jobs[0].status).toBe("dry_run_completed");
+  });
+
+  it("classifies high join failures with token and signaling errors as a Live Ops issue action", async () => {
+    const { app } = createApp(env());
+    const response = await postAlert(
+      app,
+      payload("LiveOpsTokenSignalingJoinFailures", {
+        affected_route: "live_watch_party",
+        join_failures: "42",
+        platform: "mobile",
+        signaling_errors: "5",
+        token_errors: "7"
+      })
+    );
+
+    expect(response.status).toBe(202);
+    expect(response.body.jobs[0].status).toBe("waiting_approval");
+    expect(response.body.jobs[0].plan.actionType).toBe("create_github_issue");
+    expect(response.body.jobs[0].plan.liveOpsIncident.likelyCause).toContain("Token");
+    expect(response.body.jobs[0].plan.liveOpsIncident.affectedRoute).toBe("Live Watch-Party");
+  });
+
+  it("classifies Chi'lly Chat call incidents as separate chat-call purposes", async () => {
+    const cases: Array<{
+      actionType: string;
+      alertname: string;
+      cause: string;
+      labels: Record<string, string>;
+      purpose: string;
+    }> = [
+      {
+        alertname: "ChatCallTokenIssueFailed",
+        labels: { affected_purpose: "chat-call", call_id: "call-token", call_mode: "video", join_failures: "3", token_errors: "3" },
+        actionType: "create_github_issue",
+        cause: "token",
+        purpose: "chat-video-call"
+      },
+      {
+        alertname: "ChatCallSignalingFailed",
+        labels: { affected_purpose: "chat-call", call_id: "call-signal", join_failures: "2", signaling_errors: "2" },
+        actionType: "create_github_issue",
+        cause: "signaling",
+        purpose: "chat-call"
+      },
+      {
+        alertname: "ChatCallCalleeDidNotJoin",
+        labels: { affected_purpose: "chat-call", caller_joined: "true", callee_joined: "false", call_id: "call-callee" },
+        actionType: "create_github_issue",
+        cause: "join",
+        purpose: "chat-call"
+      },
+      {
+        alertname: "ChatCallNoRemoteMediaLowRelay",
+        labels: { affected_purpose: "chat-call", both_users_joined: "true", blank_screen_count: "2", call_id: "call-turn", call_mode: "video", low_relay_bytes: "true" },
+        actionType: "create_github_issue",
+        cause: "TURN",
+        purpose: "chat-video-call"
+      },
+      {
+        alertname: "ChatCallBlankScreenNormalRelay",
+        labels: { affected_purpose: "chat-call", both_users_joined: "true", blank_screen_count: "2", call_id: "call-render", call_mode: "video", relay_bytes_normal: "true" },
+        actionType: "create_github_issue",
+        cause: "render",
+        purpose: "chat-video-call"
+      },
+      {
+        alertname: "ChatCallCameraPublishFailure",
+        labels: { affected_purpose: "chat-call", call_id: "call-camera", call_mode: "video", camera_publish_failed: "true" },
+        actionType: "create_github_issue",
+        cause: "publish",
+        purpose: "chat-video-call"
+      },
+      {
+        alertname: "ChatCallAndroidOnlyFailures",
+        labels: { affected_purpose: "chat-call", android_only: "true", call_id: "call-android", platform: "android" },
+        actionType: "create_github_issue",
+        cause: "Android",
+        purpose: "chat-call"
+      },
+      {
+        alertname: "ChatCallCellularOnlyFailures",
+        labels: { affected_purpose: "chat-call", call_id: "call-cell", cellular_only: "true" },
+        actionType: "create_github_issue",
+        cause: "cellular",
+        purpose: "chat-call"
+      },
+      {
+        alertname: "ChatCallEndedStillJoinable",
+        labels: { affected_purpose: "chat-call", call_id: "call-ended", ended_call_joinable: "true" },
+        actionType: "clean_stale_chat_call",
+        cause: "lifecycle",
+        purpose: "chat-call"
+      },
+      {
+        alertname: "ChatCallCleanupFailed",
+        labels: { affected_purpose: "chat-call", call_id: "call-cleanup", call_cleanup_failed: "true" },
+        actionType: "clean_stale_chat_call",
+        cause: "Cleanup",
+        purpose: "chat-call"
+      }
+    ];
+
+    for (const item of cases) {
+      const { app } = createApp(env({ JOB_STORE_PATH: join(tempDir, `${item.alertname}.json`) }));
+      const response = await postAlert(app, payload(item.alertname, item.labels));
+
+      expect(response.status).toBe(202);
+      expect(response.body.jobs[0].status).toBe("waiting_approval");
+      expect(response.body.jobs[0].plan.actionType).toBe(item.actionType);
+      expect(response.body.jobs[0].plan.liveOpsIncident.affectedRoute).toBe("Chi'lly Chat");
+      expect(response.body.jobs[0].plan.liveOpsIncident.affectedPurpose).toBe(item.purpose);
+      expect(response.body.jobs[0].plan.liveOpsIncident.likelyCause).toContain(item.cause);
+    }
+  });
+
+  it("dry-runs stale Chi'lly Chat call cleanup without mutating chat or call rows", async () => {
+    const oldIso = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("admin_live_ops_incidents")) {
+        return new Response(JSON.stringify([{ id: "incident-chat-call" }]), { status: 200 });
+      }
+      if (url.includes("admin_live_ops_action_audit")) {
+        return new Response(JSON.stringify({ id: "audit-chat-call" }), { status: 201 });
+      }
+      if (url.includes("chat_threads?active_communication_room_id")) {
+        return new Response(JSON.stringify([{ id: "thread-a", active_communication_room_id: "call-stale", active_call_type: "video", updated_at: oldIso }]), { status: 200 });
+      }
+      if (url.includes("communication_rooms")) {
+        return new Response(JSON.stringify([{ room_id: "call-stale", status: "active", last_activity_at: oldIso, updated_at: oldIso, created_at: oldIso }]), { status: 200 });
+      }
+      if (url.includes("communication_room_memberships")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { app } = createApp(
+      env({
+        DRY_RUN: "true",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+        SUPABASE_URL: "https://supabase.example.test"
+      })
+    );
+    const created = await postAlert(
+      app,
+      payload("ChatCallCleanupFailed", {
+        affected_purpose: "chat-call",
+        call_cleanup_failed: "true",
+        call_id: "call-stale"
+      })
+    );
+    const jobId = created.body.jobs[0].id;
+
+    const approved = await request(app)
+      .post(`/jobs/${jobId}/approve`)
+      .set("X-Ops-Approval-Token", "approval-test-token");
+
+    expect(approved.status).toBe(200);
+    expect(approved.body.job.status).toBe("dry_run_completed");
+    expect(approved.body.job.executionResult.dryRun).toBe(true);
+    expect(approved.body.job.executionResult.safeToClean).toBe(true);
+    expect(approved.body.job.executionResult.wouldClearThreadReference).toBe(true);
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes("chat_threads") && init?.method === "PATCH")).toBe(false);
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes("communication_rooms") && init?.method === "PATCH")).toBe(false);
+  });
+
+  it("blocks stale Chi'lly Chat call cleanup when fresh memberships still exist", async () => {
+    const oldIso = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+    const freshIso = new Date().toISOString();
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("admin_live_ops_incidents")) {
+        return new Response(JSON.stringify([{ id: "incident-chat-call" }]), { status: 200 });
+      }
+      if (url.includes("admin_live_ops_action_audit")) {
+        return new Response(JSON.stringify({ id: "audit-chat-call" }), { status: 201 });
+      }
+      if (url.includes("chat_threads?active_communication_room_id")) {
+        return new Response(JSON.stringify([{ id: "thread-a", active_communication_room_id: "call-active", active_call_type: "video", updated_at: oldIso }]), { status: 200 });
+      }
+      if (url.includes("communication_rooms")) {
+        return new Response(JSON.stringify([{ room_id: "call-active", status: "active", last_activity_at: oldIso, updated_at: oldIso, created_at: oldIso }]), { status: 200 });
+      }
+      if (url.includes("communication_room_memberships")) {
+        return new Response(JSON.stringify([{ room_id: "call-active", user_id: "user-a", last_seen_at: freshIso, membership_state: "active" }]), { status: 200 });
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    }));
+    const { app } = createApp(
+      env({
+        ALLOW_LIVE_OPS_REGISTRY_ACTIONS: "true",
+        DRY_RUN: "false",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+        SUPABASE_URL: "https://supabase.example.test"
+      })
+    );
+    const created = await postAlert(
+      app,
+      payload("ChatCallCleanupFailed", {
+        affected_purpose: "chat-call",
+        call_cleanup_failed: "true",
+        call_id: "call-active"
+      })
+    );
+    const jobId = created.body.jobs[0].id;
+
+    const approved = await request(app)
+      .post(`/jobs/${jobId}/approve`)
+      .set("X-Ops-Approval-Token", "approval-test-token");
+
+    expect(approved.status).toBe(409);
+    expect(approved.body.job.status).toBe("failed");
+    expect(approved.body.error).toContain("fresh_chat_call_membership_not_safe_to_clean");
+  });
+
+  it("dry-runs approved Live Ops GitHub actions without creating issues by default", async () => {
+    const { app } = createApp(env({ DRY_RUN: "true", ALLOW_GITHUB_ACTIONS: "false" }));
+    const created = await postAlert(
+      app,
+      payload("LiveOpsTokenSignalingJoinFailures", {
+        affected_route: "watch_party_live",
+        join_failures: "10",
+        signaling_errors: "3",
+        token_errors: "2"
+      })
+    );
+    const jobId = created.body.jobs[0].id;
+
+    const approved = await request(app)
+      .post(`/jobs/${jobId}/approve`)
+      .set("X-Ops-Approval-Token", "approval-test-token");
+
+    expect(approved.status).toBe(200);
+    expect(approved.body.job.status).toBe("dry_run_completed");
+    expect(approved.body.job.executionResult.dryRun).toBe(true);
+    expect(approved.body.job.plan.liveOpsIncident.affectedRoute).toBe("Watch-Party Live");
+  });
+
+  it("blocks LiveKit registry remediation when real execution is not explicitly enabled", async () => {
+    const { app } = createApp(
+      env({
+        DRY_RUN: "false",
+        ALLOW_LIVE_OPS_REGISTRY_ACTIONS: "false"
+      })
+    );
+    const created = await postAlert(
+      app,
+      payload("LiveKitNodeUnhealthy", {
+        affected_route: "live_watch_party",
+        bad_node: "true",
+        server_id: "chillywood-prod-01"
+      })
+    );
+    const jobId = created.body.jobs[0].id;
+
+    const approved = await request(app)
+      .post(`/jobs/${jobId}/approve`)
+      .set("X-Ops-Approval-Token", "approval-test-token");
+
+    expect(approved.status).toBe(409);
+    expect(approved.body.job.status).toBe("failed");
+    expect(approved.body.error).toContain("blocked_by_safety");
+  });
+
+  it("supports create PR only as a dry-run when an existing fix branch is supplied", async () => {
+    const { app } = createApp(env({ DRY_RUN: "true" }));
+    const created = await postAlert(
+      app,
+      payload("LiveOpsTokenSignalingJoinFailures", {
+        affected_route: "live_watch_party",
+        fix_branch: "ops/live-token-fix",
+        join_failures: "8",
+        signaling_errors: "2",
+        token_errors: "2"
+      })
+    );
+    const jobId = created.body.jobs[0].id;
+
+    const prOnly = await request(app)
+      .post(`/jobs/${jobId}/create-pr-only`)
+      .set("X-Ops-Approval-Token", "approval-test-token");
+
+    expect(prOnly.status).toBe(200);
+    expect(prOnly.body.result.dryRun).toBe(true);
+    expect(prOnly.body.result.target.headBranch).toBe("ops/live-token-fix");
   });
 
   it("lists recent jobs with sanitized fields and status filtering", async () => {

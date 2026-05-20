@@ -10,8 +10,19 @@ export type OpsConfig = {
   livekitApiSecret?: string;
   allowLiveActions: boolean;
   allowNetShaping: boolean;
+  allowGithubActions: boolean;
+  allowInfraActions: boolean;
+  allowLiveOpsRegistryActions: boolean;
   jobStorePath: string;
   auditLogPath: string;
+  supabaseUrl?: string;
+  supabaseServiceRoleKey?: string;
+  liveOpsHeartbeatStaleSeconds: number;
+  staleAssignmentMinAgeSeconds: number;
+  staleChatCallMinAgeSeconds: number;
+  githubToken?: string;
+  githubRepository?: string;
+  githubDefaultBranch: string;
   netThrottleInterface?: string;
   netThrottleRate?: string;
   turnConfigPath?: string;
@@ -72,8 +83,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OpsConfig {
     livekitApiSecret: readOptional(env.LK_API_SECRET),
     allowLiveActions: readBool(env.ALLOW_LIVE_ACTIONS, false),
     allowNetShaping: readBool(env.ALLOW_NET_SHAPING, false),
+    allowGithubActions: readBool(env.ALLOW_GITHUB_ACTIONS, false),
+    allowInfraActions: readBool(env.ALLOW_INFRA_ACTIONS, false),
+    allowLiveOpsRegistryActions: readBool(env.ALLOW_LIVE_OPS_REGISTRY_ACTIONS, false),
     jobStorePath: readOptional(env.JOB_STORE_PATH) ?? "./data/jobs.json",
     auditLogPath: readOptional(env.AUDIT_LOG_PATH) ?? "./data/audit.log",
+    supabaseUrl: readOptional(env.SUPABASE_URL),
+    supabaseServiceRoleKey: readOptional(env.SUPABASE_SERVICE_ROLE_KEY),
+    liveOpsHeartbeatStaleSeconds: readNumber(env.LIVE_OPS_HEARTBEAT_STALE_SECONDS, 120),
+    staleAssignmentMinAgeSeconds: readNumber(env.LIVE_OPS_STALE_ASSIGNMENT_MIN_AGE_SECONDS, 3600),
+    staleChatCallMinAgeSeconds: readNumber(env.LIVE_OPS_STALE_CHAT_CALL_MIN_AGE_SECONDS, 3600),
+    githubToken: readOptional(env.OPS_GITHUB_TOKEN),
+    githubRepository: readOptional(env.OPS_GITHUB_REPOSITORY),
+    githubDefaultBranch: readOptional(env.OPS_GITHUB_DEFAULT_BRANCH) ?? "main",
     netThrottleInterface: readOptional(env.NET_THROTTLE_INTERFACE),
     netThrottleRate: readOptional(env.NET_THROTTLE_RATE),
     turnConfigPath: readOptional(env.TURN_CONFIG_PATH),

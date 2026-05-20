@@ -4,6 +4,7 @@ import {
     ActivityIndicator,
     Alert,
     ImageBackground,
+    Linking,
     Modal,
     ScrollView,
     StyleSheet,
@@ -93,6 +94,16 @@ import {
   type LiveCostGuardSettings,
   type LiveCostGuardSettingsReadModel,
 } from "../_lib/adminLiveCostGuard";
+import {
+  formatLiveOpsTimestamp,
+  formatLiveOpsToken,
+  readLiveOpsFixCenter,
+  requestLiveOpsFixCenterAction,
+  type LiveOpsActionAudit,
+  type LiveOpsFixCenterAction,
+  type LiveOpsFixCenterReadModel,
+  type LiveOpsIncident,
+} from "../_lib/adminLiveOpsFixCenter";
 import {
   formatFinanceFoundationCount,
   readAdminFinanceReadModel,
@@ -189,6 +200,7 @@ type OperatorTabKey =
   | "sponsors"
   | "fraud"
   | "live-cost-guard"
+  | "live-ops-fix-center"
   | "ops-alerts"
   | "system";
 
@@ -278,6 +290,7 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "sponsors", label: "Sponsors" },
   { key: "fraud", label: "Fraud" },
   { key: "live-cost-guard", label: "Live Cost Guard" },
+  { key: "live-ops-fix-center", label: "Live Ops Fix Center" },
   { key: "ops-alerts", label: "Ops Alerts" },
   { key: "system", label: "System" },
 ];
@@ -920,6 +933,27 @@ const getLiveCostGuardSeverityStyle = (severity: string) => {
   return styles.badgePublished;
 };
 
+const getLiveOpsRiskStyle = (risk: string) => {
+  if (risk === "critical" || risk === "high") return styles.badgeDraft;
+  if (risk === "medium") return styles.badgeScheduled;
+  return styles.badgePublished;
+};
+
+const formatLiveOpsDryRunResult = (result: Record<string, unknown> | null) => {
+  if (!result) return "Not recorded";
+  const safeToClean = typeof result.safeToClean === "boolean" ? `safe ${result.safeToClean ? "yes" : "no"}` : "";
+  const status = typeof result.status === "string" ? result.status : "";
+  const roomStatus = typeof result.roomStatus === "string" ? `room ${result.roomStatus}` : "";
+  const dryRun = result.dryRun === true ? "dry-run" : result.dryRun === false ? "executed" : "";
+  const summary = [dryRun, status, roomStatus, safeToClean].filter(Boolean).join(" · ");
+  if (summary) return summary;
+  try {
+    return JSON.stringify(result).slice(0, 240);
+  } catch {
+    return "Recorded";
+  }
+};
+
 const formatProviderUsageRows = (count: number | null) => (
   count === null ? "usage rows not readable" : `${count} provider usage row${count === 1 ? "" : "s"}`
 );
@@ -1093,6 +1127,10 @@ export default function AdminStudioScreen() {
   const [liveCostGuardRoomName, setLiveCostGuardRoomName] = useState("");
   const [liveCostGuardParticipantIdentity, setLiveCostGuardParticipantIdentity] = useState("");
   const [liveCostGuardActionReason, setLiveCostGuardActionReason] = useState("");
+  const [liveOpsReadModel, setLiveOpsReadModel] = useState<LiveOpsFixCenterReadModel | null>(null);
+  const [liveOpsLoading, setLiveOpsLoading] = useState(false);
+  const [liveOpsNotice, setLiveOpsNotice] = useState<string | null>(null);
+  const [liveOpsActionBusy, setLiveOpsActionBusy] = useState<string | null>(null);
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
@@ -1216,6 +1254,10 @@ export default function AdminStudioScreen() {
       setLiveCostGuardSaving(false);
       setLiveCostGuardNotice(null);
       setLiveCostGuardActionBusy(null);
+      setLiveOpsReadModel(null);
+      setLiveOpsLoading(false);
+      setLiveOpsNotice(null);
+      setLiveOpsActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -1253,6 +1295,10 @@ export default function AdminStudioScreen() {
       setLiveCostGuardSaving(false);
       setLiveCostGuardNotice(null);
       setLiveCostGuardActionBusy(null);
+      setLiveOpsReadModel(null);
+      setLiveOpsLoading(false);
+      setLiveOpsNotice(null);
+      setLiveOpsActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -1262,6 +1308,10 @@ export default function AdminStudioScreen() {
       setLoading(false);
       setConfigLoading(false);
       setAppConfigConnected(false);
+      setLiveOpsReadModel(null);
+      setLiveOpsLoading(false);
+      setLiveOpsNotice(null);
+      setLiveOpsActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -1508,6 +1558,30 @@ export default function AdminStudioScreen() {
     };
   }, [liveCostGuardActions, liveCostGuardEvents, liveCostGuardSettingsForm]);
 
+  const liveOpsIncidents = liveOpsReadModel?.incidents ?? [];
+  const liveOpsAudits = liveOpsReadModel?.audits ?? [];
+  const liveOpsOpenCount = liveOpsIncidents.filter((incident) =>
+    incident.status === "detected" || incident.status === "waiting_approval"
+  ).length;
+  const liveOpsHighestRisk = useMemo(() => {
+    const riskOrder: Record<string, number> = {
+      low: 0,
+      medium: 1,
+      high: 2,
+      critical: 3,
+    };
+    return liveOpsIncidents
+      .map((incident) => incident.riskLevel)
+      .sort((left, right) => (riskOrder[right] ?? 0) - (riskOrder[left] ?? 0))[0] ?? "low";
+  }, [liveOpsIncidents]);
+  const liveOpsAuditsByIncident = useMemo(() => {
+    return liveOpsAudits.reduce<Record<string, LiveOpsActionAudit[]>>((acc, audit) => {
+      if (!audit.incidentId) return acc;
+      acc[audit.incidentId] = [...(acc[audit.incidentId] ?? []), audit];
+      return acc;
+    }, {});
+  }, [liveOpsAudits]);
+
   const adminDashboardCards = useMemo<readonly AdminDashboardCard[]>(() => {
     const activeRoleLabels = platformRoles.length
       ? platformRoles.map((membership) => formatModerationToken(membership.role)).join(" · ")
@@ -1618,6 +1692,19 @@ export default function AdminStudioScreen() {
           : "Live Cost Guard requires active owner/operator role truth.",
         tone: canManagePrivilegedWrites && liveCostGuardSettingsReadModel?.connected ? "default" : "unavailable",
         destination: canManagePrivilegedWrites ? "live-cost-guard" : undefined,
+      },
+      {
+        label: "Live Ops Fix Center",
+        value: canManagePrivilegedWrites
+          ? liveOpsReadModel?.connected
+            ? `${liveOpsOpenCount} open`
+            : "Not connected yet"
+          : "Locked",
+        body: canManagePrivilegedWrites
+          ? "Owner/operator-approved remediation cards for Live Stage, Watch-Party Live, and chat-call reliability. Actions stay server-side, dry-run-first, and audited."
+          : "Live Ops remediation requires active owner/operator role truth.",
+        tone: canManagePrivilegedWrites && liveOpsReadModel?.connected ? "default" : "unavailable",
+        destination: canManagePrivilegedWrites ? "live-ops-fix-center" : undefined,
       },
       {
         label: "App Config",
@@ -1734,6 +1821,8 @@ export default function AdminStudioScreen() {
     dmcaCasesLoading,
     liveCostGuardSettingsForm.mode,
     liveCostGuardSettingsReadModel?.connected,
+    liveOpsOpenCount,
+    liveOpsReadModel?.connected,
     platformRoles,
     resolvedActorRole,
     safetyReportQueueSummary,
@@ -1762,6 +1851,15 @@ export default function AdminStudioScreen() {
         body: "Current app configuration did not confirm a connected load.",
         tone: "unavailable",
         destination: "system",
+      });
+    }
+
+    if (canManagePrivilegedWrites && liveOpsOpenCount > 0) {
+      rows.push({
+        label: "Live Ops Fix Center",
+        value: `${liveOpsOpenCount} open`,
+        body: "Live and chat-call reliability incident cards are waiting for owner/operator review.",
+        destination: "live-ops-fix-center",
       });
     }
 
@@ -1808,9 +1906,11 @@ export default function AdminStudioScreen() {
   }, [
     adminOpsNotice,
     appConfigConnected,
+    canManagePrivilegedWrites,
     canReviewSafetyReports,
     configLoading,
     dmcaNotice,
+    liveOpsOpenCount,
     moderationNotice,
     notice,
     safetyReportQueueSummary,
@@ -2607,6 +2707,91 @@ export default function AdminStudioScreen() {
     }
     void loadLiveCostGuard();
   }, [canAccessAdmin, canManagePrivilegedWrites, loadLiveCostGuard]);
+
+  const loadLiveOpsFixCenter = useCallback(async () => {
+    if (!canManagePrivilegedWrites) {
+      setLiveOpsReadModel(null);
+      setLiveOpsLoading(false);
+      return;
+    }
+
+    try {
+      setLiveOpsLoading(true);
+      setLiveOpsNotice(null);
+      setLiveOpsReadModel(await readLiveOpsFixCenter(25));
+    } catch (err: any) {
+      setLiveOpsNotice(formatAdminOperationFailure(err, "Failed to load Live Ops Fix Center."));
+      setLiveOpsReadModel(null);
+    } finally {
+      setLiveOpsLoading(false);
+    }
+  }, [canManagePrivilegedWrites]);
+
+  useEffect(() => {
+    if (!canAccessAdmin || !canManagePrivilegedWrites) {
+      setLiveOpsReadModel(null);
+      setLiveOpsLoading(false);
+      setLiveOpsNotice(null);
+      setLiveOpsActionBusy(null);
+      return;
+    }
+    void loadLiveOpsFixCenter();
+  }, [canAccessAdmin, canManagePrivilegedWrites, loadLiveOpsFixCenter]);
+
+  const runLiveOpsAction = useCallback((incident: LiveOpsIncident, action: LiveOpsFixCenterAction) => {
+    if (!canManagePrivilegedWrites || liveOpsActionBusy) {
+      setLiveOpsNotice("Live Ops Fix Center actions require active owner/operator truth.");
+      return;
+    }
+
+    const actionLabel = action === "create_pr_only" ? "Create PR only" : formatLiveOpsToken(action);
+    const copy = action === "reject"
+      ? "This records a rejection audit entry. It does not touch LiveKit, GitHub, rooms, or production infrastructure."
+      : action === "create_pr_only"
+        ? "This asks the server-side ops proxy to create only a draft PR from an existing fix branch. It never merges or deploys."
+        : "This asks the server-side ops proxy to approve the planned remediation. Dry-run and safety env flags still gate execution.";
+
+    Alert.alert(
+      `Confirm ${actionLabel}`,
+      `${incident.title}\n\nRisk: ${formatLiveOpsToken(incident.riskLevel)}\nRollback: ${incident.rollbackNote}\n\n${copy}`,
+      [
+        { style: "cancel", text: "Cancel" },
+        {
+          style: action === "reject" ? "default" : incident.riskLevel === "low" ? "default" : "destructive",
+          text: actionLabel,
+          onPress: () => {
+            void (async () => {
+              try {
+                setLiveOpsActionBusy(`${incident.id}:${action}`);
+                setLiveOpsNotice(null);
+                setLiveOpsReadModel(await requestLiveOpsFixCenterAction({
+                  action,
+                  incidentId: incident.id,
+                  reason: `${actionLabel} from mobile Admin Live Ops Fix Center.`,
+                }));
+                setLiveOpsNotice(`Live Ops action recorded: ${actionLabel}.`);
+              } catch (err: any) {
+                setLiveOpsNotice(formatAdminOperationFailure(err, `Failed to ${actionLabel.toLowerCase()}.`));
+                await loadLiveOpsFixCenter();
+              } finally {
+                setLiveOpsActionBusy(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [canManagePrivilegedWrites, liveOpsActionBusy, loadLiveOpsFixCenter]);
+
+  const openLiveOpsRunbook = useCallback((incident: LiveOpsIncident) => {
+    if (incident.runbookUrl) {
+      void Linking.openURL(incident.runbookUrl).catch(() => {
+        Alert.alert("Runbook", incident.runbookPath);
+      });
+      return;
+    }
+    Alert.alert("Runbook", incident.runbookPath);
+  }, []);
 
   const saveLiveCostGuardSettings = useCallback(async () => {
     if (!canManagePrivilegedWrites || liveCostGuardSaving) {
@@ -6799,6 +6984,167 @@ export default function AdminStudioScreen() {
         </View>
         ) : null}
 
+        {operatorTab === "live-ops-fix-center" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>LIVE OPS FIX CENTER</Text>
+              <Text style={styles.configTitle}>Owner/Admin Live remediation approvals</Text>
+              <Text style={styles.configBody}>
+                Real incident cards for Live Stage, Watch-Party Live, and Chi'lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
+              </Text>
+            </View>
+            <View style={[styles.badge, getLiveOpsRiskStyle(liveOpsHighestRisk)]}>
+              <Text style={styles.badgeText}>{formatLiveOpsToken(liveOpsHighestRisk)}</Text>
+            </View>
+          </View>
+
+          {liveOpsNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{liveOpsNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.dashboardGrid}>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Open Incidents</Text>
+              <Text style={styles.dashboardMetricValue}>{liveOpsLoading ? "Loading" : String(liveOpsOpenCount)}</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Backed by `admin_live_ops_incidents`; empty means no real incident card has been mirrored.
+              </Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Highest Risk</Text>
+              <Text style={styles.dashboardMetricValue}>{formatLiveOpsToken(liveOpsHighestRisk)}</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Risk comes from the ops classifier and never from fabricated health or participant data.
+              </Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Proxy</Text>
+              <Text style={styles.dashboardMetricValue}>{liveOpsReadModel?.connected ? "Connected" : "Not connected"}</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Owner/operator auth is enforced by the Supabase function before any ops request.
+              </Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Audit Rows</Text>
+              <Text style={styles.dashboardMetricValue}>{String(liveOpsAudits.length)}</Text>
+              <Text style={styles.dashboardMetricBody}>
+                Detect, dry-run, approval, rejection, execution, and failure events are append-only.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Incident Cards</Text>
+                <Text style={styles.configListBody}>
+                  Cards are created only from sanitized ops alerts mirrored to Supabase. No sample rooms, fake participants, fake TURN bytes, or fake health are rendered.
+                </Text>
+              </View>
+              <View style={styles.configListActions}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, liveOpsLoading && styles.configSaveBtnDisabled]}
+                  onPress={() => void loadLiveOpsFixCenter()}
+                  disabled={liveOpsLoading}
+                >
+                  <Text style={styles.actionText}>{liveOpsLoading ? "Refreshing..." : "Refresh"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {liveOpsLoading ? (
+              <View style={styles.configLoadingRow}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.configLoadingText}>Loading Live Ops incidents...</Text>
+              </View>
+            ) : liveOpsIncidents.length ? liveOpsIncidents.map((incident) => {
+              const busy = liveOpsActionBusy?.startsWith(`${incident.id}:`) === true;
+              const actionLocked = busy || !canManagePrivilegedWrites || !incident.opsJobId || incident.status === "executed" || incident.status === "rejected";
+              const incidentAudits = liveOpsAuditsByIncident[incident.id] ?? [];
+              const callTargets = [
+                incident.affectedThreadId ? `Thread ${formatCompactIdentifier(incident.affectedThreadId)}` : "",
+                incident.affectedCallId ? `Call ${formatCompactIdentifier(incident.affectedCallId)}` : "",
+                incident.callMode ? `Mode ${formatLiveOpsToken(incident.callMode)}` : "",
+              ].filter(Boolean).join(" · ");
+
+              return (
+                <View key={incident.id} style={styles.configListRowSubtle}>
+                  <View style={styles.configHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.configListTitle}>{incident.title}</Text>
+                      <Text style={styles.configListBody}>
+                        {`${formatLiveOpsToken(incident.affectedPurpose)} · ${incident.affectedRoute} · ${incident.affectedPlatform} · ${formatLiveOpsToken(incident.status)}`}
+                      </Text>
+                    </View>
+                    <View style={[styles.badge, getLiveOpsRiskStyle(incident.riskLevel)]}>
+                      <Text style={styles.badgeText}>{formatLiveOpsToken(incident.riskLevel)}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.configListBody}>
+                    {`Rooms: ${incident.affectedRooms.length ? incident.affectedRooms.join(", ") : "Not supplied"} · Server: ${incident.affectedServerId || "Not supplied"}`}
+                  </Text>
+                  {callTargets ? (
+                    <Text style={styles.configListBody}>{callTargets}</Text>
+                  ) : null}
+                  <Text style={styles.configListBody}>{`Symptoms: ${incident.detectedSymptoms.length ? incident.detectedSymptoms.join(" · ") : "Real signal not supplied"}`}</Text>
+                  <Text style={styles.configListBody}>{`Likely cause: ${incident.likelyCause}`}</Text>
+                  <Text style={styles.configListBody}>{`Confidence: ${formatLiveOpsToken(incident.confidence)} · Suggested fix: ${incident.suggestedFix}`}</Text>
+                  <Text style={styles.configListBody}>{`Dry-run: ${formatLiveOpsDryRunResult(incident.dryRunResult)}`}</Text>
+                  <Text style={styles.configListBody}>{`Rollback: ${incident.rollbackNote}`}</Text>
+                  <Text style={styles.configListBody}>{`Last action: ${formatLiveOpsTimestamp(incident.lastActionAt || incident.updatedAt)}`}</Text>
+                  <View style={styles.configListActions}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, actionLocked && styles.configSaveBtnDisabled]}
+                      onPress={() => runLiveOpsAction(incident, "approve")}
+                      disabled={actionLocked}
+                    >
+                      <Text style={styles.actionText}>{busy ? "Working..." : "Approve"}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionBtnDanger, actionLocked && styles.configSaveBtnDisabled]}
+                      onPress={() => runLiveOpsAction(incident, "reject")}
+                      disabled={actionLocked}
+                    >
+                      <Text style={styles.actionTextDanger}>Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, actionLocked && styles.configSaveBtnDisabled]}
+                      onPress={() => runLiveOpsAction(incident, "create_pr_only")}
+                      disabled={actionLocked}
+                    >
+                      <Text style={styles.actionText}>Create PR only</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => openLiveOpsRunbook(incident)}
+                    >
+                      <Text style={styles.actionText}>Open runbook</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {incidentAudits.length ? (
+                    <View style={styles.configListRowSubtle}>
+                      <Text style={styles.configListTitle}>Audit log</Text>
+                      {incidentAudits.slice(0, 4).map((audit) => (
+                        <Text key={audit.id} style={styles.configListBody}>
+                          {`${formatLiveOpsTimestamp(audit.createdAt)} · ${formatLiveOpsToken(audit.eventType)} · ${formatLiveOpsToken(audit.actionType)} · ${audit.success ? "success" : "not applied"}${audit.errorMessage ? ` · ${audit.errorMessage}` : ""}`}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.configListBody}>No audit rows mirrored for this incident yet.</Text>
+                  )}
+                </View>
+              );
+            }) : (
+              <Text style={styles.configListBody}>No Live Ops reliability incidents are currently recorded.</Text>
+            )}
+          </View>
+        </View>
+        ) : null}
+
         {operatorTab === "ops-alerts" ? (
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
@@ -6806,7 +7152,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>OPS ALERTS</Text>
               <Text style={styles.configTitle}>Ops alert automation</Text>
               <Text style={styles.configBody}>
-                Admin visibility for the backend Alertmanager safety gate. This panel does not call LiveKit, run shell scripts, or hold approval tokens in mobile code.
+                Read-only contract for the backend Alertmanager safety gate. Live reliability approvals now belong in the Live Ops Fix Center proxy lane.
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeScheduled]}>
@@ -6831,9 +7177,9 @@ export default function AdminStudioScreen() {
             </View>
             <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
               <Text style={styles.dashboardMetricLabel}>Approve / Deny</Text>
-              <Text style={styles.dashboardMetricValue}>Proxy needed</Text>
+              <Text style={styles.dashboardMetricValue}>Fix Center</Text>
               <Text style={styles.dashboardMetricBody}>
-                Active approval requires a server-side admin proxy. `OPS_APPROVAL_TOKEN` must never ship in client code.
+                Owner/operator approval for Live reliability incidents goes through `admin-live-ops-fix-center`; tokens still never ship in client code.
               </Text>
             </View>
             <View style={styles.dashboardMetricCard}>
@@ -6850,7 +7196,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Admin visibility scope</Text>
                 <Text style={styles.configListBody}>
-                  This tab records the current integration contract only. It does not fetch ops jobs from the mobile client because the repo has no safe server-side Admin proxy in this lane.
+                  This tab records the general automation contract only. Live and chat-call incident cards are read through the dedicated Fix Center proxy.
                 </Text>
               </View>
               <View style={styles.badgesRow}>
@@ -6863,15 +7209,15 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Approval path</Text>
                 <Text style={styles.configListBody}>
-                  Approve/Deny remains available only through the ops backend endpoints protected by `X-Ops-Approval-Token`; mobile Admin controls stay disabled until a secure proxy owns that token server-side.
+                  Approve/Deny for Live reliability incidents is available in Live Ops Fix Center. Other ops jobs remain backend-only unless a separate proxy is added.
                 </Text>
               </View>
               <View style={styles.configListActions}>
-                <TouchableOpacity style={[styles.actionBtn, styles.configSaveBtnDisabled]} disabled>
-                  <Text style={styles.actionText}>Approve disabled</Text>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => setOperatorTab("live-ops-fix-center")}>
+                  <Text style={styles.actionText}>Open Fix Center</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionBtnDanger, styles.configSaveBtnDisabled]} disabled>
-                  <Text style={styles.actionTextDanger}>Deny disabled</Text>
+                  <Text style={styles.actionTextDanger}>Dangerous ops still gated</Text>
                 </TouchableOpacity>
               </View>
             </View>

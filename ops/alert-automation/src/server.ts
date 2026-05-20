@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import express, { type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
 import { AuditLog } from "./audit.js";
-import { executeAction, planAction } from "./actions.js";
+import { createPrOnlyForPlan, executeAction, planAction } from "./actions.js";
 import { loadConfig, type OpsConfig } from "./config.js";
 import { notifyActionableJob } from "./email.js";
 import {
@@ -15,6 +15,7 @@ import {
   type OpsJob
 } from "./jobs.js";
 import { sanitizeJob } from "./sanitize.js";
+import { mirrorLiveOpsJob } from "./supabaseOps.js";
 
 type RawBodyRequest = Request & {
   rawBody?: Buffer;
@@ -211,6 +212,7 @@ async function handleIncomingAlert(
       status: "failed",
       failureReason: plan.blockedReason ?? "invalid_action_plan"
     });
+    await mirrorLiveOpsJob(failed, config, "fail");
     await notifyActionableJob(failed, config, audit);
     return failed;
   }
@@ -248,6 +250,7 @@ async function handleIncomingAlert(
         plannedCommands: plan.plannedCommands ?? []
       }
     });
+    await mirrorLiveOpsJob(waiting, config, "detect");
     await notifyActionableJob(waiting, config, audit);
     return waiting;
   }
@@ -259,6 +262,7 @@ async function handleIncomingAlert(
       target: plan.target ?? {}
     }
   });
+  await mirrorLiveOpsJob(completed, config, "dry_run");
   await notifyActionableJob(completed, config, audit);
   return completed;
 }
@@ -283,7 +287,10 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
       ok: true,
       dryRun: config.dryRun,
       allowLiveActions: config.allowLiveActions,
-      allowNetShaping: config.allowNetShaping
+      allowNetShaping: config.allowNetShaping,
+      allowGithubActions: config.allowGithubActions,
+      allowInfraActions: config.allowInfraActions,
+      allowLiveOpsRegistryActions: config.allowLiveOpsRegistryActions
     });
   });
 
@@ -408,6 +415,10 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
         approvedAt: new Date().toISOString(),
         approvedBy
       });
+      await mirrorLiveOpsJob(approved, config, "approve", {
+        email: approvedBy,
+        role: req.body?.actorRole
+      });
 
       await audit.write({
         eventType: "approved",
@@ -426,6 +437,10 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
           executedAt: status === "executed" ? new Date().toISOString() : undefined,
           executionResult: result
         });
+        await mirrorLiveOpsJob(done, config, status === "executed" ? "execute" : "dry_run", {
+          email: approvedBy,
+          role: req.body?.actorRole
+        });
 
         await audit.write({
           eventType: status === "executed" ? "executed" : "dry_run",
@@ -443,6 +458,10 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
           status: "failed",
           failureReason: reason
         });
+        await mirrorLiveOpsJob(failed, config, "fail", {
+          email: approvedBy,
+          role: req.body?.actorRole
+        });
         await audit.write({
           eventType: reason.includes("blocked_by_safety") ? "blocked_by_safety" : "failed",
           jobId: failed.id,
@@ -451,6 +470,77 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
           dryRun: config.dryRun,
           approvedBy,
           reason
+        });
+        res.status(409).json({ error: reason, job: serializeJob(failed) });
+      }
+    })
+  );
+
+  app.post(
+    "/jobs/:id/create-pr-only",
+    asyncRoute(async (req, res) => {
+      const token = verifyApprovalToken(req, config);
+      if (!token.ok) {
+        res.status(token.code).json({ error: token.error });
+        return;
+      }
+
+      const job = await store.getById(routeParam(req.params.id));
+      if (!job) {
+        res.status(404).json({ error: "job_not_found" });
+        return;
+      }
+
+      if (!job.plan.liveOpsIncident) {
+        res.status(409).json({ error: "not_a_live_ops_job", job: serializeJob(job) });
+        return;
+      }
+
+      if (job.status === "denied") {
+        res.status(409).json({ error: "job_already_denied", job: serializeJob(job) });
+        return;
+      }
+
+      const approvedBy = req.get("x-ops-approved-by") ?? "operator";
+      try {
+        const result = await createPrOnlyForPlan(job.plan, config);
+        const updated = await store.update(job.id, {
+          executionResult: {
+            ...(job.executionResult ?? {}),
+            createPrOnly: result
+          }
+        });
+        await audit.write({
+          eventType: "create_pr_only",
+          jobId: updated.id,
+          alertname: getAlertName(updated.alert),
+          actionType: "create_github_pr",
+          dryRun: Boolean(result.dryRun),
+          approvedBy
+        });
+        await mirrorLiveOpsJob(updated, config, "create_pr_only", {
+          email: approvedBy,
+          role: req.body?.actorRole
+        });
+        res.json({ job: serializeJob(updated), result });
+      } catch (error) {
+        const reason = safeError(error);
+        const failed = await store.update(job.id, {
+          status: "failed",
+          failureReason: reason
+        });
+        await audit.write({
+          eventType: reason.includes("blocked_by_safety") ? "blocked_by_safety" : "failed",
+          jobId: failed.id,
+          alertname: getAlertName(failed.alert),
+          actionType: "create_github_pr",
+          dryRun: config.dryRun,
+          approvedBy,
+          reason
+        });
+        await mirrorLiveOpsJob(failed, config, "fail", {
+          email: approvedBy,
+          role: req.body?.actorRole
         });
         res.status(409).json({ error: reason, job: serializeJob(failed) });
       }
@@ -477,6 +567,10 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
         status: "denied",
         deniedAt: new Date().toISOString(),
         deniedBy
+      });
+      await mirrorLiveOpsJob(denied, config, "reject", {
+        email: deniedBy,
+        role: req.body?.actorRole
       });
       await audit.write({
         eventType: "denied",

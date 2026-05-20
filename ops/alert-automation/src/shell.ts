@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ALLOWED_SCRIPTS = new Set([
+  "livekit-restart.sh",
+  "livekit-rollback.sh",
   "turn-cap.sh",
   "net-throttle.sh",
   "net-throttle-rollback.sh"
