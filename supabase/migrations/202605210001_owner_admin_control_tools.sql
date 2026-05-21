@@ -441,7 +441,7 @@ create or replace function public."platform_staff_write_audit"(
   p_actor_role text,
   p_target_email text,
   p_action text,
-  p_target_role text,
+  p_role text,
   p_reason text,
   p_metadata jsonb default '{}'::jsonb
 )
@@ -470,7 +470,7 @@ begin
     "actor_role",
     "target_email",
     "action",
-    "target_role",
+    "role",
     "reason",
     "metadata"
   )
@@ -480,7 +480,7 @@ begin
     v_actor_role,
     public.platform_staff_normalize_email(p_target_email),
     p_action,
-    public.platform_staff_normalize_role(p_target_role),
+    public.platform_staff_normalize_role(p_role),
     nullif(trim(coalesce(p_reason, '')), ''),
     v_metadata
   );
@@ -504,8 +504,8 @@ begin
       v_actor_role,
       concat('platform_staff_role_', p_action),
       'role',
-      'platform_staff_role',
-      concat(public.platform_staff_normalize_email(p_target_email), ':', public.platform_staff_normalize_role(p_target_role)),
+      'platform_role_membership',
+      concat(public.platform_staff_normalize_email(p_target_email), ':', public.platform_staff_normalize_role(p_role)),
       nullif(trim(coalesce(p_reason, '')), ''),
       case when p_action = 'blocked' then 'warning' else 'notice' end,
       v_metadata
