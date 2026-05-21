@@ -24,12 +24,12 @@
 - `admin-owner-controls` adds Audit Explorer, permission templates, temporary grant presets, Break Glass, Legal Request Intake, Owner Security, Canary Checks, and a low-risk Safety Dashboard.
 - Audit Explorer hides normal owner actions unless `break_glass_active=true`.
 - Permission templates grant permissions only; staff roles remain in the existing Staff & Roles flow.
-- Canary checks must return pass/fail/unknown and must not fake green status.
+- Canary checks must return pass/fail/manual-required and must not fake green status.
+- `admin-owner-controls` is deployed as ACTIVE version 10 on Supabase project `bmkkhihfbmsnnmcqkoly`.
+- May 21, 2026 physical Android owner-device Admin Canary proof returned `33 pass`, `0 manual`, and `0 failed`, including owner public-profile/discovery hiding, owner normal no-audit preservation, admin self-grant denial, moderator grant denial, Legal Evidence restriction, Supabase redirect proof, and proof role/grant cleanup.
 
-## Manual Proof Required
-- Non-owner cannot view or discover the Owner account through public surfaces.
-- Owner can access their own account/profile area and premium/studio/live/admin tools.
-- Regular users still hit normal subscription gates.
-- Authorized admins can still add/remove moderators through the existing flow only after `manage_moderators`.
-- Admin legal actions require a reason, write audit, and expose no secrets to the mobile app.
-- Owner Break Glass activation and admin sensitive-action denial/allow proof must be rerun with real accounts after deployment.
+## Remaining Manual / External Proof
+- Attorney review remains required before public launch legal approval.
+- Play Console account deletion URL/Data Safety acceptance remains external.
+- Regular users must continue to prove normal subscription gates through real store/RevenueCat entitlement proof; do not fake Premium or owner access for regular users.
+- Any future grant, legal, or Break Glass behavior changes must rerun real owner/admin/moderator/viewer proof and preserve server-side enforcement.

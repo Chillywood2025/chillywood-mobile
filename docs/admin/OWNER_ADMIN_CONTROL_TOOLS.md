@@ -12,8 +12,19 @@
 - Break Glass is off by default, reason-required, and writes append-only Break Glass audit rows.
 - Legal Request Intake stores non-deletable intake records connected to Legal Evidence work.
 - Owner Security shows real status where available and unknown/manual where no safe backend proof exists.
-- Canary Checks store pass/fail/unknown results; unknown is not success.
+- Canary Checks store pass/fail/manual-required results; manual required is not success.
 - Safety Dashboard shows only real counts and unknown/manual for missing aggregations.
+
+## Production Proof
+- `admin-owner-controls` is deployed on Supabase project `bmkkhihfbmsnnmcqkoly` as ACTIVE version 10.
+- The May 21, 2026 physical Android owner-device proof on `R5CR120QCBF` ran Admin Canary from the Admin Command Center and returned `33 pass`, `0 manual`, and `0 failed`.
+- The production proof harness creates or reuses clearly marked `liveops.proof+...` accounts through Supabase Admin/service-role tooling, signs them in server-side only, grants temporary proof roles/permissions only for the run, and verifies no active proof roles/grants remain afterward.
+- The canary proves owner normal no-audit behavior by comparing owner-sensitive app-level audit counts before and after normal canary use; owner actions are only app-level audited when Break Glass is active.
+- The canary proves admin self-grant denial through the real staff-permission RPC and moderator grant denial through the real role-management RPC.
+- The canary proves Legal Evidence restriction for ungranted users/admins and exact-grant access where applicable.
+- The canary proves Live Ops remains dry-run with real-action flags disabled through the ops health contract.
+- The canary proves Supabase hosted Auth redirect configuration through a server-side management-token secret; token values are never shown in mobile UI, docs, logs, or committed files.
+- The legal readiness portion proves the production policy bundle word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, Google Play deletion language, DMCA checklist, support email/path, and public-link-or-bundled fallback.
 
 ## Access
 - Owner can see all tools.
@@ -36,5 +47,5 @@
 - The Edge Function keeps service-role access server-side.
 - No secrets are returned to the app.
 - Legal Intake has no delete action.
-- Canary checks that need unavailable proof accounts, ops health contracts, or Supabase Management API access return unknown/manual required.
+- Canary checks that need unavailable proof accounts, ops health contracts, or Supabase Management API access return manual required, not pass.
 - Owner normal functional records, such as active permission grants, may exist because the system needs them; they are not shown as app-level owner audit unless Break Glass is active.

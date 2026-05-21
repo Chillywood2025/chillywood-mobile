@@ -15,18 +15,18 @@ Canonical mobile/static policy text now lives in `legal/policies.mjs` and is ren
 
 Attorney review is still required before public launch. The repo now contains full production-draft text for 12 policy pages, each over 1,500 words:
 
-- Privacy Policy: 2,029 words
-- Terms of Use: 1,850 words
-- Community Guidelines: 1,751 words
-- Creator Rules and Creator Terms: 1,842 words
-- Copyright and DMCA Policy: 1,837 words
-- Support and Account Help: 1,702 words
-- Account Deletion and Data Deletion Policy: 1,921 words
-- Premium and Subscription Terms: 1,595 words
-- Live, Watch-Party, and Chat Rules: 1,589 words
-- Law Enforcement and Legal Request Policy: 1,589 words
-- Content Moderation, Enforcement, and Appeals Policy: 1,507 words
-- Creator Monetization and Revenue Disclaimer Policy: 1,527 words
+- Privacy Policy: 2,022 words
+- Terms of Use: 1,843 words
+- Community Guidelines: 1,744 words
+- Creator Rules and Creator Terms: 1,835 words
+- Copyright and DMCA Policy: 1,831 words
+- Support and Account Help: 1,695 words
+- Account Deletion and Data Deletion Policy: 1,914 words
+- Premium and Subscription Terms: 1,588 words
+- Live, Watch-Party, and Chat Rules: 1,582 words
+- Law Enforcement and Legal Request Policy: 1,582 words
+- Content Moderation, Enforcement, and Appeals Policy: 1,500 words
+- Creator Monetization and Revenue Disclaimer Policy: 1,520 words
 
 Required creator acknowledgements now live with the same source:
 
@@ -34,6 +34,8 @@ Required creator acknowledgements now live with the same source:
 - `LIVE_REPLAY_ACKNOWLEDGEMENT`
 
 These are wired into Studio upload/publish and live/replay event save paths in `app/channel-settings.tsx`.
+
+May 21 production proof: `admin-owner-controls` ACTIVE version 10 ran Admin Canary from physical Android owner device `R5CR120QCBF` and returned `33 pass`, `0 manual`, and `0 failed`. Legal readiness checks passed for policy word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, prohibited ownership/no-license phrases, Google Play deletion language, DMCA checklist, support email/path, and public-link-or-bundled fallback.
 
 Status key:
 
