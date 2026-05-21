@@ -229,7 +229,7 @@ const buildPreview = async (adminClient: SupabaseClientLike, payload: JsonObject
 
   if (targetType === "user_id") {
     if (!targetId) throw new Error("legal_target_id_required");
-    result.profile = await readTableRows(adminClient, "user_profiles", "user_id", targetId, "user_id,username,display_name,profile_visibility,created_at,updated_at");
+    result.profile = await readTableRows(adminClient, "user_profiles", "user_id", targetId, "user_id,username,display_name,profile_visibility,updated_at");
     result.reports = await readTableRows(adminClient, "safety_reports", "target_id", targetId, "id,target_type,target_id,category,created_at");
   } else if (targetType === "content_id") {
     if (!targetId) throw new Error("legal_target_id_required");
@@ -237,8 +237,8 @@ const buildPreview = async (adminClient: SupabaseClientLike, payload: JsonObject
     result.profilePosts = await readTableRows(adminClient, "profile_posts", "id", targetId, "id,user_id,visibility,moderation_status,created_at,updated_at");
   } else if (targetType === "room_id") {
     if (!targetId) throw new Error("legal_target_id_required");
-    result.watchPartyRooms = await readTableRows(adminClient, "watch_party_rooms", "party_id", targetId, "party_id,host_user_id,room_type,status,created_at,ended_at");
-    result.communicationRooms = await readTableRows(adminClient, "communication_rooms", "room_id", targetId, "room_id,host_user_id,status,created_at,ended_at");
+    result.watchPartyRooms = await readTableRows(adminClient, "watch_party_rooms", "party_id", targetId, "party_id,host_user_id,room_type,is_active,created_at,updated_at");
+    result.communicationRooms = await readTableRows(adminClient, "communication_rooms", "room_id", targetId, "room_id,host_user_id,status,created_at,updated_at,last_activity_at");
   } else if (targetType === "chat_thread_id") {
     if (!targetId) throw new Error("legal_target_id_required");
     result.thread = await readTableRows(adminClient, "chat_threads", "id", targetId, "id,created_by,thread_kind,created_at,updated_at,active_communication_room_id,active_call_type");
