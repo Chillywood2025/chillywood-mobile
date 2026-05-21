@@ -25,6 +25,11 @@ import {
   readMyPlatformRoleMemberships,
 } from "../_lib/moderation";
 import {
+  LEGAL_POLICY_ROUTES,
+  LEGAL_SUPPORT_EMAIL,
+  type LegalPolicy,
+} from "../_lib/legalPolicies";
+import {
   getProfileVisibilityLabel,
   PROFILE_VISIBILITY_OPTIONS,
   type ProfileVisibility,
@@ -363,11 +368,19 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  const openLocalLegalRoute = useCallback((
-    path: "/privacy" | "/terms" | "/account-deletion" | "/community-guidelines" | "/creator-rules" | "/copyright",
-  ) => {
+  const openLocalLegalRoute = useCallback((path: LegalPolicy["path"]) => {
     router.push(path as Parameters<typeof router.push>[0]);
   }, [router]);
+
+  const onPressLegalPolicy = useCallback((policy: (typeof LEGAL_POLICY_ROUTES)[number]) => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: policy.slug,
+      destination: "bundled_policy_viewer",
+    });
+
+    openLocalLegalRoute(policy.path);
+  }, [openLocalLegalRoute]);
 
   const onPressPrivacyPolicy = useCallback(() => {
     trackEvent("settings_legal_opened", {
@@ -376,13 +389,8 @@ export default function SettingsScreen() {
       destination: legalConfig.privacyPolicyUrl ? "external" : "local",
     });
 
-    if (legalConfig.privacyPolicyUrl) {
-      void openExternalDestination(legalConfig.privacyPolicyUrl, "Privacy Policy");
-      return;
-    }
-
     openLocalLegalRoute("/privacy");
-  }, [legalConfig.privacyPolicyUrl, openExternalDestination, openLocalLegalRoute]);
+  }, [legalConfig.privacyPolicyUrl, openLocalLegalRoute]);
 
   const onPressTerms = useCallback(() => {
     trackEvent("settings_legal_opened", {
@@ -391,13 +399,8 @@ export default function SettingsScreen() {
       destination: legalConfig.termsOfServiceUrl ? "external" : "local",
     });
 
-    if (legalConfig.termsOfServiceUrl) {
-      void openExternalDestination(legalConfig.termsOfServiceUrl, "Terms of Use");
-      return;
-    }
-
     openLocalLegalRoute("/terms");
-  }, [legalConfig.termsOfServiceUrl, openExternalDestination, openLocalLegalRoute]);
+  }, [legalConfig.termsOfServiceUrl, openLocalLegalRoute]);
 
   const onPressAccountDeletion = useCallback(() => {
     trackEvent("settings_legal_opened", {
@@ -406,13 +409,8 @@ export default function SettingsScreen() {
       destination: legalConfig.accountDeletionUrl ? "external" : "local",
     });
 
-    if (legalConfig.accountDeletionUrl) {
-      void openExternalDestination(legalConfig.accountDeletionUrl, "Account Deletion");
-      return;
-    }
-
     openLocalLegalRoute("/account-deletion");
-  }, [legalConfig.accountDeletionUrl, openExternalDestination, openLocalLegalRoute]);
+  }, [legalConfig.accountDeletionUrl, openLocalLegalRoute]);
 
   const onPressCommunityGuidelines = useCallback(() => {
     trackEvent("settings_legal_opened", {
@@ -451,8 +449,21 @@ export default function SettingsScreen() {
       destination: "local",
     });
 
+    openLocalLegalRoute("/support-policy");
+  }, [openLocalLegalRoute]);
+
+  const onPressSupportContact = useCallback(() => {
+    trackEvent("settings_support_contact_opened", {
+      source: "settings",
+    });
+
     router.push("/support" as Parameters<typeof router.push>[0]);
   }, [router]);
+
+  const onPressSupportEmail = useCallback(() => {
+    const supportEmail = legalConfig.supportEmail || LEGAL_SUPPORT_EMAIL;
+    void openExternalDestination(`mailto:${supportEmail}`, "Support Email");
+  }, [legalConfig.supportEmail, openExternalDestination]);
 
   const onPressManagePremium = useCallback(() => {
     trackEvent("settings_premium_manage_opened", {
@@ -706,39 +717,43 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardKicker}>LEGAL & SUPPORT</Text>
-        <Text style={styles.secondaryTitle}>Privacy, terms, and account help</Text>
+        <Text style={styles.secondaryTitle}>Legal-ready policy center</Text>
         <Text style={styles.body}>
-          Open the current policy pages or start an account-deletion request from the canonical account-help path.
+          Open the full Chi&apos;llwood policies, request account deletion help, or contact support from one polished launch surface.
         </Text>
-        <View style={styles.utilityRow}>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressPrivacyPolicy}>
-            <Text style={styles.utilityButtonText}>Privacy Policy</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressTerms}>
-            <Text style={styles.utilityButtonText}>Terms of Use</Text>
-          </TouchableOpacity>
+        <View style={styles.legalStatusCard}>
+          <Text style={styles.legalStatusLabel}>Production policy bundle</Text>
+          <Text style={styles.legalStatusValue}>Version 1.0 · Effective May 21, 2026</Text>
+          <Text style={styles.legalStatusBody}>
+            Full bundled policies are available in-app; public web links stay available where configured for store and browser review.
+          </Text>
+        </View>
+        <View style={styles.legalPolicyGrid}>
+          {LEGAL_POLICY_ROUTES.map((policy) => (
+            <TouchableOpacity
+              key={policy.slug}
+              style={styles.legalPolicyButton}
+              activeOpacity={0.86}
+              onPress={() => onPressLegalPolicy(policy)}
+            >
+              <Text style={styles.legalPolicyButtonTitle}>{policy.title}</Text>
+              <Text style={styles.legalPolicyButtonMeta}>{policy.wordCount.toLocaleString()} words</Text>
+            </TouchableOpacity>
+          ))}
         </View>
         <View style={styles.utilityRow}>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCommunityGuidelines}>
-            <Text style={styles.utilityButtonText}>Community Guidelines</Text>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupportContact}>
+            <Text style={styles.utilityButtonText}>Contact Support</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCreatorRules}>
-            <Text style={styles.utilityButtonText}>Creator Rules</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.utilityRow}>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyright}>
-            <Text style={styles.utilityButtonText}>Copyright / DMCA</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupport}>
-            <Text style={styles.utilityButtonText}>Support</Text>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupportEmail}>
+            <Text style={styles.utilityButtonText}>Email Support</Text>
           </TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressAccountDeletion}>
-          <Text style={styles.secondaryActionButtonText}>Request Account Deletion</Text>
+          <Text style={styles.secondaryActionButtonText}>Open Account Deletion Policy</Text>
         </TouchableOpacity>
         <Text style={styles.metaText}>
-          If a public legal link is not configured on this build yet, Settings opens the bundled launch policy page or hands off to Chi&apos;llywood Support for account help.
+          Short Settings copy is only a launcher; the full bundled policy pages control where policy details are needed.
         </Text>
       </View>
 
@@ -903,6 +918,60 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "700",
+  },
+  legalStatusCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 14,
+    gap: 5,
+  },
+  legalStatusLabel: {
+    color: "#FFB7C6",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  legalStatusValue: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  legalStatusBody: {
+    color: "#B8C1D6",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  legalPolicyGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  legalPolicyButton: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 138,
+    minHeight: 82,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    justifyContent: "space-between",
+    padding: 12,
+  },
+  legalPolicyButtonTitle: {
+    color: "#F4F7FC",
+    fontSize: 12.5,
+    fontWeight: "900",
+    lineHeight: 17,
+  },
+  legalPolicyButtonMeta: {
+    color: "#8D97AE",
+    fontSize: 11,
+    fontWeight: "800",
   },
   signOutButton: {
     minHeight: 48,

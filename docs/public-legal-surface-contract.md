@@ -1,6 +1,29 @@
 # Chi'llywood Public Legal Surface Contract
 
-## 0. May 13, 2026 Expanded Static Site Addendum
+## 0. May 21, 2026 Production Legal Policy Addendum
+
+This addendum supersedes the May 13 static-site source contract for policy text ownership. Public legal hosting still uses `public-site/legal-site/`, but the canonical production-draft policy source is now `legal/policies.mjs`, not scattered app route copy or older markdown drafts.
+
+Current generated policy set:
+
+- `/terms`
+- `/privacy`
+- `/creator-rules`
+- `/community-guidelines`
+- `/copyright`
+- `/account-deletion`
+- `/support`
+- `/premium-terms`
+- `/live-rules`
+- `/law-enforcement`
+- `/moderation-policy`
+- `/creator-monetization`
+
+Each full policy is over 1,500 words. The shared source includes the required creator content license, upload/publish acknowledgement, live/replay acknowledgement, deletion/retention language, moderation/legal rights, Premium/RevenueCat/store terms, law-enforcement process, evidence/legal hold language, and creator monetization disclaimers. Attorney review remains required before public launch.
+
+Admin Canary now verifies the legal policy bundle, word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, prohibited creator-ownership phrases, prohibited no-license phrases, Google Play account deletion language, DMCA agent checklist, support email/path, and public-link-or-bundled-fallback readiness.
+
+## 0.1. May 13, 2026 Expanded Static Site Addendum
 
 This addendum supersedes the older three-route-only contract for the new public launch URL surface. The older sections below remain useful history for the already-live bounded `live.chillywoodstream.com` slice.
 

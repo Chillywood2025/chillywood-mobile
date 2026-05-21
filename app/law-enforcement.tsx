@@ -3,6 +3,7 @@ import React from "react";
 import { getLegalPolicy } from "../_lib/legalPolicies";
 import { LegalPolicyViewer } from "../components/legal/legal-policy-viewer";
 
-export default function CommunityGuidelinesPage() {
-  return <LegalPolicyViewer policy={getLegalPolicy("community-guidelines")!} />;
+export default function LawEnforcementPolicyPage() {
+  return <LegalPolicyViewer policy={getLegalPolicy("law-enforcement")!} />;
 }
+

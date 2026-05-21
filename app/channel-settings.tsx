@@ -74,6 +74,10 @@ import {
   type CreatorPermissionSet,
 } from "../_lib/monetization";
 import {
+  CREATOR_UPLOAD_ACKNOWLEDGEMENT,
+  LIVE_REPLAY_ACKNOWLEDGEMENT,
+} from "../_lib/legalPolicies";
+import {
   createCreatorEvent,
   updateCreatorEvent,
   type CreatorEventReplayPolicy,
@@ -639,7 +643,13 @@ export function ChannelStudioScreen() {
   const [videoNotice, setVideoNotice] = useState<string | null>(null);
   const [videoEditor, setVideoEditor] = useState<ChannelVideoEditorState>(createEmptyVideoEditorState);
   const [selectedVideoFile, setSelectedVideoFile] = useState<CreatorVideoFile | null>(null);
+  const [contentRightsAccepted, setContentRightsAccepted] = useState(false);
+  const [liveReplayAccepted, setLiveReplayAccepted] = useState(false);
   const [videoLifecycleState, setVideoLifecycleState] = useState<VideoLifecycleState>("idle");
+  const liveReplayAcknowledgementRequired =
+    eventEditor.replayPolicy !== "none"
+    || eventEditor.status === "live_now"
+    || eventEditor.status === "replay_available";
   const videoTitleReady = videoEditor.title.trim().length > 0;
   const videoSubmitRequirement = videoEditor.editingVideoId
     ? videoTitleReady
@@ -647,6 +657,8 @@ export function ChannelStudioScreen() {
       : "Enter a title to update this video."
     : !selectedVideoFile
       ? "Choose a video file to enable upload."
+      : !contentRightsAccepted
+        ? "Confirm you own or have permission for everything in this upload."
       : videoTitleReady
         ? ""
         : "Enter a title to enable upload.";
@@ -973,6 +985,7 @@ export function ChannelStudioScreen() {
 
   const resetEventEditor = () => {
     setEventEditor(createEmptyEventEditorState());
+    setLiveReplayAccepted(false);
   };
 
   const loadCreatorEvents = async () => {
@@ -1018,6 +1031,7 @@ export function ChannelStudioScreen() {
   const resetVideoEditor = (nextLifecycleState: VideoLifecycleState = "idle") => {
     setVideoEditor(createEmptyVideoEditorState());
     setSelectedVideoFile(null);
+    setContentRightsAccepted(false);
     setVideoLifecycleState(nextLifecycleState);
   };
 
@@ -1117,6 +1131,12 @@ export function ChannelStudioScreen() {
     if (!videoEditor.editingVideoId && !selectedVideoFile) {
       logCreatorVideoUploadUi("submit_blocked", { reason: "missing_file" });
       setVideoNotice("Choose a video file before uploading.");
+      return;
+    }
+
+    if ((!videoEditor.editingVideoId || videoEditor.visibility === "public") && !contentRightsAccepted) {
+      logCreatorVideoUploadUi("submit_blocked", { reason: "rights_acknowledgement_missing" });
+      setVideoNotice("Confirm the creator rights acknowledgement before uploading or publishing.");
       return;
     }
 
@@ -1222,6 +1242,11 @@ export function ChannelStudioScreen() {
       return;
     }
 
+    if (!contentRightsAccepted) {
+      setVideoNotice("Confirm the creator rights acknowledgement below before publishing a video.");
+      return;
+    }
+
     Alert.alert(
       "Publish Video",
       `Publish "${video.title}" to your public mini platform? Public videos can appear on your Profile/Mini Platform and open in Player.`,
@@ -1281,6 +1306,7 @@ export function ChannelStudioScreen() {
       replayExpiresAt: toDatetimeLocalValue(event.replayExpiresAt),
       reminderReady: event.reminderReady,
     });
+    setLiveReplayAccepted(false);
     setEventNotice(null);
   };
 
@@ -1289,6 +1315,11 @@ export function ChannelStudioScreen() {
 
     if (!eventEditor.editingEventId && !creatorPostingEnabled) {
       setEventNotice("Creator event creation is temporarily paused. Existing events can still be managed.");
+      return;
+    }
+
+    if (liveReplayAcknowledgementRequired && !liveReplayAccepted) {
+      setEventNotice("Confirm the live/replay acknowledgement before saving this event.");
       return;
     }
 
@@ -2384,6 +2415,17 @@ export function ChannelStudioScreen() {
           </TouchableOpacity>
         ))}
       </View>
+      <TouchableOpacity
+        style={[styles.legalAcknowledgementRow, contentRightsAccepted && styles.legalAcknowledgementRowActive]}
+        activeOpacity={0.86}
+        onPress={() => setContentRightsAccepted((current) => !current)}
+        disabled={videoSaving}
+      >
+        <View style={[styles.legalCheckbox, contentRightsAccepted && styles.legalCheckboxActive]}>
+          <Text style={styles.legalCheckboxMark}>{contentRightsAccepted ? "✓" : ""}</Text>
+        </View>
+        <Text style={styles.legalAcknowledgementText}>{CREATOR_UPLOAD_ACKNOWLEDGEMENT}</Text>
+      </TouchableOpacity>
       {videoSubmitRequirement ? (
         <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
       ) : null}
@@ -3746,6 +3788,20 @@ export function ChannelStudioScreen() {
                 </>
               ) : null}
 
+              {liveReplayAcknowledgementRequired ? (
+                <TouchableOpacity
+                  style={[styles.legalAcknowledgementRow, liveReplayAccepted && styles.legalAcknowledgementRowActive]}
+                  activeOpacity={0.86}
+                  onPress={() => setLiveReplayAccepted((current) => !current)}
+                  disabled={eventSaving}
+                >
+                  <View style={[styles.legalCheckbox, liveReplayAccepted && styles.legalCheckboxActive]}>
+                    <Text style={styles.legalCheckboxMark}>{liveReplayAccepted ? "✓" : ""}</Text>
+                  </View>
+                  <Text style={styles.legalAcknowledgementText}>{LIVE_REPLAY_ACKNOWLEDGEMENT}</Text>
+                </TouchableOpacity>
+              ) : null}
+
               <Text style={styles.sectionLabel}>Reminder Readiness</Text>
               <View style={styles.chipRow}>
                 {(["off", "ready"] as const).map((value) => {
@@ -4929,6 +4985,48 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: "#fff",
+  },
+  legalAcknowledgementRow: {
+    alignItems: "flex-start",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+    padding: 12,
+  },
+  legalAcknowledgementRowActive: {
+    borderColor: "rgba(220,20,60,0.55)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+  },
+  legalCheckbox: {
+    alignItems: "center",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+    height: 24,
+    justifyContent: "center",
+    marginTop: 2,
+    width: 24,
+  },
+  legalCheckboxActive: {
+    backgroundColor: "#DC143C",
+    borderColor: "#FF8AA0",
+  },
+  legalCheckboxMark: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 18,
+  },
+  legalAcknowledgementText: {
+    color: "#DDE5F5",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
   },
   previewChipRow: {
     flexDirection: "row",

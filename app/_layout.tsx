@@ -38,6 +38,12 @@ const PUBLIC_LEGAL_PATHS = new Set([
   "/community-guidelines",
   "/creator-rules",
   "/copyright",
+  "/support-policy",
+  "/premium-terms",
+  "/live-rules",
+  "/law-enforcement",
+  "/moderation-policy",
+  "/creator-monetization",
   "/copyright-report",
 ]);
 
@@ -280,6 +286,12 @@ function RootNavigator() {
         <Stack.Screen name="channel-studio/index" />
         <Stack.Screen name="channel-settings" />
         <Stack.Screen name="support" />
+        <Stack.Screen name="support-policy" />
+        <Stack.Screen name="premium-terms" />
+        <Stack.Screen name="live-rules" />
+        <Stack.Screen name="law-enforcement" />
+        <Stack.Screen name="moderation-policy" />
+        <Stack.Screen name="creator-monetization" />
         <Stack.Screen name="copyright-report" />
         <Stack.Screen name="beta-support" />
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />

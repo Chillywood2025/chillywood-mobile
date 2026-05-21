@@ -1,4 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  CREATOR_UPLOAD_ACKNOWLEDGEMENT,
+  LEGAL_POLICIES,
+  LIVE_REPLAY_ACKNOWLEDGEMENT,
+  countPolicyWords,
+  getPolicyText,
+} from "../../../legal/policies.mjs";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -1138,6 +1145,144 @@ const fetchStatusWithTimeout = async (url: string, timeoutMs = 8000) => {
   }
 };
 
+const legalPolicyCanaryResults = (supportEmail: string, privacyUrl: string, termsUrl: string) => {
+  const results: JsonObject[] = [];
+  const requiredMinimum = 1500;
+
+  for (const policy of LEGAL_POLICIES) {
+    const wordCount = countPolicyWords(policy);
+    results.push(canaryResult({
+      actor: "system",
+      actual: `${policy.title} bundled policy has ${wordCount} words.`,
+      details: { path: policy.path, slug: policy.slug, word_count: wordCount },
+      expected: `Bundled ${policy.title} exists and has at least ${requiredMinimum} words.`,
+      key: `legal_policy_${policy.slug}`,
+      label: `${policy.title} exists and is production length`,
+      section: "Legal Readiness",
+      status: wordCount >= requiredMinimum ? "pass" : "fail",
+      testedSurface: `bundled policy: ${policy.path}`,
+    }));
+  }
+
+  const allPolicyText = LEGAL_POLICIES.map(getPolicyText).join("\n\n").toLowerCase();
+  const creatorPolicy = LEGAL_POLICIES.find((policy) => policy.slug === "creator-rules");
+  const creatorPolicyText = getPolicyText(creatorPolicy).toLowerCase();
+  const accountDeletion = LEGAL_POLICIES.find((policy) => policy.slug === "account-deletion");
+  const accountDeletionText = getPolicyText(accountDeletion).toLowerCase();
+  const copyright = LEGAL_POLICIES.find((policy) => policy.slug === "copyright");
+  const copyrightText = getPolicyText(copyright).toLowerCase();
+  const supportEmailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportEmail);
+  const publicLinksConfigured = /^https:\/\/[^/]+/.test(privacyUrl) && /^https:\/\/[^/]+/.test(termsUrl);
+  const creatorLicenseOk = creatorPolicyText.includes("worldwide, non-exclusive, royalty-free, sublicensable, transferable license")
+    && creatorPolicyText.includes("host, store, cache, back up, stream")
+    && creatorPolicyText.includes("monetize, and display");
+  const uploadAckOk = CREATOR_UPLOAD_ACKNOWLEDGEMENT.includes("I own this content or have permission")
+    && CREATOR_UPLOAD_ACKNOWLEDGEMENT.includes("monetize this content as described in the Creator Terms");
+  const liveAckOk = LIVE_REPLAY_ACKNOWLEDGEMENT.includes("live content, speaker audio/video, chat, replays")
+    && LIVE_REPLAY_ACKNOWLEDGEMENT.includes("preserved as allowed by Chi'llwood rules and legal requirements");
+  const ownershipBad = /chi'?ll'?wood\s+owns\s+(creator\s+)?(your\s+)?content/i.test(allPolicyText)
+    || /content\s+belongs\s+to\s+chi'?ll'?wood/i.test(allPolicyText);
+  const licenseBad = /chi'?ll'?wood\s+(does\s+not|doesn't|lacks)\s+(have\s+)?(a\s+)?(license|right).{0,80}(host|use|display|stream|monetize)/i.test(allPolicyText);
+  const deletionOk = accountDeletionText.includes("google play")
+    && accountDeletionText.includes("in-app")
+    && accountDeletionText.includes("public web")
+    && accountDeletionText.includes("account deletion");
+  const dmcaChecklistOk = copyrightText.includes("owner launch checklist")
+    && copyrightText.includes("designated agent")
+    && copyrightText.includes("counter-notice")
+    && copyrightText.includes("repeat infringer");
+
+  const checks = [
+    {
+      actual: creatorLicenseOk ? "Creator Content License clause includes ownership retention and broad service license." : "Creator Content License clause is missing required ownership/license terms.",
+      expected: "Creator policy grants Chi'llwood a broad service license while preserving creator ownership.",
+      key: "legal_creator_content_license_clause",
+      label: "Creator Content License clause exists",
+      status: creatorLicenseOk ? "pass" : "fail",
+      surface: "bundled policy: /creator-rules",
+    },
+    {
+      actual: uploadAckOk ? "Upload/publish acknowledgement text is present." : "Upload/publish acknowledgement text is missing.",
+      expected: "Creator upload acknowledgement includes ownership, third-party rights, platform use, moderation, and monetization notice.",
+      key: "legal_upload_acknowledgement",
+      label: "Upload/publish acknowledgement exists",
+      status: uploadAckOk ? "pass" : "fail",
+      surface: "constant: CREATOR_UPLOAD_ACKNOWLEDGEMENT",
+    },
+    {
+      actual: liveAckOk ? "Live/replay acknowledgement text is present." : "Live/replay acknowledgement text is missing.",
+      expected: "Live/replay acknowledgement covers speaker audio/video, chat, replays, metadata, moderation, and preservation.",
+      key: "legal_live_replay_acknowledgement",
+      label: "Live/replay acknowledgement exists",
+      status: liveAckOk ? "pass" : "fail",
+      surface: "constant: LIVE_REPLAY_ACKNOWLEDGEMENT",
+    },
+    {
+      actual: ownershipBad ? "A prohibited Chi'llwood-owns-content phrase was detected." : "No prohibited Chi'llwood-owns-creator-content phrase was detected.",
+      expected: "Legal text must not say Chi'llwood owns creator content.",
+      key: "legal_no_ownership_claim",
+      label: "No legal text says Chi'llwood owns creator content",
+      status: ownershipBad ? "fail" : "pass",
+      surface: "bundled legal policy corpus",
+    },
+    {
+      actual: licenseBad ? "A prohibited no-license/right-to-use phrase was detected." : "No prohibited no-license/right-to-use phrase was detected.",
+      expected: "Legal text must not say Chi'llwood lacks rights to host/use uploaded content.",
+      key: "legal_no_license_disclaimer",
+      label: "No legal text says Chi'llwood lacks rights to host/use uploaded content",
+      status: licenseBad ? "fail" : "pass",
+      surface: "bundled legal policy corpus",
+    },
+    {
+      actual: deletionOk ? "Account Deletion policy includes Google Play, in-app, and public web deletion paths." : "Account Deletion policy is missing Google Play/in-app/public web deletion language.",
+      expected: "Google Play account deletion links and paths are documented.",
+      key: "legal_google_play_deletion_paths",
+      label: "Google Play account deletion links/paths exist",
+      status: deletionOk ? "pass" : "fail",
+      surface: "bundled policy: /account-deletion",
+    },
+    {
+      actual: dmcaChecklistOk ? "Copyright policy includes DMCA agent launch checklist." : "Copyright policy is missing DMCA agent checklist language.",
+      expected: "DMCA agent registration checklist exists.",
+      key: "legal_dmca_agent_checklist",
+      label: "DMCA agent checklist exists",
+      status: dmcaChecklistOk ? "pass" : "fail",
+      surface: "bundled policy: /copyright",
+    },
+    {
+      actual: supportEmailOk ? "Support email format is configured." : "Support email is missing or invalid.",
+      expected: "Support email/path configured.",
+      key: "legal_support_email_configured",
+      label: "Support email/path configured",
+      status: supportEmailOk ? "pass" : "fail",
+      surface: "env/default: PUBLIC_SUPPORT_EMAIL",
+    },
+    {
+      actual: publicLinksConfigured ? "Public legal URLs are configured and bundled fallback policies are present." : "Public legal URLs are missing; bundled fallback policies are present.",
+      expected: "Public legal links configured or bundled fallback available.",
+      key: "legal_public_links_or_bundled_fallback",
+      label: "Public legal links configured or bundled fallback available",
+      status: publicLinksConfigured || LEGAL_POLICIES.length >= 12 ? "pass" : "fail",
+      surface: "runtime legal URLs + bundled policies",
+    },
+  ];
+
+  for (const check of checks) {
+    results.push(canaryResult({
+      actor: "system",
+      actual: check.actual,
+      expected: check.expected,
+      key: check.key,
+      label: check.label,
+      section: "Legal Readiness",
+      status: check.status as CanaryStatus,
+      testedSurface: check.surface,
+    }));
+  }
+
+  return results;
+};
+
 const canaryRun = async (
   adminClient: SupabaseClientLike,
   anonClient: SupabaseClientLike,
@@ -1416,6 +1561,8 @@ const canaryRun = async (
       testedSurface: "GET public privacy/terms URLs + support email config",
     }));
   }
+
+  results.push(...legalPolicyCanaryResults(supportEmail, privacyUrl, termsUrl));
 
   const managementToken = readOptionalEnv("CANARY_SUPABASE_ACCESS_TOKEN")
     ?? readOptionalEnv("SUPABASE_ACCESS_TOKEN")

@@ -943,6 +943,7 @@ const canarySectionOrder = [
   "Staff Permissions",
   "Premium / Entitlements",
   "Legal / Evidence",
+  "Legal Readiness",
   "Live Ops",
   "Public Web / Support",
   "Auth / Redirects",
@@ -996,6 +997,7 @@ const resolveCanarySection = (input: unknown) => {
   if (text.includes("owner")) return "Owner Protection";
   if (text.includes("admin") || text.includes("moderator") || text.includes("staff")) return "Staff Permissions";
   if (text.includes("premium") || text.includes("entitlement")) return "Premium / Entitlements";
+  if (text.includes("legal readiness") || text.includes("policy") || text.includes("dmca") || text.includes("deletion")) return "Legal Readiness";
   if (text.includes("legal") || text.includes("evidence")) return "Legal / Evidence";
   if (text.includes("live_ops") || text.includes("live ops") || text.includes("liveops") || text.includes("remediation")) return "Live Ops";
   if (text.includes("redirect") || text.includes("auth")) return "Auth / Redirects";

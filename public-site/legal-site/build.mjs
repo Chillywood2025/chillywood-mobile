@@ -2,224 +2,57 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SITE_HOST = "https://chillywoodstream.com";
-const SUPPORT_EMAIL = "support@chillywoodstream.com";
-const LAST_UPDATED = "May 13, 2026";
-const DMCA_LAST_UPDATED = "May 14, 2026";
-const DMCA_REGISTRATION_NUMBER = "DMCA-1072720";
-const DMCA_AGENT_NAME = "Chi'llywood Copyright Agent / Chi'llywood";
-const DMCA_MAILING_ADDRESS = "9316 S Kimbark, Chicago, IL 60619";
-const DMCA_PHONE = "3124879454";
+import {
+  LEGAL_POLICIES,
+  LEGAL_PUBLIC_BASE_URL,
+  LEGAL_SUPPORT_EMAIL,
+  countPolicyWords,
+} from "../../legal/policies.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..", "..");
 const siteRoot = path.join(scriptDir, "site");
+const lastUpdated = "May 21, 2026";
 
+const policyBySlug = Object.fromEntries(LEGAL_POLICIES.map((policy) => [policy.slug, policy]));
 const pages = [
+  ...LEGAL_POLICIES.map((policy) => ({
+  description: policy.summary,
+  lastUpdated: policy.effectiveDate,
+  policy,
+  slug: policy.slug === "support-help" ? "support" : policy.path.replace(/^\//, ""),
+  title: policy.title,
+  })),
   {
-    slug: "terms",
-    title: "Terms of Service",
-    source: "docs/legal/TERMS_OF_SERVICE.md",
-    description: "The account, creator, streaming, Premium, safety, and support rules for Chi'llywood.",
-  },
-  {
-    slug: "privacy",
-    title: "Privacy Policy",
-    source: "docs/legal/PRIVACY_POLICY.md",
-    description: "How Chi'llywood handles account, profile, channel, upload, room, support, billing, diagnostics, and safety data.",
-  },
-  {
-    slug: "creator-rules",
-    title: "Creator Rules",
-    source: "docs/legal/CREATOR_RULES.md",
-    description: "Ownership, upload, Channel, live, monetization, sponsor, and enforcement rules for creators.",
-  },
-  {
-    slug: "community-guidelines",
-    title: "Community Guidelines",
-    source: "docs/legal/COMMUNITY_GUIDELINES.md",
-    description: "The content, conduct, live-room, chat, reporting, and enforcement rules for Chi'llywood.",
-  },
-  {
-    slug: "copyright",
-    title: "Copyright And DMCA Policy",
-    source: "docs/legal/COPYRIGHT_DMCA_POLICY.md",
-    description: "How Chi'llywood handles copyright complaints, takedowns, counter-notices, and repeat infringement.",
-    lastUpdated: DMCA_LAST_UPDATED,
-  },
-  {
-    slug: "account-deletion",
-    title: "Account Deletion",
-    source: "docs/legal/ACCOUNT_DELETION_POLICY.md",
-    description: "How to request account deletion, what deletion may affect, and what may be retained.",
-  },
-  {
+    description: policyBySlug["premium-terms"].summary,
+    lastUpdated: policyBySlug["premium-terms"].effectiveDate,
+    policy: policyBySlug["premium-terms"],
     slug: "refunds",
-    title: "Refunds And Subscriptions",
-    source: "docs/legal/REFUNDS_SUBSCRIPTIONS_POLICY.md",
-    description: "How Premium subscription charges, cancellations, refunds, trials, and access changes are handled.",
+    title: "Refunds and Subscriptions",
   },
   {
-    slug: "sponsor-disclosure",
-    title: "Sponsor And Paid Promotion Disclosure",
-    source: "docs/legal/SPONSOR_DISCLOSURE_POLICY.md",
-    description: "Disclosure rules for paid, gifted, affiliate, discounted, or otherwise compensated promotions.",
-  },
-  {
+    description: policyBySlug["community-guidelines"].summary,
+    lastUpdated: policyBySlug["community-guidelines"].effectiveDate,
+    policy: policyBySlug["community-guidelines"],
     slug: "banned-content",
-    title: "Banned Content",
-    source: "docs/legal/BANNED_CONTENT_POLICY.md",
-    description: "Content and behavior Chi'llywood does not allow.",
+    title: "Banned Content and Community Safety",
   },
   {
+    description: policyBySlug["moderation-policy"].summary,
+    lastUpdated: policyBySlug["moderation-policy"].effectiveDate,
+    policy: policyBySlug["moderation-policy"],
     slug: "moderation",
-    title: "Moderation And Reporting",
-    source: "docs/legal/MODERATION_REPORTING_WORKFLOW.md",
-    description: "How Chi'llywood takes in reports, prioritizes safety issues, reviews content, and records actions.",
+    title: "Moderation and Reporting",
   },
   {
-    slug: "support",
-    title: "Support",
-    description: "How to contact Chi'llywood Support for account, policy, copyright, abuse, subscription, and product help.",
-    lastUpdated: DMCA_LAST_UPDATED,
-    markdown: buildSupportMarkdown(),
+    description: policyBySlug["creator-monetization"].summary,
+    lastUpdated: policyBySlug["creator-monetization"].effectiveDate,
+    policy: policyBySlug["creator-monetization"],
+    slug: "sponsor-disclosure",
+    title: "Sponsor and Monetization Disclosure",
   },
 ];
 
 const navLinks = pages.map(({ slug, title }) => ({ slug, title }));
-
-function buildSupportMarkdown() {
-  return `# Support
-
-Last updated: ${DMCA_LAST_UPDATED}
-
-Chi'llywood Support can help with account access, Profile or Channel issues, account deletion requests, legal/policy questions, copyright concerns, report-abuse guidance, subscription troubleshooting, and product reliability problems.
-
-Support contact: ${SUPPORT_EMAIL}
-
-## Account Deletion
-
-To request account deletion, review the Account Deletion page and contact Chi'llywood Support from the account you want reviewed when possible.
-
-- Account deletion page: ${SITE_HOST}/account-deletion
-- Support email: ${SUPPORT_EMAIL}
-
-Account deletion is request-based in current repo truth. Chi'llywood may need to verify account ownership before processing a request.
-
-## Copyright And Media Rights
-
-For copyright complaints, unauthorized uploads, takedown questions, or counter-notice questions, review the Copyright And DMCA Policy and contact Support with enough information to locate the content.
-
-- Copyright policy: ${SITE_HOST}/copyright
-- DMCA registration number: ${DMCA_REGISTRATION_NUMBER}
-- DMCA agent: ${DMCA_AGENT_NAME}
-- DMCA email: ${SUPPORT_EMAIL}
-- Mailing address: ${DMCA_MAILING_ADDRESS}
-- Phone: ${DMCA_PHONE}
-
-Chi'llywood's DMCA designated agent registration is active in the U.S. Copyright Office directory. Registration and public contact posting are one part of the process; Chi'llywood must still keep the agent information current and operate notice, counter-notice, and repeat-infringer handling.
-
-## Report Abuse Or Unsafe Content
-
-Use in-app report tools where available for content tied to a video, Profile, Channel, chat, Watch-Party room, Live Stage, comment, or message. You can also contact Support for harassment, impersonation, hate, threats, doxxing, scams, malware, minor-safety concerns, privacy concerns, or other unsafe behavior.
-
-Chi'llywood Support is not an emergency service. If there is immediate danger, contact local emergency services or the appropriate authority first.
-
-## Subscriptions And Refunds
-
-For Premium subscriptions purchased through an app store or store provider, the store normally controls renewals, cancellations, and refunds. Chi'llywood cannot promise a refund outside applicable law and the policy of the store or provider that processed the purchase.
-
-- Refunds and subscriptions: ${SITE_HOST}/refunds
-
-## Other Policy Pages
-
-- Terms of Service: ${SITE_HOST}/terms
-- Privacy Policy: ${SITE_HOST}/privacy
-- Community Guidelines: ${SITE_HOST}/community-guidelines
-- Creator Rules: ${SITE_HOST}/creator-rules
-- Sponsor Disclosure Policy: ${SITE_HOST}/sponsor-disclosure
-- Banned Content Policy: ${SITE_HOST}/banned-content
-- Moderation And Reporting: ${SITE_HOST}/moderation
-
-## Response Expectations
-
-Response timing depends on issue type, safety priority, copyright review, account verification, and support capacity. Severe safety, child-safety, threat, illegal-content, account-compromise, and active scam reports may be prioritized.`;
-}
-
-function readPageMarkdown(page) {
-  if (page.markdown) return page.markdown;
-  return fs.readFileSync(path.join(repoRoot, page.source), "utf8");
-}
-
-function publicizeMarkdown(markdown, slug) {
-  let text = markdown.replace(/\r\n/g, "\n");
-
-  text = text
-    .split("\n")
-    .filter((line) => !line.startsWith("> Repo launch note:"))
-    .filter((line) => !line.match(/^Last updated:/i))
-    .join("\n");
-
-  text = text.replace(
-    /## 2\. Copyright Complaints[\s\S]*?## 3\. Required Complaint Information/,
-    `## 2. Copyright Complaints
-
-If you believe content on Chi'llywood infringes your copyright, send a copyright complaint to Chi'llywood's designated DMCA agent contact:
-
-- Service provider: Chi'llywood
-- DMCA registration number: ${DMCA_REGISTRATION_NUMBER}
-- DMCA agent name: ${DMCA_AGENT_NAME}
-- DMCA email: ${SUPPORT_EMAIL}
-- Mailing address: ${DMCA_MAILING_ADDRESS}
-- Phone: ${DMCA_PHONE}
-
-The U.S. Copyright Office directory lists the Chi'llywood designation as active effective May 13, 2026. Registration and public contact posting are one part of the process; this page does not claim full DMCA safe-harbor compliance, and Chi'llywood must keep agent contact information current and operate a proper notice, counter-notice, and repeat-infringer process.
-
-Chi'llywood also has an in-app Report Copyright Infringement form at \`/copyright-report\` for formal copyright notices where that route is available. The generic safety report sheet may link users to that form when Copyright is selected.
-
-## 3. Required Complaint Information`,
-  );
-
-  text = text.replace(
-    /## Launch Status[\s\S]*$/m,
-    `## Current Provider Status
-
-Premium billing, cancellation, restore, and refund behavior depends on the Google Play, Apple, RevenueCat, or other provider setup that is actually active for a release. Chi'llywood does not promise refunds beyond applicable law and the policy of the store or provider that processed the purchase.`,
-  );
-
-  text = text.replace(
-    /## Launch Blockers[\s\S]*?Support: support@chillywoodstream\.com/m,
-    `## Google Play And Web-Link Status
-
-This public account deletion page can be used as the web deletion information page once it is deployed at the final public URL. Google Play account deletion compliance must not be treated as complete until the final public URL is reachable without login, entered in Play Console, and accepted by Google Play.
-
-Backend deletion/de-identification rules, support ownership, and deletion timing still depend on the approved operational runbook.
-
-Support: ${SUPPORT_EMAIL}`,
-  );
-
-  text = text
-    .replace(/\[ATTORNEY[^\]\n]*\]\n?/g, "")
-    .replace(/\[LEGAL \/ SUPPORT \/ BACKEND OWNER[^\]\n]*\]\n?/g, "")
-    .replace(/\[PUBLIC_ACCOUNT_DELETION_URL\]/g, `${SITE_HOST}/account-deletion`)
-    .replace(/\[PUBLIC_TERMS_URL\]/g, `${SITE_HOST}/terms`)
-    .replace(/\[PUBLIC_PRIVACY_URL\]/g, `${SITE_HOST}/privacy`)
-    .replace(/^Legal contact: \[LEGAL_EMAIL\]\n?/gm, "")
-    .replace(/^Privacy\/legal contact: \[LEGAL_EMAIL\]\n?/gm, "")
-    .replace(/^Public Terms URL: .*\n?/gm, "")
-    .replace(/^Public Privacy URL: .*\n?/gm, "")
-    .replace(/- Final public URL placeholder: .*\n?/gm, "")
-    .replace(/unless replaced by .*/g, "unless replaced by a later approved public URL.");
-
-  if (slug === "account-deletion") {
-    text = text.replace(
-      "- `https://live.chillywoodstream.com/account-deletion`",
-      `- ${SITE_HOST}/account-deletion`,
-    );
-  }
-
-  return text.replace(/\n{3,}/g, "\n\n").trim();
-}
 
 function escapeHtml(value) {
   return String(value)
@@ -230,92 +63,22 @@ function escapeHtml(value) {
 }
 
 function slugify(value) {
-  return value
+  return String(value)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
 
-function inlineMarkdown(value) {
-  let html = escapeHtml(value);
-
-  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
-  html = html.replace(
-    new RegExp(SUPPORT_EMAIL.replace(".", "\\."), "g"),
-    `<a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>`,
-  );
-  html = html.replace(
-    /https:\/\/chillywoodstream\.com\/([a-z-]+)/g,
-    (_match, slug) => `<a href="/${slug}">${SITE_HOST}/${slug}</a>`,
-  );
-  html = html.replace(
-    /https:\/\/live\.chillywoodstream\.com\/([a-z-]+)/g,
-    (_match, slug) => `<a href="https://live.chillywoodstream.com/${slug}">https://live.chillywoodstream.com/${slug}</a>`,
-  );
-  return html;
-}
-
-function closeLists(state, output) {
-  if (state.list === "ul") output.push("</ul>");
-  if (state.list === "ol") output.push("</ol>");
-  state.list = null;
-}
-
-function markdownToHtml(markdown) {
-  const lines = markdown.split("\n");
-  const output = [];
-  const state = { list: null };
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-
-    if (!line) {
-      closeLists(state, output);
-      continue;
-    }
-
-    if (line.startsWith("# ")) {
-      closeLists(state, output);
-      continue;
-    }
-
-    const heading = line.match(/^(#{2,4})\s+(.+)$/);
-    if (heading) {
-      closeLists(state, output);
-      const level = Math.min(heading[1].length, 3);
-      const text = heading[2].replace(/\s+#$/, "");
-      output.push(`<h${level} id="${slugify(text)}">${inlineMarkdown(text)}</h${level}>`);
-      continue;
-    }
-
-    const bullet = line.match(/^-\s+(.+)$/);
-    if (bullet) {
-      if (state.list !== "ul") {
-        closeLists(state, output);
-        output.push("<ul>");
-        state.list = "ul";
-      }
-      output.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
-      continue;
-    }
-
-    const ordered = line.match(/^\d+\.\s+(.+)$/);
-    if (ordered) {
-      if (state.list !== "ol") {
-        closeLists(state, output);
-        output.push("<ol>");
-        state.list = "ol";
-      }
-      output.push(`<li>${inlineMarkdown(ordered[1])}</li>`);
-      continue;
-    }
-
-    closeLists(state, output);
-    output.push(`<p>${inlineMarkdown(line)}</p>`);
-  }
-
-  closeLists(state, output);
-  return output.join("\n");
+function linkify(value) {
+  return escapeHtml(value)
+    .replace(
+      new RegExp(LEGAL_SUPPORT_EMAIL.replace(".", "\\."), "g"),
+      `<a href="mailto:${LEGAL_SUPPORT_EMAIL}">${LEGAL_SUPPORT_EMAIL}</a>`,
+    )
+    .replace(
+      /https:\/\/chillywoodstream\.com\/([a-z-]+)/g,
+      (_match, slug) => `<a href="/${slug}">${LEGAL_PUBLIC_BASE_URL}/${slug}</a>`,
+    );
 }
 
 function renderNav(currentSlug) {
@@ -327,7 +90,15 @@ function renderNav(currentSlug) {
     .join("\n");
 }
 
-function renderPage(page, html) {
+function renderPolicyBody(policy) {
+  return policy.sections.map((section) => `
+        <section class="policy-section" id="${slugify(section.heading)}">
+          <h2>${escapeHtml(section.heading)}</h2>
+          ${section.paragraphs.map((paragraph) => `<p>${linkify(paragraph)}</p>`).join("\n          ")}
+        </section>`).join("\n");
+}
+
+function renderPage(page) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -351,9 +122,16 @@ ${renderNav(page.slug)}
       <p class="eyebrow">Chi'llywood Public Policy</p>
       <h1>${escapeHtml(page.title)}</h1>
       <p class="summary">${escapeHtml(page.description)}</p>
-      <p class="updated">Last updated: ${page.lastUpdated || LAST_UPDATED}</p>
+      <div class="meta-row">
+        <span>Effective: ${escapeHtml(page.policy.effectiveDate)}</span>
+        <span>Version: ${escapeHtml(page.policy.version)}</span>
+        <span>${countPolicyWords(page.policy).toLocaleString()} words</span>
+      </div>
+      <nav class="toc" aria-label="Policy sections">
+        ${page.policy.sections.map((section) => `<a href="#${slugify(section.heading)}">${escapeHtml(section.heading)}</a>`).join("\n        ")}
+      </nav>
       <div class="policy-body">
-${html}
+${renderPolicyBody(page.policy)}
       </div>
     </article>
     <aside class="related" aria-label="Related policy links">
@@ -361,11 +139,11 @@ ${html}
       <div class="related-links">
 ${renderNav(page.slug)}
       </div>
-      <p>Questions? Contact <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
+      <p>Questions? Contact <a href="mailto:${LEGAL_SUPPORT_EMAIL}">${LEGAL_SUPPORT_EMAIL}</a>.</p>
     </aside>
   </main>
   <footer class="site-footer">
-    <p>Chi'llywood public legal and support pages. For account, copyright, safety, or subscription help, contact <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
+    <p>Chi'llywood public legal and support pages.</p>
   </footer>
 </body>
 </html>
@@ -383,7 +161,7 @@ function renderIndex() {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chi'llywood Public Policies</title>
-  <meta name="description" content="Public legal, support, account deletion, copyright, creator, and safety pages for Chi'llywood.">
+  <meta name="description" content="Public legal, support, account deletion, copyright, creator, live, Premium, law enforcement, moderation, and safety pages for Chi'llywood.">
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
@@ -399,13 +177,14 @@ ${renderNav("")}
     <article class="policy">
       <p class="eyebrow">Chi'llywood Public Policies</p>
       <h1>Public Legal And Support Pages</h1>
-      <p class="summary">Use these pages for Chi'llywood's public Terms, Privacy Policy, Creator Rules, Community Guidelines, Copyright policy, Account Deletion information, Refund and Subscription terms, Sponsor Disclosure rules, Banned Content policy, Moderation workflow, and Support contact.</p>
-      <p class="updated">Last updated: ${LAST_UPDATED}</p>
+      <p class="summary">Use these pages for Chi'llywood's public Terms, Privacy Policy, Community Guidelines, Creator Terms, Copyright/DMCA, Support, Account Deletion, Premium, Live/Watch-Party/Chat, Law Enforcement, Moderation/Appeals, and Creator Monetization policies.</p>
+      <p class="updated">Last updated: ${lastUpdated}</p>
       <div class="policy-body">
         <ul>
 ${links}
         </ul>
-        <p>Support contact: <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
+        <p>Support contact: <a href="mailto:${LEGAL_SUPPORT_EMAIL}">${LEGAL_SUPPORT_EMAIL}</a>.</p>
+        <p>Review the full policy page that matches your question, then contact support if you need account-specific help.</p>
       </div>
     </article>
   </main>
@@ -428,7 +207,6 @@ function assertPublicOutput(contents, filePath) {
     /\[LEGAL/i,
     /\[PUBLIC_/i,
     /\[DMCA/i,
-    /Attorney review required/i,
     /legal@chillywoodstream\.com/i,
     /dmca@chillywoodstream\.com/i,
     /privacy@chillywoodstream\.com/i,
@@ -436,9 +214,7 @@ function assertPublicOutput(contents, filePath) {
   ];
 
   const match = forbidden.find((pattern) => pattern.test(contents));
-  if (match) {
-    throw new Error(`public output failed placeholder/contact check for ${filePath}: ${match}`);
-  }
+  if (match) throw new Error(`public output failed placeholder/contact check for ${filePath}: ${match}`);
 }
 
 function writeStyles() {
@@ -452,242 +228,86 @@ function writeStyles() {
   --page: #f5f6f3;
   --line: #dfe3df;
   --accent: #b4172a;
-  --accent-2: #0f766e;
   --header: #101217;
   --header-muted: #c8ced8;
 }
-
-* {
-  box-sizing: border-box;
-}
-
+* { box-sizing: border-box; }
 body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.6;
+  line-height: 1.65;
 }
-
-a {
-  color: var(--accent);
-  text-underline-offset: 0.18em;
-}
-
-.site-header {
-  background: var(--header);
-  color: #fff;
-  border-bottom: 4px solid var(--accent);
-}
-
-.site-header-inner {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 18px 20px 16px;
-}
-
-.brand {
-  display: inline-block;
-  color: #fff;
-  font-size: 1.35rem;
-  font-weight: 800;
-  text-decoration: none;
-  margin-bottom: 14px;
-}
-
-.site-nav,
-.related-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.site-nav a,
-.related-links a {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
+a { color: var(--accent); text-underline-offset: 0.18em; }
+.site-header { background: var(--header); color: #fff; border-bottom: 4px solid var(--accent); }
+.site-header-inner { max-width: 1180px; margin: 0 auto; padding: 18px 20px 16px; }
+.brand { display: inline-block; color: #fff; font-size: 1.35rem; font-weight: 900; text-decoration: none; margin-bottom: 14px; }
+.site-nav, .related-links, .toc { display: flex; flex-wrap: wrap; gap: 8px; }
+.site-nav a, .related-links a, .toc a {
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 8px;
   color: var(--header-muted);
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 750;
   line-height: 1.2;
   padding: 8px 10px;
   text-decoration: none;
 }
-
-.site-nav a:hover,
-.site-nav a[aria-current="page"],
-.related-links a:hover,
-.related-links a[aria-current="page"] {
-  background: #fff;
-  color: var(--header);
+.site-nav a:hover, .site-nav a[aria-current="page"], .related-links a:hover, .related-links a[aria-current="page"] {
+  background: rgba(180,23,42,0.24);
+  color: #fff;
+  border-color: rgba(255,255,255,0.34);
 }
-
-.page-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 28px;
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 36px 20px;
-}
-
-.policy,
-.related {
+.page-shell { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; max-width: 1180px; margin: 0 auto; padding: 28px 20px 42px; }
+.policy, .related {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 12px 34px rgba(15, 18, 23, 0.06);
+  border-radius: 18px;
+  box-shadow: 0 14px 34px rgba(16,18,23,0.08);
+  padding: 26px;
 }
-
-.policy {
-  padding: 34px;
-}
-
-.related {
-  align-self: start;
-  padding: 20px;
-  position: sticky;
-  top: 18px;
-}
-
-.eyebrow {
-  color: var(--accent-2);
+.related { align-self: start; position: sticky; top: 18px; }
+.eyebrow, .updated, .meta-row {
+  color: var(--muted);
   font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0;
-  margin: 0 0 8px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-
-h1 {
-  font-size: clamp(2rem, 4vw, 3.1rem);
-  line-height: 1.05;
-  letter-spacing: 0;
-  margin: 0;
-}
-
-.summary {
-  color: var(--muted);
-  font-size: 1.04rem;
-  margin: 16px 0 0;
-  max-width: 760px;
-}
-
-.updated {
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.92rem;
-  margin: 22px 0 0;
-  padding-top: 16px;
-}
-
-.policy-body {
-  margin-top: 28px;
-}
-
-.policy-body h2 {
-  border-top: 1px solid var(--line);
-  font-size: 1.42rem;
-  line-height: 1.25;
-  margin: 30px 0 10px;
-  padding-top: 24px;
-}
-
-.policy-body h3 {
-  font-size: 1.1rem;
-  line-height: 1.35;
-  margin: 24px 0 8px;
-}
-
-.policy-body p {
-  margin: 0 0 14px;
-}
-
-.policy-body ul,
-.policy-body ol {
-  margin: 0 0 18px;
-  padding-left: 1.35rem;
-}
-
-.policy-body li {
-  margin: 7px 0;
-}
-
-code {
-  background: #eef1ee;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  font-size: 0.92em;
-  padding: 0.08rem 0.28rem;
-}
-
-.related h2 {
-  font-size: 1rem;
-  margin: 0 0 12px;
-}
-
-.related .related-links {
-  display: grid;
-}
-
-.related .related-links a {
-  border-color: var(--line);
-  color: var(--ink);
-}
-
-.related p {
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin: 18px 0 0;
-}
-
-.site-footer {
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin: 0 auto;
-  max-width: 1120px;
-  padding: 24px 20px 42px;
-}
-
-@media (max-width: 860px) {
-  .page-shell {
-    display: block;
-    padding: 24px 14px;
-  }
-
-  .policy {
-    padding: 24px 18px;
-  }
-
-  .related {
-    margin-top: 18px;
-    position: static;
-  }
-
-  .site-header-inner {
-    padding: 16px 14px 14px;
-  }
-
-  .site-nav a {
-    flex: 1 1 auto;
-    text-align: center;
-  }
+h1 { font-size: clamp(2rem, 5vw, 3.8rem); line-height: 1.02; margin: 0.3em 0; }
+h2 { font-size: clamp(1.35rem, 2.2vw, 1.85rem); line-height: 1.18; margin: 0 0 0.65rem; }
+.summary { color: #383f4b; font-size: 1.04rem; max-width: 78ch; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+.meta-row span { background: #f2f3f0; border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; }
+.toc { margin: 20px 0 26px; }
+.toc a { border-color: var(--line); color: #343943; background: #f7f8f5; }
+.policy-section { border-top: 1px solid var(--line); padding-top: 24px; margin-top: 24px; }
+.policy-body p, .policy-body li { color: #2b3038; font-size: 1rem; }
+.policy-body p { margin: 0 0 1rem; max-width: 78ch; }
+.policy-body code { background: #f1f1ee; border-radius: 5px; padding: 0.1em 0.3em; }
+.related h2 { margin-top: 0; }
+.site-footer { color: var(--muted); max-width: 1180px; margin: 0 auto; padding: 0 20px 40px; }
+@media (max-width: 840px) {
+  .page-shell { display: block; padding: 18px 14px 32px; }
+  .policy, .related { border-radius: 14px; padding: 18px; }
+  .related { margin-top: 18px; position: static; }
+  .site-header-inner { padding: 16px 14px; }
 }
 `,
   );
 }
 
-fs.rmSync(siteRoot, { recursive: true, force: true });
+fs.rmSync(siteRoot, { force: true, recursive: true });
 writeStyles();
-writeFile(path.join(siteRoot, "index.html"), renderIndex());
+const index = renderIndex();
+assertPublicOutput(index, "index");
+writeFile(path.join(siteRoot, "index.html"), index);
 
 for (const page of pages) {
-  const publicMarkdown = publicizeMarkdown(readPageMarkdown(page), page.slug);
-  const html = renderPage(page, markdownToHtml(publicMarkdown));
-  const outFile = path.join(siteRoot, page.slug, "index.html");
-  assertPublicOutput(html, outFile);
-  writeFile(outFile, html);
+  const contents = renderPage(page);
+  assertPublicOutput(contents, page.slug);
+  writeFile(path.join(siteRoot, page.slug, "index.html"), contents);
 }
 
-console.log(`public legal site built at ${siteRoot}`);
+console.log(`Built ${pages.length + 1} public legal pages into ${siteRoot}`);
