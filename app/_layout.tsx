@@ -1,6 +1,6 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -43,13 +43,71 @@ const PUBLIC_LEGAL_PATHS = new Set([
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
 
+const SENSITIVE_ROUTE_PARAM_NAMES = new Set([
+  "access_token",
+  "authorization",
+  "code",
+  "code_verifier",
+  "password",
+  "refresh_token",
+  "secret",
+  "token",
+  "token_hash",
+]);
+
+const sanitizeRouteAnalyticsParams = (pathname: string, params: Record<string, unknown>) => {
+  if (pathname === "/reset-password") return {};
+
+  const sanitized: Record<string, string> = {};
+
+  Object.entries(params).forEach(([key, value]) => {
+    const normalizedKey = key.toLowerCase();
+    if (SENSITIVE_ROUTE_PARAM_NAMES.has(normalizedKey)) return;
+    if (normalizedKey.includes("token") || normalizedKey.includes("password") || normalizedKey.includes("secret")) return;
+    if (value == null || Array.isArray(value)) return;
+
+    sanitized[key] = String(value);
+  });
+
+  return sanitized;
+};
+
+const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
+  if (!url) return null;
+
+  try {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== "chillywoodmobile:") return null;
+
+    const normalizedHost = parsedUrl.hostname.toLowerCase();
+    const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
+    const isResetPasswordLink = normalizedHost === "reset-password" || normalizedPath === "/reset-password";
+    if (!isResetPasswordLink) return null;
+
+    const params = new URLSearchParams(parsedUrl.search);
+    const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
+
+    if (fragment) {
+      const hashParams = new URLSearchParams(fragment);
+      hashParams.forEach((value, key) => {
+        if (!params.has(key)) params.set(key, value);
+      });
+    }
+
+    const query = params.toString();
+    return query ? `/reset-password?${query}` : "/reset-password";
+  } catch {
+    return null;
+  }
+};
+
 function RouteAnalyticsBridge() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const router = useRouter();
 
   useEffect(() => {
-    trackScreen(pathname, params as Record<string, string>);
+    trackScreen(pathname, sanitizeRouteAnalyticsParams(pathname, params as Record<string, unknown>));
   }, [params, pathname]);
 
   useEffect(() => {
@@ -61,6 +119,36 @@ function RouteAnalyticsBridge() {
       subscription.remove();
     };
   }, [router]);
+
+  useEffect(() => {
+    let active = true;
+
+    const routeRecoveryUrl = (url: string | null) => {
+      const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
+      if (!recoveryRoute || pathname === "/reset-password") return;
+      router.replace(recoveryRoute as Parameters<typeof router.replace>[0]);
+    };
+
+    Linking.getInitialURL()
+      .then((url) => {
+        if (!active) return;
+        routeRecoveryUrl(url);
+      })
+      .catch((error) => {
+        reportRuntimeError("auth-password-recovery-route", error, {
+          source: "root-layout",
+        });
+      });
+
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      routeRecoveryUrl(url);
+    });
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [pathname, router]);
 
   return null;
 }
@@ -186,6 +274,7 @@ function RootNavigator() {
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="channel/[userId]" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="reset-password" />
         <Stack.Screen name="subscribe" />
         <Stack.Screen name="admin" />
         <Stack.Screen name="channel-studio/index" />

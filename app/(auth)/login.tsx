@@ -16,9 +16,46 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
-import { supabase } from "../../_lib/supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "../../_lib/supabase";
 
 const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
+const PASSWORD_RESET_REDIRECT_URL = "chillywoodmobile://reset-password";
+
+async function requestPasswordResetEmail(email: string) {
+  const recoverUrl = new URL(`${SUPABASE_URL.replace(/\/+$/g, "")}/auth/v1/recover`);
+  recoverUrl.searchParams.set("redirect_to", PASSWORD_RESET_REDIRECT_URL);
+
+  const response = await fetch(recoverUrl.toString(), {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json;charset=UTF-8",
+      "X-Supabase-Api-Version": "2024-01-01",
+    },
+    body: JSON.stringify({
+      email,
+      gotrue_meta_security: {},
+    }),
+  });
+
+  if (response.ok) {
+    return;
+  }
+
+  let message = "Unable to send a reset link right now.";
+  try {
+    const data = await response.json();
+    if (typeof data?.msg === "string") message = data.msg;
+    else if (typeof data?.message === "string") message = data.message;
+    else if (typeof data?.error_description === "string") message = data.error_description;
+    else if (typeof data?.error === "string") message = data.error;
+  } catch {
+    // Keep the user-facing fallback when Supabase returns a non-JSON error body.
+  }
+
+  throw new Error(message);
+}
 
 export default function Login() {
   const params = useLocalSearchParams<{ redirectTo?: string }>();
@@ -79,15 +116,7 @@ export default function Login() {
     setResetPasswordLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
-
-      if (error) {
-        trackEvent("auth_password_reset_failure", {
-          reason: error.message,
-        });
-        Alert.alert("Reset password", error.message);
-        return;
-      }
+      await requestPasswordResetEmail(normalizedEmail);
 
       trackEvent("auth_password_reset_requested", {
         source: "login",
@@ -100,7 +129,10 @@ export default function Login() {
       trackEvent("auth_password_reset_failure", {
         reason: "runtime_error",
       });
-      Alert.alert("Reset password", "Unable to send a reset link right now.");
+      Alert.alert(
+        "Reset password",
+        error instanceof Error && error.message ? error.message : "Unable to send a reset link right now.",
+      );
     } finally {
       setResetPasswordLoading(false);
     }

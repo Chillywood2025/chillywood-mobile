@@ -9,7 +9,7 @@
 - Locked Chi'lly Chat communication doctrine and locked Rachi official-account doctrine remain carried forward unchanged and are not reopened by this planning rewrite.
 
 ## Public v1
-- login, settings, and logout; login includes a subtle Supabase-backed `Forgot password?` reset-email request with no reset tokens or passwords logged and no separate in-app recovery route yet
+- login, settings, and logout; login includes a subtle Supabase-backed `Forgot password?` reset-email request targeting `chillywoodmobile://reset-password`, plus an in-app `/reset-password` recovery route, with no reset tokens or passwords logged
 - Settings now keeps account controls, notification preferences, Admin Dashboard discoverability for authorized staff only, and signed-in Change Password; private recent/backed activity lives on the signed-in user's own Profile News Feed, while public profile feeds stay public-only.
 - home and discovery, including Explore client-side title filtering over already loaded platform `titles` rows
 - customizable basic profiles
