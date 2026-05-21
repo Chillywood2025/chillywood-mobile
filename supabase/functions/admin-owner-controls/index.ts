@@ -1399,12 +1399,16 @@ const canaryRun = async (
     }));
   }
 
-  const managementToken = readOptionalEnv("SUPABASE_ACCESS_TOKEN") ?? readOptionalEnv("SUPABASE_MANAGEMENT_TOKEN");
-  const projectRef = readOptionalEnv("SUPABASE_PROJECT_REF") ?? "bmkkhihfbmsnnmcqkoly";
+  const managementToken = readOptionalEnv("CANARY_SUPABASE_ACCESS_TOKEN")
+    ?? readOptionalEnv("SUPABASE_ACCESS_TOKEN")
+    ?? readOptionalEnv("SUPABASE_MANAGEMENT_TOKEN");
+  const projectRef = readOptionalEnv("CANARY_SUPABASE_PROJECT_REF")
+    ?? readOptionalEnv("SUPABASE_PROJECT_REF")
+    ?? "bmkkhihfbmsnnmcqkoly";
   if (!managementToken) {
     results.push(canaryResult({
       actor: "system",
-      actual: "SUPABASE_ACCESS_TOKEN/SUPABASE_MANAGEMENT_TOKEN is not configured for hosted Auth URL proof.",
+      actual: "CANARY_SUPABASE_ACCESS_TOKEN/SUPABASE_ACCESS_TOKEN/SUPABASE_MANAGEMENT_TOKEN is not configured for hosted Auth URL proof.",
       expected: "Management token exists so hosted Auth URL settings can be verified.",
       key: "supabase_redirect_urls",
       label: "Supabase redirect URLs configured",
