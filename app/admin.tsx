@@ -8400,8 +8400,8 @@ export default function AdminStudioScreen() {
               return (
                 <View key={String(run.id)} style={styles.configListRow}>
                   <Text style={styles.configListTitle}>{`${formatModerationToken(String(run.status ?? "unknown"))} · ${run.created_at ? formatModerationTimestamp(String(run.created_at)) : "time unknown"}`}</Text>
-                  {results.map((result) => (
-                    <View key={`${run.id}-${result.key}`} style={styles.configListRowSubtle}>
+                  {results.map((result, resultIndex) => (
+                    <View key={`${run.id}-${String(result.key ?? "result")}-${resultIndex}`} style={styles.configListRowSubtle}>
                       <View style={styles.configHeaderRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.configListTitle}>{result.label}</Text>

@@ -93,7 +93,10 @@ const sanitizeValue = (value: unknown): unknown => {
 
   const output: JsonObject = {};
   for (const [key, entry] of Object.entries(value).slice(0, 120)) {
-    if (/(authorization|credential|header|jwt|key|password|secret|service_role|token|url|uri)/i.test(key)) {
+    if (
+      /(authorization|credential|header|jwt|password|secret|service_role|token|url|uri)/i.test(key) ||
+      /(^|_)(api|approval|private|secret|service_role|signing)_(key)$/i.test(key)
+    ) {
       output[key] = "[redacted]";
       continue;
     }
@@ -819,6 +822,14 @@ const canaryResult = (key: string, label: string, status: "pass" | "fail" | "unk
   status,
 });
 
+const safeSupabaseCall = async (operation: () => PromiseLike<{ data?: unknown; error?: unknown; count?: number | null }>) => {
+  try {
+    return await operation();
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
 const canaryRun = async (
   adminClient: SupabaseClientLike,
   anonClient: SupabaseClientLike,
@@ -835,11 +846,12 @@ const canaryRun = async (
     .order("granted_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  const ownerUserId = toText((ownerLookup.data as JsonObject | null)?.user_id);
+  let ownerUserId = toText((ownerLookup.data as JsonObject | null)?.user_id);
+  if (!ownerUserId && user.role === "owner") ownerUserId = user.id;
   if (!ownerUserId) {
     results.push(canaryResult("owner_profile_hidden", "Owner profile hidden from public", "unknown", "No owner user id is available for public RPC proof."));
   } else {
-    const publicProfile = await anonClient.rpc("read_public_channel_profile", { profile_user_id: ownerUserId }).catch((error: unknown) => ({ data: null, error }));
+    const publicProfile = await safeSupabaseCall(() => anonClient.rpc("read_public_channel_profile", { profile_user_id: ownerUserId }));
     const publicRows = Array.isArray(publicProfile.data) ? publicProfile.data : publicProfile.data ? [publicProfile.data] : [];
     results.push(canaryResult(
       "owner_profile_hidden",
@@ -848,12 +860,13 @@ const canaryRun = async (
       publicProfile.error ? "Public profile RPC could not be checked." : publicRows.length === 0 ? "Owner public profile RPC returned no rows." : "Owner profile was visible through the public RPC.",
     ));
 
-    const discovery = await anonClient.from("user_profiles").select("user_id").eq("user_id", ownerUserId).limit(1).catch((error: unknown) => ({ data: null, error }));
+    const discovery = await safeSupabaseCall(() => anonClient.from("user_profiles").select("user_id").eq("user_id", ownerUserId).limit(1));
+    const discoveryRows = Array.isArray(discovery.data) ? discovery.data : [];
     results.push(canaryResult(
       "owner_hidden_discovery",
       "Owner hidden from public discovery/search",
-      discovery.error ? "unknown" : (discovery.data ?? []).length === 0 ? "pass" : "fail",
-      discovery.error ? "Public user_profiles select could not be checked." : (discovery.data ?? []).length === 0 ? "Owner was not visible in public profile listing." : "Owner appeared in a public profile listing.",
+      discovery.error ? "unknown" : discoveryRows.length === 0 ? "pass" : "fail",
+      discovery.error ? "Public user_profiles select could not be checked." : discoveryRows.length === 0 ? "Owner was not visible in public profile listing." : "Owner appeared in a public profile listing.",
     ));
   }
 
@@ -873,16 +886,15 @@ const canaryRun = async (
   results.push(canaryResult("support_links", "Support/legal links working", supportUrl ? "unknown" : "unknown", supportUrl ? "External link health requires fetch proof in a later lane." : "No support URL env configured for server-side proof."));
   results.push(canaryResult("supabase_redirect_urls", "Supabase redirect URLs configured", readOptionalEnv("SUPABASE_MANAGEMENT_TOKEN") ? "unknown" : "unknown", "Supabase Auth URL proof requires a reviewed Management API lane; not marked green."));
 
-  const publicCandidate = await adminClient
+  const publicCandidate = await safeSupabaseCall(() => adminClient
     .from("user_profiles")
     .select("user_id")
     .neq("user_id", ownerUserId || "none")
     .limit(1)
-    .maybeSingle()
-    .catch((error: unknown) => ({ data: null, error }));
+    .maybeSingle());
   const candidateUserId = toText((publicCandidate.data as JsonObject | null)?.user_id);
   if (candidateUserId) {
-    const publicProfile = await anonClient.rpc("read_public_channel_profile", { profile_user_id: candidateUserId }).catch((error: unknown) => ({ data: null, error }));
+    const publicProfile = await safeSupabaseCall(() => anonClient.rpc("read_public_channel_profile", { profile_user_id: candidateUserId }));
     results.push(canaryResult(
       "public_channel_sanitized_rpc",
       "Public profile/channel sanitized RPCs working",
