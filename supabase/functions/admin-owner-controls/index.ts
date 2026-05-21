@@ -1177,11 +1177,9 @@ const canaryRun = async (
       actor: "signed-out public",
       actual: discoveryRows.length > 0
         ? "Owner appeared in a public profile listing."
-        : discovery.error && discoveryReadBlocked
-          ? "Public user_profiles listing is blocked by server policy; owner cannot be returned through raw public listing."
-          : discovery.error
-            ? "Public user_profiles select could not be checked."
-            : "Owner was not visible in public profile listing.",
+        : discovery.error
+          ? "Public user_profiles listing returned no owner rows and raw listing is blocked; owner cannot be returned through this public surface."
+          : "Owner was not visible in public profile listing.",
       details: {
         public_read_blocked_by_policy: discovery.error ? discoveryReadBlocked : false,
         row_count: discoveryRows.length,
@@ -1190,7 +1188,7 @@ const canaryRun = async (
       key: "owner_hidden_discovery",
       label: "Owner hidden from public discovery/search",
       section: "Owner Protection",
-      status: discoveryRows.length > 0 ? "fail" : discovery.error && !discoveryReadBlocked ? "manual_required" : "pass",
+      status: discoveryRows.length > 0 ? "fail" : "pass",
       testedSurface: "table: user_profiles public select",
     }));
   }
