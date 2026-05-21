@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 type JsonObject = Record<string, unknown>;
-type SupabaseClientLike = ReturnType<typeof createClient>;
+type SupabaseClientLike = any;
 
 export type LiveKitRoutingRoomType =
   | "chat_call"

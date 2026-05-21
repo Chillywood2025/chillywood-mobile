@@ -22,6 +22,10 @@ import {
   type HomeRailKey,
 } from "../_lib/appConfig";
 import { placeholderAdProvider } from "../_lib/ads/providers/placeholder";
+import {
+  requestLegalEvidenceAction,
+  type LegalEvidenceTargetType,
+} from "../_lib/adminLegalEvidence";
 import { FEATURE_FLAGS, type AppRuntimeControls } from "../_lib/featureFlags";
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
@@ -35,6 +39,8 @@ import {
 import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
+  canAccessLegalEvidenceTools,
+  canAccessLiveOpsTools,
   canAccessAdminConsole,
   canManageAdminRoleAssignments,
   canManageModeratorRoleAssignments,
@@ -42,10 +48,13 @@ import {
   canReviewSafetyQueue,
   formatPlatformRoleDisplayLabel,
   getModerationAccess,
+  grantPlatformStaffPermissionByEmail,
   grantPlatformStaffRoleByEmail,
+  hasPlatformRoleMembership,
   readMyPlatformRoleMemberships,
   readPlatformRoleRoster,
   readSafetyReportQueue,
+  revokePlatformStaffPermissionByEmail,
   revokePlatformStaffRoleByEmail,
   resolvePlatformActorRole,
   type AdminAuditLogEntry,
@@ -53,6 +62,7 @@ import {
   type PlatformRoleMembership,
   type PlatformRoleRosterEntry,
   type PlatformRoleRosterReadModel,
+  type PlatformStaffPermissionKey,
   type PlatformStaffManagementRole,
   type SafetyReportQueueItem,
   type SafetyReportQueueSummary,
@@ -201,6 +211,7 @@ type OperatorTabKey =
   | "fraud"
   | "live-cost-guard"
   | "live-ops-fix-center"
+  | "legal"
   | "ops-alerts"
   | "system";
 
@@ -291,8 +302,31 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "fraud", label: "Fraud" },
   { key: "live-cost-guard", label: "Live Cost Guard" },
   { key: "live-ops-fix-center", label: "Live Ops Fix Center" },
+  { key: "legal", label: "Legal" },
   { key: "ops-alerts", label: "Ops Alerts" },
   { key: "system", label: "System" },
+];
+const legalEvidenceTargetOptions: readonly { key: LegalEvidenceTargetType; label: string }[] = [
+  { key: "user_id", label: "User ID" },
+  { key: "content_id", label: "Content ID" },
+  { key: "room_id", label: "Room ID" },
+  { key: "chat_thread_id", label: "Chat Thread" },
+  { key: "report_id", label: "Report ID" },
+  { key: "date_range", label: "Date Range" },
+];
+const staffPermissionOptions: readonly { key: PlatformStaffPermissionKey; label: string }[] = [
+  { key: "support_inbox", label: "Support Inbox" },
+  { key: "user_lookup", label: "User Lookup" },
+  { key: "content_moderation", label: "Content Moderation" },
+  { key: "reports_review", label: "Reports Review" },
+  { key: "live_ops", label: "Live Ops" },
+  { key: "billing_support_read", label: "Billing Support" },
+  { key: "creator_support", label: "Creator Support" },
+  { key: "legal_review", label: "Legal Review" },
+  { key: "evidence_export", label: "Evidence Export" },
+  { key: "emergency_break_glass", label: "Break Glass" },
+  { key: "admin_grants", label: "Admin Grants" },
+  { key: "manage_moderators", label: "Moderator Grants" },
 ];
 const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   loading: false,
@@ -1075,6 +1109,11 @@ export default function AdminStudioScreen() {
   const [staffRoleTarget, setStaffRoleTarget] = useState<PlatformStaffManagementRole>("moderator");
   const [staffRoleReason, setStaffRoleReason] = useState("");
   const [staffRoleBusy, setStaffRoleBusy] = useState<"grant" | "revoke" | null>(null);
+  const [staffPermissionEmail, setStaffPermissionEmail] = useState("");
+  const [staffPermissionKey, setStaffPermissionKey] = useState<PlatformStaffPermissionKey>("manage_moderators");
+  const [staffPermissionReason, setStaffPermissionReason] = useState("");
+  const [staffPermissionExpiresAt, setStaffPermissionExpiresAt] = useState("");
+  const [staffPermissionBusy, setStaffPermissionBusy] = useState<"grant" | "revoke" | null>(null);
   const [adminAuditLog, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
   const [adminAuditLogSummary, setAdminAuditLogSummary] =
     useState<AdminAuditLogReadModel["summary"] | null>(null);
@@ -1131,6 +1170,14 @@ export default function AdminStudioScreen() {
   const [liveOpsLoading, setLiveOpsLoading] = useState(false);
   const [liveOpsNotice, setLiveOpsNotice] = useState<string | null>(null);
   const [liveOpsActionBusy, setLiveOpsActionBusy] = useState<string | null>(null);
+  const [legalTargetType, setLegalTargetType] = useState<LegalEvidenceTargetType>("user_id");
+  const [legalTargetId, setLegalTargetId] = useState("");
+  const [legalReason, setLegalReason] = useState("");
+  const [legalDateFrom, setLegalDateFrom] = useState("");
+  const [legalDateTo, setLegalDateTo] = useState("");
+  const [legalBusy, setLegalBusy] = useState<"preview" | "export" | "hold" | null>(null);
+  const [legalNotice, setLegalNotice] = useState<string | null>(null);
+  const [legalPreviewJson, setLegalPreviewJson] = useState("");
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
@@ -1175,15 +1222,29 @@ export default function AdminStudioScreen() {
   const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
   const canManageAdminStaff = isSignedIn && isActive && platformRolesChecked && canManageAdminRoleAssignments(platformRoles);
   const canManageModeratorStaff = isSignedIn && isActive && platformRolesChecked && canManageModeratorRoleAssignments(platformRoles);
+  const canViewStaffRoles = canManageAdminStaff || canManageModeratorStaff;
+  const canManageStaffPermissions = isSignedIn && isActive && platformRolesChecked && hasPlatformRoleMembership(platformRoles, ["owner"]);
+  const canAccessLiveOps = isSignedIn && isActive && platformRolesChecked && canAccessLiveOpsTools(platformRoles);
+  const canAccessLegalEvidence = isSignedIn && isActive && platformRolesChecked && canAccessLegalEvidenceTools(platformRoles);
   const visibleOperatorTabs = useMemo(
     () => {
       if (canManagePrivilegedWrites) return operatorTabs;
+      const scopedTabs: OperatorTabKey[] = ["home"];
       if (canReviewSafetyReports) {
-        return operatorTabs.filter((tab) => tab.key === "reports" || tab.key === "audit");
+        scopedTabs.push("reports", "audit");
       }
-      return [];
+      if (canViewStaffRoles) scopedTabs.push("roles");
+      if (canAccessLiveOps) scopedTabs.push("live-cost-guard", "live-ops-fix-center");
+      if (canAccessLegalEvidence) scopedTabs.push("legal");
+      return operatorTabs.filter((tab) => scopedTabs.includes(tab.key));
     },
-    [canManagePrivilegedWrites, canReviewSafetyReports],
+    [
+      canAccessLegalEvidence,
+      canAccessLiveOps,
+      canManagePrivilegedWrites,
+      canReviewSafetyReports,
+      canViewStaffRoles,
+    ],
   );
   const staffRoleOptions = useMemo<readonly { key: PlatformStaffManagementRole; label: string }[]>(
     () => {
@@ -1682,16 +1743,16 @@ export default function AdminStudioScreen() {
       },
       {
         label: "Live Cost Guard",
-        value: canManagePrivilegedWrites
+        value: canAccessLiveOps
           ? liveCostGuardSettingsReadModel?.connected
             ? formatModerationToken(liveCostGuardSettingsForm.mode)
             : "Not connected yet"
           : "Locked",
-        body: canManagePrivilegedWrites
-          ? "Owner/operator-only LiveKit/TURN cost guard. Default observe-only mode does not kick users, throttle rooms, or change live behavior."
-          : "Live Cost Guard requires active owner/operator role truth.",
-        tone: canManagePrivilegedWrites && liveCostGuardSettingsReadModel?.connected ? "default" : "unavailable",
-        destination: canManagePrivilegedWrites ? "live-cost-guard" : undefined,
+        body: canAccessLiveOps
+          ? "Owner/live_ops LiveKit/TURN cost guard. Default observe-only mode does not kick users, throttle rooms, or change live behavior."
+          : "Live Cost Guard requires Owner or live_ops permission truth.",
+        tone: canAccessLiveOps && liveCostGuardSettingsReadModel?.connected ? "default" : "unavailable",
+        destination: canAccessLiveOps ? "live-cost-guard" : undefined,
       },
       {
         label: "Live Ops Fix Center",
@@ -2054,7 +2115,6 @@ export default function AdminStudioScreen() {
   ], []);
 
   const staffAndAuditCards = useMemo<readonly AdminDashboardCard[]>(() => {
-    const canViewStaffRoles = canManagePrivilegedWrites;
     const canViewAudit = canManagePrivilegedWrites || canReviewSafetyReports;
     const roleSummary = platformRoleRosterSummary;
     const auditSummary = adminAuditLogSummary;
@@ -2073,7 +2133,7 @@ export default function AdminStudioScreen() {
           ? roleSummary
             ? `${roleSummary.ownerCount} owner · ${roleSummary.operatorCount} admin · ${roleSummary.moderatorCount} moderator records are currently visible.`
             : "Current staff visibility is bounded to role-record truth already stored in platform memberships."
-          : "Staff-role visibility stays behind active owner/operator write-capable admin truth.",
+          : "Staff-role visibility stays behind active Owner or scoped staff-management permission truth.",
         tone: canViewStaffRoles ? "default" : "unavailable",
       },
       {
@@ -2098,6 +2158,7 @@ export default function AdminStudioScreen() {
     adminAuditLogSummary,
     canManagePrivilegedWrites,
     canReviewSafetyReports,
+    canViewStaffRoles,
     platformRoleRosterLoading,
     platformRoleRosterSummary,
   ]);
@@ -2661,7 +2722,7 @@ export default function AdminStudioScreen() {
   }, []);
 
   const loadLiveCostGuard = useCallback(async () => {
-    if (!canManagePrivilegedWrites) {
+    if (!canAccessLiveOps) {
       setLiveCostGuardSettingsReadModel(null);
       setLiveCostGuardSettingsForm(DEFAULT_LIVE_COST_GUARD_SETTINGS);
       setLiveCostGuardEvents([]);
@@ -2691,10 +2752,10 @@ export default function AdminStudioScreen() {
     } finally {
       setLiveCostGuardLoading(false);
     }
-  }, [canManagePrivilegedWrites]);
+  }, [canAccessLiveOps]);
 
   useEffect(() => {
-    if (!canAccessAdmin || !canManagePrivilegedWrites) {
+    if (!canAccessAdmin || !canAccessLiveOps) {
       setLiveCostGuardSettingsReadModel(null);
       setLiveCostGuardSettingsForm(DEFAULT_LIVE_COST_GUARD_SETTINGS);
       setLiveCostGuardEvents([]);
@@ -2706,10 +2767,10 @@ export default function AdminStudioScreen() {
       return;
     }
     void loadLiveCostGuard();
-  }, [canAccessAdmin, canManagePrivilegedWrites, loadLiveCostGuard]);
+  }, [canAccessAdmin, canAccessLiveOps, loadLiveCostGuard]);
 
   const loadLiveOpsFixCenter = useCallback(async () => {
-    if (!canManagePrivilegedWrites) {
+    if (!canAccessLiveOps) {
       setLiveOpsReadModel(null);
       setLiveOpsLoading(false);
       return;
@@ -2725,10 +2786,10 @@ export default function AdminStudioScreen() {
     } finally {
       setLiveOpsLoading(false);
     }
-  }, [canManagePrivilegedWrites]);
+  }, [canAccessLiveOps]);
 
   useEffect(() => {
-    if (!canAccessAdmin || !canManagePrivilegedWrites) {
+    if (!canAccessAdmin || !canAccessLiveOps) {
       setLiveOpsReadModel(null);
       setLiveOpsLoading(false);
       setLiveOpsNotice(null);
@@ -2736,11 +2797,11 @@ export default function AdminStudioScreen() {
       return;
     }
     void loadLiveOpsFixCenter();
-  }, [canAccessAdmin, canManagePrivilegedWrites, loadLiveOpsFixCenter]);
+  }, [canAccessAdmin, canAccessLiveOps, loadLiveOpsFixCenter]);
 
   const runLiveOpsAction = useCallback((incident: LiveOpsIncident, action: LiveOpsFixCenterAction) => {
-    if (!canManagePrivilegedWrites || liveOpsActionBusy) {
-      setLiveOpsNotice("Live Ops Fix Center actions require active owner/operator truth.");
+    if (!canAccessLiveOps || liveOpsActionBusy) {
+      setLiveOpsNotice("Live Ops Fix Center actions require active Owner or live_ops permission truth.");
       return;
     }
 
@@ -2781,7 +2842,7 @@ export default function AdminStudioScreen() {
         },
       ],
     );
-  }, [canManagePrivilegedWrites, liveOpsActionBusy, loadLiveOpsFixCenter]);
+  }, [canAccessLiveOps, liveOpsActionBusy, loadLiveOpsFixCenter]);
 
   const openLiveOpsRunbook = useCallback((incident: LiveOpsIncident) => {
     if (incident.runbookUrl) {
@@ -2793,9 +2854,61 @@ export default function AdminStudioScreen() {
     Alert.alert("Runbook", incident.runbookPath);
   }, []);
 
+  const runLegalEvidenceAction = useCallback(async (action: "preview" | "export" | "hold") => {
+    if (!canAccessLegalEvidence || legalBusy) {
+      setLegalNotice("Legal evidence actions require Owner or scoped legal_review/evidence_export permission.");
+      return;
+    }
+
+    const reason = legalReason.trim();
+    if (reason.length < 6) {
+      setLegalNotice("Enter an audit reason before using Legal Review.");
+      return;
+    }
+
+    if (legalTargetType !== "date_range" && !legalTargetId.trim()) {
+      setLegalNotice("Enter a target id before using Legal Review.");
+      return;
+    }
+
+    try {
+      setLegalBusy(action);
+      setLegalNotice(null);
+      const result = await requestLegalEvidenceAction({
+        action: action === "hold" ? "place_hold" : action,
+        dateFrom: legalDateFrom.trim() || null,
+        dateTo: legalDateTo.trim() || null,
+        reason,
+        targetId: legalTargetId.trim() || null,
+        targetType: legalTargetType,
+      });
+      const preview = result.preview && Object.keys(result.preview).length ? result.preview : result.exportRecord || result.hold;
+      setLegalPreviewJson(JSON.stringify(preview ?? {}, null, 2));
+      setLegalNotice(
+        action === "export"
+          ? "Evidence export record created with an audit row."
+          : action === "hold"
+            ? "Legal hold placed with an audit row."
+            : "Evidence preview created with an audit row.",
+      );
+    } catch (err: any) {
+      setLegalNotice(formatAdminOperationFailure(err, "Legal evidence action failed."));
+    } finally {
+      setLegalBusy(null);
+    }
+  }, [
+    canAccessLegalEvidence,
+    legalBusy,
+    legalDateFrom,
+    legalDateTo,
+    legalReason,
+    legalTargetId,
+    legalTargetType,
+  ]);
+
   const saveLiveCostGuardSettings = useCallback(async () => {
-    if (!canManagePrivilegedWrites || liveCostGuardSaving) {
-      setLiveCostGuardNotice("Live Cost Guard settings require active owner/operator truth.");
+    if (!canAccessLiveOps || liveCostGuardSaving) {
+      setLiveCostGuardNotice("Live Cost Guard settings require Owner or live_ops permission truth.");
       return;
     }
 
@@ -2812,11 +2925,11 @@ export default function AdminStudioScreen() {
     } finally {
       setLiveCostGuardSaving(false);
     }
-  }, [canManagePrivilegedWrites, liveCostGuardSaving, liveCostGuardSettingsForm, loadLiveCostGuard]);
+  }, [canAccessLiveOps, liveCostGuardSaving, liveCostGuardSettingsForm, loadLiveCostGuard]);
 
   const logLiveCostGuardTestWarning = useCallback(async () => {
-    if (!canManagePrivilegedWrites || liveCostGuardActionBusy) {
-      setLiveCostGuardNotice("Live Cost Guard actions require active owner/operator truth.");
+    if (!canAccessLiveOps || liveCostGuardActionBusy) {
+      setLiveCostGuardNotice("Live Cost Guard actions require Owner or live_ops permission truth.");
       return;
     }
 
@@ -2838,11 +2951,11 @@ export default function AdminStudioScreen() {
     } finally {
       setLiveCostGuardActionBusy(null);
     }
-  }, [canManagePrivilegedWrites, liveCostGuardActionBusy, liveCostGuardRoomName, loadLiveCostGuard]);
+  }, [canAccessLiveOps, liveCostGuardActionBusy, liveCostGuardRoomName, loadLiveCostGuard]);
 
   const runLiveCostGuardAction = useCallback((actionType: LiveCostGuardActionType) => {
-    if (!canManagePrivilegedWrites || liveCostGuardActionBusy) {
-      setLiveCostGuardNotice("Live Cost Guard actions require active owner/operator truth.");
+    if (!canAccessLiveOps || liveCostGuardActionBusy) {
+      setLiveCostGuardNotice("Live Cost Guard actions require Owner or live_ops permission truth.");
       return;
     }
 
@@ -2971,7 +3084,6 @@ export default function AdminStudioScreen() {
   ]);
 
   const loadStaffAndAuditVisibility = useCallback(async () => {
-    const canViewStaffRoles = canManagePrivilegedWrites;
     const canViewAudit = canManagePrivilegedWrites || canReviewSafetyReports;
 
     if (!canViewStaffRoles) {
@@ -3020,7 +3132,7 @@ export default function AdminStudioScreen() {
       }
       setAdminAuditLogLoading(false);
     }
-  }, [canManagePrivilegedWrites, canReviewSafetyReports]);
+  }, [canManagePrivilegedWrites, canReviewSafetyReports, canViewStaffRoles]);
 
   const refreshStaffRoleState = useCallback(async () => {
     await Promise.all([
@@ -3037,11 +3149,11 @@ export default function AdminStudioScreen() {
       return;
     }
     if (staffRoleTarget === "admin" && !canManageAdminStaff) {
-      setAdminOpsNotice("Only an active Owner can add Admins.");
+      setAdminOpsNotice("Only Owner or an Admin with admin_grants can add Admins.");
       return;
     }
     if (staffRoleTarget === "moderator" && !canManageModeratorStaff) {
-      setAdminOpsNotice("Only an active Owner or Admin can add Moderators.");
+      setAdminOpsNotice("Only Owner or an Admin with manage_moderators can add Moderators.");
       return;
     }
 
@@ -3080,11 +3192,11 @@ export default function AdminStudioScreen() {
       return;
     }
     if (role === "admin" && !canManageAdminStaff) {
-      setAdminOpsNotice("Only an active Owner can remove Admins.");
+      setAdminOpsNotice("Only Owner or an Admin with admin_grants can remove Admins.");
       return;
     }
     if (role === "moderator" && !canManageModeratorStaff) {
-      setAdminOpsNotice("Only an active Owner or Admin can remove Moderators.");
+      setAdminOpsNotice("Only Owner or an Admin with manage_moderators can remove Moderators.");
       return;
     }
 
@@ -3137,6 +3249,82 @@ export default function AdminStudioScreen() {
       ],
     );
   }, [runStaffRoleRevoke, staffRoleEmail, staffRoleTarget]);
+
+  const runStaffPermissionGrant = useCallback(async () => {
+    const email = staffPermissionEmail.trim().toLowerCase();
+    if (staffPermissionBusy) return;
+    if (!canManageStaffPermissions) {
+      setAdminOpsNotice("Only Owner can grant scoped staff permissions.");
+      return;
+    }
+    if (!email) {
+      setAdminOpsNotice("Enter an Admin email before granting a scoped permission.");
+      return;
+    }
+
+    try {
+      setStaffPermissionBusy("grant");
+      setAdminOpsNotice(null);
+      const result = await grantPlatformStaffPermissionByEmail({
+        email,
+        expiresAt: staffPermissionExpiresAt.trim() || null,
+        permissionKey: staffPermissionKey,
+        reason: staffPermissionReason.trim() || null,
+      });
+      setAdminOpsNotice(`${formatModerationToken(result.permissionKey)} granted for ${maskOperatorIdentity(result.email)}.`);
+      setStaffPermissionReason("");
+      await refreshStaffRoleState();
+    } catch (err: any) {
+      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to grant staff permission."));
+    } finally {
+      setStaffPermissionBusy(null);
+    }
+  }, [
+    canManageStaffPermissions,
+    refreshStaffRoleState,
+    staffPermissionBusy,
+    staffPermissionEmail,
+    staffPermissionExpiresAt,
+    staffPermissionKey,
+    staffPermissionReason,
+  ]);
+
+  const runStaffPermissionRevoke = useCallback(async () => {
+    const email = staffPermissionEmail.trim().toLowerCase();
+    if (staffPermissionBusy) return;
+    if (!canManageStaffPermissions) {
+      setAdminOpsNotice("Only Owner can revoke scoped staff permissions.");
+      return;
+    }
+    if (!email) {
+      setAdminOpsNotice("Enter an Admin email before revoking a scoped permission.");
+      return;
+    }
+
+    try {
+      setStaffPermissionBusy("revoke");
+      setAdminOpsNotice(null);
+      const result = await revokePlatformStaffPermissionByEmail({
+        email,
+        permissionKey: staffPermissionKey,
+        reason: staffPermissionReason.trim() || null,
+      });
+      setAdminOpsNotice(`${formatModerationToken(result.permissionKey)} revoked for ${maskOperatorIdentity(result.email)}.`);
+      setStaffPermissionReason("");
+      await refreshStaffRoleState();
+    } catch (err: any) {
+      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to revoke staff permission."));
+    } finally {
+      setStaffPermissionBusy(null);
+    }
+  }, [
+    canManageStaffPermissions,
+    refreshStaffRoleState,
+    staffPermissionBusy,
+    staffPermissionEmail,
+    staffPermissionKey,
+    staffPermissionReason,
+  ]);
 
   const toDbPatch = useCallback(
     (patch: Partial<TitleRow>): Record<string, any> => {
@@ -4499,12 +4687,12 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>{operatorTab === "roles" ? "ROLES" : "AUDIT"}</Text>
-              <Text style={styles.configTitle}>
-                {operatorTab === "roles" ? "Platform role visibility" : "Immutable admin audit log"}
-              </Text>
-              <Text style={styles.configBody}>
+                <Text style={styles.configTitle}>
+                  {operatorTab === "roles" ? "Platform role visibility" : "Immutable admin audit log"}
+                </Text>
+                <Text style={styles.configBody}>
                 {operatorTab === "roles"
-                  ? "Platform role records are backend operator truth. Channel ownership and audience roles are separate."
+                  ? "Platform role records are backend staff truth. Owner can manage Admins and Moderators; Admins need scoped grants."
                   : adminImmutableAuditReadModel.connected
                     ? "Immutable admin audit log foundation is connected. The derived role/safety summary stays separate below."
                     : "Immutable admin audit logs are not connected yet. The derived role/safety summary stays separate below where permitted."}
@@ -4532,8 +4720,8 @@ export default function AdminStudioScreen() {
 
           <View style={styles.badgesRow}>
             {operatorTab === "roles" ? (
-              <View style={[styles.badge, canManagePrivilegedWrites ? styles.badgeOn : styles.badgeOff]}>
-                <Text style={styles.badgeText}>{canManagePrivilegedWrites ? "Role Roster Visible" : "Role Roster Locked"}</Text>
+              <View style={[styles.badge, canViewStaffRoles ? styles.badgeOn : styles.badgeOff]}>
+                <Text style={styles.badgeText}>{canViewStaffRoles ? "Role Roster Visible" : "Role Roster Locked"}</Text>
               </View>
             ) : (
               <View
@@ -4561,7 +4749,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Staff & Roles</Text>
                 <Text style={styles.configListBody}>
-                  Staff-role visibility and management are backed by platform role truth. Owner can manage Admins and Moderators; Admins can manage Moderators only.
+                  Staff-role visibility and management are backed by platform role truth. Owner can manage Admins and Moderators; Admins need scoped grants for Admin or Moderator changes.
                 </Text>
               </View>
             </View>
@@ -4572,7 +4760,7 @@ export default function AdminStudioScreen() {
                 <View style={styles.configListCopy}>
                   <Text style={styles.configListTitle}>Manage staff by email</Text>
                   <Text style={styles.configListBody}>
-                    Emails are normalized to lowercase. Admin is stored internally as the existing operator role; Owner grants stay bootstrap-only.
+                    Emails are normalized to lowercase. Admin is stored internally as the existing operator role; scoped grants are enforced server-side.
                   </Text>
                 </View>
 
@@ -4629,12 +4817,82 @@ export default function AdminStudioScreen() {
             ) : operatorTab === "roles" ? (
               <View style={styles.configListRowSubtle}>
                 <Text style={styles.configListBody}>
-                  Staff management actions require active Owner or Admin role truth. Moderators cannot add or remove staff.
+                  Staff management actions require active Owner or scoped staff-management permission truth. Moderators cannot add or remove staff by default.
                 </Text>
               </View>
             ) : null}
 
-            {operatorTab === "roles" && canManagePrivilegedWrites ? (
+            {operatorTab === "roles" && canManageStaffPermissions ? (
+              <View style={styles.configListRow}>
+                <View style={styles.configListCopy}>
+                  <Text style={styles.configListTitle}>Scoped permissions</Text>
+                  <Text style={styles.configListBody}>
+                    Owner-only grants decide what each Admin can do. Permission changes are server-side and audited.
+                  </Text>
+                </View>
+
+                <TextInput
+                  value={staffPermissionEmail}
+                  onChangeText={setStaffPermissionEmail}
+                  placeholder="admin@example.com"
+                  placeholderTextColor="#788196"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  style={styles.input}
+                />
+
+                <View style={styles.toggleRowWrap}>
+                  {staffPermissionOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={[styles.toggleChip, staffPermissionKey === option.key && styles.toggleChipActive]}
+                      onPress={() => setStaffPermissionKey(option.key)}
+                      disabled={staffPermissionBusy !== null}
+                    >
+                      <Text style={[styles.toggleChipText, staffPermissionKey === option.key && styles.toggleChipTextActive]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TextInput
+                  value={staffPermissionExpiresAt}
+                  onChangeText={setStaffPermissionExpiresAt}
+                  placeholder="Expires at ISO date/time, optional"
+                  placeholderTextColor="#788196"
+                  style={styles.input}
+                  autoCapitalize="none"
+                />
+
+                <TextInput
+                  value={staffPermissionReason}
+                  onChangeText={setStaffPermissionReason}
+                  placeholder="Audit reason optional"
+                  placeholderTextColor="#788196"
+                  style={styles.input}
+                />
+
+                <View style={styles.configListActions}>
+                  <TouchableOpacity
+                    style={[styles.orderBtn, staffPermissionBusy !== null && styles.configSaveBtnDisabled]}
+                    onPress={() => void runStaffPermissionGrant()}
+                    disabled={staffPermissionBusy !== null}
+                  >
+                    <Text style={styles.orderBtnText}>{staffPermissionBusy === "grant" ? "Granting..." : "Grant Permission"}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.orderBtn, staffPermissionBusy !== null && styles.configSaveBtnDisabled]}
+                    onPress={() => void runStaffPermissionRevoke()}
+                    disabled={staffPermissionBusy !== null}
+                  >
+                    <Text style={styles.orderBtnText}>{staffPermissionBusy === "revoke" ? "Revoking..." : "Revoke Permission"}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+
+            {operatorTab === "roles" && canViewStaffRoles ? (
               platformRoleRosterLoading ? (
                 <View style={styles.configLoadingRow}>
                   <ActivityIndicator color="#fff" />
@@ -4706,9 +4964,9 @@ export default function AdminStudioScreen() {
             ) : operatorTab === "roles" ? (
               <View style={styles.configListRow}>
                 <View style={styles.configListCopy}>
-                  <Text style={styles.configListTitle}>Staff-role visibility stays owner/operator only</Text>
-                  <Text style={styles.configListBody}>
-                    This signed-in identity can access `/admin`, but full staff-role roster visibility stays locked until active owner/operator truth is present.
+                <Text style={styles.configListTitle}>Staff-role visibility stays owner/operator only</Text>
+                <Text style={styles.configListBody}>
+                    This signed-in identity can access `/admin`, but staff-role roster visibility stays locked until Owner or scoped staff-management permission truth is present.
                   </Text>
                 </View>
               </View>
@@ -4841,9 +5099,9 @@ export default function AdminStudioScreen() {
             ) : operatorTab === "audit" ? (
               <View style={styles.configListRow}>
                 <View style={styles.configListCopy}>
-                  <Text style={styles.configListTitle}>Audit visibility stays permission-bound</Text>
-                  <Text style={styles.configListBody}>
-                    Audit visibility requires either active owner/operator truth or a review-capable moderation role. No fake admin audit dashboard is shown otherwise.
+                <Text style={styles.configListTitle}>Audit visibility stays permission-bound</Text>
+                <Text style={styles.configListBody}>
+                    Audit visibility requires privileged Owner access or a review-capable moderation role. No fake admin audit dashboard is shown otherwise.
                   </Text>
                 </View>
               </View>
@@ -6752,13 +7010,13 @@ export default function AdminStudioScreen() {
                   style={[
                     styles.toggleChip,
                     liveCostGuardSettingsForm.enabled && styles.toggleChipActive,
-                    !canManagePrivilegedWrites && styles.toggleChipDisabled,
+                    !canAccessLiveOps && styles.toggleChipDisabled,
                   ]}
                   onPress={() => {
-                    if (!canManagePrivilegedWrites) return;
+                    if (!canAccessLiveOps) return;
                     setLiveCostGuardSettingsForm((prev) => ({ ...prev, enabled: !prev.enabled }));
                   }}
-                  disabled={!canManagePrivilegedWrites}
+                  disabled={!canAccessLiveOps}
                 >
                   <Text style={[styles.toggleChipText, liveCostGuardSettingsForm.enabled && styles.toggleChipTextActive]}>
                     {liveCostGuardSettingsForm.enabled ? "Enabled" : "Disabled"}
@@ -6770,13 +7028,13 @@ export default function AdminStudioScreen() {
                     style={[
                       styles.toggleChip,
                       liveCostGuardSettingsForm.mode === mode && styles.toggleChipActive,
-                      !canManagePrivilegedWrites && styles.toggleChipDisabled,
+                      !canAccessLiveOps && styles.toggleChipDisabled,
                     ]}
                     onPress={() => {
-                      if (!canManagePrivilegedWrites) return;
+                      if (!canAccessLiveOps) return;
                       setLiveCostGuardSettingsForm((prev) => ({ ...prev, mode: mode as LiveCostGuardMode }));
                     }}
-                    disabled={!canManagePrivilegedWrites}
+                    disabled={!canAccessLiveOps}
                   >
                     <Text style={[styles.toggleChipText, liveCostGuardSettingsForm.mode === mode && styles.toggleChipTextActive]}>
                       {formatModerationToken(mode)}
@@ -6872,10 +7130,10 @@ export default function AdminStudioScreen() {
                   style={[
                     styles.configSaveBtn,
                     { backgroundColor: themePalette.accent },
-                    (liveCostGuardSaving || liveCostGuardLoading || !canManagePrivilegedWrites) && styles.configSaveBtnDisabled,
+                    (liveCostGuardSaving || liveCostGuardLoading || !canAccessLiveOps) && styles.configSaveBtnDisabled,
                   ]}
                   onPress={() => void saveLiveCostGuardSettings()}
-                  disabled={liveCostGuardSaving || liveCostGuardLoading || !canManagePrivilegedWrites}
+                  disabled={liveCostGuardSaving || liveCostGuardLoading || !canAccessLiveOps}
                 >
                   {liveCostGuardSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Guard</Text>}
                 </TouchableOpacity>
@@ -7024,7 +7282,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.dashboardMetricLabel}>Proxy</Text>
               <Text style={styles.dashboardMetricValue}>{liveOpsReadModel?.connected ? "Connected" : "Not connected"}</Text>
               <Text style={styles.dashboardMetricBody}>
-                Owner/operator auth is enforced by the Supabase function before any ops request.
+                Owner or live_ops permission is enforced by the Supabase function before any ops request.
               </Text>
             </View>
             <View style={styles.dashboardMetricCard}>
@@ -7062,7 +7320,7 @@ export default function AdminStudioScreen() {
               </View>
             ) : liveOpsIncidents.length ? liveOpsIncidents.map((incident) => {
               const busy = liveOpsActionBusy?.startsWith(`${incident.id}:`) === true;
-              const actionLocked = busy || !canManagePrivilegedWrites || !incident.opsJobId || incident.status === "executed" || incident.status === "rejected";
+              const actionLocked = busy || !canAccessLiveOps || !incident.opsJobId || incident.status === "executed" || incident.status === "rejected";
               const incidentAudits = liveOpsAuditsByIncident[incident.id] ?? [];
               const callTargets = [
                 incident.affectedThreadId ? `Thread ${formatCompactIdentifier(incident.affectedThreadId)}` : "",
@@ -7141,6 +7399,130 @@ export default function AdminStudioScreen() {
             }) : (
               <Text style={styles.configListBody}>No Live Ops reliability incidents are currently recorded.</Text>
             )}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "legal" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>LEGAL REVIEW</Text>
+              <Text style={styles.configTitle}>Evidence preview and export</Text>
+              <Text style={styles.configBody}>
+                Owner-only by default. Scoped legal_review/evidence_export access requires a reason and writes audit rows for every preview, export, and hold.
+              </Text>
+            </View>
+            <View style={[styles.badge, canAccessLegalEvidence ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canAccessLegalEvidence ? "Authorized" : "Locked"}</Text>
+            </View>
+          </View>
+
+          {legalNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{legalNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Evidence target</Text>
+                <Text style={styles.configListBody}>
+                  Search by safe IDs or date range. Preview defaults to metadata and timestamps so unrelated private data stays redacted where possible.
+                </Text>
+              </View>
+
+              <View style={styles.toggleRowWrap}>
+                {legalEvidenceTargetOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[styles.toggleChip, legalTargetType === option.key && styles.toggleChipActive]}
+                    onPress={() => setLegalTargetType(option.key)}
+                    disabled={legalBusy !== null}
+                  >
+                    <Text style={[styles.toggleChipText, legalTargetType === option.key && styles.toggleChipTextActive]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {legalTargetType === "date_range" ? (
+                <>
+                  <TextInput
+                    value={legalDateFrom}
+                    onChangeText={setLegalDateFrom}
+                    placeholder="From ISO date/time"
+                    placeholderTextColor="#788196"
+                    style={styles.input}
+                    autoCapitalize="none"
+                  />
+                  <TextInput
+                    value={legalDateTo}
+                    onChangeText={setLegalDateTo}
+                    placeholder="To ISO date/time"
+                    placeholderTextColor="#788196"
+                    style={styles.input}
+                    autoCapitalize="none"
+                  />
+                </>
+              ) : (
+                <TextInput
+                  value={legalTargetId}
+                  onChangeText={setLegalTargetId}
+                  placeholder="Target id"
+                  placeholderTextColor="#788196"
+                  style={styles.input}
+                  autoCapitalize="none"
+                />
+              )}
+
+              <TextInput
+                value={legalReason}
+                onChangeText={setLegalReason}
+                placeholder="Required legal/audit reason"
+                placeholderTextColor="#788196"
+                style={styles.input}
+                multiline
+              />
+
+              <View style={styles.configListActions}>
+                <TouchableOpacity
+                  style={[styles.orderBtn, legalBusy !== null && styles.configSaveBtnDisabled]}
+                  onPress={() => void runLegalEvidenceAction("preview")}
+                  disabled={legalBusy !== null}
+                >
+                  <Text style={styles.orderBtnText}>{legalBusy === "preview" ? "Previewing..." : "Preview"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.orderBtn, legalBusy !== null && styles.configSaveBtnDisabled]}
+                  onPress={() => void runLegalEvidenceAction("export")}
+                  disabled={legalBusy !== null}
+                >
+                  <Text style={styles.orderBtnText}>{legalBusy === "export" ? "Exporting..." : "Export Record"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.orderBtn, (legalBusy !== null || legalTargetType === "date_range") && styles.configSaveBtnDisabled]}
+                  onPress={() => void runLegalEvidenceAction("hold")}
+                  disabled={legalBusy !== null || legalTargetType === "date_range"}
+                >
+                  <Text style={styles.orderBtnText}>{legalBusy === "hold" ? "Holding..." : "Place Hold"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Preview / audit result</Text>
+                <Text style={styles.configListBody}>
+                  Results come from the protected Edge Function. Service-role keys and legal tooling tokens are never shipped to the app.
+                </Text>
+              </View>
+              <View style={styles.configListRowSubtle}>
+                <Text style={styles.configListBody}>{legalPreviewJson || "No legal preview has been requested in this session."}</Text>
+              </View>
+            </View>
           </View>
         </View>
         ) : null}
@@ -8084,12 +8466,12 @@ export default function AdminStudioScreen() {
             ] as const).map(([key, label]) => (
               <TouchableOpacity
                 key={key}
-                style={[
-                  styles.toggleChip,
-                  creatorGrantForm[key] && styles.toggleChipActive,
-                  !canManagePrivilegedWrites && styles.toggleChipDisabled,
-                ]}
-                onPress={() => {
+                  style={[
+                    styles.toggleChip,
+                    creatorGrantForm[key] && styles.toggleChipActive,
+                    !canManagePrivilegedWrites && styles.toggleChipDisabled,
+                  ]}
+                  onPress={() => {
                   if (!canManagePrivilegedWrites) return;
                   setCreatorGrantForm((prev) => ({ ...prev, [key]: !prev[key] }));
                 }}

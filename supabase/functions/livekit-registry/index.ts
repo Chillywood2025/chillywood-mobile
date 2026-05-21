@@ -9,7 +9,7 @@ type AuthenticatedUser = {
   id: string;
 };
 type AuthResult = { error: Response } | { user: AuthenticatedUser };
-type SupabaseClientLike = ReturnType<typeof createClient>;
+type SupabaseClientLike = any;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-livekit-registry-heartbeat-token",
@@ -120,28 +120,58 @@ const userHasPlatformRole = async (
   const normalizedEmail = toText(user.email).toLowerCase();
   const userQuery = await adminClient
     .from("platform_role_memberships")
-    .select("id")
+    .select("role")
     .eq("status", "active")
     .in("role", ["owner", "operator"])
     .eq("user_id", user.id)
+    .order("role", { ascending: true })
     .limit(1)
     .maybeSingle();
 
   if (userQuery.error) throw new Error(`Platform role lookup failed: ${userQuery.error.message}`);
-  if ((userQuery.data as { id?: unknown } | null)?.id) return true;
-  if (!normalizedEmail) return false;
+  const userRole = toText((userQuery.data as { role?: unknown } | null)?.role);
+  if (userRole === "owner" || userRole === "operator") return userRole;
+  if (!normalizedEmail) return null;
 
   const emailQuery = await adminClient
     .from("platform_role_memberships")
-    .select("id")
+    .select("role")
     .eq("status", "active")
     .in("role", ["owner", "operator"])
     .ilike("email", normalizedEmail)
+    .order("role", { ascending: true })
     .limit(1)
     .maybeSingle();
 
   if (emailQuery.error) throw new Error(`Platform role email lookup failed: ${emailQuery.error.message}`);
-  return !!(emailQuery.data as { id?: unknown } | null)?.id;
+  const emailRole = toText((emailQuery.data as { role?: unknown } | null)?.role);
+  return emailRole === "owner" || emailRole === "operator" ? emailRole : null;
+};
+
+const userHasLiveOpsPermission = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+) => {
+  const normalizedEmail = toText(user.email).toLowerCase();
+  let query = adminClient
+    .from("platform_staff_permission_grants")
+    .select("id,expires_at")
+    .eq("status", "active")
+    .eq("permission_key", "live_ops");
+
+  if (normalizedEmail) {
+    query = query.or(`target_user_id.eq.${user.id},target_email.ilike.${normalizedEmail}`);
+  } else {
+    query = query.eq("target_user_id", user.id);
+  }
+
+  const { data, error } = await query.limit(10);
+  if (error) throw new Error(`Live Ops permission lookup failed: ${error.message}`);
+  const now = Date.now();
+  return ((data ?? []) as JsonObject[]).some((row) => {
+    const expiresAt = toText(row.expires_at);
+    return !expiresAt || Date.parse(expiresAt) > now;
+  });
 };
 
 const requireOperator = async (
@@ -153,12 +183,12 @@ const requireOperator = async (
   const authResult = await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
   if ("error" in authResult) return authResult;
 
-  const hasRole = await userHasPlatformRole(adminClient, authResult.user);
-  if (!hasRole) {
+  const role = await userHasPlatformRole(adminClient, authResult.user);
+  if (role !== "owner" && (role !== "operator" || !(await userHasLiveOpsPermission(adminClient, authResult.user)))) {
     return {
       error: jsonResponse(403, {
-        error: "operator_required",
-        message: "LiveKit registry operations require a platform owner or operator.",
+        error: "live_ops_permission_required",
+        message: "LiveKit registry operations require Owner or an Admin with live_ops permission.",
       }),
     };
   }

@@ -22,6 +22,7 @@ import {
   type PremiumEntitlementDecision,
   type PremiumEntitlementKey,
 } from "./premiumEntitlements";
+import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./moderation";
 import { supabase } from "./supabase";
 
 export type PlanTier = "free" | "premium";
@@ -34,6 +35,8 @@ export type UserPlan = {
   adFree: boolean;
   watchPartyPerks: boolean;
   updatedAt: number;
+  ownerPlatformAccess?: boolean;
+  accessSource?: "entitlement" | "owner_platform_access" | "local_legacy";
 };
 
 export type AdMode = "none" | "pre-roll" | "mid-roll" | "banner";
@@ -100,6 +103,7 @@ export type MonetizationGateResolution = {
   availableTargetIds: MonetizationTargetId[];
   recommendedPackageId?: string;
   canPurchase: boolean;
+  ownerPlatformAccess?: boolean;
   snapshotStatus: "disabled" | "ready" | "store_unavailable" | "partial";
   issues: string[];
 };
@@ -1352,6 +1356,16 @@ async function readLegacyUserPlan(): Promise<UserPlan> {
 
 export async function readUserPlan(): Promise<UserPlan> {
   const legacy = await readLegacyUserPlan();
+  if (await readOwnerPlatformAccessEnabled()) {
+    return {
+      tier: "premium",
+      adFree: true,
+      watchPartyPerks: true,
+      updatedAt: Date.now(),
+      ownerPlatformAccess: true,
+      accessSource: "owner_platform_access",
+    };
+  }
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return legacy;
 
@@ -1389,6 +1403,7 @@ export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
 export async function hasPremiumAccess(): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return true;
+  if (await readOwnerPlatformAccessEnabled()) return true;
 
   const snapshot = await readMonetizationSnapshot();
   if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
@@ -1402,6 +1417,7 @@ export async function hasPremiumAccess(): Promise<boolean> {
 export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
   const runtime = getAppMonetizationRuntimeFeatures();
   if (!FEATURE_FLAGS.monetization.partyPass || !runtime.partyPassEnabled) return true;
+  if (await readOwnerPlatformAccessEnabled()) return true;
 
   const snapshot = await readMonetizationSnapshot();
   if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
@@ -1545,6 +1561,11 @@ export const sanitizeCreatorTitleMonetization = (options: {
   };
 };
 
+async function readOwnerPlatformAccessEnabled() {
+  const memberships = await readMyPlatformRoleMemberships().catch(() => []);
+  return hasPlatformRoleMembership(memberships, ["owner"]);
+}
+
 export async function resolveMonetizationAccess(options: {
   accessRule?: MonetizationAccessRule | string | null;
   accessKey?: string | null;
@@ -1574,7 +1595,14 @@ export async function resolveMonetizationAccess(options: {
     buildMonetizationGateResolution(snapshot, policy),
     backendEntitledTargetIds,
   );
-  const monetization = entitlementBackedGate;
+  const ownerPlatformAccess = await readOwnerPlatformAccessEnabled();
+  const monetization: MonetizationGateResolution = ownerPlatformAccess
+    ? {
+      ...entitlementBackedGate,
+      ownerPlatformAccess: true,
+      issues: entitlementBackedGate.issues.filter((issue) => !issue.toLowerCase().includes("entitlement")),
+    }
+    : entitlementBackedGate;
   const hasTrustedEntitlement = monetization.entitledTargetIds.length > 0;
   const plan: UserPlan = hasTrustedEntitlement && monetization.entitledTargetIds.includes("premium_subscription")
     ? {
@@ -1582,12 +1610,23 @@ export async function resolveMonetizationAccess(options: {
       adFree: true,
       watchPartyPerks: true,
       updatedAt: Date.now(),
+      accessSource: "entitlement",
     }
+    : ownerPlatformAccess
+      ? {
+        tier: "premium",
+        adFree: true,
+        watchPartyPerks: true,
+        updatedAt: Date.now(),
+        ownerPlatformAccess: true,
+        accessSource: "owner_platform_access",
+      }
     : {
       ...snapshotPlan,
       tier: "free",
       adFree: false,
       watchPartyPerks: false,
+      accessSource: snapshotPlan.accessSource ?? "local_legacy",
     };
 
   if (accessRule === "premium") {
@@ -1596,6 +1635,7 @@ export async function resolveMonetizationAccess(options: {
         !FEATURE_FLAGS.monetization.subscriptions
         || !runtime.premiumEnabled
       ))
+      || ownerPlatformAccess
       || hasTrustedEntitlement
     ) {
       return {
@@ -1628,6 +1668,7 @@ export async function resolveMonetizationAccess(options: {
         !FEATURE_FLAGS.monetization.partyPass
         || !runtime.partyPassEnabled
       ))
+      || ownerPlatformAccess
       || hasTrustedEntitlement
     ) {
       return {

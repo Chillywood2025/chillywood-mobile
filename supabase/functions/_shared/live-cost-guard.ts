@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { RoomServiceClient } from "npm:livekit-server-sdk@2";
 
 type JsonObject = Record<string, unknown>;
-type SupabaseClientLike = ReturnType<typeof createClient>;
+type SupabaseClientLike = any;
 
 export type LiveCostGuardMode = "observe_only" | "manual_approval" | "auto_protect";
 export type LiveCostGuardSeverity = "normal" | "warning" | "high" | "critical" | "emergency";
@@ -120,24 +120,52 @@ export async function authenticateLiveCostGuardAdmin(req: Request) {
   }
 
   const adminClient = createLiveCostGuardAdminClient();
-  const hasOperatorRole = await userHasLiveCostGuardRole(adminClient, userId);
+  const hasOperatorRole = await userHasLiveCostGuardRole(adminClient, {
+    email: data.user?.email ?? null,
+    id: userId,
+  });
   if (!hasOperatorRole) {
-    return { error: liveCostGuardJson(403, { error: "owner_operator_required" }) };
+    return { error: liveCostGuardJson(403, { error: "live_ops_permission_required" }) };
   }
 
   return { adminClient, userId };
 }
 
-export async function userHasLiveCostGuardRole(adminClient: SupabaseClientLike, userId: string) {
+export async function userHasLiveCostGuardRole(
+  adminClient: SupabaseClientLike,
+  user: { email: string | null; id: string },
+) {
+  const normalizedEmail = toLiveCostGuardText(user.email).toLowerCase();
   const { data, error } = await adminClient
     .from("platform_role_memberships")
-    .select("id")
-    .eq("user_id", userId)
+    .select("role")
     .eq("status", "active")
     .in("role", ["owner", "operator"])
+    .or(normalizedEmail ? `user_id.eq.${user.id},email.ilike.${normalizedEmail}` : `user_id.eq.${user.id}`)
     .limit(1);
 
-  return !error && Array.isArray(data) && data.length > 0;
+  if (error || !Array.isArray(data) || data.length === 0) return false;
+  if (data.some((row: any) => row.role === "owner")) return true;
+  if (!data.some((row: any) => row.role === "operator")) return false;
+
+  let permissionQuery = adminClient
+    .from("platform_staff_permission_grants")
+    .select("id,expires_at")
+    .eq("status", "active")
+    .eq("permission_key", "live_ops");
+  if (normalizedEmail) {
+    permissionQuery = permissionQuery.or(`target_user_id.eq.${user.id},target_email.ilike.${normalizedEmail}`);
+  } else {
+    permissionQuery = permissionQuery.eq("target_user_id", user.id);
+  }
+
+  const permissionResult = await permissionQuery.limit(10);
+  if (permissionResult.error) return false;
+  const now = Date.now();
+  return ((permissionResult.data ?? []) as JsonObject[]).some((row) => {
+    const expiresAt = toLiveCostGuardText(row.expires_at);
+    return !expiresAt || Date.parse(expiresAt) > now;
+  });
 }
 
 const normalizeMode = (value: unknown): LiveCostGuardMode => {

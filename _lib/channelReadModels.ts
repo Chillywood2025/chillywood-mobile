@@ -3,6 +3,7 @@ import {
   canReviewSafetyQueue,
   getModerationAccess,
   hasPlatformRoleMembership,
+  hasPlatformStaffPermission,
   readMyPlatformRoleMemberships,
   readSafetyReportQueue,
   resolvePlatformActorRole,
@@ -185,12 +186,12 @@ async function readChannelHelperContext(channelUserId: string) {
     moderationAccess,
     memberships,
     canOperateAcrossChannels: (
-      canAccessAdminConsole(moderationAccess, memberships)
-      || hasPlatformRoleMembership(memberships, ["owner", "operator"])
+      hasPlatformRoleMembership(memberships, ["owner"])
+      || hasPlatformStaffPermission(memberships, ["creator_support", "content_moderation", "user_lookup"])
     ),
     canReviewSafetyAcrossChannels: (
       canReviewSafetyQueue(moderationAccess, memberships)
-      || hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"])
+      || hasPlatformStaffPermission(memberships, ["reports_review", "content_moderation"])
     ),
   };
 }

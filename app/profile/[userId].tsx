@@ -760,6 +760,11 @@ export default function ProfileScreen() {
     && !!profilePrivacyAccess?.isLocked
     && !isOfficialProfile
     && !isSelfProfile;
+  const shouldShowUnavailableProfile = channelAccessReady
+    && profilePrivacyReady
+    && !isOfficialProfile
+    && !isSelfProfile
+    && !channelAccessProfile;
 
   useEffect(() => {
     let active = true;
@@ -3116,6 +3121,38 @@ export default function ProfileScreen() {
         return;
     }
   };
+  if (shouldShowUnavailableProfile) {
+    return (
+      <View
+        style={styles.outerFlex}
+        testID="profile-screen"
+        accessibilityLabel="Chi'llywood profile unavailable screen"
+      >
+        <View style={styles.fullBackgroundFallback} pointerEvents="none" />
+        <View style={styles.fullBackgroundOverlay} pointerEvents="none" />
+        <ScrollView
+          style={styles.screen}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+              <Text style={styles.backArrow}>←</Text>
+            </TouchableOpacity>
+            <Text style={styles.kicker}>{"CHI'LLYWOOD · PROFILE"}</Text>
+            <View style={{ width: 18 }} />
+          </View>
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionKicker}>PROFILE</Text>
+            <Text style={styles.sectionTitle}>Profile unavailable</Text>
+            <Text style={styles.sectionBody}>
+              This profile is not available for public browsing.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
   const renderComposerAvatar = (size: "small" | "medium" = "small") => (
     <View style={size === "small" ? styles.composerAvatar : styles.feedAvatar}>
       {profile.avatarUrl ? (

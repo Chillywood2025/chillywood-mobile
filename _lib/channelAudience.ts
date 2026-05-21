@@ -1,6 +1,6 @@
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
-import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./moderation";
+import { hasPlatformRoleMembership, hasPlatformStaffPermission, readMyPlatformRoleMemberships } from "./moderation";
 import { supabase } from "./supabase";
 
 export const CHANNEL_FOLLOWERS_TABLE = "channel_followers";
@@ -167,7 +167,8 @@ async function readAudienceActorContext(channelUserId: string): Promise<ChannelA
   }
 
   const memberships = await readMyPlatformRoleMemberships().catch(() => []);
-  const canOperateAcrossChannels = hasPlatformRoleMembership(memberships, ["owner", "operator"]);
+  const canOperateAcrossChannels = hasPlatformRoleMembership(memberships, ["owner"])
+    || hasPlatformStaffPermission(memberships, ["creator_support", "content_moderation"]);
   const isOwner = viewerUserId === normalizedChannelUserId;
 
   return {

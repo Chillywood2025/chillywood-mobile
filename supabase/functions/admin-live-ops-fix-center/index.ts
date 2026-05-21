@@ -72,6 +72,34 @@ const sanitizeValue = (value: unknown): unknown => {
 const sanitizeObject = (value: unknown): JsonObject =>
   isRecord(value) ? sanitizeValue(value) as JsonObject : {};
 
+const hasActiveStaffPermission = async (
+  adminClient: SupabaseClientLike,
+  userId: string,
+  email: string | null,
+  permissionKey: string,
+) => {
+  const normalizedEmail = toText(email).toLowerCase();
+  let query = adminClient
+    .from("platform_staff_permission_grants")
+    .select("id,expires_at")
+    .eq("status", "active")
+    .eq("permission_key", permissionKey);
+
+  if (normalizedEmail) {
+    query = query.or(`target_user_id.eq.${userId},target_email.ilike.${normalizedEmail}`);
+  } else {
+    query = query.eq("target_user_id", userId);
+  }
+
+  const { data, error } = await query.limit(10);
+  if (error) throw new Error(`Platform permission lookup failed: ${error.message}`);
+  const now = Date.now();
+  return ((data ?? []) as JsonObject[]).some((row) => {
+    const expiresAt = toText(row.expires_at);
+    return !expiresAt || Date.parse(expiresAt) > now;
+  });
+};
+
 const authenticate = async (
   req: Request,
   adminClient: SupabaseClientLike,
@@ -107,6 +135,9 @@ const authenticate = async (
   if (userLookup.error) throw new Error(`Platform role lookup failed: ${userLookup.error.message}`);
   const userRole = toText((userLookup.data as JsonObject | null)?.role);
   if (userRole === "owner" || userRole === "operator") {
+    if (userRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, data.user?.email ?? null, "live_ops"))) {
+      return { error: json(403, { error: "live_ops_permission_required" }) };
+    }
     return { user: { email: data.user?.email ?? null, id: userId, role: userRole } };
   }
 
@@ -124,6 +155,9 @@ const authenticate = async (
     if (emailLookup.error) throw new Error(`Platform role email lookup failed: ${emailLookup.error.message}`);
     const emailRole = toText((emailLookup.data as JsonObject | null)?.role);
     if (emailRole === "owner" || emailRole === "operator") {
+      if (emailRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, data.user?.email ?? null, "live_ops"))) {
+        return { error: json(403, { error: "live_ops_permission_required" }) };
+      }
       return { user: { email: data.user?.email ?? null, id: userId, role: emailRole } };
     }
   }

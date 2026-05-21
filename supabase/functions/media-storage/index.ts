@@ -13,7 +13,7 @@ type MediaStoragePayload = {
   recordId?: unknown;
 };
 
-type SupabaseClient = ReturnType<typeof createClient>;
+type SupabaseClient = any;
 
 const JSON_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -119,9 +119,10 @@ const bytesToHex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
 const hmac = async (key: ArrayBuffer | Uint8Array, data: string) => {
+  const keyData = key instanceof ArrayBuffer ? key : new Uint8Array(key).buffer as ArrayBuffer;
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    key,
+    keyData,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -265,6 +266,113 @@ const userHasPlatformRole = async (
   return !!emailQuery.data?.id;
 };
 
+const isPlatformOwnerUser = async (
+  adminClient: SupabaseClient,
+  userId: string,
+) => {
+  const normalizedUserId = toText(userId);
+  if (!normalizedUserId) return false;
+
+  const userRoleQuery = await adminClient
+    .from("platform_role_memberships")
+    .select("id")
+    .eq("status", "active")
+    .eq("role", "owner")
+    .eq("user_id", normalizedUserId)
+    .limit(1)
+    .maybeSingle();
+  if (userRoleQuery.data?.id) return true;
+
+  const { data: authUser } = await adminClient.auth.admin.getUserById(normalizedUserId).catch(() => ({ data: null }));
+  const ownerEmail = toText(authUser?.user?.email).toLowerCase();
+  if (!ownerEmail) return false;
+
+  const emailRoleQuery = await adminClient
+    .from("platform_role_memberships")
+    .select("id")
+    .eq("status", "active")
+    .eq("role", "owner")
+    .ilike("email", ownerEmail)
+    .limit(1)
+    .maybeSingle();
+  return !!emailRoleQuery.data?.id;
+};
+
+const userHasScopedStaffPermission = async (
+  adminClient: SupabaseClient,
+  user: { id: string; email: string },
+  permissionKeys: string[],
+) => {
+  if (await userHasPlatformRole(adminClient, user, ["owner"])) return true;
+  if (!(await userHasPlatformRole(adminClient, user, ["operator", "moderator"]))) return false;
+
+  const normalizedEmail = toText(user.email).toLowerCase();
+  const normalizedKeys = Array.from(new Set(permissionKeys.map((key) => toText(key).toLowerCase()).filter(Boolean)));
+  if (!normalizedKeys.length) return false;
+
+  let query = adminClient
+    .from("platform_staff_permission_grants")
+    .select("id,expires_at")
+    .eq("status", "active")
+    .in("permission_key", normalizedKeys);
+
+  if (normalizedEmail) {
+    query = query.or(`target_user_id.eq.${user.id},target_email.ilike.${normalizedEmail}`);
+  } else {
+    query = query.eq("target_user_id", user.id);
+  }
+
+  const { data, error } = await query.limit(20);
+  if (error) throw new Error(`Scoped staff permission lookup failed: ${error.message}`);
+
+  const now = Date.now();
+  return (data ?? []).some((row: any) => {
+    const expiresAt = toText(row.expires_at);
+    return !expiresAt || Date.parse(expiresAt) > now;
+  });
+};
+
+const ownerMediaBlockedForStaff = async (
+  adminClient: SupabaseClient,
+  user: { id: string; email: string },
+  ownerId: string,
+) => {
+  const normalizedOwnerId = toText(ownerId);
+  if (!normalizedOwnerId || normalizedOwnerId === user.id) return false;
+  if (await userHasPlatformRole(adminClient, user, ["owner"])) return false;
+  return isPlatformOwnerUser(adminClient, normalizedOwnerId);
+};
+
+const writePrivateMediaAccessAudit = async (
+  adminClient: SupabaseClient,
+  user: { id: string; email: string },
+  input: {
+    action: "media_download_url" | "media_delete";
+    objectKey: string;
+    ownerId: string | null;
+    recordId: string;
+    surfaceType: MediaStorageSurfaceType;
+  },
+) => {
+  const { error } = await adminClient.from("platform_admin_audit_logs").insert({
+    action: input.action,
+    action_category: "content",
+    actor_email: user.email || null,
+    actor_role: await userHasPlatformRole(adminClient, user, ["owner"]) ? "owner" : "staff",
+    actor_user_id: user.id,
+    metadata: {
+      object_key_owner: objectKeyOwner(input.objectKey),
+      surface_type: input.surfaceType,
+    },
+    reason: "Scoped staff media access through media-storage.",
+    severity: input.action === "media_delete" ? "warning" : "notice",
+    target_id: input.recordId || input.objectKey,
+    target_type: input.surfaceType,
+    target_user_id: input.ownerId,
+  });
+  if (error) throw new Error(`Private media audit write failed: ${error.message}`);
+};
+
 const validateUpload = (input: {
   surfaceType: MediaStorageSurfaceType;
   objectKey: string;
@@ -397,13 +505,28 @@ const canReadCreatorVideoRendition = async (
   const rendition = await readCreatorVideoRenditionForObject(adminClient, recordId, bucket, objectKey);
   if (!rendition) return null;
   if (rendition.status !== "ready") return false;
-  if (rendition.qualityLabel === "original") return rendition.ownerId === user.id || userHasPlatformRole(adminClient, user, ["operator"]);
   if (rendition.ownerId === user.id) return true;
-  if (await userHasPlatformRole(adminClient, user, ["operator", "moderator"])) return true;
+  if (await ownerMediaBlockedForStaff(adminClient, user, rendition.ownerId)) return false;
   const publicSafe = rendition.visibility === "public" && ["clean", "reported"].includes(rendition.moderationStatus);
+  if (rendition.qualityLabel === "original") {
+    if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
+      await writePrivateMediaAccessAudit(adminClient, user, {
+        action: "media_download_url",
+        objectKey,
+        ownerId: rendition.ownerId,
+        recordId,
+        surfaceType: "creator_video",
+      });
+      return true;
+    }
+    return false;
+  }
   if (!publicSafe) return false;
   if (rendition.accessTier === "free") return true;
-  if (rendition.accessTier === "premium") return userHasActiveEntitlement(adminClient, user.id, ["premium"]);
+  if (rendition.accessTier === "premium") {
+    if (await userHasPlatformRole(adminClient, user, ["owner"])) return true;
+    return userHasActiveEntitlement(adminClient, user.id, ["premium"]);
+  }
   return false;
 };
 
@@ -420,13 +543,24 @@ const canReadCreatorVideo = async (
   const video = await readCreatorVideoForObject(adminClient, recordId, bucket, objectKey);
   if (!video) return false;
   if (toText(video.owner_id) === user.id) return true;
+  if (await ownerMediaBlockedForStaff(adminClient, user, toText(video.owner_id))) return false;
   if (
     toText(video.visibility) === "public"
     && ["clean", "reported"].includes(toText(video.moderation_status))
   ) {
     return true;
   }
-  return userHasPlatformRole(adminClient, user, ["operator", "moderator"]);
+  if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
+    await writePrivateMediaAccessAudit(adminClient, user, {
+      action: "media_download_url",
+      objectKey,
+      ownerId: toText(video.owner_id),
+      recordId,
+      surfaceType: "creator_video",
+    });
+    return true;
+  }
+  return false;
 };
 
 const canDeleteCreatorVideo = async (
@@ -439,7 +573,18 @@ const canDeleteCreatorVideo = async (
   const video = await readCreatorVideoForObject(adminClient, recordId, bucket, objectKey);
   if (!video) return objectKeyOwner(objectKey) === user.id;
   if (toText(video.owner_id) === user.id) return true;
-  return userHasPlatformRole(adminClient, user, ["operator"]);
+  if (await ownerMediaBlockedForStaff(adminClient, user, toText(video.owner_id))) return false;
+  if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "emergency_break_glass"])) {
+    await writePrivateMediaAccessAudit(adminClient, user, {
+      action: "media_delete",
+      objectKey,
+      ownerId: toText(video.owner_id),
+      recordId,
+      surfaceType: "creator_video",
+    });
+    return true;
+  }
+  return false;
 };
 
 const readSocialAttachmentForObject = async (
@@ -568,8 +713,19 @@ const canReadSocialAttachment = async (
   const attachment = await readSocialAttachmentForObject(adminClient, recordId, bucket, objectKey);
   if (!attachment) return false;
   if (toText(attachment.owner_user_id) === user.id) return true;
-  if (await userHasPlatformRole(adminClient, user, ["operator", "moderator"])) return true;
-  return canReadSocialAttachmentSurface(adminClient, user, attachment);
+  if (await canReadSocialAttachmentSurface(adminClient, user, attachment)) return true;
+  if (await ownerMediaBlockedForStaff(adminClient, user, toText(attachment.owner_user_id))) return false;
+  if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
+    await writePrivateMediaAccessAudit(adminClient, user, {
+      action: "media_download_url",
+      objectKey,
+      ownerId: toText(attachment.owner_user_id),
+      recordId,
+      surfaceType: "social_attachment",
+    });
+    return true;
+  }
+  return false;
 };
 
 const canDeleteSocialAttachment = async (
@@ -582,10 +738,21 @@ const canDeleteSocialAttachment = async (
   const attachment = await readSocialAttachmentForObject(adminClient, recordId, bucket, objectKey);
   if (!attachment) return objectKeyOwner(objectKey) === user.id;
   if (toText(attachment.owner_user_id) === user.id) return true;
-  return userHasPlatformRole(adminClient, user, ["operator"]);
+  if (await ownerMediaBlockedForStaff(adminClient, user, toText(attachment.owner_user_id))) return false;
+  if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "emergency_break_glass"])) {
+    await writePrivateMediaAccessAudit(adminClient, user, {
+      action: "media_delete",
+      objectKey,
+      ownerId: toText(attachment.owner_user_id),
+      recordId,
+      surfaceType: "social_attachment",
+    });
+    return true;
+  }
+  return false;
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: JSON_HEADERS, status: 200 });
   if (req.method !== "POST") {
     return json(405, { error: "method_not_allowed", message: "Use POST for media storage requests." });
@@ -607,7 +774,7 @@ Deno.serve(async (req) => {
     }
 
     const authResult = await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
-    if ("error" in authResult) return authResult.error;
+    if ("error" in authResult) return authResult.error ?? json(401, { error: "invalid_auth" });
     const user = authResult.user;
     const payload = await req.json().catch(() => null) as MediaStoragePayload | null;
     if (!payload || typeof payload !== "object") {
@@ -642,7 +809,7 @@ Deno.serve(async (req) => {
         sizeBytes,
         userId: user.id,
       });
-      if ("error" in uploadValidation) return uploadValidation.error;
+      if ("error" in uploadValidation) return uploadValidation.error ?? json(400, { error: "invalid_upload" });
 
       const expiresSeconds = surfaceType === "creator_video"
         ? CREATOR_VIDEO_UPLOAD_EXPIRES_SECONDS

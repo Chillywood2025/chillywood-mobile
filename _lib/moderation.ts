@@ -24,6 +24,19 @@ export type SafetyReportCategoryCopy = {
 export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner" | "moderator";
 export type PlatformRole = "owner" | "operator" | "moderator";
 export type PlatformStaffManagementRole = "admin" | "operator" | "moderator";
+export type PlatformStaffPermissionKey =
+  | "support_inbox"
+  | "user_lookup"
+  | "content_moderation"
+  | "reports_review"
+  | "live_ops"
+  | "billing_support_read"
+  | "creator_support"
+  | "legal_review"
+  | "evidence_export"
+  | "emergency_break_glass"
+  | "admin_grants"
+  | "manage_moderators";
 
 export type ModerationAccess = {
   actorRole: ModerationActorRole;
@@ -51,6 +64,7 @@ export type PlatformRoleMembership = {
   email: string | null;
   status: string;
   grantedAt: string | null;
+  permissionKeys: PlatformStaffPermissionKey[];
 };
 
 export type PlatformRoleRosterEntry = PlatformRoleMembership & {
@@ -76,6 +90,14 @@ export type PlatformStaffRoleActionResult = {
   email: string;
   role: PlatformRole;
   displayRole: "owner" | "admin" | "moderator";
+  status: "active" | "revoked";
+};
+
+export type PlatformStaffPermissionActionResult = {
+  id: string | null;
+  email: string;
+  expiresAt: string | null;
+  permissionKey: PlatformStaffPermissionKey;
   status: "active" | "revoked";
 };
 
@@ -229,6 +251,28 @@ const toJsonValue = (value: unknown): Json => {
 const normalizePlatformRole = (value: unknown): PlatformRole | null => {
   const normalized = normalizeText(value).toLowerCase();
   if (normalized === "owner" || normalized === "operator" || normalized === "moderator") {
+    return normalized;
+  }
+  return null;
+};
+
+const normalizePlatformStaffPermissionKey = (value: unknown): PlatformStaffPermissionKey | null => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === "moderator_grants") return "manage_moderators";
+  if (
+    normalized === "support_inbox"
+    || normalized === "user_lookup"
+    || normalized === "content_moderation"
+    || normalized === "reports_review"
+    || normalized === "live_ops"
+    || normalized === "billing_support_read"
+    || normalized === "creator_support"
+    || normalized === "legal_review"
+    || normalized === "evidence_export"
+    || normalized === "emergency_break_glass"
+    || normalized === "admin_grants"
+    || normalized === "manage_moderators"
+  ) {
     return normalized;
   }
   return null;
@@ -483,22 +527,54 @@ export function canReviewSafetyQueue(
   _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"]);
+  return hasPlatformRoleMembership(memberships, ["owner", "moderator"])
+    || hasPlatformStaffPermission(memberships, ["reports_review", "content_moderation"]);
 }
 
 export function canManagePrivilegedAdminWrites(
   _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return hasPlatformRoleMembership(memberships, ["owner", "operator"]);
+  return hasPlatformRoleMembership(memberships, ["owner"])
+    || hasPlatformStaffPermission(memberships, ["emergency_break_glass"]);
 }
 
 export function canManageAdminRoleAssignments(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner"]);
+  return hasPlatformRoleMembership(memberships, ["owner"])
+    || hasPlatformStaffPermission(memberships, ["admin_grants"]);
 }
 
 export function canManageModeratorRoleAssignments(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner", "operator"]);
+  return hasPlatformRoleMembership(memberships, ["owner"])
+    || hasPlatformStaffPermission(memberships, ["manage_moderators"]);
+}
+
+export function hasPlatformStaffPermission(
+  memberships: PlatformRoleMembership[],
+  requiredPermissionKeys: readonly (PlatformStaffPermissionKey | "moderator_grants")[],
+) {
+  if (hasPlatformRoleMembership(memberships, ["owner"])) return true;
+  const normalizedRequired = new Set(
+    requiredPermissionKeys
+      .map(normalizePlatformStaffPermissionKey)
+      .filter((entry): entry is PlatformStaffPermissionKey => !!entry),
+  );
+  if (!normalizedRequired.size) return false;
+
+  for (const membership of memberships) {
+    for (const key of membership.permissionKeys ?? []) {
+      if (normalizedRequired.has(key)) return true;
+    }
+  }
+  return false;
+}
+
+export function canAccessLiveOpsTools(memberships: PlatformRoleMembership[]) {
+  return hasPlatformStaffPermission(memberships, ["live_ops"]);
+}
+
+export function canAccessLegalEvidenceTools(memberships: PlatformRoleMembership[]) {
+  return hasPlatformStaffPermission(memberships, ["legal_review", "evidence_export"]);
 }
 
 const platformMembershipMatchesIdentity = (
@@ -510,7 +586,24 @@ const platformMembershipMatchesIdentity = (
   return (!!identity.userId && rowUserId === identity.userId) || (!!identity.email && rowEmail === identity.email);
 };
 
-export async function readMyPlatformRoleMemberships() {
+async function readMyPlatformStaffPermissionKeys(): Promise<PlatformStaffPermissionKey[]> {
+  const rpc = supabase.rpc as unknown as (
+    fn: string,
+    args?: Record<string, never>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+
+  const { data, error } = await rpc("read_my_platform_staff_permission_keys", {});
+  if (error) return [];
+
+  const values = Array.isArray(data) ? data : [];
+  return Array.from(new Set(
+    values
+      .map(normalizePlatformStaffPermissionKey)
+      .filter((entry): entry is PlatformStaffPermissionKey => !!entry),
+  ));
+}
+
+export async function readMyPlatformRoleMemberships(): Promise<PlatformRoleMembership[]> {
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = normalizeText(sessionData.session?.user?.id);
   const email = normalizeText(sessionData.session?.user?.email).toLowerCase();
@@ -525,6 +618,8 @@ export async function readMyPlatformRoleMemberships() {
 
   if (error) throw error;
 
+  const permissionKeys: PlatformStaffPermissionKey[] = await readMyPlatformStaffPermissionKeys().catch(() => []);
+
   return (data ?? [])
     .filter((entry) => platformMembershipMatchesIdentity(entry, { userId, email }))
     .map((entry) => {
@@ -537,6 +632,7 @@ export async function readMyPlatformRoleMemberships() {
         email: normalizeText(entry.email) || null,
         status: normalizeText(entry.status) || "active",
         grantedAt: normalizeText(entry.granted_at) || null,
+        permissionKeys: [...permissionKeys],
       } satisfies PlatformRoleMembership;
     })
     .filter((entry): entry is PlatformRoleMembership => !!entry);
@@ -562,7 +658,7 @@ export async function readPlatformRoleRoster(options?: {
   if (error) throw error;
 
   const items = (data ?? [])
-    .map((entry) => {
+    .map((entry): PlatformRoleRosterEntry | null => {
       const role = normalizePlatformRole(entry.role);
       if (!role) return null;
       const status = normalizePlatformRoleStatus(entry.status);
@@ -573,6 +669,7 @@ export async function readPlatformRoleRoster(options?: {
         email: normalizeText(entry.email).toLowerCase() || null,
         status,
         grantedAt: normalizeText(entry.granted_at) || null,
+        permissionKeys: [] as PlatformStaffPermissionKey[],
         grantedBy: normalizeText(entry.granted_by) || null,
         notes: normalizeText(entry.notes) || null,
         identityLabel: buildRoleIdentityLabel(entry),
@@ -608,6 +705,19 @@ const readStaffRoleActionResult = (value: unknown): PlatformStaffRoleActionResul
   };
 };
 
+const readStaffPermissionActionResult = (value: unknown): PlatformStaffPermissionActionResult => {
+  const payload = isPlainObject(value) ? value : {};
+  const permissionKey = normalizePlatformStaffPermissionKey(payload.permissionKey ?? payload.permission_key) ?? "manage_moderators";
+  const status = normalizePlatformRoleStatus(payload.status) === "revoked" ? "revoked" : "active";
+  return {
+    id: normalizeText(payload.id) || null,
+    email: normalizeText(payload.email).toLowerCase(),
+    expiresAt: normalizeText(payload.expiresAt ?? payload.expires_at) || null,
+    permissionKey,
+    status,
+  };
+};
+
 export async function grantPlatformStaffRoleByEmail(input: {
   email: string;
   role: PlatformStaffManagementRole;
@@ -628,6 +738,32 @@ export async function grantPlatformStaffRoleByEmail(input: {
   return readStaffRoleActionResult(data);
 }
 
+export async function grantPlatformStaffPermissionByEmail(input: {
+  email: string;
+  permissionKey: PlatformStaffPermissionKey | "moderator_grants";
+  reason?: string | null;
+  expiresAt?: string | null;
+}) {
+  const email = normalizeText(input.email).toLowerCase();
+  const permissionKey = normalizePlatformStaffPermissionKey(input.permissionKey);
+  if (!email) throw new Error("Enter a staff email.");
+  if (!permissionKey) throw new Error("Choose a supported staff permission.");
+
+  const rpc = supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  const { data, error } = await rpc("admin_grant_platform_staff_permission_by_email", {
+    p_expires_at: normalizeText(input.expiresAt) || null,
+    p_permission_key: permissionKey,
+    p_reason: normalizeText(input.reason) || null,
+    p_target_email: email,
+  });
+
+  if (error) throw error;
+  return readStaffPermissionActionResult(data);
+}
+
 export async function revokePlatformStaffRoleByEmail(input: {
   email: string;
   role: PlatformStaffManagementRole;
@@ -646,6 +782,30 @@ export async function revokePlatformStaffRoleByEmail(input: {
 
   if (error) throw error;
   return readStaffRoleActionResult(data);
+}
+
+export async function revokePlatformStaffPermissionByEmail(input: {
+  email: string;
+  permissionKey: PlatformStaffPermissionKey | "moderator_grants";
+  reason?: string | null;
+}) {
+  const email = normalizeText(input.email).toLowerCase();
+  const permissionKey = normalizePlatformStaffPermissionKey(input.permissionKey);
+  if (!email) throw new Error("Enter a staff email.");
+  if (!permissionKey) throw new Error("Choose a supported staff permission.");
+
+  const rpc = supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  const { data, error } = await rpc("admin_revoke_platform_staff_permission_by_email", {
+    p_permission_key: permissionKey,
+    p_reason: normalizeText(input.reason) || null,
+    p_target_email: email,
+  });
+
+  if (error) throw error;
+  return readStaffPermissionActionResult(data);
 }
 
 export async function readSafetyReports(options?: {
