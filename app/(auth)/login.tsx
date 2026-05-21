@@ -28,6 +28,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
 
   const signIn = async () => {
     if (!email || !password) {
@@ -64,6 +65,44 @@ export default function Login() {
       Alert.alert("Login Error", "Unable to sign in right now.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendPasswordReset = async () => {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      Alert.alert("Reset password", "Enter your email first and we'll send you a password reset link.");
+      return;
+    }
+
+    setResetPasswordLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+
+      if (error) {
+        trackEvent("auth_password_reset_failure", {
+          reason: error.message,
+        });
+        Alert.alert("Reset password", error.message);
+        return;
+      }
+
+      trackEvent("auth_password_reset_requested", {
+        source: "login",
+      });
+      Alert.alert("Reset password", "Check your email for a password reset link.");
+    } catch (error) {
+      reportRuntimeError("auth-password-reset", error, {
+        source: "login",
+      });
+      trackEvent("auth_password_reset_failure", {
+        reason: "runtime_error",
+      });
+      Alert.alert("Reset password", "Unable to send a reset link right now.");
+    } finally {
+      setResetPasswordLoading(false);
     }
   };
 
@@ -130,6 +169,16 @@ export default function Login() {
                 void signIn();
               }}
             />
+
+            <Pressable
+              style={styles.forgotPasswordButton}
+              onPress={sendPasswordReset}
+              disabled={resetPasswordLoading}
+            >
+              <Text style={[styles.forgotPasswordText, resetPasswordLoading && styles.forgotPasswordTextDisabled]}>
+                {resetPasswordLoading ? "Sending reset..." : "Forgot password?"}
+              </Text>
+            </Pressable>
 
             <Pressable style={styles.button} onPress={signIn} disabled={loading}>
               <Text style={styles.buttonText}>{loading ? "Signing in..." : "Log In"}</Text>
@@ -212,6 +261,20 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
     fontSize: 16,
+  },
+  forgotPasswordButton: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 2,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  forgotPasswordText: {
+    color: "#BFC7D8",
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+  forgotPasswordTextDisabled: {
+    color: "#7A859A",
   },
   row: {
     flexDirection: "row",
