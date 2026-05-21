@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
 type AuthenticatedUser = {
+  activeBreakGlassSessionId: string | null;
   email: string | null;
   id: string;
   permissions: Set<string>;
@@ -74,6 +75,16 @@ const requireReason = (value: unknown) => {
   return reason;
 };
 
+const shouldWriteAppAudit = (user: AuthenticatedUser) =>
+  user.role !== "owner" || !!user.activeBreakGlassSessionId;
+
+const resolveLegalReason = (user: AuthenticatedUser, value: unknown, fallback: string) => {
+  if (user.role === "owner" && !user.activeBreakGlassSessionId) {
+    return sanitizeText(value, 500) || fallback;
+  }
+  return requireReason(value);
+};
+
 const hasPermission = (user: AuthenticatedUser, key: string) =>
   user.role === "owner" || user.permissions.has(normalizePermission(key));
 
@@ -109,6 +120,33 @@ const readActivePermissions = async (
       .map((row) => normalizePermission(row.permission_key))
       .filter(Boolean),
   );
+};
+
+const readActiveBreakGlassSessionId = async (
+  adminClient: SupabaseClientLike,
+  userId: string,
+  email: string | null,
+) => {
+  const normalizedEmail = toText(email).toLowerCase();
+  let query = adminClient
+    .from("platform_break_glass_sessions")
+    .select("id,expires_at")
+    .eq("status", "active");
+
+  if (normalizedEmail) {
+    query = query.or(`actor_user_id.eq.${userId},actor_email.ilike.${normalizedEmail}`);
+  } else {
+    query = query.eq("actor_user_id", userId);
+  }
+
+  const { data, error } = await query.order("activated_at", { ascending: false }).limit(5);
+  if (error) throw new Error(`Break Glass lookup failed: ${error.message}`);
+  const now = Date.now();
+  const active = ((data ?? []) as JsonObject[]).find((row) => {
+    const expiresAt = toText(row.expires_at);
+    return !expiresAt || Date.parse(expiresAt) > now;
+  });
+  return toText(active?.id) || null;
 };
 
 const authenticate = async (
@@ -164,7 +202,8 @@ const authenticate = async (
   }
 
   const permissions = await readActivePermissions(adminClient, userId, email);
-  const user = { email, id: userId, permissions, role } as AuthenticatedUser;
+  const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, email);
+  const user = { activeBreakGlassSessionId, email, id: userId, permissions, role } as AuthenticatedUser;
   if (!hasAnyPermission(user, ["legal_review", "evidence_export"])) {
     return { error: json(403, { error: "legal_permission_required" }) };
   }
@@ -183,12 +222,17 @@ const writeAudit = async (
     metadata?: JsonObject;
   },
 ) => {
+  if (!shouldWriteAppAudit(user)) return;
   const { error } = await adminClient.from("legal_evidence_audit_log").insert({
     action: input.action,
     actor_email: user.email,
     actor_role: user.role,
     actor_user_id: user.id,
-    metadata: sanitizeObject(input.metadata ?? {}),
+    metadata: sanitizeObject({
+      ...(input.metadata ?? {}),
+      break_glass_active: !!user.activeBreakGlassSessionId,
+      break_glass_session_id: user.activeBreakGlassSessionId,
+    }),
     reason: input.reason,
     request_id: input.requestId || null,
     target_id: input.targetId || null,
@@ -286,7 +330,7 @@ Deno.serve(async (req) => {
 
     const payload = sanitizeObject(await req.json().catch(() => ({})));
     const action = toText(payload.action).toLowerCase() || "preview";
-    const reason = requireReason(payload.reason);
+    const reason = resolveLegalReason(auth.user, payload.reason, "Owner normal legal evidence action.");
 
     if (action === "preview" || action === "search") {
       if (!hasPermission(auth.user, "legal_review")) return json(403, { error: "legal_review_required" });

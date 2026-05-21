@@ -36,7 +36,11 @@ export type PlatformStaffPermissionKey =
   | "evidence_export"
   | "emergency_break_glass"
   | "admin_grants"
-  | "manage_moderators";
+  | "manage_moderators"
+  | "audit_review"
+  | "security_review"
+  | "staff_permission_templates"
+  | "legal_request_intake";
 
 export type ModerationAccess = {
   actorRole: ModerationActorRole;
@@ -272,6 +276,10 @@ const normalizePlatformStaffPermissionKey = (value: unknown): PlatformStaffPermi
     || normalized === "emergency_break_glass"
     || normalized === "admin_grants"
     || normalized === "manage_moderators"
+    || normalized === "audit_review"
+    || normalized === "security_review"
+    || normalized === "staff_permission_templates"
+    || normalized === "legal_request_intake"
   ) {
     return normalized;
   }
@@ -535,8 +543,7 @@ export function canManagePrivilegedAdminWrites(
   _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return hasPlatformRoleMembership(memberships, ["owner"])
-    || hasPlatformStaffPermission(memberships, ["emergency_break_glass"]);
+  return hasPlatformRoleMembership(memberships, ["owner"]);
 }
 
 export function canManageAdminRoleAssignments(memberships: PlatformRoleMembership[]) {
@@ -575,6 +582,22 @@ export function canAccessLiveOpsTools(memberships: PlatformRoleMembership[]) {
 
 export function canAccessLegalEvidenceTools(memberships: PlatformRoleMembership[]) {
   return hasPlatformStaffPermission(memberships, ["legal_review", "evidence_export"]);
+}
+
+export function canAccessAuditExplorerTools(memberships: PlatformRoleMembership[]) {
+  return hasPlatformStaffPermission(memberships, ["audit_review", "security_review"]);
+}
+
+export function canManageStaffPermissionTemplates(memberships: PlatformRoleMembership[]) {
+  return hasPlatformStaffPermission(memberships, ["staff_permission_templates", "admin_grants"]);
+}
+
+export function canAccessBreakGlassTools(memberships: PlatformRoleMembership[]) {
+  return hasPlatformStaffPermission(memberships, ["emergency_break_glass"]);
+}
+
+export function canAccessLegalRequestIntakeTools(memberships: PlatformRoleMembership[]) {
+  return hasPlatformStaffPermission(memberships, ["legal_request_intake", "legal_review"]);
 }
 
 const platformMembershipMatchesIdentity = (

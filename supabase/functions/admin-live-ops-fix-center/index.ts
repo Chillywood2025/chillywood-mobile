@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
 type AuthenticatedUser = {
+  activeBreakGlassSessionId: string | null;
   email: string | null;
   id: string;
   role: "owner" | "operator";
@@ -72,6 +73,9 @@ const sanitizeValue = (value: unknown): unknown => {
 const sanitizeObject = (value: unknown): JsonObject =>
   isRecord(value) ? sanitizeValue(value) as JsonObject : {};
 
+const shouldWriteAppAudit = (user: AuthenticatedUser) =>
+  user.role !== "owner" || !!user.activeBreakGlassSessionId;
+
 const hasActiveStaffPermission = async (
   adminClient: SupabaseClientLike,
   userId: string,
@@ -98,6 +102,33 @@ const hasActiveStaffPermission = async (
     const expiresAt = toText(row.expires_at);
     return !expiresAt || Date.parse(expiresAt) > now;
   });
+};
+
+const readActiveBreakGlassSessionId = async (
+  adminClient: SupabaseClientLike,
+  userId: string,
+  email: string | null,
+) => {
+  const normalizedEmail = toText(email).toLowerCase();
+  let query = adminClient
+    .from("platform_break_glass_sessions")
+    .select("id,expires_at")
+    .eq("status", "active");
+
+  if (normalizedEmail) {
+    query = query.or(`actor_user_id.eq.${userId},actor_email.ilike.${normalizedEmail}`);
+  } else {
+    query = query.eq("actor_user_id", userId);
+  }
+
+  const { data, error } = await query.order("activated_at", { ascending: false }).limit(5);
+  if (error) throw new Error(`Break Glass lookup failed: ${error.message}`);
+  const now = Date.now();
+  const active = ((data ?? []) as JsonObject[]).find((row) => {
+    const expiresAt = toText(row.expires_at);
+    return !expiresAt || Date.parse(expiresAt) > now;
+  });
+  return toText(active?.id) || null;
 };
 
 const authenticate = async (
@@ -138,7 +169,8 @@ const authenticate = async (
     if (userRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, data.user?.email ?? null, "live_ops"))) {
       return { error: json(403, { error: "live_ops_permission_required" }) };
     }
-    return { user: { email: data.user?.email ?? null, id: userId, role: userRole } };
+    const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, data.user?.email ?? null);
+    return { user: { activeBreakGlassSessionId, email: data.user?.email ?? null, id: userId, role: userRole } };
   }
 
   if (normalizedEmail) {
@@ -158,7 +190,8 @@ const authenticate = async (
       if (emailRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, data.user?.email ?? null, "live_ops"))) {
         return { error: json(403, { error: "live_ops_permission_required" }) };
       }
-      return { user: { email: data.user?.email ?? null, id: userId, role: emailRole } };
+      const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, data.user?.email ?? null);
+      return { user: { activeBreakGlassSessionId, email: data.user?.email ?? null, id: userId, role: emailRole } };
     }
   }
 
@@ -238,6 +271,7 @@ const writeAudit = async (
     user: AuthenticatedUser;
   },
 ) => {
+  if (!shouldWriteAppAudit(input.user)) return;
   const incidentId = toText(input.incident.id);
   const opsJobId = toText(input.incident.ops_job_id) || null;
   const idempotencyKey = toText(input.incident.idempotency_key) || `${incidentId}:${input.action}`;
@@ -263,7 +297,11 @@ const writeAudit = async (
     idempotency_key: `${idempotencyKey}:${input.action}:${input.eventType}:${Date.now()}`,
     incident_id: incidentId,
     ops_job_id: opsJobId,
-    result: sanitizeObject(input.result ?? {}),
+    result: sanitizeObject({
+      ...(input.result ?? {}),
+      break_glass_active: !!input.user.activeBreakGlassSessionId,
+      break_glass_session_id: input.user.activeBreakGlassSessionId,
+    }),
     risk_level: toText(input.incident.risk_level) || "low",
     rollback_note: toText(input.incident.rollback_note) || null,
     success: input.success,
@@ -279,6 +317,8 @@ const writeAudit = async (
     actor_role: input.user.role,
     actor_user_id: input.user.id,
     metadata: sanitizeObject({
+      break_glass_active: !!input.user.activeBreakGlassSessionId,
+      break_glass_session_id: input.user.activeBreakGlassSessionId,
       dry_run: input.dryRun,
       event_type: input.eventType,
       incident_id: incidentId,

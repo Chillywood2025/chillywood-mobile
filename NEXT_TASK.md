@@ -416,6 +416,12 @@ Use the lane-specific prompt for validation. Default baseline remains:
 - `git diff --check`
 - targeted Android/manual proof when UI, routing, gates, or device behavior changed
 
+## Current Lane Pending Proof
+- Owner/Admin Control Tools are implemented locally but not deployed/proved yet.
+- Before commit/deploy, run the full requested validation: `npm run typecheck`, refresh-policy guard, admin-auth guard, runtime validation, `git diff --check`, and Deno checks for `admin-owner-controls`, `admin-legal-evidence`, and `admin-live-ops-fix-center`.
+- Production proof must use real owner/admin/moderator/viewer accounts. Do not fake canary passes; unavailable checks must stay unknown/manual required.
+- Deployment should include only migration `202605210001_owner_admin_control_tools.sql`, function `admin-owner-controls`, and touched legal/live-ops functions if the owner no-audit/Break Glass behavior is being shipped.
+
 ## Staging Discipline
 - Do not stage `artifacts/`.
 - Do not stage `supabase/.temp/`.

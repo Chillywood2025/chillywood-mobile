@@ -11,7 +11,7 @@ export type LegalEvidenceTargetType =
 
 export type LegalEvidenceRequestInput = {
   action: LegalEvidenceAction;
-  reason: string;
+  reason?: string | null;
   targetType?: LegalEvidenceTargetType | string | null;
   targetId?: string | null;
   dateFrom?: string | null;

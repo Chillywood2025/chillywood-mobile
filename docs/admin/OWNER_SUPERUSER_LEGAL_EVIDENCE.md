@@ -18,10 +18,18 @@
 - `evidence_export` allows reason-required export record creation.
 - The Edge Function writes preview/export/hold records and append-only audit rows with service-role credentials kept server-side only.
 - This tool must never delete evidence, chat history, or user content.
+- Owner normal Legal Evidence use no longer requires a reason prompt and does not emit app-level owner audit rows unless Break Glass is active. Approved Admin legal/evidence use still requires exact grants, a reason, and audit.
+
+## Owner/Admin Control Tools
+- `admin-owner-controls` adds Audit Explorer, permission templates, temporary grant presets, Break Glass, Legal Request Intake, Owner Security, Canary Checks, and a low-risk Safety Dashboard.
+- Audit Explorer hides normal owner actions unless `break_glass_active=true`.
+- Permission templates grant permissions only; staff roles remain in the existing Staff & Roles flow.
+- Canary checks must return pass/fail/unknown and must not fake green status.
 
 ## Manual Proof Required
 - Non-owner cannot view or discover the Owner account through public surfaces.
 - Owner can access their own account/profile area and premium/studio/live/admin tools.
 - Regular users still hit normal subscription gates.
 - Authorized admins can still add/remove moderators through the existing flow only after `manage_moderators`.
-- Legal actions require a reason, write audit, and expose no secrets to the mobile app.
+- Admin legal actions require a reason, write audit, and expose no secrets to the mobile app.
+- Owner Break Glass activation and admin sensitive-action denial/allow proof must be rerun with real accounts after deployment.

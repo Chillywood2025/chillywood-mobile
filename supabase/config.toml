@@ -78,3 +78,6 @@ verify_jwt = false
 
 [functions.admin-legal-evidence]
 verify_jwt = false
+
+[functions.admin-owner-controls]
+verify_jwt = false

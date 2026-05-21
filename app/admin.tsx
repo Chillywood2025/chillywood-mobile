@@ -26,6 +26,28 @@ import {
   requestLegalEvidenceAction,
   type LegalEvidenceTargetType,
 } from "../_lib/adminLegalEvidence";
+import {
+  activateBreakGlass,
+  applyPermissionTemplate,
+  createLegalRequest,
+  endBreakGlass,
+  listLegalRequests,
+  listOwnerControlAudit,
+  listOwnerControlCanaries,
+  listPermissionTemplates,
+  readBreakGlassStatus,
+  readOwnerSecurityStatus,
+  revokePermissionTemplate,
+  runOwnerControlCanary,
+  updateLegalRequest,
+  type OwnerControlAuditRow,
+  type OwnerControlBreakGlassSession,
+  type OwnerControlCanaryRun,
+  type OwnerControlLegalRequest,
+  type OwnerControlPermissionTemplate,
+  type OwnerControlSafetyDashboard,
+  type OwnerControlSecurityStatus,
+} from "../_lib/adminOwnerControls";
 import { FEATURE_FLAGS, type AppRuntimeControls } from "../_lib/featureFlags";
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
@@ -39,9 +61,13 @@ import {
 import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
+  canAccessAuditExplorerTools,
+  canAccessBreakGlassTools,
   canAccessLegalEvidenceTools,
+  canAccessLegalRequestIntakeTools,
   canAccessLiveOpsTools,
   canAccessAdminConsole,
+  canManageStaffPermissionTemplates,
   canManageAdminRoleAssignments,
   canManageModeratorRoleAssignments,
   canManagePrivilegedAdminWrites,
@@ -198,6 +224,13 @@ type OperatorTabKey =
   | "content"
   | "roles"
   | "audit"
+  | "audit-explorer"
+  | "permission-templates"
+  | "break-glass"
+  | "legal-intake"
+  | "owner-security"
+  | "canary"
+  | "safety-dashboard"
   | "rachi"
   | "users"
   | "premium"
@@ -289,6 +322,13 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "content", label: "Content" },
   { key: "roles", label: "Roles" },
   { key: "audit", label: "Audit" },
+  { key: "audit-explorer", label: "Audit Explorer" },
+  { key: "permission-templates", label: "Permission Templates" },
+  { key: "break-glass", label: "Break Glass" },
+  { key: "legal-intake", label: "Legal Intake" },
+  { key: "owner-security", label: "Owner Security" },
+  { key: "canary", label: "Canary" },
+  { key: "safety-dashboard", label: "Safety" },
   { key: "rachi", label: "Rachi" },
   { key: "users", label: "Users" },
   { key: "premium", label: "Premium" },
@@ -327,6 +367,10 @@ const staffPermissionOptions: readonly { key: PlatformStaffPermissionKey; label:
   { key: "emergency_break_glass", label: "Break Glass" },
   { key: "admin_grants", label: "Admin Grants" },
   { key: "manage_moderators", label: "Moderator Grants" },
+  { key: "audit_review", label: "Audit Review" },
+  { key: "security_review", label: "Security Review" },
+  { key: "staff_permission_templates", label: "Permission Templates" },
+  { key: "legal_request_intake", label: "Legal Intake" },
 ];
 const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   loading: false,
@@ -1178,6 +1222,37 @@ export default function AdminStudioScreen() {
   const [legalBusy, setLegalBusy] = useState<"preview" | "export" | "hold" | null>(null);
   const [legalNotice, setLegalNotice] = useState<string | null>(null);
   const [legalPreviewJson, setLegalPreviewJson] = useState("");
+  const [ownerControlNotice, setOwnerControlNotice] = useState<string | null>(null);
+  const [ownerControlLoading, setOwnerControlLoading] = useState(false);
+  const [auditExplorerRows, setAuditExplorerRows] = useState<OwnerControlAuditRow[]>([]);
+  const [auditExplorerActionFilter, setAuditExplorerActionFilter] = useState("");
+  const [auditExplorerTargetFilter, setAuditExplorerTargetFilter] = useState("");
+  const [auditExplorerBreakGlassOnly, setAuditExplorerBreakGlassOnly] = useState(false);
+  const [permissionTemplates, setPermissionTemplates] = useState<OwnerControlPermissionTemplate[]>([]);
+  const [permissionTemplateKey, setPermissionTemplateKey] = useState("support_agent");
+  const [permissionTemplateEmail, setPermissionTemplateEmail] = useState("");
+  const [permissionTemplateDuration, setPermissionTemplateDuration] = useState("until_revoked");
+  const [permissionTemplateReason, setPermissionTemplateReason] = useState("");
+  const [permissionTemplateBusy, setPermissionTemplateBusy] = useState<"apply" | "revoke" | null>(null);
+  const [breakGlassSessions, setBreakGlassSessions] = useState<OwnerControlBreakGlassSession[]>([]);
+  const [breakGlassActiveSessionId, setBreakGlassActiveSessionId] = useState<string | null>(null);
+  const [breakGlassReason, setBreakGlassReason] = useState("");
+  const [breakGlassCaseId, setBreakGlassCaseId] = useState("");
+  const [breakGlassReportId, setBreakGlassReportId] = useState("");
+  const [breakGlassDuration, setBreakGlassDuration] = useState("1h");
+  const [breakGlassBusy, setBreakGlassBusy] = useState<"activate" | "end" | null>(null);
+  const [legalRequests, setLegalRequests] = useState<OwnerControlLegalRequest[]>([]);
+  const [legalRequestAgency, setLegalRequestAgency] = useState("");
+  const [legalRequestContact, setLegalRequestContact] = useState("");
+  const [legalRequestCaseNumber, setLegalRequestCaseNumber] = useState("");
+  const [legalRequestReason, setLegalRequestReason] = useState("");
+  const [legalRequestTargetId, setLegalRequestTargetId] = useState("");
+  const [legalRequestTargetType, setLegalRequestTargetType] = useState<"targetUserId" | "targetContentId" | "targetThreadId" | "targetRoomId" | "targetReportId">("targetUserId");
+  const [legalRequestBusy, setLegalRequestBusy] = useState(false);
+  const [ownerSecurityStatus, setOwnerSecurityStatus] = useState<OwnerControlSecurityStatus | null>(null);
+  const [ownerSafetyDashboard, setOwnerSafetyDashboard] = useState<OwnerControlSafetyDashboard | null>(null);
+  const [canaryRuns, setCanaryRuns] = useState<OwnerControlCanaryRun[]>([]);
+  const [canaryBusy, setCanaryBusy] = useState(false);
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
@@ -1220,12 +1295,19 @@ export default function AdminStudioScreen() {
   const canAccessAdmin = isSignedIn && isActive && platformRolesChecked && canAccessAdminConsole(moderationAccess, platformRoles);
   const canReviewSafetyReports = isSignedIn && isActive && platformRolesChecked && canReviewSafetyQueue(moderationAccess, platformRoles);
   const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
+  const isOwnerStaff = isSignedIn && isActive && platformRolesChecked && hasPlatformRoleMembership(platformRoles, ["owner"]);
   const canManageAdminStaff = isSignedIn && isActive && platformRolesChecked && canManageAdminRoleAssignments(platformRoles);
   const canManageModeratorStaff = isSignedIn && isActive && platformRolesChecked && canManageModeratorRoleAssignments(platformRoles);
   const canViewStaffRoles = canManageAdminStaff || canManageModeratorStaff;
   const canManageStaffPermissions = isSignedIn && isActive && platformRolesChecked && hasPlatformRoleMembership(platformRoles, ["owner"]);
   const canAccessLiveOps = isSignedIn && isActive && platformRolesChecked && canAccessLiveOpsTools(platformRoles);
   const canAccessLegalEvidence = isSignedIn && isActive && platformRolesChecked && canAccessLegalEvidenceTools(platformRoles);
+  const canAccessAuditExplorer = isSignedIn && isActive && platformRolesChecked && canAccessAuditExplorerTools(platformRoles);
+  const canManagePermissionTemplates = isSignedIn && isActive && platformRolesChecked && canManageStaffPermissionTemplates(platformRoles);
+  const canAccessBreakGlass = isSignedIn && isActive && platformRolesChecked && canAccessBreakGlassTools(platformRoles);
+  const canAccessLegalIntake = isSignedIn && isActive && platformRolesChecked && canAccessLegalRequestIntakeTools(platformRoles);
+  const canAccessOwnerSecurity = isOwnerStaff;
+  const canAccessCanaryChecks = canAccessAuditExplorer;
   const visibleOperatorTabs = useMemo(
     () => {
       if (canManagePrivilegedWrites) return operatorTabs;
@@ -1236,12 +1318,24 @@ export default function AdminStudioScreen() {
       if (canViewStaffRoles) scopedTabs.push("roles");
       if (canAccessLiveOps) scopedTabs.push("live-cost-guard", "live-ops-fix-center");
       if (canAccessLegalEvidence) scopedTabs.push("legal");
+      if (canAccessAuditExplorer) scopedTabs.push("audit-explorer");
+      if (canAccessCanaryChecks) scopedTabs.push("canary");
+      if (canManagePermissionTemplates) scopedTabs.push("permission-templates");
+      if (canAccessBreakGlass) scopedTabs.push("break-glass");
+      if (canAccessLegalIntake) scopedTabs.push("legal-intake");
+      if (canAccessOwnerSecurity) scopedTabs.push("owner-security", "safety-dashboard");
       return operatorTabs.filter((tab) => scopedTabs.includes(tab.key));
     },
     [
+      canAccessAuditExplorer,
+      canAccessBreakGlass,
       canAccessLegalEvidence,
+      canAccessLegalIntake,
       canAccessLiveOps,
+      canAccessOwnerSecurity,
+      canAccessCanaryChecks,
       canManagePrivilegedWrites,
+      canManagePermissionTemplates,
       canReviewSafetyReports,
       canViewStaffRoles,
     ],
@@ -1319,6 +1413,20 @@ export default function AdminStudioScreen() {
       setLiveOpsLoading(false);
       setLiveOpsNotice(null);
       setLiveOpsActionBusy(null);
+      setOwnerControlNotice(null);
+      setOwnerControlLoading(false);
+      setAuditExplorerRows([]);
+      setPermissionTemplates([]);
+      setPermissionTemplateBusy(null);
+      setBreakGlassSessions([]);
+      setBreakGlassActiveSessionId(null);
+      setBreakGlassBusy(null);
+      setLegalRequests([]);
+      setLegalRequestBusy(false);
+      setOwnerSecurityStatus(null);
+      setOwnerSafetyDashboard(null);
+      setCanaryRuns([]);
+      setCanaryBusy(false);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -1360,6 +1468,20 @@ export default function AdminStudioScreen() {
       setLiveOpsLoading(false);
       setLiveOpsNotice(null);
       setLiveOpsActionBusy(null);
+      setOwnerControlNotice(null);
+      setOwnerControlLoading(false);
+      setAuditExplorerRows([]);
+      setPermissionTemplates([]);
+      setPermissionTemplateBusy(null);
+      setBreakGlassSessions([]);
+      setBreakGlassActiveSessionId(null);
+      setBreakGlassBusy(null);
+      setLegalRequests([]);
+      setLegalRequestBusy(false);
+      setOwnerSecurityStatus(null);
+      setOwnerSafetyDashboard(null);
+      setCanaryRuns([]);
+      setCanaryBusy(false);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -2861,7 +2983,7 @@ export default function AdminStudioScreen() {
     }
 
     const reason = legalReason.trim();
-    if (reason.length < 6) {
+    if (!isOwnerStaff && reason.length < 6) {
       setLegalNotice("Enter an audit reason before using Legal Review.");
       return;
     }
@@ -2886,10 +3008,10 @@ export default function AdminStudioScreen() {
       setLegalPreviewJson(JSON.stringify(preview ?? {}, null, 2));
       setLegalNotice(
         action === "export"
-          ? "Evidence export record created with an audit row."
+          ? (isOwnerStaff ? "Evidence export record created." : "Evidence export record created with an audit row.")
           : action === "hold"
-            ? "Legal hold placed with an audit row."
-            : "Evidence preview created with an audit row.",
+            ? (isOwnerStaff ? "Legal hold placed." : "Legal hold placed with an audit row.")
+            : (isOwnerStaff ? "Evidence preview created." : "Evidence preview created with an audit row."),
       );
     } catch (err: any) {
       setLegalNotice(formatAdminOperationFailure(err, "Legal evidence action failed."));
@@ -2904,6 +3026,296 @@ export default function AdminStudioScreen() {
     legalReason,
     legalTargetId,
     legalTargetType,
+    isOwnerStaff,
+  ]);
+
+  const loadAuditExplorer = useCallback(async () => {
+    if (!canAccessAuditExplorer) return;
+    try {
+      setOwnerControlLoading(true);
+      setOwnerControlNotice(null);
+      const result = await listOwnerControlAudit({
+        actionType: auditExplorerActionFilter.trim() || undefined,
+        breakGlassOnly: auditExplorerBreakGlassOnly,
+        limit: 80,
+        targetId: auditExplorerTargetFilter.trim() || undefined,
+      });
+      setAuditExplorerRows(result.rows);
+    } catch (err: any) {
+      setAuditExplorerRows([]);
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load Audit Explorer."));
+    } finally {
+      setOwnerControlLoading(false);
+    }
+  }, [auditExplorerActionFilter, auditExplorerBreakGlassOnly, auditExplorerTargetFilter, canAccessAuditExplorer]);
+
+  const loadPermissionTemplates = useCallback(async () => {
+    if (!canManagePermissionTemplates) return;
+    try {
+      setOwnerControlLoading(true);
+      setOwnerControlNotice(null);
+      const templates = await listPermissionTemplates();
+      setPermissionTemplates(templates);
+      if (templates.length && !templates.some((template) => template.key === permissionTemplateKey)) {
+        setPermissionTemplateKey(templates[0].key);
+      }
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load permission templates."));
+    } finally {
+      setOwnerControlLoading(false);
+    }
+  }, [canManagePermissionTemplates, permissionTemplateKey]);
+
+  const runPermissionTemplateAction = useCallback(async (action: "apply" | "revoke") => {
+    const email = permissionTemplateEmail.trim().toLowerCase();
+    if (!canManagePermissionTemplates || permissionTemplateBusy) {
+      setOwnerControlNotice("Permission templates require Owner or scoped staff_permission_templates/admin_grants permission.");
+      return;
+    }
+    if (!email) {
+      setOwnerControlNotice("Enter an Admin email before applying a permission template.");
+      return;
+    }
+    if (!isOwnerStaff && permissionTemplateReason.trim().length < 6) {
+      setOwnerControlNotice("Admins need a reason before applying or revoking templates.");
+      return;
+    }
+
+    try {
+      setPermissionTemplateBusy(action);
+      setOwnerControlNotice(null);
+      if (action === "apply") {
+        await applyPermissionTemplate({
+          duration: permissionTemplateDuration,
+          reason: permissionTemplateReason.trim() || null,
+          targetEmail: email,
+          templateKey: permissionTemplateKey,
+        });
+      } else {
+        await revokePermissionTemplate({
+          reason: permissionTemplateReason.trim() || null,
+          targetEmail: email,
+          templateKey: permissionTemplateKey,
+        });
+      }
+      setOwnerControlNotice(`Permission template ${action === "apply" ? "applied" : "revoked"} for ${maskOperatorIdentity(email)}.`);
+      await Promise.all([loadPermissionTemplates(), loadPlatformRoles()]);
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, `Failed to ${action} permission template.`));
+    } finally {
+      setPermissionTemplateBusy(null);
+    }
+  }, [
+    canManagePermissionTemplates,
+    isOwnerStaff,
+    loadPermissionTemplates,
+    loadPlatformRoles,
+    permissionTemplateBusy,
+    permissionTemplateDuration,
+    permissionTemplateEmail,
+    permissionTemplateKey,
+    permissionTemplateReason,
+  ]);
+
+  const loadBreakGlass = useCallback(async () => {
+    if (!canAccessBreakGlass) return;
+    try {
+      setOwnerControlLoading(true);
+      setOwnerControlNotice(null);
+      const status = await readBreakGlassStatus();
+      setBreakGlassActiveSessionId(status.activeSessionId);
+      setBreakGlassSessions(status.sessions);
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load Break Glass status."));
+    } finally {
+      setOwnerControlLoading(false);
+    }
+  }, [canAccessBreakGlass]);
+
+  const runBreakGlassActivate = useCallback(async () => {
+    if (!canAccessBreakGlass || breakGlassBusy) return;
+    if (breakGlassReason.trim().length < 6) {
+      setOwnerControlNotice("Break Glass activation requires a reason.");
+      return;
+    }
+    try {
+      setBreakGlassBusy("activate");
+      setOwnerControlNotice(null);
+      await activateBreakGlass({
+        caseId: breakGlassCaseId.trim() || null,
+        duration: breakGlassDuration,
+        reason: breakGlassReason.trim(),
+        reportId: breakGlassReportId.trim() || null,
+      });
+      setOwnerControlNotice("Break Glass activated. Owner/admin actions now emit Break Glass audit rows until ended or expired.");
+      setBreakGlassReason("");
+      await loadBreakGlass();
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to activate Break Glass."));
+    } finally {
+      setBreakGlassBusy(null);
+    }
+  }, [breakGlassBusy, breakGlassCaseId, breakGlassDuration, breakGlassReason, breakGlassReportId, canAccessBreakGlass, loadBreakGlass]);
+
+  const runBreakGlassEnd = useCallback(async () => {
+    if (!canAccessBreakGlass || breakGlassBusy) return;
+    try {
+      setBreakGlassBusy("end");
+      setOwnerControlNotice(null);
+      await endBreakGlass({ sessionId: breakGlassActiveSessionId });
+      setOwnerControlNotice("Break Glass session ended.");
+      await loadBreakGlass();
+      await loadPlatformRoles();
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to end Break Glass."));
+    } finally {
+      setBreakGlassBusy(null);
+    }
+  }, [breakGlassActiveSessionId, breakGlassBusy, canAccessBreakGlass, loadBreakGlass, loadPlatformRoles]);
+
+  const loadLegalIntake = useCallback(async () => {
+    if (!canAccessLegalIntake) return;
+    try {
+      setOwnerControlLoading(true);
+      setOwnerControlNotice(null);
+      setLegalRequests(await listLegalRequests({ limit: 25 }));
+    } catch (err: any) {
+      setLegalRequests([]);
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load legal request intake."));
+    } finally {
+      setOwnerControlLoading(false);
+    }
+  }, [canAccessLegalIntake]);
+
+  const runLegalIntakeCreate = useCallback(async () => {
+    if (!canAccessLegalIntake || legalRequestBusy) return;
+    if (legalRequestAgency.trim().length < 2 || legalRequestReason.trim().length < 6) {
+      setOwnerControlNotice("Legal request intake needs an agency and request reason.");
+      return;
+    }
+    if (!isOwnerStaff && legalRequestReason.trim().length < 6) {
+      setOwnerControlNotice("Admins need a reason for legal request intake.");
+      return;
+    }
+    const targetPatch: Record<string, string> = {};
+    if (legalRequestTargetId.trim()) targetPatch[legalRequestTargetType] = legalRequestTargetId.trim();
+    try {
+      setLegalRequestBusy(true);
+      setOwnerControlNotice(null);
+      await createLegalRequest({
+        contactName: legalRequestContact.trim() || null,
+        caseNumber: legalRequestCaseNumber.trim() || null,
+        requestReason: legalRequestReason.trim(),
+        requestingAgency: legalRequestAgency.trim(),
+        ...targetPatch,
+      });
+      setOwnerControlNotice("Legal request intake record created.");
+      setLegalRequestAgency("");
+      setLegalRequestContact("");
+      setLegalRequestCaseNumber("");
+      setLegalRequestReason("");
+      setLegalRequestTargetId("");
+      await loadLegalIntake();
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to create legal request intake."));
+    } finally {
+      setLegalRequestBusy(false);
+    }
+  }, [
+    canAccessLegalIntake,
+    isOwnerStaff,
+    legalRequestAgency,
+    legalRequestBusy,
+    legalRequestCaseNumber,
+    legalRequestContact,
+    legalRequestReason,
+    legalRequestTargetId,
+    legalRequestTargetType,
+    loadLegalIntake,
+  ]);
+
+  const markLegalRequestReviewing = useCallback(async (requestId: string) => {
+    if (!canAccessLegalIntake) return;
+    try {
+      setOwnerControlNotice(null);
+      await updateLegalRequest({
+        id: requestId,
+        reason: isOwnerStaff ? null : "Admin marked legal intake reviewing.",
+        status: "reviewing",
+      });
+      await loadLegalIntake();
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to update legal request intake."));
+    }
+  }, [canAccessLegalIntake, isOwnerStaff, loadLegalIntake]);
+
+  const loadOwnerSecurity = useCallback(async () => {
+    if (!canAccessOwnerSecurity) return;
+    try {
+      setOwnerControlLoading(true);
+      setOwnerControlNotice(null);
+      const result = await readOwnerSecurityStatus();
+      setOwnerSecurityStatus(result.security);
+      setOwnerSafetyDashboard(result.safetyDashboard);
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load owner security panel."));
+    } finally {
+      setOwnerControlLoading(false);
+    }
+  }, [canAccessOwnerSecurity]);
+
+  const loadCanaries = useCallback(async () => {
+    if (!canAccessCanaryChecks) return;
+    try {
+      setOwnerControlLoading(true);
+      setOwnerControlNotice(null);
+      setCanaryRuns(await listOwnerControlCanaries());
+    } catch (err: any) {
+      setCanaryRuns([]);
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load canary checks."));
+    } finally {
+      setOwnerControlLoading(false);
+    }
+  }, [canAccessCanaryChecks]);
+
+  const runCanaryChecks = useCallback(async () => {
+    if (!canAccessCanaryChecks || canaryBusy) return;
+    try {
+      setCanaryBusy(true);
+      setOwnerControlNotice(null);
+      const run = await runOwnerControlCanary();
+      setCanaryRuns((prev) => [run, ...prev].slice(0, 10));
+      setOwnerControlNotice("Canary checks completed. Unknown means manual proof is required, not pass.");
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to run canary checks."));
+    } finally {
+      setCanaryBusy(false);
+    }
+  }, [canAccessCanaryChecks, canaryBusy]);
+
+  useEffect(() => {
+    if (!canAccessAdmin) return;
+    if (operatorTab === "audit-explorer" && canAccessAuditExplorer) void loadAuditExplorer();
+    if (operatorTab === "permission-templates" && canManagePermissionTemplates) void loadPermissionTemplates();
+    if (operatorTab === "break-glass" && canAccessBreakGlass) void loadBreakGlass();
+    if (operatorTab === "legal-intake" && canAccessLegalIntake) void loadLegalIntake();
+    if ((operatorTab === "owner-security" || operatorTab === "safety-dashboard") && canAccessOwnerSecurity) void loadOwnerSecurity();
+    if (operatorTab === "canary" && canAccessCanaryChecks) void loadCanaries();
+  }, [
+    canAccessAdmin,
+    canAccessAuditExplorer,
+    canAccessBreakGlass,
+    canAccessCanaryChecks,
+    canAccessLegalIntake,
+    canAccessOwnerSecurity,
+    canManagePermissionTemplates,
+    loadAuditExplorer,
+    loadBreakGlass,
+    loadCanaries,
+    loadLegalIntake,
+    loadOwnerSecurity,
+    loadPermissionTemplates,
+    operatorTab,
   ]);
 
   const saveLiveCostGuardSettings = useCallback(async () => {
@@ -7481,7 +7893,7 @@ export default function AdminStudioScreen() {
               <TextInput
                 value={legalReason}
                 onChangeText={setLegalReason}
-                placeholder="Required legal/audit reason"
+                placeholder={isOwnerStaff ? "Owner note optional unless Break Glass is active" : "Required legal/audit reason"}
                 placeholderTextColor="#788196"
                 style={styles.input}
                 multiline
@@ -7522,6 +7934,525 @@ export default function AdminStudioScreen() {
               <View style={styles.configListRowSubtle}>
                 <Text style={styles.configListBody}>{legalPreviewJson || "No legal preview has been requested in this session."}</Text>
               </View>
+            </View>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "audit-explorer" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>AUDIT EXPLORER</Text>
+              <Text style={styles.configTitle}>Search admin/security audit rows</Text>
+              <Text style={styles.configBody}>
+                Shows staff, legal, Live Ops, Break Glass, legal intake, canary, and system/security rows. Normal owner actions are hidden unless Break Glass was active.
+              </Text>
+            </View>
+            <View style={[styles.badge, canAccessAuditExplorer ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canAccessAuditExplorer ? "Authorized" : "Locked"}</Text>
+            </View>
+          </View>
+
+          {ownerControlNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Filters</Text>
+                <Text style={styles.configListBody}>Filter by action text, target/id text, and Break Glass-only rows.</Text>
+              </View>
+              <TextInput
+                value={auditExplorerActionFilter}
+                onChangeText={setAuditExplorerActionFilter}
+                placeholder="Action filter"
+                placeholderTextColor="#788196"
+                style={styles.input}
+                autoCapitalize="none"
+              />
+              <TextInput
+                value={auditExplorerTargetFilter}
+                onChangeText={setAuditExplorerTargetFilter}
+                placeholder="Target, user, content, room, thread, report, legal request id"
+                placeholderTextColor="#788196"
+                style={styles.input}
+                autoCapitalize="none"
+              />
+              <View style={styles.configListActions}>
+                <TouchableOpacity
+                  style={[styles.toggleChip, auditExplorerBreakGlassOnly && styles.toggleChipActive]}
+                  onPress={() => setAuditExplorerBreakGlassOnly((prev) => !prev)}
+                >
+                  <Text style={[styles.toggleChipText, auditExplorerBreakGlassOnly && styles.toggleChipTextActive]}>Break Glass only</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, ownerControlLoading && styles.configSaveBtnDisabled]}
+                  onPress={() => void loadAuditExplorer()}
+                  disabled={ownerControlLoading || !canAccessAuditExplorer}
+                >
+                  <Text style={styles.actionText}>{ownerControlLoading ? "Searching..." : "Search"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {auditExplorerRows.length ? auditExplorerRows.map((row) => (
+              <View key={`${row.source}-${row.id}`} style={styles.configListRowSubtle}>
+                <View style={styles.configHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.configListTitle}>{`${formatModerationToken(row.source)} · ${formatModerationToken(row.action)}`}</Text>
+                    <Text style={styles.configListBody}>
+                      {`${row.occurredAt ? formatModerationTimestamp(row.occurredAt) : "Time unknown"} · ${formatModerationToken(row.actorRole || "unknown")}`}
+                    </Text>
+                  </View>
+                  <View style={[styles.badge, row.breakGlassActive ? styles.badgeScheduled : styles.badgeOff]}>
+                    <Text style={styles.badgeText}>{row.breakGlassActive ? "Break Glass" : row.dryRun ? "Dry Run" : "Audit"}</Text>
+                  </View>
+                </View>
+                <Text style={styles.configListBody}>{`Actor ${row.actorEmail ? maskOperatorIdentity(row.actorEmail) : formatCompactIdentifier(row.actorUserId)}`}</Text>
+                <Text style={styles.configListBody}>{`Target ${formatModerationToken(row.targetType)} ${formatCompactIdentifier(row.targetId)}`}</Text>
+                {row.permissionKey ? <Text style={styles.configListBody}>{`Permission ${formatModerationToken(row.permissionKey)}`}</Text> : null}
+                {row.reason ? <Text style={styles.configListBody}>{formatAuditDisplayText(row.reason)}</Text> : null}
+              </View>
+            )) : (
+              <View style={styles.configListRowSubtle}>
+                <Text style={styles.configListBody}>{ownerControlLoading ? "Loading audit rows..." : "No audit rows matched this search."}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "permission-templates" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>PERMISSION TEMPLATES</Text>
+              <Text style={styles.configTitle}>Owner-controlled staff permission bundles</Text>
+              <Text style={styles.configBody}>
+                Templates grant scoped permissions only. They never create platform roles, and Admins cannot apply templates to themselves.
+              </Text>
+            </View>
+            <View style={[styles.badge, canManagePermissionTemplates ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canManagePermissionTemplates ? "Authorized" : "Locked"}</Text>
+            </View>
+          </View>
+
+          {ownerControlNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Apply / revoke template</Text>
+                <Text style={styles.configListBody}>Review the exact permissions before approving. Expiration is enforced server-side by expires_at.</Text>
+              </View>
+              <TextInput
+                value={permissionTemplateEmail}
+                onChangeText={setPermissionTemplateEmail}
+                placeholder="admin@example.com"
+                placeholderTextColor="#788196"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={styles.input}
+              />
+              <View style={styles.toggleRowWrap}>
+                {permissionTemplates.map((template) => (
+                  <TouchableOpacity
+                    key={template.key}
+                    style={[styles.toggleChip, permissionTemplateKey === template.key && styles.toggleChipActive]}
+                    onPress={() => setPermissionTemplateKey(template.key)}
+                    disabled={permissionTemplateBusy !== null}
+                  >
+                    <Text style={[styles.toggleChipText, permissionTemplateKey === template.key && styles.toggleChipTextActive]}>
+                      {template.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.toggleRowWrap}>
+                {[
+                  ["1h", "1 hour"],
+                  ["24h", "24 hours"],
+                  ["7d", "7 days"],
+                  ["until_revoked", "Until revoked"],
+                ].map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.toggleChip, permissionTemplateDuration === key && styles.toggleChipActive]}
+                    onPress={() => setPermissionTemplateDuration(key)}
+                    disabled={permissionTemplateBusy !== null}
+                  >
+                    <Text style={[styles.toggleChipText, permissionTemplateDuration === key && styles.toggleChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                value={permissionTemplateReason}
+                onChangeText={setPermissionTemplateReason}
+                placeholder={isOwnerStaff ? "Owner note optional" : "Reason required for Admin template action"}
+                placeholderTextColor="#788196"
+                style={styles.input}
+              />
+              <View style={styles.configListActions}>
+                <TouchableOpacity
+                  style={[styles.orderBtn, permissionTemplateBusy !== null && styles.configSaveBtnDisabled]}
+                  onPress={() => void runPermissionTemplateAction("apply")}
+                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates}
+                >
+                  <Text style={styles.orderBtnText}>{permissionTemplateBusy === "apply" ? "Applying..." : "Apply Template"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.orderBtn, permissionTemplateBusy !== null && styles.configSaveBtnDisabled]}
+                  onPress={() => void runPermissionTemplateAction("revoke")}
+                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates}
+                >
+                  <Text style={styles.orderBtnText}>{permissionTemplateBusy === "revoke" ? "Revoking..." : "Revoke Template"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {permissionTemplates.map((template) => (
+              <View key={`template-${template.key}`} style={styles.configListRowSubtle}>
+                <Text style={styles.configListTitle}>{template.label}</Text>
+                <Text style={styles.configListBody}>{template.permissions.map(formatModerationToken).join(" · ")}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "break-glass" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>BREAK GLASS</Text>
+              <Text style={styles.configTitle}>Emergency audit mode</Text>
+              <Text style={styles.configBody}>
+                Off by default. Owner normal use is not app-level audited. Activating Break Glass requires a reason and causes owner/admin actions to appear in audit.
+              </Text>
+            </View>
+            <View style={[styles.badge, breakGlassActiveSessionId ? styles.badgeScheduled : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{breakGlassActiveSessionId ? "Active" : "Off"}</Text>
+            </View>
+          </View>
+
+          {ownerControlNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Activate Break Glass</Text>
+                <Text style={styles.configListBody}>Approved Admins require emergency_break_glass and a time limit. Normal admins, moderators, and users cannot see this tab.</Text>
+              </View>
+              <TextInput
+                value={breakGlassReason}
+                onChangeText={setBreakGlassReason}
+                placeholder="Emergency reason"
+                placeholderTextColor="#788196"
+                style={styles.input}
+                multiline
+              />
+              <View style={styles.inlineInputs}>
+                <TextInput
+                  value={breakGlassCaseId}
+                  onChangeText={setBreakGlassCaseId}
+                  placeholder="Case id optional"
+                  placeholderTextColor="#788196"
+                  style={[styles.input, styles.inputHalf]}
+                  autoCapitalize="none"
+                />
+                <TextInput
+                  value={breakGlassReportId}
+                  onChangeText={setBreakGlassReportId}
+                  placeholder="Report id optional"
+                  placeholderTextColor="#788196"
+                  style={[styles.input, styles.inputHalf]}
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={styles.toggleRowWrap}>
+                {[
+                  ["1h", "1 hour"],
+                  ["24h", "24 hours"],
+                  ["7d", "7 days"],
+                  ["until_revoked", "Until ended"],
+                ].map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.toggleChip, breakGlassDuration === key && styles.toggleChipActive]}
+                    onPress={() => setBreakGlassDuration(key)}
+                    disabled={breakGlassBusy !== null}
+                  >
+                    <Text style={[styles.toggleChipText, breakGlassDuration === key && styles.toggleChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.configListActions}>
+                <TouchableOpacity
+                  style={[styles.actionBtnDanger, (breakGlassBusy !== null || !!breakGlassActiveSessionId) && styles.configSaveBtnDisabled]}
+                  onPress={() => void runBreakGlassActivate()}
+                  disabled={breakGlassBusy !== null || !!breakGlassActiveSessionId || !canAccessBreakGlass}
+                >
+                  <Text style={styles.actionTextDanger}>{breakGlassBusy === "activate" ? "Activating..." : "Activate"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, (breakGlassBusy !== null || !breakGlassActiveSessionId) && styles.configSaveBtnDisabled]}
+                  onPress={() => void runBreakGlassEnd()}
+                  disabled={breakGlassBusy !== null || !breakGlassActiveSessionId || !canAccessBreakGlass}
+                >
+                  <Text style={styles.actionText}>{breakGlassBusy === "end" ? "Ending..." : "End Active Session"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {breakGlassSessions.length ? breakGlassSessions.map((session) => (
+              <View key={String(session.id)} style={styles.configListRowSubtle}>
+                <Text style={styles.configListTitle}>{`${formatModerationToken(String(session.status ?? "unknown"))} · ${formatCompactIdentifier(session.id)}`}</Text>
+                <Text style={styles.configListBody}>{`Reason: ${formatAuditDisplayText(session.reason)}`}</Text>
+                <Text style={styles.configListBody}>{`Expires: ${session.expires_at ? formatModerationTimestamp(String(session.expires_at)) : "Manual end"}`}</Text>
+              </View>
+            )) : (
+              <Text style={styles.configListBody}>No recent Break Glass sessions loaded.</Text>
+            )}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "legal-intake" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>LEGAL INTAKE</Text>
+              <Text style={styles.configTitle}>Legal and police request intake</Text>
+              <Text style={styles.configBody}>
+                Intake connects requests to Legal Evidence review without deletion. Approved Admins need legal_request_intake or legal_review.
+              </Text>
+            </View>
+            <View style={[styles.badge, canAccessLegalIntake ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canAccessLegalIntake ? "Authorized" : "Locked"}</Text>
+            </View>
+          </View>
+
+          {ownerControlNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.configList}>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Create intake record</Text>
+                <Text style={styles.configListBody}>No evidence is deleted here. Export/hold remains in Legal Evidence with separate authorization.</Text>
+              </View>
+              <TextInput value={legalRequestAgency} onChangeText={setLegalRequestAgency} placeholder="Requesting agency" placeholderTextColor="#788196" style={styles.input} />
+              <TextInput value={legalRequestContact} onChangeText={setLegalRequestContact} placeholder="Officer/contact name optional" placeholderTextColor="#788196" style={styles.input} />
+              <TextInput value={legalRequestCaseNumber} onChangeText={setLegalRequestCaseNumber} placeholder="Case number optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+              <TextInput value={legalRequestReason} onChangeText={setLegalRequestReason} placeholder="Request reason" placeholderTextColor="#788196" style={styles.input} multiline />
+              <View style={styles.toggleRowWrap}>
+                {[
+                  ["targetUserId", "User"],
+                  ["targetContentId", "Content"],
+                  ["targetThreadId", "Thread"],
+                  ["targetRoomId", "Room"],
+                  ["targetReportId", "Report"],
+                ].map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.toggleChip, legalRequestTargetType === key && styles.toggleChipActive]}
+                    onPress={() => setLegalRequestTargetType(key as typeof legalRequestTargetType)}
+                  >
+                    <Text style={[styles.toggleChipText, legalRequestTargetType === key && styles.toggleChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput value={legalRequestTargetId} onChangeText={setLegalRequestTargetId} placeholder="Target id optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+              <TouchableOpacity
+                style={[styles.orderBtn, legalRequestBusy && styles.configSaveBtnDisabled]}
+                onPress={() => void runLegalIntakeCreate()}
+                disabled={legalRequestBusy || !canAccessLegalIntake}
+              >
+                <Text style={styles.orderBtnText}>{legalRequestBusy ? "Creating..." : "Create Intake"}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {legalRequests.length ? legalRequests.map((request) => (
+              <View key={String(request.id)} style={styles.configListRowSubtle}>
+                <Text style={styles.configListTitle}>{`${formatModerationToken(String(request.status ?? "open"))} · ${formatAuditDisplayText(request.requesting_agency)}`}</Text>
+                <Text style={styles.configListBody}>{`Case ${formatAuditDisplayText(request.case_number) || "not supplied"} · ${request.created_at ? formatModerationTimestamp(String(request.created_at)) : "time unknown"}`}</Text>
+                <View style={styles.configListActions}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => void markLegalRequestReviewing(String(request.id ?? ""))}>
+                    <Text style={styles.actionText}>Mark reviewing</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )) : (
+              <Text style={styles.configListBody}>{ownerControlLoading ? "Loading legal requests..." : "No legal request intake records loaded."}</Text>
+            )}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "owner-security" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>OWNER SECURITY</Text>
+              <Text style={styles.configTitle}>Owner-only security panel</Text>
+              <Text style={styles.configBody}>
+                Checklist and real status where backend proof exists. Secrets are never shown here.
+              </Text>
+            </View>
+            <View style={[styles.badge, canAccessOwnerSecurity ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canAccessOwnerSecurity ? "Owner" : "Locked"}</Text>
+            </View>
+          </View>
+
+          {ownerControlNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.dashboardGrid}>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Active Break Glass</Text>
+              <Text style={styles.dashboardMetricValue}>{String(ownerSecurityStatus?.activeBreakGlassCount ?? "Unknown")}</Text>
+              <Text style={styles.dashboardMetricBody}>Real active session count when available.</Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Proof Roles</Text>
+              <Text style={styles.dashboardMetricValue}>{String(ownerSecurityStatus?.proofRoleCount ?? "Unknown")}</Text>
+              <Text style={styles.dashboardMetricBody}>Warning if temporary proof roles remain active.</Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Proof Grants</Text>
+              <Text style={styles.dashboardMetricValue}>{String(ownerSecurityStatus?.proofGrantCount ?? "Unknown")}</Text>
+              <Text style={styles.dashboardMetricBody}>Warning if temporary proof permissions remain active.</Text>
+            </View>
+          </View>
+
+          <View style={styles.configList}>
+            {(ownerSecurityStatus?.ownerCliChecklist ?? []).map((item) => (
+              <View key={item} style={styles.configListRowSubtle}>
+                <Text style={styles.configListBody}>{item}</Text>
+              </View>
+            ))}
+            <View style={styles.configListRowSubtle}>
+              <Text style={styles.configListTitle}>Session/device support</Text>
+              <Text style={styles.configListBody}>{formatAuditDisplayText(ownerSecurityStatus?.ownerSessions?.message) || "Unknown/manual required."}</Text>
+            </View>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => void loadOwnerSecurity()}>
+              <Text style={styles.actionText}>Refresh Security</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "canary" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>CANARY CHECKS</Text>
+              <Text style={styles.configTitle}>Public launch safety checks</Text>
+              <Text style={styles.configBody}>
+                Real checks pass or fail; unavailable checks show unknown/manual required. Unknown is never treated as green.
+              </Text>
+            </View>
+            <View style={[styles.badge, canAccessCanaryChecks ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canAccessCanaryChecks ? "Authorized" : "Locked"}</Text>
+            </View>
+          </View>
+
+          {ownerControlNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.configListActions}>
+            <TouchableOpacity
+              style={[styles.actionBtn, canaryBusy && styles.configSaveBtnDisabled]}
+              onPress={() => void runCanaryChecks()}
+              disabled={canaryBusy || !canAccessCanaryChecks}
+            >
+              <Text style={styles.actionText}>{canaryBusy ? "Running..." : "Run Canary Checks"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => void loadCanaries()}>
+              <Text style={styles.actionText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.configList}>
+            {canaryRuns.length ? canaryRuns.map((run) => {
+              const results = Array.isArray(run.results) ? run.results : [];
+              return (
+                <View key={String(run.id)} style={styles.configListRow}>
+                  <Text style={styles.configListTitle}>{`${formatModerationToken(String(run.status ?? "unknown"))} · ${run.created_at ? formatModerationTimestamp(String(run.created_at)) : "time unknown"}`}</Text>
+                  {results.map((result) => (
+                    <View key={`${run.id}-${result.key}`} style={styles.configListRowSubtle}>
+                      <View style={styles.configHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.configListTitle}>{result.label}</Text>
+                          <Text style={styles.configListBody}>{result.message}</Text>
+                        </View>
+                        <View style={[styles.badge, result.status === "pass" ? styles.badgePublished : result.status === "fail" ? styles.badgeOff : styles.badgeDraft]}>
+                          <Text style={styles.badgeText}>{formatModerationToken(result.status)}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              );
+            }) : (
+              <Text style={styles.configListBody}>{ownerControlLoading ? "Loading canary runs..." : "No canary run has been recorded yet."}</Text>
+            )}
+          </View>
+        </View>
+        ) : null}
+
+        {operatorTab === "safety-dashboard" ? (
+        <View style={styles.configCard}>
+          <View style={styles.configHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.configKicker}>OWNER SAFETY</Text>
+              <Text style={styles.configTitle}>Low-risk safety read model</Text>
+              <Text style={styles.configBody}>
+                Real counts only. Missing aggregations show unknown/manual required instead of fake zeroes.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.dashboardGrid}>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Open Reports</Text>
+              <Text style={styles.dashboardMetricValue}>{String(ownerSafetyDashboard?.openReports ?? "Unknown")}</Text>
+              <Text style={styles.dashboardMetricBody}>Real safety_reports count when available.</Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Legal Holds</Text>
+              <Text style={styles.dashboardMetricValue}>{String(ownerSafetyDashboard?.activeLegalHolds ?? "Unknown")}</Text>
+              <Text style={styles.dashboardMetricBody}>Active legal hold count.</Text>
+            </View>
+            <View style={styles.dashboardMetricCard}>
+              <Text style={styles.dashboardMetricLabel}>Legal Requests</Text>
+              <Text style={styles.dashboardMetricValue}>{String(ownerSafetyDashboard?.unresolvedLegalRequests ?? "Unknown")}</Text>
+              <Text style={styles.dashboardMetricBody}>Open or reviewing intake records.</Text>
+            </View>
+            <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
+              <Text style={styles.dashboardMetricLabel}>Repeated Reports</Text>
+              <Text style={styles.dashboardMetricValue}>Unknown</Text>
+              <Text style={styles.dashboardMetricBody}>{formatAuditDisplayText(ownerSafetyDashboard?.repeatedReportTargets?.message) || "Aggregation not configured."}</Text>
             </View>
           </View>
         </View>
