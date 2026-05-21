@@ -1109,6 +1109,24 @@ const fetchJsonWithTimeout = async (url: string, init: RequestInit = {}, timeout
   }
 };
 
+const fetchRawJsonWithTimeout = async (url: string, init: RequestInit = {}, timeoutMs = 8000) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const text = await response.text();
+    let body: unknown = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = {};
+    }
+    return { body: isRecord(body) ? body : {}, ok: response.ok, status: response.status };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const fetchStatusWithTimeout = async (url: string, timeoutMs = 8000) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -1418,7 +1436,7 @@ const canaryRun = async (
     }));
   } else {
     try {
-      const authConfig = await fetchJsonWithTimeout(`https://api.supabase.com/v1/projects/${projectRef}/config/auth`, {
+      const authConfig = await fetchRawJsonWithTimeout(`https://api.supabase.com/v1/projects/${projectRef}/config/auth`, {
         headers: { Authorization: `Bearer ${managementToken}` },
       });
       const body = authConfig.body;
