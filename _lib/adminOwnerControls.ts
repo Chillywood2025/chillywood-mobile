@@ -40,11 +40,19 @@ export type OwnerControlLegalRequest = Record<string, unknown> & {
 };
 
 export type OwnerControlCanaryResult = {
+  actor?: string | null;
+  actual?: string | null;
+  cleanupStatus?: string | null;
+  details?: Record<string, unknown>;
+  expected?: string | null;
   key: string;
   label: string;
-  status: "pass" | "fail" | "unknown";
-  message: string;
   metadata?: Record<string, unknown>;
+  message: string;
+  section?: string | null;
+  status: "pass" | "fail" | "manual_required" | "unknown";
+  testedAt?: string | null;
+  testedSurface?: string | null;
 };
 
 export type OwnerControlCanaryRun = Record<string, unknown> & {

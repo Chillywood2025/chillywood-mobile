@@ -814,12 +814,47 @@ const securityStatus = async (adminClient: SupabaseClientLike, user: Authenticat
   });
 };
 
-const canaryResult = (key: string, label: string, status: "pass" | "fail" | "unknown", message: string, metadata: JsonObject = {}) => ({
-  key,
-  label,
-  metadata: sanitizeObject(metadata),
-  message: redactText(message, 500),
-  status,
+type CanaryStatus = "pass" | "fail" | "manual_required";
+type CanaryResultInput = {
+  actor: string;
+  actual: string;
+  cleanupStatus?: string | null;
+  details?: JsonObject;
+  expected: string;
+  key: string;
+  label: string;
+  section: string;
+  status: CanaryStatus;
+  testedAt?: string;
+  testedSurface: string;
+};
+
+const DEFAULT_SUPPORT_EMAIL = "support@chillywoodstream.com";
+const DEFAULT_PRIVACY_URL = "https://live.chillywoodstream.com/privacy";
+const DEFAULT_TERMS_URL = "https://live.chillywoodstream.com/terms";
+const PROOF_EMAILS = {
+  admin: "liveops.proof+admin@chillywoodstream.com",
+  grantedAdmin: "liveops.proof+granted-admin@chillywoodstream.com",
+  moderator: "liveops.proof+moderator@chillywoodstream.com",
+  targetModerator: "liveops.proof+target-moderator@chillywoodstream.com",
+  viewer: "liveops.proof+viewer@chillywoodstream.com",
+} as const;
+const PREMIUM_ENTITLEMENT_KEYS = ["premium", "premium_watch_party", "premium_live", "paid_content"] as const;
+
+const canaryResult = (input: CanaryResultInput) => ({
+  actor: input.actor,
+  actual: redactText(input.actual, 500),
+  cleanupStatus: input.cleanupStatus ? redactText(input.cleanupStatus, 260) : null,
+  details: sanitizeObject(input.details ?? {}),
+  expected: redactText(input.expected, 500),
+  key: input.key,
+  label: input.label,
+  message: redactText(input.actual, 500),
+  metadata: sanitizeObject(input.details ?? {}),
+  section: input.section,
+  status: input.status,
+  testedAt: input.testedAt ?? new Date().toISOString(),
+  testedSurface: redactText(input.testedSurface, 260),
 });
 
 const safeSupabaseCall = async (operation: () => PromiseLike<{ data?: unknown; error?: unknown; count?: number | null }>) => {
@@ -830,13 +865,273 @@ const safeSupabaseCall = async (operation: () => PromiseLike<{ data?: unknown; e
   }
 };
 
+const randomProofPassword = () => {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return `Canary!${Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("")}aA1`;
+};
+
+const listAuthUserByEmail = async (adminClient: SupabaseClientLike, email: string) => {
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(`Proof auth list failed: ${error.message}`);
+    const users = Array.isArray(data?.users) ? data.users : [];
+    const user = users.find((entry: JsonObject) => normalizeEmail(entry.email) === email);
+    if (user) return user as JsonObject;
+    if (users.length < 1000) break;
+  }
+  return null;
+};
+
+const ensureProofUser = async (
+  adminClient: SupabaseClientLike,
+  anonClient: SupabaseClientLike,
+  email: string,
+  label: string,
+) => {
+  const password = randomProofPassword();
+  let user: JsonObject | null = null;
+  const created = await adminClient.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    password,
+    user_metadata: { canary_proof: true, proof_label: label },
+  });
+
+  if (created.error) {
+    const message = toText(created.error.message).toLowerCase();
+    if (!message.includes("already") && !message.includes("registered") && !message.includes("exists")) {
+      throw new Error(`Proof auth create failed for ${label}: ${created.error.message}`);
+    }
+    user = await listAuthUserByEmail(adminClient, email);
+    if (!user) throw new Error(`Proof auth reuse failed for ${label}: user not found`);
+    const update = await adminClient.auth.admin.updateUserById(toText(user.id), {
+      email_confirm: true,
+      password,
+      user_metadata: { ...(isRecord(user.user_metadata) ? user.user_metadata : {}), canary_proof: true, proof_label: label },
+    });
+    if (update.error) throw new Error(`Proof auth update failed for ${label}: ${update.error.message}`);
+    user = update.data?.user as JsonObject;
+  } else {
+    user = created.data?.user as JsonObject;
+  }
+
+  const userId = toText(user?.id);
+  if (!userId) throw new Error(`Proof auth user id missing for ${label}`);
+  const signedIn = await anonClient.auth.signInWithPassword({ email, password });
+  const accessToken = toText(signedIn.data?.session?.access_token);
+  if (signedIn.error || !accessToken) throw new Error(`Proof auth sign-in failed for ${label}: ${signedIn.error?.message ?? "missing session"}`);
+  return { accessToken, email, label, userId };
+};
+
+const proofClientForToken = (supabaseUrl: string, anonKey: string, accessToken: string) => createClient(supabaseUrl, anonKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+  global: { headers: { Authorization: `Bearer ${accessToken}` } },
+});
+
+const cleanupProofAccess = async (adminClient: SupabaseClientLike, reason: string) => {
+  const now = new Date().toISOString();
+  const roles = await adminClient
+    .from("platform_role_memberships")
+    .update({ notes: reason, revoked_at: now, revoked_by: "admin-owner-controls-canary", status: "revoked", updated_at: now })
+    .eq("status", "active")
+    .ilike("email", "liveops.proof+%")
+    .select("id,role,email");
+  const grants = await adminClient
+    .from("platform_staff_permission_grants")
+    .update({ reason, revoked_at: now, revoked_by: "admin-owner-controls-canary", status: "revoked", updated_at: now })
+    .eq("status", "active")
+    .ilike("target_email", "liveops.proof+%")
+    .select("id,permission_key,target_email");
+  const activeRoles = await adminClient
+    .from("platform_role_memberships")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "active")
+    .ilike("email", "liveops.proof+%");
+  const activeGrants = await adminClient
+    .from("platform_staff_permission_grants")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "active")
+    .ilike("target_email", "liveops.proof+%");
+
+  const errors = [roles.error, grants.error, activeRoles.error, activeGrants.error]
+    .filter(Boolean)
+    .map((error: { message?: string }) => redactText(error.message, 220));
+  const activeCount = (activeRoles.count ?? 0) + (activeGrants.count ?? 0);
+  return {
+    activeCount,
+    errors,
+    ok: errors.length === 0 && activeCount === 0,
+    summary: errors.length
+      ? `cleanup failed: ${errors.join("; ")}`
+      : activeCount === 0
+        ? `cleanup passed; revoked ${(roles.data ?? []).length} proof roles and ${(grants.data ?? []).length} proof grants`
+        : `cleanup incomplete; ${activeCount} active proof role/grant rows remain`,
+  };
+};
+
+const ensureProofRole = async (
+  adminClient: SupabaseClientLike,
+  proofUser: { email: string; userId: string },
+  role: "operator" | "moderator",
+) => {
+  const now = new Date().toISOString();
+  let existing = await adminClient
+    .from("platform_role_memberships")
+    .select("id")
+    .eq("role", role)
+    .ilike("email", proofUser.email)
+    .limit(1)
+    .maybeSingle();
+  if (existing.error) throw new Error(`Proof role lookup failed: ${existing.error.message}`);
+  if (!existing.data?.id) {
+    existing = await adminClient
+      .from("platform_role_memberships")
+      .select("id")
+      .eq("role", role)
+      .eq("user_id", proofUser.userId)
+      .limit(1)
+      .maybeSingle();
+    if (existing.error) throw new Error(`Proof role lookup failed: ${existing.error.message}`);
+  }
+  if (existing.data?.id) {
+    const update = await adminClient
+      .from("platform_role_memberships")
+      .update({
+        email: proofUser.email,
+        granted_at: now,
+        granted_by: "admin-owner-controls-canary",
+        notes: "CANARY PROOF temporary role; revoke during canary cleanup.",
+        revoked_at: null,
+        revoked_by: null,
+        status: "active",
+        updated_at: now,
+        user_id: proofUser.userId,
+      })
+      .eq("id", existing.data.id);
+    if (update.error) throw new Error(`Proof role update failed: ${update.error.message}`);
+    return;
+  }
+  const insert = await adminClient.from("platform_role_memberships").insert({
+    email: proofUser.email,
+    granted_by: "admin-owner-controls-canary",
+    notes: "CANARY PROOF temporary role; revoke during canary cleanup.",
+    role,
+    status: "active",
+    user_id: proofUser.userId,
+  });
+  if (insert.error) throw new Error(`Proof role insert failed: ${insert.error.message}`);
+};
+
+const ensureProofPermission = async (
+  adminClient: SupabaseClientLike,
+  proofUser: { email: string; userId: string },
+  permissionKey: string,
+) => {
+  const insert = await adminClient.from("platform_staff_permission_grants").insert({
+    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    granted_by: "admin-owner-controls-canary",
+    metadata: { canary_proof: true, cleanup_required: true, granted_actor_role: "system" },
+    permission_key: permissionKey,
+    reason: "CANARY PROOF temporary scoped permission; revoke during canary cleanup.",
+    status: "active",
+    target_email: proofUser.email,
+    target_user_id: proofUser.userId,
+  });
+  if (insert.error) throw new Error(`Proof permission insert failed: ${insert.error.message}`);
+};
+
+const countOwnerNormalAuditRows = async (adminClient: SupabaseClientLike) => {
+  const [platform, legal] = await Promise.all([
+    adminClient.from("platform_admin_audit_logs").select("id", { count: "exact", head: true }).eq("actor_role", "owner"),
+    adminClient.from("legal_evidence_audit_log").select("id", { count: "exact", head: true }).eq("actor_role", "owner"),
+  ]);
+  return {
+    legal: legal.error ? null : legal.count ?? 0,
+    platform: platform.error ? null : platform.count ?? 0,
+  };
+};
+
+const didCountStaySame = (before: { legal: number | null; platform: number | null }, after: { legal: number | null; platform: number | null }) =>
+  before.legal !== null && before.platform !== null && before.legal === after.legal && before.platform === after.platform;
+
+const createTimedClient = (supabaseUrl: string, anonKey: string, token: string) => proofClientForToken(supabaseUrl, anonKey, token);
+
+const callLegalEvidence = async (
+  supabaseUrl: string,
+  anonKey: string,
+  accessToken: string,
+  action: string,
+) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`${supabaseUrl.replace(/\/$/, "")}/functions/v1/admin-legal-evidence`, {
+      body: JSON.stringify({
+        action,
+        dateFrom: "2026-01-01T00:00:00.000Z",
+        dateTo: "2026-01-01T00:01:00.000Z",
+        reason: "CANARY PROOF legal evidence permission check.",
+        targetType: "date_range",
+      }),
+      headers: {
+        apikey: anonKey,
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      method: "POST",
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    return { ok: response.ok, payload: sanitizeObject(payload), status: response.status };
+  } catch (error) {
+    return { ok: false, payload: { error: redactText(error instanceof Error ? error.message : error) }, status: 0 };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const fetchJsonWithTimeout = async (url: string, init: RequestInit = {}, timeoutMs = 8000) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const text = await response.text();
+    let body: unknown = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = { text: redactText(text, 500) };
+    }
+    return { body: sanitizeObject(body), ok: response.ok, status: response.status };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const fetchStatusWithTimeout = async (url: string, timeoutMs = 8000) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { redirect: "follow", signal: controller.signal });
+    return { ok: response.ok, status: response.status };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const canaryRun = async (
   adminClient: SupabaseClientLike,
   anonClient: SupabaseClientLike,
   user: AuthenticatedUser,
+  supabaseUrl: string,
+  anonKey: string,
 ) => {
   if (!hasAnyPermission(user, ["audit_review", "security_review"])) return json(403, { error: "audit_review_required" });
   const results: JsonObject[] = [];
+  const ownerAuditBefore = await countOwnerNormalAuditRows(adminClient);
+  let cleanupStatus = "not needed";
+  await cleanupProofAccess(adminClient, "CANARY PROOF pre-run cleanup.");
 
   const ownerLookup = await adminClient
     .from("platform_role_memberships")
@@ -849,42 +1144,305 @@ const canaryRun = async (
   let ownerUserId = toText((ownerLookup.data as JsonObject | null)?.user_id);
   if (!ownerUserId && user.role === "owner") ownerUserId = user.id;
   if (!ownerUserId) {
-    results.push(canaryResult("owner_profile_hidden", "Owner profile hidden from public", "unknown", "No owner user id is available for public RPC proof."));
+    results.push(canaryResult({
+      actor: "system",
+      actual: "No owner user id is available for public RPC proof.",
+      expected: "Active owner user id is resolvable.",
+      key: "owner_profile_hidden",
+      label: "Owner profile hidden from public",
+      section: "Owner Protection",
+      status: "manual_required",
+      testedSurface: "platform_role_memberships owner lookup",
+    }));
   } else {
     const publicProfile = await safeSupabaseCall(() => anonClient.rpc("read_public_channel_profile", { profile_user_id: ownerUserId }));
     const publicRows = Array.isArray(publicProfile.data) ? publicProfile.data : publicProfile.data ? [publicProfile.data] : [];
-    results.push(canaryResult(
-      "owner_profile_hidden",
-      "Owner profile hidden from public",
-      publicProfile.error ? "unknown" : publicRows.length === 0 ? "pass" : "fail",
-      publicProfile.error ? "Public profile RPC could not be checked." : publicRows.length === 0 ? "Owner public profile RPC returned no rows." : "Owner profile was visible through the public RPC.",
-    ));
+    results.push(canaryResult({
+      actor: "signed-out public",
+      actual: publicProfile.error ? "Public profile RPC could not be checked." : publicRows.length === 0 ? "Owner public profile RPC returned no rows." : "Owner profile was visible through the public RPC.",
+      details: { row_count: publicRows.length },
+      expected: "Owner public profile RPC returns no rows.",
+      key: "owner_profile_hidden",
+      label: "Owner profile hidden from public",
+      section: "Owner Protection",
+      status: publicProfile.error ? "manual_required" : publicRows.length === 0 ? "pass" : "fail",
+      testedSurface: "rpc: read_public_channel_profile(profile_user_id=owner)",
+    }));
 
     const discovery = await safeSupabaseCall(() => anonClient.from("user_profiles").select("user_id").eq("user_id", ownerUserId).limit(1));
     const discoveryRows = Array.isArray(discovery.data) ? discovery.data : [];
-    results.push(canaryResult(
-      "owner_hidden_discovery",
-      "Owner hidden from public discovery/search",
-      discovery.error ? "unknown" : discoveryRows.length === 0 ? "pass" : "fail",
-      discovery.error ? "Public user_profiles select could not be checked." : discoveryRows.length === 0 ? "Owner was not visible in public profile listing." : "Owner appeared in a public profile listing.",
-    ));
+    results.push(canaryResult({
+      actor: "signed-out public",
+      actual: discovery.error ? "Public user_profiles select could not be checked." : discoveryRows.length === 0 ? "Owner was not visible in public profile listing." : "Owner appeared in a public profile listing.",
+      details: { row_count: discoveryRows.length },
+      expected: "Owner is absent from public user_profiles listing/search.",
+      key: "owner_hidden_discovery",
+      label: "Owner hidden from public discovery/search",
+      section: "Owner Protection",
+      status: discovery.error ? "manual_required" : discoveryRows.length === 0 ? "pass" : "fail",
+      testedSurface: "table: user_profiles public select",
+    }));
   }
 
-  results.push(canaryResult("normal_premium_gates", "Normal premium gates active", "unknown", "Requires a real regular account without entitlement for runtime proof; no fake RevenueCat proof is produced."));
-  results.push(canaryResult("admin_self_grant_denied", "Admin cannot self-grant", "unknown", "Requires a real non-owner admin proof account; direct fake proof is intentionally not produced."));
-  results.push(canaryResult("moderator_grant_denied", "Moderator cannot grant moderators", "unknown", "Requires a real moderator proof account; direct fake proof is intentionally not produced."));
-  results.push(canaryResult("legal_evidence_restricted", "Legal Evidence restricted", "unknown", "Requires a real ungranted admin/viewer token to prove function denial."));
+  try {
+    const [viewer, adminProof, grantedAdmin, moderatorProof] = await Promise.all([
+      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.viewer, "viewer"),
+      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.admin, "admin_without_grants"),
+      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.grantedAdmin, "admin_with_legal_review"),
+      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.moderator, "moderator"),
+    ]);
+    await Promise.all([
+      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.targetModerator, "moderator_target"),
+      ensureProofRole(adminClient, adminProof, "operator"),
+      ensureProofRole(adminClient, grantedAdmin, "operator"),
+      ensureProofRole(adminClient, moderatorProof, "moderator"),
+    ]);
+    await ensureProofPermission(adminClient, grantedAdmin, "legal_review");
+    await adminClient.from("user_entitlements").delete().eq("user_id", viewer.userId).in("entitlement_key", [...PREMIUM_ENTITLEMENT_KEYS]);
+
+    const viewerClient = createTimedClient(supabaseUrl, anonKey, viewer.accessToken);
+    const viewerEntitlements = await safeSupabaseCall(() => viewerClient
+      .from("user_entitlements")
+      .select("entitlement_key,status,expires_at,revoked_at")
+      .in("entitlement_key", [...PREMIUM_ENTITLEMENT_KEYS]));
+    const entitlementRows = Array.isArray(viewerEntitlements.data) ? viewerEntitlements.data as JsonObject[] : [];
+    const activeEntitlements = entitlementRows.filter((row) => {
+      const status = toText(row.status);
+      const revokedAt = toText(row.revoked_at);
+      const expiresAt = toText(row.expires_at);
+      return ["active", "trialing", "grace_period"].includes(status) && !revokedAt && (!expiresAt || Date.parse(expiresAt) > Date.now());
+    });
+    results.push(canaryResult({
+      actor: "proof viewer",
+      actual: viewerEntitlements.error ? "Proof viewer entitlement read failed." : activeEntitlements.length === 0 ? "Proof viewer has no active premium entitlement rows." : `${activeEntitlements.length} active premium entitlement rows found for proof viewer.`,
+      cleanupStatus: "pending proof cleanup",
+      details: { entitlement_keys_tested: [...PREMIUM_ENTITLEMENT_KEYS], returned_rows: entitlementRows.length },
+      expected: "Regular proof viewer without RevenueCat/user_entitlements is denied premium-backed access.",
+      key: "normal_premium_gates",
+      label: "Normal premium gates active",
+      section: "Premium / Entitlements",
+      status: viewerEntitlements.error ? "fail" : activeEntitlements.length === 0 ? "pass" : "fail",
+      testedSurface: "table: user_entitlements RLS/readCurrentUserEntitlements keys",
+    }));
+
+    const adminClientAsProof = createTimedClient(supabaseUrl, anonKey, adminProof.accessToken);
+    const selfGrant = await safeSupabaseCall(() => adminClientAsProof.rpc("admin_grant_platform_staff_permission_by_email", {
+      p_expires_at: null,
+      p_permission_key: "admin_grants",
+      p_reason: "CANARY PROOF self-grant denial.",
+      p_target_email: adminProof.email,
+    }));
+    results.push(canaryResult({
+      actor: "proof admin without grants",
+      actual: selfGrant.error ? "Self-grant was denied server-side." : "Self-grant unexpectedly succeeded.",
+      cleanupStatus: "pending proof cleanup",
+      details: { error: selfGrant.error ? redactText((selfGrant.error as { message?: string }).message, 260) : null },
+      expected: "Admin cannot grant admin_grants to itself.",
+      key: "admin_self_grant_denied",
+      label: "Admin cannot self-grant",
+      section: "Staff Permissions",
+      status: selfGrant.error ? "pass" : "fail",
+      testedSurface: "rpc: admin_grant_platform_staff_permission_by_email",
+    }));
+
+    const moderatorClient = createTimedClient(supabaseUrl, anonKey, moderatorProof.accessToken);
+    const moderatorGrant = await safeSupabaseCall(() => moderatorClient.rpc("admin_grant_platform_role_by_email", {
+      p_reason: "CANARY PROOF moderator grant denial.",
+      p_role: "moderator",
+      p_target_email: PROOF_EMAILS.targetModerator,
+    }));
+    results.push(canaryResult({
+      actor: "proof moderator",
+      actual: moderatorGrant.error ? "Moderator role grant was denied server-side." : "Moderator role grant unexpectedly succeeded.",
+      cleanupStatus: "pending proof cleanup",
+      details: { error: moderatorGrant.error ? redactText((moderatorGrant.error as { message?: string }).message, 260) : null },
+      expected: "Moderator cannot add another moderator by default.",
+      key: "moderator_grant_denied",
+      label: "Moderator cannot grant moderators",
+      section: "Staff Permissions",
+      status: moderatorGrant.error ? "pass" : "fail",
+      testedSurface: "rpc: admin_grant_platform_role_by_email",
+    }));
+
+    const deniedCalls = await Promise.all([
+      callLegalEvidence(supabaseUrl, anonKey, viewer.accessToken, "preview"),
+      callLegalEvidence(supabaseUrl, anonKey, viewer.accessToken, "export"),
+      callLegalEvidence(supabaseUrl, anonKey, viewer.accessToken, "hold"),
+      callLegalEvidence(supabaseUrl, anonKey, adminProof.accessToken, "preview"),
+      callLegalEvidence(supabaseUrl, anonKey, adminProof.accessToken, "export"),
+      callLegalEvidence(supabaseUrl, anonKey, adminProof.accessToken, "hold"),
+    ]);
+    const grantedPreview = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "preview");
+    const deniedOk = deniedCalls.every((call) => call.status === 401 || call.status === 403);
+    results.push(canaryResult({
+      actor: "proof viewer, proof admin without grants, proof admin with legal_review",
+      actual: deniedOk && grantedPreview.ok
+        ? "Viewer/ungranted admin were denied; exact legal_review admin preview succeeded with auditable reason."
+        : `Legal Evidence proof mismatch: denied statuses ${deniedCalls.map((call) => call.status).join(", ")}, granted preview status ${grantedPreview.status}.`,
+      cleanupStatus: "pending proof cleanup; legal audit proof retained append-only",
+      details: { denied_statuses: deniedCalls.map((call) => call.status), granted_preview_status: grantedPreview.status },
+      expected: "Legal Evidence denies viewer/ungranted admin and allows granted admin only with exact permission.",
+      key: "legal_evidence_restricted",
+      label: "Legal Evidence restricted",
+      section: "Legal / Evidence",
+      status: deniedOk && grantedPreview.ok ? "pass" : "fail",
+      testedSurface: "function: admin-legal-evidence preview/export/hold",
+    }));
+  } catch (error) {
+    results.push(canaryResult({
+      actor: "system",
+      actual: `Proof harness setup failed: ${redactText(error instanceof Error ? error.message : error, 420)}`,
+      cleanupStatus: "cleanup attempted after setup failure",
+      expected: "Proof accounts can be created/reused and temporary roles granted safely.",
+      key: "proof_harness_setup",
+      label: "Proof harness setup",
+      section: "Cleanup / Proof Hygiene",
+      status: "fail",
+      testedSurface: "supabase.auth.admin proof account setup",
+    }));
+  }
 
   const opsBaseUrl = readOptionalEnv("OPS_AUTOMATION_BASE_URL");
   if (!opsBaseUrl) {
-    results.push(canaryResult("live_ops_flags", "Live Ops dry-run and real-action flags", "unknown", "OPS_AUTOMATION_BASE_URL is not configured for this function."));
+    results.push(canaryResult({
+      actor: "system",
+      actual: "OPS_AUTOMATION_BASE_URL is not configured for this function.",
+      expected: "Ops service base URL is configured so health can prove dry-run flags.",
+      key: "live_ops_flags",
+      label: "Live Ops dry-run and real-action flags",
+      section: "Live Ops",
+      status: "manual_required",
+      testedSurface: "env: OPS_AUTOMATION_BASE_URL",
+    }));
   } else {
-    results.push(canaryResult("live_ops_flags", "Live Ops dry-run and real-action flags", "unknown", "Ops service config proof requires a read-token health contract; not marked green."));
+    try {
+      const opsHealth = await fetchJsonWithTimeout(`${opsBaseUrl.replace(/\/$/, "")}/healthz`, {
+        headers: readOptionalEnv("OPS_ADMIN_READ_TOKEN") ? { "X-Ops-Admin-Token": readOptionalEnv("OPS_ADMIN_READ_TOKEN") as string } : {},
+      });
+      const body = opsHealth.body;
+      const safeFlags = body.dryRun === true
+        && body.allowLiveActions === false
+        && body.allowNetShaping === false
+        && body.allowGithubActions === false
+        && body.allowInfraActions === false
+        && body.allowLiveOpsRegistryActions === false;
+      results.push(canaryResult({
+        actor: "system",
+        actual: opsHealth.ok && safeFlags ? "Ops service health proved dry-run with all real-action flags off." : `Ops health status ${opsHealth.status}; real-action flag proof did not pass.`,
+        details: {
+          allowGithubActions: body.allowGithubActions,
+          allowInfraActions: body.allowInfraActions,
+          allowLiveActions: body.allowLiveActions,
+          allowLiveOpsRegistryActions: body.allowLiveOpsRegistryActions,
+          allowNetShaping: body.allowNetShaping,
+          dryRun: body.dryRun,
+          http_status: opsHealth.status,
+        },
+        expected: "dryRun true and all real-action flags false.",
+        key: "live_ops_flags",
+        label: "Live Ops dry-run and real-action flags",
+        section: "Live Ops",
+        status: opsHealth.ok && safeFlags ? "pass" : "fail",
+        testedSurface: "GET ops-alert-automation /healthz",
+      }));
+    } catch (error) {
+      results.push(canaryResult({
+        actor: "system",
+        actual: `Ops service health fetch failed: ${redactText(error instanceof Error ? error.message : error, 420)}`,
+        expected: "Reachable ops service health endpoint.",
+        key: "live_ops_flags",
+        label: "Live Ops dry-run and real-action flags",
+        section: "Live Ops",
+        status: "fail",
+        testedSurface: "GET ops-alert-automation /healthz",
+      }));
+    }
   }
 
-  const supportUrl = readOptionalEnv("PUBLIC_SUPPORT_URL");
-  results.push(canaryResult("support_links", "Support/legal links working", supportUrl ? "unknown" : "unknown", supportUrl ? "External link health requires fetch proof in a later lane." : "No support URL env configured for server-side proof."));
-  results.push(canaryResult("supabase_redirect_urls", "Supabase redirect URLs configured", readOptionalEnv("SUPABASE_MANAGEMENT_TOKEN") ? "unknown" : "unknown", "Supabase Auth URL proof requires a reviewed Management API lane; not marked green."));
+  const supportEmail = readOptionalEnv("PUBLIC_SUPPORT_EMAIL") ?? DEFAULT_SUPPORT_EMAIL;
+  const privacyUrl = readOptionalEnv("PUBLIC_PRIVACY_URL") ?? DEFAULT_PRIVACY_URL;
+  const termsUrl = readOptionalEnv("PUBLIC_TERMS_URL") ?? DEFAULT_TERMS_URL;
+  try {
+    const [privacy, terms] = await Promise.all([fetchStatusWithTimeout(privacyUrl), fetchStatusWithTimeout(termsUrl)]);
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportEmail);
+    const linksOk = emailOk && privacy.ok && terms.ok;
+    results.push(canaryResult({
+      actor: "system",
+      actual: linksOk ? "Support email format and public privacy/terms links passed." : `Support/legal proof failed: privacy ${privacy.status}, terms ${terms.status}, support email ${emailOk ? "valid" : "invalid"}.`,
+      details: { privacy_status: privacy.status, support_email_configured: emailOk, terms_status: terms.status },
+      expected: "Support email configured and privacy/terms URLs return HTTP 2xx.",
+      key: "support_links",
+      label: "Support/legal links working",
+      section: "Public Web / Support",
+      status: linksOk ? "pass" : "fail",
+      testedSurface: "GET public privacy/terms URLs + support email config",
+    }));
+  } catch (error) {
+    results.push(canaryResult({
+      actor: "system",
+      actual: `Support/legal URL fetch failed: ${redactText(error instanceof Error ? error.message : error, 420)}`,
+      expected: "Privacy/terms URLs are publicly reachable.",
+      key: "support_links",
+      label: "Support/legal links working",
+      section: "Public Web / Support",
+      status: "fail",
+      testedSurface: "GET public privacy/terms URLs + support email config",
+    }));
+  }
+
+  const managementToken = readOptionalEnv("SUPABASE_ACCESS_TOKEN") ?? readOptionalEnv("SUPABASE_MANAGEMENT_TOKEN");
+  const projectRef = readOptionalEnv("SUPABASE_PROJECT_REF") ?? "bmkkhihfbmsnnmcqkoly";
+  if (!managementToken) {
+    results.push(canaryResult({
+      actor: "system",
+      actual: "SUPABASE_ACCESS_TOKEN/SUPABASE_MANAGEMENT_TOKEN is not configured for hosted Auth URL proof.",
+      expected: "Management token exists so hosted Auth URL settings can be verified.",
+      key: "supabase_redirect_urls",
+      label: "Supabase redirect URLs configured",
+      section: "Auth / Redirects",
+      status: "manual_required",
+      testedSurface: "Supabase Management API auth config",
+    }));
+  } else {
+    try {
+      const authConfig = await fetchJsonWithTimeout(`https://api.supabase.com/v1/projects/${projectRef}/config/auth`, {
+        headers: { Authorization: `Bearer ${managementToken}` },
+      });
+      const body = authConfig.body;
+      const siteUrl = toText(body.site_url ?? body.siteUrl ?? body.SITE_URL);
+      const redirectSources = [
+        body.redirect_urls,
+        body.additional_redirect_urls,
+        body.uri_allow_list,
+        body.redirect_uri,
+        body.redirect_uris,
+      ].flatMap((value) => Array.isArray(value) ? value.map(toText) : toText(value).split(/[,\n]/).map(toText)).filter(Boolean);
+      const siteOk = /^https:\/\/[^/]+/.test(siteUrl) && !siteUrl.includes("localhost") && !siteUrl.includes("127.0.0.1");
+      const resetOk = redirectSources.includes("chillywoodmobile://reset-password");
+      results.push(canaryResult({
+        actor: "system",
+        actual: authConfig.ok && siteOk && resetOk ? "Hosted Auth Site URL and reset-password redirect are configured." : `Hosted Auth URL proof failed: status ${authConfig.status}, site ${siteOk ? "ok" : "bad"}, reset redirect ${resetOk ? "found" : "missing"}.`,
+        details: { http_status: authConfig.status, redirect_count: redirectSources.length, reset_redirect_found: resetOk, site_url_ok: siteOk },
+        expected: "Real Site URL is non-localhost and chillywoodmobile://reset-password is allowlisted.",
+        key: "supabase_redirect_urls",
+        label: "Supabase redirect URLs configured",
+        section: "Auth / Redirects",
+        status: authConfig.ok && siteOk && resetOk ? "pass" : "fail",
+        testedSurface: "Supabase Management API GET project auth config",
+      }));
+    } catch (error) {
+      results.push(canaryResult({
+        actor: "system",
+        actual: `Supabase Management API auth config fetch failed: ${redactText(error instanceof Error ? error.message : error, 420)}`,
+        expected: "Management API auth config can be read.",
+        key: "supabase_redirect_urls",
+        label: "Supabase redirect URLs configured",
+        section: "Auth / Redirects",
+        status: "fail",
+        testedSurface: "Supabase Management API GET project auth config",
+      }));
+    }
+  }
 
   const publicCandidate = await safeSupabaseCall(() => adminClient
     .from("user_profiles")
@@ -895,31 +1453,80 @@ const canaryRun = async (
   const candidateUserId = toText((publicCandidate.data as JsonObject | null)?.user_id);
   if (candidateUserId) {
     const publicProfile = await safeSupabaseCall(() => anonClient.rpc("read_public_channel_profile", { profile_user_id: candidateUserId }));
-    results.push(canaryResult(
-      "public_channel_sanitized_rpc",
-      "Public profile/channel sanitized RPCs working",
-      publicProfile.error ? "unknown" : "pass",
-      publicProfile.error ? "Public sanitized RPC could not be checked." : "Public sanitized RPC responded without exposing owner data.",
-    ));
+    results.push(canaryResult({
+      actor: "signed-out public",
+      actual: publicProfile.error ? "Public sanitized RPC could not be checked." : "Public sanitized RPC responded without exposing owner data.",
+      expected: "Public sanitized profile/channel RPC responds for a non-owner candidate.",
+      key: "public_channel_sanitized_rpc",
+      label: "Public profile/channel sanitized RPCs working",
+      section: "Public Web / Support",
+      status: publicProfile.error ? "manual_required" : "pass",
+      testedSurface: "rpc: read_public_channel_profile(profile_user_id=non-owner)",
+    }));
   } else {
-    results.push(canaryResult("public_channel_sanitized_rpc", "Public profile/channel sanitized RPCs working", "unknown", "No non-owner public profile candidate was available."));
+    results.push(canaryResult({
+      actor: "system",
+      actual: "No non-owner public profile candidate was available.",
+      expected: "At least one non-owner public profile candidate exists.",
+      key: "public_channel_sanitized_rpc",
+      label: "Public profile/channel sanitized RPCs working",
+      section: "Public Web / Support",
+      status: "manual_required",
+      testedSurface: "table: user_profiles candidate lookup",
+    }));
+  }
+
+  const cleanup = await cleanupProofAccess(adminClient, "CANARY PROOF post-run cleanup.");
+  cleanupStatus = cleanup.summary;
+  for (const row of results) {
+    if (isRecord(row) && toText(row.cleanupStatus) === "pending proof cleanup") row.cleanupStatus = cleanupStatus;
+    if (isRecord(row) && toText(row.cleanupStatus).includes("pending proof cleanup")) row.cleanupStatus = cleanupStatus;
   }
 
   const activeProofRoles = await adminClient.from("platform_role_memberships").select("id", { count: "exact", head: true }).eq("status", "active").ilike("email", "liveops.proof+%");
   const activeProofGrants = await adminClient.from("platform_staff_permission_grants").select("id", { count: "exact", head: true }).eq("status", "active").ilike("target_email", "liveops.proof+%");
   const proofCount = (activeProofRoles.count ?? 0) + (activeProofGrants.count ?? 0);
-  results.push(canaryResult(
-    "proof_roles_cleaned",
-    "Proof roles/grants cleaned up",
-    activeProofRoles.error || activeProofGrants.error ? "unknown" : proofCount === 0 ? "pass" : "fail",
-    activeProofRoles.error || activeProofGrants.error ? "Proof role/grant cleanup query failed." : proofCount === 0 ? "No active liveops.proof role/grant rows remain." : `${proofCount} active liveops.proof role/grant rows remain.`,
-  ));
+  results.push(canaryResult({
+    actor: "system",
+    actual: activeProofRoles.error || activeProofGrants.error ? "Proof role/grant cleanup query failed." : proofCount === 0 ? "No active liveops.proof role/grant rows remain." : `${proofCount} active liveops.proof role/grant rows remain.`,
+    cleanupStatus,
+    details: { active_proof_grants: activeProofGrants.count ?? null, active_proof_roles: activeProofRoles.count ?? null },
+    expected: "No active elevated proof role/grant rows remain.",
+    key: "proof_roles_cleaned",
+    label: "Proof roles/grants cleaned up",
+    section: "Cleanup / Proof Hygiene",
+    status: activeProofRoles.error || activeProofGrants.error ? "manual_required" : proofCount === 0 ? "pass" : "fail",
+    testedSurface: "tables: platform_role_memberships + platform_staff_permission_grants",
+  }));
+
+  const ownerAuditAfter = await countOwnerNormalAuditRows(adminClient);
+  results.push(canaryResult({
+    actor: "owner/system",
+    actual: didCountStaySame(ownerAuditBefore, ownerAuditAfter)
+      ? "Owner normal canary use did not add owner app-level audit rows."
+      : "Owner app-level audit count changed during canary run.",
+    details: { after: ownerAuditAfter, before: ownerAuditBefore },
+    expected: "Owner normal canary/admin use creates no owner-sensitive app-level audit rows.",
+    key: "owner_normal_no_audit_rows",
+    label: "Owner normal no-audit rule preserved",
+    section: "Owner Protection",
+    status: didCountStaySame(ownerAuditBefore, ownerAuditAfter) ? "pass" : "fail",
+    testedSurface: "tables: platform_admin_audit_logs + legal_evidence_audit_log",
+  }));
 
   const passCount = results.filter((row) => row.status === "pass").length;
   const failCount = results.filter((row) => row.status === "fail").length;
-  const unknownCount = results.filter((row) => row.status === "unknown").length;
-  const status = failCount > 0 ? "failed" : unknownCount > 0 ? "partial" : "completed";
-  const summary = { failCount, passCount, unknownCount };
+  const manualRequiredCount = results.filter((row) => row.status === "manual_required" || row.status === "unknown").length;
+  const status = failCount > 0 ? "failed" : manualRequiredCount > 0 ? "partial" : "completed";
+  const summary = {
+    fail: failCount,
+    failCount,
+    manualRequired: manualRequiredCount,
+    manualRequiredCount,
+    pass: passCount,
+    passCount,
+    unknownCount: manualRequiredCount,
+  };
   const { data, error } = await adminClient.from("admin_canary_runs").insert({
     requested_by_email: user.email,
     requested_by_role: user.role,
@@ -974,7 +1581,7 @@ Deno.serve(async (req) => {
     if (action === "legal_request_update") return await legalRequestUpdate(adminClient, auth.user, payload);
     if (action === "legal_request_list") return await legalRequestList(adminClient, auth.user, payload);
     if (action === "security_status") return await securityStatus(adminClient, auth.user);
-    if (action === "canary_run") return await canaryRun(adminClient, anonClient, auth.user);
+    if (action === "canary_run") return await canaryRun(adminClient, anonClient, auth.user, supabaseUrl, anonKey);
     if (action === "canary_list") return await canaryList(adminClient, auth.user);
 
     return json(400, { error: "invalid_action" });

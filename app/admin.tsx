@@ -42,6 +42,7 @@ import {
   updateLegalRequest,
   type OwnerControlAuditRow,
   type OwnerControlBreakGlassSession,
+  type OwnerControlCanaryResult,
   type OwnerControlCanaryRun,
   type OwnerControlLegalRequest,
   type OwnerControlPermissionTemplate,
@@ -926,6 +927,239 @@ const formatAuditDisplayText = (value: unknown) => {
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, (match) => formatCompactIdentifier(match));
 };
 
+type OwnerControlTone = "default" | "success" | "danger" | "manual" | "locked" | "info";
+type CanaryStatusFilter = "all" | "fail" | "manual_required" | "pass";
+type CanaryStatus = "pass" | "fail" | "manual_required";
+
+const canaryFilterOptions: readonly { key: CanaryStatusFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "fail", label: "Failed" },
+  { key: "manual_required", label: "Manual Required" },
+  { key: "pass", label: "Passed" },
+];
+
+const canarySectionOrder = [
+  "Owner Protection",
+  "Staff Permissions",
+  "Premium / Entitlements",
+  "Legal / Evidence",
+  "Live Ops",
+  "Public Web / Support",
+  "Auth / Redirects",
+  "Cleanup / Proof Hygiene",
+] as const;
+
+const normalizeCanaryStatus = (status: unknown): CanaryStatus => {
+  const text = String(status ?? "").toLowerCase();
+  if (text === "pass" || text === "fail") return text;
+  return "manual_required";
+};
+
+const ownerToneForStatus = (status: unknown): OwnerControlTone => {
+  const normalized = normalizeCanaryStatus(status);
+  if (normalized === "pass") return "success";
+  if (normalized === "fail") return "danger";
+  return "manual";
+};
+
+const ownerStatusLabel = (status: unknown) => {
+  const normalized = normalizeCanaryStatus(status);
+  if (normalized === "pass") return "Pass";
+  if (normalized === "fail") return "Failed";
+  return "Manual Required";
+};
+
+const ownerToneBadgeStyle = (tone: OwnerControlTone) => {
+  if (tone === "success") return styles.ownerPillSuccess;
+  if (tone === "danger") return styles.ownerPillDanger;
+  if (tone === "manual") return styles.ownerPillManual;
+  if (tone === "locked") return styles.ownerPillLocked;
+  if (tone === "info") return styles.ownerPillInfo;
+  return styles.ownerPillDefault;
+};
+
+const ownerMetricToneStyle = (tone: OwnerControlTone) => {
+  if (tone === "success") return styles.ownerMetricSuccess;
+  if (tone === "danger") return styles.ownerMetricDanger;
+  if (tone === "manual") return styles.ownerMetricManual;
+  if (tone === "locked") return styles.ownerMetricLocked;
+  return null;
+};
+
+const resolveCanarySection = (input: unknown) => {
+  const source = input && typeof input === "object"
+    ? (input as Record<string, unknown>).section ?? (input as Record<string, unknown>).key ?? (input as Record<string, unknown>).label
+    : input;
+  const text = String(source ?? "").toLowerCase();
+  const explicit = canarySectionOrder.find((section) => section.toLowerCase() === text);
+  if (explicit) return explicit;
+  if (text.includes("owner")) return "Owner Protection";
+  if (text.includes("admin") || text.includes("moderator") || text.includes("staff")) return "Staff Permissions";
+  if (text.includes("premium") || text.includes("entitlement")) return "Premium / Entitlements";
+  if (text.includes("legal") || text.includes("evidence")) return "Legal / Evidence";
+  if (text.includes("live_ops") || text.includes("live ops") || text.includes("liveops") || text.includes("remediation")) return "Live Ops";
+  if (text.includes("redirect") || text.includes("auth")) return "Auth / Redirects";
+  if (text.includes("support") || text.includes("public") || text.includes("channel")) return "Public Web / Support";
+  if (text.includes("proof") || text.includes("cleanup")) return "Cleanup / Proof Hygiene";
+  return "Public Web / Support";
+};
+
+const summarizeCanaryRun = (run: OwnerControlCanaryRun | null | undefined) => {
+  const results = Array.isArray(run?.results) ? run.results : [];
+  const rawSummary = run?.summary && typeof run.summary === "object" && !Array.isArray(run.summary) ? run.summary : null;
+  const summary = { fail: 0, manualRequired: 0, pass: 0 };
+  if (rawSummary) {
+    summary.fail = Number(rawSummary.fail ?? rawSummary.failed ?? rawSummary.failCount ?? 0) || 0;
+    summary.pass = Number(rawSummary.pass ?? rawSummary.passed ?? rawSummary.passCount ?? 0) || 0;
+    summary.manualRequired = Number(rawSummary.manualRequired ?? rawSummary.manual_required ?? rawSummary.manualRequiredCount ?? rawSummary.unknown ?? rawSummary.unknownCount ?? 0) || 0;
+    if (summary.fail > 0 || summary.pass > 0 || summary.manualRequired > 0 || results.length === 0) return summary;
+  }
+  for (const result of results) {
+    const status = normalizeCanaryStatus(result.status);
+    if (status === "manual_required") summary.manualRequired += 1;
+    else summary[status] += 1;
+  }
+  return summary;
+};
+
+const ownerMetricValue = (value: unknown) => (value === null || value === undefined ? "Manual" : String(value));
+
+const ownerAttentionCountTone = (value: unknown): OwnerControlTone => {
+  if (value === null || value === undefined) return "manual";
+  return Number(value) > 0 ? "manual" : "success";
+};
+
+const OwnerStatusPill = ({ label, tone = "default" }: { label: string; tone?: OwnerControlTone }) => (
+  <View style={[styles.ownerPill, ownerToneBadgeStyle(tone)]}>
+    <Text style={styles.ownerPillText}>{label}</Text>
+  </View>
+);
+
+const OwnerMetricTile = ({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string | number;
+  tone?: OwnerControlTone;
+}) => (
+  <View style={[styles.ownerMetricTile, ownerMetricToneStyle(tone)]}>
+    <Text style={styles.ownerMetricLabel}>{label}</Text>
+    <Text style={styles.ownerMetricValue}>{String(value)}</Text>
+  </View>
+);
+
+const OwnerControlPanelHeader = ({
+  actions,
+  badgeLabel,
+  badgeTone = "default",
+  kicker,
+  lastRunLabel,
+  subtitle,
+  title,
+}: {
+  actions?: React.ReactNode;
+  badgeLabel?: string;
+  badgeTone?: OwnerControlTone;
+  kicker: string;
+  lastRunLabel?: string;
+  subtitle: string;
+  title: string;
+}) => (
+  <View style={styles.ownerPanelHeader}>
+    <View style={styles.ownerPanelTitleRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.ownerPanelKicker}>{kicker}</Text>
+        <Text style={styles.ownerPanelTitle}>{title}</Text>
+      </View>
+      {badgeLabel ? <OwnerStatusPill label={badgeLabel} tone={badgeTone} /> : null}
+    </View>
+    <Text style={styles.ownerPanelSubtitle}>{subtitle}</Text>
+    {lastRunLabel ? <Text style={styles.ownerPanelMeta}>{lastRunLabel}</Text> : null}
+    {actions ? <View style={styles.ownerPanelActions}>{actions}</View> : null}
+  </View>
+);
+
+const OwnerFilterChips = ({
+  onChange,
+  options,
+  value,
+}: {
+  onChange: (next: CanaryStatusFilter) => void;
+  options: readonly { key: CanaryStatusFilter; label: string }[];
+  value: CanaryStatusFilter;
+}) => (
+  <View style={styles.ownerFilterRow}>
+    {options.map((option) => {
+      const active = value === option.key;
+      return (
+        <TouchableOpacity
+          key={option.key}
+          accessibilityRole="button"
+          style={[styles.ownerFilterChip, active && styles.ownerFilterChipActive]}
+          onPress={() => onChange(option.key)}
+        >
+          <Text style={[styles.ownerFilterChipText, active && styles.ownerFilterChipTextActive]}>{option.label}</Text>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+);
+
+const OwnerEmptyState = ({ body, title }: { body: string; title: string }) => (
+  <View style={styles.ownerEmptyState}>
+    <Text style={styles.ownerEmptyTitle}>{title}</Text>
+    <Text style={styles.ownerEmptyBody}>{body}</Text>
+  </View>
+);
+
+const OwnerControlRow = ({
+  children,
+  expanded = false,
+  message,
+  meta,
+  onPress,
+  statusLabel,
+  title,
+  tone = "default",
+}: {
+  children?: React.ReactNode;
+  expanded?: boolean;
+  message?: string;
+  meta?: string;
+  onPress?: () => void;
+  statusLabel?: string;
+  title: string;
+  tone?: OwnerControlTone;
+}) => {
+  const content = (
+    <>
+      <View style={styles.ownerRowHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.ownerRowTitle}>{title}</Text>
+          {meta ? <Text style={styles.ownerRowMeta}>{meta}</Text> : null}
+        </View>
+        {statusLabel ? <OwnerStatusPill label={statusLabel} tone={tone} /> : null}
+      </View>
+      {message ? (
+        <Text style={styles.ownerRowMessage} numberOfLines={expanded ? undefined : 1}>
+          {message}
+        </Text>
+      ) : null}
+      {expanded && children ? <View style={styles.ownerRowDetails}>{children}</View> : null}
+    </>
+  );
+
+  if (!onPress) return <View style={styles.ownerControlRow}>{content}</View>;
+  return (
+    <TouchableOpacity accessibilityRole="button" activeOpacity={0.82} style={styles.ownerControlRow} onPress={onPress}>
+      {content}
+      <Text style={styles.ownerRowHint}>{expanded ? "Hide details" : "Show details"}</Text>
+    </TouchableOpacity>
+  );
+};
+
 const formatAdminOperationFailure = (error: any, fallback: string) => {
   const message = String(error?.message ?? "");
   const code = String(error?.code ?? "");
@@ -1253,6 +1487,9 @@ export default function AdminStudioScreen() {
   const [ownerSafetyDashboard, setOwnerSafetyDashboard] = useState<OwnerControlSafetyDashboard | null>(null);
   const [canaryRuns, setCanaryRuns] = useState<OwnerControlCanaryRun[]>([]);
   const [canaryBusy, setCanaryBusy] = useState(false);
+  const [canaryStatusFilter, setCanaryStatusFilter] = useState<CanaryStatusFilter>("all");
+  const [expandedCanaryRows, setExpandedCanaryRows] = useState<Record<string, boolean>>({});
+  const [expandedOwnerControlRows, setExpandedOwnerControlRows] = useState<Record<string, boolean>>({});
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
@@ -1427,6 +1664,9 @@ export default function AdminStudioScreen() {
       setOwnerSafetyDashboard(null);
       setCanaryRuns([]);
       setCanaryBusy(false);
+      setCanaryStatusFilter("all");
+      setExpandedCanaryRows({});
+      setExpandedOwnerControlRows({});
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -1482,6 +1722,9 @@ export default function AdminStudioScreen() {
       setOwnerSafetyDashboard(null);
       setCanaryRuns([]);
       setCanaryBusy(false);
+      setCanaryStatusFilter("all");
+      setExpandedCanaryRows({});
+      setExpandedOwnerControlRows({});
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -3292,6 +3535,34 @@ export default function AdminStudioScreen() {
       setCanaryBusy(false);
     }
   }, [canAccessCanaryChecks, canaryBusy]);
+
+  const toggleOwnerControlRow = useCallback((key: string) => {
+    setExpandedOwnerControlRows((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const toggleCanaryRow = useCallback((key: string) => {
+    setExpandedCanaryRows((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const latestCanaryRun = canaryRuns[0] ?? null;
+  const latestCanarySummary = useMemo(() => summarizeCanaryRun(latestCanaryRun), [latestCanaryRun]);
+  const latestCanaryResults = useMemo(
+    () => (Array.isArray(latestCanaryRun?.results) ? latestCanaryRun.results : []),
+    [latestCanaryRun],
+  );
+  const filteredCanaryResults = useMemo(
+    () => latestCanaryResults.filter((result) => canaryStatusFilter === "all" || normalizeCanaryStatus(result.status) === canaryStatusFilter),
+    [canaryStatusFilter, latestCanaryResults],
+  );
+  const groupedCanaryResults = useMemo(
+    () => canarySectionOrder
+      .map((section) => ({
+        results: filteredCanaryResults.filter((result) => resolveCanarySection(result) === section),
+        section,
+      }))
+      .filter((group) => group.results.length > 0),
+    [filteredCanaryResults],
+  );
 
   useEffect(() => {
     if (!canAccessAdmin) return;
@@ -7941,18 +8212,13 @@ export default function AdminStudioScreen() {
 
         {operatorTab === "audit-explorer" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>AUDIT EXPLORER</Text>
-              <Text style={styles.configTitle}>Search admin/security audit rows</Text>
-              <Text style={styles.configBody}>
-                Shows staff, legal, Live Ops, Break Glass, legal intake, canary, and system/security rows. Normal owner actions are hidden unless Break Glass was active.
-              </Text>
-            </View>
-            <View style={[styles.badge, canAccessAuditExplorer ? styles.badgeOn : styles.badgeOff]}>
-              <Text style={styles.badgeText}>{canAccessAuditExplorer ? "Authorized" : "Locked"}</Text>
-            </View>
-          </View>
+          <OwnerControlPanelHeader
+            badgeLabel={canAccessAuditExplorer ? "Authorized" : "Locked"}
+            badgeTone={canAccessAuditExplorer ? "success" : "locked"}
+            kicker="AUDIT EXPLORER"
+            subtitle="Staff, legal, Live Ops, Break Glass, intake, canary, and system/security rows. Normal owner actions stay hidden unless Break Glass was active."
+            title="Search Admin Audit"
+          />
 
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
@@ -7960,12 +8226,8 @@ export default function AdminStudioScreen() {
             </View>
           ) : null}
 
-          <View style={styles.configList}>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Filters</Text>
-                <Text style={styles.configListBody}>Filter by action text, target/id text, and Break Glass-only rows.</Text>
-              </View>
+          <View style={styles.ownerToolbarPanel}>
+            <View style={styles.ownerInputGroup}>
               <TextInput
                 value={auditExplorerActionFilter}
                 onChangeText={setAuditExplorerActionFilter}
@@ -7982,7 +8244,7 @@ export default function AdminStudioScreen() {
                 style={styles.input}
                 autoCapitalize="none"
               />
-              <View style={styles.configListActions}>
+              <View style={styles.ownerPanelActions}>
                 <TouchableOpacity
                   style={[styles.toggleChip, auditExplorerBreakGlassOnly && styles.toggleChipActive]}
                   onPress={() => setAuditExplorerBreakGlassOnly((prev) => !prev)}
@@ -7998,29 +8260,34 @@ export default function AdminStudioScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
 
-            {auditExplorerRows.length ? auditExplorerRows.map((row) => (
-              <View key={`${row.source}-${row.id}`} style={styles.configListRowSubtle}>
-                <View style={styles.configHeaderRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.configListTitle}>{`${formatModerationToken(row.source)} · ${formatModerationToken(row.action)}`}</Text>
-                    <Text style={styles.configListBody}>
-                      {`${row.occurredAt ? formatModerationTimestamp(row.occurredAt) : "Time unknown"} · ${formatModerationToken(row.actorRole || "unknown")}`}
-                    </Text>
-                  </View>
-                  <View style={[styles.badge, row.breakGlassActive ? styles.badgeScheduled : styles.badgeOff]}>
-                    <Text style={styles.badgeText}>{row.breakGlassActive ? "Break Glass" : row.dryRun ? "Dry Run" : "Audit"}</Text>
-                  </View>
-                </View>
-                <Text style={styles.configListBody}>{`Actor ${row.actorEmail ? maskOperatorIdentity(row.actorEmail) : formatCompactIdentifier(row.actorUserId)}`}</Text>
-                <Text style={styles.configListBody}>{`Target ${formatModerationToken(row.targetType)} ${formatCompactIdentifier(row.targetId)}`}</Text>
-                {row.permissionKey ? <Text style={styles.configListBody}>{`Permission ${formatModerationToken(row.permissionKey)}`}</Text> : null}
-                {row.reason ? <Text style={styles.configListBody}>{formatAuditDisplayText(row.reason)}</Text> : null}
-              </View>
-            )) : (
-              <View style={styles.configListRowSubtle}>
-                <Text style={styles.configListBody}>{ownerControlLoading ? "Loading audit rows..." : "No audit rows matched this search."}</Text>
-              </View>
+          <View style={styles.ownerControlList}>
+            {auditExplorerRows.length ? auditExplorerRows.map((row) => {
+              const rowKey = `${row.source}-${row.id}`;
+              const expanded = !!expandedOwnerControlRows[rowKey];
+              const statusLabel = row.breakGlassActive ? "Break Glass" : row.dryRun ? "Dry Run" : "Audit";
+              return (
+                <OwnerControlRow
+                  key={rowKey}
+                  expanded={expanded}
+                  message={row.reason ? formatAuditDisplayText(row.reason) : row.summary || "Audit row recorded."}
+                  meta={`${row.occurredAt ? formatModerationTimestamp(row.occurredAt) : "Time unknown"} - ${formatModerationToken(row.actorRole || "unknown")}`}
+                  onPress={() => toggleOwnerControlRow(rowKey)}
+                  statusLabel={statusLabel}
+                  title={`${formatModerationToken(row.source)} - ${formatModerationToken(row.action)}`}
+                  tone={row.breakGlassActive ? "manual" : row.dryRun ? "info" : "default"}
+                >
+                  <Text style={styles.ownerDetailText}>{`Actor: ${row.actorEmail ? maskOperatorIdentity(row.actorEmail) : formatCompactIdentifier(row.actorUserId)}`}</Text>
+                  <Text style={styles.ownerDetailText}>{`Target: ${formatModerationToken(row.targetType)} ${formatCompactIdentifier(row.targetId)}`}</Text>
+                  {row.permissionKey ? <Text style={styles.ownerDetailText}>{`Permission: ${formatModerationToken(row.permissionKey)}`}</Text> : null}
+                </OwnerControlRow>
+              );
+            }) : (
+              <OwnerEmptyState
+                body={ownerControlLoading ? "Audit rows are loading." : "Try changing filters or run a search after privileged activity exists."}
+                title={ownerControlLoading ? "Loading Audit Explorer" : "No audit rows matched"}
+              />
             )}
           </View>
         </View>
@@ -8028,18 +8295,13 @@ export default function AdminStudioScreen() {
 
         {operatorTab === "permission-templates" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>PERMISSION TEMPLATES</Text>
-              <Text style={styles.configTitle}>Owner-controlled staff permission bundles</Text>
-              <Text style={styles.configBody}>
-                Templates grant scoped permissions only. They never create platform roles, and Admins cannot apply templates to themselves.
-              </Text>
-            </View>
-            <View style={[styles.badge, canManagePermissionTemplates ? styles.badgeOn : styles.badgeOff]}>
-              <Text style={styles.badgeText}>{canManagePermissionTemplates ? "Authorized" : "Locked"}</Text>
-            </View>
-          </View>
+          <OwnerControlPanelHeader
+            badgeLabel={canManagePermissionTemplates ? "Authorized" : "Locked"}
+            badgeTone={canManagePermissionTemplates ? "success" : "locked"}
+            kicker="PERMISSION TEMPLATES"
+            subtitle="Permission-only bundles. Templates never create platform roles, and Admins cannot apply templates to themselves."
+            title="Scoped Staff Templates"
+          />
 
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
@@ -8047,12 +8309,9 @@ export default function AdminStudioScreen() {
             </View>
           ) : null}
 
-          <View style={styles.configList}>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Apply / revoke template</Text>
-                <Text style={styles.configListBody}>Review the exact permissions before approving. Expiration is enforced server-side by expires_at.</Text>
-              </View>
+          <View style={styles.ownerToolbarPanel}>
+            <Text style={styles.ownerSectionTitle}>Apply or revoke</Text>
+            <View style={styles.ownerInputGroup}>
               <TextInput
                 value={permissionTemplateEmail}
                 onChangeText={setPermissionTemplateEmail}
@@ -8100,29 +8359,35 @@ export default function AdminStudioScreen() {
                 placeholderTextColor="#788196"
                 style={styles.input}
               />
-              <View style={styles.configListActions}>
+              <View style={styles.ownerPanelActions}>
                 <TouchableOpacity
-                  style={[styles.orderBtn, permissionTemplateBusy !== null && styles.configSaveBtnDisabled]}
+                  style={[styles.ownerPrimaryButton, permissionTemplateBusy !== null && styles.configSaveBtnDisabled]}
                   onPress={() => void runPermissionTemplateAction("apply")}
                   disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates}
                 >
-                  <Text style={styles.orderBtnText}>{permissionTemplateBusy === "apply" ? "Applying..." : "Apply Template"}</Text>
+                  <Text style={styles.ownerPrimaryButtonText}>{permissionTemplateBusy === "apply" ? "Applying..." : "Apply Template"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.orderBtn, permissionTemplateBusy !== null && styles.configSaveBtnDisabled]}
+                  style={[styles.ownerSecondaryButton, permissionTemplateBusy !== null && styles.configSaveBtnDisabled]}
                   onPress={() => void runPermissionTemplateAction("revoke")}
                   disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates}
                 >
-                  <Text style={styles.orderBtnText}>{permissionTemplateBusy === "revoke" ? "Revoking..." : "Revoke Template"}</Text>
+                  <Text style={styles.ownerSecondaryButtonText}>{permissionTemplateBusy === "revoke" ? "Revoking..." : "Revoke Template"}</Text>
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
 
+          <View style={styles.ownerControlList}>
+            <Text style={styles.ownerSectionTitle}>Template permissions</Text>
             {permissionTemplates.map((template) => (
-              <View key={`template-${template.key}`} style={styles.configListRowSubtle}>
-                <Text style={styles.configListTitle}>{template.label}</Text>
-                <Text style={styles.configListBody}>{template.permissions.map(formatModerationToken).join(" · ")}</Text>
-              </View>
+              <OwnerControlRow
+                key={`template-${template.key}`}
+                message={template.permissions.map(formatModerationToken).join(" - ")}
+                statusLabel={`${template.permissions.length} permissions`}
+                title={template.label}
+                tone={permissionTemplateKey === template.key ? "info" : "default"}
+              />
             ))}
           </View>
         </View>
@@ -8130,18 +8395,13 @@ export default function AdminStudioScreen() {
 
         {operatorTab === "break-glass" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>BREAK GLASS</Text>
-              <Text style={styles.configTitle}>Emergency audit mode</Text>
-              <Text style={styles.configBody}>
-                Off by default. Owner normal use is not app-level audited. Activating Break Glass requires a reason and causes owner/admin actions to appear in audit.
-              </Text>
-            </View>
-            <View style={[styles.badge, breakGlassActiveSessionId ? styles.badgeScheduled : styles.badgeOff]}>
-              <Text style={styles.badgeText}>{breakGlassActiveSessionId ? "Active" : "Off"}</Text>
-            </View>
-          </View>
+          <OwnerControlPanelHeader
+            badgeLabel={breakGlassActiveSessionId ? "Active" : "Off"}
+            badgeTone={breakGlassActiveSessionId ? "manual" : "locked"}
+            kicker="BREAK GLASS"
+            subtitle="Emergency audit mode. Owner normal use stays unaudited unless this is manually activated."
+            title="Emergency Owner Mode"
+          />
 
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
@@ -8149,12 +8409,9 @@ export default function AdminStudioScreen() {
             </View>
           ) : null}
 
-          <View style={styles.configList}>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Activate Break Glass</Text>
-                <Text style={styles.configListBody}>Approved Admins require emergency_break_glass and a time limit. Normal admins, moderators, and users cannot see this tab.</Text>
-              </View>
+          <View style={styles.ownerToolbarPanel}>
+            <Text style={styles.ownerSectionTitle}>Activation</Text>
+            <View style={styles.ownerInputGroup}>
               <TextInput
                 value={breakGlassReason}
                 onChangeText={setBreakGlassReason}
@@ -8198,7 +8455,7 @@ export default function AdminStudioScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <View style={styles.configListActions}>
+              <View style={styles.ownerPanelActions}>
                 <TouchableOpacity
                   style={[styles.actionBtnDanger, (breakGlassBusy !== null || !!breakGlassActiveSessionId) && styles.configSaveBtnDisabled]}
                   onPress={() => void runBreakGlassActivate()}
@@ -8215,15 +8472,21 @@ export default function AdminStudioScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
 
+          <View style={styles.ownerControlList}>
+            <Text style={styles.ownerSectionTitle}>Recent sessions</Text>
             {breakGlassSessions.length ? breakGlassSessions.map((session) => (
-              <View key={String(session.id)} style={styles.configListRowSubtle}>
-                <Text style={styles.configListTitle}>{`${formatModerationToken(String(session.status ?? "unknown"))} · ${formatCompactIdentifier(session.id)}`}</Text>
-                <Text style={styles.configListBody}>{`Reason: ${formatAuditDisplayText(session.reason)}`}</Text>
-                <Text style={styles.configListBody}>{`Expires: ${session.expires_at ? formatModerationTimestamp(String(session.expires_at)) : "Manual end"}`}</Text>
-              </View>
+              <OwnerControlRow
+                key={String(session.id)}
+                message={formatAuditDisplayText(session.reason) || "Reason not available."}
+                meta={`Expires: ${session.expires_at ? formatModerationTimestamp(String(session.expires_at)) : "Manual end"}`}
+                statusLabel={formatModerationToken(String(session.status ?? "unknown"))}
+                title={`Session ${formatCompactIdentifier(session.id)}`}
+                tone={String(session.status ?? "").toLowerCase() === "active" ? "manual" : "default"}
+              />
             )) : (
-              <Text style={styles.configListBody}>No recent Break Glass sessions loaded.</Text>
+              <OwnerEmptyState body="No recent Break Glass sessions loaded." title="Break Glass is quiet" />
             )}
           </View>
         </View>
@@ -8231,18 +8494,13 @@ export default function AdminStudioScreen() {
 
         {operatorTab === "legal-intake" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>LEGAL INTAKE</Text>
-              <Text style={styles.configTitle}>Legal and police request intake</Text>
-              <Text style={styles.configBody}>
-                Intake connects requests to Legal Evidence review without deletion. Approved Admins need legal_request_intake or legal_review.
-              </Text>
-            </View>
-            <View style={[styles.badge, canAccessLegalIntake ? styles.badgeOn : styles.badgeOff]}>
-              <Text style={styles.badgeText}>{canAccessLegalIntake ? "Authorized" : "Locked"}</Text>
-            </View>
-          </View>
+          <OwnerControlPanelHeader
+            badgeLabel={canAccessLegalIntake ? "Authorized" : "Locked"}
+            badgeTone={canAccessLegalIntake ? "success" : "locked"}
+            kicker="LEGAL INTAKE"
+            subtitle="Request intake links legal records to evidence review. This tool does not delete evidence."
+            title="Legal Request Intake"
+          />
 
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
@@ -8250,12 +8508,9 @@ export default function AdminStudioScreen() {
             </View>
           ) : null}
 
-          <View style={styles.configList}>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Create intake record</Text>
-                <Text style={styles.configListBody}>No evidence is deleted here. Export/hold remains in Legal Evidence with separate authorization.</Text>
-              </View>
+          <View style={styles.ownerToolbarPanel}>
+            <Text style={styles.ownerSectionTitle}>Create intake record</Text>
+            <View style={styles.ownerInputGroup}>
               <TextInput value={legalRequestAgency} onChangeText={setLegalRequestAgency} placeholder="Requesting agency" placeholderTextColor="#788196" style={styles.input} />
               <TextInput value={legalRequestContact} onChangeText={setLegalRequestContact} placeholder="Officer/contact name optional" placeholderTextColor="#788196" style={styles.input} />
               <TextInput value={legalRequestCaseNumber} onChangeText={setLegalRequestCaseNumber} placeholder="Case number optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
@@ -8279,26 +8534,38 @@ export default function AdminStudioScreen() {
               </View>
               <TextInput value={legalRequestTargetId} onChangeText={setLegalRequestTargetId} placeholder="Target id optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
               <TouchableOpacity
-                style={[styles.orderBtn, legalRequestBusy && styles.configSaveBtnDisabled]}
+                style={[styles.ownerPrimaryButton, legalRequestBusy && styles.configSaveBtnDisabled]}
                 onPress={() => void runLegalIntakeCreate()}
                 disabled={legalRequestBusy || !canAccessLegalIntake}
               >
-                <Text style={styles.orderBtnText}>{legalRequestBusy ? "Creating..." : "Create Intake"}</Text>
+                <Text style={styles.ownerPrimaryButtonText}>{legalRequestBusy ? "Creating..." : "Create Intake"}</Text>
               </TouchableOpacity>
             </View>
+          </View>
 
+          <View style={styles.ownerControlList}>
+            <Text style={styles.ownerSectionTitle}>Intake records</Text>
             {legalRequests.length ? legalRequests.map((request) => (
-              <View key={String(request.id)} style={styles.configListRowSubtle}>
-                <Text style={styles.configListTitle}>{`${formatModerationToken(String(request.status ?? "open"))} · ${formatAuditDisplayText(request.requesting_agency)}`}</Text>
-                <Text style={styles.configListBody}>{`Case ${formatAuditDisplayText(request.case_number) || "not supplied"} · ${request.created_at ? formatModerationTimestamp(String(request.created_at)) : "time unknown"}`}</Text>
-                <View style={styles.configListActions}>
+              <OwnerControlRow
+                key={String(request.id)}
+                expanded
+                message={`Case ${formatAuditDisplayText(request.case_number) || "not supplied"}`}
+                meta={request.created_at ? formatModerationTimestamp(String(request.created_at)) : "Time unknown"}
+                statusLabel={formatModerationToken(String(request.status ?? "open"))}
+                title={formatAuditDisplayText(request.requesting_agency) || "Unknown agency"}
+                tone={String(request.status ?? "").toLowerCase() === "closed" ? "locked" : "info"}
+              >
+                <View style={styles.ownerPanelActions}>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => void markLegalRequestReviewing(String(request.id ?? ""))}>
                     <Text style={styles.actionText}>Mark reviewing</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </OwnerControlRow>
             )) : (
-              <Text style={styles.configListBody}>{ownerControlLoading ? "Loading legal requests..." : "No legal request intake records loaded."}</Text>
+              <OwnerEmptyState
+                body={ownerControlLoading ? "Legal requests are loading." : "No legal request intake records loaded."}
+                title={ownerControlLoading ? "Loading Legal Intake" : "No legal requests"}
+              />
             )}
           </View>
         </View>
@@ -8306,18 +8573,18 @@ export default function AdminStudioScreen() {
 
         {operatorTab === "owner-security" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>OWNER SECURITY</Text>
-              <Text style={styles.configTitle}>Owner-only security panel</Text>
-              <Text style={styles.configBody}>
-                Checklist and real status where backend proof exists. Secrets are never shown here.
-              </Text>
-            </View>
-            <View style={[styles.badge, canAccessOwnerSecurity ? styles.badgeOn : styles.badgeOff]}>
-              <Text style={styles.badgeText}>{canAccessOwnerSecurity ? "Owner" : "Locked"}</Text>
-            </View>
-          </View>
+          <OwnerControlPanelHeader
+            actions={(
+              <TouchableOpacity style={styles.ownerSecondaryButton} onPress={() => void loadOwnerSecurity()}>
+                <Text style={styles.ownerSecondaryButtonText}>Refresh Security</Text>
+              </TouchableOpacity>
+            )}
+            badgeLabel={canAccessOwnerSecurity ? "Owner" : "Locked"}
+            badgeTone={canAccessOwnerSecurity ? "success" : "locked"}
+            kicker="OWNER SECURITY"
+            subtitle="Owner-only status and setup reminders. Secrets are never shown in mobile UI."
+            title="Security Panel"
+          />
 
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
@@ -8326,54 +8593,55 @@ export default function AdminStudioScreen() {
           ) : null}
 
           <View style={styles.dashboardGrid}>
-            <View style={styles.dashboardMetricCard}>
-              <Text style={styles.dashboardMetricLabel}>Active Break Glass</Text>
-              <Text style={styles.dashboardMetricValue}>{String(ownerSecurityStatus?.activeBreakGlassCount ?? "Unknown")}</Text>
-              <Text style={styles.dashboardMetricBody}>Real active session count when available.</Text>
-            </View>
-            <View style={styles.dashboardMetricCard}>
-              <Text style={styles.dashboardMetricLabel}>Proof Roles</Text>
-              <Text style={styles.dashboardMetricValue}>{String(ownerSecurityStatus?.proofRoleCount ?? "Unknown")}</Text>
-              <Text style={styles.dashboardMetricBody}>Warning if temporary proof roles remain active.</Text>
-            </View>
-            <View style={styles.dashboardMetricCard}>
-              <Text style={styles.dashboardMetricLabel}>Proof Grants</Text>
-              <Text style={styles.dashboardMetricValue}>{String(ownerSecurityStatus?.proofGrantCount ?? "Unknown")}</Text>
-              <Text style={styles.dashboardMetricBody}>Warning if temporary proof permissions remain active.</Text>
-            </View>
+            <OwnerMetricTile label="Active Break Glass" tone={ownerAttentionCountTone(ownerSecurityStatus?.activeBreakGlassCount)} value={ownerMetricValue(ownerSecurityStatus?.activeBreakGlassCount)} />
+            <OwnerMetricTile label="Proof Roles" tone={ownerAttentionCountTone(ownerSecurityStatus?.proofRoleCount)} value={ownerMetricValue(ownerSecurityStatus?.proofRoleCount)} />
+            <OwnerMetricTile label="Proof Grants" tone={ownerAttentionCountTone(ownerSecurityStatus?.proofGrantCount)} value={ownerMetricValue(ownerSecurityStatus?.proofGrantCount)} />
           </View>
 
-          <View style={styles.configList}>
+          <View style={styles.ownerControlList}>
             {(ownerSecurityStatus?.ownerCliChecklist ?? []).map((item) => (
-              <View key={item} style={styles.configListRowSubtle}>
-                <Text style={styles.configListBody}>{item}</Text>
-              </View>
+              <OwnerControlRow key={item} message={item} statusLabel="Checklist" title="Owner CLI" tone="info" />
             ))}
-            <View style={styles.configListRowSubtle}>
-              <Text style={styles.configListTitle}>Session/device support</Text>
-              <Text style={styles.configListBody}>{formatAuditDisplayText(ownerSecurityStatus?.ownerSessions?.message) || "Unknown/manual required."}</Text>
-            </View>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => void loadOwnerSecurity()}>
-              <Text style={styles.actionText}>Refresh Security</Text>
-            </TouchableOpacity>
+            <OwnerControlRow
+              message={formatAuditDisplayText(ownerSecurityStatus?.ownerSessions?.message) || "Session and device listing is manual required."}
+              statusLabel="Manual Required"
+              title="Session/device support"
+              tone="manual"
+            />
+            <OwnerControlRow
+              message={formatAuditDisplayText(ownerSecurityStatus?.realLiveOpsFlags?.message) || "Live Ops real-action flag proof requires server health/config evidence."}
+              statusLabel="Manual Required"
+              title="Live Ops flags"
+              tone="manual"
+            />
           </View>
         </View>
         ) : null}
 
         {operatorTab === "canary" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>CANARY CHECKS</Text>
-              <Text style={styles.configTitle}>Public launch safety checks</Text>
-              <Text style={styles.configBody}>
-                Real checks pass or fail; unavailable checks show unknown/manual required. Unknown is never treated as green.
-              </Text>
-            </View>
-            <View style={[styles.badge, canAccessCanaryChecks ? styles.badgeOn : styles.badgeOff]}>
-              <Text style={styles.badgeText}>{canAccessCanaryChecks ? "Authorized" : "Locked"}</Text>
-            </View>
-          </View>
+          <OwnerControlPanelHeader
+            actions={(
+              <>
+                <TouchableOpacity
+                  style={[styles.ownerPrimaryButton, canaryBusy && styles.configSaveBtnDisabled]}
+                  onPress={() => void runCanaryChecks()}
+                  disabled={canaryBusy || !canAccessCanaryChecks}
+                >
+                  <Text style={styles.ownerPrimaryButtonText}>{canaryBusy ? "Running..." : "Run Canary Checks"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.ownerSecondaryButton} onPress={() => void loadCanaries()}>
+                  <Text style={styles.ownerSecondaryButtonText}>Refresh</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            badgeLabel={canAccessCanaryChecks ? "Authorized" : "Locked"}
+            badgeTone={canAccessCanaryChecks ? "success" : "locked"}
+            kicker="CANARY CHECKS"
+            lastRunLabel={latestCanaryRun?.created_at ? `Last run ${formatModerationTimestamp(String(latestCanaryRun.created_at))}` : "No canary run yet"}
+            subtitle="Real checks only; manual required is never treated as green."
+            title="Public Launch Safety Checks"
+          />
 
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
@@ -8381,79 +8649,115 @@ export default function AdminStudioScreen() {
             </View>
           ) : null}
 
-          <View style={styles.configListActions}>
-            <TouchableOpacity
-              style={[styles.actionBtn, canaryBusy && styles.configSaveBtnDisabled]}
-              onPress={() => void runCanaryChecks()}
-              disabled={canaryBusy || !canAccessCanaryChecks}
-            >
-              <Text style={styles.actionText}>{canaryBusy ? "Running..." : "Run Canary Checks"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => void loadCanaries()}>
-              <Text style={styles.actionText}>Refresh</Text>
-            </TouchableOpacity>
+          <View style={styles.dashboardGrid}>
+            <OwnerMetricTile label="Passed" tone="success" value={latestCanarySummary.pass} />
+            <OwnerMetricTile label="Manual Required" tone="manual" value={latestCanarySummary.manualRequired} />
+            <OwnerMetricTile label="Failed" tone={latestCanarySummary.fail > 0 ? "danger" : "success"} value={latestCanarySummary.fail} />
           </View>
 
-          <View style={styles.configList}>
-            {canaryRuns.length ? canaryRuns.map((run) => {
-              const results = Array.isArray(run.results) ? run.results : [];
-              return (
-                <View key={String(run.id)} style={styles.configListRow}>
-                  <Text style={styles.configListTitle}>{`${formatModerationToken(String(run.status ?? "unknown"))} · ${run.created_at ? formatModerationTimestamp(String(run.created_at)) : "time unknown"}`}</Text>
-                  {results.map((result, resultIndex) => (
-                    <View key={`${run.id}-${String(result.key ?? "result")}-${resultIndex}`} style={styles.configListRowSubtle}>
-                      <View style={styles.configHeaderRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.configListTitle}>{result.label}</Text>
-                          <Text style={styles.configListBody}>{result.message}</Text>
-                        </View>
-                        <View style={[styles.badge, result.status === "pass" ? styles.badgePublished : result.status === "fail" ? styles.badgeOff : styles.badgeDraft]}>
-                          <Text style={styles.badgeText}>{formatModerationToken(result.status)}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
+          <OwnerFilterChips options={canaryFilterOptions} value={canaryStatusFilter} onChange={setCanaryStatusFilter} />
+
+          {canaryBusy ? (
+            <OwnerEmptyState body="The check run is using real backend proof paths." title="Running checks" />
+          ) : !latestCanaryRun ? (
+            <OwnerEmptyState
+              body={ownerControlLoading ? "Canary history is loading." : "Run the first production canary when ready."}
+              title={ownerControlLoading ? "Loading Canary" : "No canary run yet"}
+            />
+          ) : filteredCanaryResults.length === 0 ? (
+            <OwnerEmptyState body="Choose another filter to see available checks." title="No checks in this filter" />
+          ) : (
+            <View style={styles.ownerControlList}>
+              {latestCanaryRun.status ? (
+                <View style={styles.ownerRunBanner}>
+                  <Text style={styles.ownerRunBannerTitle}>{formatModerationToken(String(latestCanaryRun.status))} proof complete</Text>
+                  <Text style={styles.ownerRunBannerBody}>
+                    {latestCanarySummary.fail > 0
+                      ? "Failed checks require attention before launch."
+                      : latestCanarySummary.manualRequired > 0
+                        ? "Partial proof complete. Manual Required checks are not pass."
+                        : "All available checks passed."}
+                  </Text>
                 </View>
-              );
-            }) : (
-              <Text style={styles.configListBody}>{ownerControlLoading ? "Loading canary runs..." : "No canary run has been recorded yet."}</Text>
-            )}
-          </View>
+              ) : null}
+
+              {groupedCanaryResults.map((group) => (
+                <View key={group.section} style={styles.ownerSectionGroup}>
+                  <Text style={styles.ownerSectionTitle}>{group.section}</Text>
+                  {group.results.map((result, resultIndex) => {
+                    const status = normalizeCanaryStatus(result.status);
+                    const rowKey = `${latestCanaryRun.id ?? "latest"}-${String(result.key ?? "result")}-${resultIndex}`;
+                    const expanded = !!expandedCanaryRows[rowKey];
+                    return (
+                      <OwnerControlRow
+                        key={rowKey}
+                        expanded={expanded}
+                        message={formatAuditDisplayText(result.actual || result.message)}
+                        meta={formatAuditDisplayText(result.testedSurface)}
+                        onPress={() => toggleCanaryRow(rowKey)}
+                        statusLabel={ownerStatusLabel(status)}
+                        title={result.label}
+                        tone={ownerToneForStatus(status)}
+                      >
+                        <Text style={styles.ownerDetailText}>{`Actor: ${formatAuditDisplayText(result.actor) || "system"}`}</Text>
+                        <Text style={styles.ownerDetailText}>{`Expected: ${formatAuditDisplayText(result.expected) || "not supplied"}`}</Text>
+                        <Text style={styles.ownerDetailText}>{`Actual: ${formatAuditDisplayText(result.actual || result.message)}`}</Text>
+                        <Text style={styles.ownerDetailText}>{`Tested: ${formatAuditDisplayText(result.testedSurface) || "not supplied"}`}</Text>
+                        <Text style={styles.ownerDetailText}>{`Timestamp: ${result.testedAt ? formatModerationTimestamp(String(result.testedAt)) : "not supplied"}`}</Text>
+                        <Text style={styles.ownerDetailText}>{`Cleanup: ${formatAuditDisplayText(result.cleanupStatus) || "not applicable"}`}</Text>
+                        <Text style={styles.ownerDetailText}>{`Backend status: ${status}`}</Text>
+                        {result.details && Object.keys(result.details).length ? (
+                          <Text style={styles.ownerDetailText}>{formatAuditDisplayText(JSON.stringify(result.details))}</Text>
+                        ) : result.metadata && Object.keys(result.metadata).length ? (
+                          <Text style={styles.ownerDetailText}>{formatAuditDisplayText(JSON.stringify(result.metadata))}</Text>
+                        ) : null}
+                      </OwnerControlRow>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {canaryRuns.length > 1 ? (
+            <View style={styles.ownerHistoryStrip}>
+              <Text style={styles.ownerSectionTitle}>Recent history</Text>
+              {canaryRuns.slice(1, 4).map((run) => {
+                const summary = summarizeCanaryRun(run);
+                return (
+                  <View key={String(run.id)} style={styles.ownerHistoryRow}>
+                    <Text style={styles.ownerHistoryText}>{run.created_at ? formatModerationTimestamp(String(run.created_at)) : "Time unknown"}</Text>
+                    <Text style={styles.ownerHistoryText}>{`${summary.pass} pass - ${summary.manualRequired} manual - ${summary.fail} failed`}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
         ) : null}
 
         {operatorTab === "safety-dashboard" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>OWNER SAFETY</Text>
-              <Text style={styles.configTitle}>Low-risk safety read model</Text>
-              <Text style={styles.configBody}>
-                Real counts only. Missing aggregations show unknown/manual required instead of fake zeroes.
-              </Text>
-            </View>
-          </View>
+          <OwnerControlPanelHeader
+            badgeLabel={canAccessOwnerSecurity ? "Owner" : "Locked"}
+            badgeTone={canAccessOwnerSecurity ? "success" : "locked"}
+            kicker="OWNER SAFETY"
+            subtitle="Real counts only. Missing aggregations show Manual Required instead of fake zeroes."
+            title="Safety Dashboard"
+          />
           <View style={styles.dashboardGrid}>
-            <View style={styles.dashboardMetricCard}>
-              <Text style={styles.dashboardMetricLabel}>Open Reports</Text>
-              <Text style={styles.dashboardMetricValue}>{String(ownerSafetyDashboard?.openReports ?? "Unknown")}</Text>
-              <Text style={styles.dashboardMetricBody}>Real safety_reports count when available.</Text>
-            </View>
-            <View style={styles.dashboardMetricCard}>
-              <Text style={styles.dashboardMetricLabel}>Legal Holds</Text>
-              <Text style={styles.dashboardMetricValue}>{String(ownerSafetyDashboard?.activeLegalHolds ?? "Unknown")}</Text>
-              <Text style={styles.dashboardMetricBody}>Active legal hold count.</Text>
-            </View>
-            <View style={styles.dashboardMetricCard}>
-              <Text style={styles.dashboardMetricLabel}>Legal Requests</Text>
-              <Text style={styles.dashboardMetricValue}>{String(ownerSafetyDashboard?.unresolvedLegalRequests ?? "Unknown")}</Text>
-              <Text style={styles.dashboardMetricBody}>Open or reviewing intake records.</Text>
-            </View>
-            <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
-              <Text style={styles.dashboardMetricLabel}>Repeated Reports</Text>
-              <Text style={styles.dashboardMetricValue}>Unknown</Text>
-              <Text style={styles.dashboardMetricBody}>{formatAuditDisplayText(ownerSafetyDashboard?.repeatedReportTargets?.message) || "Aggregation not configured."}</Text>
-            </View>
+            <OwnerMetricTile label="Open Reports" tone={ownerAttentionCountTone(ownerSafetyDashboard?.openReports)} value={ownerMetricValue(ownerSafetyDashboard?.openReports)} />
+            <OwnerMetricTile label="Legal Holds" tone={ownerAttentionCountTone(ownerSafetyDashboard?.activeLegalHolds)} value={ownerMetricValue(ownerSafetyDashboard?.activeLegalHolds)} />
+            <OwnerMetricTile label="Legal Requests" tone={ownerAttentionCountTone(ownerSafetyDashboard?.unresolvedLegalRequests)} value={ownerMetricValue(ownerSafetyDashboard?.unresolvedLegalRequests)} />
+            <OwnerMetricTile label="Repeated Reports" tone="manual" value="Manual" />
+          </View>
+          <View style={styles.ownerControlList}>
+            <OwnerControlRow
+              message={formatAuditDisplayText(ownerSafetyDashboard?.repeatedReportTargets?.message) || "Repeated-report aggregation is not configured."}
+              statusLabel="Manual Required"
+              title="Repeated-report targets"
+              tone="manual"
+            />
           </View>
         </View>
         ) : null}
@@ -10160,6 +10464,314 @@ const styles = StyleSheet.create({
     color: "#f0f0f0",
     fontWeight: "700",
     fontSize: 12,
+  },
+  ownerPanelHeader: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(5,8,14,0.82)",
+    padding: 14,
+    gap: 9,
+  },
+  ownerPanelTitleRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+  },
+  ownerPanelKicker: {
+    color: "#9AA4B9",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  ownerPanelTitle: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 29,
+    marginTop: 4,
+  },
+  ownerPanelSubtitle: {
+    color: "#C8D0DF",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  ownerPanelMeta: {
+    color: "#8F9AAF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  ownerPanelActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  ownerPrimaryButton: {
+    alignItems: "center",
+    backgroundColor: "#DC143C",
+    borderRadius: 999,
+    justifyContent: "center",
+    minHeight: 44,
+    minWidth: 132,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  ownerPrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  ownerSecondaryButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    minWidth: 104,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  ownerSecondaryButtonText: {
+    color: "#F4F7FB",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  ownerPill: {
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 28,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  ownerPillDefault: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  ownerPillSuccess: {
+    backgroundColor: "rgba(31,148,83,0.22)",
+    borderColor: "rgba(69,204,127,0.45)",
+  },
+  ownerPillDanger: {
+    backgroundColor: "rgba(210,54,72,0.24)",
+    borderColor: "rgba(255,96,116,0.5)",
+  },
+  ownerPillManual: {
+    backgroundColor: "rgba(220,170,20,0.2)",
+    borderColor: "rgba(220,170,20,0.5)",
+  },
+  ownerPillLocked: {
+    backgroundColor: "rgba(120,128,144,0.16)",
+    borderColor: "rgba(168,176,192,0.3)",
+  },
+  ownerPillInfo: {
+    backgroundColor: "rgba(87,124,255,0.18)",
+    borderColor: "rgba(116,146,255,0.4)",
+  },
+  ownerPillText: {
+    color: "#F7FAFF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  ownerMetricTile: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexBasis: "30%",
+    flexGrow: 1,
+    minHeight: 82,
+    minWidth: 96,
+    padding: 12,
+    gap: 8,
+  },
+  ownerMetricSuccess: {
+    borderColor: "rgba(69,204,127,0.32)",
+    backgroundColor: "rgba(31,148,83,0.12)",
+  },
+  ownerMetricDanger: {
+    borderColor: "rgba(255,96,116,0.38)",
+    backgroundColor: "rgba(210,54,72,0.14)",
+  },
+  ownerMetricManual: {
+    borderColor: "rgba(220,170,20,0.38)",
+    backgroundColor: "rgba(220,170,20,0.12)",
+  },
+  ownerMetricLocked: {
+    borderColor: "rgba(168,176,192,0.22)",
+    backgroundColor: "rgba(120,128,144,0.08)",
+  },
+  ownerMetricLabel: {
+    color: "#9AA4B9",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  ownerMetricValue: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  ownerFilterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  ownerFilterChip: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.16)",
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  ownerFilterChipActive: {
+    backgroundColor: "rgba(220,20,60,0.2)",
+    borderColor: "rgba(220,20,60,0.5)",
+  },
+  ownerFilterChipText: {
+    color: "#C8D0DF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  ownerFilterChipTextActive: {
+    color: "#FFFFFF",
+  },
+  ownerToolbarPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12,
+    gap: 10,
+  },
+  ownerInputGroup: {
+    gap: 9,
+  },
+  ownerControlList: {
+    gap: 10,
+  },
+  ownerSectionGroup: {
+    gap: 8,
+  },
+  ownerSectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    marginTop: 2,
+  },
+  ownerControlRow: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(8,11,18,0.74)",
+    minHeight: 58,
+    padding: 11,
+    gap: 7,
+  },
+  ownerRowHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+  },
+  ownerRowTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 19,
+  },
+  ownerRowMeta: {
+    color: "#8F9AAF",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+  ownerRowMessage: {
+    color: "#C4CCDA",
+    fontSize: 12.5,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  ownerRowHint: {
+    color: "#8F9AAF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  ownerRowDetails: {
+    borderTopColor: "rgba(255,255,255,0.08)",
+    borderTopWidth: 1,
+    gap: 6,
+    paddingTop: 8,
+  },
+  ownerDetailText: {
+    color: "#DCE3EF",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  ownerEmptyState: {
+    borderRadius: 8,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    padding: 14,
+    gap: 6,
+  },
+  ownerEmptyTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  ownerEmptyBody: {
+    color: "#AEB8C9",
+    fontSize: 12.5,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  ownerRunBanner: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    gap: 4,
+  },
+  ownerRunBannerTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  ownerRunBannerBody: {
+    color: "#C8D0DF",
+    fontSize: 12.5,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  ownerHistoryStrip: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    gap: 8,
+    padding: 12,
+  },
+  ownerHistoryRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  ownerHistoryText: {
+    color: "#AEB8C9",
+    flexShrink: 1,
+    fontSize: 11.5,
+    fontWeight: "800",
   },
   configCard: {
     borderRadius: 22,
