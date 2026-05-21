@@ -1171,15 +1171,26 @@ const canaryRun = async (
 
     const discovery = await safeSupabaseCall(() => anonClient.from("user_profiles").select("user_id").eq("user_id", ownerUserId).limit(1));
     const discoveryRows = Array.isArray(discovery.data) ? discovery.data : [];
+    const discoveryErrorText = discovery.error ? redactText(discovery.error, 420) : "";
+    const discoveryReadBlocked = /42501|403|forbidden|not authorized|permission denied|row-level security/i.test(discoveryErrorText);
     results.push(canaryResult({
       actor: "signed-out public",
-      actual: discovery.error ? "Public user_profiles select could not be checked." : discoveryRows.length === 0 ? "Owner was not visible in public profile listing." : "Owner appeared in a public profile listing.",
-      details: { row_count: discoveryRows.length },
+      actual: discoveryRows.length > 0
+        ? "Owner appeared in a public profile listing."
+        : discovery.error && discoveryReadBlocked
+          ? "Public user_profiles listing is blocked by server policy; owner cannot be returned through raw public listing."
+          : discovery.error
+            ? "Public user_profiles select could not be checked."
+            : "Owner was not visible in public profile listing.",
+      details: {
+        public_read_blocked_by_policy: discovery.error ? discoveryReadBlocked : false,
+        row_count: discoveryRows.length,
+      },
       expected: "Owner is absent from public user_profiles listing/search.",
       key: "owner_hidden_discovery",
       label: "Owner hidden from public discovery/search",
       section: "Owner Protection",
-      status: discovery.error ? "manual_required" : discoveryRows.length === 0 ? "pass" : "fail",
+      status: discoveryRows.length > 0 ? "fail" : discovery.error && !discoveryReadBlocked ? "manual_required" : "pass",
       testedSurface: "table: user_profiles public select",
     }));
   }
