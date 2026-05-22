@@ -99,6 +99,8 @@ The expanded public legal/support web surface exists in repo as a static site ge
 
 Static site owner: `public-site/legal-site/`. Canonical policy source: `legal/policies.mjs`. Build command: `npm run legal-site:build`. Local server command: `npm run legal-site:serve -- --port 4177`. Generated deployable output: `public-site/legal-site/site/`. Cloudflare Pages project: `chillywood-legal`. Proved public Pages deployment: `https://0c365932.chillywood-legal.pages.dev`. Apex custom domain `chillywoodstream.com` is active. Admin Canary legal/DMCA readiness passed on May 22, 2026 with `65 pass / 0 manual / 0 fail` after Legal Intake / Legal Evidence closeout. No LiveKit fallback was reached.
 
+Admin/public legal UI law proof: the May 22 Admin UI/UX follow-up applied `docs/APP_UI_UX_RULES.md` to the production-closeout DMCA, public copyright, uploader counter-notice, Legal Intake/Evidence, Owner Security, Canary, Safety, Audit Explorer, Permission Templates, and Break Glass surfaces. This was a visual/state-only pass: grouped command-center panels, structured proof/detail grids, honest empty/error/loading states, exact disabled reasons, no raw debug proof rows, no dead active buttons, and no fake green/zero counters. Physical Android device `R5CR120QCBF` installed a local release APK and proved the Canary snapshot/filter/grouped-proof UI plus Safety Dashboard's exact repeated-report disabled reason. No backend behavior, RLS, migrations, Supabase functions, LiveKit action, Premium gate, Player, Watch-Party, Chat/call, DMCA workflow, or Legal workflow behavior changed.
+
 ## May 17, 2026 V1 Task 7/10/11 Closeout Proof
 
 Artifact folder: `artifacts/v1-closeout-7-10-11-20260517-2013/`.

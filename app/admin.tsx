@@ -1386,6 +1386,79 @@ const OwnerDisabledReason = ({ reason }: { reason: string }) => (
   </View>
 );
 
+const formatOwnerDetailValue = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return "not supplied";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) return `${value.length} ${value.length === 1 ? "item" : "items"}`;
+  if (typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>).filter((key) => {
+      const entry = (value as Record<string, unknown>)[key];
+      return entry !== null && entry !== undefined && entry !== "";
+    });
+    if (!keys.length) return "empty";
+    return `${keys.length} ${keys.length === 1 ? "field" : "fields"}: ${keys.slice(0, 3).map(formatModerationToken).join(", ")}`;
+  }
+  return formatAuditDisplayText(value) || "not supplied";
+};
+
+const canaryStructuredRows = (result: OwnerControlCanaryResult) => {
+  const source = result.details && Object.keys(result.details).length
+    ? result.details
+    : result.metadata && Object.keys(result.metadata).length
+      ? result.metadata
+      : null;
+  if (!source) return [];
+  return Object.entries(source)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .slice(0, 8)
+    .map(([key, value]) => ({
+      label: formatModerationToken(key),
+      value: formatOwnerDetailValue(value),
+    }));
+};
+
+const OwnerDetailGrid = ({ rows }: { rows: { label: string; value: string }[] }) => (
+  <View style={styles.ownerDetailGrid}>
+    {rows.map((row) => (
+      <View key={row.label} style={styles.ownerDetailGridRow}>
+        <Text style={styles.ownerDetailLabel}>{row.label}</Text>
+        <Text style={styles.ownerDetailValue}>{row.value}</Text>
+      </View>
+    ))}
+  </View>
+);
+
+const CanaryProofDetails = ({ result, status }: { result: OwnerControlCanaryResult; status: CanaryStatus }) => {
+  const structuredRows = canaryStructuredRows(result);
+  return (
+    <>
+      <OwnerDetailGrid
+        rows={[
+          { label: "Actor", value: formatOwnerDetailValue(result.actor || "system") },
+          { label: "Expected", value: formatOwnerDetailValue(result.expected) },
+          { label: "Actual", value: formatOwnerDetailValue(result.actual || result.message) },
+          { label: "Tested Surface", value: formatOwnerDetailValue(result.testedSurface) },
+          { label: "Timestamp", value: result.testedAt ? formatModerationTimestamp(String(result.testedAt)) : "not supplied" },
+          { label: "Cleanup", value: formatOwnerDetailValue(result.cleanupStatus || "not applicable") },
+          { label: "Backend Status", value: ownerStatusLabel(status) },
+        ]}
+      />
+      {structuredRows.length ? (
+        <View style={styles.ownerNestedProofPanel}>
+          <View style={styles.ownerSectionHeaderRow}>
+            <Text style={styles.ownerSectionTitle}>Proof Metadata</Text>
+            <OwnerStatusPill label={`${structuredRows.length} fields`} tone="info" />
+          </View>
+          <OwnerDetailGrid rows={structuredRows} />
+        </View>
+      ) : (
+        <Text style={styles.ownerDetailText}>No extra proof metadata returned for this check.</Text>
+      )}
+    </>
+  );
+};
+
 const OwnerControlRow = ({
   children,
   expanded = false,
@@ -1558,11 +1631,8 @@ const formatLiveOpsDryRunResult = (result: Record<string, unknown> | null) => {
   const dryRun = result.dryRun === true ? "dry-run" : result.dryRun === false ? "executed" : "";
   const summary = [dryRun, status, roomStatus, safeToClean].filter(Boolean).join(" · ");
   if (summary) return summary;
-  try {
-    return JSON.stringify(result).slice(0, 240);
-  } catch {
-    return "Recorded";
-  }
+  const fieldCount = Object.keys(result).length;
+  return fieldCount ? `${fieldCount} result ${fieldCount === 1 ? "field" : "fields"} recorded` : "Recorded";
 };
 
 const formatProviderUsageRows = (count: number | null) => (
@@ -8989,6 +9059,11 @@ export default function AdminStudioScreen() {
           ) : null}
 
           <View style={styles.ownerToolbarPanel}>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Search Filters</Text>
+              <OwnerStatusPill label="Server Checked" tone="info" />
+            </View>
+            <Text style={styles.ownerPanelMeta}>Search only returns rows allowed by the protected audit explorer path.</Text>
             <View style={styles.ownerInputGroup}>
               <TextInput
                 value={auditExplorerActionFilter}
@@ -9043,9 +9118,13 @@ export default function AdminStudioScreen() {
                   title={`${formatModerationToken(row.source)} - ${formatModerationToken(row.action)}`}
                   tone={row.breakGlassActive ? "manual" : row.dryRun ? "info" : "default"}
                 >
-                  <Text style={styles.ownerDetailText}>{`Actor: ${row.actorEmail ? maskOperatorIdentity(row.actorEmail) : formatCompactIdentifier(row.actorUserId)}`}</Text>
-                  <Text style={styles.ownerDetailText}>{`Target: ${formatModerationToken(row.targetType)} ${formatCompactIdentifier(row.targetId)}`}</Text>
-                  {row.permissionKey ? <Text style={styles.ownerDetailText}>{`Permission: ${formatModerationToken(row.permissionKey)}`}</Text> : null}
+                  <OwnerDetailGrid
+                    rows={[
+                      { label: "Actor", value: row.actorEmail ? maskOperatorIdentity(row.actorEmail) : formatCompactIdentifier(row.actorUserId) },
+                      { label: "Target", value: `${formatModerationToken(row.targetType)} ${formatCompactIdentifier(row.targetId)}` },
+                      { label: "Permission", value: row.permissionKey ? formatModerationToken(row.permissionKey) : "not supplied" },
+                    ]}
+                  />
                 </OwnerControlRow>
               );
             }) : (
@@ -9075,7 +9154,11 @@ export default function AdminStudioScreen() {
           ) : null}
 
           <View style={styles.ownerToolbarPanel}>
-            <Text style={styles.ownerSectionTitle}>Apply or revoke</Text>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Apply or Revoke</Text>
+              <OwnerStatusPill label="Scoped" tone="info" />
+            </View>
+            <Text style={styles.ownerPanelMeta}>Applies permission bundles only; it does not create platform roles or let admins self-grant.</Text>
             <View style={styles.ownerInputGroup}>
               <TextInput
                 value={permissionTemplateEmail}
@@ -9147,11 +9230,14 @@ export default function AdminStudioScreen() {
           </View>
 
           <View style={styles.ownerControlList}>
-            <Text style={styles.ownerSectionTitle}>Template permissions</Text>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Template Permissions</Text>
+              <OwnerStatusPill label={`${permissionTemplates.length} templates`} tone="info" />
+            </View>
             {permissionTemplates.map((template) => (
               <OwnerControlRow
                 key={`template-${template.key}`}
-                message={template.permissions.map(formatModerationToken).join(" - ")}
+                message={template.permissions.map(formatModerationToken).join(" · ")}
                 statusLabel={`${template.permissions.length} permissions`}
                 title={template.label}
                 tone={permissionTemplateKey === template.key ? "info" : "default"}
@@ -9178,7 +9264,11 @@ export default function AdminStudioScreen() {
           ) : null}
 
           <View style={styles.ownerToolbarPanel}>
-            <Text style={styles.ownerSectionTitle}>Activation</Text>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Activation</Text>
+              <OwnerStatusPill label={breakGlassActiveSessionId ? "Active" : "Confirmation Required"} tone={breakGlassActiveSessionId ? "manual" : "locked"} />
+            </View>
+            <Text style={styles.ownerPanelMeta}>Use only for emergency owner-sensitive review. Normal owner legal/admin work elsewhere stays outside Break Glass.</Text>
             <View style={styles.ownerInputGroup}>
               <TextInput
                 value={breakGlassReason}
@@ -9250,7 +9340,10 @@ export default function AdminStudioScreen() {
           </View>
 
           <View style={styles.ownerControlList}>
-            <Text style={styles.ownerSectionTitle}>Recent sessions</Text>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Recent Sessions</Text>
+              <OwnerStatusPill label={`${breakGlassSessions.length} loaded`} tone={breakGlassSessions.length ? "manual" : "success"} />
+            </View>
             {breakGlassSessions.length ? breakGlassSessions.map((session) => (
               <OwnerControlRow
                 key={String(session.id)}
@@ -9687,41 +9780,57 @@ export default function AdminStudioScreen() {
             <OwnerDisabledReason reason="Canary run is disabled because this account lacks Owner, canary_run, or launch_safety permission. Refresh remains read-only." />
           ) : null}
 
+          <View style={styles.ownerRunBanner}>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerRunBannerTitle}>Latest Run Snapshot</Text>
+              <OwnerStatusPill
+                label={latestCanaryRun?.status ? formatModerationToken(String(latestCanaryRun.status)) : "Not Run"}
+                tone={latestCanarySummary.fail > 0 ? "danger" : latestCanarySummary.manualRequired > 0 ? "manual" : latestCanaryRun ? "success" : "locked"}
+              />
+            </View>
+            <Text style={styles.ownerRunBannerBody}>
+              {latestCanaryRun
+                ? latestCanarySummary.fail > 0
+                  ? "Failed checks need review before launch. The UI keeps them visible and actionable."
+                  : latestCanarySummary.manualRequired > 0
+                    ? "Manual Required checks are surfaced as warnings, never green proof."
+                    : "All available checks from the latest run passed."
+                : "No production canary run is loaded yet. Run or refresh to load backed proof rows."}
+            </Text>
+          </View>
+
           <View style={styles.dashboardGrid}>
             <OwnerMetricTile label="Passed" tone="success" value={latestCanarySummary.pass} />
             <OwnerMetricTile label="Manual Required" tone="manual" value={latestCanarySummary.manualRequired} />
             <OwnerMetricTile label="Failed" tone={latestCanarySummary.fail > 0 ? "danger" : "success"} value={latestCanarySummary.fail} />
           </View>
 
-          <OwnerFilterChips options={canaryFilterOptions} value={canaryStatusFilter} onChange={setCanaryStatusFilter} />
+          <View style={styles.ownerToolbarPanel}>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Check Filters</Text>
+              <OwnerStatusPill label={`${filteredCanaryResults.length} visible`} tone="info" />
+            </View>
+            <Text style={styles.ownerPanelMeta}>Filter by proof status without hiding failed or manual-required checks behind a pass count.</Text>
+            <OwnerFilterChips options={canaryFilterOptions} value={canaryStatusFilter} onChange={setCanaryStatusFilter} />
+          </View>
 
           {canaryBusy ? (
-            <OwnerEmptyState body="The check run is using real backend proof paths." title="Running checks" />
+            <OwnerEmptyState body="The check run is using real backend proof paths and will refresh the grouped proof panels when it finishes." title="Running checks" />
           ) : !latestCanaryRun ? (
             <OwnerEmptyState
-              body={ownerControlLoading ? "Canary history is loading." : "Run the first production canary when ready."}
+              body={ownerControlLoading ? "Canary history is loading from the backend." : "Run the first production canary when ready; no placeholder proof is shown."}
               title={ownerControlLoading ? "Loading Canary" : "No canary run yet"}
             />
           ) : filteredCanaryResults.length === 0 ? (
             <OwnerEmptyState body="Choose another filter to see available checks." title="No checks in this filter" />
           ) : (
             <View style={styles.ownerControlList}>
-              {latestCanaryRun.status ? (
-                <View style={styles.ownerRunBanner}>
-                  <Text style={styles.ownerRunBannerTitle}>{formatModerationToken(String(latestCanaryRun.status))} proof complete</Text>
-                  <Text style={styles.ownerRunBannerBody}>
-                    {latestCanarySummary.fail > 0
-                      ? "Failed checks require attention before launch."
-                      : latestCanarySummary.manualRequired > 0
-                        ? "Partial proof complete. Manual Required checks are not pass."
-                        : "All available checks passed."}
-                  </Text>
-                </View>
-              ) : null}
-
               {groupedCanaryResults.map((group) => (
                 <View key={group.section} style={styles.ownerSectionGroup}>
-                  <Text style={styles.ownerSectionTitle}>{group.section}</Text>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>{group.section}</Text>
+                    <OwnerStatusPill label={`${group.results.length} checks`} tone="info" />
+                  </View>
                   {group.results.map((result, resultIndex) => {
                     const status = normalizeCanaryStatus(result.status);
                     const rowKey = `${latestCanaryRun.id ?? "latest"}-${String(result.key ?? "result")}-${resultIndex}`;
@@ -9730,25 +9839,14 @@ export default function AdminStudioScreen() {
                       <OwnerControlRow
                         key={rowKey}
                         expanded={expanded}
-                        message={formatAuditDisplayText(result.actual || result.message)}
-                        meta={formatAuditDisplayText(result.testedSurface)}
+                        message={formatAuditDisplayText(result.actual || result.message) || "Canary check returned no message."}
+                        meta={formatAuditDisplayText(result.testedSurface) || "No tested surface supplied"}
                         onPress={() => toggleCanaryRow(rowKey)}
                         statusLabel={ownerStatusLabel(status)}
                         title={result.label}
                         tone={ownerToneForStatus(status)}
                       >
-                        <Text style={styles.ownerDetailText}>{`Actor: ${formatAuditDisplayText(result.actor) || "system"}`}</Text>
-                        <Text style={styles.ownerDetailText}>{`Expected: ${formatAuditDisplayText(result.expected) || "not supplied"}`}</Text>
-                        <Text style={styles.ownerDetailText}>{`Actual: ${formatAuditDisplayText(result.actual || result.message)}`}</Text>
-                        <Text style={styles.ownerDetailText}>{`Tested: ${formatAuditDisplayText(result.testedSurface) || "not supplied"}`}</Text>
-                        <Text style={styles.ownerDetailText}>{`Timestamp: ${result.testedAt ? formatModerationTimestamp(String(result.testedAt)) : "not supplied"}`}</Text>
-                        <Text style={styles.ownerDetailText}>{`Cleanup: ${formatAuditDisplayText(result.cleanupStatus) || "not applicable"}`}</Text>
-                        <Text style={styles.ownerDetailText}>{`Backend status: ${status}`}</Text>
-                        {result.details && Object.keys(result.details).length ? (
-                          <Text style={styles.ownerDetailText}>{formatAuditDisplayText(JSON.stringify(result.details))}</Text>
-                        ) : result.metadata && Object.keys(result.metadata).length ? (
-                          <Text style={styles.ownerDetailText}>{formatAuditDisplayText(JSON.stringify(result.metadata))}</Text>
-                        ) : null}
+                        <CanaryProofDetails result={result} status={status} />
                       </OwnerControlRow>
                     );
                   })}
@@ -9765,7 +9863,7 @@ export default function AdminStudioScreen() {
                 return (
                   <View key={String(run.id)} style={styles.ownerHistoryRow}>
                     <Text style={styles.ownerHistoryText}>{run.created_at ? formatModerationTimestamp(String(run.created_at)) : "Time unknown"}</Text>
-                    <Text style={styles.ownerHistoryText}>{`${summary.pass} pass - ${summary.manualRequired} manual - ${summary.fail} failed`}</Text>
+                    <Text style={styles.ownerHistoryText}>{`${summary.pass} pass · ${summary.manualRequired} manual · ${summary.fail} failed`}</Text>
                   </View>
                 );
               })}
@@ -9789,13 +9887,23 @@ export default function AdminStudioScreen() {
             <OwnerMetricTile label="Legal Requests" tone={ownerAttentionCountTone(ownerSafetyDashboard?.unresolvedLegalRequests)} value={ownerMetricValue(ownerSafetyDashboard?.unresolvedLegalRequests)} />
             <OwnerMetricTile label="Repeated Reports" tone="manual" value="Manual" />
           </View>
+          <View style={styles.ownerToolbarPanel}>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Attention Signals</Text>
+              <OwnerStatusPill label="Read Only" tone="info" />
+            </View>
+            <Text style={styles.ownerPanelMeta}>Counts come from backed safety/legal sources. Missing aggregations stay warning-colored with an exact reason.</Text>
+          </View>
           <View style={styles.ownerControlList}>
             <OwnerControlRow
+              expanded
               message={formatAuditDisplayText(ownerSafetyDashboard?.repeatedReportTargets?.message) || "Repeated-report aggregation is not configured."}
               statusLabel="Manual Required"
               title="Repeated-report targets"
               tone="manual"
-            />
+            >
+              <OwnerDisabledReason reason="Repeated-report target aggregation is not connected in the backend yet, so this row cannot be marked passed or zero." />
+            </OwnerControlRow>
           </View>
         </View>
         ) : null}
@@ -12374,6 +12482,13 @@ const styles = StyleSheet.create({
   ownerSectionGroup: {
     gap: 8,
   },
+  ownerSectionHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "space-between",
+  },
   ownerSectionTitle: {
     color: "#FFFFFF",
     fontSize: 12,
@@ -12429,6 +12544,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     lineHeight: 18,
+  },
+  ownerDetailGrid: {
+    gap: 8,
+  },
+  ownerDetailGridRow: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 3,
+  },
+  ownerDetailLabel: {
+    color: "#8F9AAF",
+    fontSize: 10.5,
+    fontWeight: "900",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  ownerDetailValue: {
+    color: "#E5ECF8",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+  },
+  ownerNestedProofPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(113,142,255,0.16)",
+    backgroundColor: "rgba(88,116,255,0.06)",
+    gap: 8,
+    padding: 10,
   },
   ownerEmptyState: {
     borderRadius: 8,
