@@ -1,6 +1,7 @@
 import type { Json, TablesInsert } from "../supabase/database.types";
 import { trackEvent } from "./analytics";
 import { getOfficialPlatformAccount } from "./officialAccounts";
+import type { PlatformAdminAuditLogRow } from "./platformAudit";
 import { isBetaOperatorIdentity } from "./runtimeConfig";
 import { supabase } from "./supabase";
 
@@ -17,6 +18,18 @@ export type SafetyReportTargetType =
   | "creator_video_comment"
   | "social_attachment";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
+export type SafetyReportSeverity = "low" | "medium" | "high" | "critical" | "unknown";
+export type SafetyReportStatus = "needs_review" | "reviewing" | "actioned" | "dismissed" | "escalated";
+export type SafetyReportResolutionType =
+  | "marked_reviewed"
+  | "dismissed"
+  | "escalated"
+  | "target_hidden"
+  | "target_removed"
+  | "target_restored"
+  | "no_action_needed"
+  | "duplicate"
+  | "unsupported_target";
 export type SafetyReportCategoryCopy = {
   label: string;
   description: string;
@@ -116,11 +129,20 @@ export type SafetyReportRecord = {
   targetType: SafetyReportTargetType;
   targetId: string;
   category: SafetyReportCategory;
+  severity: SafetyReportSeverity;
+  status: SafetyReportStatus;
+  resolutionType: SafetyReportResolutionType | null;
+  resolutionReason: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  escalatedAt: string | null;
+  actionedAt: string | null;
   note: string | null;
   roomId: string | null;
   titleId: string | null;
   context: Record<string, unknown>;
   createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type SafetyReportQueueSourceSurface =
@@ -151,6 +173,10 @@ export type SafetyReportQueueItem = SafetyReportRecord & {
 
 export type SafetyReportQueueSummary = {
   totalReports: number;
+  needsReviewCount: number | null;
+  criticalHighRiskCount: number | null;
+  actionedTodayCount: number | null;
+  queueHealth: "connected" | "not_connected";
   platformOwnedTargetCount: number;
   sourceSurfaces: SafetyReportQueueSourceSurface[];
 };
@@ -220,6 +246,20 @@ export const SAFETY_REPORT_CATEGORY_COPY: Record<SafetyReportCategory, SafetyRep
 };
 
 type SafetyReportInsert = TablesInsert<"safety_reports">;
+
+type ReportsRpcError = {
+  code?: string | null;
+  message?: string | null;
+};
+
+type ReportsRpcResult = {
+  data: unknown;
+  error: ReportsRpcError | null;
+};
+
+const reportsRpcClient = supabase as unknown as {
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<ReportsRpcResult>;
+};
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -370,6 +410,60 @@ const normalizeSafetyReportCategory = (value: unknown): SafetyReportCategory => 
     return "other";
   }
   return "safety";
+};
+
+const normalizeSafetyReportSeverity = (value: unknown): SafetyReportSeverity => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (
+    normalized === "low"
+    || normalized === "medium"
+    || normalized === "high"
+    || normalized === "critical"
+  ) {
+    return normalized;
+  }
+  return "unknown";
+};
+
+const normalizeSafetyReportStatus = (value: unknown): SafetyReportStatus => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (
+    normalized === "reviewing"
+    || normalized === "actioned"
+    || normalized === "dismissed"
+    || normalized === "escalated"
+  ) {
+    return normalized;
+  }
+  return "needs_review";
+};
+
+const normalizeSafetyReportResolutionType = (value: unknown): SafetyReportResolutionType | null => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (
+    normalized === "marked_reviewed"
+    || normalized === "dismissed"
+    || normalized === "escalated"
+    || normalized === "target_hidden"
+    || normalized === "target_removed"
+    || normalized === "target_restored"
+    || normalized === "no_action_needed"
+    || normalized === "duplicate"
+    || normalized === "unsupported_target"
+  ) {
+    return normalized;
+  }
+  return null;
+};
+
+const isMissingReportsRpcError = (error: ReportsRpcError | null) => {
+  const searchable = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  return (
+    searchable.includes("pgrst202")
+    || searchable.includes("could not find the function")
+    || searchable.includes("function public.list_admin_reports")
+    || searchable.includes("function public.get_admin_reports_overview")
+  );
 };
 
 const readContextText = (value: unknown) => normalizeText(value) || null;
@@ -857,10 +951,133 @@ export async function revokePlatformStaffPermissionByEmail(input: {
   return readStaffPermissionActionResult(data);
 }
 
+type SafetyReportDbRow = {
+  id?: unknown;
+  reporter_user_id?: unknown;
+  target_type?: unknown;
+  target_id?: unknown;
+  category?: unknown;
+  severity?: unknown;
+  status?: unknown;
+  resolution_type?: unknown;
+  resolution_reason?: unknown;
+  resolved_by?: unknown;
+  resolved_at?: unknown;
+  escalated_at?: unknown;
+  actioned_at?: unknown;
+  note?: unknown;
+  room_id?: unknown;
+  title_id?: unknown;
+  context?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+};
+
+type AdminReportsOverview = {
+  connected: boolean;
+  generatedAt: string | null;
+  totalReports: number | null;
+  needsReviewCount: number | null;
+  criticalHighRiskCount: number | null;
+  actionedTodayCount: number | null;
+  queueHealth: "connected" | "not_connected";
+  sourceSurfaces: SafetyReportQueueSourceSurface[];
+};
+
+const toSafetyReportRecord = (entry: SafetyReportDbRow): SafetyReportRecord => ({
+  id: Number(entry.id ?? 0),
+  reporterUserId: normalizeText(entry.reporter_user_id),
+  targetType: normalizeSafetyReportTargetType(entry.target_type),
+  targetId: normalizeText(entry.target_id),
+  category: normalizeSafetyReportCategory(entry.category),
+  severity: normalizeSafetyReportSeverity(entry.severity),
+  status: normalizeSafetyReportStatus(entry.status),
+  resolutionType: normalizeSafetyReportResolutionType(entry.resolution_type),
+  resolutionReason: normalizeText(entry.resolution_reason) || null,
+  resolvedBy: normalizeText(entry.resolved_by) || null,
+  resolvedAt: normalizeText(entry.resolved_at) || null,
+  escalatedAt: normalizeText(entry.escalated_at) || null,
+  actionedAt: normalizeText(entry.actioned_at) || null,
+  note: normalizeText(entry.note) || null,
+  roomId: normalizeText(entry.room_id) || null,
+  titleId: normalizeText(entry.title_id) || null,
+  context: isPlainObject(entry.context) ? entry.context : {},
+  createdAt: normalizeText(entry.created_at) || null,
+  updatedAt: normalizeText(entry.updated_at) || null,
+});
+
+const parseReportRows = (value: unknown): SafetyReportRecord[] => {
+  const rows = Array.isArray(value) ? value : value ? [value] : [];
+  return rows
+    .filter(isPlainObject)
+    .map((entry) => toSafetyReportRecord(entry as SafetyReportDbRow));
+};
+
+const parseAdminReportsOverview = (value: unknown): AdminReportsOverview | null => {
+  if (!isPlainObject(value)) return null;
+  const sourceValues = Array.isArray(value.sourceSurfaces) ? value.sourceSurfaces : [];
+  return {
+    connected: value.connected === true,
+    generatedAt: normalizeText(value.generatedAt) || normalizeText(value.generated_at) || null,
+    totalReports: Number.isFinite(Number(value.totalReports)) ? Number(value.totalReports) : null,
+    needsReviewCount: Number.isFinite(Number(value.needsReviewCount)) ? Number(value.needsReviewCount) : null,
+    criticalHighRiskCount: Number.isFinite(Number(value.criticalHighRiskCount)) ? Number(value.criticalHighRiskCount) : null,
+    actionedTodayCount: Number.isFinite(Number(value.actionedTodayCount)) ? Number(value.actionedTodayCount) : null,
+    queueHealth: value.queueHealth === "connected" ? "connected" : "not_connected",
+    sourceSurfaces: sourceValues.map(normalizeSafetyReportQueueSourceSurface),
+  };
+};
+
+const toAdminAuditLogRow = (row: Record<string, unknown>): PlatformAdminAuditLogRow | null => {
+  const id = normalizeText(row.id);
+  const action = normalizeText(row.action);
+  const actionCategory = normalizeText(row.action_category);
+  if (!id || !action || !actionCategory) return null;
+
+  const metadata = isPlainObject(row.metadata) ? row.metadata : {};
+  return {
+    id,
+    actorUserId: normalizeText(row.actor_user_id) || null,
+    actorEmail: normalizeText(row.actor_email) || null,
+    actorRole: normalizeText(row.actor_role) || null,
+    action,
+    actionCategory,
+    targetType: normalizeText(row.target_type) || null,
+    targetId: normalizeText(row.target_id) || null,
+    targetUserId: normalizeText(row.target_user_id) || null,
+    targetChannelUserId: normalizeText(row.target_channel_user_id) || null,
+    reason: normalizeText(row.reason) || null,
+    severity: normalizeText(row.severity) || "info",
+    metadata,
+    createdAt: normalizeText(row.created_at) || null,
+    foundationProof: metadata.admin_audit_foundation_proof === true || metadata.foundation_only === true,
+  };
+};
+
 export async function readSafetyReports(options?: {
   limit?: number;
+  filter?: string;
 }) {
   const limit = Number.isFinite(options?.limit) ? Math.max(1, Math.min(50, Math.floor(Number(options?.limit)))) : 8;
+  const filter = normalizeText(options?.filter) || "all";
+
+  const rpcResult = await reportsRpcClient.rpc("list_admin_reports", {
+    p_cursor: null,
+    p_filter: filter,
+    p_limit: limit,
+    p_severity: null,
+    p_status: null,
+    p_target_type: null,
+  });
+
+  if (!rpcResult.error) {
+    return parseReportRows(rpcResult.data);
+  }
+
+  if (!isMissingReportsRpcError(rpcResult.error)) {
+    throw rpcResult.error;
+  }
+
   const { data, error } = await supabase
     .from(SAFETY_REPORTS_TABLE)
     .select("id,reporter_user_id,target_type,target_id,category,note,room_id,title_id,context,created_at")
@@ -869,18 +1086,7 @@ export async function readSafetyReports(options?: {
 
   if (error) throw error;
 
-  return (data ?? []).map((entry) => ({
-    id: Number(entry.id ?? 0),
-    reporterUserId: normalizeText(entry.reporter_user_id),
-    targetType: normalizeSafetyReportTargetType(entry.target_type),
-    targetId: normalizeText(entry.target_id),
-    category: normalizeSafetyReportCategory(entry.category),
-    note: normalizeText(entry.note) || null,
-    roomId: normalizeText(entry.room_id) || null,
-    titleId: normalizeText(entry.title_id) || null,
-    context: isPlainObject(entry.context) ? entry.context : {},
-    createdAt: normalizeText(entry.created_at) || null,
-  })) satisfies SafetyReportRecord[];
+  return (data ?? []).map((entry) => toSafetyReportRecord(entry as SafetyReportDbRow)) satisfies SafetyReportRecord[];
 }
 
 export function toSafetyReportQueueItem(report: SafetyReportRecord): SafetyReportQueueItem {
@@ -903,20 +1109,131 @@ export function toSafetyReportQueueItem(report: SafetyReportRecord): SafetyRepor
 export function summarizeSafetyReportQueue(items: SafetyReportQueueItem[]): SafetyReportQueueSummary {
   return {
     totalReports: items.length,
+    needsReviewCount: items.filter((item) => item.status === "needs_review" || item.status === "reviewing").length,
+    criticalHighRiskCount: items.filter((item) => (
+      (item.severity === "critical" || item.severity === "high")
+      && item.status !== "actioned"
+      && item.status !== "dismissed"
+    )).length,
+    actionedTodayCount: null,
+    queueHealth: "connected",
     platformOwnedTargetCount: items.filter((item) => item.platformOwnedTarget).length,
     sourceSurfaces: Array.from(new Set(items.map((item) => item.sourceSurface))),
   };
 }
 
+export async function readAdminReportsOverview(): Promise<AdminReportsOverview> {
+  const { data, error } = await reportsRpcClient.rpc("get_admin_reports_overview", {});
+  if (error) throw error;
+  return parseAdminReportsOverview(data) ?? {
+    connected: false,
+    generatedAt: null,
+    totalReports: null,
+    needsReviewCount: null,
+    criticalHighRiskCount: null,
+    actionedTodayCount: null,
+    queueHealth: "not_connected",
+    sourceSurfaces: [],
+  };
+}
+
 export async function readSafetyReportQueue(options?: {
   limit?: number;
+  filter?: string;
 }): Promise<SafetyReportQueueReadModel> {
-  const items = (await readSafetyReports(options)).map(toSafetyReportQueueItem);
+  const [reports, overview] = await Promise.all([
+    readSafetyReports(options),
+    readAdminReportsOverview().catch(() => null),
+  ]);
+  const items = reports.map(toSafetyReportQueueItem);
+  const fallbackSummary = summarizeSafetyReportQueue(items);
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: overview?.generatedAt ?? new Date().toISOString(),
     items,
-    summary: summarizeSafetyReportQueue(items),
+    summary: overview
+      ? {
+        totalReports: overview.totalReports ?? fallbackSummary.totalReports,
+        needsReviewCount: overview.needsReviewCount ?? fallbackSummary.needsReviewCount,
+        criticalHighRiskCount: overview.criticalHighRiskCount ?? fallbackSummary.criticalHighRiskCount,
+        actionedTodayCount: overview.actionedTodayCount,
+        queueHealth: overview.queueHealth,
+        platformOwnedTargetCount: fallbackSummary.platformOwnedTargetCount,
+        sourceSurfaces: overview.sourceSurfaces.length ? overview.sourceSurfaces : fallbackSummary.sourceSurfaces,
+      }
+      : fallbackSummary,
   };
+}
+
+export async function updateAdminReportStatusAction(input: {
+  reportId: number;
+  action: "mark_reviewed" | "dismiss" | "escalate";
+  reason: string;
+}): Promise<SafetyReportQueueItem> {
+  const reason = normalizeText(input.reason);
+  if (!Number.isFinite(input.reportId) || input.reportId <= 0) {
+    throw new Error("Select a report before updating status.");
+  }
+  if (!reason) {
+    throw new Error("Add an action reason before updating report status.");
+  }
+
+  const { data, error } = await reportsRpcClient.rpc("update_admin_report_status", {
+    p_reason: reason,
+    p_report_id: input.reportId,
+    p_status_action: input.action,
+  });
+  if (error) throw error;
+
+  const [report] = parseReportRows(data);
+  if (!report) throw new Error("Report status updated, but no report row was returned.");
+  return toSafetyReportQueueItem(report);
+}
+
+export async function applyAdminReportTargetAction(input: {
+  reportId: number;
+  targetType: SafetyReportTargetType;
+  targetId: string;
+  action: "hidden" | "removed" | "clean";
+  reason: string;
+}): Promise<SafetyReportQueueItem> {
+  const reason = normalizeText(input.reason);
+  const targetId = normalizeText(input.targetId);
+  if (!Number.isFinite(input.reportId) || input.reportId <= 0) {
+    throw new Error("Select a report before applying a target action.");
+  }
+  if (!targetId) {
+    throw new Error("Report target id is missing.");
+  }
+  if (!reason) {
+    throw new Error("Add an action reason before applying report target moderation.");
+  }
+
+  const { data, error } = await reportsRpcClient.rpc("apply_admin_report_target_action", {
+    p_action_type: input.action,
+    p_reason: reason,
+    p_report_id: input.reportId,
+    p_target_id: targetId,
+    p_target_type: input.targetType,
+  });
+  if (error) throw error;
+
+  const [report] = parseReportRows(data);
+  if (!report) throw new Error("Target action completed, but no report row was returned.");
+  return toSafetyReportQueueItem(report);
+}
+
+export async function listAdminReportAuditEvents(reportId: number): Promise<PlatformAdminAuditLogRow[]> {
+  if (!Number.isFinite(reportId) || reportId <= 0) return [];
+  const { data, error } = await reportsRpcClient.rpc("list_admin_report_audit_events", {
+    p_report_id: reportId,
+  });
+  if (error) throw error;
+
+  const rows = Array.isArray(data) ? data : [];
+  return rows
+    .filter(isPlainObject)
+    .map((row) => toAdminAuditLogRow(row))
+    .filter((row): row is PlatformAdminAuditLogRow => !!row);
 }
 
 const toAuditTimestamp = (value: string | null) => {

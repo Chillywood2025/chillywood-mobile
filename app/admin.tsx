@@ -74,6 +74,7 @@ import {
 import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
+  applyAdminReportTargetAction,
   canAccessAuditExplorerTools,
   canAccessBreakGlassTools,
   canAccessDmcaTools,
@@ -90,13 +91,16 @@ import {
   getModerationAccess,
   grantPlatformStaffPermissionByEmail,
   grantPlatformStaffRoleByEmail,
+  hasPlatformStaffPermission,
   hasPlatformRoleMembership,
+  listAdminReportAuditEvents,
   readMyPlatformRoleMemberships,
   readPlatformRoleRoster,
   readSafetyReportQueue,
   revokePlatformStaffPermissionByEmail,
   revokePlatformStaffRoleByEmail,
   resolvePlatformActorRole,
+  updateAdminReportStatusAction,
   type AdminAuditLogEntry,
   type AdminAuditLogReadModel,
   type PlatformRoleMembership,
@@ -191,7 +195,6 @@ import {
   type DmcaContentType,
 } from "../_lib/dmca";
 import { supabase } from "../_lib/supabase";
-import { moderateCreatorVideo, type CreatorVideoModerationStatus } from "../_lib/creatorVideos";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 
 type TitleId = Database["public"]["Tables"]["titles"]["Row"]["id"];
@@ -314,9 +317,12 @@ type AdminDashboardCard = {
   destination?: OperatorTabKey;
 };
 
-type PendingCreatorVideoModerationAction = {
-  status: CreatorVideoModerationStatus;
-  videoId: string;
+type ReportTargetModerationStatus = "hidden" | "removed" | "clean";
+
+type PendingReportTargetModerationAction = {
+  status: ReportTargetModerationStatus;
+  targetType: SafetyReportQueueItem["targetType"];
+  targetId: string;
   reason: string;
   reportId?: number | null;
   reportSourceSurface?: string | null;
@@ -334,27 +340,15 @@ type ReportTriageFilterKey =
 const REPORT_TRIAGE_FILTERS: readonly {
   key: ReportTriageFilterKey;
   label: string;
-  disabledReason?: string;
 }[] = [
   { key: "needs_review", label: "Needs Review" },
-  {
-    key: "critical",
-    label: "Critical",
-    disabledReason: "Critical severity filtering is disabled because safety_reports does not expose a backed severity field yet.",
-  },
+  { key: "critical", label: "Critical" },
   { key: "creator_video", label: "Creator Videos" },
   { key: "profile_post", label: "Profile Posts" },
   { key: "player", label: "Player" },
-  {
-    key: "actioned",
-    label: "Actioned",
-    disabledReason: "Actioned filtering is disabled because report resolution/status fields are not connected in safety_reports yet.",
-  },
+  { key: "actioned", label: "Actioned" },
   { key: "all", label: "All" },
 ];
-
-const REPORT_STATUS_WORKFLOW_DISABLED_REASON =
-  "Report status actions are disabled because safety_reports currently has no backed resolution/status fields. Use backed target moderation for creator-video reports.";
 
 const REPORT_AUDIT_UNAVAILABLE_REASON =
   "Recent report-specific audit rows are shown when immutable admin audit rows are connected for this target.";
@@ -1603,7 +1597,7 @@ const formatDmcaOperationFailure = (error: any, fallback: string) => {
   return formatAdminOperationFailure(error, fallback);
 };
 
-const formatCreatorVideoModerationFailure = (error: any) => {
+const formatReportModerationFailure = (error: any) => {
   const message = String(error?.message ?? "");
   const code = String(error?.code ?? "");
   const searchable = `${code} ${message}`.toLowerCase();
@@ -1619,7 +1613,20 @@ const formatCreatorVideoModerationFailure = (error: any) => {
     || searchable.includes("not authorized")
     || code === "42501"
   ) {
-    return "Admin action denied. This account does not have operator permissions.";
+    return "Admin action denied. This account lacks backed report-review or content-moderation permission.";
+  }
+
+  if (searchable.includes("admin_report_reason_required")) {
+    return "Add a short reason before recording this report action.";
+  }
+  if (searchable.includes("admin_report_closed_state")) {
+    return "This report is already closed. Reopen is not backed in this lane.";
+  }
+  if (searchable.includes("admin_report_target_action_unsupported")) {
+    return "That target type is not backed for public visibility moderation. Use Mark Reviewed, Dismiss, or Escalate.";
+  }
+  if (searchable.includes("admin_report_target_mismatch")) {
+    return "Report target mismatch. Refresh Reports and try again.";
   }
 
   if (
@@ -1632,7 +1639,7 @@ const formatCreatorVideoModerationFailure = (error: any) => {
     return "Content not found or no longer available.";
   }
 
-  return "Unable to update creator video moderation status. Try again after confirming this content still exists.";
+  return "Unable to update this report action. Try again after confirming the report and target still exist.";
 };
 
 const formatAdminV1Count = (value: number | null, loading: boolean) => {
@@ -1723,21 +1730,25 @@ const formatImmutableAuditTarget = (entry: PlatformAdminAuditLogRow) => {
   return entry.targetId ? `${targetType} ${formatCompactIdentifier(entry.targetId)}` : targetType;
 };
 
-const getCreatorVideoModerationActionLabel = (status: CreatorVideoModerationStatus) => {
+const getCreatorVideoModerationActionLabel = (status: ReportTargetModerationStatus) => {
   if (status === "hidden") return "Hide From Public";
   if (status === "removed") return "Remove From Public";
   if (status === "clean") return "Restore Clean";
   return formatModerationToken(status);
 };
 
-const getCreatorVideoModerationConfirmCopy = (status: CreatorVideoModerationStatus) => {
+const getReportTargetActionConfirmCopy = (
+  status: ReportTargetModerationStatus,
+  targetType?: SafetyReportQueueItem["targetType"] | null,
+) => {
+  const targetLabel = targetType ? formatModerationToken(targetType).toLowerCase() : "target";
   if (status === "hidden") {
-    return "This hides the creator video from public Channel and Player access while keeping the record available for review.";
+    return `This hides the ${targetLabel} from public access while keeping the record available for review.`;
   }
   if (status === "removed") {
-    return "This marks the creator video removed from public access. Use only for safe test content or reviewed policy action.";
+    return `This marks the ${targetLabel} removed from public access. Use only for reviewed policy action or safe proof content.`;
   }
-  return "This clears the active moderation block and lets the video follow its normal visibility rules again.";
+  return `This clears the active moderation block and lets the ${targetLabel} follow its normal visibility rules again.`;
 };
 
 const formatReportSourceSurface = (surface: SafetyReportQueueItem["sourceSurface"]) => {
@@ -1761,44 +1772,69 @@ const formatReportSourceSurface = (surface: SafetyReportQueueItem["sourceSurface
   }
 };
 
-const formatReportReviewState = (state: SafetyReportQueueItem["reviewState"]) => {
-  if (state === "pending_review") return "Needs Review";
-  if (state === "operator_visible") return "Operator Visible";
-  return "Status Not Connected";
+const formatReportReviewState = (status: SafetyReportQueueItem["status"]) => {
+  switch (status) {
+    case "reviewing":
+      return "Under Review";
+    case "actioned":
+      return "Actioned";
+    case "dismissed":
+      return "Dismissed";
+    case "escalated":
+      return "Escalated";
+    default:
+      return "Needs Review";
+  }
 };
 
-const getReportReviewTone = (state: SafetyReportQueueItem["reviewState"]): OwnerControlTone => {
-  if (state === "pending_review") return "manual";
-  if (state === "operator_visible") return "info";
-  return "locked";
+const getReportReviewTone = (status: SafetyReportQueueItem["status"]): OwnerControlTone => {
+  if (status === "actioned" || status === "dismissed") return "success";
+  if (status === "escalated") return "manual";
+  if (status === "reviewing") return "info";
+  return "manual";
 };
 
-const getReportCategoryTone = (category: SafetyReportQueueItem["category"]): OwnerControlTone => {
-  if (category === "abuse" || category === "harassment" || category === "safety") return "manual";
-  if (category === "copyright" || category === "impersonation") return "info";
+const getReportSeverityTone = (severity: SafetyReportQueueItem["severity"]): OwnerControlTone => {
+  if (severity === "critical") return "danger";
+  if (severity === "high" || severity === "medium") return "manual";
+  if (severity === "low") return "success";
   return "locked";
 };
 
 const formatReportRiskLabel = (report: SafetyReportQueueItem) => {
-  if (report.category === "abuse" || report.category === "harassment" || report.category === "safety") {
-    return "High Review";
-  }
-  if (report.category === "copyright") return "Copyright";
-  if (report.category === "impersonation") return "Identity";
-  return "Unclassified";
+  if (report.severity === "critical") return "Critical";
+  if (report.severity === "high") return "High Risk";
+  if (report.severity === "medium") return "Medium";
+  if (report.severity === "low") return "Low";
+  return "Unknown Severity";
 };
 
 const isProfilePostReport = (report: SafetyReportQueueItem) => (
   report.targetType === "profile_post" || report.targetType === "profile_post_comment"
 );
 
+const isReportVisibilityTargetSupported = (targetType: SafetyReportQueueItem["targetType"]) => (
+  targetType === "creator_video"
+  || targetType === "profile_post"
+  || targetType === "profile_post_comment"
+  || targetType === "creator_video_comment"
+  || targetType === "social_attachment"
+);
+
 const reportMatchesTriageFilter = (report: SafetyReportQueueItem, filter: ReportTriageFilterKey) => {
-  if (filter === "all" || filter === "needs_review") return true;
+  if (filter === "all") return true;
+  if (filter === "needs_review") return report.status === "needs_review" || report.status === "reviewing";
   if (filter === "creator_video") return report.targetType === "creator_video" || report.targetType === "creator_video_comment";
   if (filter === "profile_post") return isProfilePostReport(report);
   if (filter === "player") return report.sourceSurface === "player";
-  if (filter === "critical") return report.category === "abuse" || report.category === "harassment" || report.category === "safety";
-  if (filter === "actioned") return false;
+  if (filter === "critical") {
+    return (
+      (report.severity === "critical" || report.severity === "high")
+      && report.status !== "actioned"
+      && report.status !== "dismissed"
+    );
+  }
+  if (filter === "actioned") return report.status === "actioned" || report.status === "dismissed" || report.status === "escalated";
   return true;
 };
 
@@ -1816,16 +1852,25 @@ const buildReportActorLine = (report: SafetyReportQueueItem) => {
 
 const getReportTargetActionDisabledReason = (
   report: SafetyReportQueueItem | null,
-  canManagePrivilegedWrites: boolean,
+  canApplyReportTargetActions: boolean,
 ) => {
   if (!report) return "Select a report before applying a target action.";
-  if (report.targetType !== "creator_video") {
-    return `Missing backend piece: ${formatModerationToken(report.targetType)} target moderation action is not connected to Reports yet.`;
+  if (report.status === "actioned" || report.status === "dismissed") {
+    return "This report is already closed. Reopen is not backed in the Reports workflow yet.";
   }
-  if (!canManagePrivilegedWrites) {
-    return "Creator-video safety writes require backend Owner/Admin operator permission. Report review access alone is read-only here.";
+  if (!isReportVisibilityTargetSupported(report.targetType)) {
+    return `Missing backend piece: ${formatModerationToken(report.targetType)} public visibility mutation is not backed. Mark Reviewed, Dismiss, and Escalate are available.`;
+  }
+  if (!canApplyReportTargetActions) {
+    return "Target visibility actions require Owner or scoped content_moderation permission. Report review alone can Mark Reviewed, Dismiss, or Escalate.";
   }
   return null;
+};
+
+const formatReportResolution = (report: SafetyReportQueueItem) => {
+  if (report.resolutionType) return formatModerationToken(report.resolutionType);
+  if (report.status === "needs_review") return "Pending";
+  return formatModerationToken(report.status);
 };
 
 const formatRelease = (releaseAt?: string | null) => {
@@ -1903,6 +1948,9 @@ export default function AdminStudioScreen() {
   const [safetyReportFilter, setSafetyReportFilter] = useState<ReportTriageFilterKey>("needs_review");
   const [selectedSafetyReportId, setSelectedSafetyReportId] = useState<number | null>(null);
   const [safetyReportDetailVisible, setSafetyReportDetailVisible] = useState(false);
+  const [selectedReportAuditRows, setSelectedReportAuditRows] = useState<PlatformAdminAuditLogRow[]>([]);
+  const [selectedReportAuditLoading, setSelectedReportAuditLoading] = useState(false);
+  const [reportStatusActionBusy, setReportStatusActionBusy] = useState<string | null>(null);
   const [manualReportActionOpen, setManualReportActionOpen] = useState(false);
   const [moderationNotice, setModerationNotice] = useState<string | null>(null);
   const [dmcaCases, setDmcaCases] = useState<DmcaCase[]>([]);
@@ -1936,11 +1984,10 @@ export default function AdminStudioScreen() {
   const [counterService, setCounterService] = useState(false);
   const [counterSignature, setCounterSignature] = useState("");
   const [counterForwardedNow, setCounterForwardedNow] = useState(false);
-  const [creatorVideoModerationId, setCreatorVideoModerationId] = useState("");
   const [creatorVideoModerationReason, setCreatorVideoModerationReason] = useState("");
-  const [creatorVideoModerationBusy, setCreatorVideoModerationBusy] = useState<CreatorVideoModerationStatus | null>(null);
+  const [creatorVideoModerationBusy, setCreatorVideoModerationBusy] = useState<ReportTargetModerationStatus | null>(null);
   const [pendingCreatorVideoModeration, setPendingCreatorVideoModeration] =
-    useState<PendingCreatorVideoModerationAction | null>(null);
+    useState<PendingReportTargetModerationAction | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
   const [liveCostGuardSettingsReadModel, setLiveCostGuardSettingsReadModel] =
     useState<LiveCostGuardSettingsReadModel | null>(null);
@@ -2076,6 +2123,13 @@ export default function AdminStudioScreen() {
   const canManagePermissionTemplates = isSignedIn && isActive && platformRolesChecked && canManageStaffPermissionTemplates(platformRoles);
   const canAccessBreakGlass = isSignedIn && isActive && platformRolesChecked && canAccessBreakGlassTools(platformRoles);
   const canAccessLegalIntake = isSignedIn && isActive && platformRolesChecked && canAccessLegalRequestIntakeTools(platformRoles);
+  const canApplyReportTargetActions = canManagePrivilegedWrites
+    || (
+      isSignedIn
+      && isActive
+      && platformRolesChecked
+      && hasPlatformStaffPermission(platformRoles, ["content_moderation"])
+    );
   const canAccessOwnerSecurity = isOwnerStaff;
   const canAccessCanaryChecks = canAccessAuditExplorer;
   const visibleOperatorTabs = useMemo(
@@ -2139,7 +2193,7 @@ export default function AdminStudioScreen() {
   const safetyReportSourceSummary = safetyReportQueueSummary
     ? safetyReportQueueSummary.sourceSurfaces.map(formatReportSourceSurface).join(" · ") || "No source surfaces returned"
     : "Queue source not connected";
-  const selectedReportAuditRows = useMemo(() => {
+  const fallbackSelectedReportAuditRows = useMemo(() => {
     if (!selectedSafetyReport || !adminImmutableAuditReadModel.connected) return [];
     return adminImmutableAuditReadModel.latestRows
       .filter((entry) => {
@@ -2150,17 +2204,22 @@ export default function AdminStudioScreen() {
       })
       .slice(0, 5);
   }, [adminImmutableAuditReadModel.connected, adminImmutableAuditReadModel.latestRows, selectedSafetyReport]);
+  const visibleSelectedReportAuditRows = selectedReportAuditRows.length
+    ? selectedReportAuditRows
+    : fallbackSelectedReportAuditRows;
   const selectedReportTargetActionDisabledReason = getReportTargetActionDisabledReason(
     selectedSafetyReport,
-    canManagePrivilegedWrites,
+    canApplyReportTargetActions,
   );
   const reportTriageMetrics = useMemo(() => {
+    const criticalHighRiskCount = safetyReportQueueSummary?.criticalHighRiskCount ?? null;
+    const actionedTodayCount = safetyReportQueueSummary?.actionedTodayCount ?? null;
     const queueValue = !canReviewSafetyReports
       ? "Locked"
       : safetyReportsLoading
         ? "Loading"
         : safetyReportQueueConnected
-          ? String(safetyReportQueueCount)
+          ? String(safetyReportQueueSummary?.needsReviewCount ?? safetyReportQueueCount)
           : "Not Connected";
     const queueTone: OwnerControlTone = !canReviewSafetyReports
       ? "locked"
@@ -2181,21 +2240,31 @@ export default function AdminStudioScreen() {
         label: "Needs Review",
         value: queueValue,
         body: safetyReportQueueConnected
-          ? "Backed recent report queue loaded."
+          ? "Backed status count from safety_reports."
           : "Queue count is unavailable until the report query succeeds.",
         tone: queueTone,
       },
       {
         label: "Critical / High Risk",
-        value: "Manual",
-        body: "No backed severity field exists yet, so high-risk classification is manual.",
-        tone: "manual" as OwnerControlTone,
+        value: safetyReportQueueConnected
+          ? criticalHighRiskCount === null ? "Unavailable" : String(criticalHighRiskCount)
+          : "Not Connected",
+        body: criticalHighRiskCount === null
+          ? "Severity count is unavailable until the backed overview RPC returns it."
+          : "Backed severity filter counts critical/high open reports.",
+        tone: safetyReportQueueConnected && criticalHighRiskCount !== null && criticalHighRiskCount > 0
+          ? "danger" as OwnerControlTone
+          : safetyReportQueueConnected && criticalHighRiskCount !== null ? "success" as OwnerControlTone : "locked" as OwnerControlTone,
       },
       {
         label: "Actioned Today",
-        value: "Not Connected",
-        body: "Report resolution/status rows are not connected yet.",
-        tone: "locked" as OwnerControlTone,
+        value: safetyReportQueueConnected
+          ? actionedTodayCount === null ? "Unavailable" : String(actionedTodayCount)
+          : "Not Connected",
+        body: actionedTodayCount === null
+          ? "Actioned count requires the backed overview timestamp query."
+          : "Backed status/resolution timestamps for today's triage work.",
+        tone: safetyReportQueueConnected && actionedTodayCount !== null ? "info" as OwnerControlTone : "locked" as OwnerControlTone,
       },
       {
         label: "Queue Health",
@@ -2210,6 +2279,7 @@ export default function AdminStudioScreen() {
     canReviewSafetyReports,
     safetyReportQueueConnected,
     safetyReportQueueCount,
+    safetyReportQueueSummary,
     safetyReportSourceSummary,
     safetyReportsLoading,
   ]);
@@ -2285,6 +2355,7 @@ export default function AdminStudioScreen() {
       setSafetyReportFilter("needs_review");
       setSelectedSafetyReportId(null);
       setSafetyReportDetailVisible(false);
+      setSelectedReportAuditRows([]);
       setManualReportActionOpen(false);
       setModerationNotice(null);
       setDmcaCases([]);
@@ -2299,7 +2370,6 @@ export default function AdminStudioScreen() {
       setDmcaIntakeVisible(false);
       setDmcaIntakeBusy(false);
       setDmcaIntakeForm(createDmcaNoticeFormState());
-      setCreatorVideoModerationId("");
       setCreatorVideoModerationReason("");
       setCreatorVideoModerationBusy(null);
       setPendingCreatorVideoModeration(null);
@@ -2370,6 +2440,7 @@ export default function AdminStudioScreen() {
       setSafetyReportsLastLoadedAt(null);
       setSelectedSafetyReportId(null);
       setSafetyReportDetailVisible(false);
+      setSelectedReportAuditRows([]);
       setManualReportActionOpen(false);
       setDmcaCases([]);
       setDmcaCasesLoading(false);
@@ -2444,6 +2515,7 @@ export default function AdminStudioScreen() {
       setSafetyReportsLastLoadedAt(null);
       setSelectedSafetyReportId(null);
       setSafetyReportDetailVisible(false);
+      setSelectedReportAuditRows([]);
       return;
     }
     void loadSafetyReports();
@@ -2454,8 +2526,34 @@ export default function AdminStudioScreen() {
     if (selectedSafetyReportId !== null && !safetyReports.some((report) => report.id === selectedSafetyReportId)) {
       setSelectedSafetyReportId(null);
       setSafetyReportDetailVisible(false);
+      setSelectedReportAuditRows([]);
     }
   }, [safetyReports, selectedSafetyReportId]);
+
+  useEffect(() => {
+    if (!safetyReportDetailVisible || !selectedSafetyReport || !canReviewSafetyReports) {
+      setSelectedReportAuditRows([]);
+      setSelectedReportAuditLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedReportAuditLoading(true);
+    listAdminReportAuditEvents(selectedSafetyReport.id)
+      .then((rows) => {
+        if (!cancelled) setSelectedReportAuditRows(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedReportAuditRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSelectedReportAuditLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canReviewSafetyReports, safetyReportDetailVisible, selectedSafetyReport]);
 
   useEffect(() => {
     if (!canAccessAdmin) {
@@ -3352,7 +3450,7 @@ export default function AdminStudioScreen() {
     try {
       setSafetyReportsLoading(true);
       setModerationNotice(null);
-      const queue = await readSafetyReportQueue({ limit: 8 });
+      const queue = await readSafetyReportQueue({ filter: "all", limit: 25 });
       setSafetyReports(queue.items);
       setSafetyReportQueueSummary(queue.summary);
       setSafetyReportsLastLoadedAt(queue.generatedAt);
@@ -3360,6 +3458,7 @@ export default function AdminStudioScreen() {
       setSafetyReports([]);
       setSafetyReportQueueSummary(null);
       setSafetyReportsLastLoadedAt(null);
+      setSelectedReportAuditRows([]);
       setModerationNotice(formatAdminOperationFailure(err, "Failed to load the safety review queue."));
     } finally {
       setSafetyReportsLoading(false);
@@ -4815,151 +4914,133 @@ export default function AdminStudioScreen() {
     loadLiveCostGuard,
   ]);
 
-  const queueCreatorVideoModerationForTarget = useCallback((
-    status: CreatorVideoModerationStatus,
-    targetVideoId: string,
+  const queueReportTargetModerationForTarget = useCallback((
+    status: ReportTargetModerationStatus,
+    targetType: SafetyReportQueueItem["targetType"],
+    targetIdInput: string,
     reasonInput: string,
     report?: SafetyReportQueueItem | null,
   ) => {
-    const videoId = targetVideoId.trim();
+    const targetId = targetIdInput.trim();
     const reason = reasonInput.trim();
-    if (!videoId || creatorVideoModerationBusy) return;
+    if (!targetId || creatorVideoModerationBusy) return;
 
-    if (!canManagePrivilegedWrites) {
-      setModerationNotice("Admin action denied. This account does not have operator permissions.");
+    if (!canApplyReportTargetActions) {
+      setModerationNotice("Target visibility actions require Owner or scoped content_moderation permission.");
       return;
     }
 
-    if ((status === "hidden" || status === "removed") && !reason) {
-      setModerationNotice("Add a short safety reason before hiding or removing creator video content.");
+    if (!reason) {
+      setModerationNotice("Add a short safety reason before changing public visibility.");
       return;
     }
 
     setPendingCreatorVideoModeration({
       status,
-      videoId,
+      targetType,
+      targetId,
       reason,
       reportId: report?.id ?? null,
       reportSourceSurface: report?.sourceSurface ?? null,
     });
   }, [
-    canManagePrivilegedWrites,
+    canApplyReportTargetActions,
     creatorVideoModerationBusy,
   ]);
-
-  const queueCreatorVideoModeration = useCallback((status: CreatorVideoModerationStatus) => {
-    queueCreatorVideoModerationForTarget(
-      status,
-      creatorVideoModerationId,
-      creatorVideoModerationReason,
-      null,
-    );
-  }, [
-    creatorVideoModerationId,
-    creatorVideoModerationReason,
-    queueCreatorVideoModerationForTarget,
-  ]);
-
-  const recordReportModerationAudit = useCallback(async (
-    action: PendingCreatorVideoModerationAction,
-  ): Promise<PlatformAdminAuditLogRow> => {
-    const metadata = {
-      report_id: action.reportId ?? null,
-      report_source_surface: action.reportSourceSurface ?? null,
-      moderation_status: action.status,
-      ui_surface: "admin_reports_triage",
-    };
-    const severity = action.status === "removed" ? "warning" : action.status === "hidden" ? "notice" : "info";
-    const actionName = `reports_creator_video_${action.status}`;
-    const { data, error } = await supabase
-      .from("platform_admin_audit_logs")
-      .insert({
-        actor_user_id: user?.id ?? null,
-        actor_email: user?.email ?? null,
-        actor_role: resolvedActorRole,
-        action: actionName,
-        action_category: "moderation",
-        target_type: "creator_video",
-        target_id: action.videoId,
-        reason: action.reason || null,
-        severity,
-        metadata,
-      })
-      .select("id,created_at")
-      .single();
-
-    if (error) {
-      throw new Error(`Target moderation updated, but audit event could not be written: ${error.message}`);
-    }
-
-    return {
-      id: String(data?.id ?? `local-${Date.now()}`),
-      actorUserId: user?.id ?? null,
-      actorEmail: user?.email ?? null,
-      actorRole: resolvedActorRole,
-      action: actionName,
-      actionCategory: "moderation",
-      targetType: "creator_video",
-      targetId: action.videoId,
-      targetUserId: null,
-      targetChannelUserId: null,
-      reason: action.reason || null,
-      severity,
-      metadata,
-      createdAt: String(data?.created_at ?? new Date().toISOString()),
-      foundationProof: false,
-    };
-  }, [resolvedActorRole, user?.email, user?.id]);
 
   const applyCreatorVideoModeration = useCallback(async () => {
     const action = pendingCreatorVideoModeration;
     if (!action || creatorVideoModerationBusy) return;
 
-    if (!canManagePrivilegedWrites) {
+    if (!canApplyReportTargetActions) {
       setPendingCreatorVideoModeration(null);
-      setModerationNotice("Admin action denied. This account does not have operator permissions.");
+      setModerationNotice("Target visibility actions require Owner or scoped content_moderation permission.");
+      return;
+    }
+
+    if (!action.reportId) {
+      setPendingCreatorVideoModeration(null);
+      setModerationNotice("Manual target action is disabled because immutable report-linked audit requires a selected report.");
       return;
     }
 
     try {
       setCreatorVideoModerationBusy(action.status);
       setModerationNotice(null);
-      await moderateCreatorVideo({
-        videoId: action.videoId,
-        moderationStatus: action.status,
+      const updatedReport = await applyAdminReportTargetAction({
+        action: action.status,
         reason: action.reason,
+        reportId: action.reportId,
+        targetId: action.targetId,
+        targetType: action.targetType,
       });
-      const auditEntry = await recordReportModerationAudit(action);
-      setAdminImmutableAuditReadModel((current) => ({
-        ...current,
-        auditLogCount: current.auditLogCount === null ? null : current.auditLogCount + 1,
-        connected: true,
-        generatedAt: new Date().toISOString(),
-        latestRows: [auditEntry, ...current.latestRows].slice(0, 8),
-        loading: false,
-      }));
+      setSafetyReports((current) => current.map((report) => (
+        report.id === updatedReport.id ? updatedReport : report
+      )));
+      const auditRows = await listAdminReportAuditEvents(action.reportId).catch(() => []);
+      setSelectedReportAuditRows(auditRows);
       setCreatorVideoModerationReason("");
       setModerationNotice(
-        action.reportId
-          ? `Report ${formatCompactIdentifier(action.reportId)} target ${formatCompactIdentifier(action.videoId)} is now ${formatModerationToken(action.status).toLowerCase()}; immutable audit row written.`
-          : `Creator video ${formatCompactIdentifier(action.videoId)} is now ${formatModerationToken(action.status).toLowerCase()}; immutable audit row written.`,
+        `Report ${formatCompactIdentifier(action.reportId)} target ${formatCompactIdentifier(action.targetId)} is now ${formatModerationToken(action.status).toLowerCase()}; immutable audit row written and report status updated.`,
       );
       if (canReviewSafetyReports) {
         void loadSafetyReports();
       }
     } catch (err: any) {
-      setModerationNotice(formatCreatorVideoModerationFailure(err));
+      setModerationNotice(formatReportModerationFailure(err));
     } finally {
       setCreatorVideoModerationBusy(null);
       setPendingCreatorVideoModeration(null);
     }
   }, [
-    canManagePrivilegedWrites,
+    canApplyReportTargetActions,
     canReviewSafetyReports,
     creatorVideoModerationBusy,
     loadSafetyReports,
     pendingCreatorVideoModeration,
-    recordReportModerationAudit,
+  ]);
+
+  const updateSelectedReportStatus = useCallback(async (
+    action: "mark_reviewed" | "dismiss" | "escalate",
+  ) => {
+    if (!selectedSafetyReport || reportStatusActionBusy) return;
+    const reason = creatorVideoModerationReason.trim();
+    if (!reason) {
+      setModerationNotice("Add a short report action reason before updating status.");
+      return;
+    }
+    if (!canReviewSafetyReports) {
+      setModerationNotice("Report status actions require backed report-review permission.");
+      return;
+    }
+
+    try {
+      setReportStatusActionBusy(action);
+      setModerationNotice(null);
+      const updatedReport = await updateAdminReportStatusAction({
+        action,
+        reason,
+        reportId: selectedSafetyReport.id,
+      });
+      setSafetyReports((current) => current.map((report) => (
+        report.id === updatedReport.id ? updatedReport : report
+      )));
+      const auditRows = await listAdminReportAuditEvents(updatedReport.id).catch(() => []);
+      setSelectedReportAuditRows(auditRows);
+      setCreatorVideoModerationReason("");
+      setModerationNotice(`Report ${formatCompactIdentifier(updatedReport.id)} ${formatModerationToken(updatedReport.status).toLowerCase()}; immutable audit row written.`);
+      void loadSafetyReports();
+    } catch (err: any) {
+      setModerationNotice(formatReportModerationFailure(err));
+    } finally {
+      setReportStatusActionBusy(null);
+    }
+  }, [
+    canReviewSafetyReports,
+    creatorVideoModerationReason,
+    loadSafetyReports,
+    reportStatusActionBusy,
+    selectedSafetyReport,
   ]);
 
   const loadStaffAndAuditVisibility = useCallback(async () => {
@@ -5972,7 +6053,6 @@ export default function AdminStudioScreen() {
             <View style={styles.ownerFilterRow}>
               {REPORT_TRIAGE_FILTERS.map((option) => {
                 const active = safetyReportFilter === option.key;
-                const disabled = !!option.disabledReason;
                 return (
                   <TouchableOpacity
                     key={option.key}
@@ -5980,20 +6060,14 @@ export default function AdminStudioScreen() {
                     style={[
                       styles.ownerFilterChip,
                       active && styles.ownerFilterChipActive,
-                      disabled && styles.reportFilterChipDisabled,
                     ]}
                     onPress={() => {
-                      if (disabled) {
-                        setModerationNotice(option.disabledReason ?? REPORT_STATUS_WORKFLOW_DISABLED_REASON);
-                        return;
-                      }
                       setSafetyReportFilter(option.key);
                     }}
                   >
                     <Text style={[
                       styles.ownerFilterChipText,
                       active && styles.ownerFilterChipTextActive,
-                      disabled && styles.reportFilterChipTextDisabled,
                     ]}>
                       {option.label}
                     </Text>
@@ -6001,7 +6075,6 @@ export default function AdminStudioScreen() {
                 );
               })}
             </View>
-            <OwnerDisabledReason reason="Critical and Actioned chips remain visible but unavailable until backed severity and report-resolution fields exist." />
           </View>
 
           <View style={styles.reportQueueGrid}>
@@ -6042,7 +6115,8 @@ export default function AdminStudioScreen() {
               ) : canReviewSafetyReports && filteredSafetyReports.length ? (
                 <View style={styles.ownerControlList}>
                   {filteredSafetyReports.map((report) => {
-                    const creatorVideoActionReady = report.targetType === "creator_video" && canManagePrivilegedWrites;
+                    const targetActionDisabledReason = getReportTargetActionDisabledReason(report, canApplyReportTargetActions);
+                    const targetActionReady = !targetActionDisabledReason;
                     return (
                       <View key={report.id} style={styles.reportCard}>
                         <View style={styles.reportHeaderRow}>
@@ -6058,9 +6132,6 @@ export default function AdminStudioScreen() {
                             onPress={() => {
                               setSelectedSafetyReportId(report.id);
                               setSafetyReportDetailVisible(true);
-                              if (report.targetType === "creator_video") {
-                                setCreatorVideoModerationId(report.targetId);
-                              }
                             }}
                           >
                             <Text style={styles.orderBtnText}>Review</Text>
@@ -6068,8 +6139,9 @@ export default function AdminStudioScreen() {
                         </View>
 
                         <View style={styles.badgesRow}>
-                          <OwnerStatusPill label={formatReportRiskLabel(report)} tone={getReportCategoryTone(report.category)} />
-                          <OwnerStatusPill label={formatReportReviewState(report.reviewState)} tone={getReportReviewTone(report.reviewState)} />
+                          <OwnerStatusPill label={formatReportRiskLabel(report)} tone={getReportSeverityTone(report.severity)} />
+                          <OwnerStatusPill label={formatReportReviewState(report.status)} tone={getReportReviewTone(report.status)} />
+                          <OwnerStatusPill label={formatReportResolution(report)} tone={report.resolutionType ? "info" : "locked"} />
                           <OwnerStatusPill label={formatReportSourceSurface(report.sourceSurface)} tone={report.sourceSurface === "unknown" ? "locked" : "info"} />
                           {report.platformOwnedTarget ? <OwnerStatusPill label="Platform Target" tone="success" /> : null}
                         </View>
@@ -6078,23 +6150,20 @@ export default function AdminStudioScreen() {
                         {report.note ? <Text style={styles.reportBody} numberOfLines={3}>{formatAuditDisplayText(report.note)}</Text> : null}
 
                         <View style={styles.reportRowActions}>
-                          {creatorVideoActionReady ? (
+                          {targetActionReady ? (
                             <TouchableOpacity
                               style={styles.reportTargetButton}
                               onPress={() => {
                                 setSelectedSafetyReportId(report.id);
                                 setSafetyReportDetailVisible(true);
-                                setCreatorVideoModerationId(report.targetId);
-                                setModerationNotice(`Report ${formatCompactIdentifier(report.id)} target loaded for backed creator-video action.`);
+                                setModerationNotice(`Report ${formatCompactIdentifier(report.id)} target loaded for backed ${formatModerationToken(report.targetType).toLowerCase()} action.`);
                               }}
                             >
                               <Text style={styles.reportTargetButtonText}>Use Target</Text>
                             </TouchableOpacity>
                           ) : (
                             <Text style={styles.reportActionHint}>
-                              {report.targetType === "creator_video"
-                                ? "Target action locked by operator permission"
-                                : `No backed ${formatModerationToken(report.targetType)} action`}
+                              {targetActionDisabledReason}
                             </Text>
                           )}
                         </View>
@@ -6133,11 +6202,10 @@ export default function AdminStudioScreen() {
                   },
                   {
                     label: "Resolution Status",
-                    value: "not connected",
+                    value: safetyReportQueueConnected ? "backed by safety_reports.status/resolution_type" : "not connected",
                   },
                 ]}
               />
-              <OwnerDisabledReason reason={REPORT_STATUS_WORKFLOW_DISABLED_REASON} />
             </View>
           </View>
 
@@ -6148,59 +6216,17 @@ export default function AdminStudioScreen() {
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.ownerSectionTitle}>Manual Target Action</Text>
-                <Text style={styles.ownerPanelMeta}>Advanced fallback for backed creator-video targets only.</Text>
+                <Text style={styles.ownerPanelMeta}>Report-linked actions are backed; standalone manual mutation stays locked.</Text>
               </View>
               <OwnerStatusPill label={manualReportActionOpen ? "Open" : "Collapsed"} tone={manualReportActionOpen ? "manual" : "locked"} />
             </TouchableOpacity>
 
             {manualReportActionOpen ? (
-              canManagePrivilegedWrites ? (
-                <View style={styles.ownerInputGroup}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Creator video id"
-                    placeholderTextColor="#8d8d8d"
-                    value={creatorVideoModerationId}
-                    onChangeText={setCreatorVideoModerationId}
-                    autoCapitalize="none"
-                  />
-                  <TextInput
-                    style={[styles.input, styles.multiline]}
-                    placeholder="Action reason for immutable audit"
-                    placeholderTextColor="#8d8d8d"
-                    value={creatorVideoModerationReason}
-                    onChangeText={setCreatorVideoModerationReason}
-                    multiline
-                  />
-                  <View style={styles.actionsRow}>
-                    {(["hidden", "removed", "clean"] as const).map((status) => {
-                      const busy = creatorVideoModerationBusy === status;
-                      const disabled = !creatorVideoModerationId.trim() || creatorVideoModerationBusy !== null;
-                      return (
-                        <TouchableOpacity
-                          key={status}
-                          style={[
-                            status === "clean" ? styles.actionBtn : styles.actionBtnDanger,
-                            disabled && styles.configSaveBtnDisabled,
-                          ]}
-                          onPress={() => queueCreatorVideoModeration(status)}
-                          disabled={disabled}
-                        >
-                          {busy ? (
-                            <ActivityIndicator color="#fff" size="small" />
-                          ) : (
-                            <Text style={status === "clean" ? styles.actionText : styles.actionTextDanger}>
-                              {getCreatorVideoModerationActionLabel(status)}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ) : (
-                <OwnerDisabledReason reason="Manual target actions require backend Owner/Admin operator permission and are hidden from regular report reviewers." />
-              )
+              <OwnerDisabledReason reason={
+                canApplyReportTargetActions
+                  ? "Manual target action without a selected report is disabled because immutable report-linked audit requires a safety_reports row. Use Review or Use Target from the queue."
+                  : "Manual target actions require Owner or scoped content_moderation permission and are hidden from regular report reviewers."
+              } />
             ) : null}
           </View>
         </View>
@@ -12276,8 +12302,9 @@ export default function AdminStudioScreen() {
                 </View>
 
                 <View style={styles.badgesRow}>
-                  <OwnerStatusPill label={formatReportRiskLabel(selectedSafetyReport)} tone={getReportCategoryTone(selectedSafetyReport.category)} />
-                  <OwnerStatusPill label={formatReportReviewState(selectedSafetyReport.reviewState)} tone={getReportReviewTone(selectedSafetyReport.reviewState)} />
+                  <OwnerStatusPill label={formatReportRiskLabel(selectedSafetyReport)} tone={getReportSeverityTone(selectedSafetyReport.severity)} />
+                  <OwnerStatusPill label={formatReportReviewState(selectedSafetyReport.status)} tone={getReportReviewTone(selectedSafetyReport.status)} />
+                  <OwnerStatusPill label={formatReportResolution(selectedSafetyReport)} tone={selectedSafetyReport.resolutionType ? "info" : "locked"} />
                   <OwnerStatusPill label={formatReportSourceSurface(selectedSafetyReport.sourceSurface)} tone={selectedSafetyReport.sourceSurface === "unknown" ? "locked" : "info"} />
                 </View>
 
@@ -12290,8 +12317,11 @@ export default function AdminStudioScreen() {
                       { label: "Target Id", value: formatCompactIdentifier(selectedSafetyReport.targetId) },
                       { label: "Reporter", value: formatModerationToken(selectedSafetyReport.reporterRole) },
                       { label: "Category", value: formatModerationToken(selectedSafetyReport.category) },
+                      { label: "Severity", value: formatModerationToken(selectedSafetyReport.severity) },
+                      { label: "Status", value: formatModerationToken(selectedSafetyReport.status) },
+                      { label: "Resolution", value: formatReportResolution(selectedSafetyReport) },
                       { label: "Source Route", value: formatAuditDisplayText(selectedSafetyReport.sourceRoute) || "not supplied" },
-                      { label: "Current Moderation", value: selectedSafetyReport.targetType === "creator_video" ? "actionable by creator-video moderation fields" : "not returned by queue" },
+                      { label: "Current Moderation", value: isReportVisibilityTargetSupported(selectedSafetyReport.targetType) ? "backed public visibility moderation" : "status-only target in Reports" },
                     ]}
                   />
                   {selectedSafetyReport.note ? (
@@ -12335,8 +12365,9 @@ export default function AdminStudioScreen() {
                                 status === "clean" ? styles.actionBtn : styles.actionBtnDanger,
                                 disabled && styles.configSaveBtnDisabled,
                               ]}
-                              onPress={() => queueCreatorVideoModerationForTarget(
+                              onPress={() => queueReportTargetModerationForTarget(
                                 status,
+                                selectedSafetyReport.targetType,
                                 selectedSafetyReport.targetId,
                                 creatorVideoModerationReason,
                                 selectedSafetyReport,
@@ -12356,27 +12387,44 @@ export default function AdminStudioScreen() {
                       </View>
                     </>
                   )}
-                  <OwnerDisabledReason reason={REPORT_STATUS_WORKFLOW_DISABLED_REASON} />
                 </View>
 
                 <View style={styles.reportDetailPanel}>
                   <Text style={styles.ownerSectionTitle}>Report Status Actions</Text>
                   <View style={styles.actionsRow}>
-                    {["Mark Reviewed", "Dismiss Report", "Escalate"].map((label) => (
-                      <TouchableOpacity key={label} style={[styles.orderBtn, styles.configSaveBtnDisabled]} disabled>
-                        <Text style={styles.orderBtnText}>{label}</Text>
+                    {([
+                      ["mark_reviewed", "Mark Reviewed"],
+                      ["dismiss", "Dismiss Report"],
+                      ["escalate", "Escalate"],
+                    ] as const).map(([action, label]) => {
+                      const busy = reportStatusActionBusy === action;
+                      const closed = selectedSafetyReport.status === "actioned" || selectedSafetyReport.status === "dismissed";
+                      const disabled = busy || reportStatusActionBusy !== null || closed;
+                      return (
+                      <TouchableOpacity
+                        key={action}
+                        style={[styles.orderBtn, disabled && styles.configSaveBtnDisabled]}
+                        disabled={disabled}
+                        onPress={() => void updateSelectedReportStatus(action)}
+                      >
+                        {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.orderBtnText}>{label}</Text>}
                       </TouchableOpacity>
-                    ))}
+                      );
+                    })}
                   </View>
-                  <OwnerDisabledReason reason={REPORT_STATUS_WORKFLOW_DISABLED_REASON} />
+                  {selectedSafetyReport.status === "actioned" || selectedSafetyReport.status === "dismissed" ? (
+                    <OwnerDisabledReason reason="This report is already closed. Reopen is not backed in this lane." />
+                  ) : (
+                    <OwnerDisabledReason reason="Report status actions require an action reason and write immutable audit rows." />
+                  )}
                 </View>
 
                 <View style={styles.reportDetailPanel}>
                   <View style={styles.ownerSectionHeaderRow}>
                     <Text style={styles.ownerSectionTitle}>Audit Timeline</Text>
                     <OwnerStatusPill
-                      label={selectedReportAuditRows.length ? `${selectedReportAuditRows.length} rows` : "Recent Only"}
-                      tone={selectedReportAuditRows.length ? "info" : "locked"}
+                      label={selectedReportAuditLoading ? "Loading" : visibleSelectedReportAuditRows.length ? `${visibleSelectedReportAuditRows.length} rows` : "Recent Only"}
+                      tone={visibleSelectedReportAuditRows.length ? "info" : "locked"}
                     />
                   </View>
                   <View style={styles.reportTimeline}>
@@ -12389,7 +12437,7 @@ export default function AdminStudioScreen() {
                         </Text>
                       </View>
                     </View>
-                    {selectedReportAuditRows.map((entry) => (
+                    {visibleSelectedReportAuditRows.map((entry) => (
                       <View key={entry.id} style={styles.reportTimelineRow}>
                         <View style={[styles.reportTimelineDot, entry.severity === "warning" || entry.severity === "critical" ? styles.reportTimelineDotDanger : styles.reportTimelineDotInfo]} />
                         <View style={{ flex: 1 }}>
@@ -12402,7 +12450,7 @@ export default function AdminStudioScreen() {
                       </View>
                     ))}
                   </View>
-                  {!selectedReportAuditRows.length ? <OwnerDisabledReason reason={REPORT_AUDIT_UNAVAILABLE_REASON} /> : null}
+                  {!visibleSelectedReportAuditRows.length && !selectedReportAuditLoading ? <OwnerDisabledReason reason={REPORT_AUDIT_UNAVAILABLE_REASON} /> : null}
                 </View>
               </ScrollView>
             ) : null}
@@ -12418,7 +12466,7 @@ export default function AdminStudioScreen() {
       >
         <View style={styles.confirmBackdrop}>
           <View style={styles.confirmSheet}>
-            <Text style={styles.confirmKicker}>Creator Video Safety</Text>
+            <Text style={styles.confirmKicker}>Report Target Safety</Text>
             <Text style={styles.confirmTitle}>
               {pendingCreatorVideoModeration
                 ? getCreatorVideoModerationActionLabel(pendingCreatorVideoModeration.status)
@@ -12426,14 +12474,19 @@ export default function AdminStudioScreen() {
             </Text>
             <Text style={styles.confirmBody}>
               {pendingCreatorVideoModeration
-                ? getCreatorVideoModerationConfirmCopy(pendingCreatorVideoModeration.status)
+                ? getReportTargetActionConfirmCopy(pendingCreatorVideoModeration.status, pendingCreatorVideoModeration.targetType)
                 : "Confirm this operator action before continuing."}
             </Text>
             {pendingCreatorVideoModeration ? (
               <View style={styles.confirmMetaBox}>
                 <Text style={styles.confirmMetaText}>
-                  {`Target ${formatCompactIdentifier(pendingCreatorVideoModeration.videoId)}`}
+                  {`${formatModerationToken(pendingCreatorVideoModeration.targetType)} ${formatCompactIdentifier(pendingCreatorVideoModeration.targetId)}`}
                 </Text>
+                {pendingCreatorVideoModeration.reportId ? (
+                  <Text style={styles.confirmMetaText}>
+                    {`Report ${formatCompactIdentifier(pendingCreatorVideoModeration.reportId)}`}
+                  </Text>
+                ) : null}
                 <Text style={styles.confirmMetaText}>
                   {pendingCreatorVideoModeration.reason
                     ? `Reason: ${pendingCreatorVideoModeration.reason}`
