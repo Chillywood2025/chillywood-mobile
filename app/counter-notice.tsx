@@ -6,7 +6,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -40,6 +39,24 @@ type ToggleRowProps = {
   label: string;
   onPress: () => void;
 };
+
+type FormPanelProps = {
+  children: React.ReactNode;
+  title: string;
+  body?: string;
+};
+
+function FormPanel({ children, title, body }: FormPanelProps) {
+  return (
+    <View style={styles.fieldGroup}>
+      <View style={styles.fieldGroupHeader}>
+        <Text style={styles.groupTitle}>{title}</Text>
+        {body ? <Text style={styles.groupHint}>{body}</Text> : null}
+      </View>
+      {children}
+    </View>
+  );
+}
 
 function ToggleRow({ active, label, onPress }: ToggleRowProps) {
   return (
@@ -184,6 +201,8 @@ export default function CounterNoticePage() {
     }
   };
 
+  const submitDisabled = busy || !caseId.trim() || !caseRecord;
+
   if (isLoading) {
     return (
       <LegalPageShell
@@ -233,8 +252,26 @@ export default function CounterNoticePage() {
       </LegalSection>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView scrollEnabled={false} contentContainerStyle={styles.form}>
-          <Text style={styles.groupTitle}>Case</Text>
+        <View style={styles.form}>
+          <View style={styles.statusGrid}>
+            <View style={styles.statusTile}>
+              <Text style={styles.statusLabel}>Access</Text>
+              <Text style={styles.statusValue}>Uploader Only</Text>
+            </View>
+            <View style={styles.statusTile}>
+              <Text style={styles.statusLabel}>Case Check</Text>
+              <Text style={styles.statusValue}>{caseRecord ? "Verified" : "Required"}</Text>
+            </View>
+            <View style={styles.statusTile}>
+              <Text style={styles.statusLabel}>Evidence</Text>
+              <Text style={styles.statusValue}>Private Review</Text>
+            </View>
+          </View>
+
+          <FormPanel
+            title="Case"
+            body="Load your DMCA case first so the server can confirm ownership before submission."
+          >
           <TextInput
             style={styles.input}
             value={caseId}
@@ -265,18 +302,30 @@ export default function CounterNoticePage() {
               <Text style={styles.caseText}>{caseRecord.publicSafeSummary || "No public-safe summary recorded."}</Text>
             </View>
           ) : null}
+          </FormPanel>
 
-          <Text style={styles.groupTitle}>Submitter</Text>
+          <FormPanel
+            title="Submitter"
+            body="Use the legal identity and contact address for the uploader submitting this counter-notice."
+          >
           <TextInput style={styles.input} value={submitterName} onChangeText={setSubmitterName} placeholder="Legal name" placeholderTextColor="#7D879E" />
           <TextInput style={styles.input} value={submitterEmail} onChangeText={setSubmitterEmail} placeholder="Email address" placeholderTextColor="#7D879E" keyboardType="email-address" autoCapitalize="none" />
           <TextInput style={styles.input} value={submitterPhone} onChangeText={setSubmitterPhone} placeholder="Phone optional" placeholderTextColor="#7D879E" keyboardType="phone-pad" />
           <TextInput style={[styles.input, styles.multiline]} value={submitterAddress} onChangeText={setSubmitterAddress} placeholder="Mailing address" placeholderTextColor="#7D879E" multiline />
+          </FormPanel>
 
-          <Text style={styles.groupTitle}>Counter-Notice</Text>
+          <FormPanel
+            title="Counter-Notice"
+            body="Explain why the content was removed by mistake or misidentification."
+          >
           <TextInput style={[styles.input, styles.largeInput]} value={statement} onChangeText={setStatement} placeholder="Counter-notice statement" placeholderTextColor="#7D879E" multiline />
           <TextInput style={styles.input} value={contentLocation} onChangeText={setContentLocation} placeholder="Content id, URL, or removed location" placeholderTextColor="#7D879E" autoCapitalize="none" />
+          </FormPanel>
 
-          <Text style={styles.groupTitle}>Attachments</Text>
+          <FormPanel
+            title="Attachments"
+            body="Optional supporting evidence is private to legal operators."
+          >
           <View style={styles.attachmentBox}>
             <Text style={styles.boxTitle}>Evidence files</Text>
             <Text style={styles.boxText}>
@@ -303,8 +352,12 @@ export default function CounterNoticePage() {
               <Text style={styles.boxText}>No files selected. Maximum {(DMCA_ATTACHMENT_MAX_BYTES / (1024 * 1024)).toFixed(0)} MB per file.</Text>
             )}
           </View>
+          </FormPanel>
 
-          <Text style={styles.groupTitle}>Required Statements</Text>
+          <FormPanel
+            title="Required Statements"
+            body="These statements are required before the counter-notice can be recorded."
+          >
           <ToggleRow
             active={goodFaithMistake}
             label="I have a good-faith belief that the material was removed or disabled because of mistake or misidentification."
@@ -321,6 +374,7 @@ export default function CounterNoticePage() {
             onPress={() => setServiceAcceptance((current) => !current)}
           />
           <TextInput style={styles.input} value={signature} onChangeText={setSignature} placeholder="Electronic signature" placeholderTextColor="#7D879E" />
+          </FormPanel>
 
           {notice ? (
             <View style={styles.noticeBox}>
@@ -329,15 +383,24 @@ export default function CounterNoticePage() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.primaryButton, (busy || !caseId.trim()) && styles.disabled]}
-            disabled={busy || !caseId.trim()}
+            style={[styles.primaryButton, submitDisabled && styles.disabled]}
+            disabled={submitDisabled}
             onPress={() => {
               void submitCounterNotice();
             }}
           >
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Submit Counter-Notice</Text>}
+            {busy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>{caseRecord ? "Submit Counter-Notice" : "Load case before submit"}</Text>
+            )}
           </TouchableOpacity>
-        </ScrollView>
+          {!caseRecord ? (
+            <Text style={styles.disabledReason}>
+              Submission unlocks after the backend confirms this case is tied to your signed-in uploader account.
+            </Text>
+          ) : null}
+        </View>
       </KeyboardAvoidingView>
     </LegalPageShell>
   );
@@ -346,15 +409,59 @@ export default function CounterNoticePage() {
 const styles = StyleSheet.create({
   form: {
     gap: 12,
+    paddingBottom: 18,
+  },
+  statusGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusTile: {
+    flexGrow: 1,
+    flexBasis: "31%",
+    minWidth: 96,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    padding: 10,
+    gap: 4,
+  },
+  statusLabel: {
+    color: "#98A4BA",
+    fontSize: 10.5,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  statusValue: {
+    color: "#F4F7FC",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  fieldGroup: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12,
+    gap: 10,
+  },
+  fieldGroupHeader: {
+    gap: 4,
   },
   groupTitle: {
     color: "#F4F7FC",
     fontSize: 14,
     fontWeight: "900",
-    marginTop: 8,
+  },
+  groupHint: {
+    color: "#98A4BA",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
   },
   input: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -373,7 +480,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   caseBox: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(96,211,148,0.32)",
     backgroundColor: "rgba(96,211,148,0.1)",
@@ -392,7 +499,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   attachmentBox: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -411,7 +518,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   attachmentRow: {
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -438,7 +545,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     alignItems: "flex-start",
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -470,10 +577,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   primaryButton: {
-    borderRadius: 999,
+    borderRadius: 8,
     backgroundColor: "#DC143C",
     paddingVertical: 14,
+    minHeight: 48,
     alignItems: "center",
+    justifyContent: "center",
   },
   primaryButtonText: {
     color: "#fff",
@@ -481,7 +590,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   secondaryButton: {
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(255,255,255,0.06)",
@@ -495,7 +604,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   removeButton: {
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     paddingHorizontal: 10,
@@ -507,7 +616,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   noticeBox: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -521,5 +630,11 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.68,
+  },
+  disabledReason: {
+    color: "#D6A84F",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
   },
 });

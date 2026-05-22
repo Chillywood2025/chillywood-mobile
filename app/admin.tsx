@@ -1380,6 +1380,12 @@ const OwnerEmptyState = ({ body, title }: { body: string; title: string }) => (
   </View>
 );
 
+const OwnerDisabledReason = ({ reason }: { reason: string }) => (
+  <View style={styles.ownerDisabledReason}>
+    <Text style={styles.ownerDisabledReasonText}>{reason}</Text>
+  </View>
+);
+
 const OwnerControlRow = ({
   children,
   expanded = false,
@@ -5759,17 +5765,22 @@ export default function AdminStudioScreen() {
                 <OwnerMetricTile label="Repeat Review" tone={ownerAttentionCountTone(dmcaRepeatReviewCount)} value={dmcaRepeatReviewCount} />
               </View>
 
-              <View style={styles.actionsRow}>
-                <TouchableOpacity style={styles.actionBtnPrimary} onPress={openDmcaIntake}>
-                  <Text style={styles.actionTextPrimary}>Formal Notice Intake</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionBtn} onPress={() => void openPublicDmcaForm()}>
-                  <Text style={styles.actionText}>Public Form</Text>
-                </TouchableOpacity>
+              <View style={styles.ownerToolbarPanel}>
+                <Text style={styles.ownerSectionTitle}>Case Workflows</Text>
+                <Text style={styles.configListBody}>Every action opens a backed workflow. Manual email intake remains supported; automated email ingestion is not configured.</Text>
+                <View style={styles.configListActions}>
+                  <TouchableOpacity style={styles.actionBtnPrimary} onPress={openDmcaIntake}>
+                    <Text style={styles.actionTextPrimary}>Formal Notice Intake</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => void openPublicDmcaForm()}>
+                    <Text style={styles.actionText}>Open Public Form</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View style={styles.configListRow}>
-                <View style={styles.configListCopy}>
+              <View style={styles.ownerToolbarPanel}>
+                <Text style={styles.ownerSectionTitle}>Find Cases</Text>
+                <Text style={styles.configListBody}>Search and filters are backed by the loaded case list; no proof/demo cases are shown in production mode.</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="Search case id, content id, reporter email, uploader id, URL, or status"
@@ -5791,7 +5802,6 @@ export default function AdminStudioScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
-                </View>
               </View>
 
               {dmcaCaseSummary ? (
@@ -5861,18 +5871,12 @@ export default function AdminStudioScreen() {
                   ))}
                 </View>
               ) : (
-                <View style={styles.configListRow}>
-                  <View style={styles.configListCopy}>
-                    <Text style={styles.configListTitle}>
-                      {dmcaSearchQuery.trim() || dmcaStatusFilter !== "all" ? "No matching DMCA cases" : "No DMCA cases yet"}
-                    </Text>
-                    <Text style={styles.configListBody}>
-                      {dmcaSearchQuery.trim() || dmcaStatusFilter !== "all"
-                        ? "Adjust search or filters to find a case."
-                        : "Formal notices from the public form, Support, email, or admin manual intake will appear here."}
-                    </Text>
-                  </View>
-                </View>
+                <OwnerEmptyState
+                  body={dmcaSearchQuery.trim() || dmcaStatusFilter !== "all"
+                    ? "Adjust search or filters to find a case."
+                    : "Formal notices from the public form, Support, email, or admin manual intake will appear here."}
+                  title={dmcaSearchQuery.trim() || dmcaStatusFilter !== "all" ? "No Matching DMCA Cases" : "No DMCA Cases Yet"}
+                />
               )}
             </>
           )}
@@ -8705,6 +8709,9 @@ export default function AdminStudioScreen() {
                 >
                   <Text style={styles.ownerPrimaryButtonText}>{legalRequestBusy ? "Creating..." : canAccessLegalIntake ? "Create Request" : "Disabled: legal_request_intake required"}</Text>
                 </TouchableOpacity>
+                {!canAccessLegalIntake ? (
+                  <OwnerDisabledReason reason="Create Request is disabled because this account lacks legal_request_intake, legal_review, or legal_ops permission." />
+                ) : null}
               </View>
             </View>
             ) : null}
@@ -8778,23 +8785,28 @@ export default function AdminStudioScreen() {
                   onPress={() => void runLegalEvidenceAction("preview")}
                   disabled={legalBusy !== null || !canAccessLegalEvidence}
                 >
-                  <Text style={styles.orderBtnText}>{legalBusy === "preview" ? "Previewing..." : "Preview Evidence"}</Text>
+                  <Text style={styles.orderBtnText}>{legalBusy === "preview" ? "Previewing..." : canAccessLegalEvidence ? "Preview Evidence" : "Disabled: evidence_preview required"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.orderBtn, (legalBusy !== null || !canAccessLegalEvidence) && styles.configSaveBtnDisabled]}
                   onPress={() => void runLegalEvidenceAction("export")}
                   disabled={legalBusy !== null || !canAccessLegalEvidence}
                 >
-                  <Text style={styles.orderBtnText}>{legalBusy === "export" ? "Exporting..." : "Export Evidence"}</Text>
+                  <Text style={styles.orderBtnText}>{legalBusy === "export" ? "Exporting..." : canAccessLegalEvidence ? "Export Evidence" : "Disabled: evidence_export required"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.orderBtn, (legalBusy !== null || legalTargetType === "date_range" || !canAccessLegalEvidence) && styles.configSaveBtnDisabled]}
                   onPress={() => void runLegalEvidenceAction("hold")}
                   disabled={legalBusy !== null || legalTargetType === "date_range" || !canAccessLegalEvidence}
                 >
-                  <Text style={styles.orderBtnText}>{legalBusy === "hold" ? "Holding..." : legalTargetType === "date_range" ? "Disabled: target required" : "Apply Legal Hold"}</Text>
+                  <Text style={styles.orderBtnText}>{legalBusy === "hold" ? "Holding..." : !canAccessLegalEvidence ? "Disabled: legal_hold required" : legalTargetType === "date_range" ? "Disabled: target required" : "Apply Legal Hold"}</Text>
                 </TouchableOpacity>
               </View>
+              {!canAccessLegalEvidence ? (
+                <OwnerDisabledReason reason="Evidence actions require legal_review, evidence_preview/evidence_export/legal_hold, or legal_ops permission and are enforced by the protected Edge Function." />
+              ) : legalTargetType === "date_range" ? (
+                <OwnerDisabledReason reason="Legal Hold is disabled for date-range searches. Choose a concrete user, content, thread, room, report, or DMCA target first." />
+              ) : null}
             </View>
             ) : null}
 
@@ -8917,6 +8929,14 @@ export default function AdminStudioScreen() {
                     <Text style={styles.actionText}>{selectedLegalTarget.id ? (canAccessLegalEvidence ? "Apply Legal Hold" : "Disabled: legal_hold required") : "Disabled: target id required"}</Text>
                   </TouchableOpacity>
                 </View>
+                {!canAccessLegalIntake ? (
+                  <OwnerDisabledReason reason="Status updates and notes require legal_request_intake, legal_review, or legal_ops permission." />
+                ) : null}
+                {!selectedLegalTarget.id ? (
+                  <OwnerDisabledReason reason="Legal Hold is disabled because this request has no concrete linked target id." />
+                ) : !canAccessLegalEvidence ? (
+                  <OwnerDisabledReason reason="Legal Hold requires legal_hold, legal_review, or legal_ops permission through the protected legal evidence workflow." />
+                ) : null}
               </View>
             </View>
             ) : null}
@@ -8994,13 +9014,16 @@ export default function AdminStudioScreen() {
                   <Text style={[styles.toggleChipText, auditExplorerBreakGlassOnly && styles.toggleChipTextActive]}>Break Glass only</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.actionBtn, ownerControlLoading && styles.configSaveBtnDisabled]}
+                  style={[styles.actionBtn, (ownerControlLoading || !canAccessAuditExplorer) && styles.configSaveBtnDisabled]}
                   onPress={() => void loadAuditExplorer()}
                   disabled={ownerControlLoading || !canAccessAuditExplorer}
                 >
-                  <Text style={styles.actionText}>{ownerControlLoading ? "Searching..." : "Search"}</Text>
+                  <Text style={styles.actionText}>{ownerControlLoading ? "Searching..." : canAccessAuditExplorer ? "Search" : "Locked"}</Text>
                 </TouchableOpacity>
               </View>
+              {!canAccessAuditExplorer ? (
+                <OwnerDisabledReason reason="Audit Explorer requires Owner, audit_explorer, legal_ops, or admin_audit_review permission and is enforced server-side." />
+              ) : null}
             </View>
           </View>
 
@@ -9103,20 +9126,23 @@ export default function AdminStudioScreen() {
               />
               <View style={styles.ownerPanelActions}>
                 <TouchableOpacity
-                  style={[styles.ownerPrimaryButton, permissionTemplateBusy !== null && styles.configSaveBtnDisabled]}
+                  style={[styles.ownerPrimaryButton, (permissionTemplateBusy !== null || !canManagePermissionTemplates) && styles.configSaveBtnDisabled]}
                   onPress={() => void runPermissionTemplateAction("apply")}
                   disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates}
                 >
-                  <Text style={styles.ownerPrimaryButtonText}>{permissionTemplateBusy === "apply" ? "Applying..." : "Apply Template"}</Text>
+                  <Text style={styles.ownerPrimaryButtonText}>{permissionTemplateBusy === "apply" ? "Applying..." : canManagePermissionTemplates ? "Apply Template" : "Locked"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.ownerSecondaryButton, permissionTemplateBusy !== null && styles.configSaveBtnDisabled]}
+                  style={[styles.ownerSecondaryButton, (permissionTemplateBusy !== null || !canManagePermissionTemplates) && styles.configSaveBtnDisabled]}
                   onPress={() => void runPermissionTemplateAction("revoke")}
                   disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates}
                 >
-                  <Text style={styles.ownerSecondaryButtonText}>{permissionTemplateBusy === "revoke" ? "Revoking..." : "Revoke Template"}</Text>
+                  <Text style={styles.ownerSecondaryButtonText}>{permissionTemplateBusy === "revoke" ? "Revoking..." : canManagePermissionTemplates ? "Revoke Template" : "Locked"}</Text>
                 </TouchableOpacity>
               </View>
+              {!canManagePermissionTemplates ? (
+                <OwnerDisabledReason reason="Template actions require Owner or staff_permission_template_manage permission. Admins cannot apply templates to themselves." />
+              ) : null}
             </View>
           </View>
 
@@ -9199,20 +9225,27 @@ export default function AdminStudioScreen() {
               </View>
               <View style={styles.ownerPanelActions}>
                 <TouchableOpacity
-                  style={[styles.actionBtnDanger, (breakGlassBusy !== null || !!breakGlassActiveSessionId) && styles.configSaveBtnDisabled]}
+                  style={[styles.actionBtnDanger, (breakGlassBusy !== null || !!breakGlassActiveSessionId || !canAccessBreakGlass) && styles.configSaveBtnDisabled]}
                   onPress={() => void runBreakGlassActivate()}
                   disabled={breakGlassBusy !== null || !!breakGlassActiveSessionId || !canAccessBreakGlass}
                 >
-                  <Text style={styles.actionTextDanger}>{breakGlassBusy === "activate" ? "Activating..." : "Activate"}</Text>
+                  <Text style={styles.actionTextDanger}>{breakGlassBusy === "activate" ? "Activating..." : !canAccessBreakGlass ? "Locked" : breakGlassActiveSessionId ? "Already Active" : "Activate"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.actionBtn, (breakGlassBusy !== null || !breakGlassActiveSessionId) && styles.configSaveBtnDisabled]}
+                  style={[styles.actionBtn, (breakGlassBusy !== null || !breakGlassActiveSessionId || !canAccessBreakGlass) && styles.configSaveBtnDisabled]}
                   onPress={() => void runBreakGlassEnd()}
                   disabled={breakGlassBusy !== null || !breakGlassActiveSessionId || !canAccessBreakGlass}
                 >
-                  <Text style={styles.actionText}>{breakGlassBusy === "end" ? "Ending..." : "End Active Session"}</Text>
+                  <Text style={styles.actionText}>{breakGlassBusy === "end" ? "Ending..." : !canAccessBreakGlass ? "Locked" : breakGlassActiveSessionId ? "End Active Session" : "No Active Session"}</Text>
                 </TouchableOpacity>
               </View>
+              {!canAccessBreakGlass ? (
+                <OwnerDisabledReason reason="Break Glass actions require Owner or emergency_break_glass permission. Normal owner work elsewhere does not require Break Glass." />
+              ) : breakGlassActiveSessionId ? (
+                <OwnerDisabledReason reason="A Break Glass session is already active. End the active session before starting another one." />
+              ) : (
+                <OwnerDisabledReason reason="Activation requires a short emergency reason and writes Break Glass audit rows until the session ends or expires." />
+              )}
             </View>
           </View>
 
@@ -9609,6 +9642,12 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecondaryButtonText}>Open incident checklist</Text>
               </TouchableOpacity>
             </View>
+            {!Number(ownerSecurityActiveGrantsCount ?? 0) ? (
+              <OwnerDisabledReason reason="Bulk grant revoke is disabled because the backend reports no active temporary grants." />
+            ) : null}
+            {!(ownerSecurityCurrentDevice?.id && ownerSecurityCurrentDevice.trustStatus !== "revoked") ? (
+              <OwnerDisabledReason reason="Mark current untrusted is disabled until a trusted current device record is connected." />
+            ) : null}
           </View>
         </View>
         ) : null}
@@ -9619,11 +9658,11 @@ export default function AdminStudioScreen() {
             actions={(
               <>
                 <TouchableOpacity
-                  style={[styles.ownerPrimaryButton, canaryBusy && styles.configSaveBtnDisabled]}
+                  style={[styles.ownerPrimaryButton, (canaryBusy || !canAccessCanaryChecks) && styles.configSaveBtnDisabled]}
                   onPress={() => void runCanaryChecks()}
                   disabled={canaryBusy || !canAccessCanaryChecks}
                 >
-                  <Text style={styles.ownerPrimaryButtonText}>{canaryBusy ? "Running..." : "Run Canary Checks"}</Text>
+                  <Text style={styles.ownerPrimaryButtonText}>{canaryBusy ? "Running..." : canAccessCanaryChecks ? "Run Canary Checks" : "Locked"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.ownerSecondaryButton} onPress={() => void loadCanaries()}>
                   <Text style={styles.ownerSecondaryButtonText}>Refresh</Text>
@@ -9642,6 +9681,10 @@ export default function AdminStudioScreen() {
             <View style={[styles.notice, styles.noticeWarn]}>
               <Text style={styles.noticeText}>{ownerControlNotice}</Text>
             </View>
+          ) : null}
+
+          {!canAccessCanaryChecks ? (
+            <OwnerDisabledReason reason="Canary run is disabled because this account lacks Owner, canary_run, or launch_safety permission. Refresh remains read-only." />
           ) : null}
 
           <View style={styles.dashboardGrid}>
@@ -12307,6 +12350,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.035)",
     padding: 12,
     gap: 10,
+  },
+  ownerDisabledReason: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(214,168,79,0.28)",
+    backgroundColor: "rgba(214,168,79,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  ownerDisabledReasonText: {
+    color: "#E2C878",
+    fontSize: 11.5,
+    fontWeight: "800",
+    lineHeight: 16,
   },
   ownerInputGroup: {
     gap: 9,

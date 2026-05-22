@@ -5,7 +5,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -39,6 +38,24 @@ type PickedAttachment = {
   type: string;
   uri: string;
 };
+
+type FormPanelProps = {
+  children: React.ReactNode;
+  title: string;
+  body?: string;
+};
+
+function FormPanel({ children, title, body }: FormPanelProps) {
+  return (
+    <View style={styles.fieldGroup}>
+      <View style={styles.fieldGroupHeader}>
+        <Text style={styles.groupTitle}>{title}</Text>
+        {body ? <Text style={styles.groupHint}>{body}</Text> : null}
+      </View>
+      {children}
+    </View>
+  );
+}
 
 function ToggleRow({ active, label, onPress }: ToggleRowProps) {
   return (
@@ -185,8 +202,26 @@ export default function CopyrightReportPage() {
       </LegalSection>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView scrollEnabled={false} contentContainerStyle={styles.form}>
-          <Text style={styles.groupTitle}>Reporter</Text>
+        <View style={styles.form}>
+          <View style={styles.statusGrid}>
+            <View style={styles.statusTile}>
+              <Text style={styles.statusLabel}>Access</Text>
+              <Text style={styles.statusValue}>Public Intake</Text>
+            </View>
+            <View style={styles.statusTile}>
+              <Text style={styles.statusLabel}>Evidence</Text>
+              <Text style={styles.statusValue}>Private Review</Text>
+            </View>
+            <View style={styles.statusTile}>
+              <Text style={styles.statusLabel}>Scan Status</Text>
+              <Text style={styles.statusValue}>Manual Review</Text>
+            </View>
+          </View>
+
+          <FormPanel
+            title="Reporter"
+            body="Tell legal operators who is submitting the notice and how to reach you."
+          >
           <TextInput style={styles.input} value={reporterName} onChangeText={setReporterName} placeholder="Copyright owner or authorized agent name" placeholderTextColor="#7D879E" />
           <TextInput style={styles.input} value={reporterCompany} onChangeText={setReporterCompany} placeholder="Company or organization (optional)" placeholderTextColor="#7D879E" />
           <TextInput style={styles.input} value={reporterEmail} onChangeText={setReporterEmail} placeholder="Email address" placeholderTextColor="#7D879E" keyboardType="email-address" autoCapitalize="none" />
@@ -204,15 +239,23 @@ export default function CopyrightReportPage() {
           {!reporterIsOwner ? (
             <TextInput style={styles.input} value={authorizedAgentName} onChangeText={setAuthorizedAgentName} placeholder="Authorized agent name" placeholderTextColor="#7D879E" />
           ) : null}
+          </FormPanel>
 
-          <Text style={styles.groupTitle}>Copyrighted Work</Text>
+          <FormPanel
+            title="Copyrighted Work"
+            body="Describe the original work and add source links when you have them."
+          >
           <TextInput style={styles.input} value={copyrightOwnerName} onChangeText={setCopyrightOwnerName} placeholder="Copyright owner name" placeholderTextColor="#7D879E" />
           <TextInput style={[styles.input, styles.largeInput]} value={copyrightedWorkDescription} onChangeText={setCopyrightedWorkDescription} placeholder="Describe the copyrighted work you claim was infringed" placeholderTextColor="#7D879E" multiline />
           <TextInput style={[styles.input, styles.multiline]} value={copyrightedWorkUrls} onChangeText={setCopyrightedWorkUrls} placeholder="Copyrighted work URL(s), separated by lines or commas (optional)" placeholderTextColor="#7D879E" multiline autoCapitalize="none" />
+          </FormPanel>
 
-          <Text style={styles.groupTitle}>Allegedly Infringing Content</Text>
+          <FormPanel
+            title="Allegedly Infringing Content"
+            body="Point us to the Chi'llywood content and choose the closest content type."
+          >
           <TextInput style={[styles.input, styles.largeInput]} value={infringingMaterialDescription} onChangeText={setInfringingMaterialDescription} placeholder="Describe the allegedly infringing material" placeholderTextColor="#7D879E" multiline />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
+          <View style={styles.typeRow}>
             {DMCA_CONTENT_TYPES.map((entry) => (
               <TouchableOpacity
                 key={entry}
@@ -224,11 +267,15 @@ export default function CopyrightReportPage() {
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
           <TextInput style={styles.input} value={contentId} onChangeText={setContentId} placeholder="Content id, if known" placeholderTextColor="#7D879E" autoCapitalize="none" />
           <TextInput style={styles.input} value={contentUrl} onChangeText={setContentUrl} placeholder="Chi'llywood URL or location" placeholderTextColor="#7D879E" autoCapitalize="none" />
+          </FormPanel>
 
-          <Text style={styles.groupTitle}>Attachments</Text>
+          <FormPanel
+            title="Attachments"
+            body="Evidence files are private to legal operators and never public-read."
+          >
           <View style={styles.attachmentBox}>
             <Text style={styles.disabledTitle}>Evidence files</Text>
             <Text style={styles.disabledText}>
@@ -263,8 +310,12 @@ export default function CopyrightReportPage() {
               </Text>
             )}
           </View>
+          </FormPanel>
 
-          <Text style={styles.groupTitle}>Required Statements</Text>
+          <FormPanel
+            title="Required Statements"
+            body="These statements are required before a formal notice can be submitted."
+          >
           <ToggleRow
             active={goodFaithStatement}
             label="I have a good-faith belief that the reported use is not authorized by the copyright owner, the owner's agent, or the law."
@@ -276,6 +327,7 @@ export default function CopyrightReportPage() {
             onPress={() => setAccuracyStatement((current) => !current)}
           />
           <TextInput style={styles.input} value={electronicSignature} onChangeText={setElectronicSignature} placeholder="Electronic signature" placeholderTextColor="#7D879E" />
+          </FormPanel>
 
           {submittedCaseNumber ? (
             <View style={styles.successBox}>
@@ -292,7 +344,7 @@ export default function CopyrightReportPage() {
           <TouchableOpacity style={[styles.primaryButton, busy && styles.disabled]} disabled={busy} onPress={submitNotice}>
             {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Submit Copyright Notice</Text>}
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </LegalPageShell>
   );
@@ -301,15 +353,59 @@ export default function CopyrightReportPage() {
 const styles = StyleSheet.create({
   form: {
     gap: 12,
+    paddingBottom: 18,
+  },
+  statusGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusTile: {
+    flexGrow: 1,
+    flexBasis: "31%",
+    minWidth: 96,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    padding: 10,
+    gap: 4,
+  },
+  statusLabel: {
+    color: "#98A4BA",
+    fontSize: 10.5,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  statusValue: {
+    color: "#F4F7FC",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  fieldGroup: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12,
+    gap: 10,
+  },
+  fieldGroupHeader: {
+    gap: 4,
   },
   groupTitle: {
     color: "#F4F7FC",
     fontSize: 14,
     fontWeight: "900",
-    marginTop: 8,
+  },
+  groupHint: {
+    color: "#98A4BA",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
   },
   input: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -329,11 +425,13 @@ const styles = StyleSheet.create({
   },
   choiceRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   choice: {
     flex: 1,
-    borderRadius: 14,
+    minWidth: 130,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -353,6 +451,8 @@ const styles = StyleSheet.create({
     color: "#FFE6EB",
   },
   typeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   typeChip: {
@@ -380,7 +480,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     alignItems: "flex-start",
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -412,7 +512,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   successBox: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(96,211,148,0.35)",
     backgroundColor: "rgba(96,211,148,0.12)",
@@ -436,7 +536,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   attachmentBox: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -447,7 +547,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   attachmentRow: {
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -471,7 +571,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   secondaryButton: {
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(255,255,255,0.06)",
@@ -485,7 +585,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   removeButton: {
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     paddingHorizontal: 10,
@@ -497,7 +597,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   disabledBox: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -516,10 +616,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   primaryButton: {
-    borderRadius: 999,
+    borderRadius: 8,
     backgroundColor: "#DC143C",
     paddingVertical: 14,
+    minHeight: 48,
     alignItems: "center",
+    justifyContent: "center",
   },
   disabled: {
     opacity: 0.7,
