@@ -13,6 +13,7 @@ const DEPLOYED_LIVEKIT_TOKEN_ENDPOINT = "https://bmkkhihfbmsnnmcqkoly.supabase.c
 const DEPLOYED_PRIVACY_POLICY_URL = "https://chillywoodstream.com/privacy";
 const DEPLOYED_TERMS_OF_SERVICE_URL = "https://chillywoodstream.com/terms";
 const DEPLOYED_ACCOUNT_DELETION_URL = "https://chillywoodstream.com/account-deletion";
+const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-report";
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
 
 const resolveExistingFile = (...candidates: Array<string | undefined>) => {
@@ -135,6 +136,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         ),
         legal: {
           ...existingLegal,
+          copyrightReportUrl: normalizeText(
+            process.env.EXPO_PUBLIC_COPYRIGHT_REPORT_URL
+            || process.env.EXPO_PUBLIC_DMCA_URL
+            || existingLegal.copyrightReportUrl
+            || existingLegal.dmcaUrl
+            || DEPLOYED_COPYRIGHT_REPORT_URL,
+          ),
           privacyPolicyUrl: normalizeText(
             process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL || existingLegal.privacyPolicyUrl || DEPLOYED_PRIVACY_POLICY_URL,
           ),

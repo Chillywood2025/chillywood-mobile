@@ -14,6 +14,7 @@ export type LiveKitRuntimeConfig = {
 };
 
 export type LegalRuntimeConfig = {
+  copyrightReportUrl: string;
   privacyPolicyUrl: string;
   termsOfServiceUrl: string;
   accountDeletionUrl: string;
@@ -79,6 +80,12 @@ export function getRuntimeConfig(): RuntimeConfig {
       process.env.EXPO_PUBLIC_BETA_ENVIRONMENT || runtimeExtra.betaEnvironment,
     ),
     legal: {
+      copyrightReportUrl: normalizeText(
+        process.env.EXPO_PUBLIC_COPYRIGHT_REPORT_URL
+        || process.env.EXPO_PUBLIC_DMCA_URL
+        || legalExtra.copyrightReportUrl
+        || legalExtra.dmcaUrl,
+      ),
       privacyPolicyUrl: normalizeText(
         process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL || legalExtra.privacyPolicyUrl,
       ),

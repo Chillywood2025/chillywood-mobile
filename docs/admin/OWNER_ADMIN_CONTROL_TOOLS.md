@@ -17,9 +17,9 @@
 - Safety Dashboard shows only real counts and unknown/manual for missing aggregations.
 
 ## Production Proof
-- `admin-owner-controls` is deployed on Supabase project `bmkkhihfbmsnnmcqkoly` as ACTIVE version 12.
+- `admin-owner-controls` is deployed on Supabase project `bmkkhihfbmsnnmcqkoly` as ACTIVE version 14.
 - The May 21, 2026 physical Android owner-device legal-readiness proof on `R5CR120QCBF` ran Admin Canary from the Admin Command Center and returned `33 pass`, `0 manual`, and `0 failed`.
-- The May 21/22, 2026 physical Android owner-device DMCA production-readiness proof on `R5CR120QCBF` returned `44 pass`, `1 manual_required`, and `0 failed`; the manual-required item is hosted public DMCA URL env configuration.
+- The May 22, 2026 physical Android owner-device release proof on `R5CR120QCBF` returned `60 pass`, `0 manual_required`, and `0 failed` after the hosted public DMCA URL, public form intake, attachment/email/uploader status, and content mutation matrix checks were added.
 - The production proof harness creates or reuses clearly marked `liveops.proof+...` accounts through Supabase Admin/service-role tooling, signs them in server-side only, grants temporary proof roles/permissions only for the run, and verifies no active proof roles/grants remain afterward.
 - The canary proves owner normal no-audit behavior by comparing owner-sensitive app-level audit counts before and after normal canary use; owner actions are only app-level audited when Break Glass is active.
 - The canary proves admin self-grant denial through the real staff-permission RPC and moderator grant denial through the real role-management RPC.
@@ -27,7 +27,9 @@
 - The canary proves Live Ops remains dry-run with real-action flags disabled through the ops health contract.
 - The canary proves Supabase hosted Auth redirect configuration through a server-side management-token secret; token values are never shown in mobile UI, docs, logs, or committed files.
 - The legal readiness portion proves the production policy bundle word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, Google Play deletion language, DMCA checklist, support email/path, and public-link-or-bundled fallback.
-- The DMCA readiness portion proves DMCA tables, real case detail, manual formal notice intake, content action recording, strike add/dispute/resolve, counter-notice recording/forwarding/restore eligibility, filters/search, no dead backing checks, proof/demo production hiding, owner/scoped-operator access, and server-side unauthorized denial.
+- The DMCA readiness portion proves DMCA tables, real case detail, manual formal notice intake, public hosted URL reachability, public form anon submission with Admin readback, content action recording, strike add/dispute/resolve, counter-notice recording/forwarding/restore eligibility, filters/search, no dead backing checks, proof/demo production hiding, owner/scoped-operator access, and server-side unauthorized denial.
+- The public/legal DMCA portion also records exact non-live reasons: attachments are disabled until a DMCA storage bucket, malware scanning, and retention workflow are configured; automated inbound email ingestion is not configured, so support/admin manual intake remains the live path; uploader-facing counter-notice self-service is not live, while Admin recording/forwarding/restore-window workflows are supported.
+- The content mutation matrix passes for `creator_video`, `profile_post`, `profile_post_comment`, `comment`, `creator_video_comment`, `reply`, `social_attachment`, and `attachment`; `live_room`, `channel`, and `other` are preserve-only/disabled with exact missing-backend reasons and no LiveKit action.
 
 ## Access
 - Owner can see all tools.

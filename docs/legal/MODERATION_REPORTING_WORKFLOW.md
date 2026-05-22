@@ -96,15 +96,15 @@ Current admin tooling:
 - Owner or scoped Admin/operator can list/detail DMCA cases, mark case statuses, record hide/disable/restore/rejected-no-action/preserved-evidence actions, add/remove/dispute/resolve strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view functional case history;
 - normal users cannot access Admin DMCA case details or private reporter/uploader contact fields through the DMCA tables;
 - live backed/Admin DMCA proof passed with disposable reporter/uploader/admin/viewer accounts and safe profile-post/comment/creator-video content, including invalid notice rejection, notice creation, Admin list/detail/status, content hide/restore, public hidden/restored visibility, strike/repeat-infringer review, rejected no-strike behavior, counter-notice deadlines, court-action restore blocking, RLS/private-data denial, generic report compatibility, and proof-content cleanup;
-- production Admin DMCA closeout proof on physical Android `R5CR120QCBF` returned `44 pass`, `1 manual_required`, and `0 failed`; the manual item is hosted public DMCA URL env configuration, not Admin case backing;
+- production Admin DMCA/public-legal closeout proof on physical Android `R5CR120QCBF` returned `60 pass`, `0 manual_required`, and `0 failed`, including hosted public DMCA URL reachability, public form submission, Admin readback/cleanup, attachment/email/uploader self-service status, and content mutation coverage;
 - proof/demo/canary DMCA cases are marked test-only and hidden from production clients;
 - first-class open/resolved report workflow is not connected;
 - fraud runtime enforcement hooks are not connected;
 - payout holds are foundation-only unless a future release proves enforcement.
 
-DMCA content disable/restore support currently covers creator videos, profile posts, profile-post comments, creator-video comments, and social attachments. Live-room and channel-level takedowns still need a separate safe moderation action or support/legal handling.
+DMCA content disable/restore support currently covers `creator_video`, `profile_post`, `profile_post_comment`, `comment`, `creator_video_comment`, `reply`, `social_attachment`, and `attachment`. `live_room`, `channel`, and `other` remain preserve-only/disabled with exact missing-backend reasons and require support/legal handling; no LiveKit action is part of DMCA mutation coverage.
 
-Outbound email automation is pending. Admin/support notification templates exist for receipt confirmation, incomplete notice, rejection, uploader notice, counter-notice receipt/forwarding, restore eligibility, content restore, and repeat-infringer warnings, but sending remains manual unless a future email lane proves automation.
+Outbound email automation is pending. Admin/support notification templates exist for receipt confirmation, incomplete notice, rejection, uploader notice, counter-notice receipt/forwarding, restore eligibility, content restore, and repeat-infringer warnings, but sending remains manual unless a future email lane proves automation. DMCA attachment storage/scanning/retention is also pending, so public/Admin intake keeps attachments disabled with the exact backend reason.
 
 ## Launch Gaps
 

@@ -17,9 +17,10 @@ import {
   submitDmcaNotice,
   type DmcaContentType,
 } from "../_lib/dmca";
+import { LEGAL_SUPPORT_EMAIL } from "../_lib/legalPolicies";
 import { LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
-const LAST_UPDATED = "May 14, 2026";
+const LAST_UPDATED = "May 22, 2026";
 
 type ToggleRowProps = {
   active: boolean;
@@ -46,8 +47,10 @@ export default function CopyrightReportPage() {
   const [reporterAddress, setReporterAddress] = useState("");
   const [reporterIsOwner, setReporterIsOwner] = useState(true);
   const [authorizedAgentName, setAuthorizedAgentName] = useState("");
+  const [copyrightOwnerName, setCopyrightOwnerName] = useState("");
   const [copyrightedWorkDescription, setCopyrightedWorkDescription] = useState("");
   const [copyrightedWorkUrls, setCopyrightedWorkUrls] = useState("");
+  const [infringingMaterialDescription, setInfringingMaterialDescription] = useState("");
   const [contentType, setContentType] = useState<DmcaContentType>("creator_video");
   const [contentId, setContentId] = useState("");
   const [contentUrl, setContentUrl] = useState("");
@@ -78,8 +81,10 @@ export default function CopyrightReportPage() {
         reporterAddress,
         reporterIsOwner,
         authorizedAgentName,
+        copyrightOwnerName,
         copyrightedWorkDescription,
         copyrightedWorkUrls: workUrls,
+        infringingMaterialDescription,
         contentType,
         contentId,
         contentUrl,
@@ -132,10 +137,12 @@ export default function CopyrightReportPage() {
           ) : null}
 
           <Text style={styles.groupTitle}>Copyrighted Work</Text>
+          <TextInput style={styles.input} value={copyrightOwnerName} onChangeText={setCopyrightOwnerName} placeholder="Copyright owner name" placeholderTextColor="#7D879E" />
           <TextInput style={[styles.input, styles.largeInput]} value={copyrightedWorkDescription} onChangeText={setCopyrightedWorkDescription} placeholder="Describe the copyrighted work you claim was infringed" placeholderTextColor="#7D879E" multiline />
           <TextInput style={[styles.input, styles.multiline]} value={copyrightedWorkUrls} onChangeText={setCopyrightedWorkUrls} placeholder="Copyrighted work URL(s), separated by lines or commas (optional)" placeholderTextColor="#7D879E" multiline autoCapitalize="none" />
 
           <Text style={styles.groupTitle}>Allegedly Infringing Content</Text>
+          <TextInput style={[styles.input, styles.largeInput]} value={infringingMaterialDescription} onChangeText={setInfringingMaterialDescription} placeholder="Describe the allegedly infringing material" placeholderTextColor="#7D879E" multiline />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
             {DMCA_CONTENT_TYPES.map((entry) => (
               <TouchableOpacity
@@ -151,6 +158,14 @@ export default function CopyrightReportPage() {
           </ScrollView>
           <TextInput style={styles.input} value={contentId} onChangeText={setContentId} placeholder="Content id, if known" placeholderTextColor="#7D879E" autoCapitalize="none" />
           <TextInput style={styles.input} value={contentUrl} onChangeText={setContentUrl} placeholder="Chi'llywood URL or location" placeholderTextColor="#7D879E" autoCapitalize="none" />
+
+          <Text style={styles.groupTitle}>Attachments</Text>
+          <View style={styles.disabledBox}>
+            <Text style={styles.disabledTitle}>Attachments unavailable</Text>
+            <Text style={styles.disabledText}>
+              DMCA attachment storage, malware scanning, and retention review are not configured for this public form yet. Submit the notice first, then send supporting screenshots, PDFs, or evidence files to {LEGAL_SUPPORT_EMAIL} with the case number.
+            </Text>
+          </View>
 
           <Text style={styles.groupTitle}>Required Statements</Text>
           <ToggleRow
@@ -311,6 +326,25 @@ const styles = StyleSheet.create({
     color: "#F4F7FC",
     fontSize: 14,
     fontWeight: "900",
+  },
+  disabledBox: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    gap: 4,
+  },
+  disabledTitle: {
+    color: "#F4F7FC",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  disabledText: {
+    color: "#C8D0E2",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   primaryButton: {
     borderRadius: 999,

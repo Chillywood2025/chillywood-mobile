@@ -12,6 +12,18 @@ import {
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const siteRoot = path.join(scriptDir, "site");
 const lastUpdated = "May 21, 2026";
+const publicDmcaReportSlug = "copyright-report";
+const publicDmcaReportUrl = `${LEGAL_PUBLIC_BASE_URL}/${publicDmcaReportSlug}`;
+const publicSupabaseUrl = String(
+  process.env.PUBLIC_SUPABASE_URL
+  || process.env.EXPO_PUBLIC_SUPABASE_URL
+  || "https://bmkkhihfbmsnnmcqkoly.supabase.co",
+).trim();
+const publicSupabaseAnonKey = String(
+  process.env.PUBLIC_SUPABASE_ANON_KEY
+  || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+  || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJta2toaWhmYm1zbm5tY3Frb2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNjE1ODUsImV4cCI6MjA4NjczNzU4NX0.j45qJsnaZelO4fND2LGOwH66cb7qHr1LY0t31Ck-TcQ",
+).trim();
 
 const policyBySlug = Object.fromEntries(LEGAL_POLICIES.map((policy) => [policy.slug, policy]));
 const pages = [
@@ -52,7 +64,10 @@ const pages = [
   },
 ];
 
-const navLinks = pages.map(({ slug, title }) => ({ slug, title }));
+const navLinks = [
+  ...pages.map(({ slug, title }) => ({ slug, title })),
+  { slug: publicDmcaReportSlug, title: "Report Copyright" },
+];
 
 function escapeHtml(value) {
   return String(value)
@@ -138,6 +153,205 @@ ${renderPolicyBody(page.policy)}
       <h2>Legal Pages</h2>
       <div class="related-links">
 ${renderNav(page.slug)}
+      </div>
+      <p>Questions? Contact <a href="mailto:${LEGAL_SUPPORT_EMAIL}">${LEGAL_SUPPORT_EMAIL}</a>.</p>
+    </aside>
+  </main>
+  <footer class="site-footer">
+    <p>Chi'llywood public legal and support pages.</p>
+  </footer>
+</body>
+</html>
+`;
+}
+
+function renderCopyrightReportPage() {
+  const contentTypeOptions = [
+    ["creator_video", "Creator video"],
+    ["profile_post", "Profile post"],
+    ["profile_post_comment", "Profile post comment"],
+    ["creator_video_comment", "Creator video comment"],
+    ["comment", "Comment"],
+    ["reply", "Reply"],
+    ["social_attachment", "Social attachment"],
+    ["attachment", "Attachment"],
+    ["live_room", "Live room"],
+    ["channel", "Channel"],
+    ["other", "Other"],
+  ];
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report Copyright Infringement | Chi'llywood</title>
+  <meta name="description" content="Submit a public copyright or DMCA notice to Chi'llywood.">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="/">Chi'llywood</a>
+      <nav class="site-nav" aria-label="Public legal pages">
+${renderNav(publicDmcaReportSlug)}
+      </nav>
+    </div>
+  </header>
+  <main class="page-shell">
+    <article class="policy">
+      <p class="eyebrow">Chi'llywood Copyright</p>
+      <h1>Report Copyright Infringement</h1>
+      <p class="summary">Use this public form for copyright or media-rights notices. The form creates a real DMCA case for Chi'llywood review and returns a case number.</p>
+      <div class="meta-row">
+        <span>Public URL: ${escapeHtml(publicDmcaReportUrl)}</span>
+        <span>Manual email intake: ${escapeHtml(LEGAL_SUPPORT_EMAIL)}</span>
+      </div>
+      <div class="notice-box">
+        <strong>Attachments unavailable:</strong> DMCA attachment storage, malware scanning, and retention review are not configured for this public form yet. Submit the notice first, then email screenshots, PDFs, or evidence files to <a href="mailto:${LEGAL_SUPPORT_EMAIL}">${LEGAL_SUPPORT_EMAIL}</a> with the case number.
+      </div>
+      <form class="dmca-form" id="dmca-form" novalidate>
+        <section class="form-section">
+          <h2>Reporter</h2>
+          <label>Claimant or authorized agent name <input name="reporterName" required autocomplete="name"></label>
+          <label>Email address <input name="reporterEmail" required type="email" autocomplete="email"></label>
+          <label>Company or organization <input name="reporterCompany" autocomplete="organization"></label>
+          <label>Phone <input name="reporterPhone" autocomplete="tel"></label>
+          <label>Mailing address <textarea name="reporterAddress" rows="3" autocomplete="street-address"></textarea></label>
+          <label>Reporter role
+            <select name="reporterIsOwner">
+              <option value="true">Copyright owner</option>
+              <option value="false">Authorized agent</option>
+            </select>
+          </label>
+          <label>Authorized agent name <input name="authorizedAgentName"></label>
+        </section>
+        <section class="form-section">
+          <h2>Copyrighted Work</h2>
+          <label>Copyright owner name <input name="copyrightOwnerName" required></label>
+          <label>Description of copyrighted work <textarea name="copyrightedWorkDescription" rows="5" required></textarea></label>
+          <label>Copyrighted work URLs, one per line <textarea name="copyrightedWorkUrls" rows="3"></textarea></label>
+        </section>
+        <section class="form-section">
+          <h2>Allegedly Infringing Material</h2>
+          <label>Content type
+            <select name="contentType">
+${contentTypeOptions.map(([value, label]) => `              <option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("\n")}
+            </select>
+          </label>
+          <label>Content id, if known <input name="contentId"></label>
+          <label>Chi'llywood URL or location <input name="contentUrl" required></label>
+          <label>Description of allegedly infringing material <textarea name="infringingMaterialDescription" rows="5" required></textarea></label>
+        </section>
+        <section class="form-section">
+          <h2>Required Statements</h2>
+          <label class="check-row"><input name="goodFaithStatement" type="checkbox" required> I have a good-faith belief that the reported use is not authorized by the copyright owner, the owner's agent, or the law.</label>
+          <label class="check-row"><input name="accuracyPenaltyPerjuryStatement" type="checkbox" required> I state under penalty of perjury that the information in this notice is accurate and that I am authorized to act for the copyright owner.</label>
+          <label>Electronic signature <input name="electronicSignature" required></label>
+        </section>
+        <div class="form-actions">
+          <button type="submit">Submit Copyright Notice</button>
+          <p id="dmca-status" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+      <script>
+(() => {
+  const SUPABASE_URL = ${JSON.stringify(publicSupabaseUrl)};
+  const SUPABASE_ANON_KEY = ${JSON.stringify(publicSupabaseAnonKey)};
+  const form = document.getElementById("dmca-form");
+  const status = document.getElementById("dmca-status");
+  const button = form.querySelector("button[type='submit']");
+  const setStatus = (message, tone = "") => {
+    status.textContent = message;
+    status.dataset.tone = tone;
+  };
+  const text = (data, key) => String(data.get(key) || "").trim();
+  const workUrls = (value) => String(value || "")
+    .split(/\\n|,/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    button.disabled = true;
+    setStatus("Public DMCA form disabled: Supabase public URL or public anon key is not configured for this static build.", "error");
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setStatus("");
+    const data = new FormData(form);
+    const payload = {
+      accuracyPenaltyPerjuryStatement: data.get("accuracyPenaltyPerjuryStatement") === "on",
+      copyrightOwnerName: text(data, "copyrightOwnerName"),
+      copyrightedWorkDescription: text(data, "copyrightedWorkDescription"),
+      copyrightedWorkUrls: workUrls(data.get("copyrightedWorkUrls")),
+      contentId: text(data, "contentId") || null,
+      contentType: text(data, "contentType") || "other",
+      contentUrl: text(data, "contentUrl") || null,
+      electronicSignature: text(data, "electronicSignature"),
+      goodFaithStatement: data.get("goodFaithStatement") === "on",
+      infringingMaterialDescription: text(data, "infringingMaterialDescription"),
+      reporterAddress: text(data, "reporterAddress") || null,
+      reporterCompany: text(data, "reporterCompany") || null,
+      reporterEmail: text(data, "reporterEmail"),
+      reporterIsOwner: text(data, "reporterIsOwner") !== "false",
+      reporterName: text(data, "reporterName"),
+      reporterPhone: text(data, "reporterPhone") || null,
+      authorizedAgentName: text(data, "authorizedAgentName") || null
+    };
+
+    const missing = [];
+    if (!payload.reporterName) missing.push("reporter name");
+    if (!payload.reporterEmail || !payload.reporterEmail.includes("@")) missing.push("valid reporter email");
+    if (!payload.copyrightOwnerName) missing.push("copyright owner name");
+    if (!payload.copyrightedWorkDescription) missing.push("copyrighted work description");
+    if (!payload.contentId && !payload.contentUrl) missing.push("content URL or id");
+    if (!payload.infringingMaterialDescription) missing.push("infringing material description");
+    if (!payload.goodFaithStatement) missing.push("good-faith statement");
+    if (!payload.accuracyPenaltyPerjuryStatement) missing.push("accuracy and authority statement");
+    if (!payload.electronicSignature) missing.push("electronic signature");
+    if (missing.length) {
+      setStatus("Please provide: " + missing.join(", ") + ".", "error");
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Submitting...";
+    try {
+      const response = await fetch(SUPABASE_URL.replace(/\\/$/, "") + "/rest/v1/rpc/submit_dmca_notice", {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ p_payload: payload })
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = body && (body.message || body.error || body.details)
+          ? String(body.message || body.error || body.details)
+          : "Unable to submit this copyright notice right now.";
+        throw new Error(message);
+      }
+      const row = Array.isArray(body) ? body[0] : body;
+      setStatus("Copyright notice received. Case " + (row && row.case_number ? row.case_number : "recorded") + " has been created for review.", "success");
+      form.reset();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to submit this copyright notice right now.", "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = "Submit Copyright Notice";
+    }
+  });
+})();
+      </script>
+    </article>
+    <aside class="related" aria-label="Related policy links">
+      <h2>Legal Pages</h2>
+      <div class="related-links">
+${renderNav(publicDmcaReportSlug)}
       </div>
       <p>Questions? Contact <a href="mailto:${LEGAL_SUPPORT_EMAIL}">${LEGAL_SUPPORT_EMAIL}</a>.</p>
     </aside>
@@ -286,6 +500,37 @@ h2 { font-size: clamp(1.35rem, 2.2vw, 1.85rem); line-height: 1.18; margin: 0 0 0
 .policy-body p, .policy-body li { color: #2b3038; font-size: 1rem; }
 .policy-body p { margin: 0 0 1rem; max-width: 78ch; }
 .policy-body code { background: #f1f1ee; border-radius: 5px; padding: 0.1em 0.3em; }
+.notice-box { background: #fff5e8; border: 1px solid #edc88e; border-radius: 10px; color: #3d3020; margin: 20px 0; padding: 14px; }
+.dmca-form { display: grid; gap: 22px; margin-top: 22px; }
+.form-section { border-top: 1px solid var(--line); display: grid; gap: 12px; padding-top: 20px; }
+.dmca-form label { color: #2b3038; display: grid; font-size: 0.9rem; font-weight: 760; gap: 6px; }
+.dmca-form input, .dmca-form textarea, .dmca-form select {
+  background: #fbfcfa;
+  border: 1px solid #cfd5cf;
+  border-radius: 8px;
+  color: #17181c;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 11px;
+  width: 100%;
+}
+.check-row { align-items: flex-start; display: flex !important; gap: 10px !important; line-height: 1.45; }
+.check-row input { margin-top: 0.25em; width: auto; }
+.form-actions { display: grid; gap: 10px; }
+.form-actions button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 13px 18px;
+}
+.form-actions button:disabled { cursor: not-allowed; opacity: 0.6; }
+#dmca-status { font-weight: 800; margin: 0; }
+#dmca-status[data-tone="success"] { color: #167340; }
+#dmca-status[data-tone="error"] { color: #a51224; }
 .related h2 { margin-top: 0; }
 .site-footer { color: var(--muted); max-width: 1180px; margin: 0 auto; padding: 0 20px 40px; }
 @media (max-width: 840px) {
@@ -310,4 +555,8 @@ for (const page of pages) {
   writeFile(path.join(siteRoot, page.slug, "index.html"), contents);
 }
 
-console.log(`Built ${pages.length + 1} public legal pages into ${siteRoot}`);
+const copyrightReport = renderCopyrightReportPage();
+assertPublicOutput(copyrightReport, publicDmcaReportSlug);
+writeFile(path.join(siteRoot, publicDmcaReportSlug, "index.html"), copyrightReport);
+
+console.log(`Built ${pages.length + 2} public legal pages into ${siteRoot}`);

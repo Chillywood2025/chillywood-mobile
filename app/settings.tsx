@@ -442,6 +442,22 @@ export default function SettingsScreen() {
     openLocalLegalRoute("/copyright");
   }, [openLocalLegalRoute]);
 
+  const onPressCopyrightReport = useCallback(() => {
+    const hostedUrl = legalConfig.copyrightReportUrl;
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "copyright_report",
+      destination: hostedUrl ? "external" : "local",
+    });
+
+    if (hostedUrl) {
+      void openExternalDestination(hostedUrl, "Copyright Report");
+      return;
+    }
+
+    router.push("/copyright-report" as Parameters<typeof router.push>[0]);
+  }, [legalConfig.copyrightReportUrl, openExternalDestination, router]);
+
   const onPressSupport = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -742,6 +758,9 @@ export default function SettingsScreen() {
           ))}
         </View>
         <View style={styles.utilityRow}>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyrightReport}>
+            <Text style={styles.utilityButtonText}>Report Copyright</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupportContact}>
             <Text style={styles.utilityButtonText}>Contact Support</Text>
           </TouchableOpacity>

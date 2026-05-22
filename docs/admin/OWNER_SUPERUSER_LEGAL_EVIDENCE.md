@@ -32,9 +32,9 @@
 - Audit Explorer hides normal owner actions unless `break_glass_active=true`.
 - Permission templates grant permissions only; staff roles remain in the existing Staff & Roles flow.
 - Canary checks must return pass/fail/manual-required and must not fake green status.
-- `admin-owner-controls` is deployed as ACTIVE version 12 on Supabase project `bmkkhihfbmsnnmcqkoly`.
+- `admin-owner-controls` is deployed as ACTIVE version 14 on Supabase project `bmkkhihfbmsnnmcqkoly`.
 - May 21, 2026 physical Android owner-device Admin Canary proof returned `33 pass`, `0 manual`, and `0 failed`, including owner public-profile/discovery hiding, owner normal no-audit preservation, admin self-grant denial, moderator grant denial, Legal Evidence restriction, Supabase redirect proof, and proof role/grant cleanup.
-- May 21/22, 2026 physical Android owner-device Admin DMCA proof returned `44 pass`, `1 manual_required`, and `0 failed`, including real case detail, formal manual intake, content action recording, strike dispute/resolve, counter-notice flow, filters/search, proof-case hygiene, and unauthorized server-side denial.
+- May 22, 2026 physical Android owner-device Admin DMCA/public-legal proof returned `60 pass`, `0 manual_required`, and `0 failed`, including real case detail, formal manual intake, public hosted URL reachability, public form submission through anon `submit_dmca_notice`, content action recording, strike dispute/resolve, counter-notice flow, filters/search, attachment/email/uploader status disclosure, per-content-type mutation coverage, proof-case hygiene, and unauthorized server-side denial.
 
 ## Remaining Manual / External Proof
 - Attorney review remains required before public launch legal approval.

@@ -2462,6 +2462,7 @@ export default function AdminStudioScreen() {
       runtimeConfig.legal.privacyPolicyUrl
       && runtimeConfig.legal.termsOfServiceUrl
       && runtimeConfig.legal.accountDeletionUrl
+      && runtimeConfig.legal.copyrightReportUrl
     );
 
     return [
@@ -2804,9 +2805,24 @@ export default function AdminStudioScreen() {
     setDmcaIntakeVisible(true);
   }, [canAccessDmca]);
 
-  const openPublicDmcaForm = useCallback(() => {
-    router.push("/copyright-report");
-  }, [router]);
+  const openPublicDmcaForm = useCallback(async () => {
+    const publicUrl = runtimeConfig.legal.copyrightReportUrl;
+    if (!publicUrl) {
+      router.push("/copyright-report");
+      return;
+    }
+
+    try {
+      const supported = await Linking.canOpenURL(publicUrl);
+      if (!supported) {
+        setDmcaNotice(`Public DMCA form setup required: cannot open configured URL ${publicUrl}.`);
+        return;
+      }
+      await Linking.openURL(publicUrl);
+    } catch {
+      setDmcaNotice(`Public DMCA form setup required: cannot open configured URL ${publicUrl}.`);
+    }
+  }, [router, runtimeConfig.legal.copyrightReportUrl]);
 
   const applyDmcaDetailDefaults = useCallback((detail: DmcaCaseDetail) => {
     setDmcaContentType(detail.case.contentType);
@@ -5242,7 +5258,7 @@ export default function AdminStudioScreen() {
                 <TouchableOpacity style={styles.actionBtnPrimary} onPress={openDmcaIntake}>
                   <Text style={styles.actionTextPrimary}>Formal Notice Intake</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionBtn} onPress={openPublicDmcaForm}>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => void openPublicDmcaForm()}>
                   <Text style={styles.actionText}>Public Form</Text>
                 </TouchableOpacity>
               </View>

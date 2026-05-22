@@ -403,7 +403,9 @@ export function validateDmcaNoticeInput(input: SubmitDmcaNoticeInput) {
   assertText(input.reporterName, "Reporter name is required.");
   assertText(input.reporterEmail, "Reporter email is required.");
   if (!toText(input.reporterEmail).includes("@")) throw new Error("Enter a valid reporter email.");
+  assertText(input.copyrightOwnerName, "Copyright owner name is required.");
   assertText(input.copyrightedWorkDescription, "Describe the copyrighted work.");
+  assertText(input.infringingMaterialDescription, "Describe the allegedly infringing material.");
   if (!toText(input.contentId) && !toText(input.contentUrl)) {
     throw new Error("Provide the allegedly infringing content URL or content id.");
   }
@@ -450,8 +452,6 @@ export async function submitDmcaNotice(input: SubmitDmcaNoticeInput) {
 
 export async function adminDmcaCreateCase(input: AdminDmcaCreateCaseInput) {
   validateDmcaNoticeInput(input);
-  assertText(input.copyrightOwnerName, "Copyright owner name is required.");
-  assertText(input.infringingMaterialDescription, "Describe the allegedly infringing material.");
 
   const { data, error } = await dmcaClient.rpc("admin_dmca_create_case", {
     p_payload: {

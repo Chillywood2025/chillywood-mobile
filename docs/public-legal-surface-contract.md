@@ -11,6 +11,7 @@ Current generated policy set:
 - `/creator-rules`
 - `/community-guidelines`
 - `/copyright`
+- `/copyright-report`
 - `/account-deletion`
 - `/support`
 - `/premium-terms`
@@ -22,7 +23,7 @@ Current generated policy set:
 
 Each full policy is over 1,500 words. The shared source includes the required creator content license, upload/publish acknowledgement, live/replay acknowledgement, deletion/retention language, moderation/legal rights, Premium/RevenueCat/store terms, law-enforcement process, evidence/legal hold language, and creator monetization disclaimers. Attorney review remains required before public launch.
 
-Admin Canary now verifies the legal policy bundle, word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, prohibited creator-ownership phrases, prohibited no-license phrases, Google Play account deletion language, DMCA agent checklist, support email/path, and public-link-or-bundled-fallback readiness. The May 21, 2026 production canary run from physical Android owner device `R5CR120QCBF` returned `33 pass`, `0 manual`, and `0 failed`.
+Admin Canary now verifies the legal policy bundle, word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, prohibited creator-ownership phrases, prohibited no-license phrases, Google Play account deletion language, DMCA agent checklist, support email/path, public-link-or-bundled-fallback readiness, hosted public DMCA URL reachability, public DMCA form submission, and explicit non-live DMCA attachment/email/uploader counter-notice reasons. The May 22, 2026 release canary run from physical Android owner device `R5CR120QCBF` returned `60 pass`, `0 manual`, and `0 failed`.
 
 ## 0.1. May 13, 2026 Expanded Static Site Addendum
 
@@ -57,6 +58,7 @@ Preferred final production URLs:
 - `https://chillywoodstream.com/creator-rules`
 - `https://chillywoodstream.com/community-guidelines`
 - `https://chillywoodstream.com/copyright`
+- `https://chillywoodstream.com/copyright-report`
 - `https://chillywoodstream.com/account-deletion`
 - `https://chillywoodstream.com/refunds`
 - `https://chillywoodstream.com/sponsor-disclosure`
@@ -67,16 +69,17 @@ Preferred final production URLs:
 Current deployment truth:
 
 - the expanded static site exists in repo and can be locally built/proved;
-- the May 21 build generates 17 static pages, including the 12-policy bundle plus compatibility aliases;
+- the May 22 build generates 18 static pages, including the 12-policy bundle, `/copyright-report`, and compatibility aliases;
 - Cloudflare Pages project `chillywood-legal` is created and deployed;
 - stable Pages hostname `https://chillywood-legal.pages.dev` is the Cloudflare Pages project hostname;
 - the custom domain `chillywoodstream.com` is active on the Pages project;
 - `https://chillywoodstream.com/` returns HTTP/2 200;
-- `https://chillywoodstream.com/privacy/`, `/creator-monetization/`, and `/live-rules/` returned HTTP 200 after redirect in the May 21 expanded policy proof;
+- `https://chillywoodstream.com/copyright-report/` returned HTTP 200 after redirect in the May 22 proof, and `/privacy/`, `/creator-monetization/`, and `/live-rules/` returned HTTP 200 after redirect in the May 21 expanded policy proof;
 - prior apex proof for `/terms`, `/account-deletion`, `/copyright`, and `/support` remains governing unless a later deployment regresses those routes;
 - no LiveKit fallback was reached; the Privacy page mentions LiveKit only as policy text;
 - `https://chillywoodstream.com/account-deletion` is the live Google Play account deletion web URL candidate;
 - `https://chillywoodstream.com/support` is the live public support URL;
+- `https://chillywoodstream.com/copyright-report` is the canonical public DMCA notice intake URL;
 - Google Play account deletion compliance is not complete until the live public deletion URL is entered in Play Console and accepted;
 - DMCA designated agent public contact posting and U.S. Copyright Office registration are recorded complete under registration `DMCA-1072720`;
 - broader DMCA/legal-compliance claims still require attorney review, current agent information, support inbox operations, and properly operated notice/counter-notice/repeat-infringer handling; the backed/Admin DMCA workflow itself has live proof for formal notice intake, Admin review/actions, supported content hide/restore, strikes, Admin-recorded counter-notices, court-action restore blocking, and normal-user access denial;

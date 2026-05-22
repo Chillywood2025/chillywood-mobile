@@ -48,6 +48,7 @@ const strictProductionEnv = [
   "EXPO_PUBLIC_PRIVACY_POLICY_URL",
   "EXPO_PUBLIC_TERMS_OF_SERVICE_URL",
   "EXPO_PUBLIC_ACCOUNT_DELETION_URL",
+  "EXPO_PUBLIC_COPYRIGHT_REPORT_URL",
   "EXPO_PUBLIC_SUPPORT_EMAIL",
 ];
 
@@ -152,6 +153,7 @@ if (!readConfigValue(livekit, "tokenEndpoint")) configPresenceIssues.push("Expo 
 if (!readConfigValue(legal, "privacyPolicyUrl")) configPresenceIssues.push("Expo public config missing runtime.legal.privacyPolicyUrl.");
 if (!readConfigValue(legal, "termsOfServiceUrl")) configPresenceIssues.push("Expo public config missing runtime.legal.termsOfServiceUrl.");
 if (!readConfigValue(legal, "accountDeletionUrl")) configPresenceIssues.push("Expo public config missing runtime.legal.accountDeletionUrl.");
+if (!readConfigValue(legal, "copyrightReportUrl")) configPresenceIssues.push("Expo public config missing runtime.legal.copyrightReportUrl.");
 if (!readConfigValue(legal, "supportEmail") && requireStrictProductionEnv) {
   configPresenceIssues.push("Expo public config missing runtime.legal.supportEmail.");
 }

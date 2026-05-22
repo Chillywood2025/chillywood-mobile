@@ -29,6 +29,7 @@ Preferred production mapping after DNS/hosting setup:
 - `https://chillywoodstream.com/creator-rules`
 - `https://chillywoodstream.com/community-guidelines`
 - `https://chillywoodstream.com/copyright`
+- `https://chillywoodstream.com/copyright-report`
 - `https://chillywoodstream.com/account-deletion`
 - `https://chillywoodstream.com/support`
 - `https://chillywoodstream.com/premium-terms`
@@ -37,19 +38,20 @@ Preferred production mapping after DNS/hosting setup:
 - `https://chillywoodstream.com/moderation-policy`
 - `https://chillywoodstream.com/creator-monetization`
 
-Current repo truth: this static site is deployed on `chillywoodstream.com` from repo source. The May 21, 2026 deployment uploaded the expanded generated output to Cloudflare Pages project `chillywood-legal`; sampled apex proof returned HTTP 200 after redirect for `/privacy/`, `/creator-monetization/`, and `/live-rules/`, and earlier apex proof remains the governing baseline for `/terms`, `/account-deletion`, `/copyright`, and `/support` unless a later deployment regresses them. Support inbox receipt proof for `support@chillywoodstream.com` is closed, and public DNS proves Cloudflare MX, SPF `v=spf1 include:_spf.mx.cloudflare.net ~all`, and DMARC `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`. DKIM remains pending until a real outbound mail provider for `@chillywoodstream.com` issues selector records. Google Play web-link acceptance, attorney review, uploader-facing counter-notice submission if required, outbound email automation, and hosted `PUBLIC_DMCA_URL` / `PUBLIC_COPYRIGHT_REPORT_URL` configuration remain external/pending until separately proved. DMCA designated-agent public contact posting and U.S. Copyright Office registration are recorded complete for registration `DMCA-1072720`; backed/Admin DMCA case management is production-closeout complete in the app/backend, including formal manual intake, case detail, content actions, strikes, counter-notice recording, functional case history, scoped RLS/RPC access, and production-hidden test/proof cases.
+Current repo truth: this static site is deployed on `chillywoodstream.com` from repo source. The May 22, 2026 deployment uploaded the expanded generated output to Cloudflare Pages project `chillywood-legal`; apex proof returned HTTP 200 after redirect for `/copyright-report/`, and prior May 21 apex proof remains the governing baseline for `/privacy/`, `/creator-monetization/`, `/live-rules/`, `/terms`, `/account-deletion`, `/copyright`, and `/support` unless a later deployment regresses them. Support inbox receipt proof for `support@chillywoodstream.com` is closed, and public DNS proves Cloudflare MX, SPF `v=spf1 include:_spf.mx.cloudflare.net ~all`, and DMARC `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`. DKIM remains pending until a real outbound mail provider for `@chillywoodstream.com` issues selector records. Google Play web-link acceptance, attorney review, uploader-facing counter-notice self-service if required, outbound email automation, and DMCA attachment storage/scanning/retention remain external/pending until separately proved. DMCA designated-agent public contact posting and U.S. Copyright Office registration are recorded complete for registration `DMCA-1072720`; backed/Admin DMCA case management is production-closeout complete in the app/backend, including formal notice intake, public form intake, case detail, content actions, strikes, counter-notice recording, functional case history, scoped RLS/RPC access, and production-hidden test/proof cases.
 
-The May 21 policy bundle includes 12 full pages, each over 1,500 words: Privacy, Terms, Community Guidelines, Creator Rules, Copyright/DMCA, Support & Account Help, Account Deletion, Premium/Subscription Terms, Live/Watch-Party/Chat Rules, Law Enforcement/Legal Requests, Moderation/Appeals, and Creator Monetization/Revenue Disclaimer. `npm run legal-site:build` currently generates 17 static pages: the 12 policy pages plus compatibility aliases for existing launch/legal paths.
+The May 21 policy bundle includes 12 full pages, each over 1,500 words: Privacy, Terms, Community Guidelines, Creator Rules, Copyright/DMCA, Support & Account Help, Account Deletion, Premium/Subscription Terms, Live/Watch-Party/Chat Rules, Law Enforcement/Legal Requests, Moderation/Appeals, and Creator Monetization/Revenue Disclaimer. `npm run legal-site:build` currently generates 18 static pages: the 12 policy pages, the formal `/copyright-report` public intake page, and compatibility aliases for existing launch/legal paths.
 
-Cloudflare status as of May 21, 2026:
+Cloudflare status as of May 22, 2026:
 
 - Pages project: `chillywood-legal`
-- Proved Pages hostname: `https://chillywood-legal.pages.dev`
+- Proved Pages deployment: `https://a3ebef7d.chillywood-legal.pages.dev`
 - Expanded generated output deployed successfully from `public-site/legal-site/site/`.
 - Custom domain `chillywoodstream.com` is active.
 - `https://chillywoodstream.com/` returns HTTP/2 200.
+- `/copyright-report` returned HTTP 200 after trailing-slash redirect in May 22 proof and hosts the public copyright notice form.
 - `/privacy`, `/creator-monetization`, and `/live-rules` returned HTTP 200 after trailing-slash redirect in May 21 proof.
 - `/terms`, `/account-deletion`, `/copyright`, and `/support` had prior HTTP 200 proof after trailing-slash redirect and remain current unless a later deploy regresses them.
 - No LiveKit fallback was reached on legal/support paths.
-- Admin Canary legal readiness passed in the May 21 production run with `33 pass`, `0 manual`, and `0 failed` across the full canary set.
-- Admin DMCA production readiness is backed by `admin-owner-controls` ACTIVE version 12. The physical Android owner-device run on `R5CR120QCBF` returned `44 pass`, `1 manual_required`, and `0 failed`; the manual-required item is hosted public DMCA URL env configuration, while in-app `/copyright-report` remains present.
+- Admin Canary legal/DMCA readiness is backed by `admin-owner-controls` ACTIVE version 14. The May 22 physical Android owner-device release run on `R5CR120QCBF` returned `60 pass`, `0 manual_required`, and `0 failed`.
+- The public DMCA URL canary now passes through configured `PUBLIC_DMCA_URL=https://chillywoodstream.com/copyright-report`; the public form canary submits through anon `submit_dmca_notice`, reads back required fields as Admin, and cleans up test-only proof records.

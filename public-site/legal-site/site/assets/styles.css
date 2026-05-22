@@ -64,6 +64,37 @@ h2 { font-size: clamp(1.35rem, 2.2vw, 1.85rem); line-height: 1.18; margin: 0 0 0
 .policy-body p, .policy-body li { color: #2b3038; font-size: 1rem; }
 .policy-body p { margin: 0 0 1rem; max-width: 78ch; }
 .policy-body code { background: #f1f1ee; border-radius: 5px; padding: 0.1em 0.3em; }
+.notice-box { background: #fff5e8; border: 1px solid #edc88e; border-radius: 10px; color: #3d3020; margin: 20px 0; padding: 14px; }
+.dmca-form { display: grid; gap: 22px; margin-top: 22px; }
+.form-section { border-top: 1px solid var(--line); display: grid; gap: 12px; padding-top: 20px; }
+.dmca-form label { color: #2b3038; display: grid; font-size: 0.9rem; font-weight: 760; gap: 6px; }
+.dmca-form input, .dmca-form textarea, .dmca-form select {
+  background: #fbfcfa;
+  border: 1px solid #cfd5cf;
+  border-radius: 8px;
+  color: #17181c;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 11px;
+  width: 100%;
+}
+.check-row { align-items: flex-start; display: flex !important; gap: 10px !important; line-height: 1.45; }
+.check-row input { margin-top: 0.25em; width: auto; }
+.form-actions { display: grid; gap: 10px; }
+.form-actions button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 13px 18px;
+}
+.form-actions button:disabled { cursor: not-allowed; opacity: 0.6; }
+#dmca-status { font-weight: 800; margin: 0; }
+#dmca-status[data-tone="success"] { color: #167340; }
+#dmca-status[data-tone="error"] { color: #a51224; }
 .related h2 { margin-top: 0; }
 .site-footer { color: var(--muted); max-width: 1180px; margin: 0 auto; padding: 0 20px 40px; }
 @media (max-width: 840px) {

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report Copyright Infringement | Chi'llywood</title>
+  <meta name="description" content="Submit a public copyright or DMCA notice to Chi'llywood.">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="/">Chi'llywood</a>
+      <nav class="site-nav" aria-label="Public legal pages">
+<a href="/privacy">Privacy Policy</a>
+<a href="/terms">Terms of Use</a>
+<a href="/community-guidelines">Community Guidelines</a>
+<a href="/creator-rules">Creator Rules and Creator Terms</a>
+<a href="/copyright">Copyright and DMCA Policy</a>
+<a href="/support">Support and Account Help</a>
+<a href="/account-deletion">Account Deletion and Data Deletion Policy</a>
+<a href="/premium-terms">Premium and Subscription Terms</a>
+<a href="/live-rules">Live, Watch-Party, and Chat Rules</a>
+<a href="/law-enforcement">Law Enforcement and Legal Request Policy</a>
+<a href="/moderation-policy">Content Moderation, Enforcement, and Appeals Policy</a>
+<a href="/creator-monetization">Creator Monetization and Revenue Disclaimer Policy</a>
+<a href="/refunds">Refunds and Subscriptions</a>
+<a href="/banned-content">Banned Content and Community Safety</a>
+<a href="/moderation">Moderation and Reporting</a>
+<a href="/sponsor-disclosure">Sponsor and Monetization Disclosure</a>
+<a aria-current="page" href="/copyright-report">Report Copyright</a>
+      </nav>
+    </div>
+  </header>
+  <main class="page-shell">
+    <article class="policy">
+      <p class="eyebrow">Chi'llywood Copyright</p>
+      <h1>Report Copyright Infringement</h1>
+      <p class="summary">Use this public form for copyright or media-rights notices. The form creates a real DMCA case for Chi'llywood review and returns a case number.</p>
+      <div class="meta-row">
+        <span>Public URL: https://chillywoodstream.com/copyright-report</span>
+        <span>Manual email intake: support@chillywoodstream.com</span>
+      </div>
+      <div class="notice-box">
+        <strong>Attachments unavailable:</strong> DMCA attachment storage, malware scanning, and retention review are not configured for this public form yet. Submit the notice first, then email screenshots, PDFs, or evidence files to <a href="mailto:support@chillywoodstream.com">support@chillywoodstream.com</a> with the case number.
+      </div>
+      <form class="dmca-form" id="dmca-form" novalidate>
+        <section class="form-section">
+          <h2>Reporter</h2>
+          <label>Claimant or authorized agent name <input name="reporterName" required autocomplete="name"></label>
+          <label>Email address <input name="reporterEmail" required type="email" autocomplete="email"></label>
+          <label>Company or organization <input name="reporterCompany" autocomplete="organization"></label>
+          <label>Phone <input name="reporterPhone" autocomplete="tel"></label>
+          <label>Mailing address <textarea name="reporterAddress" rows="3" autocomplete="street-address"></textarea></label>
+          <label>Reporter role
+            <select name="reporterIsOwner">
+              <option value="true">Copyright owner</option>
+              <option value="false">Authorized agent</option>
+            </select>
+          </label>
+          <label>Authorized agent name <input name="authorizedAgentName"></label>
+        </section>
+        <section class="form-section">
+          <h2>Copyrighted Work</h2>
+          <label>Copyright owner name <input name="copyrightOwnerName" required></label>
+          <label>Description of copyrighted work <textarea name="copyrightedWorkDescription" rows="5" required></textarea></label>
+          <label>Copyrighted work URLs, one per line <textarea name="copyrightedWorkUrls" rows="3"></textarea></label>
+        </section>
+        <section class="form-section">
+          <h2>Allegedly Infringing Material</h2>
+          <label>Content type
+            <select name="contentType">
+              <option value="creator_video">Creator video</option>
+              <option value="profile_post">Profile post</option>
+              <option value="profile_post_comment">Profile post comment</option>
+              <option value="creator_video_comment">Creator video comment</option>
+              <option value="comment">Comment</option>
+              <option value="reply">Reply</option>
+              <option value="social_attachment">Social attachment</option>
+              <option value="attachment">Attachment</option>
+              <option value="live_room">Live room</option>
+              <option value="channel">Channel</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Content id, if known <input name="contentId"></label>
+          <label>Chi'llywood URL or location <input name="contentUrl" required></label>
+          <label>Description of allegedly infringing material <textarea name="infringingMaterialDescription" rows="5" required></textarea></label>
+        </section>
+        <section class="form-section">
+          <h2>Required Statements</h2>
+          <label class="check-row"><input name="goodFaithStatement" type="checkbox" required> I have a good-faith belief that the reported use is not authorized by the copyright owner, the owner's agent, or the law.</label>
+          <label class="check-row"><input name="accuracyPenaltyPerjuryStatement" type="checkbox" required> I state under penalty of perjury that the information in this notice is accurate and that I am authorized to act for the copyright owner.</label>
+          <label>Electronic signature <input name="electronicSignature" required></label>
+        </section>
+        <div class="form-actions">
+          <button type="submit">Submit Copyright Notice</button>
+          <p id="dmca-status" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+      <script>
+(() => {
+  const SUPABASE_URL = "https://bmkkhihfbmsnnmcqkoly.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJta2toaWhmYm1zbm5tY3Frb2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNjE1ODUsImV4cCI6MjA4NjczNzU4NX0.j45qJsnaZelO4fND2LGOwH66cb7qHr1LY0t31Ck-TcQ";
+  const form = document.getElementById("dmca-form");
+  const status = document.getElementById("dmca-status");
+  const button = form.querySelector("button[type='submit']");
+  const setStatus = (message, tone = "") => {
+    status.textContent = message;
+    status.dataset.tone = tone;
+  };
+  const text = (data, key) => String(data.get(key) || "").trim();
+  const workUrls = (value) => String(value || "")
+    .split(/\n|,/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    button.disabled = true;
+    setStatus("Public DMCA form disabled: Supabase public URL or public anon key is not configured for this static build.", "error");
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setStatus("");
+    const data = new FormData(form);
+    const payload = {
+      accuracyPenaltyPerjuryStatement: data.get("accuracyPenaltyPerjuryStatement") === "on",
+      copyrightOwnerName: text(data, "copyrightOwnerName"),
+      copyrightedWorkDescription: text(data, "copyrightedWorkDescription"),
+      copyrightedWorkUrls: workUrls(data.get("copyrightedWorkUrls")),
+      contentId: text(data, "contentId") || null,
+      contentType: text(data, "contentType") || "other",
+      contentUrl: text(data, "contentUrl") || null,
+      electronicSignature: text(data, "electronicSignature"),
+      goodFaithStatement: data.get("goodFaithStatement") === "on",
+      infringingMaterialDescription: text(data, "infringingMaterialDescription"),
+      reporterAddress: text(data, "reporterAddress") || null,
+      reporterCompany: text(data, "reporterCompany") || null,
+      reporterEmail: text(data, "reporterEmail"),
+      reporterIsOwner: text(data, "reporterIsOwner") !== "false",
+      reporterName: text(data, "reporterName"),
+      reporterPhone: text(data, "reporterPhone") || null,
+      authorizedAgentName: text(data, "authorizedAgentName") || null
+    };
+
+    const missing = [];
+    if (!payload.reporterName) missing.push("reporter name");
+    if (!payload.reporterEmail || !payload.reporterEmail.includes("@")) missing.push("valid reporter email");
+    if (!payload.copyrightOwnerName) missing.push("copyright owner name");
+    if (!payload.copyrightedWorkDescription) missing.push("copyrighted work description");
+    if (!payload.contentId && !payload.contentUrl) missing.push("content URL or id");
+    if (!payload.infringingMaterialDescription) missing.push("infringing material description");
+    if (!payload.goodFaithStatement) missing.push("good-faith statement");
+    if (!payload.accuracyPenaltyPerjuryStatement) missing.push("accuracy and authority statement");
+    if (!payload.electronicSignature) missing.push("electronic signature");
+    if (missing.length) {
+      setStatus("Please provide: " + missing.join(", ") + ".", "error");
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Submitting...";
+    try {
+      const response = await fetch(SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/rpc/submit_dmca_notice", {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ p_payload: payload })
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = body && (body.message || body.error || body.details)
+          ? String(body.message || body.error || body.details)
+          : "Unable to submit this copyright notice right now.";
+        throw new Error(message);
+      }
+      const row = Array.isArray(body) ? body[0] : body;
+      setStatus("Copyright notice received. Case " + (row && row.case_number ? row.case_number : "recorded") + " has been created for review.", "success");
+      form.reset();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to submit this copyright notice right now.", "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = "Submit Copyright Notice";
+    }
+  });
+})();
+      </script>
+    </article>
+    <aside class="related" aria-label="Related policy links">
+      <h2>Legal Pages</h2>
+      <div class="related-links">
+<a href="/privacy">Privacy Policy</a>
+<a href="/terms">Terms of Use</a>
+<a href="/community-guidelines">Community Guidelines</a>
+<a href="/creator-rules">Creator Rules and Creator Terms</a>
+<a href="/copyright">Copyright and DMCA Policy</a>
+<a href="/support">Support and Account Help</a>
+<a href="/account-deletion">Account Deletion and Data Deletion Policy</a>
+<a href="/premium-terms">Premium and Subscription Terms</a>
+<a href="/live-rules">Live, Watch-Party, and Chat Rules</a>
+<a href="/law-enforcement">Law Enforcement and Legal Request Policy</a>
+<a href="/moderation-policy">Content Moderation, Enforcement, and Appeals Policy</a>
+<a href="/creator-monetization">Creator Monetization and Revenue Disclaimer Policy</a>
+<a href="/refunds">Refunds and Subscriptions</a>
+<a href="/banned-content">Banned Content and Community Safety</a>
+<a href="/moderation">Moderation and Reporting</a>
+<a href="/sponsor-disclosure">Sponsor and Monetization Disclosure</a>
+<a aria-current="page" href="/copyright-report">Report Copyright</a>
+      </div>
+      <p>Questions? Contact <a href="mailto:support@chillywoodstream.com">support@chillywoodstream.com</a>.</p>
+    </aside>
+  </main>
+  <footer class="site-footer">
+    <p>Chi'llywood public legal and support pages.</p>
+  </footer>
+</body>
+</html>
