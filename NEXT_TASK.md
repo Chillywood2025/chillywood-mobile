@@ -1,12 +1,12 @@
 # NEXT TASK
 
-## Admin Home Remaining Gaps
+## Admin Content Programming Remaining Gaps
 
-Admin Command Center Home production pass is repo-side complete for the current UI/data aggregation lane. True remaining Home-tab gaps only:
+Admin Content Programming Center is repo-side implemented for the current UI/RPC lane. True remaining Content-tab gaps only:
 
-- Run physical Android proof with a normal user to confirm `/admin` remains hidden or denied and no admin Home data leaks.
-- Run physical Android proof with an owner/admin/operator to confirm Home loads, refresh works, snapshot counts show real values or honest unavailable states, Needs Attention is meaningful, Connected Systems is readable, Operational Truth is clear, and quick drill-down opens relevant tabs.
-- If a future lane wants one server-owned source, add a role-gated `get_admin_home_snapshot()` RPC that preserves the same truth labels; this pass safely reuses existing role-gated helpers.
-- App Config Home truth can distinguish table-connected/default-row fallback only if a future read model exposes source provenance; this pass already probes `app_configurations` before claiming `Connected`.
-- Recent Signals currently uses immutable admin audit rows only. A broader activity feed should wait for a backed, safe cross-source report/DMCA/live-ops/audit read model.
-- Live Cost Guard remains `Observe Only` until production metrics/remediation proof connects real monitoring and explicit approved actions.
+- Start local Supabase or use a safe linked staging target, then run Supabase migration lint/apply proof for `202605220007_admin_content_programming_center.sql`.
+- Run physical Android proof with a normal user to confirm `/admin` Content is hidden or backend-denied and no programming config, title action, creator grant, or content audit data leaks.
+- Run physical Android proof with an owner/admin/operator to confirm Content loads, refresh works, title counts are real or honestly unavailable, theme presets render, selected-vs-saved preset state is clear, Save Config persists through `save_admin_content_config`, and the content audit timeline records the save.
+- Prove title programming actions on Android for at least one safe test title: feature/unfeature, pin/unpin, trend/untrend, set/remove hero, sort, publish/unpublish, and archive/restore only through the reason-required confirmation path.
+- Prove creator grants on Android only against a safe test creator account, with `save_admin_creator_grants` audit rows and no fake grants.
+- Add richer Home preview/deep-link proof only after the public Home read path can safely return a resolved programming preview from the same saved config.

@@ -1,26 +1,25 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    ImageBackground,
-    Linking,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  Linking,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import {
   DEFAULT_APP_CONFIG,
-  APP_CONFIG_GLOBAL_KEY,
-  APP_CONFIG_TABLE,
   getThemePresetPalette,
-  readAppConfig,
-  saveAppConfig,
+  normalizeAppConfig,
   type AppConfig,
+  type AppBackgroundMode,
+  type AppThemePreset,
   type HomeRailKey,
 } from "../_lib/appConfig";
 import { placeholderAdProvider } from "../_lib/ads/providers/placeholder";
@@ -119,7 +118,6 @@ import {
   normalizeTitleAccessRule,
   readCreatorPermissions,
   sanitizeCreatorTitleMonetization,
-  saveCreatorPermissions,
   type CreatorPermissionSet,
   type SponsorPlacement,
   type TitleAccessRule,
@@ -202,6 +200,71 @@ import { BetaAccessScreen } from "../components/system/beta-access-screen";
 type TitleId = Database["public"]["Tables"]["titles"]["Row"]["id"];
 
 type StatusType = "draft" | "published" | "scheduled" | "archived";
+type ContentProgrammingActionType =
+  | "create_title"
+  | "update_title"
+  | "feature"
+  | "unfeature"
+  | "pin_top_row"
+  | "unpin_top_row"
+  | "trend"
+  | "untrend"
+  | "set_hero"
+  | "remove_hero"
+  | "sort_increment"
+  | "sort_decrement"
+  | "publish"
+  | "unpublish"
+  | "archive"
+  | "restore";
+
+type ContentConfirmState =
+  | {
+      kind: "save_config";
+      title: string;
+      body: string;
+      actionLabel: string;
+      tone: OwnerControlTone;
+    }
+  | {
+      kind: "title_action";
+      title: string;
+      body: string;
+      actionLabel: string;
+      tone: OwnerControlTone;
+      titleId: TitleId | null;
+      actionType: ContentProgrammingActionType;
+      patch: Partial<TitleRow>;
+      successText: string;
+    }
+  | {
+      kind: "save_editor";
+      title: string;
+      body: string;
+      actionLabel: string;
+      tone: OwnerControlTone;
+    }
+  | {
+      kind: "creator_grants";
+      title: string;
+      body: string;
+      actionLabel: string;
+      tone: OwnerControlTone;
+    };
+
+type ContentAuditRow = {
+  id: string;
+  action: string;
+  action_category?: string | null;
+  actor_email?: string | null;
+  actor_role?: string | null;
+  target_type?: string | null;
+  target_id?: string | null;
+  target_user_id?: string | null;
+  reason?: string | null;
+  severity?: string | null;
+  created_at?: string | null;
+};
 
 type TitleRow = {
   id: TitleId;
@@ -816,6 +879,53 @@ const railLabels: Record<HomeRailKey, string> = {
   continue_watching: "Continue Watching",
 };
 
+const themePresetOptions: readonly {
+  key: AppThemePreset;
+  label: string;
+  cue: string;
+  body: string;
+}[] = [
+  { key: "city_night", label: "City Night", cue: "Crimson city glow", body: "Original premium night-city treatment." },
+  { key: "lake_glow", label: "Lake Glow", cue: "Cyan shoreline", body: "Cooler lakefront accent palette." },
+  { key: "steel_day", label: "Steel Day", cue: "Blue steel glass", body: "Daylight steel-and-skyline mode." },
+  { key: "theater_noir", label: "Theater Noir", cue: "Black and gold", body: "Cinema-first darker command mood." },
+  { key: "premiere_gold", label: "Premiere Gold", cue: "Warm marquee", body: "Launch-night gold accenting." },
+  { key: "red_carpet", label: "Red Carpet", cue: "Crimson premiere", body: "Public programming emphasis." },
+  { key: "midnight_blue", label: "Midnight Blue", cue: "Blue midnight", body: "Cool late-night streaming polish." },
+  { key: "studio_neon", label: "Studio Neon", cue: "Green studio light", body: "Creator-forward production energy." },
+  { key: "chi_town_glow", label: "Chi-Town Glow", cue: "Rose skyline", body: "Chicago nightlife accent pass." },
+  { key: "skyline_glass", label: "Skyline Glass", cue: "Glass blue skyline", body: "Lighter glass overlay treatment." },
+  { key: "creator_spotlight", label: "Creator Spotlight", cue: "Magenta spotlight", body: "Creator-led programming accent." },
+];
+
+const backgroundModeOptions: readonly {
+  key: AppBackgroundMode;
+  label: string;
+  body: string;
+}[] = [
+  { key: "hero_art", label: "Hero Art", body: "Home leads with backed title artwork when available." },
+  { key: "skyline", label: "Skyline", body: "Home leans into the shared Chicago skyline shell." },
+];
+
+const contentActionLabels: Record<ContentProgrammingActionType, string> = {
+  create_title: "Create Title",
+  update_title: "Update Title",
+  feature: "Feature",
+  unfeature: "Unfeature",
+  pin_top_row: "Pin Top Row",
+  unpin_top_row: "Unpin Top Row",
+  trend: "Trend",
+  untrend: "Untrend",
+  set_hero: "Set Hero",
+  remove_hero: "Remove Hero",
+  sort_increment: "Sort +",
+  sort_decrement: "Sort -",
+  publish: "Publish",
+  unpublish: "Unpublish",
+  archive: "Archive",
+  restore: "Restore",
+};
+
 const normalizeStatus = (raw?: string | null, isPublished?: boolean | null): StatusType => {
   const value = (raw ?? "").toLowerCase().trim();
   if (value === "draft" || value === "published" || value === "scheduled" || value === "archived") {
@@ -836,6 +946,26 @@ const toTimestamp = (value?: string | null) => {
 
 const formatProgrammingToken = (value: string) =>
   value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+
+const stringifyConfig = (config: AppConfig | null) => JSON.stringify(config ?? {});
+
+const formatContentCount = (value: number | null, loading: boolean) => {
+  if (loading) return "Loading";
+  if (value === null) return "Not Connected";
+  return String(value);
+};
+
+const formatContentAuditActor = (row: ContentAuditRow) => {
+  if (row.actor_role) return formatModerationToken(row.actor_role);
+  if (row.actor_email) return maskOperatorIdentity(row.actor_email);
+  return "System";
+};
+
+const formatContentAuditTarget = (row: ContentAuditRow) => {
+  const targetType = row.target_type ? formatModerationToken(row.target_type) : "Content";
+  const targetId = row.target_id || row.target_user_id;
+  return targetId ? `${targetType} ${formatCompactIdentifier(targetId)}` : targetType;
+};
 
 const formatRuntimeControlValue = (value: AppRuntimeControls[keyof AppRuntimeControls]) => {
   if (typeof value === "boolean") return value ? "On by default" : "Off by default";
@@ -1972,6 +2102,75 @@ const fromDatetimeLocalValue = (raw: string) => {
   return date.toISOString();
 };
 
+const adminContentRpc = () => supabase as unknown as {
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
+};
+
+const readAdminContentConfigRpc = async () => {
+  const { data, error } = await adminContentRpc().rpc("get_admin_content_config");
+  if (error) throw error;
+  return data as {
+    connected?: boolean;
+    source?: string | null;
+    config?: unknown;
+    updatedAt?: string | null;
+    updatedBy?: string | null;
+  } | null;
+};
+
+const saveAdminContentConfigRpc = async (config: AppConfig, reason: string) => {
+  const { data, error } = await adminContentRpc().rpc("save_admin_content_config", {
+    p_config_patch: config,
+    p_reason: reason,
+  });
+  if (error) throw error;
+  return data as { config?: unknown; updatedAt?: string | null; auditLogId?: string | null } | null;
+};
+
+const applyAdminTitleProgrammingActionRpc = async (input: {
+  actionType: ContentProgrammingActionType;
+  patch?: Record<string, unknown>;
+  reason: string;
+  titleId?: TitleId | null;
+}) => {
+  const { data, error } = await adminContentRpc().rpc("apply_admin_title_programming_action", {
+    p_title_id: input.titleId ?? null,
+    p_action_type: input.actionType,
+    p_patch: input.patch ?? {},
+    p_reason: input.reason,
+  });
+  if (error) throw error;
+  return data as { titleId?: string | null; auditLogId?: string | null } | null;
+};
+
+const saveAdminCreatorGrantsRpc = async (input: {
+  grants: CreatorPermissionSet;
+  reason: string;
+  targetUserId: string;
+}) => {
+  const { data, error } = await adminContentRpc().rpc("save_admin_creator_grants", {
+    p_target_user_id: input.targetUserId,
+    p_grants: {
+      canUsePartyPassRooms: input.grants.canUsePartyPassRooms,
+      canUsePremiumRooms: input.grants.canUsePremiumRooms,
+      canPublishPremiumTitles: input.grants.canPublishPremiumTitles,
+      canUseSponsorPlacements: input.grants.canUseSponsorPlacements,
+      canUsePlayerAds: input.grants.canUsePlayerAds,
+    },
+    p_reason: input.reason,
+  });
+  if (error) throw error;
+  return data as { auditLogId?: string | null; grants?: unknown } | null;
+};
+
+const listAdminContentAuditEventsRpc = async (limit = 10) => {
+  const { data, error } = await adminContentRpc().rpc("list_admin_content_audit_events", {
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as ContentAuditRow[]).filter((row) => !!row?.id && !!row?.action);
+};
+
 export default function AdminStudioScreen() {
   const router = useRouter();
   const { isLoading: authLoading, isSignedIn, user } = useSession();
@@ -1988,9 +2187,19 @@ export default function AdminStudioScreen() {
   const [capabilities, setCapabilities] = useState<AdminCapabilities>(defaultCapabilities);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [experienceConfig, setExperienceConfig] = useState<AppConfig>(DEFAULT_APP_CONFIG);
+  const [savedExperienceConfig, setSavedExperienceConfig] = useState<AppConfig>(DEFAULT_APP_CONFIG);
   const [configLoading, setConfigLoading] = useState(true);
   const [appConfigConnected, setAppConfigConnected] = useState(false);
+  const [appConfigSource, setAppConfigSource] = useState<string | null>(null);
+  const [appConfigSavedAt, setAppConfigSavedAt] = useState<string | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
+  const [titlesConnected, setTitlesConnected] = useState(false);
+  const [contentAuditRows, setContentAuditRows] = useState<ContentAuditRow[]>([]);
+  const [contentAuditLoading, setContentAuditLoading] = useState(false);
+  const [contentAuditConnected, setContentAuditConnected] = useState(false);
+  const [contentLastRefreshedAt, setContentLastRefreshedAt] = useState<string | null>(null);
+  const [contentConfirm, setContentConfirm] = useState<ContentConfirmState | null>(null);
+  const [contentConfirmReason, setContentConfirmReason] = useState("");
   const [creatorGrantUserId, setCreatorGrantUserId] = useState("");
   const [creatorGrantLoading, setCreatorGrantLoading] = useState(false);
   const [creatorGrantSaving, setCreatorGrantSaving] = useState(false);
@@ -2185,6 +2394,10 @@ export default function AdminStudioScreen() {
   const canAccessAdmin = isSignedIn && isActive && platformRolesChecked && canAccessAdminConsole(moderationAccess, platformRoles);
   const canReviewSafetyReports = isSignedIn && isActive && platformRolesChecked && canReviewSafetyQueue(moderationAccess, platformRoles);
   const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
+  const canAccessContentProgramming = isSignedIn
+    && isActive
+    && platformRolesChecked
+    && hasPlatformRoleMembership(platformRoles, ["owner", "operator"]);
   const isOwnerStaff = isSignedIn && isActive && platformRolesChecked && hasPlatformRoleMembership(platformRoles, ["owner"]);
   const canAccessDmca = isSignedIn && isActive && platformRolesChecked && canAccessDmcaTools(platformRoles);
   const canManageAdminStaff = isSignedIn && isActive && platformRolesChecked && canManageAdminRoleAssignments(platformRoles);
@@ -2213,6 +2426,7 @@ export default function AdminStudioScreen() {
       if (canReviewSafetyReports) {
         scopedTabs.push("reports", "audit");
       }
+      if (canAccessContentProgramming) scopedTabs.push("content");
       if (canAccessDmca) scopedTabs.push("dmca");
       if (canViewStaffRoles) scopedTabs.push("roles");
       if (canAccessLiveOps) scopedTabs.push("live-cost-guard", "live-ops-fix-center");
@@ -2227,6 +2441,7 @@ export default function AdminStudioScreen() {
     [
       canAccessAuditExplorer,
       canAccessBreakGlass,
+      canAccessContentProgramming,
       canAccessLegalEvidence,
       canAccessLegalIntake,
       canAccessLiveOps,
@@ -2409,6 +2624,16 @@ export default function AdminStudioScreen() {
       setLoading(false);
       setConfigLoading(false);
       setAppConfigConnected(false);
+      setAppConfigSource(null);
+      setAppConfigSavedAt(null);
+      setSavedExperienceConfig(DEFAULT_APP_CONFIG);
+      setTitlesConnected(false);
+      setContentAuditRows([]);
+      setContentAuditLoading(false);
+      setContentAuditConnected(false);
+      setContentLastRefreshedAt(null);
+      setContentConfirm(null);
+      setContentConfirmReason("");
       setPlatformRoles([]);
       setPlatformRolesLoading(false);
       setPlatformRolesChecked(false);
@@ -2501,6 +2726,16 @@ export default function AdminStudioScreen() {
       setLoading(false);
       setConfigLoading(false);
       setAppConfigConnected(false);
+      setAppConfigSource(null);
+      setAppConfigSavedAt(null);
+      setSavedExperienceConfig(DEFAULT_APP_CONFIG);
+      setTitlesConnected(false);
+      setContentAuditRows([]);
+      setContentAuditLoading(false);
+      setContentAuditConnected(false);
+      setContentLastRefreshedAt(null);
+      setContentConfirm(null);
+      setContentConfirmReason("");
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
       setPlatformRoleRosterLoading(false);
@@ -2560,10 +2795,20 @@ export default function AdminStudioScreen() {
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
       return;
     }
-    if (!canManagePrivilegedWrites) {
+    if (!canAccessContentProgramming) {
       setLoading(false);
       setConfigLoading(false);
       setAppConfigConnected(false);
+      setAppConfigSource(null);
+      setAppConfigSavedAt(null);
+      setSavedExperienceConfig(DEFAULT_APP_CONFIG);
+      setTitlesConnected(false);
+      setContentAuditRows([]);
+      setContentAuditLoading(false);
+      setContentAuditConnected(false);
+      setContentLastRefreshedAt(null);
+      setContentConfirm(null);
+      setContentConfirmReason("");
       setLiveOpsReadModel(null);
       setLiveOpsLoading(false);
       setLiveOpsNotice(null);
@@ -2575,11 +2820,12 @@ export default function AdminStudioScreen() {
     }
     loadTitles();
     loadExperienceConfig();
+    void loadContentAuditEvents();
     void loadAdminV1ReadModel();
     void loadAdminFinanceReadModel();
     void loadAdminImmutableAuditReadModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canAccessAdmin, canManagePrivilegedWrites]);
+  }, [canAccessAdmin, canAccessContentProgramming]);
 
   useEffect(() => {
     if (!canAccessAdmin || !canReviewSafetyReports) {
@@ -2819,6 +3065,137 @@ export default function AdminStudioScreen() {
       visibleItems: queue.slice(0, 4),
     };
   }, [hasReleaseControl, hasStatusControl, titles]);
+
+  const contentConfigDirty = stringifyConfig(experienceConfig) !== stringifyConfig(savedExperienceConfig);
+  const contentLastCheckedAt = useMemo(() => getLatestHomeTimestamp([
+    contentLastRefreshedAt,
+    appConfigSavedAt,
+    contentAuditRows[0]?.created_at ?? null,
+  ]), [appConfigSavedAt, contentAuditRows, contentLastRefreshedAt]);
+  const contentLoading = loading || configLoading || contentAuditLoading;
+  const contentConfirmBusy = configSaving || saving || creatorGrantSaving;
+  const publishedTitleCount = titlesConnected ? stats.published : null;
+  const scheduledTitleCount = titlesConnected ? upcomingScheduledSnapshot.totalUpcoming : null;
+  const draftTitleCount = titlesConnected ? stats.draft : null;
+  const heroPickCount = titlesConnected ? stats.hero : null;
+
+  const contentCommandStatus = useMemo(() => {
+    if (contentLoading) {
+      return {
+        body: "Refreshing title inventory, saved config, and content audit proof.",
+        label: "Partial Visibility",
+        tone: "info" as OwnerControlTone,
+      };
+    }
+    if (!titlesConnected || !appConfigConnected) {
+      return {
+        body: "Content programming cannot be called ready until titles and saved app configuration both load successfully.",
+        label: "Partial Visibility",
+        tone: "manual" as OwnerControlTone,
+      };
+    }
+    if (contentConfigDirty) {
+      return {
+        body: "Draft changes are selected locally. Save Config requires a reason and immutable audit.",
+        label: "Unsaved Changes",
+        tone: "manual" as OwnerControlTone,
+      };
+    }
+    if (programmingSnapshot.guardrailAdjustments.length) {
+      return {
+        body: "Saved programming references a source that would normalize during the next save.",
+        label: "Needs Review",
+        tone: "manual" as OwnerControlTone,
+      };
+    }
+    return {
+      body: "Saved programming is backed by the current title/config read paths; foundation systems stay labeled below.",
+      label: "Programming Ready",
+      tone: "success" as OwnerControlTone,
+    };
+  }, [
+    appConfigConnected,
+    contentConfigDirty,
+    contentLoading,
+    programmingSnapshot.guardrailAdjustments.length,
+    titlesConnected,
+  ]);
+
+  const contentSnapshotTiles = useMemo<readonly AdminHomeSignalTile[]>(() => [
+    {
+      label: "Published Titles",
+      value: formatContentCount(publishedTitleCount, loading),
+      body: titlesConnected ? "Backed count from the titles query." : "No count is shown until titles load successfully.",
+      qualifier: titlesConnected ? "Backed" : "Not Connected",
+      tone: loading ? "info" : titlesConnected ? "success" : "locked",
+    },
+    {
+      label: "Scheduled Titles",
+      value: formatContentCount(scheduledTitleCount, loading),
+      body: hasReleaseControl ? "Future release_at rows only." : "Scheduling column not connected on this schema.",
+      qualifier: hasReleaseControl ? titlesConnected ? "Backed" : "Not Connected" : "Not Connected",
+      tone: loading ? "info" : hasReleaseControl && titlesConnected ? "manual" : "locked",
+    },
+    {
+      label: "Draft Titles",
+      value: formatContentCount(draftTitleCount, loading),
+      body: titlesConnected ? "Draft/off-catalog programming rows." : "Draft count is hidden until titles load.",
+      qualifier: titlesConnected ? "Backed" : "Not Connected",
+      tone: loading ? "info" : titlesConnected ? "manual" : "locked",
+    },
+    {
+      label: "Hero Picks",
+      value: formatContentCount(heroPickCount, loading),
+      body: hasHeroControl ? "Hero flag count from the titles row set." : "Hero flag column is not connected.",
+      qualifier: hasHeroControl ? titlesConnected ? "Backed" : "Not Connected" : "Not Connected",
+      tone: loading ? "info" : hasHeroControl && titlesConnected ? heroPickCount === 1 ? "success" : "manual" : "locked",
+    },
+  ], [
+    draftTitleCount,
+    hasHeroControl,
+    hasReleaseControl,
+    heroPickCount,
+    loading,
+    publishedTitleCount,
+    scheduledTitleCount,
+    titlesConnected,
+  ]);
+
+  const contentRailRows = useMemo(() => {
+    const programmedTitles = sortTitlesByProgrammingTruth(titles);
+    return experienceConfig.home.railOrder.map((railKey, index) => {
+      let itemCount: number | null = null;
+      let backing = "Config";
+      let body = "Config-backed rail placement.";
+      if (railKey === "top_picks") {
+        itemCount = titlesConnected ? getTopPicksCandidates(programmedTitles, experienceConfig.home.topPicksSource).length : null;
+        backing = "Backed";
+        body = `${formatProgrammingToken(experienceConfig.home.topPicksSource)} source for Top Picks.`;
+      } else if (railKey === "browse") {
+        const needle = experienceConfig.home.browseCategoryQuery.trim().toLowerCase();
+        itemCount = titlesConnected
+          ? programmedTitles.filter((item) => (item.category ?? "").toLowerCase().includes(needle)).length
+          : null;
+        backing = "Backed";
+        body = `Category query: ${experienceConfig.home.browseCategoryQuery || "not set"}.`;
+      } else if (railKey === "favorites" || railKey === "continue_watching") {
+        backing = "Read Only";
+        body = "User-specific rail; global Content can order or hide it, not count personal rows.";
+      }
+
+      return {
+        backing,
+        body,
+        itemCount,
+        key: railKey,
+        label: railLabels[railKey],
+        position: index + 1,
+        visible: experienceConfig.home.enabledRails[railKey],
+      };
+    });
+  }, [experienceConfig.home, titles, titlesConnected]);
+
+  const contentAuditVisibleRows = useMemo(() => contentAuditRows.slice(0, 6), [contentAuditRows]);
 
   const liveCostGuardSnapshot = useMemo(() => {
     const severityOrder: Record<string, number> = {
@@ -3764,21 +4141,38 @@ export default function AdminStudioScreen() {
     try {
       setConfigLoading(true);
       setAppConfigConnected(false);
-      const probe = await supabase
-        .from(APP_CONFIG_TABLE)
-        .select("config_key")
-        .eq("config_key", APP_CONFIG_GLOBAL_KEY)
-        .maybeSingle();
-      if (probe.error && probe.error.code !== "PGRST116") throw probe.error;
-      const config = await readAppConfig();
+      setAppConfigSource(null);
+      const adminConfig = await readAdminContentConfigRpc();
+      const config = normalizeAppConfig(adminConfig?.config ?? DEFAULT_APP_CONFIG);
       setExperienceConfig(config);
-      setAppConfigConnected(true);
+      setSavedExperienceConfig(config);
+      setAppConfigConnected(adminConfig?.connected === true);
+      setAppConfigSource(adminConfig?.source ?? "app_configurations");
+      setAppConfigSavedAt(adminConfig?.updatedAt ?? null);
+      setContentLastRefreshedAt(new Date().toISOString());
     } catch (err: any) {
       setExperienceConfig(DEFAULT_APP_CONFIG);
+      setSavedExperienceConfig(DEFAULT_APP_CONFIG);
       setAppConfigConnected(false);
+      setAppConfigSource(null);
+      setAppConfigSavedAt(null);
       setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to load experience config.") });
     } finally {
       setConfigLoading(false);
+    }
+  }, []);
+
+  const loadContentAuditEvents = useCallback(async () => {
+    try {
+      setContentAuditLoading(true);
+      const rows = await listAdminContentAuditEventsRpc(10);
+      setContentAuditRows(rows);
+      setContentAuditConnected(true);
+    } catch {
+      setContentAuditRows([]);
+      setContentAuditConnected(false);
+    } finally {
+      setContentAuditLoading(false);
     }
   }, []);
 
@@ -5695,6 +6089,7 @@ export default function AdminStudioScreen() {
   const loadTitles = useCallback(async () => {
     try {
       setLoading(true);
+      setTitlesConnected(false);
       setNotice(null);
 
       const detected = await detectCapabilities();
@@ -5722,7 +6117,10 @@ export default function AdminStudioScreen() {
 
       const rows = ((query.data as Record<string, any>[] | null) ?? []).map(canonicalizeRow);
       setTitles(normalizeRows(rows));
+      setTitlesConnected(true);
+      setContentLastRefreshedAt(new Date().toISOString());
     } catch (err: any) {
+      setTitlesConnected(false);
       setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to load titles.") });
     } finally {
       setLoading(false);
@@ -5734,7 +6132,7 @@ export default function AdminStudioScreen() {
   }, []);
 
   const loadCreatorGrantTarget = useCallback(async () => {
-    if (!canManagePrivilegedWrites) {
+    if (!canAccessContentProgramming) {
       setNotice({ type: "error", text: "Active owner or operator role required to load creator grants." });
       return;
     }
@@ -5756,10 +6154,10 @@ export default function AdminStudioScreen() {
     } finally {
       setCreatorGrantLoading(false);
     }
-  }, [canManagePrivilegedWrites, creatorGrantUserId]);
+  }, [canAccessContentProgramming, creatorGrantUserId]);
 
   const saveCreatorGrantTarget = useCallback(async () => {
-    if (!canManagePrivilegedWrites) {
+    if (!canAccessContentProgramming) {
       setNotice({ type: "error", text: "Active owner or operator role required to save creator grants." });
       return;
     }
@@ -5770,17 +6168,36 @@ export default function AdminStudioScreen() {
       return;
     }
 
+    setContentConfirm({
+      kind: "creator_grants",
+      title: "Save Creator Grants",
+      body: `Creator monetization grants for ${formatCompactIdentifier(targetUserId)} affect which backed premium, Party Pass, sponsor, and player-ad defaults can stay enabled.`,
+      actionLabel: "Save Grants",
+      tone: "manual",
+    });
+    setContentConfirmReason("");
+  }, [canAccessContentProgramming, creatorGrantUserId]);
+
+  const runCreatorGrantSave = useCallback(async (reason: string) => {
+    const targetUserId = creatorGrantUserId.trim();
+    if (!targetUserId) {
+      setNotice({ type: "error", text: "Enter a creator user id before saving grants." });
+      return;
+    }
+
     try {
       setCreatorGrantSaving(true);
-      const saved = await saveCreatorPermissions(targetUserId, creatorGrantForm);
+      await saveAdminCreatorGrantsRpc({ targetUserId, grants: creatorGrantForm, reason });
+      const saved = await readCreatorPermissions(targetUserId);
       setCreatorGrantForm(saved);
-      setNotice({ type: "success", text: `Creator grants saved for ${targetUserId}.` });
+      setNotice({ type: "success", text: `Creator grants saved for ${targetUserId}. Audit written.` });
+      await loadContentAuditEvents();
     } catch (err: any) {
       setNotice({ type: "error", text: formatAdminOperationFailure(err, "Unable to save creator grants.") });
     } finally {
       setCreatorGrantSaving(false);
     }
-  }, [canManagePrivilegedWrites, creatorGrantForm, creatorGrantUserId]);
+  }, [creatorGrantForm, creatorGrantUserId, loadContentAuditEvents]);
 
   const moveRail = useCallback((railKey: HomeRailKey, direction: -1 | 1) => {
     updateExperienceConfig((prev) => {
@@ -5802,7 +6219,28 @@ export default function AdminStudioScreen() {
   }, [updateExperienceConfig]);
 
   const saveExperienceConfigChanges = useCallback(async () => {
-    if (!canManagePrivilegedWrites) {
+    if (!canAccessContentProgramming) {
+      setNotice({ type: "error", text: "Active owner or operator role required to save global config." });
+      return;
+    }
+
+    if (stringifyConfig(experienceConfig) === stringifyConfig(savedExperienceConfig)) {
+      setNotice({ type: "success", text: "No unsaved Content config changes to save." });
+      return;
+    }
+
+    setContentConfirm({
+      kind: "save_config",
+      title: "Save Public Programming Config",
+      body: "This can change homepage presentation, hero strategy, rail order, feature visibility, monetization copy, and room defaults. The save will use the backend Content RPC and write immutable audit.",
+      actionLabel: "Save Config",
+      tone: "manual",
+    });
+    setContentConfirmReason("");
+  }, [canAccessContentProgramming, experienceConfig, savedExperienceConfig]);
+
+  const runExperienceConfigSave = useCallback(async (reason: string) => {
+    if (!canAccessContentProgramming) {
       setNotice({ type: "error", text: "Active owner or operator role required to save global config." });
       return;
     }
@@ -5810,23 +6248,29 @@ export default function AdminStudioScreen() {
     try {
       setConfigSaving(true);
       const { nextConfig, adjustments } = applyExperienceConfigGuardrails(experienceConfig, titles);
-      const saved = await saveAppConfig(nextConfig, "admin");
+      const result = await saveAdminContentConfigRpc(nextConfig, reason);
+      const saved = normalizeAppConfig(result?.config ?? nextConfig);
       setExperienceConfig(saved);
+      setSavedExperienceConfig(saved);
+      setAppConfigConnected(true);
+      setAppConfigSource("app_configurations");
+      setAppConfigSavedAt(result?.updatedAt ?? new Date().toISOString());
       setNotice({
         type: "success",
         text: adjustments.length > 0
-          ? `Experience config saved. ${adjustments.join("; ")}.`
-          : "Experience config saved.",
+          ? `Experience config saved with audit. ${adjustments.join("; ")}.`
+          : "Experience config saved with audit.",
       });
+      await loadContentAuditEvents();
     } catch (err: any) {
       setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to save experience config.") });
     } finally {
       setConfigSaving(false);
     }
-  }, [canManagePrivilegedWrites, experienceConfig, titles]);
+  }, [canAccessContentProgramming, experienceConfig, loadContentAuditEvents, titles]);
 
   const openCreate = useCallback(() => {
-    if (!canManagePrivilegedWrites) {
+    if (!canAccessContentProgramming) {
       setNotice({ type: "error", text: "Active owner or operator role required to create platform titles." });
       return;
     }
@@ -5855,7 +6299,7 @@ export default function AdminStudioScreen() {
       sponsor_label: "",
     });
     setEditorVisible(true);
-  }, [canManagePrivilegedWrites, titles]);
+  }, [canAccessContentProgramming, titles]);
 
   const openEdit = useCallback((item: TitleRow) => {
     const publicationState = normalizePublicationState({
@@ -5892,114 +6336,95 @@ export default function AdminStudioScreen() {
     setEditorVisible(true);
   }, [hasReleaseControl, hasStatusControl]);
 
-  const patchTitle = useCallback(
-    async (id: TitleId, patch: Partial<TitleRow>, successText: string) => {
-      if (!canManagePrivilegedWrites) {
-        setNotice({ type: "error", text: "Active owner or operator role required to update platform titles." });
-        return;
-      }
+  const queueTitleProgrammingAction = useCallback((
+    item: TitleRow,
+    actionType: ContentProgrammingActionType,
+    patch: Partial<TitleRow>,
+    successText: string,
+  ) => {
+    if (!canAccessContentProgramming) {
+      setNotice({ type: "error", text: "Active owner or operator role required to update platform titles." });
+      return;
+    }
 
-      try {
-        const currentItem = titles.find((item) => toIdString(item.id) === toIdString(id)) ?? null;
-        const touchesPublicationState =
-          patch.status !== undefined || patch.is_published !== undefined || patch.release_at !== undefined;
+    const riskyActions = new Set<ContentProgrammingActionType>([
+      "set_hero",
+      "remove_hero",
+      "publish",
+      "unpublish",
+      "archive",
+      "restore",
+    ]);
 
-        let nextPatch = patch;
-        let adjustments: string[] = [];
+    setContentConfirm({
+      kind: "title_action",
+      title: contentActionLabels[actionType],
+      body: `${item.title || "Untitled"} will receive a backed Content programming action. Public-impacting changes require this reason and write immutable audit.`,
+      actionLabel: contentActionLabels[actionType],
+      tone: riskyActions.has(actionType) ? "danger" : "manual",
+      titleId: item.id,
+      actionType,
+      patch,
+      successText,
+    });
+    setContentConfirmReason("");
+  }, [canAccessContentProgramming]);
 
-        if (currentItem && touchesPublicationState) {
-          const publicationState = normalizePublicationState({
-            status: normalizeStatus(patch.status ?? currentItem.status, patch.is_published ?? currentItem.is_published),
-            releaseAt: patch.release_at !== undefined ? patch.release_at ?? null : currentItem.release_at ?? null,
-            hasStatusControl,
-            hasReleaseControl,
-          });
+  const runTitleProgrammingAction = useCallback(async (
+    pending: Extract<ContentConfirmState, { kind: "title_action" }>,
+    reason: string,
+  ) => {
+    if (!canAccessContentProgramming) {
+      setNotice({ type: "error", text: "Active owner or operator role required to update platform titles." });
+      return;
+    }
 
-          nextPatch = {
-            ...patch,
-            is_published: publicationState.isPublished,
-            ...(hasStatusControl ? { status: publicationState.status } : {}),
-            ...(hasReleaseControl ? { release_at: publicationState.releaseAt } : {}),
-          };
-          adjustments = publicationState.adjustments;
-        }
+    try {
+      setSaving(true);
+      const payload = toDbPatch(pending.patch);
+      await applyAdminTitleProgrammingActionRpc({
+        actionType: pending.actionType,
+        patch: payload,
+        reason,
+        titleId: pending.titleId,
+      });
+      await loadTitles();
+      await loadContentAuditEvents();
+      setNotice({ type: "success", text: `${pending.successText} Audit written.` });
+    } catch (err: any) {
+      setNotice({ type: "error", text: formatAdminOperationFailure(err, "Update failed.") });
+    } finally {
+      setSaving(false);
+    }
+  }, [canAccessContentProgramming, loadContentAuditEvents, loadTitles, toDbPatch]);
 
-        const payload = toDbPatch(nextPatch);
+  const patchTitle = useCallback((id: TitleId, patch: Partial<TitleRow>, successText: string) => {
+    const item = titles.find((entry) => toIdString(entry.id) === toIdString(id));
+    if (!item) {
+      setNotice({ type: "error", text: "Content not found or no longer available." });
+      return;
+    }
+    let actionType: ContentProgrammingActionType = "update_title";
+    if (patch.featured !== undefined) actionType = patch.featured ? "feature" : "unfeature";
+    else if (patch.pin_to_top_row !== undefined) actionType = patch.pin_to_top_row ? "pin_top_row" : "unpin_top_row";
+    else if (patch.is_trending !== undefined) actionType = patch.is_trending ? "trend" : "untrend";
+    else if (patch.status === "published" || patch.is_published === true) actionType = "publish";
+    else if (patch.status === "draft" || patch.is_published === false) actionType = "unpublish";
+    else if (typeof patch.sort_order === "number" && patch.sort_order > (item.sort_order ?? 0)) actionType = "sort_increment";
+    else if (patch.sort_order !== undefined) actionType = "sort_decrement";
+    queueTitleProgrammingAction(item, actionType, patch, successText);
+  }, [queueTitleProgrammingAction, titles]);
 
-        const { error } = await supabase.from("titles").update(payload as any).eq("id", id);
-        if (error) throw error;
+  const setHeroExclusive = useCallback((item: TitleRow) => {
+    if (!capabilities.heroCol) {
+      setNotice({ type: "error", text: "Hero control is unavailable for this schema." });
+      return;
+    }
+    queueTitleProgrammingAction(item, "set_hero", {}, `${item.title} is now Home Hero.`);
+  }, [capabilities.heroCol, queueTitleProgrammingAction]);
 
-        setTitles((prev) =>
-          normalizeRows(
-            prev.map((item) =>
-              toIdString(item.id) === toIdString(id)
-                ? {
-                    ...item,
-                    ...nextPatch,
-                  }
-                : item,
-            ),
-          ),
-        );
-
-        setNotice({
-          type: "success",
-          text: adjustments.length > 0
-            ? `${successText} ${adjustments.join("; ")}.`
-            : successText,
-        });
-      } catch (err: any) {
-        setNotice({ type: "error", text: formatAdminOperationFailure(err, "Update failed.") });
-      }
-    },
-    [canManagePrivilegedWrites, hasReleaseControl, hasStatusControl, titles, toDbPatch],
-  );
-
-  const setHeroExclusive = useCallback(
-    async (item: TitleRow) => {
-      if (!canManagePrivilegedWrites) {
-        setNotice({ type: "error", text: "Active owner or operator role required to update platform title programming." });
-        return;
-      }
-
-      if (!capabilities.heroCol) {
-        setNotice({ type: "error", text: "Hero control is unavailable for this schema." });
-        return;
-      }
-
-      try {
-        setSaving(true);
-        const clearOthers = await supabase
-          .from("titles")
-          .update({ [capabilities.heroCol]: false } as any)
-          .neq("id", item.id);
-        if (clearOthers.error) throw clearOthers.error;
-
-        const setCurrent = await supabase
-          .from("titles")
-          .update({ [capabilities.heroCol]: true } as any)
-          .eq("id", item.id);
-        if (setCurrent.error) throw setCurrent.error;
-
-        setTitles((prev) =>
-          prev.map((row) => ({
-            ...row,
-            is_hero: toIdString(row.id) === toIdString(item.id),
-          })),
-        );
-
-        setNotice({ type: "success", text: `${item.title} is now Home Hero.` });
-      } catch (err: any) {
-        setNotice({ type: "error", text: formatAdminOperationFailure(err, "Failed to set hero.") });
-      } finally {
-        setSaving(false);
-      }
-    },
-    [canManagePrivilegedWrites, capabilities.heroCol],
-  );
-
-  const saveEditor = useCallback(async () => {
-    if (!canManagePrivilegedWrites) {
+  const saveEditor = useCallback(() => {
+    if (!canAccessContentProgramming) {
       setNotice({ type: "error", text: "Active owner or operator role required to save platform titles." });
       return;
     }
@@ -6011,6 +6436,24 @@ export default function AdminStudioScreen() {
 
     if (!form.video_url.trim() && editorMode === "create") {
       Alert.alert("Video URL required", "Please add a playable video URL to preview content in app.");
+      return;
+    }
+
+    setContentConfirm({
+      kind: "save_editor",
+      title: editorMode === "create" ? "Create Platform Title" : "Save Title Changes",
+      body: editorMode === "create"
+        ? "This creates a backed platform title row and writes immutable content audit."
+        : "This updates backed title programming, visibility, scheduling, and monetization fields where supported, then writes immutable content audit.",
+      actionLabel: editorMode === "create" ? "Create Title" : "Save Title",
+      tone: form.status === "published" || form.is_hero ? "danger" : "manual",
+    });
+    setContentConfirmReason("");
+  }, [canAccessContentProgramming, editorMode, form.is_hero, form.status, form.title, form.video_url]);
+
+  const runEditorSave = useCallback(async (reason: string) => {
+    if (!canAccessContentProgramming) {
+      setNotice({ type: "error", text: "Active owner or operator role required to save platform titles." });
       return;
     }
 
@@ -6064,59 +6507,29 @@ export default function AdminStudioScreen() {
 
     try {
       setSaving(true);
-
-      if (editorMode === "create") {
-        const { data, error } = await supabase.from("titles").insert(payload as any).select("id").single();
-        if (error) throw error;
-
-        if (capabilities.heroCol && form.is_hero && data?.id != null) {
-          const clearOthers = await supabase
-            .from("titles")
-            .update({ [capabilities.heroCol]: false } as any)
-            .neq("id", data.id);
-          if (clearOthers.error) throw clearOthers.error;
-          const setCurrent = await supabase
-            .from("titles")
-            .update({ [capabilities.heroCol]: true } as any)
-            .eq("id", data.id);
-          if (setCurrent.error) throw setCurrent.error;
-        }
-
-        setNotice({
-          type: "success",
-          text: publicationState.adjustments.length > 0
-            ? `Title created. ${publicationState.adjustments.join("; ")}.`
-            : "Title created.",
-        });
-      } else {
-        if (!form.id) throw new Error("Missing title id.");
-
-        if (capabilities.heroCol && form.is_hero) {
-          const clearOthers = await supabase
-            .from("titles")
-            .update({ [capabilities.heroCol]: false } as any)
-            .neq("id", form.id);
-          if (clearOthers.error) throw clearOthers.error;
-        }
-
-        const { error } = await supabase.from("titles").update(payload as any).eq("id", form.id);
-        if (error) throw error;
-        setNotice({
-          type: "success",
-          text: publicationState.adjustments.length > 0
-            ? `Title updated. ${publicationState.adjustments.join("; ")}.`
-            : "Title updated.",
-        });
-      }
+      if (editorMode !== "create" && !form.id) throw new Error("Missing title id.");
+      await applyAdminTitleProgrammingActionRpc({
+        actionType: editorMode === "create" ? "create_title" : form.is_hero ? "set_hero" : "update_title",
+        patch: payload,
+        reason,
+        titleId: editorMode === "create" ? null : form.id ?? null,
+      });
+      setNotice({
+        type: "success",
+        text: publicationState.adjustments.length > 0
+          ? `Title ${editorMode === "create" ? "created" : "updated"} with audit. ${publicationState.adjustments.join("; ")}.`
+          : `Title ${editorMode === "create" ? "created" : "updated"} with audit.`,
+      });
 
       setEditorVisible(false);
       await loadTitles();
+      await loadContentAuditEvents();
     } catch (err: any) {
       setNotice({ type: "error", text: formatAdminOperationFailure(err, "Save failed.") });
     } finally {
       setSaving(false);
     }
-  }, [canManagePrivilegedWrites, capabilities.heroCol, editorMode, form, hasReleaseControl, hasStatusControl, loadTitles, toDbPatch]);
+  }, [canAccessContentProgramming, editorMode, form, hasReleaseControl, hasStatusControl, loadContentAuditEvents, loadTitles, toDbPatch]);
 
   const refreshAdminHome = useCallback(async () => {
     if (!canAccessAdmin) return;
@@ -6159,6 +6572,671 @@ export default function AdminStudioScreen() {
     loadSafetyReports,
     loadStaffAndAuditVisibility,
   ]);
+
+  const refreshAdminContent = useCallback(async () => {
+    if (!canAccessContentProgramming) return;
+    await Promise.all([
+      loadTitles(),
+      loadExperienceConfig(),
+      loadContentAuditEvents(),
+    ]);
+    setContentLastRefreshedAt(new Date().toISOString());
+  }, [canAccessContentProgramming, loadContentAuditEvents, loadExperienceConfig, loadTitles]);
+
+  const renderContentProgrammingCenter = () => (
+    <>
+      <View style={styles.contentHeroPanel}>
+        <View style={styles.ownerPanelTitleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ownerPanelKicker}>CONTENT PROGRAMMING</Text>
+            <Text style={styles.ownerPanelTitle}>Content Programming</Text>
+            <Text style={styles.ownerPanelSubtitle}>
+              Control homepage presentation, rails, titles, and launch programming with backed save flows.
+            </Text>
+          </View>
+          <OwnerStatusPill label={contentCommandStatus.label} tone={contentCommandStatus.tone} />
+        </View>
+        <Text style={styles.ownerPanelMeta}>{contentCommandStatus.body}</Text>
+        <View style={styles.contentHeroPills}>
+          <OwnerStatusPill label={`Operator ${formatModerationToken(resolvedActorRole)}`} tone={canAccessContentProgramming ? "info" : "locked"} />
+          <OwnerStatusPill label={appConfigConnected ? "Config Backed" : "Config Not Connected"} tone={appConfigConnected ? "success" : "locked"} />
+          <OwnerStatusPill label={contentConfigDirty ? "Unsaved Draft" : "Saved State"} tone={contentConfigDirty ? "manual" : "success"} />
+          <OwnerStatusPill label={contentAuditConnected ? "Audit Feed Connected" : "Audit Feed Not Connected"} tone={contentAuditConnected ? "success" : "locked"} />
+        </View>
+        <View style={styles.ownerPanelActions}>
+          <TouchableOpacity
+            style={[styles.adminHomeRefreshButton, contentLoading && styles.configSaveBtnDisabled]}
+            onPress={() => void refreshAdminContent()}
+            disabled={contentLoading}
+          >
+            {contentLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.adminHomeRefreshText}>Refresh</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.configSaveBtn,
+              { backgroundColor: themePalette.accent },
+              (!contentConfigDirty || configSaving || configLoading || !canAccessContentProgramming) && styles.configSaveBtnDisabled,
+            ]}
+            onPress={saveExperienceConfigChanges}
+            disabled={!contentConfigDirty || configSaving || configLoading || !canAccessContentProgramming}
+          >
+            {configSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Config</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.orderBtn, (!contentConfigDirty || configSaving) && styles.configSaveBtnDisabled]}
+            onPress={() => {
+              setExperienceConfig(savedExperienceConfig);
+              setNotice({ type: "success", text: "Content draft reset to the saved config." });
+            }}
+            disabled={!contentConfigDirty || configSaving}
+          >
+            <Text style={styles.orderBtnText}>Reset Draft</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.ownerPanelMeta}>
+          {contentLastCheckedAt ? `Last Checked ${formatModerationTimestamp(contentLastCheckedAt)}` : "Last Checked Not Connected"}
+          {appConfigSavedAt ? ` · Last Saved ${formatModerationTimestamp(appConfigSavedAt)}` : " · Last Saved Not Connected"}
+          {appConfigSource ? ` · Source ${formatProgrammingToken(appConfigSource)}` : ""}
+        </Text>
+      </View>
+
+      <View style={styles.adminHomeMetricGrid}>
+        {contentSnapshotTiles.map((tile) => (
+          <View key={tile.label} style={[styles.adminHomeMetricTile, ownerMetricToneStyle(tile.tone)]}>
+            <View style={styles.adminHomeTileHeader}>
+              <Text style={styles.adminHomeTileLabel}>{tile.label}</Text>
+              <OwnerStatusPill label={tile.qualifier} tone={tile.tone} />
+            </View>
+            <Text style={styles.adminHomeTileValue}>{tile.value}</Text>
+            <Text style={styles.adminHomeTileBody}>{tile.body}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.contentPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <Text style={styles.ownerSectionTitle}>Theme Preset Gallery</Text>
+          <OwnerStatusPill label="Backed Config" tone={appConfigConnected ? "success" : "locked"} />
+        </View>
+        <View style={styles.themePresetGrid}>
+          {themePresetOptions.map((preset) => {
+            const palette = getThemePresetPalette(preset.key);
+            const isSaved = savedExperienceConfig.theme.preset === preset.key;
+            const isSelected = experienceConfig.theme.preset === preset.key;
+            const isUnsaved = isSelected && !isSaved;
+            return (
+              <TouchableOpacity
+                key={preset.key}
+                style={[
+                  styles.themePresetTile,
+                  isSelected && styles.themePresetTileSelected,
+                  isUnsaved && styles.themePresetTileUnsaved,
+                ]}
+                onPress={() =>
+                  updateExperienceConfig((prev) => ({
+                    ...prev,
+                    theme: { ...prev.theme, preset: preset.key },
+                  }))
+                }
+              >
+                <View style={[styles.themePresetSwatch, { backgroundColor: palette.accent }]}>
+                  <View style={[styles.themePresetSwatchInner, { backgroundColor: palette.surfaceTint }]} />
+                </View>
+                <Text style={styles.themePresetTitle}>{preset.label}</Text>
+                <Text style={styles.themePresetCue}>{preset.cue}</Text>
+                <Text style={styles.themePresetBody} numberOfLines={2}>{preset.body}</Text>
+                <View style={styles.badgesRow}>
+                  {isSaved ? <OwnerStatusPill label="Saved" tone="success" /> : null}
+                  {isUnsaved ? <OwnerStatusPill label="Unsaved" tone="manual" /> : null}
+                  {!isSaved && !isUnsaved ? <OwnerStatusPill label="Preview" tone="info" /> : null}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <View style={styles.contentSegmentRow}>
+          {backgroundModeOptions.map((mode) => (
+            <TouchableOpacity
+              key={mode.key}
+              style={[styles.contentSegment, experienceConfig.theme.backgroundMode === mode.key && styles.contentSegmentActive]}
+              onPress={() =>
+                updateExperienceConfig((prev) => ({
+                  ...prev,
+                  theme: { ...prev.theme, backgroundMode: mode.key },
+                }))
+              }
+            >
+              <Text style={[styles.contentSegmentText, experienceConfig.theme.backgroundMode === mode.key && styles.contentSegmentTextActive]}>{mode.label}</Text>
+              <Text style={styles.contentSegmentBody}>{mode.body}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.contentPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <Text style={styles.ownerSectionTitle}>Homepage Programming Console</Text>
+          <OwnerStatusPill label={titlesConnected ? "Backed Titles" : "Not Connected"} tone={titlesConnected ? "success" : "locked"} />
+        </View>
+        <Text style={styles.configHint}>Hero and Top Picks resolve against real title rows. Unbacked sources are shown as fallbacks, not fake confidence.</Text>
+        <Text style={styles.sectionLabel}>Hero Strategy</Text>
+        <View style={styles.contentSegmentRow}>
+          {(["latest", "hero_flag", "manual_title"] as const).map((heroMode) => (
+            <TouchableOpacity
+              key={heroMode}
+              style={[styles.contentSegment, experienceConfig.home.heroMode === heroMode && styles.contentSegmentActive]}
+              onPress={() =>
+                updateExperienceConfig((prev) => ({
+                  ...prev,
+                  home: {
+                    ...prev.home,
+                    heroMode,
+                    manualHeroTitleId: heroMode === "manual_title" ? prev.home.manualHeroTitleId : null,
+                  },
+                }))
+              }
+            >
+              <Text style={[styles.contentSegmentText, experienceConfig.home.heroMode === heroMode && styles.contentSegmentTextActive]}>
+                {formatProgrammingToken(heroMode)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {experienceConfig.home.heroMode === "manual_title" ? (
+          <View style={styles.contentSubPanel}>
+            <TextInput
+              style={styles.input}
+              placeholder="Search titles, category, or status"
+              placeholderTextColor="#8d8d8d"
+              value={manualHeroQuery}
+              onChangeText={setManualHeroQuery}
+            />
+            {manualHeroSelection.selectedTitle ? (
+              <OwnerControlRow
+                expanded
+                message={`${manualHeroSelection.selectedTitle.category ?? "Uncategorized"} · ${normalizeStatus(
+                  manualHeroSelection.selectedTitle.status,
+                  manualHeroSelection.selectedTitle.is_published,
+                ).toUpperCase()} · Sort ${manualHeroSelection.selectedTitle.sort_order ?? "not set"}`}
+                statusLabel="Selected"
+                title={`Manual target: ${manualHeroSelection.selectedTitle.title}`}
+                tone="success"
+              />
+            ) : (
+              <OwnerDisabledReason reason="Manual Title requires a real title target before save; guardrails will normalize it otherwise." />
+            )}
+            {manualHeroSelection.visibleTitles.slice(0, 8).map((item) => {
+              const isSelected = manualHeroSelection.selectedId.length > 0 && hasTitleId(item, manualHeroSelection.selectedId);
+              return (
+                <OwnerControlRow
+                  key={toIdString(item.id)}
+                  message={`${item.category ?? "Uncategorized"} · ${normalizeStatus(item.status, item.is_published).toUpperCase()}`}
+                  statusLabel={isSelected ? "Selected" : "Choose"}
+                  title={item.title || "Untitled"}
+                  tone={isSelected ? "success" : "info"}
+                  onPress={() => {
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      home: { ...prev.home, manualHeroTitleId: String(item.id) },
+                    }));
+                    setManualHeroQuery("");
+                  }}
+                />
+              );
+            })}
+          </View>
+        ) : null}
+
+        <Text style={styles.sectionLabel}>Top Picks Source</Text>
+        <View style={styles.contentSegmentRow}>
+          {(["recent", "top_row", "featured", "trending"] as const).map((source) => (
+            <TouchableOpacity
+              key={source}
+              style={[styles.contentSegment, experienceConfig.home.topPicksSource === source && styles.contentSegmentActive]}
+              onPress={() =>
+                updateExperienceConfig((prev) => ({
+                  ...prev,
+                  home: { ...prev.home, topPicksSource: source },
+                }))
+              }
+            >
+              <Text style={[styles.contentSegmentText, experienceConfig.home.topPicksSource === source && styles.contentSegmentTextActive]}>
+                {formatProgrammingToken(source)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.dashboardGrid}>
+          <OwnerMetricTile label="Resolved Hero" value={programmingSnapshot.resolvedHeroItem?.title || "Not Connected"} tone={programmingSnapshot.resolvedHeroItem ? "success" : "locked"} />
+          <OwnerMetricTile label="Hero Source" value={formatProgrammingToken(programmingSnapshot.resolvedHeroSource)} tone="info" />
+          <OwnerMetricTile label="Top Picks Backing" value={titlesConnected ? programmingSnapshot.configuredTopPicksCount : "Not Connected"} tone={titlesConnected && programmingSnapshot.configuredTopPicksCount > 0 ? "success" : "manual"} />
+          <OwnerMetricTile label="Confidence" value={programmingSnapshot.guardrailAdjustments.length ? "Needs Review" : "Backed"} tone={programmingSnapshot.guardrailAdjustments.length ? "manual" : "success"} />
+        </View>
+        {programmingSnapshot.guardrailAdjustments.length ? (
+          <View style={styles.ownerControlList}>
+            {programmingSnapshot.guardrailAdjustments.map((adjustment) => (
+              <OwnerDisabledReason key={adjustment} reason={adjustment} />
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.contentPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <Text style={styles.ownerSectionTitle}>Homepage Rails Manager</Text>
+          <OwnerStatusPill label="Persist On Save" tone={contentConfigDirty ? "manual" : "success"} />
+        </View>
+        <View style={styles.ownerControlList}>
+          {contentRailRows.map((rail) => (
+            <View key={rail.key} style={[styles.contentRailRow, !rail.visible && styles.contentRailRowHidden]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.ownerRowTitle}>{rail.label}</Text>
+                <Text style={styles.ownerRowMessage}>{`Position ${rail.position} · ${rail.visible ? "Visible" : "Hidden"} · ${rail.backing}`}</Text>
+                <Text style={styles.ownerRowMeta}>
+                  {rail.itemCount === null ? rail.body : `${rail.body} Items ${rail.itemCount}.`}
+                </Text>
+              </View>
+              <View style={styles.configListActions}>
+                <TouchableOpacity
+                  style={styles.orderBtn}
+                  onPress={() =>
+                    updateExperienceConfig((prev) => ({
+                      ...prev,
+                      home: {
+                        ...prev.home,
+                        enabledRails: {
+                          ...prev.home.enabledRails,
+                          [rail.key]: !prev.home.enabledRails[rail.key],
+                        },
+                      },
+                    }))
+                  }
+                >
+                  <Text style={styles.orderBtnText}>{rail.visible ? "Hide" : "Show"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.orderBtn} onPress={() => moveRail(rail.key, -1)} disabled={rail.position === 1}>
+                  <Text style={styles.orderBtnText}>Up</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.orderBtn} onPress={() => moveRail(rail.key, 1)} disabled={rail.position === contentRailRows.length}>
+                  <Text style={styles.orderBtnText}>Down</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+        <View style={styles.inlineInputs}>
+          <TextInput
+            style={[styles.input, styles.inputHalf]}
+            placeholder="Browse rail label"
+            placeholderTextColor="#8d8d8d"
+            value={experienceConfig.home.browseCategoryLabel}
+            onChangeText={(text) =>
+              updateExperienceConfig((prev) => ({ ...prev, home: { ...prev.home, browseCategoryLabel: text } }))
+            }
+          />
+          <TextInput
+            style={[styles.input, styles.inputHalf]}
+            placeholder="Browse category query"
+            placeholderTextColor="#8d8d8d"
+            value={experienceConfig.home.browseCategoryQuery}
+            onChangeText={(text) =>
+              updateExperienceConfig((prev) => ({ ...prev, home: { ...prev.home, browseCategoryQuery: text } }))
+            }
+          />
+        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="Max items per rail"
+          placeholderTextColor="#8d8d8d"
+          keyboardType="numeric"
+          value={String(experienceConfig.home.maxItemsPerRail)}
+          onChangeText={(text) =>
+            updateExperienceConfig((prev) => ({
+              ...prev,
+              home: { ...prev.home, maxItemsPerRail: Number.parseInt(text || "0", 10) || prev.home.maxItemsPerRail },
+            }))
+          }
+        />
+      </View>
+
+      <View style={styles.contentPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <Text style={styles.ownerSectionTitle}>Title Inventory / Scheduling Board</Text>
+          <TouchableOpacity style={styles.actionBtnPrimary} onPress={openCreate}>
+            <Text style={styles.actionTextPrimary}>Create Title</Text>
+          </TouchableOpacity>
+        </View>
+        {hasReleaseControl ? (
+          <View style={styles.contentSubPanel}>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.configListTitle}>Upcoming Scheduled Titles</Text>
+              <OwnerStatusPill label={scheduledTitleCount === null ? "Not Connected" : `${scheduledTitleCount}`} tone={scheduledTitleCount === null ? "locked" : scheduledTitleCount > 0 ? "manual" : "success"} />
+            </View>
+            {loading ? (
+              <View style={styles.configLoadingRow}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.configLoadingText}>Loading scheduled queue...</Text>
+              </View>
+            ) : upcomingScheduledSnapshot.visibleItems.length ? (
+              upcomingScheduledSnapshot.visibleItems.map(({ item, releaseAt }, index) => (
+                <OwnerControlRow
+                  key={toIdString(item.id)}
+                  message={`Queue #${index + 1} · Publishes ${formatRelease(releaseAt)}`}
+                  statusLabel="Scheduled"
+                  title={item.title || "Untitled"}
+                  tone="manual"
+                />
+              ))
+            ) : (
+              <OwnerEmptyState title="No real upcoming scheduled titles" body="Only titles with a valid future release_at appear here." />
+            )}
+          </View>
+        ) : (
+          <OwnerDisabledReason reason="Scheduling board is read-only unavailable because release_at/release_date is not connected in this schema." />
+        )}
+
+        <View style={styles.searchWrap}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search by title, category, or status"
+            placeholderTextColor="#9b9b9b"
+            style={styles.searchInput}
+          />
+        </View>
+        <View style={styles.filterRow}>
+          {([
+            { key: "all", label: "All" },
+            { key: "published", label: "Published" },
+            { key: "scheduled", label: "Scheduled" },
+            { key: "draft", label: "Draft" },
+            { key: "archived", label: "Archived" },
+            { key: "featured", label: "Featured" },
+            ...(hasHeroControl ? [{ key: "hero", label: "Hero" } as const] : []),
+            ...(hasTrendingControl ? [{ key: "trending", label: "Trending" } as const] : []),
+            ...(hasTopRowControl ? [{ key: "top-row", label: "Top Row" } as const] : []),
+          ] as const).map((chip) => (
+            <TouchableOpacity
+              key={chip.key}
+              onPress={() => setFilter(chip.key)}
+              style={[styles.filterChip, filter === chip.key && styles.filterChipActive]}
+            >
+              <Text style={[styles.filterChipText, filter === chip.key && styles.filterChipTextActive]}>{chip.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {loading ? (
+          renderSkeleton()
+        ) : !titlesConnected ? (
+          <OwnerEmptyState title="Title inventory not connected" body="The board will not show zero counts until the titles query succeeds." />
+        ) : filteredTitles.length === 0 ? (
+          <OwnerEmptyState title="No titles match this view" body="Adjust search or filters to inspect backed title rows." />
+        ) : (
+          <View style={styles.cardsList}>
+            {filteredTitles.map((item) => {
+              const status = normalizeStatus(item.status, item.is_published);
+              return (
+                <View key={toIdString(item.id)} style={styles.contentTitleCard}>
+                  <View style={styles.thumbWrap}>
+                    <ImageBackground source={getCompactArtSource(item)} style={styles.thumb} resizeMode="cover" />
+                  </View>
+                  <View style={styles.cardBody}>
+                    <View style={styles.cardTopRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>{item.title || "Untitled"}</Text>
+                        <Text style={styles.cardMeta} numberOfLines={1}>
+                          {(item.category ?? "Uncategorized").toString()} • {item.year ?? "—"} • {item.runtime ?? "—"}
+                        </Text>
+                      </View>
+                      <TouchableOpacity style={styles.previewBtn} onPress={() => router.push({ pathname: "/player/[id]", params: { id: String(toIdString(item.id)) } })}>
+                        <Text style={styles.previewBtnText}>Preview</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.badgesRow}>
+                      <View style={[styles.badge, getStatusTone(status)]}><Text style={styles.badgeText}>{status.toUpperCase()}</Text></View>
+                      <View style={[styles.badge, item.featured ? styles.badgeOn : styles.badgeOff]}><Text style={styles.badgeText}>{item.featured ? "FEATURED" : "STANDARD"}</Text></View>
+                      {hasHeroControl ? <View style={[styles.badge, item.is_hero ? styles.badgeOn : styles.badgeOff]}><Text style={styles.badgeText}>{item.is_hero ? "HERO" : "NOT HERO"}</Text></View> : null}
+                      {hasTrendingControl ? <View style={[styles.badge, item.is_trending ? styles.badgeOn : styles.badgeOff]}><Text style={styles.badgeText}>{item.is_trending ? "TRENDING" : "NORMAL"}</Text></View> : null}
+                      {hasTopRowControl ? <View style={[styles.badge, item.pin_to_top_row ? styles.badgeOn : styles.badgeOff]}><Text style={styles.badgeText}>{item.pin_to_top_row ? "TOP ROW" : "UNPINNED"}</Text></View> : null}
+                      <View style={styles.badge}><Text style={styles.badgeText}>SORT {item.sort_order ?? "—"}</Text></View>
+                      {hasReleaseControl ? <View style={styles.badge}><Text style={styles.badgeText}>Release {formatRelease(item.release_at)}</Text></View> : null}
+                    </View>
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => queueTitleProgrammingAction(item, item.featured ? "unfeature" : "feature", {}, item.featured ? "Title unfeatured." : "Title featured.")}>
+                        <Text style={styles.actionText}>{item.featured ? "Unfeature" : "Feature"}</Text>
+                      </TouchableOpacity>
+                      {hasTopRowControl ? (
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => queueTitleProgrammingAction(item, item.pin_to_top_row ? "unpin_top_row" : "pin_top_row", {}, item.pin_to_top_row ? "Top row pin removed." : "Title pinned to Top Row.")}>
+                          <Text style={styles.actionText}>{item.pin_to_top_row ? "Unpin" : "Pin Top Row"}</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {hasTrendingControl ? (
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => queueTitleProgrammingAction(item, item.is_trending ? "untrend" : "trend", {}, item.is_trending ? "Trending removed." : "Title marked trending.")}>
+                          <Text style={styles.actionText}>{item.is_trending ? "Untrend" : "Trend"}</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {hasHeroControl ? (
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => queueTitleProgrammingAction(item, item.is_hero ? "remove_hero" : "set_hero", {}, item.is_hero ? "Hero flag removed." : "Title set as Home Hero.")}>
+                          <Text style={styles.actionText}>{item.is_hero ? "Remove Hero" : "Set Hero"}</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => queueTitleProgrammingAction(item, "sort_decrement", {}, "Sort order updated.")}>
+                        <Text style={styles.actionText}>Sort -</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => queueTitleProgrammingAction(item, "sort_increment", {}, "Sort order updated.")}>
+                        <Text style={styles.actionText}>Sort +</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => openEdit({ ...item, status })}>
+                        <Text style={styles.actionText}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={status === "published" ? styles.actionBtn : styles.actionBtnPrimary}
+                        onPress={() => queueTitleProgrammingAction(item, status === "published" ? "unpublish" : "publish", {}, status === "published" ? "Title unpublished." : "Title published.")}
+                      >
+                        <Text style={status === "published" ? styles.actionText : styles.actionTextPrimary}>{status === "published" ? "Unpublish" : "Publish"}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={status === "archived" ? styles.actionBtn : styles.actionBtnDanger}
+                        onPress={() => queueTitleProgrammingAction(item, status === "archived" ? "restore" : "archive", {}, status === "archived" ? "Title restored as draft." : "Title archived.")}
+                      >
+                        <Text style={status === "archived" ? styles.actionText : styles.actionTextDanger}>{status === "archived" ? "Restore" : "Archive"}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.contentPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <Text style={styles.ownerSectionTitle}>Feature + Monetization Runtime</Text>
+          <OwnerStatusPill label="Config Only" tone="info" />
+        </View>
+        <Text style={styles.configHint}>Feature and monetization controls persist as config. Premium entitlement, RevenueCat, and real ad provider behavior are not changed here.</Text>
+        <Text style={styles.sectionLabel}>Feature Toggles</Text>
+        <View style={styles.contentSignalGrid}>
+          {([
+            ["watchPartyEnabled", "Watch Party", "Public UI config"],
+            ["communicationEnabled", "Communication", "Public UI config"],
+            ["favoritesEnabled", "Favorites", "Public UI config"],
+            ["continueWatchingEnabled", "Continue Watching", "Public UI config"],
+            ["creatorSettingsEnabled", "Creator Settings", "Public UI config"],
+          ] as const).map(([key, label, body]) => (
+            <TouchableOpacity
+              key={key}
+              style={[styles.contentSignalTile, experienceConfig.features[key] && styles.contentSignalTileActive]}
+              onPress={() => updateExperienceConfig((prev) => ({ ...prev, features: { ...prev.features, [key]: !prev.features[key] } }))}
+            >
+              <OwnerStatusPill label={experienceConfig.features[key] ? "Active" : "Inactive"} tone={experienceConfig.features[key] ? "success" : "locked"} />
+              <Text style={styles.contentSignalTitle}>{label}</Text>
+              <Text style={styles.contentSignalBody}>{body}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.sectionLabel}>Monetization Runtime</Text>
+        <View style={styles.contentSignalGrid}>
+          {([
+            ["premiumEnabled", "Premium", "Config; RevenueCat remains entitlement truth."],
+            ["partyPassEnabled", "Party Pass", "Config foundation for later access products."],
+            ["sponsorPlacementsEnabled", "Sponsor Placements", "Foundation Only until sponsor execution is backed."],
+            ["playerBannerEnabled", "Player Banner", "Foundation Only; no ad provider activation here."],
+            ["playerMidRollEnabled", "Player Mid-Roll", "Foundation Only; no ad provider activation here."],
+          ] as const).map(([key, label, body]) => (
+            <TouchableOpacity
+              key={key}
+              style={[styles.contentSignalTile, experienceConfig.monetization[key] && styles.contentSignalTileActive]}
+              onPress={() => updateExperienceConfig((prev) => ({ ...prev, monetization: { ...prev.monetization, [key]: !prev.monetization[key] } }))}
+            >
+              <OwnerStatusPill label={label.includes("Sponsor") || label.includes("Banner") || label.includes("Mid-Roll") ? "Foundation Only" : "Config"} tone={label.includes("Sponsor") || label.includes("Banner") || label.includes("Mid-Roll") ? "locked" : "info"} />
+              <Text style={styles.contentSignalTitle}>{label}</Text>
+              <Text style={styles.contentSignalBody}>{body}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TextInput style={styles.input} placeholder="Default sponsor label" placeholderTextColor="#8d8d8d" value={experienceConfig.monetization.defaultSponsorLabel} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, monetization: { ...prev.monetization, defaultSponsorLabel: text } }))} />
+        <TextInput style={styles.input} placeholder="Premium access title" placeholderTextColor="#8d8d8d" value={experienceConfig.monetization.premiumUpsellTitle} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, monetization: { ...prev.monetization, premiumUpsellTitle: text } }))} />
+        <TextInput style={[styles.input, styles.multiline]} placeholder="Premium access body" placeholderTextColor="#8d8d8d" multiline value={experienceConfig.monetization.premiumUpsellBody} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, monetization: { ...prev.monetization, premiumUpsellBody: text } }))} />
+      </View>
+
+      <View style={styles.contentPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <Text style={styles.ownerSectionTitle}>Branding + Copy Locks</Text>
+          <OwnerStatusPill label="Doctrine Locked" tone="info" />
+        </View>
+        <View style={styles.ownerControlList}>
+          <OwnerControlRow expanded message="Core product naming is code-owned by doctrine and sanitized by the app config layer." statusLabel="Locked by doctrine" title={`App Display Name · ${experienceConfig.branding.appDisplayName}`} tone="locked" />
+          <OwnerControlRow expanded message="Watch-Party Live, Live Watch-Party, Party Room, and Live Room labels remain canonical and are not runtime experiments." statusLabel="Locked by doctrine" title="Canonical Room Labels" tone="locked" />
+        </View>
+        <TextInput style={styles.input} placeholder="Home hero kicker" placeholderTextColor="#8d8d8d" value={experienceConfig.branding.homeHeroKicker} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, branding: { ...prev.branding, homeHeroKicker: text } }))} />
+        <View style={styles.inlineInputs}>
+          <TextInput style={[styles.input, styles.inputHalf]} placeholder="Operator center label" placeholderTextColor="#8d8d8d" value={experienceConfig.branding.adminTitle} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, branding: { ...prev.branding, adminTitle: text } }))} />
+          <TextInput style={[styles.input, styles.inputHalf, styles.inputDisabled]} placeholder="Watch Party label" placeholderTextColor="#8d8d8d" value={experienceConfig.branding.watchPartyLabel} editable={false} selectTextOnFocus={false} />
+        </View>
+        <TextInput style={[styles.input, styles.multiline]} placeholder="Operator center helper copy" placeholderTextColor="#8d8d8d" multiline value={experienceConfig.branding.adminSubtitle} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, branding: { ...prev.branding, adminSubtitle: text } }))} />
+      </View>
+
+      <View style={styles.contentPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <Text style={styles.ownerSectionTitle}>Defaults + Grants</Text>
+          <OwnerStatusPill label="Config Defaults" tone="info" />
+        </View>
+        <Text style={styles.configHint}>Room defaults save config only. This lane does not touch room implementation, LiveKit behavior, waiting-room separation, or token issuance.</Text>
+        <Text style={styles.sectionLabel}>New Watch Party Defaults</Text>
+        <View style={styles.contentSegmentRow}>
+          {(["open", "locked"] as const).map((value) => (
+            <TouchableOpacity key={`watch-join-${value}`} style={[styles.contentSegment, experienceConfig.roomDefaults.watchParty.joinPolicy === value && styles.contentSegmentActive]} onPress={() => updateExperienceConfig((prev) => ({ ...prev, roomDefaults: { ...prev.roomDefaults, watchParty: { ...prev.roomDefaults.watchParty, joinPolicy: value } } }))}>
+              <Text style={[styles.contentSegmentText, experienceConfig.roomDefaults.watchParty.joinPolicy === value && styles.contentSegmentTextActive]}>Join {formatProgrammingToken(value)}</Text>
+            </TouchableOpacity>
+          ))}
+          {(["enabled", "muted"] as const).map((value) => (
+            <TouchableOpacity key={`watch-reactions-${value}`} style={[styles.contentSegment, experienceConfig.roomDefaults.watchParty.reactionsPolicy === value && styles.contentSegmentActive]} onPress={() => updateExperienceConfig((prev) => ({ ...prev, roomDefaults: { ...prev.roomDefaults, watchParty: { ...prev.roomDefaults.watchParty, reactionsPolicy: value } } }))}>
+              <Text style={[styles.contentSegmentText, experienceConfig.roomDefaults.watchParty.reactionsPolicy === value && styles.contentSegmentTextActive]}>Reactions {formatProgrammingToken(value)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.contentSegmentRow}>
+          {(["open", "party_pass", "premium"] as const).map((value) => (
+            <TouchableOpacity key={`watch-access-${value}`} style={[styles.contentSegment, experienceConfig.roomDefaults.watchParty.contentAccessRule === value && styles.contentSegmentActive]} onPress={() => updateExperienceConfig((prev) => ({ ...prev, roomDefaults: { ...prev.roomDefaults, watchParty: { ...prev.roomDefaults.watchParty, contentAccessRule: value } } }))}>
+              <Text style={[styles.contentSegmentText, experienceConfig.roomDefaults.watchParty.contentAccessRule === value && styles.contentSegmentTextActive]}>{formatProgrammingToken(value)}</Text>
+            </TouchableOpacity>
+          ))}
+          {(["best_effort", "host_managed"] as const).map((value) => (
+            <TouchableOpacity key={`watch-capture-${value}`} style={[styles.contentSegment, experienceConfig.roomDefaults.watchParty.capturePolicy === value && styles.contentSegmentActive]} onPress={() => updateExperienceConfig((prev) => ({ ...prev, roomDefaults: { ...prev.roomDefaults, watchParty: { ...prev.roomDefaults.watchParty, capturePolicy: value } } }))}>
+              <Text style={[styles.contentSegmentText, experienceConfig.roomDefaults.watchParty.capturePolicy === value && styles.contentSegmentTextActive]}>{formatProgrammingToken(value)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.sectionLabel}>New Communication Defaults</Text>
+        <View style={styles.contentSegmentRow}>
+          {(["open", "party_pass", "premium"] as const).map((value) => (
+            <TouchableOpacity key={`comm-access-${value}`} style={[styles.contentSegment, experienceConfig.roomDefaults.communication.contentAccessRule === value && styles.contentSegmentActive]} onPress={() => updateExperienceConfig((prev) => ({ ...prev, roomDefaults: { ...prev.roomDefaults, communication: { ...prev.roomDefaults.communication, contentAccessRule: value } } }))}>
+              <Text style={[styles.contentSegmentText, experienceConfig.roomDefaults.communication.contentAccessRule === value && styles.contentSegmentTextActive]}>{formatProgrammingToken(value)}</Text>
+            </TouchableOpacity>
+          ))}
+          {(["best_effort", "host_managed"] as const).map((value) => (
+            <TouchableOpacity key={`comm-capture-${value}`} style={[styles.contentSegment, experienceConfig.roomDefaults.communication.capturePolicy === value && styles.contentSegmentActive]} onPress={() => updateExperienceConfig((prev) => ({ ...prev, roomDefaults: { ...prev.roomDefaults, communication: { ...prev.roomDefaults.communication, capturePolicy: value } } }))}>
+              <Text style={[styles.contentSegmentText, experienceConfig.roomDefaults.communication.capturePolicy === value && styles.contentSegmentTextActive]}>{formatProgrammingToken(value)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.contentSubPanel}>
+          <View style={styles.ownerSectionHeaderRow}>
+            <Text style={styles.configListTitle}>Creator Grants</Text>
+            <OwnerStatusPill label="Audited Save" tone="manual" />
+          </View>
+          <View style={styles.inlineInputs}>
+            <TextInput style={[styles.input, styles.inputHalf]} placeholder="Creator user id" placeholderTextColor="#8d8d8d" value={creatorGrantUserId} onChangeText={setCreatorGrantUserId} autoCapitalize="none" />
+            <TouchableOpacity style={[styles.orderBtn, (creatorGrantLoading || !canAccessContentProgramming) && styles.configSaveBtnDisabled]} onPress={loadCreatorGrantTarget} disabled={creatorGrantLoading || !canAccessContentProgramming}>
+              {creatorGrantLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.orderBtnText}>Load</Text>}
+            </TouchableOpacity>
+          </View>
+          <View style={styles.contentSignalGrid}>
+            {([
+              ["canUsePartyPassRooms", "Party Pass Rooms", "Grant type"],
+              ["canUsePremiumRooms", "Premium Rooms", "Grant type"],
+              ["canPublishPremiumTitles", "Premium Titles", "Grant type"],
+              ["canUseSponsorPlacements", "Sponsor Placements", "Foundation grant"],
+              ["canUsePlayerAds", "Player Ads", "Foundation grant"],
+            ] as const).map(([key, label, body]) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.contentSignalTile, creatorGrantForm[key] && styles.contentSignalTileActive]}
+                onPress={() => setCreatorGrantForm((prev) => ({ ...prev, [key]: !prev[key] }))}
+              >
+                <OwnerStatusPill label={creatorGrantForm[key] ? "Active" : "Inactive"} tone={creatorGrantForm[key] ? "success" : "locked"} />
+                <Text style={styles.contentSignalTitle}>{label}</Text>
+                <Text style={styles.contentSignalBody}>{body}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={[styles.configSaveBtn, { backgroundColor: themePalette.accent }, (creatorGrantSaving || !canAccessContentProgramming) && styles.configSaveBtnDisabled]}
+            onPress={saveCreatorGrantTarget}
+            disabled={creatorGrantSaving || !canAccessContentProgramming}
+          >
+            {creatorGrantSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Grants</Text>}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.contentPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <Text style={styles.ownerSectionTitle}>Recent Content Audit Timeline</Text>
+          <OwnerStatusPill label={contentAuditConnected ? `${contentAuditRows.length} loaded` : "Not Connected"} tone={contentAuditConnected ? "info" : "locked"} />
+        </View>
+        {contentAuditLoading ? (
+          <View style={styles.configLoadingRow}>
+            <ActivityIndicator color="#fff" />
+            <Text style={styles.configLoadingText}>Loading content audit feed...</Text>
+          </View>
+        ) : contentAuditVisibleRows.length ? (
+          <View style={styles.reportTimeline}>
+            {contentAuditVisibleRows.map((row) => (
+              <View key={row.id} style={styles.reportTimelineRow}>
+                <View style={[styles.reportTimelineDot, row.severity === "critical" || row.severity === "warning" ? styles.reportTimelineDotDanger : styles.reportTimelineDotInfo]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reportTimelineTitle}>{formatProgrammingToken(row.action)}</Text>
+                  <Text style={styles.reportTimelineMeta}>
+                    {`${row.created_at ? formatModerationTimestamp(row.created_at) : "Time unknown"} · ${formatContentAuditActor(row)} · ${formatContentAuditTarget(row)}`}
+                  </Text>
+                  {row.reason ? <Text style={styles.reportBody}>{row.reason}</Text> : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <OwnerEmptyState title="Content audit feed not connected yet" body="Config saves and public-impacting title/grant actions will appear here after the RPC feed returns rows." />
+        )}
+      </View>
+    </>
+  );
 
   const renderSkeleton = () => (
     <View style={{ gap: 12 }}>
@@ -11032,7 +12110,9 @@ export default function AdminStudioScreen() {
         </View>
         ) : null}
 
-        {operatorTab === "content" ? (
+        {operatorTab === "content" ? renderContentProgrammingCenter() : null}
+
+        {false ? (
         <>
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
@@ -11151,12 +12231,12 @@ export default function AdminStudioScreen() {
                     <View style={styles.configListRow}>
                       <View style={styles.configListCopy}>
                         <Text style={styles.configListTitle}>Current manual hero target</Text>
-                        <Text style={styles.configListBody}>{manualHeroSelection.selectedTitle.title}</Text>
+                        <Text style={styles.configListBody}>{manualHeroSelection.selectedTitle!.title}</Text>
                         <Text style={styles.configListBody}>
-                          {`${manualHeroSelection.selectedTitle.category ?? "Uncategorized"} · ${normalizeStatus(
-                            manualHeroSelection.selectedTitle.status,
-                            manualHeroSelection.selectedTitle.is_published,
-                          ).toUpperCase()} · Sort ${manualHeroSelection.selectedTitle.sort_order ?? "—"}`}
+                          {`${manualHeroSelection.selectedTitle!.category ?? "Uncategorized"} · ${normalizeStatus(
+                            manualHeroSelection.selectedTitle!.status,
+                            manualHeroSelection.selectedTitle!.is_published,
+                          ).toUpperCase()} · Sort ${manualHeroSelection.selectedTitle!.sort_order ?? "—"}`}
                         </Text>
                       </View>
                       <View style={styles.badgesRow}>
@@ -11273,7 +12353,7 @@ export default function AdminStudioScreen() {
                       {programmingSnapshot.configuredHeroMode === "manual_title" ? (
                         <Text style={styles.configListBody}>
                           {programmingSnapshot.manualHeroItem
-                            ? `Manual target: ${programmingSnapshot.manualHeroItem.title}`
+                            ? `Manual target: ${programmingSnapshot.manualHeroItem!.title}`
                             : "Manual target is currently unavailable, so Home would fall through to a real backup hero source."}
                         </Text>
                       ) : null}
@@ -12162,6 +13242,76 @@ export default function AdminStudioScreen() {
         </>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={contentConfirm !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          if (!contentConfirmBusy) {
+            setContentConfirm(null);
+            setContentConfirmReason("");
+          }
+        }}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmSheet}>
+            <Text style={styles.confirmKicker}>Content Programming</Text>
+            <Text style={styles.confirmTitle}>{contentConfirm?.title ?? "Confirm Content Action"}</Text>
+            <Text style={styles.confirmBody}>
+              {contentConfirm?.body ?? "Confirm this backed content programming change before continuing."}
+            </Text>
+            <View style={styles.confirmMetaBox}>
+              <Text style={styles.confirmMetaText}>Reason is required for audit proof.</Text>
+              <Text style={styles.confirmMetaText}>No media files, room behavior, LiveKit lifecycle, or token issuance are changed by this action.</Text>
+            </View>
+            <TextInput
+              style={[styles.input, styles.multiline]}
+              placeholder="Audit reason"
+              placeholderTextColor="#8d8d8d"
+              multiline
+              value={contentConfirmReason}
+              onChangeText={setContentConfirmReason}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setContentConfirm(null);
+                  setContentConfirmReason("");
+                }}
+                disabled={contentConfirmBusy}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  contentConfirm?.tone === "danger" ? styles.dangerConfirmBtn : styles.saveBtn,
+                  (!contentConfirmReason.trim() || contentConfirmBusy) && styles.configSaveBtnDisabled,
+                ]}
+                onPress={() => {
+                  const pending = contentConfirm;
+                  const reason = contentConfirmReason.trim();
+                  if (!pending || !reason) return;
+                  setContentConfirm(null);
+                  setContentConfirmReason("");
+                  if (pending.kind === "save_config") void runExperienceConfigSave(reason);
+                  if (pending.kind === "title_action") void runTitleProgrammingAction(pending, reason);
+                  if (pending.kind === "save_editor") void runEditorSave(reason);
+                  if (pending.kind === "creator_grants") void runCreatorGrantSave(reason);
+                }}
+                disabled={!contentConfirmReason.trim() || contentConfirmBusy}
+              >
+                {contentConfirmBusy ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveText}>{contentConfirm?.actionLabel ?? "Confirm"}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={ownerSecurityConfirmVisible}
@@ -14519,6 +15669,181 @@ const styles = StyleSheet.create({
   configList: {
     gap: 8,
     marginBottom: 10,
+  },
+  contentHeroPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(6,9,16,0.9)",
+    padding: 14,
+    gap: 10,
+  },
+  contentHeroPills: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  contentPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(7,10,16,0.78)",
+    padding: 13,
+    gap: 12,
+  },
+  themePresetGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  themePresetTile: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexBasis: "47%",
+    flexGrow: 1,
+    minHeight: 164,
+    minWidth: 142,
+    padding: 11,
+    gap: 7,
+  },
+  themePresetTileSelected: {
+    borderColor: "rgba(220,20,60,0.56)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+  },
+  themePresetTileUnsaved: {
+    borderColor: "rgba(220,170,20,0.58)",
+    backgroundColor: "rgba(220,170,20,0.12)",
+  },
+  themePresetSwatch: {
+    borderRadius: 7,
+    height: 42,
+    justifyContent: "center",
+    overflow: "hidden",
+    padding: 8,
+  },
+  themePresetSwatchInner: {
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    flex: 1,
+  },
+  themePresetTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  themePresetCue: {
+    color: "#D8E0EE",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  themePresetBody: {
+    color: "#AEB8CA",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 15,
+  },
+  contentSegmentRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  contentSegment: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.11)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexBasis: 132,
+    flexGrow: 1,
+    minHeight: 44,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 3,
+  },
+  contentSegmentActive: {
+    borderColor: "rgba(220,20,60,0.52)",
+    backgroundColor: "rgba(220,20,60,0.16)",
+  },
+  contentSegmentText: {
+    color: "#D8E0EE",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  contentSegmentTextActive: {
+    color: "#FFFFFF",
+  },
+  contentSegmentBody: {
+    color: "#98A4B8",
+    fontSize: 10.5,
+    fontWeight: "700",
+    lineHeight: 14,
+  },
+  contentSubPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 10,
+    gap: 9,
+  },
+  contentRailRow: {
+    alignItems: "flex-start",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    padding: 11,
+  },
+  contentRailRowHidden: {
+    borderColor: "rgba(168,176,192,0.18)",
+    backgroundColor: "rgba(120,128,144,0.08)",
+    opacity: 0.78,
+  },
+  contentTitleCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexDirection: "row",
+    gap: 10,
+    padding: 10,
+  },
+  contentSignalGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+  },
+  contentSignalTile: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    flexBasis: "47%",
+    flexGrow: 1,
+    minHeight: 104,
+    minWidth: 132,
+    padding: 10,
+    gap: 7,
+  },
+  contentSignalTileActive: {
+    borderColor: "rgba(69,204,127,0.38)",
+    backgroundColor: "rgba(31,148,83,0.12)",
+  },
+  contentSignalTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  contentSignalBody: {
+    color: "#AEB8CA",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 15,
   },
   operatorSummaryGrid: {
     flexDirection: "row",

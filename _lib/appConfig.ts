@@ -31,7 +31,18 @@ import { supabase } from "./supabase";
 export const APP_CONFIG_TABLE = "app_configurations";
 export const APP_CONFIG_GLOBAL_KEY = "global";
 
-export type AppThemePreset = "city_night" | "lake_glow" | "steel_day";
+export type AppThemePreset =
+  | "city_night"
+  | "lake_glow"
+  | "steel_day"
+  | "theater_noir"
+  | "premiere_gold"
+  | "red_carpet"
+  | "midnight_blue"
+  | "studio_neon"
+  | "chi_town_glow"
+  | "skyline_glass"
+  | "creator_spotlight";
 export type AppBackgroundMode = "hero_art" | "skyline";
 export type HomeHeroMode = "latest" | "hero_flag" | "manual_title";
 export type HomeRailKey = "top_picks" | "browse" | "favorites" | "continue_watching";
@@ -195,6 +206,78 @@ export const THEME_PRESET_PALETTES: Record<AppThemePreset, ThemePresetPalette> =
     tabBarBorder: "rgba(210,222,241,0.18)",
     tabActiveTint: "#C6D4EA",
   },
+  theater_noir: {
+    accent: "#B8A16A",
+    surfaceTint: "rgba(184,161,106,0.18)",
+    screenOverlay: "rgba(5,5,7,0.58)",
+    heroOverlay: "rgba(3,3,6,0.62)",
+    tabBarBackground: "rgba(5,5,8,0.86)",
+    tabBarBorder: "rgba(224,204,150,0.2)",
+    tabActiveTint: "#E4C978",
+  },
+  premiere_gold: {
+    accent: "#E0B95B",
+    surfaceTint: "rgba(224,185,91,0.2)",
+    screenOverlay: "rgba(18,13,8,0.5)",
+    heroOverlay: "rgba(24,16,8,0.54)",
+    tabBarBackground: "rgba(18,12,8,0.82)",
+    tabBarBorder: "rgba(255,224,148,0.22)",
+    tabActiveTint: "#FFD780",
+  },
+  red_carpet: {
+    accent: "#E84A5F",
+    surfaceTint: "rgba(232,74,95,0.2)",
+    screenOverlay: "rgba(18,5,9,0.5)",
+    heroOverlay: "rgba(24,5,11,0.56)",
+    tabBarBackground: "rgba(18,5,9,0.84)",
+    tabBarBorder: "rgba(255,138,153,0.22)",
+    tabActiveTint: "#FF7C8D",
+  },
+  midnight_blue: {
+    accent: "#5EA8FF",
+    surfaceTint: "rgba(94,168,255,0.18)",
+    screenOverlay: "rgba(5,12,23,0.52)",
+    heroOverlay: "rgba(5,13,28,0.56)",
+    tabBarBackground: "rgba(5,12,23,0.84)",
+    tabBarBorder: "rgba(134,191,255,0.2)",
+    tabActiveTint: "#8EC5FF",
+  },
+  studio_neon: {
+    accent: "#27E6A8",
+    surfaceTint: "rgba(39,230,168,0.18)",
+    screenOverlay: "rgba(6,10,14,0.52)",
+    heroOverlay: "rgba(3,12,14,0.55)",
+    tabBarBackground: "rgba(5,10,14,0.84)",
+    tabBarBorder: "rgba(93,255,205,0.2)",
+    tabActiveTint: "#6CFFD0",
+  },
+  chi_town_glow: {
+    accent: "#FF5E7A",
+    surfaceTint: "rgba(255,94,122,0.2)",
+    screenOverlay: "rgba(12,7,18,0.5)",
+    heroOverlay: "rgba(15,8,24,0.54)",
+    tabBarBackground: "rgba(12,7,18,0.84)",
+    tabBarBorder: "rgba(255,160,176,0.2)",
+    tabActiveTint: "#FF8DA0",
+  },
+  skyline_glass: {
+    accent: "#9AD7FF",
+    surfaceTint: "rgba(154,215,255,0.18)",
+    screenOverlay: "rgba(8,15,20,0.46)",
+    heroOverlay: "rgba(8,16,24,0.5)",
+    tabBarBackground: "rgba(8,15,20,0.78)",
+    tabBarBorder: "rgba(197,232,255,0.24)",
+    tabActiveTint: "#C2EAFF",
+  },
+  creator_spotlight: {
+    accent: "#F06FD8",
+    surfaceTint: "rgba(240,111,216,0.18)",
+    screenOverlay: "rgba(13,8,18,0.5)",
+    heroOverlay: "rgba(16,8,22,0.54)",
+    tabBarBackground: "rgba(13,8,18,0.84)",
+    tabBarBorder: "rgba(247,168,233,0.2)",
+    tabActiveTint: "#F7A8E9",
+  },
 };
 
 let cachedAppConfig: AppConfig = DEFAULT_APP_CONFIG;
@@ -218,6 +301,14 @@ const normalizeThemePreset = (value: unknown): AppThemePreset => {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (normalized === "lake_glow") return "lake_glow";
   if (normalized === "steel_day") return "steel_day";
+  if (normalized === "theater_noir") return "theater_noir";
+  if (normalized === "premiere_gold") return "premiere_gold";
+  if (normalized === "red_carpet") return "red_carpet";
+  if (normalized === "midnight_blue") return "midnight_blue";
+  if (normalized === "studio_neon") return "studio_neon";
+  if (normalized === "chi_town_glow") return "chi_town_glow";
+  if (normalized === "skyline_glass") return "skyline_glass";
+  if (normalized === "creator_spotlight") return "creator_spotlight";
   return "city_night";
 };
 
