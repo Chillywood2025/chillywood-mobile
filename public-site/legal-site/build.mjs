@@ -24,6 +24,15 @@ const publicSupabaseAnonKey = String(
   || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
   || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJta2toaWhmYm1zbm5tY3Frb2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNjE1ODUsImV4cCI6MjA4NjczNzU4NX0.j45qJsnaZelO4fND2LGOwH66cb7qHr1LY0t31Ck-TcQ",
 ).trim();
+const dmcaEvidenceBucket = "dmca-evidence";
+const dmcaAttachmentMaxBytes = 10 * 1024 * 1024;
+const dmcaAttachmentMimeTypes = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+];
 
 const policyBySlug = Object.fromEntries(LEGAL_POLICIES.map((policy) => [policy.slug, policy]));
 const pages = [
@@ -208,7 +217,7 @@ ${renderNav(publicDmcaReportSlug)}
         <span>Manual email intake: ${escapeHtml(LEGAL_SUPPORT_EMAIL)}</span>
       </div>
       <div class="notice-box">
-        <strong>Attachments unavailable:</strong> DMCA attachment storage, malware scanning, and retention review are not configured for this public form yet. Submit the notice first, then email screenshots, PDFs, or evidence files to <a href="mailto:${LEGAL_SUPPORT_EMAIL}">${LEGAL_SUPPORT_EMAIL}</a> with the case number.
+        <strong>Evidence attachments:</strong> Optional PNG, JPEG, WebP, PDF, and plain-text files upload to private DMCA evidence storage. Automated malware scanning is not configured; uploaded files are marked pending manual review.
       </div>
       <form class="dmca-form" id="dmca-form" novalidate>
         <section class="form-section">
@@ -244,6 +253,11 @@ ${contentTypeOptions.map(([value, label]) => `              <option value="${esc
           <label>Description of allegedly infringing material <textarea name="infringingMaterialDescription" rows="5" required></textarea></label>
         </section>
         <section class="form-section">
+          <h2>Evidence Attachments</h2>
+          <label>Screenshots, PDFs, or notes <input name="attachments" type="file" multiple accept="${dmcaAttachmentMimeTypes.join(",")}"></label>
+          <p class="field-hint">Optional. Maximum 10 MB per file. Files are private to legal operators and stay pending manual malware review.</p>
+        </section>
+        <section class="form-section">
           <h2>Required Statements</h2>
           <label class="check-row"><input name="goodFaithStatement" type="checkbox" required> I have a good-faith belief that the reported use is not authorized by the copyright owner, the owner's agent, or the law.</label>
           <label class="check-row"><input name="accuracyPenaltyPerjuryStatement" type="checkbox" required> I state under penalty of perjury that the information in this notice is accurate and that I am authorized to act for the copyright owner.</label>
@@ -258,6 +272,9 @@ ${contentTypeOptions.map(([value, label]) => `              <option value="${esc
 (() => {
   const SUPABASE_URL = ${JSON.stringify(publicSupabaseUrl)};
   const SUPABASE_ANON_KEY = ${JSON.stringify(publicSupabaseAnonKey)};
+  const EVIDENCE_BUCKET = ${JSON.stringify(dmcaEvidenceBucket)};
+  const MAX_ATTACHMENT_BYTES = ${JSON.stringify(dmcaAttachmentMaxBytes)};
+  const ALLOWED_ATTACHMENT_TYPES = ${JSON.stringify(dmcaAttachmentMimeTypes)};
   const form = document.getElementById("dmca-form");
   const status = document.getElementById("dmca-status");
   const button = form.querySelector("button[type='submit']");
@@ -270,6 +287,63 @@ ${contentTypeOptions.map(([value, label]) => `              <option value="${esc
     .split(/\\n|,/)
     .map((entry) => entry.trim())
     .filter(Boolean);
+  const sanitizeFileName = (value) => {
+    const cleaned = String(value || "dmca-evidence")
+      .replace(/[\\\\/]+/g, "-")
+      .replace(/[^A-Za-z0-9._ -]/g, "-")
+      .replace(/\\s+/g, " ")
+      .trim();
+    return cleaned.slice(0, 96) || "dmca-evidence.txt";
+  };
+  const objectName = (fileName) => Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10) + "-" + sanitizeFileName(fileName);
+  const storageObjectUrl = (objectPath) => SUPABASE_URL.replace(/\\/$/, "") + "/storage/v1/object/" + EVIDENCE_BUCKET + "/" + objectPath.split("/").map(encodeURIComponent).join("/");
+  const uploadAttachment = async ({ caseId, attachmentToken, file }) => {
+    const mimeType = String(file.type || "").toLowerCase();
+    if (!ALLOWED_ATTACHMENT_TYPES.includes(mimeType)) throw new Error(file.name + " is not an allowed DMCA evidence type.");
+    if (!file.size || file.size > MAX_ATTACHMENT_BYTES) throw new Error(file.name + " must be 10 MB or smaller.");
+    if (!attachmentToken) throw new Error("Attachment upload token was not returned for this case.");
+    const objectPath = "public-intake/" + caseId + "/" + attachmentToken + "/" + objectName(file.name);
+    const upload = await fetch(storageObjectUrl(objectPath), {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+        "Content-Type": mimeType,
+        "x-upsert": "false"
+      },
+      body: file
+    });
+    if (!upload.ok) {
+      const text = await upload.text().catch(() => "");
+      throw new Error(text || "Unable to upload " + file.name + ".");
+    }
+    const metadata = await fetch(SUPABASE_URL.replace(/\\/$/, "") + "/rest/v1/rpc/submit_dmca_attachment_metadata", {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        p_payload: {
+          attachmentToken,
+          caseId,
+          fileName: file.name,
+          mimeType,
+          objectPath,
+          sizeBytes: file.size,
+          source: "public_notice"
+        }
+      })
+    });
+    const metadataBody = await metadata.json().catch(() => null);
+    if (!metadata.ok) {
+      const message = metadataBody && (metadataBody.message || metadataBody.error || metadataBody.details)
+        ? String(metadataBody.message || metadataBody.error || metadataBody.details)
+        : "Unable to record attachment metadata for " + file.name + ".";
+      throw new Error(message);
+    }
+  };
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     button.disabled = true;
@@ -281,6 +355,7 @@ ${contentTypeOptions.map(([value, label]) => `              <option value="${esc
     event.preventDefault();
     setStatus("");
     const data = new FormData(form);
+    const files = Array.from(form.elements.attachments && form.elements.attachments.files ? form.elements.attachments.files : []);
     const payload = {
       accuracyPenaltyPerjuryStatement: data.get("accuracyPenaltyPerjuryStatement") === "on",
       copyrightOwnerName: text(data, "copyrightOwnerName"),
@@ -311,6 +386,11 @@ ${contentTypeOptions.map(([value, label]) => `              <option value="${esc
     if (!payload.goodFaithStatement) missing.push("good-faith statement");
     if (!payload.accuracyPenaltyPerjuryStatement) missing.push("accuracy and authority statement");
     if (!payload.electronicSignature) missing.push("electronic signature");
+    for (const file of files) {
+      const mimeType = String(file.type || "").toLowerCase();
+      if (!ALLOWED_ATTACHMENT_TYPES.includes(mimeType)) missing.push(file.name + " allowed file type");
+      if (!file.size || file.size > MAX_ATTACHMENT_BYTES) missing.push(file.name + " under 10 MB");
+    }
     if (missing.length) {
       setStatus("Please provide: " + missing.join(", ") + ".", "error");
       return;
@@ -336,7 +416,12 @@ ${contentTypeOptions.map(([value, label]) => `              <option value="${esc
         throw new Error(message);
       }
       const row = Array.isArray(body) ? body[0] : body;
-      setStatus("Copyright notice received. Case " + (row && row.case_number ? row.case_number : "recorded") + " has been created for review.", "success");
+      let uploadedCount = 0;
+      for (const file of files) {
+        await uploadAttachment({ caseId: row && row.id, attachmentToken: row && row.attachment_token, file });
+        uploadedCount += 1;
+      }
+      setStatus("Copyright notice received. Case " + (row && row.case_number ? row.case_number : "recorded") + " has been created for review." + (uploadedCount ? " " + uploadedCount + " evidence file" + (uploadedCount === 1 ? "" : "s") + " uploaded and marked pending manual malware review." : ""), "success");
       form.reset();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to submit this copyright notice right now.", "error");
@@ -504,6 +589,7 @@ h2 { font-size: clamp(1.35rem, 2.2vw, 1.85rem); line-height: 1.18; margin: 0 0 0
 .dmca-form { display: grid; gap: 22px; margin-top: 22px; }
 .form-section { border-top: 1px solid var(--line); display: grid; gap: 12px; padding-top: 20px; }
 .dmca-form label { color: #2b3038; display: grid; font-size: 0.9rem; font-weight: 760; gap: 6px; }
+.field-hint { color: var(--muted); font-size: 0.88rem; font-weight: 650; margin: -2px 0 0; }
 .dmca-form input, .dmca-form textarea, .dmca-form select {
   background: #fbfcfa;
   border: 1px solid #cfd5cf;

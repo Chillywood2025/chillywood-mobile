@@ -10152,7 +10152,26 @@ export default function AdminStudioScreen() {
                           ? "Evidence preservation has been recorded on this DMCA case."
                           : "No DMCA evidence preservation action recorded yet."}
                       </Text>
-                      <Text style={styles.configListBody}>Attachments are not configured in this build; preserve external files through the legal evidence workflow.</Text>
+                      {selectedDmcaDetail.attachments.length ? (
+                        <View style={styles.configList}>
+                          {selectedDmcaDetail.attachments.map((attachment) => (
+                            <View key={attachment.id} style={styles.configListRowSubtle}>
+                              <Text style={styles.configListTitle}>{formatAuditDisplayText(attachment.originalFilename)}</Text>
+                              <Text style={styles.configListBody}>
+                                {`${formatModerationToken(attachment.source)} · ${formatAuditDisplayText(attachment.mimeType)} · ${(attachment.sizeBytes / 1024).toFixed(1)} KB`}
+                              </Text>
+                              <Text style={styles.configListBody}>
+                                {`Scan: ${formatModerationToken(attachment.scanStatus)} · Retention: ${formatModerationToken(attachment.retentionStatus)}`}
+                              </Text>
+                              <Text style={styles.configListBody}>
+                                {attachment.scanNotes || "No scan notes recorded."}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={styles.configListBody}>No private evidence attachments are recorded on this case yet.</Text>
+                      )}
                       <Text style={styles.configListBody}>Legal hold state is recorded through case timeline/evidence actions and the Legal Evidence tooling where applicable.</Text>
                     </View>
                   </View>
@@ -10341,7 +10360,7 @@ export default function AdminStudioScreen() {
                   <View style={styles.configListRow}>
                     <View style={styles.configListCopy}>
                       <Text style={styles.configListTitle}>Counter-Notice Recording</Text>
-                      <Text style={styles.configListBody}>Uploader-facing counter-notice form not implemented yet; admin recording is supported.</Text>
+                      <Text style={styles.configListBody}>Uploader-facing counter-notice self-service is live for authenticated uploaders whose user id matches this case. Admin manual recording remains supported.</Text>
                       <TextInput style={styles.input} placeholder="Submitter name" placeholderTextColor="#8d8d8d" value={counterSubmitterName} onChangeText={setCounterSubmitterName} />
                       <TextInput style={styles.input} placeholder="Submitter email" placeholderTextColor="#8d8d8d" value={counterSubmitterEmail} onChangeText={setCounterSubmitterEmail} keyboardType="email-address" autoCapitalize="none" />
                       <TextInput style={styles.input} placeholder="Phone optional" placeholderTextColor="#8d8d8d" value={counterSubmitterPhone} onChangeText={setCounterSubmitterPhone} />
@@ -10568,7 +10587,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListRow}>
                 <View style={styles.configListCopy}>
                   <Text style={styles.configListTitle}>Attachments</Text>
-                  <Text style={styles.configListBody}>Attachments are not configured in this build; preserve external files through the legal evidence workflow.</Text>
+                  <Text style={styles.configListBody}>Public notice and uploader counter-notice evidence files upload to the private dmca-evidence bucket and appear on the case detail after submission. Manual admin file upload still uses the legal evidence workflow.</Text>
                 </View>
               </View>
 

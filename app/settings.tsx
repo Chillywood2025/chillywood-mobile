@@ -458,6 +458,16 @@ export default function SettingsScreen() {
     router.push("/copyright-report" as Parameters<typeof router.push>[0]);
   }, [legalConfig.copyrightReportUrl, openExternalDestination, router]);
 
+  const onPressCounterNotice = useCallback(() => {
+    trackEvent("settings_legal_opened", {
+      source: "settings",
+      target: "counter_notice",
+      destination: "local",
+    });
+
+    router.push("/counter-notice" as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   const onPressSupport = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -761,6 +771,9 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyrightReport}>
             <Text style={styles.utilityButtonText}>Report Copyright</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCounterNotice}>
+            <Text style={styles.utilityButtonText}>Counter Notice</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupportContact}>
             <Text style={styles.utilityButtonText}>Contact Support</Text>
           </TouchableOpacity>
@@ -1010,10 +1023,12 @@ const styles = StyleSheet.create({
   },
   utilityRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
   utilityButton: {
     flex: 1,
+    minWidth: 132,
     minHeight: 44,
     borderRadius: 14,
     borderWidth: 1,

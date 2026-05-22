@@ -82,7 +82,7 @@ Implemented backed flow:
 
 ## Attachment And Public Intake Limits
 
-The public and Admin intake surfaces currently show attachment support as disabled with this exact backend reason: DMCA attachment storage bucket, malware scanning, and retention workflow are not configured. Reporters should submit the notice first, then send supporting screenshots, PDFs, or evidence files to `support@chillywoodstream.com` with the case number.
+Public notice intake and uploader counter-notice intake support evidence attachments through the private `dmca-evidence` storage bucket and `dmca_attachments` metadata table. Public submitters upload only to the case-scoped intake path, uploader counter-notice submitters upload only for their own case/content, and Admin/legal operators can read attachment metadata through scoped DMCA access. Anonymous public download is denied. Automated malware scanning is not configured, so uploaded evidence is marked pending manual review instead of fake-scan-passed.
 
 Automated inbound email ingestion is not configured. Manual email intake is enabled through support/admin recording and is clearly labeled in the Admin UI and canary status.
 
@@ -116,9 +116,9 @@ Escalate reports that appear false, retaliatory, automated, harassing, or design
 
 [ATTORNEY TO CONFIRM COUNTER-NOTICE TIMING AND JURISDICTION LANGUAGE]
 
-Current implementation supports Admin-recorded counter-notices received by Support/email. It stores submitter details, required statements, signature, forwarding time, 10-business-day restore-not-before date, 14-business-day restore-not-after date, court-action notice time, and status. Court-action notices block both restore-eligible status and the restore content action. A direct uploader-facing counter-notice route is still pending; the Admin UI states that uploader-facing submission is not implemented yet and admin recording is supported.
+Current implementation supports both Admin-recorded counter-notices received by Support/email and authenticated uploader-facing self-service for a case tied to the uploader's own account. It stores submitter details, required statements, signature, forwarding time, 10-business-day restore-not-before date, 14-business-day restore-not-after date, court-action notice time, status, and optional private evidence attachments. Court-action notices block both restore-eligible status and the restore content action. The self-service RPC denies another user's case/content.
 
-The May 22 canary records this as a passing disabled-with-reason item: uploader-facing counter-notice self-service is not live; Admin recording, forwarding, response-window, court-action, and restore-eligibility workflows are supported.
+The May 22 canary proves uploader self-service through `read_my_dmca_counter_notice_case`, `submit_dmca_counter_notice`, private counter-notice attachment upload, Admin readback, and other-user denial.
 
 ## Repeat Offender Review
 
@@ -137,13 +137,13 @@ Share only what is needed to process the claim, counter-notice, legal request, o
 ## Remaining Manual / External Items
 
 - Live end-to-end backed/Admin DMCA proof with safe disposable reporter/uploader/admin/viewer accounts and supported content targets passed on May 14, 2026.
-- Production Admin DMCA case-management closeout proof passed on May 21/22, 2026 through the physical Android owner device, and the May 22 public/legal pipeline proof passed through `admin-owner-controls` version 14.
-- Public DMCA/legal pipeline closeout proof passed on May 22, 2026 through the physical Android owner device and `admin-owner-controls` version 14 with `60 pass`, `0 manual_required`, and `0 failed`.
+- Production Admin DMCA case-management closeout proof passed on May 21/22, 2026 through the physical Android owner device, and the May 22 public/legal pipeline proof passed through `admin-owner-controls` version 15.
+- Public DMCA/legal pipeline closeout proof passed on May 22, 2026 through the physical Android owner device and `admin-owner-controls` version 15 with `60 pass`, `0 manual_required`, and `0 failed`.
 - Support inbox receipt proof for `support@chillywoodstream.com` is closed in launch readiness docs.
 - DMCA designated agent public contact and U.S. Copyright Office registration are recorded as complete from the provided registration details.
-- Uploader-facing counter-notice submission route is still pending; Admin-recorded counter-notices are implemented, proved, and surfaced with a clear self-service-not-live reason.
 - Outbound email automation is still pending; notification templates/status recording are implemented for manual support/admin workflow and template coverage is proved. The Admin UI states: `Manual email intake enabled. Automated email ingestion not configured.`
-- DMCA attachment upload/storage/scanning/retention is still pending; public/Admin forms keep attachments disabled with the exact missing-backend reason.
+- Uploader-facing counter-notice submission is implemented and proved for the affected authenticated uploader, with other-user denial.
+- DMCA attachment upload/storage/retention is implemented for public notices and uploader counter-notices; automated malware scanning remains not configured, so scan status remains pending manual review.
 - The hosted public DMCA URL is configured and live at `https://chillywoodstream.com/copyright-report`.
 - Content mutation is enabled for `creator_video`, `profile_post`, `profile_post_comment`, `comment`, `creator_video_comment`, `reply`, `social_attachment`, and `attachment`. `live_room`, `channel`, and `other` remain preserve-only/disabled with exact missing-backend reasons; no LiveKit action is part of DMCA mutation coverage.
 - Proof/demo/canary cases are marked `is_test_case` and hidden from production clients.

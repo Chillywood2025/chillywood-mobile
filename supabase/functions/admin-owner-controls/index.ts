@@ -1288,12 +1288,9 @@ const legalPolicyCanaryResults = (supportEmail: string, privacyUrl: string, term
 
 const DMCA_CANARY_CONTENT_ID = "CANARY-DMCA-CONTENT-DO-NOT-MODERATE";
 const CANONICAL_PUBLIC_DMCA_URL = "https://chillywoodstream.com/copyright-report";
-const DMCA_ATTACHMENT_DISABLED_REASON =
-  "DMCA attachment storage bucket, malware scanning, and retention workflow are not configured; public/admin intake instructs reporters to submit the notice first and send evidence files to support with the case number.";
+const DMCA_EVIDENCE_BUCKET = "dmca-evidence";
 const DMCA_EMAIL_INTAKE_STATUS =
   "Manual email intake enabled through support/admin recording; automated inbound email ingestion is not configured.";
-const DMCA_UPLOADER_COUNTER_NOTICE_DISABLED_REASON =
-  "Uploader-facing counter-notice self-service form is not live; admin recording, forwarding, response-window, court-action, and restore-eligibility workflows are supported.";
 const DMCA_CONTENT_MUTATION_MATRIX = [
   { contentType: "creator_video", stateLookup: "videos", mutation: "enabled", reason: "Safe moderation_status disable/hide/restore route exists on videos." },
   { contentType: "profile_post", stateLookup: "profile_posts", mutation: "enabled", reason: "Safe moderation_status disable/hide/restore route exists on profile_posts." },
@@ -1331,20 +1328,31 @@ const buildDmcaCanaryPayload = (label: string) => ({
 
 const cleanupDmcaCanaryCase = async (adminClient: SupabaseClientLike, caseId: string) => {
   if (!caseId) return "cleanup skipped; no DMCA canary case id";
+  const attachmentRows = await adminClient
+    .from("dmca_attachments")
+    .select("object_path")
+    .eq("dmca_case_id", caseId);
+  const attachmentPaths = Array.isArray(attachmentRows.data)
+    ? (attachmentRows.data as JsonObject[]).map((row) => toText(row.object_path)).filter(Boolean)
+    : [];
+  const storageRemoval = attachmentPaths.length
+    ? await adminClient.storage.from(DMCA_EVIDENCE_BUCKET).remove(attachmentPaths)
+    : { data: [], error: null };
   const deletes = await Promise.all([
+    adminClient.from("dmca_attachments").delete().eq("dmca_case_id", caseId),
     adminClient.from("dmca_audit_log").delete().eq("dmca_case_id", caseId),
     adminClient.from("dmca_content_actions").delete().eq("dmca_case_id", caseId),
     adminClient.from("dmca_strikes").delete().eq("dmca_case_id", caseId),
     adminClient.from("dmca_counter_notices").delete().eq("dmca_case_id", caseId),
   ]);
   const caseDelete = await adminClient.from("dmca_cases").delete().eq("id", caseId);
-  const errors = [...deletes, caseDelete]
+  const errors = [attachmentRows, storageRemoval, ...deletes, caseDelete]
     .map((result) => result.error)
     .filter(Boolean)
     .map((error: { message?: string }) => redactText(error.message, 220));
   return errors.length
     ? `cleanup failed: ${errors.join("; ")}`
-    : "cleanup passed; DMCA canary case and child records deleted";
+    : `cleanup passed; DMCA canary case, child records, and ${attachmentPaths.length} evidence object(s) deleted`;
 };
 
 const dmcaAdminCanaryResults = async (
@@ -1364,7 +1372,7 @@ const dmcaAdminCanaryResults = async (
   let publicCaseId = "";
   let publicDmcaCleanupStatus = "not needed";
 
-  const tableNames = ["dmca_cases", "dmca_content_actions", "dmca_strikes", "dmca_counter_notices", "dmca_audit_log"] as const;
+  const tableNames = ["dmca_cases", "dmca_content_actions", "dmca_strikes", "dmca_counter_notices", "dmca_attachments", "dmca_audit_log"] as const;
   const tableChecks = await Promise.all(tableNames.map((table) =>
     safeSupabaseCall(() => adminClient.from(table).select("id", { count: "exact", head: true }).limit(1))
   ));
@@ -1373,14 +1381,14 @@ const dmcaAdminCanaryResults = async (
     .filter(Boolean);
   results.push(canaryResult({
     actor: "system",
-    actual: tableErrors.length ? `DMCA table proof failed: ${tableErrors.join("; ")}` : "DMCA case, action, strike, counter-notice, and history tables responded.",
+    actual: tableErrors.length ? `DMCA table proof failed: ${tableErrors.join("; ")}` : "DMCA case, action, strike, counter-notice, attachment, and history tables responded.",
     details: { checked_tables: [...tableNames], errors: tableErrors },
     expected: "DMCA cases table and child case-record tables exist.",
     key: "dmca_cases_table_exists",
     label: "DMCA cases tables exist",
     section: "DMCA / Copyright",
     status: tableErrors.length ? "fail" : "pass",
-    testedSurface: "tables: dmca_cases, dmca_content_actions, dmca_strikes, dmca_counter_notices, dmca_audit_log",
+    testedSurface: "tables: dmca_cases, dmca_content_actions, dmca_strikes, dmca_counter_notices, dmca_attachments, dmca_audit_log",
   }));
 
   const publicNotice = await safeSupabaseCall(() => anonClient.rpc("submit_dmca_notice", {
@@ -1392,6 +1400,7 @@ const dmcaAdminCanaryResults = async (
       ? publicNotice.data
       : {};
   publicCaseId = toText((publicCreated as JsonObject).id);
+  const publicAttachmentToken = toText((publicCreated as JsonObject).attachment_token);
   const publicCaseRead = publicCaseId
     ? await safeSupabaseCall(() => adminClient
       .from("dmca_cases")
@@ -1426,6 +1435,69 @@ const dmcaAdminCanaryResults = async (
     section: "DMCA / Copyright",
     status: publicFormOk ? "pass" : "fail",
     testedSurface: "rpc: submit_dmca_notice as anon + admin readback for required fields",
+  }));
+
+  const publicAttachmentPath = publicCaseId && publicAttachmentToken
+    ? `public-intake/${publicCaseId}/${publicAttachmentToken}/canary-public-evidence.txt`
+    : "";
+  const publicAttachmentUpload = publicAttachmentPath
+    ? await safeSupabaseCall(() => anonClient.storage
+      .from(DMCA_EVIDENCE_BUCKET)
+      .upload(publicAttachmentPath, new Blob(["CANARY PROOF public DMCA evidence"], { type: "text/plain" }), {
+        contentType: "text/plain",
+        upsert: false,
+      }))
+    : { data: null, error: publicNotice.error ?? new Error("public_attachment_token_missing") };
+  const publicAttachmentMetadata = publicAttachmentPath && !publicAttachmentUpload.error
+    ? await safeSupabaseCall(() => anonClient.rpc("submit_dmca_attachment_metadata", {
+      p_payload: {
+        attachmentToken: publicAttachmentToken,
+        caseId: publicCaseId,
+        fileName: "canary-public-evidence.txt",
+        mimeType: "text/plain",
+        objectPath: publicAttachmentPath,
+        sizeBytes: 32,
+        source: "public_notice",
+      },
+    }))
+    : { data: null, error: publicAttachmentUpload.error ?? new Error("public_attachment_upload_failed") };
+  const publicAttachmentId = toText((isRecord(publicAttachmentMetadata.data) ? publicAttachmentMetadata.data : {}).id);
+  const publicAttachmentRead = publicAttachmentId
+    ? await safeSupabaseCall(() => adminClient
+      .from("dmca_attachments")
+      .select("id,dmca_case_id,source,scan_status,retention_status,object_path")
+      .eq("id", publicAttachmentId)
+      .maybeSingle())
+    : { data: null, error: publicAttachmentMetadata.error ?? new Error("public_attachment_metadata_missing") };
+  const anonAttachmentRead = publicAttachmentPath
+    ? await safeSupabaseCall(() => anonClient.storage.from(DMCA_EVIDENCE_BUCKET).download(publicAttachmentPath))
+    : { data: null, error: new Error("public_attachment_path_missing") };
+  const publicAttachmentRow = isRecord(publicAttachmentRead.data) ? publicAttachmentRead.data : {};
+  const publicAttachmentOk = !publicAttachmentUpload.error
+    && !publicAttachmentMetadata.error
+    && !publicAttachmentRead.error
+    && toText(publicAttachmentRow.source) === "public_notice"
+    && toText(publicAttachmentRow.scan_status) === "pending_manual_review"
+    && !!anonAttachmentRead.error;
+  results.push(canaryResult({
+    actor: "signed-out public",
+    actual: publicAttachmentOk
+      ? "Public DMCA evidence upload created private attachment metadata; anonymous download was denied and scan status is pending manual review."
+      : "Public DMCA evidence attachment flow failed or was readable publicly.",
+    cleanupStatus: "pending public DMCA proof cleanup",
+    details: {
+      admin_attachment_read: !publicAttachmentRead.error,
+      anon_download_denied: !!anonAttachmentRead.error,
+      metadata_error: publicAttachmentMetadata.error ? redactText((publicAttachmentMetadata.error as { message?: string }).message, 260) : null,
+      scan_status: toText(publicAttachmentRow.scan_status),
+      storage_upload_error: publicAttachmentUpload.error ? redactText((publicAttachmentUpload.error as { message?: string }).message, 260) : null,
+    },
+    expected: "Public DMCA attachments upload to a private bucket, create case metadata, and do not fake malware scan success.",
+    key: "dmca_attachment_support",
+    label: "DMCA attachment upload works",
+    section: "DMCA / Copyright",
+    status: publicAttachmentOk ? "pass" : "fail",
+    testedSurface: "storage: dmca-evidence public-intake + rpc: submit_dmca_attachment_metadata + anon download denial",
   }));
 
   const dmcaScopedGrant = await safeSupabaseCall(() => adminClient.from("platform_staff_permission_grants").insert({
@@ -1605,6 +1677,113 @@ const dmcaAdminCanaryResults = async (
       testedSurface: "rpcs: admin_dmca_record_counter_notice + forward + mark_restore_eligible",
     }));
 
+    await safeSupabaseCall(() => adminClient
+      .from("dmca_cases")
+      .update({
+        status: "content_disabled",
+        updated_at: new Date().toISOString(),
+        uploader_user_id: viewerProof.userId,
+      })
+      .eq("id", caseId));
+    const uploaderCaseRead = await safeSupabaseCall(() => viewerClient.rpc("read_my_dmca_counter_notice_case", {
+      p_case_id: caseId,
+    }));
+    const uploaderCounterNotice = await safeSupabaseCall(() => viewerClient.rpc("submit_dmca_counter_notice", {
+      p_case_id: caseId,
+      p_payload: {
+        electronicSignature: "CANARY PROOF Uploader Counter Submitter",
+        goodFaithMistakeStatement: true,
+        jurisdictionConsentStatement: true,
+        removedMaterialDescription: "CANARY PROOF uploader self-service counter-notice statement.",
+        removedMaterialUrlOrLocation: DMCA_CANARY_CONTENT_ID,
+        serviceAcceptanceStatement: true,
+        submitterEmail: "liveops.proof+viewer@chillywoodstream.com",
+        submitterName: "CANARY PROOF Uploader Counter Submitter",
+      },
+    }));
+    const uploaderCounterNoticeId = toText((isRecord(uploaderCounterNotice.data) ? uploaderCounterNotice.data : {}).id);
+    const uploaderAttachmentPath = uploaderCounterNoticeId
+      ? `uploader-counter-notice/${caseId}/${viewerProof.userId}/${uploaderCounterNoticeId}/canary-counter-evidence.txt`
+      : "";
+    const uploaderAttachmentUpload = uploaderAttachmentPath
+      ? await safeSupabaseCall(() => viewerClient.storage
+        .from(DMCA_EVIDENCE_BUCKET)
+        .upload(uploaderAttachmentPath, new Blob(["CANARY PROOF uploader counter-notice evidence"], { type: "text/plain" }), {
+          contentType: "text/plain",
+          upsert: false,
+        }))
+      : { data: null, error: uploaderCounterNotice.error ?? new Error("uploader_counter_notice_id_missing") };
+    const uploaderAttachmentMetadata = uploaderAttachmentPath && !uploaderAttachmentUpload.error
+      ? await safeSupabaseCall(() => viewerClient.rpc("submit_dmca_attachment_metadata", {
+        p_payload: {
+          caseId,
+          counterNoticeId: uploaderCounterNoticeId,
+          fileName: "canary-counter-evidence.txt",
+          mimeType: "text/plain",
+          objectPath: uploaderAttachmentPath,
+          sizeBytes: 44,
+          source: "uploader_counter_notice",
+        },
+      }))
+      : { data: null, error: uploaderAttachmentUpload.error ?? new Error("uploader_counter_attachment_upload_failed") };
+    const unauthorizedCounterNotice = await safeSupabaseCall(() => grantedDmcaClient.rpc("submit_dmca_counter_notice", {
+      p_case_id: caseId,
+      p_payload: {
+        electronicSignature: "CANARY PROOF Wrong Uploader",
+        goodFaithMistakeStatement: true,
+        jurisdictionConsentStatement: true,
+        removedMaterialDescription: "CANARY PROOF should be denied for another user's case.",
+        removedMaterialUrlOrLocation: DMCA_CANARY_CONTENT_ID,
+        serviceAcceptanceStatement: true,
+        submitterEmail: "liveops.proof+granted-admin@chillywoodstream.com",
+        submitterName: "CANARY PROOF Wrong Uploader",
+      },
+    }));
+    const adminCounterRead = await safeSupabaseCall(() => grantedDmcaClient
+      .from("dmca_counter_notices")
+      .select("id,submitter_user_id,status")
+      .eq("id", uploaderCounterNoticeId)
+      .maybeSingle());
+    const adminAttachmentRead = await safeSupabaseCall(() => grantedDmcaClient
+      .from("dmca_attachments")
+      .select("id,counter_notice_id,source,scan_status")
+      .eq("counter_notice_id", uploaderCounterNoticeId)
+      .limit(10));
+    const adminAttachmentRows = Array.isArray(adminAttachmentRead.data) ? adminAttachmentRead.data as JsonObject[] : [];
+    const uploaderCounterOk = !uploaderCaseRead.error
+      && !uploaderCounterNotice.error
+      && !!uploaderCounterNoticeId
+      && !uploaderAttachmentUpload.error
+      && !uploaderAttachmentMetadata.error
+      && !adminCounterRead.error
+      && adminAttachmentRows.some((row) => toText(row.source) === "uploader_counter_notice")
+      && !!unauthorizedCounterNotice.error;
+    results.push(canaryResult({
+      actor: "proof uploader",
+      actual: uploaderCounterOk
+        ? "Uploader self-service counter-notice succeeded for the case owner, attached evidence for manual scan review, appeared in Admin detail data, and denied another user."
+        : "Uploader self-service counter-notice flow failed or did not enforce ownership.",
+      cleanupStatus: "pending DMCA proof cleanup",
+      details: {
+        admin_attachment_rows: adminAttachmentRows.length,
+        admin_attachment_read_error: adminAttachmentRead.error ? redactText((adminAttachmentRead.error as { message?: string }).message, 220) : null,
+        admin_counter_read_error: adminCounterRead.error ? redactText((adminCounterRead.error as { message?: string }).message, 220) : null,
+        attachment_metadata_error: uploaderAttachmentMetadata.error ? redactText((uploaderAttachmentMetadata.error as { message?: string }).message, 220) : null,
+        attachment_upload_error: uploaderAttachmentUpload.error ? redactText((uploaderAttachmentUpload.error as { message?: string }).message, 220) : null,
+        case_read_error: uploaderCaseRead.error ? redactText((uploaderCaseRead.error as { message?: string }).message, 220) : null,
+        counter_notice_id: uploaderCounterNoticeId ? "[created]" : "",
+        counter_submit_error: uploaderCounterNotice.error ? redactText((uploaderCounterNotice.error as { message?: string }).message, 220) : null,
+        unauthorized_denied: !!unauthorizedCounterNotice.error,
+        unauthorized_error: unauthorizedCounterNotice.error ? redactText((unauthorizedCounterNotice.error as { message?: string }).message, 220) : null,
+      },
+      expected: "Uploader self-service counter-notice works only for the matching uploader and Admin sees the counter-notice plus attachments.",
+      key: "dmca_uploader_counter_notice_status",
+      label: "Uploader counter-notice self-service works",
+      section: "DMCA / Copyright",
+      status: uploaderCounterOk ? "pass" : "fail",
+      testedSurface: "rpcs: read_my_dmca_counter_notice_case + submit_dmca_counter_notice + private counter attachment upload + Admin RLS readback",
+    }));
+
     const searchPattern = `%${caseNumber || caseId}%`;
     const filterSearch = await safeSupabaseCall(() => grantedDmcaClient
       .from("dmca_cases")
@@ -1723,17 +1902,6 @@ const dmcaAdminCanaryResults = async (
 
   results.push(canaryResult({
     actor: "system",
-    actual: DMCA_ATTACHMENT_DISABLED_REASON,
-    expected: "DMCA attachment support works or is disabled with exact backend/config reason.",
-    key: "dmca_attachment_support",
-    label: "DMCA attachments disabled with reason",
-    section: "DMCA / Copyright",
-    status: "pass",
-    testedSurface: "public form + Admin intake/detail attachment state",
-  }));
-
-  results.push(canaryResult({
-    actor: "system",
     actual: DMCA_EMAIL_INTAKE_STATUS,
     expected: "DMCA email intake automation/manual mode is clearly reported.",
     key: "dmca_email_intake_status",
@@ -1741,17 +1909,6 @@ const dmcaAdminCanaryResults = async (
     section: "DMCA / Copyright",
     status: "pass",
     testedSurface: "Admin intake copy + canary config status",
-  }));
-
-  results.push(canaryResult({
-    actor: "system",
-    actual: DMCA_UPLOADER_COUNTER_NOTICE_DISABLED_REASON,
-    expected: "Uploader counter-notice self-service works or is disabled with exact reason.",
-    key: "dmca_uploader_counter_notice_status",
-    label: "Uploader counter-notice disabled with reason",
-    section: "DMCA / Copyright",
-    status: "pass",
-    testedSurface: "Admin counter-notice workflow disclosure",
   }));
 
   for (const item of DMCA_CONTENT_MUTATION_MATRIX) {

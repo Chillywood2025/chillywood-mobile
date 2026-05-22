@@ -40,6 +40,16 @@ export const DMCA_CONTENT_ACTIONS = [
   "preserved_evidence",
 ] as const;
 
+export const DMCA_EVIDENCE_BUCKET = "dmca-evidence";
+export const DMCA_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export const DMCA_ATTACHMENT_ALLOWED_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+] as const;
+
 export const DMCA_NOTIFICATION_TEMPLATES = [
   {
     key: "reporter_receipt",
@@ -188,8 +198,30 @@ export type DmcaAuditLogEntry = {
   createdAt: string;
 };
 
+export type DmcaAttachment = {
+  id: string;
+  dmcaCaseId: string;
+  counterNoticeId: string | null;
+  source: "public_notice" | "uploader_counter_notice" | "admin_manual" | string;
+  submittedByUserId: string | null;
+  submittedByRole: "reporter" | "uploader" | "admin" | string;
+  bucketId: string;
+  objectPath: string;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  scanStatus: "pending_manual_review" | "not_configured" | "clean" | "quarantined" | "rejected" | string;
+  scanProvider: string;
+  scanNotes: string | null;
+  retentionStatus: string;
+  preservedForEvidence: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type DmcaCaseDetail = {
   case: DmcaCase;
+  attachments: DmcaAttachment[];
   counterNotices: DmcaCounterNotice[];
   contentActions: DmcaContentActionRecord[];
   contentState: DmcaContentState | null;
@@ -215,6 +247,13 @@ export type SubmitDmcaNoticeInput = {
   goodFaithStatement: boolean;
   accuracyPenaltyPerjuryStatement: boolean;
   electronicSignature: string;
+};
+
+export type SubmitDmcaNoticeResult = {
+  id: string;
+  caseNumber: string;
+  status: DmcaCaseStatus;
+  attachmentToken: string | null;
 };
 
 export type AdminDmcaCreateCaseInput = SubmitDmcaNoticeInput & {
@@ -243,6 +282,18 @@ export type DmcaCaseSummary = {
   priority: number;
   repeatInfringerReview: number;
   byStatus: Record<DmcaCaseStatus, number>;
+};
+
+export type DmcaCounterNoticeCase = {
+  id: string;
+  caseNumber: string;
+  status: DmcaCaseStatus;
+  contentType: DmcaContentType;
+  contentId: string | null;
+  contentUrl: string | null;
+  publicSafeSummary: string | null;
+  receivedAt: string;
+  existingCounterNoticeCount: number;
 };
 
 type DmcaRpcClient = {
@@ -375,6 +426,27 @@ const parseAudit = (row: any): DmcaAuditLogEntry => ({
   createdAt: toDateText(row.created_at),
 });
 
+const parseAttachment = (row: any): DmcaAttachment => ({
+  id: toText(row.id),
+  dmcaCaseId: toText(row.dmca_case_id),
+  counterNoticeId: toText(row.counter_notice_id) || null,
+  source: toText(row.source) || "public_notice",
+  submittedByUserId: toText(row.submitted_by_user_id) || null,
+  submittedByRole: toText(row.submitted_by_role) || "reporter",
+  bucketId: toText(row.bucket_id) || DMCA_EVIDENCE_BUCKET,
+  objectPath: toText(row.object_path),
+  originalFilename: toText(row.original_filename),
+  mimeType: toText(row.mime_type),
+  sizeBytes: Number(row.size_bytes ?? 0),
+  scanStatus: toText(row.scan_status) || "pending_manual_review",
+  scanProvider: toText(row.scan_provider) || "manual_review_required",
+  scanNotes: toText(row.scan_notes) || null,
+  retentionStatus: toText(row.retention_status) || "active_legal_hold",
+  preservedForEvidence: row.preserved_for_evidence !== false,
+  createdAt: toDateText(row.created_at),
+  updatedAt: toDateText(row.updated_at),
+});
+
 const parseContentState = (value: unknown): DmcaContentState | null => {
   const row = parseJsonObject(value);
   if (!row) return null;
@@ -447,7 +519,8 @@ export async function submitDmcaNotice(input: SubmitDmcaNoticeInput) {
     id: toText(row?.id),
     caseNumber: toText(row?.case_number),
     status: normalizeStatus(row?.status),
-  };
+    attachmentToken: toText(row?.attachment_token) || null,
+  } satisfies SubmitDmcaNoticeResult;
 }
 
 export async function adminDmcaCreateCase(input: AdminDmcaCreateCaseInput) {
@@ -602,8 +675,9 @@ export async function readAdminDmcaCaseDetail(caseId: string): Promise<DmcaCaseD
   const normalizedCaseId = toText(caseId);
   if (!normalizedCaseId) throw new Error("Missing DMCA case id.");
 
-  const [caseResult, countersResult, actionsResult, strikesResult, auditResult] = await Promise.all([
+  const [caseResult, attachmentsResult, countersResult, actionsResult, strikesResult, auditResult] = await Promise.all([
     dmcaClient.from("dmca_cases").select("*").eq("id", normalizedCaseId).single(),
+    dmcaClient.from("dmca_attachments").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
     dmcaClient.from("dmca_counter_notices").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
     dmcaClient.from("dmca_content_actions").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
     dmcaClient.from("dmca_strikes").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
@@ -611,6 +685,7 @@ export async function readAdminDmcaCaseDetail(caseId: string): Promise<DmcaCaseD
   ]);
 
   if (caseResult.error) throw caseResult.error;
+  if (attachmentsResult.error) throw attachmentsResult.error;
   if (countersResult.error) throw countersResult.error;
   if (actionsResult.error) throw actionsResult.error;
   if (strikesResult.error) throw strikesResult.error;
@@ -634,6 +709,7 @@ export async function readAdminDmcaCaseDetail(caseId: string): Promise<DmcaCaseD
 
   return {
     case: parsedCase,
+    attachments: (attachmentsResult.data ?? []).map(parseAttachment),
     counterNotices: (countersResult.data ?? []).map(parseCounterNotice),
     contentActions: (actionsResult.data ?? []).map(parseContentAction),
     contentState,
@@ -801,4 +877,241 @@ export async function adminDmcaMarkRestoreEligible(input: {
   });
   if (error) throw error;
   return parseDmcaCase(data);
+}
+
+const normalizeAttachmentMimeType = (value: unknown) => toLowerText(value) || "application/octet-stream";
+
+const sanitizeAttachmentFilename = (fileName: string) => {
+  const normalized = toText(fileName)
+    .replace(/[\\/]+/g, "-")
+    .replace(/[^A-Za-z0-9._ -]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized.slice(0, 96) || "dmca-evidence.txt";
+};
+
+const buildAttachmentObjectName = (fileName: string) => {
+  const safeName = sanitizeAttachmentFilename(fileName);
+  const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${suffix}-${safeName}`;
+};
+
+export function validateDmcaAttachmentFile(input: {
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}) {
+  const mimeType = normalizeAttachmentMimeType(input.mimeType);
+  if (!DMCA_ATTACHMENT_ALLOWED_MIME_TYPES.includes(mimeType as typeof DMCA_ATTACHMENT_ALLOWED_MIME_TYPES[number])) {
+    throw new Error("DMCA attachments must be PNG, JPEG, WebP, PDF, or plain text.");
+  }
+  if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0) {
+    throw new Error("DMCA attachment size could not be read.");
+  }
+  if (input.sizeBytes > DMCA_ATTACHMENT_MAX_BYTES) {
+    throw new Error("DMCA attachments must be 10 MB or smaller.");
+  }
+  if (!toText(input.fileName)) throw new Error("DMCA attachment filename is required.");
+}
+
+export function buildDmcaPublicAttachmentObjectPath(input: {
+  attachmentToken: string;
+  caseId: string;
+  fileName: string;
+}) {
+  const caseId = toText(input.caseId);
+  const attachmentToken = toText(input.attachmentToken);
+  if (!caseId) throw new Error("DMCA case id is required before uploading evidence.");
+  if (!attachmentToken) throw new Error("DMCA attachment upload token is missing.");
+  return `public-intake/${caseId}/${attachmentToken}/${buildAttachmentObjectName(input.fileName)}`;
+}
+
+export function buildDmcaCounterNoticeAttachmentObjectPath(input: {
+  caseId: string;
+  counterNoticeId: string;
+  fileName: string;
+  uploaderUserId: string;
+}) {
+  const caseId = toText(input.caseId);
+  const counterNoticeId = toText(input.counterNoticeId);
+  const uploaderUserId = toText(input.uploaderUserId);
+  if (!caseId || !counterNoticeId || !uploaderUserId) {
+    throw new Error("DMCA counter-notice attachment path requires case, counter-notice, and uploader ids.");
+  }
+  return `uploader-counter-notice/${caseId}/${uploaderUserId}/${counterNoticeId}/${buildAttachmentObjectName(input.fileName)}`;
+}
+
+export async function uploadDmcaAttachmentObject(input: {
+  fileData: unknown;
+  mimeType: string;
+  objectPath: string;
+}) {
+  const { error } = await supabase.storage
+    .from(DMCA_EVIDENCE_BUCKET)
+    .upload(input.objectPath, input.fileData as any, {
+      contentType: normalizeAttachmentMimeType(input.mimeType),
+      upsert: false,
+    });
+  if (error) throw error;
+}
+
+export async function submitDmcaAttachmentMetadata(input: {
+  attachmentToken?: string | null;
+  caseId: string;
+  counterNoticeId?: string | null;
+  fileName: string;
+  mimeType: string;
+  objectPath: string;
+  sizeBytes: number;
+  source: "public_notice" | "uploader_counter_notice" | "admin_manual";
+}) {
+  validateDmcaAttachmentFile({
+    fileName: input.fileName,
+    mimeType: input.mimeType,
+    sizeBytes: input.sizeBytes,
+  });
+
+  const { data, error } = await dmcaClient.rpc("submit_dmca_attachment_metadata", {
+    p_payload: {
+      attachmentToken: toText(input.attachmentToken) || null,
+      caseId: toText(input.caseId),
+      counterNoticeId: toText(input.counterNoticeId) || null,
+      fileName: sanitizeAttachmentFilename(input.fileName),
+      mimeType: normalizeAttachmentMimeType(input.mimeType),
+      objectPath: toText(input.objectPath),
+      sizeBytes: Math.trunc(input.sizeBytes),
+      source: input.source,
+    },
+  });
+  if (error) throw error;
+  return parseAttachment(data);
+}
+
+export async function uploadDmcaPublicNoticeAttachment(input: {
+  attachmentToken: string;
+  caseId: string;
+  fileData: unknown;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}) {
+  validateDmcaAttachmentFile(input);
+  const objectPath = buildDmcaPublicAttachmentObjectPath({
+    attachmentToken: input.attachmentToken,
+    caseId: input.caseId,
+    fileName: input.fileName,
+  });
+  await uploadDmcaAttachmentObject({
+    fileData: input.fileData,
+    mimeType: input.mimeType,
+    objectPath,
+  });
+  return submitDmcaAttachmentMetadata({
+    attachmentToken: input.attachmentToken,
+    caseId: input.caseId,
+    fileName: input.fileName,
+    mimeType: input.mimeType,
+    objectPath,
+    sizeBytes: input.sizeBytes,
+    source: "public_notice",
+  });
+}
+
+export async function uploadDmcaCounterNoticeAttachment(input: {
+  caseId: string;
+  counterNoticeId: string;
+  fileData: unknown;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploaderUserId: string;
+}) {
+  validateDmcaAttachmentFile(input);
+  const objectPath = buildDmcaCounterNoticeAttachmentObjectPath({
+    caseId: input.caseId,
+    counterNoticeId: input.counterNoticeId,
+    fileName: input.fileName,
+    uploaderUserId: input.uploaderUserId,
+  });
+  await uploadDmcaAttachmentObject({
+    fileData: input.fileData,
+    mimeType: input.mimeType,
+    objectPath,
+  });
+  return submitDmcaAttachmentMetadata({
+    caseId: input.caseId,
+    counterNoticeId: input.counterNoticeId,
+    fileName: input.fileName,
+    mimeType: input.mimeType,
+    objectPath,
+    sizeBytes: input.sizeBytes,
+    source: "uploader_counter_notice",
+  });
+}
+
+const parseCounterNoticeCase = (row: any): DmcaCounterNoticeCase => ({
+  id: toText(row.id),
+  caseNumber: toText(row.case_number),
+  status: normalizeStatus(row.status),
+  contentType: normalizeDmcaContentType(row.content_type),
+  contentId: toText(row.content_id) || null,
+  contentUrl: toText(row.content_url) || null,
+  publicSafeSummary: toText(row.public_safe_summary) || null,
+  receivedAt: toDateText(row.received_at),
+  existingCounterNoticeCount: Number(row.existing_counter_notice_count ?? 0),
+});
+
+export async function readMyDmcaCounterNoticeCase(caseId: string) {
+  const normalizedCaseId = toText(caseId);
+  if (!normalizedCaseId) throw new Error("Enter the DMCA case id from your uploader notice.");
+
+  const { data, error } = await dmcaClient.rpc("read_my_dmca_counter_notice_case", {
+    p_case_id: normalizedCaseId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return parseCounterNoticeCase(row);
+}
+
+export async function submitUploaderDmcaCounterNotice(input: {
+  caseId: string;
+  submitterName: string;
+  submitterEmail: string;
+  submitterPhone?: string;
+  submitterAddress?: string;
+  removedMaterialDescription: string;
+  removedMaterialUrlOrLocation: string;
+  goodFaithMistakeStatement: boolean;
+  jurisdictionConsentStatement: boolean;
+  serviceAcceptanceStatement: boolean;
+  electronicSignature: string;
+}) {
+  assertText(input.caseId, "DMCA case id is required.");
+  assertText(input.submitterName, "Submitter legal name is required.");
+  assertText(input.submitterEmail, "Submitter email is required.");
+  if (!toText(input.submitterEmail).includes("@")) throw new Error("Enter a valid submitter email.");
+  assertText(input.removedMaterialDescription, "Counter-notice statement is required.");
+  assertText(input.removedMaterialUrlOrLocation, "Content id, URL, or removed location is required.");
+  if (!input.goodFaithMistakeStatement) throw new Error("Confirm the good-faith mistake statement.");
+  if (!input.jurisdictionConsentStatement) throw new Error("Confirm the jurisdiction consent statement.");
+  if (!input.serviceAcceptanceStatement) throw new Error("Confirm service acceptance.");
+  assertText(input.electronicSignature, "Electronic signature is required.");
+
+  const { data, error } = await dmcaClient.rpc("submit_dmca_counter_notice", {
+    p_case_id: toText(input.caseId),
+    p_payload: {
+      electronicSignature: toText(input.electronicSignature),
+      goodFaithMistakeStatement: input.goodFaithMistakeStatement,
+      jurisdictionConsentStatement: input.jurisdictionConsentStatement,
+      removedMaterialDescription: toText(input.removedMaterialDescription),
+      removedMaterialUrlOrLocation: toText(input.removedMaterialUrlOrLocation),
+      serviceAcceptanceStatement: input.serviceAcceptanceStatement,
+      submitterAddress: toText(input.submitterAddress) || null,
+      submitterEmail: toText(input.submitterEmail),
+      submitterName: toText(input.submitterName),
+      submitterPhone: toText(input.submitterPhone) || null,
+    },
+  });
+  if (error) throw error;
+  return parseCounterNotice(data);
 }

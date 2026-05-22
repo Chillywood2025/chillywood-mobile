@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
 import {
   ActivityIndicator,
   Alert,
@@ -13,9 +14,13 @@ import {
 } from "react-native";
 
 import {
+  DMCA_ATTACHMENT_ALLOWED_MIME_TYPES,
+  DMCA_ATTACHMENT_MAX_BYTES,
   DMCA_CONTENT_TYPES,
   submitDmcaNotice,
   type DmcaContentType,
+  uploadDmcaPublicNoticeAttachment,
+  validateDmcaAttachmentFile,
 } from "../_lib/dmca";
 import { LEGAL_SUPPORT_EMAIL } from "../_lib/legalPolicies";
 import { LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
@@ -26,6 +31,13 @@ type ToggleRowProps = {
   active: boolean;
   label: string;
   onPress: () => void;
+};
+
+type PickedAttachment = {
+  name: string;
+  size: number;
+  type: string;
+  uri: string;
 };
 
 function ToggleRow({ active, label, onPress }: ToggleRowProps) {
@@ -59,6 +71,8 @@ export default function CopyrightReportPage() {
   const [electronicSignature, setElectronicSignature] = useState("");
   const [busy, setBusy] = useState(false);
   const [submittedCaseNumber, setSubmittedCaseNumber] = useState<string | null>(null);
+  const [submittedAttachmentCount, setSubmittedAttachmentCount] = useState(0);
+  const [attachments, setAttachments] = useState<PickedAttachment[]>([]);
 
   const workUrls = useMemo(
     () => copyrightedWorkUrls
@@ -68,11 +82,42 @@ export default function CopyrightReportPage() {
     [copyrightedWorkUrls],
   );
 
+  const pickAttachments = async () => {
+    if (busy) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: true,
+        type: [...DMCA_ATTACHMENT_ALLOWED_MIME_TYPES],
+      });
+      if (result.canceled) return;
+      const nextFiles = result.assets.map((asset) => {
+        const picked = {
+          name: asset.name || "dmca-evidence",
+          size: Number(asset.size ?? 0),
+          type: asset.mimeType || "application/octet-stream",
+          uri: asset.uri,
+        };
+        validateDmcaAttachmentFile({
+          fileName: picked.name,
+          mimeType: picked.type,
+          sizeBytes: picked.size,
+        });
+        return picked;
+      });
+      setAttachments((current) => [...current, ...nextFiles].slice(0, 6));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to attach that evidence file.";
+      Alert.alert("Attachments", message);
+    }
+  };
+
   const submitNotice = async () => {
     if (busy) return;
     try {
       setBusy(true);
       setSubmittedCaseNumber(null);
+      setSubmittedAttachmentCount(0);
       const result = await submitDmcaNotice({
         reporterName,
         reporterCompany,
@@ -92,8 +137,32 @@ export default function CopyrightReportPage() {
         accuracyPenaltyPerjuryStatement: accuracyStatement,
         electronicSignature,
       });
+      let uploadedCount = 0;
+      if (attachments.length) {
+        if (!result.id || !result.attachmentToken) {
+          throw new Error("Case was recorded, but the attachment upload token was not returned.");
+        }
+        for (const attachment of attachments) {
+          const fileResponse = await fetch(attachment.uri);
+          const fileData = await fileResponse.arrayBuffer();
+          await uploadDmcaPublicNoticeAttachment({
+            attachmentToken: result.attachmentToken,
+            caseId: result.id,
+            fileData,
+            fileName: attachment.name,
+            mimeType: attachment.type,
+            sizeBytes: attachment.size,
+          });
+          uploadedCount += 1;
+        }
+      }
       setSubmittedCaseNumber(result.caseNumber);
-      Alert.alert("Copyright report received", `Case ${result.caseNumber} has been recorded for review.`);
+      setSubmittedAttachmentCount(uploadedCount);
+      setAttachments([]);
+      Alert.alert(
+        "Copyright report received",
+        `Case ${result.caseNumber} has been recorded for review.${uploadedCount ? ` ${uploadedCount} evidence file${uploadedCount === 1 ? "" : "s"} uploaded for manual malware review.` : ""}`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit this copyright report right now.";
       Alert.alert("Copyright report not submitted", message);
@@ -160,11 +229,39 @@ export default function CopyrightReportPage() {
           <TextInput style={styles.input} value={contentUrl} onChangeText={setContentUrl} placeholder="Chi'llywood URL or location" placeholderTextColor="#7D879E" autoCapitalize="none" />
 
           <Text style={styles.groupTitle}>Attachments</Text>
-          <View style={styles.disabledBox}>
-            <Text style={styles.disabledTitle}>Attachments unavailable</Text>
+          <View style={styles.attachmentBox}>
+            <Text style={styles.disabledTitle}>Evidence files</Text>
             <Text style={styles.disabledText}>
-              DMCA attachment storage, malware scanning, and retention review are not configured for this public form yet. Submit the notice first, then send supporting screenshots, PDFs, or evidence files to {LEGAL_SUPPORT_EMAIL} with the case number.
+              Optional screenshots, PDFs, WebP/JPEG/PNG images, or plain-text notes. Files are private to legal operators. Automated malware scanning is not configured; uploads are marked pending manual review.
             </Text>
+            <TouchableOpacity style={[styles.secondaryButton, busy && styles.disabled]} disabled={busy} onPress={pickAttachments}>
+              <Text style={styles.secondaryButtonText}>Add Evidence Files</Text>
+            </TouchableOpacity>
+            {attachments.length ? (
+              <View style={styles.attachmentList}>
+                {attachments.map((attachment, index) => (
+                  <View key={`${attachment.uri}-${index}`} style={styles.attachmentRow}>
+                    <View style={styles.attachmentCopy}>
+                      <Text style={styles.attachmentName}>{attachment.name}</Text>
+                      <Text style={styles.attachmentMeta}>
+                        {`${attachment.type} · ${(attachment.size / 1024).toFixed(1)} KB`}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      disabled={busy}
+                      onPress={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    >
+                      <Text style={styles.removeButtonText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.disabledText}>
+                No files selected. Maximum {(DMCA_ATTACHMENT_MAX_BYTES / (1024 * 1024)).toFixed(0)} MB per file.
+              </Text>
+            )}
           </View>
 
           <Text style={styles.groupTitle}>Required Statements</Text>
@@ -184,6 +281,11 @@ export default function CopyrightReportPage() {
             <View style={styles.successBox}>
               <Text style={styles.successTitle}>Case recorded</Text>
               <Text style={styles.successText}>{submittedCaseNumber}</Text>
+              <Text style={styles.successMeta}>
+                {submittedAttachmentCount
+                  ? `${submittedAttachmentCount} evidence file${submittedAttachmentCount === 1 ? "" : "s"} uploaded; scan status pending manual review.`
+                  : `No evidence files uploaded. Supporting files can still be sent to ${LEGAL_SUPPORT_EMAIL} with the case number.`}
+              </Text>
             </View>
           ) : null}
 
@@ -325,6 +427,73 @@ const styles = StyleSheet.create({
   successText: {
     color: "#F4F7FC",
     fontSize: 14,
+    fontWeight: "900",
+  },
+  successMeta: {
+    color: "#DFFBEA",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  attachmentBox: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    gap: 10,
+  },
+  attachmentList: {
+    gap: 8,
+  },
+  attachmentRow: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+  },
+  attachmentCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  attachmentName: {
+    color: "#F4F7FC",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  attachmentMeta: {
+    color: "#98A4BA",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  secondaryButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+  },
+  secondaryButtonText: {
+    color: "#F4F7FC",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  removeButton: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  removeButtonText: {
+    color: "#FFE6EB",
+    fontSize: 11,
     fontWeight: "900",
   },
   disabledBox: {

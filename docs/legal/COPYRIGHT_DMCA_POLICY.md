@@ -74,7 +74,7 @@ A counter-notice should include:
 
 After a proper counter-notice, the rightsholder may need to file legal action to keep the content down. Timing and reinstatement rules must be confirmed by legal counsel.
 
-Current tooling lets Admin record a counter-notice received through Support, record forwarding to the claimant, store the 10-14 business-day response window, record a court action notice, and mark a case eligible for restore after review. Court-action notices block restore eligibility and restore actions in the backed Admin workflow. A direct uploader-facing counter-notice submission route is not yet public.
+Current tooling lets Admin record a counter-notice received through Support, record forwarding to the claimant, store the 10-14 business-day response window, record a court action notice, and mark a case eligible for restore after review. Court-action notices block restore eligibility and restore actions in the backed Admin workflow. Authenticated uploaders also have a self-service counter-notice route for cases tied to their own account; the backed RPC denies other users' cases and optional evidence attachments remain private for Admin/legal review.
 
 ## 6. Repeat Infringer Policy
 
