@@ -15,6 +15,8 @@ import {
 } from "react-native";
 import {
   DEFAULT_APP_CONFIG,
+  APP_CONFIG_GLOBAL_KEY,
+  APP_CONFIG_TABLE,
   getThemePresetPalette,
   readAppConfig,
   saveAppConfig,
@@ -315,6 +317,58 @@ type AdminDashboardCard = {
   body: string;
   tone?: "default" | "unavailable";
   destination?: OperatorTabKey;
+};
+
+type AdminHomeTone = "default" | "success" | "danger" | "manual" | "locked" | "info";
+type AdminHomeTruthQualifier =
+  | "Backed"
+  | "Connected"
+  | "Foundation Only"
+  | "Observe Only"
+  | "DB Estimate"
+  | "Not Connected"
+  | "Read Only"
+  | "Manual Review Required"
+  | "Queue Ready";
+
+type AdminHomeSignalTile = {
+  label: string;
+  value: string;
+  body: string;
+  qualifier: AdminHomeTruthQualifier;
+  tone: AdminHomeTone;
+  destination?: OperatorTabKey;
+};
+
+type AdminHomeAttentionItem = {
+  label: string;
+  value: string;
+  body: string;
+  priorityLabel: string;
+  tone: AdminHomeTone;
+  destination?: OperatorTabKey;
+};
+
+type AdminHomeBoundaryItem = {
+  label: string;
+  body: string;
+  proofLabel: string;
+  tone: AdminHomeTone;
+};
+
+type AdminHomeActivityItem = {
+  id: string;
+  title: string;
+  meta: string;
+  target: string;
+  tone: AdminHomeTone;
+};
+
+type AdminHomeQuickAction = {
+  label: string;
+  body: string;
+  destination: OperatorTabKey;
+  tone: AdminHomeTone;
 };
 
 type ReportTargetModerationStatus = "hidden" | "removed" | "clean";
@@ -1647,6 +1701,26 @@ const formatAdminV1Count = (value: number | null, loading: boolean) => {
   return value === null ? "Not connected yet" : String(value);
 };
 
+const formatHomeCount = (value: number | null | undefined, loading: boolean) => {
+  if (loading) return "Loading";
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : "Not Connected";
+};
+
+const getLatestHomeTimestamp = (values: Array<string | null | undefined>) => {
+  const latest = values
+    .map((value) => {
+      const parsed = Date.parse(String(value ?? ""));
+      return Number.isFinite(parsed) && parsed > 0 ? { parsed, value: String(value) } : null;
+    })
+    .filter((entry): entry is { parsed: number; value: string } => !!entry)
+    .sort((left, right) => right.parsed - left.parsed)[0];
+  return latest?.value ?? null;
+};
+
+const isLiveCostAttentionSeverity = (severity: string) => (
+  severity === "warning" || severity === "high" || severity === "critical" || severity === "emergency"
+);
+
 const formatProviderUsageStatusLabel = (status: AdminProviderUsageImportStatus["status"]) => {
   if (status === "connected") return "Connected";
   if (status === "partial") return "Partial";
@@ -2802,230 +2876,535 @@ export default function AdminStudioScreen() {
     }, {});
   }, [liveOpsAudits]);
 
-  const adminDashboardCards = useMemo<readonly AdminDashboardCard[]>(() => {
-    const activeRoleLabels = platformRoles.length
-      ? platformRoles.map((membership) => formatModerationToken(membership.role)).join(" · ")
-      : formatModerationToken(resolvedActorRole);
-    const recentReportValue = canReviewSafetyReports
-      ? String(safetyReportQueueSummary?.totalReports ?? safetyReports.length)
-      : "Locked";
-    const dmcaValue = canAccessDmca
-      ? dmcaCasesLoading
+  const homeLastCheckedAt = useMemo(() => getLatestHomeTimestamp([
+    safetyReportsLastLoadedAt,
+    dmcaCases[0]?.updatedAt,
+    adminV1ReadModel.generatedAt,
+    adminFinanceReadModel.generatedAt,
+    adminImmutableAuditReadModel.generatedAt,
+    liveCostGuardSettingsForm.updatedAt,
+    liveCostGuardEvents[0]?.createdAt,
+    liveOpsIncidents[0]?.updatedAt,
+  ]), [
+    adminFinanceReadModel.generatedAt,
+    adminImmutableAuditReadModel.generatedAt,
+    adminV1ReadModel.generatedAt,
+    dmcaCases,
+    liveCostGuardEvents,
+    liveCostGuardSettingsForm.updatedAt,
+    liveOpsIncidents,
+    safetyReportsLastLoadedAt,
+  ]);
+
+  const homeRefreshing = platformRoleCheckPending
+    || safetyReportsLoading
+    || dmcaCasesLoading
+    || configLoading
+    || adminV1ReadModel.loading
+    || adminFinanceReadModel.loading
+    || adminImmutableAuditReadModel.loading
+    || liveCostGuardLoading
+    || liveOpsLoading;
+
+  const recentReportsNeedsReview = safetyReportQueueConnected
+    ? safetyReportQueueSummary?.needsReviewCount ?? 0
+    : null;
+  const recentReportsCriticalHigh = safetyReportQueueConnected
+    ? safetyReportQueueSummary?.criticalHighRiskCount ?? null
+    : null;
+  const dmcaOpenHomeCount = canAccessDmca && dmcaCaseSummary ? dmcaCaseSummary.open : null;
+  const dmcaPriorityHomeCount = canAccessDmca && dmcaCaseSummary ? dmcaCaseSummary.priority : null;
+  const liveOpsConnected = !!liveOpsReadModel?.connected;
+  const liveCostGuardConnected = !!liveCostGuardSettingsReadModel?.connected;
+  const liveCostGuardNeedsReview = isLiveCostAttentionSeverity(liveCostGuardSnapshot.activeSeverity);
+  const appConfigNotConnected = !configLoading && !appConfigConnected;
+  const immutableAuditNotConnected = !adminImmutableAuditReadModel.loading && !adminImmutableAuditReadModel.connected;
+  const reportQueueNotConnected = canReviewSafetyReports && !safetyReportsLoading && !safetyReportQueueConnected;
+  const dmcaNotConnected = canAccessDmca && !dmcaCasesLoading && !dmcaCaseSummary;
+  const liveOpsNotConnected = canAccessLiveOps && !liveOpsLoading && !liveOpsConnected;
+
+  const homeCommandStatus = useMemo(() => {
+    const manualReviewRequired = notice?.type === "error"
+      || (recentReportsCriticalHigh !== null && recentReportsCriticalHigh > 0)
+      || liveOpsHighestRisk === "critical"
+      || liveCostGuardSnapshot.activeSeverity === "critical"
+      || liveCostGuardSnapshot.activeSeverity === "emergency";
+    const needsAttention = (recentReportsNeedsReview !== null && recentReportsNeedsReview > 0)
+      || (dmcaPriorityHomeCount !== null && dmcaPriorityHomeCount > 0)
+      || liveOpsOpenCount > 0
+      || liveCostGuardNeedsReview
+      || !!moderationNotice
+      || !!dmcaNotice
+      || !!adminOpsNotice;
+    const partialVisibility = appConfigNotConnected
+      || immutableAuditNotConnected
+      || reportQueueNotConnected
+      || dmcaNotConnected
+      || liveOpsNotConnected
+      || adminV1ReadModel.premiumActiveCount === null
+      || adminV1ReadModel.activeLiveRoomCount === null
+      || adminV1ReadModel.activeWatchPartyCount === null
+      || adminV1ReadModel.uploadsTodayCount === null;
+
+    if (homeRefreshing) {
+      return {
+        body: "Refreshing backed admin queries and foundation readouts.",
+        label: "Partial Visibility",
+        tone: "info" as AdminHomeTone,
+      };
+    }
+    if (manualReviewRequired) {
+      return {
+        body: "One or more backed signals requires owner/operator review before this can be called calm.",
+        label: "Manual Review Required",
+        tone: "danger" as AdminHomeTone,
+      };
+    }
+    if (needsAttention) {
+      return {
+        body: "Backed queues or observe-only operations have pending work to review.",
+        label: "Needs Attention",
+        tone: "manual" as AdminHomeTone,
+      };
+    }
+    if (partialVisibility) {
+      return {
+        body: "No urgent queue is visible, but at least one source is not connected or remains estimate/foundation only.",
+        label: "Partial Visibility",
+        tone: "manual" as AdminHomeTone,
+      };
+    }
+    return {
+      body: "Backed admin signals are quiet, with foundation-only systems still labeled below.",
+      label: "Stable",
+      tone: "success" as AdminHomeTone,
+    };
+  }, [
+    adminOpsNotice,
+    adminV1ReadModel.activeLiveRoomCount,
+    adminV1ReadModel.activeWatchPartyCount,
+    adminV1ReadModel.premiumActiveCount,
+    adminV1ReadModel.uploadsTodayCount,
+    appConfigNotConnected,
+    dmcaNotConnected,
+    dmcaNotice,
+    dmcaPriorityHomeCount,
+    homeRefreshing,
+    immutableAuditNotConnected,
+    liveCostGuardNeedsReview,
+    liveCostGuardSnapshot.activeSeverity,
+    liveOpsHighestRisk,
+    liveOpsNotConnected,
+    liveOpsOpenCount,
+    moderationNotice,
+    notice,
+    recentReportsCriticalHigh,
+    recentReportsNeedsReview,
+    reportQueueNotConnected,
+  ]);
+
+  const homeSnapshotMetrics = useMemo<readonly AdminHomeSignalTile[]>(() => {
+    const reportValue = !canReviewSafetyReports
+      ? "Locked"
+      : formatHomeCount(recentReportsNeedsReview, safetyReportsLoading);
+    const dmcaValue = !canAccessDmca
+      ? "Locked"
+      : formatHomeCount(dmcaOpenHomeCount, dmcaCasesLoading);
+    const liveOpsValue = !canAccessLiveOps
+      ? "Locked"
+      : liveOpsLoading
         ? "Loading"
-        : String(dmcaCases.length)
-      : "Locked";
-    const creatorVideoValue = canManagePrivilegedWrites ? "Ready" : "Locked";
-    const appConfigValue = configLoading ? "Loading" : appConfigConnected ? "Connected" : "Not connected yet";
-    const premiumValue = formatAdminV1Count(adminV1ReadModel.premiumActiveCount, adminV1ReadModel.loading);
-    const activeLiveValue = formatAdminV1Count(adminV1ReadModel.activeLiveRoomCount, adminV1ReadModel.loading);
-    const activeWatchPartyValue = formatAdminV1Count(adminV1ReadModel.activeWatchPartyCount, adminV1ReadModel.loading);
-    const uploadsTodayValue = formatAdminV1Count(adminV1ReadModel.uploadsTodayCount, adminV1ReadModel.loading);
-    const immutableAuditValue = adminImmutableAuditReadModel.loading
+        : liveOpsConnected
+          ? String(liveOpsOpenCount)
+          : "Not Connected";
+    const auditValue = adminImmutableAuditReadModel.loading
       ? "Loading"
       : adminImmutableAuditReadModel.connected
         ? "Connected"
-        : "Not connected yet";
-    const financeLedgerValue = adminFinanceReadModel.loading
-      ? "Loading"
-      : adminFinanceReadModel.financeLedgerEventCount === null
-        ? "Money not connected yet"
-        : `${adminFinanceReadModel.financeLedgerEventCount} ledger event${adminFinanceReadModel.financeLedgerEventCount === 1 ? "" : "s"}`;
-    const payoutLedgerValue = adminFinanceReadModel.loading
-      ? "Loading"
-      : adminFinanceReadModel.creatorPayoutLedgerEntryCount === null
-        ? "Not active yet"
-        : `${adminFinanceReadModel.creatorPayoutLedgerEntryCount} ledger entr${adminFinanceReadModel.creatorPayoutLedgerEntryCount === 1 ? "y" : "ies"}`;
-    const networkLedgerValue = adminFinanceReadModel.loading
-      ? "Loading"
-      : adminFinanceReadModel.networkBillingAccountCount === null
-        ? "Not active yet"
-        : `${adminFinanceReadModel.networkBillingAccountCount} account / ${adminFinanceReadModel.networkPlanRecordCount ?? 0} plan foundation`;
-    const sponsorLedgerValue = adminFinanceReadModel.loading
-      ? "Loading"
-      : adminFinanceReadModel.sponsorBrandRecordCount === null || adminFinanceReadModel.sponsorDealRecordCount === null
-        ? "Not active yet"
-        : `${adminFinanceReadModel.sponsorBrandRecordCount} brand${adminFinanceReadModel.sponsorBrandRecordCount === 1 ? "" : "s"} / ${adminFinanceReadModel.sponsorDealRecordCount} deal${adminFinanceReadModel.sponsorDealRecordCount === 1 ? "" : "s"}`;
-    const fraudFoundationValue = adminFinanceReadModel.loading
-      ? "Loading"
-      : adminFinanceReadModel.platformFraudHoldCount === null
-        ? "Not connected yet"
-        : `${adminFinanceReadModel.platformFraudHoldCount} hold${adminFinanceReadModel.platformFraudHoldCount === 1 ? "" : "s"} / ${adminFinanceReadModel.fraudReasonRecordCount ?? 0} reason${adminFinanceReadModel.fraudReasonRecordCount === 1 ? "" : "s"}`;
+        : "Not Connected";
 
     return [
       {
         label: "Recent Reports",
-        value: recentReportValue,
-        body: canReviewSafetyReports
-          ? "Recent safety reports are available from backed report intake. First-class open/resolved status is not connected yet."
-          : "Report review requires active platform role membership.",
-        tone: canReviewSafetyReports ? "default" : "unavailable",
-        destination: "reports",
+        value: reportValue,
+        body: safetyReportQueueConnected
+          ? "Backed needs-review count from safety_reports."
+          : canReviewSafetyReports
+            ? "Queue count appears only after the report query succeeds."
+            : "Report review is hidden without backed staff permission.",
+        qualifier: safetyReportQueueConnected ? "Backed" : canReviewSafetyReports ? "Not Connected" : "Read Only",
+        tone: !canReviewSafetyReports
+          ? "locked"
+          : safetyReportsLoading
+            ? "info"
+            : recentReportsCriticalHigh !== null && recentReportsCriticalHigh > 0
+              ? "danger"
+              : recentReportsNeedsReview !== null && recentReportsNeedsReview > 0
+                ? "manual"
+                : safetyReportQueueConnected
+                  ? "success"
+                  : "locked",
+        destination: canReviewSafetyReports ? "reports" : undefined,
       },
       {
-        label: "DMCA Cases",
+        label: "Open DMCA Cases",
         value: dmcaValue,
-        body: canAccessDmca
-          ? "Formal copyright cases, takedown actions, counter-notices, strikes, and functional case history are available."
-          : "DMCA requires Owner or Admin/Operator with dmca_review, copyright_review, or legal_review.",
-        tone: canAccessDmca ? "default" : "unavailable",
-        destination: "dmca",
+        body: dmcaCaseSummary
+          ? "Backed open status count from dmca_cases."
+          : canAccessDmca
+            ? "Case count appears only after the DMCA query succeeds."
+            : "Copyright case access requires scoped owner/admin truth.",
+        qualifier: dmcaCaseSummary ? "Backed" : canAccessDmca ? "Not Connected" : "Read Only",
+        tone: !canAccessDmca
+          ? "locked"
+          : dmcaCasesLoading
+            ? "info"
+            : dmcaPriorityHomeCount !== null && dmcaPriorityHomeCount > 0
+              ? "manual"
+              : dmcaOpenHomeCount !== null
+                ? "success"
+                : "locked",
+        destination: canAccessDmca ? "dmca" : undefined,
       },
       {
-        label: "Creator Video Safety",
-        value: creatorVideoValue,
-        body: canManagePrivilegedWrites
-          ? "Hide, remove, and restore actions are available with confirmation and audit reason."
-          : "Manual creator-video safety writes require backend owner/operator role truth.",
-        tone: canManagePrivilegedWrites ? "default" : "unavailable",
-        destination: "content",
+        label: "Open Live Ops Items",
+        value: liveOpsValue,
+        body: liveOpsConnected
+          ? "Owner/operator fix cards from the backend proxy."
+          : canAccessLiveOps
+            ? "Fix Center is unavailable until the backend proxy responds."
+            : "Live Ops is scoped to Owner or live_ops permission.",
+        qualifier: liveOpsConnected ? "Connected" : canAccessLiveOps ? "Not Connected" : "Read Only",
+        tone: !canAccessLiveOps
+          ? "locked"
+          : liveOpsLoading
+            ? "info"
+            : liveOpsConnected && liveOpsOpenCount > 0
+              ? "manual"
+              : liveOpsConnected
+                ? "success"
+                : "locked",
+        destination: canAccessLiveOps ? "live-ops-fix-center" : undefined,
       },
       {
-        label: "Operator Role",
-        value: activeRoleLabels,
-        body: "This surface requires backend platform-role membership. Local helper state never unlocks operator controls.",
-        destination: "roles",
-      },
-      {
-        label: "Immutable Audit",
-        value: immutableAuditValue,
+        label: "Audit / Command Health",
+        value: auditValue,
         body: adminImmutableAuditReadModel.connected
-          ? "Immutable admin audit log foundation is connected. Audit rows are append-only and dangerous money/fraud actions remain inactive."
-          : "Immutable admin audit logs are not connected yet.",
-        tone: adminImmutableAuditReadModel.connected ? "default" : "unavailable",
+          ? "Immutable audit rows are readable; Home actions remain drill-down only."
+          : "Audit health is unavailable until immutable audit query succeeds.",
+        qualifier: adminImmutableAuditReadModel.connected ? "Connected" : "Not Connected",
+        tone: adminImmutableAuditReadModel.loading
+          ? "info"
+          : adminImmutableAuditReadModel.connected
+            ? "success"
+            : "locked",
         destination: "audit",
-      },
-      {
-        label: "Ops Alerts",
-        value: "Safety gate",
-        body: "Alertmanager automation jobs stay backend-owned, dry-run-first, and approval-gated. Mobile Admin visibility is read-only until a secure server-side proxy exists.",
-        destination: "ops-alerts",
-      },
-      {
-        label: "Live Cost Guard",
-        value: canAccessLiveOps
-          ? liveCostGuardSettingsReadModel?.connected
-            ? formatModerationToken(liveCostGuardSettingsForm.mode)
-            : "Not connected yet"
-          : "Locked",
-        body: canAccessLiveOps
-          ? "Owner/live_ops LiveKit/TURN cost guard. Default observe-only mode does not kick users, throttle rooms, or change live behavior."
-          : "Live Cost Guard requires Owner or live_ops permission truth.",
-        tone: canAccessLiveOps && liveCostGuardSettingsReadModel?.connected ? "default" : "unavailable",
-        destination: canAccessLiveOps ? "live-cost-guard" : undefined,
-      },
-      {
-        label: "Live Ops Fix Center",
-        value: canManagePrivilegedWrites
-          ? liveOpsReadModel?.connected
-            ? `${liveOpsOpenCount} open`
-            : "Not connected yet"
-          : "Locked",
-        body: canManagePrivilegedWrites
-          ? "Owner/operator-approved remediation cards for Live Stage, Watch-Party Live, and chat-call reliability. Actions stay server-side, dry-run-first, and audited."
-          : "Live Ops remediation requires active owner/operator role truth.",
-        tone: canManagePrivilegedWrites && liveOpsReadModel?.connected ? "default" : "unavailable",
-        destination: canManagePrivilegedWrites ? "live-ops-fix-center" : undefined,
-      },
-      {
-        label: "App Config",
-        value: appConfigValue,
-        body: appConfigConnected
-          ? "Current app configuration loaded through the existing app_configurations foundation."
-          : "Admin can render with defaults, but app config is not confirmed connected yet.",
-        tone: appConfigConnected ? "default" : "unavailable",
-        destination: "system",
-      },
-      {
-        label: "Premium Entitlements",
-        value: premiumValue,
-        body: adminV1ReadModel.premiumActiveCount === null
-          ? "Entitlement counts are not connected yet."
-          : "Active Premium count comes from user_entitlements only, not subscription money.",
-        tone: adminV1ReadModel.premiumActiveCount === null ? "unavailable" : "default",
-        destination: "premium",
-      },
-      {
-        label: "Active Live Rooms",
-        value: activeLiveValue,
-        body: adminV1ReadModel.activeLiveRoomCount === null
-          ? "Live usage is not connected yet."
-          : "DB estimate from active live room records. This is not LiveKit truth.",
-        tone: adminV1ReadModel.activeLiveRoomCount === null ? "unavailable" : "default",
-        destination: "usage",
-      },
-      {
-        label: "Active Watch-Parties",
-        value: activeWatchPartyValue,
-        body: adminV1ReadModel.activeWatchPartyCount === null
-          ? "Watch-party usage is not connected yet."
-          : "DB estimate from active title/watch-party room records.",
-        tone: adminV1ReadModel.activeWatchPartyCount === null ? "unavailable" : "default",
-        destination: "usage",
-      },
-      {
-        label: "Uploads Today",
-        value: uploadsTodayValue,
-        body: adminV1ReadModel.uploadsTodayCount === null
-          ? "Upload counts are not connected yet."
-          : "Count comes from creator video records created today.",
-        tone: adminV1ReadModel.uploadsTodayCount === null ? "unavailable" : "default",
-        destination: "usage",
-      },
-      {
-        label: "Ads Foundation",
-        value: "Foundation only",
-        body: "Placeholder provider and launch cap defaults are defined, but ads remain disabled and no ad SDK is integrated here.",
-        tone: "unavailable",
-        destination: "ads",
-      },
-      {
-        label: "Revenue",
-        value: financeLedgerValue,
-        body: adminFinanceReadModel.financeLedgerEventCount === null
-          ? "Premium entitlement counts may be visible, but subscription money and ad money are not backed here."
-          : "Finance ledger foundation can be read. Admin still shows counts only, not money totals.",
-        tone: adminFinanceReadModel.financeLedgerEventCount === null ? "unavailable" : "default",
-        destination: "revenue",
-      },
-      {
-        label: "Payouts",
-        value: payoutLedgerValue,
-        body: "Creator payouts are not active yet. Ledger rows are not payout execution.",
-        tone: adminFinanceReadModel.creatorPayoutLedgerEntryCount === null ? "unavailable" : "default",
-        destination: "payouts",
-      },
-      {
-        label: "Networks",
-        value: networkLedgerValue,
-        body: "Network plans are not active yet. Billing account records are foundation only.",
-        tone: adminFinanceReadModel.networkBillingAccountCount === null ? "unavailable" : "default",
-        destination: "networks",
-      },
-      {
-        label: "Sponsors",
-        value: sponsorLedgerValue,
-        body: "Sponsor tools are not active yet. Sponsor records do not create checkout, payment links, approvals, or payouts.",
-        tone: adminFinanceReadModel.sponsorBrandRecordCount === null || adminFinanceReadModel.sponsorDealRecordCount === null ? "unavailable" : "default",
-        destination: "sponsors",
-      },
-      {
-        label: "Fraud",
-        value: fraudFoundationValue,
-        body: "Fraud holds are not connected yet. Counts are foundation-only and do not enforce account, monetization, upload, live, or payout restrictions.",
-        tone: adminFinanceReadModel.platformFraudHoldCount === null ? "unavailable" : "default",
-        destination: "fraud",
       },
     ];
   }, [
-    adminFinanceReadModel.creatorPayoutLedgerEntryCount,
-    adminFinanceReadModel.financeLedgerEventCount,
-    adminFinanceReadModel.loading,
-    adminFinanceReadModel.networkBillingAccountCount,
-    adminFinanceReadModel.networkPlanRecordCount,
-    adminFinanceReadModel.fraudReasonRecordCount,
-    adminFinanceReadModel.platformFraudHoldCount,
-    adminFinanceReadModel.sponsorBrandRecordCount,
-    adminFinanceReadModel.sponsorDealRecordCount,
+    adminImmutableAuditReadModel.connected,
+    adminImmutableAuditReadModel.loading,
+    canAccessDmca,
+    canAccessLiveOps,
+    canReviewSafetyReports,
+    dmcaCaseSummary,
+    dmcaCasesLoading,
+    dmcaOpenHomeCount,
+    dmcaPriorityHomeCount,
+    liveOpsConnected,
+    liveOpsLoading,
+    liveOpsOpenCount,
+    recentReportsCriticalHigh,
+    recentReportsNeedsReview,
+    safetyReportQueueConnected,
+    safetyReportsLoading,
+  ]);
+
+  const homeAttentionItems = useMemo<readonly AdminHomeAttentionItem[]>(() => {
+    const rows: AdminHomeAttentionItem[] = [];
+
+    if (canReviewSafetyReports && recentReportsNeedsReview !== null && recentReportsNeedsReview > 0) {
+      rows.push({
+        body: recentReportsCriticalHigh !== null && recentReportsCriticalHigh > 0
+          ? "Critical/high-risk reports are present in the backed queue."
+          : "Reports are waiting in the backed recent review queue.",
+        destination: "reports",
+        label: "Recent reports awaiting review",
+        priorityLabel: recentReportsCriticalHigh !== null && recentReportsCriticalHigh > 0 ? "High" : "Review",
+        tone: recentReportsCriticalHigh !== null && recentReportsCriticalHigh > 0 ? "danger" : "manual",
+        value: String(recentReportsNeedsReview),
+      });
+    }
+
+    if (canAccessDmca && dmcaPriorityHomeCount !== null && dmcaPriorityHomeCount > 0) {
+      rows.push({
+        body: "Priority DMCA states or repeat-infringer review need legal/copyright attention.",
+        destination: "dmca",
+        label: "DMCA priority queue",
+        priorityLabel: "Legal",
+        tone: "manual",
+        value: String(dmcaPriorityHomeCount),
+      });
+    }
+
+    if (canAccessLiveOps && liveOpsConnected && liveOpsOpenCount > 0) {
+      rows.push({
+        body: "Owner/operator-approved live reliability cards are waiting. Home only links to review.",
+        destination: "live-ops-fix-center",
+        label: "Open live ops items",
+        priorityLabel: liveOpsHighestRisk === "critical" || liveOpsHighestRisk === "high" ? "High" : "Review",
+        tone: liveOpsHighestRisk === "critical" || liveOpsHighestRisk === "high" ? "danger" : "manual",
+        value: `${liveOpsOpenCount} open`,
+      });
+    }
+
+    if (liveCostGuardNeedsReview && canAccessLiveOps) {
+      rows.push({
+        body: "Cost pressure is observe-only unless a backed operator action is reviewed in the guard tab.",
+        destination: "live-cost-guard",
+        label: "Live Cost Guard signal",
+        priorityLabel: "Observe",
+        tone: liveCostGuardSnapshot.activeSeverity === "critical" || liveCostGuardSnapshot.activeSeverity === "emergency"
+          ? "danger"
+          : "manual",
+        value: formatModerationToken(liveCostGuardSnapshot.activeSeverity),
+      });
+    }
+
+    if (appConfigNotConnected) {
+      rows.push({
+        body: "Home is using local normalized defaults until app_configurations confirms a connected read.",
+        destination: "system",
+        label: "App config not connected",
+        priorityLabel: "Partial",
+        tone: "locked",
+        value: "Not Connected",
+      });
+    }
+
+    if (immutableAuditNotConnected) {
+      rows.push({
+        body: "Recent Signals cannot show immutable audit activity until the audit table query succeeds.",
+        destination: "audit",
+        label: "Immutable audit missing",
+        priorityLabel: "Visibility",
+        tone: "locked",
+        value: "Not Connected",
+      });
+    }
+
+    if (reportQueueNotConnected) {
+      rows.push({
+        body: "Report queue access is role-gated and failed closed in this session.",
+        destination: "reports",
+        label: "Report queue source",
+        priorityLabel: "Visibility",
+        tone: "locked",
+        value: "Not Connected",
+      });
+    }
+
+    if (dmcaNotConnected) {
+      rows.push({
+        body: "DMCA case summary is unavailable; the Home tab will not show a zero count.",
+        destination: "dmca",
+        label: "DMCA source",
+        priorityLabel: "Visibility",
+        tone: "locked",
+        value: "Not Connected",
+      });
+    }
+
+    if (liveOpsNotConnected) {
+      rows.push({
+        body: "Live Ops Fix Center proxy did not return a connected incident list.",
+        destination: "live-ops-fix-center",
+        label: "Live Ops source",
+        priorityLabel: "Visibility",
+        tone: "locked",
+        value: "Not Connected",
+      });
+    }
+
+    if (notice?.type === "error") {
+      rows.push({
+        body: notice.text,
+        label: "Admin error",
+        priorityLabel: "Manual",
+        tone: "danger",
+        value: "Review",
+      });
+    }
+
+    if (moderationNotice) {
+      rows.push({
+        body: moderationNotice,
+        destination: "reports",
+        label: "Moderation notice",
+        priorityLabel: "Manual",
+        tone: "manual",
+        value: "Review",
+      });
+    }
+
+    if (dmcaNotice) {
+      rows.push({
+        body: dmcaNotice,
+        destination: "dmca",
+        label: "DMCA notice",
+        priorityLabel: "Manual",
+        tone: "manual",
+        value: "Review",
+      });
+    }
+
+    if (adminOpsNotice) {
+      rows.push({
+        body: adminOpsNotice,
+        destination: "audit",
+        label: "Admin ops notice",
+        priorityLabel: "Manual",
+        tone: "manual",
+        value: "Review",
+      });
+    }
+
+    return rows;
+  }, [
+    adminOpsNotice,
+    appConfigNotConnected,
+    canAccessDmca,
+    canAccessLiveOps,
+    canReviewSafetyReports,
+    dmcaNotConnected,
+    dmcaNotice,
+    dmcaPriorityHomeCount,
+    immutableAuditNotConnected,
+    liveCostGuardNeedsReview,
+    liveCostGuardSnapshot.activeSeverity,
+    liveOpsConnected,
+    liveOpsHighestRisk,
+    liveOpsNotConnected,
+    liveOpsOpenCount,
+    moderationNotice,
+    notice,
+    recentReportsCriticalHigh,
+    recentReportsNeedsReview,
+    reportQueueNotConnected,
+  ]);
+
+  const homeSystemTiles = useMemo<readonly AdminHomeSignalTile[]>(() => [
+    {
+      label: "Immutable Audit",
+      value: adminImmutableAuditReadModel.loading
+        ? "Loading"
+        : adminImmutableAuditReadModel.connected
+          ? "Connected"
+          : "Not Connected",
+      body: adminImmutableAuditReadModel.connected
+        ? "Append-only audit rows are readable."
+        : "Audit table read failed or is unavailable.",
+      qualifier: adminImmutableAuditReadModel.connected ? "Connected" : "Not Connected",
+      tone: adminImmutableAuditReadModel.loading ? "info" : adminImmutableAuditReadModel.connected ? "success" : "locked",
+      destination: "audit",
+    },
+    {
+      label: "Safety Gate",
+      value: !canReviewSafetyReports
+        ? "Locked"
+        : safetyReportsLoading
+          ? "Loading"
+          : safetyReportQueueConnected
+            ? "Queue Ready"
+            : "Not Connected",
+      body: safetyReportQueueConnected
+        ? "Reports are backed by role-gated safety_reports queries."
+        : "Safety review remains fail-closed when role or queue proof is missing.",
+      qualifier: safetyReportQueueConnected ? "Queue Ready" : canReviewSafetyReports ? "Manual Review Required" : "Read Only",
+      tone: !canReviewSafetyReports ? "locked" : safetyReportsLoading ? "info" : safetyReportQueueConnected ? "success" : "manual",
+      destination: canReviewSafetyReports ? "reports" : undefined,
+    },
+    {
+      label: "Live Cost Guard",
+      value: !canAccessLiveOps
+        ? "Locked"
+        : liveCostGuardLoading
+          ? "Loading"
+          : liveCostGuardConnected
+            ? liveCostGuardSettingsForm.mode === "observe_only"
+              ? "Observe Only"
+              : formatModerationToken(liveCostGuardSettingsForm.mode)
+            : "Not Connected",
+      body: liveCostGuardConnected
+        ? "Metrics are not LiveKit billing truth; remediation stays reviewed in the guard tab."
+        : "Cost guard settings/events are unavailable.",
+      qualifier: liveCostGuardConnected ? "Observe Only" : canAccessLiveOps ? "Not Connected" : "Read Only",
+      tone: !canAccessLiveOps ? "locked" : liveCostGuardLoading ? "info" : liveCostGuardNeedsReview ? "manual" : liveCostGuardConnected ? "success" : "locked",
+      destination: canAccessLiveOps ? "live-cost-guard" : undefined,
+    },
+    {
+      label: "Live Ops Fix Center",
+      value: !canAccessLiveOps
+        ? "Locked"
+        : liveOpsLoading
+          ? "Loading"
+          : liveOpsConnected
+            ? `${liveOpsOpenCount} open`
+            : "Not Connected",
+      body: "Incident cards are approval-gated drill-downs, not Home remediation controls.",
+      qualifier: liveOpsConnected ? "Connected" : canAccessLiveOps ? "Not Connected" : "Read Only",
+      tone: !canAccessLiveOps ? "locked" : liveOpsLoading ? "info" : liveOpsConnected && liveOpsOpenCount > 0 ? "manual" : liveOpsConnected ? "success" : "locked",
+      destination: canAccessLiveOps ? "live-ops-fix-center" : undefined,
+    },
+    {
+      label: "App Config",
+      value: configLoading ? "Loading" : appConfigConnected ? "Connected" : "Not Connected",
+      body: "Current config uses the existing app_configurations read path.",
+      qualifier: appConfigConnected ? "Connected" : "Not Connected",
+      tone: configLoading ? "info" : appConfigConnected ? "success" : "locked",
+      destination: "system",
+    },
+    {
+      label: "Premium Entitlements",
+      value: formatHomeCount(adminV1ReadModel.premiumActiveCount, adminV1ReadModel.loading),
+      body: "Count comes from active user_entitlements only, not subscription revenue.",
+      qualifier: adminV1ReadModel.premiumActiveCount === null ? "Not Connected" : "Backed",
+      tone: adminV1ReadModel.loading ? "info" : adminV1ReadModel.premiumActiveCount === null ? "locked" : "success",
+      destination: "premium",
+    },
+    {
+      label: "Active Live Rooms",
+      value: formatHomeCount(adminV1ReadModel.activeLiveRoomCount, adminV1ReadModel.loading),
+      body: "Fresh active watch_party_rooms live rows. This is not LiveKit server truth.",
+      qualifier: adminV1ReadModel.activeLiveRoomCount === null ? "Not Connected" : "DB Estimate",
+      tone: adminV1ReadModel.loading ? "info" : adminV1ReadModel.activeLiveRoomCount === null ? "locked" : "manual",
+      destination: "usage",
+    },
+    {
+      label: "Active Watch-Parties",
+      value: formatHomeCount(adminV1ReadModel.activeWatchPartyCount, adminV1ReadModel.loading),
+      body: "Fresh active title-room rows. This is a database estimate.",
+      qualifier: adminV1ReadModel.activeWatchPartyCount === null ? "Not Connected" : "DB Estimate",
+      tone: adminV1ReadModel.loading ? "info" : adminV1ReadModel.activeWatchPartyCount === null ? "locked" : "manual",
+      destination: "usage",
+    },
+    {
+      label: "Uploads Today",
+      value: formatHomeCount(adminV1ReadModel.uploadsTodayCount, adminV1ReadModel.loading),
+      body: "Creator video rows created today; no upload value is shown without a successful query.",
+      qualifier: adminV1ReadModel.uploadsTodayCount === null ? "Not Connected" : "Backed",
+      tone: adminV1ReadModel.loading ? "info" : adminV1ReadModel.uploadsTodayCount === null ? "locked" : "success",
+      destination: "usage",
+    },
+    {
+      label: "Ads Foundation",
+      value: "Foundation Only",
+      body: "Placeholder provider and caps exist. No real SDK, ad revenue, or rendering is live.",
+      qualifier: "Foundation Only",
+      tone: "locked",
+      destination: "ads",
+    },
+  ], [
     adminImmutableAuditReadModel.connected,
     adminImmutableAuditReadModel.loading,
     adminV1ReadModel.activeLiveRoomCount,
@@ -3034,109 +3413,104 @@ export default function AdminStudioScreen() {
     adminV1ReadModel.premiumActiveCount,
     adminV1ReadModel.uploadsTodayCount,
     appConfigConnected,
-    canAccessDmca,
-    canManagePrivilegedWrites,
+    canAccessLiveOps,
     canReviewSafetyReports,
     configLoading,
-    dmcaCases.length,
-    dmcaCasesLoading,
+    liveCostGuardConnected,
+    liveCostGuardLoading,
+    liveCostGuardNeedsReview,
     liveCostGuardSettingsForm.mode,
-    liveCostGuardSettingsReadModel?.connected,
+    liveOpsConnected,
+    liveOpsLoading,
     liveOpsOpenCount,
-    liveOpsReadModel?.connected,
-    platformRoles,
-    resolvedActorRole,
-    safetyReportQueueSummary,
-    safetyReports.length,
+    safetyReportQueueConnected,
+    safetyReportsLoading,
   ]);
 
-  const needsAttentionCards = useMemo<readonly AdminDashboardCard[]>(() => {
-    const rows: AdminDashboardCard[] = [];
-    const recentReportsCount = canReviewSafetyReports
-      ? safetyReportQueueSummary?.totalReports ?? safetyReports.length
-      : 0;
+  const homeBoundaryItems = useMemo<readonly AdminHomeBoundaryItem[]>(() => [
+    {
+      body: canManagePrivilegedWrites
+        ? "Channel owners manage channel-level systems; platform operators review platform-wide safety, legal, audit, and ops queues here."
+        : "Channel ownership alone never opens this private operator surface.",
+      label: "Owner / Operator Split",
+      proofLabel: canManagePrivilegedWrites ? "Backed Role" : "Scope Limited",
+      tone: canManagePrivilegedWrites ? "success" : "locked",
+    },
+    {
+      body: "This route does not grant authority from profile ownership, channel ownership, Rachi identity, or local helper status.",
+      label: "Authority Boundary",
+      proofLabel: "Backend Role",
+      tone: "info",
+    },
+    {
+      body: canAccessLiveOps
+        ? "Live recovery posture is queue-first and approval-gated. Home links to review; it does not execute remediation."
+        : "Live recovery controls are hidden unless Owner or live_ops permission is backed.",
+      label: "Recovery Posture",
+      proofLabel: canAccessLiveOps ? "Queue Ready" : "Operator Only",
+      tone: canAccessLiveOps ? "manual" : "locked",
+    },
+    {
+      body: "Rachi is the official platform presence and can be managed where backed, but it never grants platform roles or moderation power.",
+      label: "Rachi Boundary",
+      proofLabel: "Critical Presence",
+      tone: "info",
+    },
+  ], [canAccessLiveOps, canManagePrivilegedWrites]);
 
-    if (canReviewSafetyReports && recentReportsCount > 0) {
-      rows.push({
-        label: "Recent Reports",
-        value: String(recentReportsCount),
-        body: "Backed safety reports are waiting in the recent review queue slice.",
+  const homeRecentActivity = useMemo<readonly AdminHomeActivityItem[]>(() => {
+    if (!adminImmutableAuditReadModel.connected) return [];
+    return adminImmutableAuditReadModel.latestRows.slice(0, 5).map((entry) => ({
+      id: entry.id,
+      meta: `${entry.createdAt ? formatModerationTimestamp(entry.createdAt) : "Time unknown"} · ${formatImmutableAuditActor(entry)}`,
+      target: formatImmutableAuditTarget(entry),
+      title: `${formatModerationToken(entry.actionCategory)} · ${formatModerationToken(entry.action)}`,
+      tone: entry.severity === "critical" || entry.severity === "high" ? "danger" : entry.foundationProof ? "locked" : "info",
+    }));
+  }, [adminImmutableAuditReadModel.connected, adminImmutableAuditReadModel.latestRows]);
+
+  const homeQuickActions = useMemo<readonly AdminHomeQuickAction[]>(() => {
+    const isVisible = (destination: OperatorTabKey) => visibleOperatorTabs.some((tab) => tab.key === destination);
+    const actions: AdminHomeQuickAction[] = [
+      {
+        body: "Review backed safety queue.",
         destination: "reports",
-      });
-    }
-
-    if (!configLoading && !appConfigConnected) {
-      rows.push({
-        label: "App Config",
-        value: "Not connected yet",
-        body: "Current app configuration did not confirm a connected load.",
-        tone: "unavailable",
-        destination: "system",
-      });
-    }
-
-    if (canManagePrivilegedWrites && liveOpsOpenCount > 0) {
-      rows.push({
-        label: "Live Ops Fix Center",
-        value: `${liveOpsOpenCount} open`,
-        body: "Live and chat-call reliability incident cards are waiting for owner/operator review.",
-        destination: "live-ops-fix-center",
-      });
-    }
-
-    if (notice?.type === "error") {
-      rows.push({
-        label: "Admin Error",
-        value: "Needs review",
-        body: notice.text,
-        tone: "unavailable",
-      });
-    }
-
-    if (moderationNotice) {
-      rows.push({
-        label: "Moderation Notice",
-        value: "Needs review",
-        body: moderationNotice,
-        tone: "unavailable",
-        destination: "reports",
-      });
-    }
-
-    if (dmcaNotice) {
-      rows.push({
-        label: "DMCA Notice",
-        value: "Needs review",
-        body: dmcaNotice,
-        tone: "unavailable",
+        label: "Open Reports",
+        tone: "manual" as AdminHomeTone,
+      },
+      {
+        body: "Review copyright cases.",
         destination: "dmca",
-      });
-    }
-
-    if (adminOpsNotice) {
-      rows.push({
-        label: "Admin Ops Notice",
-        value: "Needs review",
-        body: adminOpsNotice,
-        tone: "unavailable",
+        label: "Open DMCA",
+        tone: "manual" as AdminHomeTone,
+      },
+      {
+        body: "Inspect immutable rows.",
         destination: "audit",
-      });
-    }
-
-    return rows;
-  }, [
-    adminOpsNotice,
-    appConfigConnected,
-    canManagePrivilegedWrites,
-    canReviewSafetyReports,
-    configLoading,
-    dmcaNotice,
-    liveOpsOpenCount,
-    moderationNotice,
-    notice,
-    safetyReportQueueSummary,
-    safetyReports.length,
-  ]);
+        label: "Open Audit",
+        tone: "info" as AdminHomeTone,
+      },
+      {
+        body: "Review live incident cards.",
+        destination: "live-ops-fix-center",
+        label: "Open Live Ops",
+        tone: "manual" as AdminHomeTone,
+      },
+      {
+        body: "Check owner security state.",
+        destination: "owner-security",
+        label: "Open Owner Security",
+        tone: "info" as AdminHomeTone,
+      },
+      {
+        body: "Inspect runtime setup.",
+        destination: "system",
+        label: "Open System",
+        tone: "info" as AdminHomeTone,
+      },
+    ];
+    return actions.filter((action) => isVisible(action.destination));
+  }, [visibleOperatorTabs]);
 
   const systemStatusCards = useMemo<readonly AdminDashboardCard[]>(() => {
     const hasRevenueCatPublicKey = !!(
@@ -3223,34 +3597,6 @@ export default function AdminStudioScreen() {
     runtimeConfig,
     runtimeConfigIssues.length,
   ]);
-
-  const adminSectionRows = useMemo<readonly AdminDashboardCard[]>(() => [
-    {
-      label: "Owner / Operator split",
-      value: "Separate",
-      body: canManagePrivilegedWrites
-        ? "Channel owners manage their own uploads in Channel Settings. Platform operators review reports and apply safety actions here."
-        : "Channel ownership alone never opens this private operator surface.",
-    },
-    {
-      label: "Review posture",
-      value: canReviewSafetyReports ? "Queue Ready" : "Locked",
-      body: canReviewSafetyReports
-        ? "Reports are visible through the current moderation foundation and backend role truth."
-        : "The review queue stays hidden until this identity has an active platform moderation role.",
-      tone: canReviewSafetyReports ? "default" : "unavailable",
-    },
-    {
-      label: "Authority boundary",
-      value: "Backend Role",
-      body: "This route does not grant authority from profile ownership, channel ownership, or local test-helper status.",
-    },
-    {
-      label: "Rachi boundary",
-      value: "Official Presence",
-      body: "Rachi can be operator-managed where backed, but Rachi does not grant platform roles or moderation powers.",
-    },
-  ], [canManagePrivilegedWrites, canReviewSafetyReports]);
 
   const rachiManagementCards = useMemo<readonly AdminDashboardCard[]>(() => [
     {
@@ -3418,6 +3764,12 @@ export default function AdminStudioScreen() {
     try {
       setConfigLoading(true);
       setAppConfigConnected(false);
+      const probe = await supabase
+        .from(APP_CONFIG_TABLE)
+        .select("config_key")
+        .eq("config_key", APP_CONFIG_GLOBAL_KEY)
+        .maybeSingle();
+      if (probe.error && probe.error.code !== "PGRST116") throw probe.error;
       const config = await readAppConfig();
       setExperienceConfig(config);
       setAppConfigConnected(true);
@@ -5766,6 +6118,48 @@ export default function AdminStudioScreen() {
     }
   }, [canManagePrivilegedWrites, capabilities.heroCol, editorMode, form, hasReleaseControl, hasStatusControl, loadTitles, toDbPatch]);
 
+  const refreshAdminHome = useCallback(async () => {
+    if (!canAccessAdmin) return;
+
+    const tasks: Promise<unknown>[] = [loadPlatformRoles()];
+
+    if (canReviewSafetyReports) tasks.push(loadSafetyReports());
+    if (canAccessDmca) tasks.push(loadDmcaCases());
+    if (canManagePrivilegedWrites) {
+      tasks.push(
+        loadExperienceConfig(),
+        loadAdminV1ReadModel(),
+        loadAdminFinanceReadModel(),
+        loadAdminImmutableAuditReadModel(),
+      );
+    }
+    if (canManagePrivilegedWrites || canReviewSafetyReports) tasks.push(loadStaffAndAuditVisibility());
+    if (canAccessLiveOps) {
+      tasks.push(
+        loadLiveCostGuard(),
+        loadLiveOpsFixCenter(),
+      );
+    }
+
+    await Promise.all(tasks);
+  }, [
+    canAccessAdmin,
+    canAccessDmca,
+    canAccessLiveOps,
+    canManagePrivilegedWrites,
+    canReviewSafetyReports,
+    loadAdminFinanceReadModel,
+    loadAdminImmutableAuditReadModel,
+    loadAdminV1ReadModel,
+    loadDmcaCases,
+    loadExperienceConfig,
+    loadLiveCostGuard,
+    loadLiveOpsFixCenter,
+    loadPlatformRoles,
+    loadSafetyReports,
+    loadStaffAndAuditVisibility,
+  ]);
+
   const renderSkeleton = () => (
     <View style={{ gap: 12 }}>
       {Array.from({ length: 4 }).map((_, index) => (
@@ -5874,121 +6268,271 @@ export default function AdminStudioScreen() {
         </View>
 
         {operatorTab === "home" ? (
-        <>
-        <View style={styles.configCard}>
-          <Text style={styles.configKicker}>PLATFORM SNAPSHOT</Text>
-          <Text style={styles.configTitle}>Platform Snapshot</Text>
-          <Text style={styles.configBody}>
-            Backed command-center signals appear as counts or ready states. Unbacked systems stay labeled as foundation or not connected.
-          </Text>
-          <View style={styles.operatorSummaryGrid}>
-            {adminDashboardCards.map((card) => {
-              const destination = card.destination;
+        <View style={styles.adminHomeSurface}>
+          <View style={styles.adminHomeHero}>
+            <View style={styles.adminHomeHeroTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configKicker}>COMMAND OVERVIEW</Text>
+                <Text style={styles.adminHomeHeroTitle}>Platform Snapshot</Text>
+                <Text style={styles.adminHomeHeroBody}>
+                  Backed launch-control summary for queues, connected systems, estimates, and foundation-only boundaries.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.adminHomeRefreshButton, homeRefreshing && styles.configSaveBtnDisabled]}
+                onPress={() => void refreshAdminHome()}
+                disabled={homeRefreshing}
+              >
+                {homeRefreshing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.adminHomeRefreshText}>Refresh</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.adminHomeStatusBand}>
+              <View style={[styles.adminHomeSummaryStatus, ownerMetricToneStyle(homeCommandStatus.tone)]}>
+                <Text style={styles.adminHomeSummaryLabel}>Summary Status</Text>
+                <Text style={styles.adminHomeSummaryValue}>{homeCommandStatus.label}</Text>
+                <Text style={styles.adminHomeSummaryBody}>{homeCommandStatus.body}</Text>
+              </View>
+              <View style={styles.adminHomeHeroPills}>
+                <OwnerStatusPill label={`Operator ${formatModerationToken(resolvedActorRole)}`} tone={canAccessAdmin ? "info" : "locked"} />
+                <OwnerStatusPill label={appConfigConnected ? "App Config Connected" : "App Config Not Connected"} tone={appConfigConnected ? "success" : "locked"} />
+                <OwnerStatusPill label={adminImmutableAuditReadModel.connected ? "Audit Connected" : "Audit Not Connected"} tone={adminImmutableAuditReadModel.connected ? "success" : "locked"} />
+                <OwnerStatusPill
+                  label={homeLastCheckedAt ? `Last Checked ${formatModerationTimestamp(homeLastCheckedAt)}` : "Last Checked Not Connected"}
+                  tone={homeLastCheckedAt ? "info" : "locked"}
+                />
+              </View>
+            </View>
+          </View>
+
+          {homeRefreshing && !homeLastCheckedAt ? (
+            <View style={styles.adminHomeSkeletonGrid}>
+              {[0, 1, 2, 3].map((item) => (
+                <View key={item} style={styles.adminHomeSkeletonTile}>
+                  <View style={styles.reportSkeletonLineWide} />
+                  <View style={styles.reportSkeletonLine} />
+                  <View style={styles.reportSkeletonPill} />
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.adminHomeMetricGrid}>
+            {homeSnapshotMetrics.map((tile) => {
+              const canOpenTile = !!tile.destination && visibleOperatorTabs.some((tab) => tab.key === tile.destination);
               const content = (
                 <>
-                  <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
-                  <Text style={styles.dashboardMetricValue}>{card.value}</Text>
-                  <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+                  <View style={styles.adminHomeTileHeader}>
+                    <Text style={styles.adminHomeTileLabel}>{tile.label}</Text>
+                    <OwnerStatusPill label={tile.qualifier} tone={tile.tone} />
+                  </View>
+                  <Text style={styles.adminHomeTileValue}>{tile.value}</Text>
+                  <Text style={styles.adminHomeTileBody}>{tile.body}</Text>
                 </>
               );
-              const cardStyle = [
-                styles.dashboardMetricCard,
-                card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
-              ];
-
-              if (!destination) {
-                return (
-                  <View key={card.label} style={cardStyle}>
-                    {content}
-                  </View>
-                );
-              }
-
-              return (
+              const tileStyle = [styles.adminHomeMetricTile, ownerMetricToneStyle(tile.tone)];
+              return canOpenTile ? (
                 <TouchableOpacity
-                  key={card.label}
-                  style={cardStyle}
+                  key={tile.label}
+                  style={tileStyle}
                   activeOpacity={0.84}
-                  onPress={() => setOperatorTab(destination)}
+                  onPress={() => setOperatorTab(tile.destination as OperatorTabKey)}
                 >
                   {content}
                 </TouchableOpacity>
+              ) : (
+                <View key={tile.label} style={tileStyle}>
+                  {content}
+                </View>
               );
             })}
           </View>
-        </View>
 
-        <View style={styles.configCard}>
-          <Text style={styles.configKicker}>NEEDS ATTENTION</Text>
-          <Text style={styles.configTitle}>Needs Attention</Text>
-          {needsAttentionCards.length ? (
-            <View style={styles.configList}>
-              {needsAttentionCards.map((card) => {
-                const destination = card.destination;
-                const content = (
-                  <>
-                    <View style={styles.configListCopy}>
-                      <Text style={styles.configListTitle}>{card.label}</Text>
-                      <Text style={styles.configListBody}>{card.body}</Text>
-                    </View>
-                    <View style={[
-                      styles.badge,
-                      card.tone === "unavailable" ? styles.badgeOff : styles.badgeScheduled,
-                    ]}>
-                      <Text style={styles.badgeText}>{card.value}</Text>
-                    </View>
-                  </>
-                );
+          <View style={styles.adminHomePanel}>
+            <View style={styles.adminHomeSectionHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configKicker}>NEEDS ATTENTION</Text>
+                <Text style={styles.adminHomeSectionTitle}>Priority Rail</Text>
+              </View>
+              <OwnerStatusPill
+                label={homeAttentionItems.length ? `${homeAttentionItems.length} signal${homeAttentionItems.length === 1 ? "" : "s"}` : "Calm"}
+                tone={homeAttentionItems.length ? "manual" : "success"}
+              />
+            </View>
 
-                if (!destination) {
-                  return (
-                    <View key={card.label} style={styles.configListRow}>
+            {homeAttentionItems.length ? (
+              <View style={styles.adminHomeAttentionRail}>
+                {homeAttentionItems.map((item) => {
+                  const canOpenItem = !!item.destination && visibleOperatorTabs.some((tab) => tab.key === item.destination);
+                  const content = (
+                    <>
+                      <View style={styles.adminHomePriorityStripe} />
+                      <View style={styles.adminHomeAttentionCopy}>
+                        <Text style={styles.adminHomeAttentionTitle}>{item.label}</Text>
+                        <Text style={styles.adminHomeAttentionBody}>{item.body}</Text>
+                      </View>
+                      <View style={styles.adminHomeAttentionMeta}>
+                        <OwnerStatusPill label={item.priorityLabel} tone={item.tone} />
+                        <Text style={styles.adminHomeAttentionValue}>{item.value}</Text>
+                        {canOpenItem ? <Text style={styles.adminHomeDrillText}>Open</Text> : null}
+                      </View>
+                    </>
+                  );
+                  return canOpenItem ? (
+                    <TouchableOpacity
+                      key={`${item.label}-${item.value}`}
+                      style={[styles.adminHomeAttentionRow, ownerMetricToneStyle(item.tone)]}
+                      activeOpacity={0.84}
+                      onPress={() => setOperatorTab(item.destination as OperatorTabKey)}
+                    >
+                      {content}
+                    </TouchableOpacity>
+                  ) : (
+                    <View key={`${item.label}-${item.value}`} style={[styles.adminHomeAttentionRow, ownerMetricToneStyle(item.tone)]}>
                       {content}
                     </View>
                   );
-                }
+                })}
+              </View>
+            ) : (
+              <OwnerEmptyState
+                title="No urgent admin issues detected"
+                body={homeCommandStatus.label === "Partial Visibility"
+                  ? "No urgent backed queue is visible, but partial visibility and foundation-only systems remain clearly labeled below."
+                  : "Backed report, DMCA, audit, and live-ops signals are calm in the current snapshot."}
+              />
+            )}
+          </View>
 
-                return (
+          <View style={styles.adminHomePanel}>
+            <View style={styles.adminHomeSectionHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configKicker}>CONNECTED SYSTEMS</Text>
+                <Text style={styles.adminHomeSectionTitle}>System Signal Grid</Text>
+              </View>
+              <OwnerStatusPill label="Truth-labeled" tone="info" />
+            </View>
+
+            <View style={styles.adminHomeSystemGrid}>
+              {homeSystemTiles.map((tile) => {
+                const canOpenTile = !!tile.destination && visibleOperatorTabs.some((tab) => tab.key === tile.destination);
+                const content = (
+                  <>
+                    <View style={styles.adminHomeTileHeader}>
+                      <Text style={styles.adminHomeSystemLabel}>{tile.label}</Text>
+                      <OwnerStatusPill label={tile.qualifier} tone={tile.tone} />
+                    </View>
+                    <Text style={styles.adminHomeSystemValue}>{tile.value}</Text>
+                    <Text style={styles.adminHomeSystemBody}>{tile.body}</Text>
+                  </>
+                );
+                return canOpenTile ? (
                   <TouchableOpacity
-                    key={card.label}
-                    style={styles.configListRow}
+                    key={tile.label}
+                    style={[styles.adminHomeSystemTile, ownerMetricToneStyle(tile.tone)]}
                     activeOpacity={0.84}
-                    onPress={() => setOperatorTab(destination)}
+                    onPress={() => setOperatorTab(tile.destination as OperatorTabKey)}
                   >
                     {content}
                   </TouchableOpacity>
+                ) : (
+                  <View key={tile.label} style={[styles.adminHomeSystemTile, ownerMetricToneStyle(tile.tone)]}>
+                    {content}
+                  </View>
                 );
               })}
             </View>
-          ) : (
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>No urgent admin tasks right now.</Text>
-                <Text style={styles.configListBody}>
-                  Only backed report, config, and admin-error signals appear here.
-                </Text>
-              </View>
-            </View>
-          )}
-        </View>
+          </View>
 
-        <View style={styles.roleBoundaryPanel}>
-          {adminSectionRows.map((row) => (
-            <View key={row.label} style={styles.boundaryRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>{row.label}</Text>
-                <Text style={styles.configListBody}>{row.body}</Text>
+          <View style={styles.adminHomePanel}>
+            <View style={styles.adminHomeSectionHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configKicker}>OPERATIONAL TRUTH</Text>
+                <Text style={styles.adminHomeSectionTitle}>Boundaries</Text>
               </View>
-              <View style={[
-                styles.badge,
-                row.tone === "unavailable" ? styles.badgeOff : styles.badgeScheduled,
-              ]}>
-                <Text style={styles.badgeText}>{row.value}</Text>
-              </View>
+              <OwnerStatusPill label="Scope Limited" tone="info" />
             </View>
-          ))}
+
+            <View style={styles.adminHomeBoundaryGrid}>
+              {homeBoundaryItems.map((item) => (
+                <View key={item.label} style={[styles.adminHomeBoundaryItem, ownerMetricToneStyle(item.tone)]}>
+                  <View style={styles.adminHomeTileHeader}>
+                    <Text style={styles.adminHomeBoundaryTitle}>{item.label}</Text>
+                    <OwnerStatusPill label={item.proofLabel} tone={item.tone} />
+                  </View>
+                  <Text style={styles.adminHomeBoundaryBody}>{item.body}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.adminHomePanel}>
+            <View style={styles.adminHomeSectionHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configKicker}>RECENT SIGNALS</Text>
+                <Text style={styles.adminHomeSectionTitle}>Audit Activity</Text>
+              </View>
+              <OwnerStatusPill
+                label={adminImmutableAuditReadModel.connected ? "Backed Feed" : "Not Connected"}
+                tone={adminImmutableAuditReadModel.connected ? "success" : "locked"}
+              />
+            </View>
+
+            {adminImmutableAuditReadModel.loading ? (
+              <View style={styles.reportSkeletonPanel}>
+                <View style={styles.reportSkeletonLineWide} />
+                <View style={styles.reportSkeletonLine} />
+              </View>
+            ) : homeRecentActivity.length ? (
+              <View style={styles.adminHomeActivityList}>
+                {homeRecentActivity.map((item) => (
+                  <View key={item.id} style={styles.adminHomeActivityRow}>
+                    <View style={[styles.adminHomeActivityDot, ownerMetricToneStyle(item.tone)]} />
+                    <View style={styles.adminHomeAttentionCopy}>
+                      <Text style={styles.adminHomeActivityTitle}>{item.title}</Text>
+                      <Text style={styles.adminHomeActivityMeta}>{item.meta}</Text>
+                      <Text style={styles.adminHomeActivityTarget}>{item.target}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <OwnerEmptyState
+                title={adminImmutableAuditReadModel.connected ? "No recent audit rows returned" : "Recent activity feed not connected yet"}
+                body={adminImmutableAuditReadModel.connected
+                  ? "The immutable audit query succeeded but returned no rows in the current slice."
+                  : "Home does not fake activity. The feed appears only when immutable audit rows are readable."}
+              />
+            )}
+          </View>
+
+          <View style={styles.adminHomeQuickSurface}>
+            <View style={styles.adminHomeSectionHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configKicker}>QUICK DRILL-DOWN</Text>
+                <Text style={styles.adminHomeSectionTitle}>Go Next</Text>
+              </View>
+              <OwnerStatusPill label="Non-destructive" tone="info" />
+            </View>
+            <View style={styles.adminHomeQuickGrid}>
+              {homeQuickActions.map((action) => (
+                <TouchableOpacity
+                  key={action.destination}
+                  style={[styles.adminHomeQuickAction, ownerMetricToneStyle(action.tone)]}
+                  activeOpacity={0.84}
+                  onPress={() => setOperatorTab(action.destination)}
+                >
+                  <Text style={styles.adminHomeQuickTitle}>{action.label}</Text>
+                  <Text style={styles.adminHomeQuickBody}>{action.body}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
-        </>
         ) : null}
 
         {operatorTab === "reports" ? (
@@ -13561,6 +14105,346 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(58,12,22,0.48)",
     padding: 13,
     gap: 12,
+  },
+  adminHomeSurface: {
+    gap: 12,
+  },
+  adminHomeHero: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(118,146,255,0.28)",
+    backgroundColor: "rgba(7,11,18,0.88)",
+    padding: 14,
+    gap: 12,
+  },
+  adminHomeHeroTop: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  adminHomeHeroTitle: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  adminHomeHeroBody: {
+    color: "#C0C9DB",
+    fontSize: 12.5,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginTop: 6,
+    maxWidth: "96%",
+  },
+  adminHomeRefreshButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(220,20,60,0.24)",
+    borderColor: "rgba(220,20,60,0.44)",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 42,
+    minWidth: 96,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+  },
+  adminHomeRefreshText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  adminHomeStatusBand: {
+    alignItems: "stretch",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  adminHomeSummaryStatus: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    flexBasis: 190,
+    flexGrow: 1,
+    gap: 5,
+    minHeight: 96,
+    padding: 12,
+  },
+  adminHomeSummaryLabel: {
+    color: "#9AA4B9",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  adminHomeSummaryValue: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  adminHomeSummaryBody: {
+    color: "#B8C2D4",
+    fontSize: 11.5,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  adminHomeHeroPills: {
+    alignContent: "flex-start",
+    flexBasis: 180,
+    flexDirection: "row",
+    flexGrow: 1,
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  adminHomeSkeletonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  adminHomeSkeletonTile: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    flexBasis: "47%",
+    flexGrow: 1,
+    gap: 9,
+    minHeight: 112,
+    minWidth: 142,
+    padding: 12,
+  },
+  adminHomeMetricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  adminHomeMetricTile: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexBasis: "47%",
+    flexGrow: 1,
+    gap: 8,
+    minHeight: 132,
+    minWidth: 146,
+    padding: 12,
+  },
+  adminHomeTileHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "space-between",
+  },
+  adminHomeTileLabel: {
+    color: "#A9B3C7",
+    flex: 1,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  adminHomeTileValue: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  adminHomeTileBody: {
+    color: "#B8C2D4",
+    fontSize: 11.5,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  adminHomePanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(8,11,18,0.76)",
+    gap: 11,
+    padding: 12,
+  },
+  adminHomeSectionHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  adminHomeSectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  adminHomeAttentionRail: {
+    gap: 8,
+  },
+  adminHomeAttentionRow: {
+    alignItems: "stretch",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 86,
+    padding: 10,
+  },
+  adminHomePriorityStripe: {
+    backgroundColor: "rgba(220,20,60,0.72)",
+    borderRadius: 999,
+    width: 3,
+  },
+  adminHomeAttentionCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  adminHomeAttentionTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  adminHomeAttentionBody: {
+    color: "#B5C0D2",
+    fontSize: 11.5,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  adminHomeAttentionMeta: {
+    alignItems: "flex-end",
+    gap: 5,
+    minWidth: 68,
+  },
+  adminHomeAttentionValue: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  adminHomeDrillText: {
+    color: "#AFC0FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  adminHomeSystemGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  adminHomeSystemTile: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    flexBasis: "47%",
+    flexGrow: 1,
+    gap: 7,
+    minHeight: 124,
+    minWidth: 142,
+    padding: 11,
+  },
+  adminHomeSystemLabel: {
+    color: "#A9B3C7",
+    flex: 1,
+    fontSize: 10.8,
+    fontWeight: "900",
+  },
+  adminHomeSystemValue: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  adminHomeSystemBody: {
+    color: "#B4BED0",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 15,
+  },
+  adminHomeBoundaryGrid: {
+    gap: 8,
+  },
+  adminHomeBoundaryItem: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    gap: 7,
+    padding: 11,
+  },
+  adminHomeBoundaryTitle: {
+    color: "#FFFFFF",
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  adminHomeBoundaryBody: {
+    color: "#B9C3D4",
+    fontSize: 11.5,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  adminHomeActivityList: {
+    gap: 9,
+  },
+  adminHomeActivityRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+  },
+  adminHomeActivityDot: {
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 10,
+    marginTop: 5,
+    width: 10,
+  },
+  adminHomeActivityTitle: {
+    color: "#FFFFFF",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  adminHomeActivityMeta: {
+    color: "#AAB5C8",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15,
+  },
+  adminHomeActivityTarget: {
+    color: "#8793A8",
+    fontSize: 10.8,
+    fontWeight: "800",
+    lineHeight: 15,
+  },
+  adminHomeQuickSurface: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(118,146,255,0.2)",
+    backgroundColor: "rgba(7,11,18,0.72)",
+    gap: 11,
+    padding: 12,
+  },
+  adminHomeQuickGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  adminHomeQuickAction: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexBasis: "47%",
+    flexGrow: 1,
+    minHeight: 72,
+    minWidth: 136,
+    padding: 10,
+    gap: 5,
+  },
+  adminHomeQuickTitle: {
+    color: "#FFFFFF",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  adminHomeQuickBody: {
+    color: "#AEB9CC",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 15,
   },
   configCard: {
     borderRadius: 22,
