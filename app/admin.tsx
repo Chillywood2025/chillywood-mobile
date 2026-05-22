@@ -90,20 +90,22 @@ import {
   canReviewSafetyQueue,
   formatPlatformRoleDisplayLabel,
   getModerationAccess,
-  grantPlatformStaffPermissionByEmail,
   grantPlatformStaffRoleByEmail,
   hasPlatformStaffPermission,
   hasPlatformRoleMembership,
   listAdminReportAuditEvents,
+  listAdminRoleAuditEvents,
   readMyPlatformRoleMemberships,
   readPlatformRoleRoster,
+  readPlatformStaffPermissionsByEmail,
   readSafetyReportQueue,
-  revokePlatformStaffPermissionByEmail,
   revokePlatformStaffRoleByEmail,
   resolvePlatformActorRole,
+  updatePlatformStaffPermissionsByEmail,
   updateAdminReportStatusAction,
   type AdminAuditLogEntry,
   type AdminAuditLogReadModel,
+  type PlatformRoleAuditEvent,
   type PlatformRoleMembership,
   type PlatformRoleRosterEntry,
   type PlatformRoleRosterReadModel,
@@ -551,6 +553,73 @@ const staffPermissionOptions: readonly { key: PlatformStaffPermissionKey; label:
   { key: "staff_permission_templates", label: "Permission Templates" },
   { key: "legal_request_intake", label: "Legal Intake" },
 ];
+const staffPermissionLabelByKey = staffPermissionOptions.reduce<Record<PlatformStaffPermissionKey, string>>((acc, option) => {
+  acc[option.key] = option.label;
+  return acc;
+}, {} as Record<PlatformStaffPermissionKey, string>);
+
+const staffPermissionGroups: readonly {
+  key: string;
+  label: string;
+  body: string;
+  permissions: readonly PlatformStaffPermissionKey[];
+}[] = [
+  {
+    key: "support",
+    label: "Support",
+    body: "Support inbox, user lookup, billing readout, and creator support.",
+    permissions: ["support_inbox", "user_lookup", "billing_support_read", "creator_support"],
+  },
+  {
+    key: "moderation",
+    label: "Moderation",
+    body: "Reports, evidence preview, content moderation, and audit review.",
+    permissions: ["content_moderation", "reports_review", "evidence_preview", "audit_review"],
+  },
+  {
+    key: "live_ops",
+    label: "Live Operations",
+    body: "Live Ops, Live Cost Guard, and operations alert surfaces.",
+    permissions: ["live_ops"],
+  },
+  {
+    key: "legal",
+    label: "Legal / DMCA",
+    body: "Legal intake, copyright review, evidence export, and legal hold workflows.",
+    permissions: ["legal_request_intake", "legal_review", "legal_ops", "dmca_review", "copyright_review", "evidence_export", "legal_hold"],
+  },
+  {
+    key: "security",
+    label: "Security / Admin",
+    body: "Owner-controlled admin grants, templates, security review, and Break Glass.",
+    permissions: ["security_review", "staff_permission_templates", "admin_grants", "manage_moderators", "emergency_break_glass"],
+  },
+];
+type RoleAuditFilterKey = "all" | "grants" | "revokes" | "permissions" | "owners" | "admins" | "moderators";
+const roleAuditFilterOptions: readonly { key: RoleAuditFilterKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "grants", label: "Grants" },
+  { key: "revokes", label: "Revokes" },
+  { key: "permissions", label: "Permissions" },
+  { key: "owners", label: "Owners" },
+  { key: "admins", label: "Admins" },
+  { key: "moderators", label: "Moderators" },
+];
+type RoleConfirmState =
+  | {
+      kind: "revoke_role";
+      email: string;
+      role: PlatformStaffManagementRole;
+      title: string;
+      body: string;
+    }
+  | {
+      kind: "save_permissions";
+      email: string;
+      selectedPermissions: PlatformStaffPermissionKey[];
+      title: string;
+      body: string;
+    };
 const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   loading: false,
   premiumActiveCount: null,
@@ -1722,6 +1791,32 @@ const OwnerControlRow = ({
   );
 };
 
+const sortPermissionKeys = (keys: readonly PlatformStaffPermissionKey[]) => (
+  Array.from(new Set(keys)).sort()
+);
+
+const permissionSetsEqual = (
+  left: readonly PlatformStaffPermissionKey[] | null,
+  right: readonly PlatformStaffPermissionKey[] | null,
+) => {
+  if (!left || !right) return false;
+  const sortedLeft = sortPermissionKeys(left);
+  const sortedRight = sortPermissionKeys(right);
+  return sortedLeft.length === sortedRight.length && sortedLeft.every((key, index) => key === sortedRight[index]);
+};
+
+const formatPermissionSummary = (keys: readonly PlatformStaffPermissionKey[]) => {
+  if (!keys.length) return "No scoped permissions selected";
+  return sortPermissionKeys(keys).map((key) => staffPermissionLabelByKey[key] ?? formatModerationToken(key)).join(" · ");
+};
+
+const roleAuditTone = (entry: PlatformRoleAuditEvent): OwnerControlTone => {
+  if (entry.action.includes("blocked")) return "danger";
+  if (entry.action.includes("revoke") || entry.action.includes("expire")) return "manual";
+  if (entry.auditKind === "permission") return "info";
+  return "success";
+};
+
 const formatAdminOperationFailure = (error: any, fallback: string) => {
   const message = String(error?.message ?? "");
   const code = String(error?.code ?? "");
@@ -2210,16 +2305,23 @@ export default function AdminStudioScreen() {
   const [platformRoleRoster, setPlatformRoleRoster] = useState<PlatformRoleRosterEntry[]>([]);
   const [platformRoleRosterSummary, setPlatformRoleRosterSummary] =
     useState<PlatformRoleRosterReadModel["summary"] | null>(null);
+  const [platformRoleRosterGeneratedAt, setPlatformRoleRosterGeneratedAt] = useState<string | null>(null);
   const [platformRoleRosterLoading, setPlatformRoleRosterLoading] = useState(false);
   const [staffRoleEmail, setStaffRoleEmail] = useState("");
   const [staffRoleTarget, setStaffRoleTarget] = useState<PlatformStaffManagementRole>("moderator");
   const [staffRoleReason, setStaffRoleReason] = useState("");
   const [staffRoleBusy, setStaffRoleBusy] = useState<"grant" | "revoke" | null>(null);
   const [staffPermissionEmail, setStaffPermissionEmail] = useState("");
-  const [staffPermissionKey, setStaffPermissionKey] = useState<PlatformStaffPermissionKey>("manage_moderators");
+  const [staffPermissionSavedKeys, setStaffPermissionSavedKeys] = useState<PlatformStaffPermissionKey[] | null>(null);
+  const [staffPermissionSelectedKeys, setStaffPermissionSelectedKeys] = useState<PlatformStaffPermissionKey[]>([]);
+  const [staffPermissionLoadedEmail, setStaffPermissionLoadedEmail] = useState("");
   const [staffPermissionReason, setStaffPermissionReason] = useState("");
   const [staffPermissionExpiresAt, setStaffPermissionExpiresAt] = useState("");
-  const [staffPermissionBusy, setStaffPermissionBusy] = useState<"grant" | "revoke" | null>(null);
+  const [staffPermissionBusy, setStaffPermissionBusy] = useState<"load" | "save" | null>(null);
+  const [roleAuditEvents, setRoleAuditEvents] = useState<PlatformRoleAuditEvent[]>([]);
+  const [roleAuditLoading, setRoleAuditLoading] = useState(false);
+  const [roleAuditFilter, setRoleAuditFilter] = useState<RoleAuditFilterKey>("all");
+  const [roleConfirm, setRoleConfirm] = useState<RoleConfirmState | null>(null);
   const [adminAuditLog, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
   const [adminAuditLogSummary, setAdminAuditLogSummary] =
     useState<AdminAuditLogReadModel["summary"] | null>(null);
@@ -2469,6 +2571,33 @@ export default function AdminStudioScreen() {
     },
     [canManageAdminStaff, canManageModeratorStaff],
   );
+  const staffSnapshotSummary = platformRoleRosterSummary;
+  const activePlatformRoleRoster = useMemo(
+    () => platformRoleRoster.filter((entry) => entry.status === "active"),
+    [platformRoleRoster],
+  );
+  const revokedPlatformRoleRoster = useMemo(
+    () => platformRoleRoster.filter((entry) => entry.status !== "active"),
+    [platformRoleRoster],
+  );
+  const normalizedStaffPermissionEmail = staffPermissionEmail.trim().toLowerCase();
+  const staffPermissionDraftChanged = staffPermissionSavedKeys !== null
+    && normalizedStaffPermissionEmail === staffPermissionLoadedEmail
+    && !permissionSetsEqual(staffPermissionSavedKeys, staffPermissionSelectedKeys);
+  const staffPermissionGrantDelta = staffPermissionSavedKeys
+    ? staffPermissionSelectedKeys.filter((key) => !staffPermissionSavedKeys.includes(key))
+    : [];
+  const staffPermissionRevokeDelta = staffPermissionSavedKeys
+    ? staffPermissionSavedKeys.filter((key) => !staffPermissionSelectedKeys.includes(key))
+    : [];
+  const staffPermissionLoadState = staffPermissionSavedKeys === null
+    ? "Not Loaded"
+    : staffPermissionDraftChanged ? "Unsaved Changes" : "Loaded";
+  const selectedPermissionCountLabel = `${staffPermissionSelectedKeys.length} selected`;
+  const canSaveStaffPermissions = canManageStaffPermissions
+    && staffPermissionDraftChanged
+    && staffPermissionReason.trim().length >= 6
+    && staffPermissionBusy === null;
   const selectedSafetyReport = useMemo(
     () => safetyReports.find((report) => report.id === selectedSafetyReportId) ?? null,
     [safetyReports, selectedSafetyReportId],
@@ -2639,11 +2768,23 @@ export default function AdminStudioScreen() {
       setPlatformRolesChecked(false);
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterGeneratedAt(null);
       setPlatformRoleRosterLoading(false);
       setStaffRoleEmail("");
       setStaffRoleTarget("moderator");
       setStaffRoleReason("");
       setStaffRoleBusy(null);
+      setStaffPermissionEmail("");
+      setStaffPermissionSavedKeys(null);
+      setStaffPermissionSelectedKeys([]);
+      setStaffPermissionLoadedEmail("");
+      setStaffPermissionReason("");
+      setStaffPermissionExpiresAt("");
+      setStaffPermissionBusy(null);
+      setRoleAuditEvents([]);
+      setRoleAuditLoading(false);
+      setRoleAuditFilter("all");
+      setRoleConfirm(null);
       setAdminAuditLog([]);
       setAdminAuditLogSummary(null);
       setAdminAuditLogLoading(false);
@@ -2738,8 +2879,16 @@ export default function AdminStudioScreen() {
       setContentConfirmReason("");
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterGeneratedAt(null);
       setPlatformRoleRosterLoading(false);
       setStaffRoleBusy(null);
+      setStaffPermissionSavedKeys(null);
+      setStaffPermissionSelectedKeys([]);
+      setStaffPermissionLoadedEmail("");
+      setStaffPermissionBusy(null);
+      setRoleAuditEvents([]);
+      setRoleAuditLoading(false);
+      setRoleConfirm(null);
       setAdminAuditLog([]);
       setAdminAuditLogSummary(null);
       setAdminAuditLogLoading(false);
@@ -2879,6 +3028,7 @@ export default function AdminStudioScreen() {
     if (!canAccessAdmin) {
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterGeneratedAt(null);
       setPlatformRoleRosterLoading(false);
       setAdminAuditLog([]);
       setAdminAuditLogSummary(null);
@@ -2888,7 +3038,7 @@ export default function AdminStudioScreen() {
     }
     void loadStaffAndAuditVisibility();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canAccessAdmin, canManagePrivilegedWrites, canReviewSafetyReports]);
+  }, [canAccessAdmin, canManagePrivilegedWrites, canReviewSafetyReports, canViewStaffRoles, roleAuditFilter]);
 
   const stats = useMemo(() => {
     const total = titles.length;
@@ -5058,8 +5208,8 @@ export default function AdminStudioScreen() {
       setOwnerControlNotice("Enter an Admin email before applying a permission template.");
       return;
     }
-    if (!isOwnerStaff && permissionTemplateReason.trim().length < 6) {
-      setOwnerControlNotice("Admins need a reason before applying or revoking templates.");
+    if (permissionTemplateReason.trim().length < 6) {
+      setOwnerControlNotice("Audit reason is required before applying or revoking templates.");
       return;
     }
 
@@ -5089,7 +5239,6 @@ export default function AdminStudioScreen() {
     }
   }, [
     canManagePermissionTemplates,
-    isOwnerStaff,
     loadPermissionTemplates,
     loadPlatformRoles,
     permissionTemplateBusy,
@@ -5795,50 +5944,63 @@ export default function AdminStudioScreen() {
     if (!canViewStaffRoles) {
       setPlatformRoleRoster([]);
       setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterGeneratedAt(null);
       setPlatformRoleRosterLoading(false);
+      setRoleAuditEvents([]);
+      setRoleAuditLoading(false);
     }
 
     if (!canViewAudit) {
       setAdminAuditLog([]);
       setAdminAuditLogSummary(null);
       setAdminAuditLogLoading(false);
-      if (!canViewStaffRoles) {
-        setAdminOpsNotice(null);
-      }
+    }
+
+    if (!canViewStaffRoles && !canViewAudit) {
+      setAdminOpsNotice(null);
       return;
     }
 
     try {
       setAdminOpsNotice(null);
       setPlatformRoleRosterLoading(canViewStaffRoles);
-      setAdminAuditLogLoading(true);
+      setRoleAuditLoading(canViewStaffRoles);
+      setAdminAuditLogLoading(canViewAudit);
 
-      const [roleRosterResult, auditLogResult] = await Promise.all([
+      const [roleRosterResult, auditLogResult, roleAuditResult] = await Promise.all([
         canViewStaffRoles
-          ? readPlatformRoleRoster({ limit: 8, includeRevoked: true })
+          ? readPlatformRoleRoster({ limit: 16, includeRevoked: true, includePermissionGrants: isOwnerStaff })
           : Promise.resolve(null),
-        readAdminAuditLog({ limit: 8 }),
+        canViewAudit ? readAdminAuditLog({ limit: 8 }) : Promise.resolve(null),
+        canViewStaffRoles ? listAdminRoleAuditEvents({ filter: roleAuditFilter, limit: 12 }) : Promise.resolve([]),
       ]);
 
       setPlatformRoleRoster(roleRosterResult?.items ?? []);
       setPlatformRoleRosterSummary(roleRosterResult?.summary ?? null);
-      setAdminAuditLog(auditLogResult.items);
-      setAdminAuditLogSummary(auditLogResult.summary);
+      setPlatformRoleRosterGeneratedAt(roleRosterResult?.generatedAt ?? null);
+      setAdminAuditLog(auditLogResult?.items ?? []);
+      setAdminAuditLogSummary(auditLogResult?.summary ?? null);
+      setRoleAuditEvents(roleAuditResult ?? []);
     } catch (err: any) {
       if (canViewStaffRoles) {
         setPlatformRoleRoster([]);
         setPlatformRoleRosterSummary(null);
+        setPlatformRoleRosterGeneratedAt(null);
+        setRoleAuditEvents([]);
       }
-      setAdminAuditLog([]);
-      setAdminAuditLogSummary(null);
+      if (canViewAudit) {
+        setAdminAuditLog([]);
+        setAdminAuditLogSummary(null);
+      }
       setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to load staff-role or audit visibility."));
     } finally {
       if (canViewStaffRoles) {
         setPlatformRoleRosterLoading(false);
+        setRoleAuditLoading(false);
       }
       setAdminAuditLogLoading(false);
     }
-  }, [canManagePrivilegedWrites, canReviewSafetyReports, canViewStaffRoles]);
+  }, [canManagePrivilegedWrites, canReviewSafetyReports, canViewStaffRoles, isOwnerStaff, roleAuditFilter]);
 
   const refreshStaffRoleState = useCallback(async () => {
     await Promise.all([
@@ -5852,6 +6014,10 @@ export default function AdminStudioScreen() {
     if (staffRoleBusy) return;
     if (!email) {
       setAdminOpsNotice("Enter an email before granting a staff role.");
+      return;
+    }
+    if (staffRoleReason.trim().length < 6) {
+      setAdminOpsNotice("Audit reason is required before granting a staff role.");
       return;
     }
     if (staffRoleTarget === "admin" && !canManageAdminStaff) {
@@ -5897,6 +6063,10 @@ export default function AdminStudioScreen() {
       setAdminOpsNotice("Enter an email before removing a staff role.");
       return;
     }
+    if (staffRoleReason.trim().length < 6) {
+      setAdminOpsNotice("Audit reason is required before removing a staff role.");
+      return;
+    }
     if (role === "admin" && !canManageAdminStaff) {
       setAdminOpsNotice("Only Owner or an Admin with admin_grants can remove Admins.");
       return;
@@ -5940,97 +6110,144 @@ export default function AdminStudioScreen() {
       return;
     }
 
-    Alert.alert(
-      "Remove staff role",
-      `Remove ${formatPlatformRoleDisplayLabel(role)} from ${maskOperatorIdentity(email)}? This is backed by server-side role truth and will be audited.`,
-      [
-        { style: "cancel", text: "Cancel" },
-        {
-          style: "destructive",
-          text: "Remove",
-          onPress: () => {
-            void runStaffRoleRevoke(email, role);
-          },
-        },
-      ],
-    );
-  }, [runStaffRoleRevoke, staffRoleEmail, staffRoleTarget]);
+    setRoleConfirm({
+      kind: "revoke_role",
+      email,
+      role,
+      title: "Remove Staff Role",
+      body: `Remove ${formatPlatformRoleDisplayLabel(role)} from ${maskOperatorIdentity(email)}. This writes backed staff role audit and cannot remove a protected Owner flow from this panel.`,
+    });
+  }, [staffRoleEmail, staffRoleTarget]);
 
-  const runStaffPermissionGrant = useCallback(async () => {
-    const email = staffPermissionEmail.trim().toLowerCase();
+  const loadStaffPermissionSet = useCallback(async (emailInput?: string | null, seedKeys?: readonly PlatformStaffPermissionKey[]) => {
+    const email = (emailInput ?? staffPermissionEmail).trim().toLowerCase();
     if (staffPermissionBusy) return;
     if (!canManageStaffPermissions) {
-      setAdminOpsNotice("Only Owner can grant scoped staff permissions.");
+      setAdminOpsNotice("Scoped permission details are Owner-only. Admins can see role-management status but cannot load another staff member's permission set.");
       return;
     }
     if (!email) {
-      setAdminOpsNotice("Enter an Admin email before granting a scoped permission.");
+      setAdminOpsNotice("Enter an Admin or Moderator email before loading scoped permissions.");
       return;
     }
 
     try {
-      setStaffPermissionBusy("grant");
+      setStaffPermissionBusy("load");
       setAdminOpsNotice(null);
-      const result = await grantPlatformStaffPermissionByEmail({
-        email,
+      setStaffPermissionEmail(email);
+      const permissions = seedKeys ? sortPermissionKeys(seedKeys) : await readPlatformStaffPermissionsByEmail({ email });
+      setStaffPermissionSavedKeys(permissions);
+      setStaffPermissionSelectedKeys(permissions);
+      setStaffPermissionLoadedEmail(email);
+      setAdminOpsNotice(`Loaded ${permissions.length} scoped permissions for ${maskOperatorIdentity(email)}.`);
+    } catch (err: any) {
+      setStaffPermissionSavedKeys(null);
+      setStaffPermissionSelectedKeys([]);
+      setStaffPermissionLoadedEmail("");
+      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to load staff permissions."));
+    } finally {
+      setStaffPermissionBusy(null);
+    }
+  }, [
+    canManageStaffPermissions,
+    staffPermissionBusy,
+    staffPermissionEmail,
+  ]);
+
+  const toggleStaffPermissionDraft = useCallback((permissionKey: PlatformStaffPermissionKey) => {
+    if (staffPermissionBusy !== null || !canManageStaffPermissions) return;
+    setStaffPermissionSelectedKeys((current) => (
+      current.includes(permissionKey)
+        ? current.filter((key) => key !== permissionKey)
+        : sortPermissionKeys([...current, permissionKey])
+    ));
+  }, [canManageStaffPermissions, staffPermissionBusy]);
+
+  const resetStaffPermissionDraft = useCallback(() => {
+    if (staffPermissionSavedKeys === null) return;
+    setStaffPermissionSelectedKeys(staffPermissionSavedKeys);
+  }, [staffPermissionSavedKeys]);
+
+  const queueStaffPermissionSave = useCallback(() => {
+    const email = staffPermissionEmail.trim().toLowerCase();
+    if (!canManageStaffPermissions) {
+      setAdminOpsNotice("Only Owner can save scoped staff permission sets.");
+      return;
+    }
+    if (!email || email !== staffPermissionLoadedEmail || staffPermissionSavedKeys === null) {
+      setAdminOpsNotice("Load the current backed permission set before saving changes.");
+      return;
+    }
+    if (!staffPermissionDraftChanged) {
+      setAdminOpsNotice("No scoped permission changes are selected.");
+      return;
+    }
+    if (staffPermissionReason.trim().length < 6) {
+      setAdminOpsNotice("Audit reason is required before saving permission changes.");
+      return;
+    }
+
+    setRoleConfirm({
+      kind: "save_permissions",
+      email,
+      selectedPermissions: sortPermissionKeys(staffPermissionSelectedKeys),
+      title: "Save Permission Set",
+      body: `${staffPermissionGrantDelta.length} permissions will be granted and ${staffPermissionRevokeDelta.length} will be revoked for ${maskOperatorIdentity(email)}.`,
+    });
+  }, [
+    canManageStaffPermissions,
+    staffPermissionDraftChanged,
+    staffPermissionEmail,
+    staffPermissionGrantDelta.length,
+    staffPermissionLoadedEmail,
+    staffPermissionReason,
+    staffPermissionRevokeDelta.length,
+    staffPermissionSavedKeys,
+    staffPermissionSelectedKeys,
+  ]);
+
+  const applyStaffPermissionSave = useCallback(async () => {
+    if (!roleConfirm || roleConfirm.kind !== "save_permissions" || staffPermissionBusy) return;
+    try {
+      setStaffPermissionBusy("save");
+      setAdminOpsNotice(null);
+      const result = await updatePlatformStaffPermissionsByEmail({
+        email: roleConfirm.email,
         expiresAt: staffPermissionExpiresAt.trim() || null,
-        permissionKey: staffPermissionKey,
-        reason: staffPermissionReason.trim() || null,
+        permissionKeys: roleConfirm.selectedPermissions,
+        reason: staffPermissionReason.trim(),
       });
-      setAdminOpsNotice(`${formatModerationToken(result.permissionKey)} granted for ${maskOperatorIdentity(result.email)}.`);
+      setStaffPermissionSavedKeys(result.newPermissions);
+      setStaffPermissionSelectedKeys(result.newPermissions);
+      setStaffPermissionLoadedEmail(result.email);
       setStaffPermissionReason("");
+      setRoleConfirm(null);
+      setAdminOpsNotice(
+        `Saved ${result.newPermissions.length} scoped permissions for ${maskOperatorIdentity(result.email)}; audit written.`,
+      );
       await refreshStaffRoleState();
     } catch (err: any) {
-      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to grant staff permission."));
+      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to save staff permissions."));
     } finally {
       setStaffPermissionBusy(null);
     }
   }, [
-    canManageStaffPermissions,
     refreshStaffRoleState,
+    roleConfirm,
     staffPermissionBusy,
-    staffPermissionEmail,
     staffPermissionExpiresAt,
-    staffPermissionKey,
     staffPermissionReason,
   ]);
 
-  const runStaffPermissionRevoke = useCallback(async () => {
-    const email = staffPermissionEmail.trim().toLowerCase();
-    if (staffPermissionBusy) return;
-    if (!canManageStaffPermissions) {
-      setAdminOpsNotice("Only Owner can revoke scoped staff permissions.");
+  const applyRoleConfirmation = useCallback(async () => {
+    if (!roleConfirm) return;
+    if (roleConfirm.kind === "revoke_role") {
+      await runStaffRoleRevoke(roleConfirm.email, roleConfirm.role);
+      setRoleConfirm(null);
       return;
     }
-    if (!email) {
-      setAdminOpsNotice("Enter an Admin email before revoking a scoped permission.");
-      return;
-    }
-
-    try {
-      setStaffPermissionBusy("revoke");
-      setAdminOpsNotice(null);
-      const result = await revokePlatformStaffPermissionByEmail({
-        email,
-        permissionKey: staffPermissionKey,
-        reason: staffPermissionReason.trim() || null,
-      });
-      setAdminOpsNotice(`${formatModerationToken(result.permissionKey)} revoked for ${maskOperatorIdentity(result.email)}.`);
-      setStaffPermissionReason("");
-      await refreshStaffRoleState();
-    } catch (err: any) {
-      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to revoke staff permission."));
-    } finally {
-      setStaffPermissionBusy(null);
-    }
-  }, [
-    canManageStaffPermissions,
-    refreshStaffRoleState,
-    staffPermissionBusy,
-    staffPermissionEmail,
-    staffPermissionKey,
-    staffPermissionReason,
-  ]);
+    await applyStaffPermissionSave();
+  }, [applyStaffPermissionSave, roleConfirm, runStaffRoleRevoke]);
 
   const toDbPatch = useCallback(
     (patch: Partial<TitleRow>): Record<string, any> => {
@@ -6546,7 +6763,7 @@ export default function AdminStudioScreen() {
         loadAdminImmutableAuditReadModel(),
       );
     }
-    if (canManagePrivilegedWrites || canReviewSafetyReports) tasks.push(loadStaffAndAuditVisibility());
+    if (canManagePrivilegedWrites || canReviewSafetyReports || canViewStaffRoles) tasks.push(loadStaffAndAuditVisibility());
     if (canAccessLiveOps) {
       tasks.push(
         loadLiveCostGuard(),
@@ -6561,6 +6778,7 @@ export default function AdminStudioScreen() {
     canAccessLiveOps,
     canManagePrivilegedWrites,
     canReviewSafetyReports,
+    canViewStaffRoles,
     loadAdminFinanceReadModel,
     loadAdminImmutableAuditReadModel,
     loadAdminV1ReadModel,
@@ -8090,231 +8308,363 @@ export default function AdminStudioScreen() {
 
           <View style={styles.configList}>
             {operatorTab === "roles" ? (
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Staff & Roles</Text>
-                <Text style={styles.configListBody}>
-                  Staff-role visibility and management are backed by platform role truth. Owner can manage Admins and Moderators; Admins need scoped grants for Admin or Moderator changes.
-                </Text>
-              </View>
-            </View>
-            ) : null}
-
-            {operatorTab === "roles" && (canManageAdminStaff || canManageModeratorStaff) ? (
-              <View style={styles.configListRow}>
-                <View style={styles.configListCopy}>
-                  <Text style={styles.configListTitle}>Manage staff by email</Text>
-                  <Text style={styles.configListBody}>
-                    Emails are normalized to lowercase. Admin is stored internally as the existing operator role; scoped grants are enforced server-side.
-                  </Text>
-                </View>
-
-                <TextInput
-                  value={staffRoleEmail}
-                  onChangeText={setStaffRoleEmail}
-                  placeholder="staff@example.com"
-                  placeholderTextColor="#788196"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  style={styles.input}
-                />
-
-                <View style={styles.toggleRowWrap}>
-                  {staffRoleOptions.map((option) => (
+              <>
+                <OwnerControlPanelHeader
+                  actions={(
                     <TouchableOpacity
-                      key={option.key}
-                      style={[styles.toggleChip, staffRoleTarget === option.key && styles.toggleChipActive]}
-                      onPress={() => setStaffRoleTarget(option.key)}
-                      disabled={staffRoleBusy !== null}
+                      style={[styles.ownerSecondaryButton, platformRoleRosterLoading && styles.configSaveBtnDisabled]}
+                      onPress={() => void refreshStaffRoleState()}
+                      disabled={platformRoleRosterLoading}
                     >
-                      <Text style={[styles.toggleChipText, staffRoleTarget === option.key && styles.toggleChipTextActive]}>
-                        {option.label}
-                      </Text>
+                      <Text style={styles.ownerSecondaryButtonText}>{platformRoleRosterLoading ? "Refreshing" : "Refresh"}</Text>
                     </TouchableOpacity>
-                  ))}
-                </View>
-
-                <TextInput
-                  value={staffRoleReason}
-                  onChangeText={setStaffRoleReason}
-                  placeholder="Audit reason optional"
-                  placeholderTextColor="#788196"
-                  style={styles.input}
+                  )}
+                  badgeLabel={canManageAdminStaff || canManageModeratorStaff ? "Manage Enabled" : canViewStaffRoles ? "View Only" : "Denied"}
+                  badgeTone={canManageAdminStaff || canManageModeratorStaff ? "success" : canViewStaffRoles ? "manual" : "locked"}
+                  kicker="ROLES CONTROL"
+                  lastRunLabel={platformRoleRosterGeneratedAt ? `Last refreshed ${formatModerationTimestamp(platformRoleRosterGeneratedAt)}` : "Last refreshed not connected"}
+                  subtitle="Manage platform staff access, scoped permissions, and audit-backed grants."
+                  title="Roles & Permissions"
                 />
 
-                <View style={styles.configListActions}>
-                  <TouchableOpacity
-                    style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
-                    onPress={() => void runStaffRoleGrant()}
-                    disabled={staffRoleBusy !== null}
-                  >
-                    <Text style={styles.orderBtnText}>{staffRoleBusy === "grant" ? "Granting..." : "Grant Role"}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
-                    onPress={() => confirmStaffRoleRevoke()}
-                    disabled={staffRoleBusy !== null}
-                  >
-                    <Text style={styles.orderBtnText}>{staffRoleBusy === "revoke" ? "Removing..." : "Remove Role"}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : operatorTab === "roles" ? (
-              <View style={styles.configListRowSubtle}>
-                <Text style={styles.configListBody}>
-                  Staff management actions require active Owner or scoped staff-management permission truth. Moderators cannot add or remove staff by default.
-                </Text>
-              </View>
-            ) : null}
-
-            {operatorTab === "roles" && canManageStaffPermissions ? (
-              <View style={styles.configListRow}>
-                <View style={styles.configListCopy}>
-                  <Text style={styles.configListTitle}>Scoped permissions</Text>
-                  <Text style={styles.configListBody}>
-                    Owner-only grants decide what each Admin can do. Permission changes are server-side and audited.
-                  </Text>
+                <View style={styles.ownerMetricGrid}>
+                  <OwnerMetricTile
+                    label="Active Staff"
+                    tone={staffSnapshotSummary ? "info" : "locked"}
+                    value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.activeCount : "Not Connected"}
+                  />
+                  <OwnerMetricTile
+                    label="Owners"
+                    tone={staffSnapshotSummary ? "success" : "locked"}
+                    value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.ownerCount : "Not Connected"}
+                  />
+                  <OwnerMetricTile
+                    label="Admins"
+                    tone={staffSnapshotSummary ? "info" : "locked"}
+                    value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.operatorCount : "Not Connected"}
+                  />
+                  <OwnerMetricTile
+                    label="Moderators"
+                    tone={staffSnapshotSummary ? "manual" : "locked"}
+                    value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.moderatorCount : "Not Connected"}
+                  />
                 </View>
 
-                <TextInput
-                  value={staffPermissionEmail}
-                  onChangeText={setStaffPermissionEmail}
-                  placeholder="admin@example.com"
-                  placeholderTextColor="#788196"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  style={styles.input}
-                />
-
-                <View style={styles.toggleRowWrap}>
-                  {staffPermissionOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option.key}
-                      style={[styles.toggleChip, staffPermissionKey === option.key && styles.toggleChipActive]}
-                      onPress={() => setStaffPermissionKey(option.key)}
-                      disabled={staffPermissionBusy !== null}
-                    >
-                      <Text style={[styles.toggleChipText, staffPermissionKey === option.key && styles.toggleChipTextActive]}>
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <TextInput
-                  value={staffPermissionExpiresAt}
-                  onChangeText={setStaffPermissionExpiresAt}
-                  placeholder="Expires at ISO date/time, optional"
-                  placeholderTextColor="#788196"
-                  style={styles.input}
-                  autoCapitalize="none"
-                />
-
-                <TextInput
-                  value={staffPermissionReason}
-                  onChangeText={setStaffPermissionReason}
-                  placeholder="Audit reason optional"
-                  placeholderTextColor="#788196"
-                  style={styles.input}
-                />
-
-                <View style={styles.configListActions}>
-                  <TouchableOpacity
-                    style={[styles.orderBtn, staffPermissionBusy !== null && styles.configSaveBtnDisabled]}
-                    onPress={() => void runStaffPermissionGrant()}
-                    disabled={staffPermissionBusy !== null}
-                  >
-                    <Text style={styles.orderBtnText}>{staffPermissionBusy === "grant" ? "Granting..." : "Grant Permission"}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.orderBtn, staffPermissionBusy !== null && styles.configSaveBtnDisabled]}
-                    onPress={() => void runStaffPermissionRevoke()}
-                    disabled={staffPermissionBusy !== null}
-                  >
-                    <Text style={styles.orderBtnText}>{staffPermissionBusy === "revoke" ? "Revoking..." : "Revoke Permission"}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : null}
-
-            {operatorTab === "roles" && canViewStaffRoles ? (
-              platformRoleRosterLoading ? (
-                <View style={styles.configLoadingRow}>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={styles.configLoadingText}>Loading platform role roster…</Text>
-                </View>
-              ) : platformRoleRoster.length ? (
-	                platformRoleRoster.map((entry) => (
-	                  <View key={`staff-role-${entry.id}`} style={styles.configListRow}>
-	                    <View style={styles.configListCopy}>
-	                      <Text style={styles.configListTitle}>{maskOperatorIdentity(entry.identityLabel)}</Text>
-	                      <Text style={styles.configListBody}>
-	                        {entry.grantedAt ? formatModerationTimestamp(entry.grantedAt) : "Grant timestamp unavailable"}
-	                      </Text>
-	                      {entry.grantedBy ? (
-	                        <Text style={styles.configListBody}>{`Granted by ${formatAuditDisplayText(entry.grantedBy)}`}</Text>
-	                      ) : null}
-	                      {entry.notes ? (
-	                        <Text style={styles.configListBody}>{formatAuditDisplayText(entry.notes)}</Text>
-	                      ) : null}
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Active Role Roster</Text>
+                    <OwnerStatusPill
+                      label={canViewStaffRoles ? `${activePlatformRoleRoster.length} active` : "Locked"}
+                      tone={canViewStaffRoles ? "info" : "locked"}
+                    />
+                  </View>
+                  {!canViewStaffRoles ? (
+                    <OwnerDisabledReason reason="Staff-role roster visibility requires Owner, admin_grants, or manage_moderators truth. Normal users cannot load roster rows or staff emails." />
+                  ) : platformRoleRosterLoading ? (
+                    <View style={styles.configLoadingRow}>
+                      <ActivityIndicator color="#fff" />
+                      <Text style={styles.configLoadingText}>Loading platform role roster...</Text>
                     </View>
-
-                    <View style={styles.badgesRow}>
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{formatPlatformRoleDisplayLabel(entry.role)}</Text>
-                      </View>
-                      <View style={[styles.badge, entry.status === "active" ? styles.badgeOn : styles.badgeOff]}>
-                        <Text style={styles.badgeText}>{formatModerationToken(entry.status)}</Text>
-                      </View>
+                  ) : activePlatformRoleRoster.length ? (
+                    <View style={styles.ownerControlList}>
+                      {activePlatformRoleRoster.map((entry) => {
+                        const canRemoveEntry = entry.role === "operator" ? canManageAdminStaff : entry.role === "moderator" ? canManageModeratorStaff : false;
+                        return (
+                          <OwnerControlRow
+                            key={`active-staff-role-${entry.id}`}
+                            expanded
+                            message={`${entry.grantedAt ? `Granted ${formatModerationTimestamp(entry.grantedAt)}` : "Grant timestamp unavailable"} · ${entry.grantedBy ? `Granted by ${formatAuditDisplayText(entry.grantedBy)}` : "Grant actor not returned"} · ${isOwnerStaff ? `${entry.permissionKeys.length} scoped permissions` : "Permission detail Owner-only"}`}
+                            meta={entry.notes ? formatAuditDisplayText(entry.notes) : undefined}
+                            statusLabel={entry.role === "owner" ? "Protected Owner" : formatPlatformRoleDisplayLabel(entry.role)}
+                            title={maskOperatorIdentity(entry.identityLabel)}
+                            tone={entry.role === "owner" ? "success" : "info"}
+                          >
+                            <View style={styles.badgesRow}>
+                              <OwnerStatusPill label={formatModerationToken(entry.status)} tone="success" />
+                              <OwnerStatusPill label={isOwnerStaff ? `${entry.permissionKeys.length} permissions` : "Owner-only permissions"} tone={isOwnerStaff ? "info" : "locked"} />
+                            </View>
+                            {isOwnerStaff && entry.permissionKeys.length ? (
+                              <Text style={styles.ownerDetailText}>{formatPermissionSummary(entry.permissionKeys)}</Text>
+                            ) : null}
+                            {entry.role === "owner" ? (
+                              <OwnerDisabledReason reason="Owner records are protected. At least one active Owner must always remain, and Owner removal is not exposed from this generic staff panel." />
+                            ) : entry.email ? (
+                              <View style={styles.configListActions}>
+                                {isOwnerStaff ? (
+                                  <TouchableOpacity
+                                    style={[styles.orderBtn, staffPermissionBusy !== null && styles.configSaveBtnDisabled]}
+                                    onPress={() => void loadStaffPermissionSet(entry.email, entry.permissionKeys)}
+                                    disabled={staffPermissionBusy !== null}
+                                  >
+                                    <Text style={styles.orderBtnText}>Manage Permissions</Text>
+                                  </TouchableOpacity>
+                                ) : null}
+                                {canRemoveEntry ? (
+                                  <TouchableOpacity
+                                    style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
+                                    onPress={() => confirmStaffRoleRevoke(entry.email, entry.role === "operator" ? "admin" : "moderator")}
+                                    disabled={staffRoleBusy !== null}
+                                  >
+                                    <Text style={styles.orderBtnText}>{entry.role === "operator" ? "Remove Admin" : "Remove Moderator"}</Text>
+                                  </TouchableOpacity>
+                                ) : (
+                                  <OwnerDisabledReason reason={entry.role === "operator" ? "Admin removal requires Owner or admin_grants." : "Moderator removal requires Owner or manage_moderators."} />
+                                )}
+                              </View>
+                            ) : null}
+                          </OwnerControlRow>
+                        );
+                      })}
                     </View>
+                  ) : (
+                    <OwnerEmptyState
+                      body="The backed roster query succeeded, but no active staff records are visible in this slice."
+                      title="No Active Staff Rows"
+                    />
+                  )}
+                  {revokedPlatformRoleRoster.length ? (
+                    <View style={styles.ownerNestedProofPanel}>
+                      <View style={styles.ownerSectionHeaderRow}>
+                        <Text style={styles.ownerSectionTitle}>Revoked / History Rows</Text>
+                        <OwnerStatusPill label={`${revokedPlatformRoleRoster.length} rows`} tone="locked" />
+                      </View>
+                      {revokedPlatformRoleRoster.slice(0, 4).map((entry) => (
+                        <OwnerControlRow
+                          key={`revoked-staff-role-${entry.id}`}
+                          message={`${formatPlatformRoleDisplayLabel(entry.role)} · ${entry.grantedAt ? formatModerationTimestamp(entry.grantedAt) : "time unknown"}`}
+                          statusLabel="Revoked"
+                          title={maskOperatorIdentity(entry.identityLabel)}
+                          tone="locked"
+                        />
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
 
-                    {entry.status === "active" && entry.email && entry.role !== "owner" ? (
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Grant / Revoke Staff Access</Text>
+                    <OwnerStatusPill label={canManageAdminStaff || canManageModeratorStaff ? "Backed RPC" : "Locked"} tone={canManageAdminStaff || canManageModeratorStaff ? "success" : "locked"} />
+                  </View>
+                  <Text style={styles.contentSignalBody}>Emails normalize to lowercase. Admin is stored as internal operator. Owner grants are not available from this generic panel.</Text>
+                  {canManageAdminStaff || canManageModeratorStaff ? (
+                    <>
+                      <TextInput
+                        value={staffRoleEmail}
+                        onChangeText={setStaffRoleEmail}
+                        placeholder="staff@example.com"
+                        placeholderTextColor="#788196"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        style={styles.input}
+                      />
+                      <View style={styles.toggleRowWrap}>
+                        {staffRoleOptions.map((option) => (
+                          <TouchableOpacity
+                            key={option.key}
+                            style={[styles.toggleChip, staffRoleTarget === option.key && styles.toggleChipActive]}
+                            onPress={() => setStaffRoleTarget(option.key)}
+                            disabled={staffRoleBusy !== null}
+                          >
+                            <Text style={[styles.toggleChipText, staffRoleTarget === option.key && styles.toggleChipTextActive]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TextInput
+                        value={staffRoleReason}
+                        onChangeText={setStaffRoleReason}
+                        placeholder="Audit reason required"
+                        placeholderTextColor="#788196"
+                        style={styles.input}
+                      />
                       <View style={styles.configListActions}>
-                        {entry.role === "operator" && canManageAdminStaff ? (
-                          <TouchableOpacity
-                            style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
-                            onPress={() => confirmStaffRoleRevoke(entry.email, "admin")}
-                            disabled={staffRoleBusy !== null}
-                          >
-                            <Text style={styles.orderBtnText}>Remove Admin</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                        {entry.role === "moderator" && canManageModeratorStaff ? (
-                          <TouchableOpacity
-                            style={[styles.orderBtn, staffRoleBusy !== null && styles.configSaveBtnDisabled]}
-                            onPress={() => confirmStaffRoleRevoke(entry.email, "moderator")}
-                            disabled={staffRoleBusy !== null}
-                          >
-                            <Text style={styles.orderBtnText}>Remove Moderator</Text>
-                          </TouchableOpacity>
-                        ) : null}
+                        <TouchableOpacity
+                          style={[styles.orderBtn, (staffRoleBusy !== null || staffRoleReason.trim().length < 6) && styles.configSaveBtnDisabled]}
+                          onPress={() => void runStaffRoleGrant()}
+                          disabled={staffRoleBusy !== null || staffRoleReason.trim().length < 6}
+                        >
+                          <Text style={styles.orderBtnText}>{staffRoleBusy === "grant" ? "Granting..." : "Grant Role"}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.orderBtn, (staffRoleBusy !== null || staffRoleReason.trim().length < 6) && styles.configSaveBtnDisabled]}
+                          onPress={() => confirmStaffRoleRevoke()}
+                          disabled={staffRoleBusy !== null || staffRoleReason.trim().length < 6}
+                        >
+                          <Text style={styles.orderBtnText}>{staffRoleBusy === "revoke" ? "Removing..." : "Remove Role"}</Text>
+                        </TouchableOpacity>
                       </View>
-                    ) : entry.role === "owner" ? (
-                      <View style={styles.configListRowSubtle}>
-                        <Text style={styles.configListBody}>Owner records are protected. At least one active Owner must always remain.</Text>
+                    </>
+                  ) : (
+                    <OwnerDisabledReason reason="Staff management actions require active Owner, admin_grants, or manage_moderators. Moderators cannot add or remove staff." />
+                  )}
+                </View>
+
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Scoped Permission Matrix</Text>
+                    <OwnerStatusPill label={staffPermissionLoadState} tone={staffPermissionDraftChanged ? "manual" : staffPermissionSavedKeys ? "success" : "locked"} />
+                  </View>
+                  <Text style={styles.contentSignalBody}>Tap any permission to toggle it. Multiple permissions can stay selected before saving the full backed set.</Text>
+                  {canManageStaffPermissions ? (
+                    <>
+                      <TextInput
+                        value={staffPermissionEmail}
+                        onChangeText={setStaffPermissionEmail}
+                        placeholder="admin-or-moderator@example.com"
+                        placeholderTextColor="#788196"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        style={styles.input}
+                      />
+                      <View style={styles.configListActions}>
+                        <TouchableOpacity
+                          style={[styles.orderBtn, staffPermissionBusy !== null && styles.configSaveBtnDisabled]}
+                          onPress={() => void loadStaffPermissionSet()}
+                          disabled={staffPermissionBusy !== null}
+                        >
+                          <Text style={styles.orderBtnText}>{staffPermissionBusy === "load" ? "Loading..." : "Load Current"}</Text>
+                        </TouchableOpacity>
+                        <OwnerStatusPill label={selectedPermissionCountLabel} tone={staffPermissionSelectedKeys.length ? "info" : "locked"} />
                       </View>
-                    ) : null}
-                  </View>
-                ))
-              ) : (
-                <View style={styles.configListRow}>
-                  <View style={styles.configListCopy}>
-                    <Text style={styles.configListTitle}>No visible staff-role records</Text>
-                    <Text style={styles.configListBody}>
-                      Owner/operator roster visibility is ready, but no current role records are visible in this slice yet.
-                    </Text>
-                  </View>
+                      <View style={styles.contentSignalGrid}>
+                        {staffPermissionGroups.map((group) => (
+                          <View key={group.key} style={styles.contentSignalTile}>
+                            <Text style={styles.contentSignalTitle}>{group.label}</Text>
+                            <Text style={styles.contentSignalBody}>{group.body}</Text>
+                            <View style={styles.toggleRowWrap}>
+                              {group.permissions.map((permissionKey) => {
+                                const selected = staffPermissionSelectedKeys.includes(permissionKey);
+                                return (
+                                  <TouchableOpacity
+                                    key={permissionKey}
+                                    style={[
+                                      styles.toggleChip,
+                                      selected && styles.toggleChipActive,
+                                      (staffPermissionSavedKeys === null || staffPermissionBusy !== null) && styles.toggleChipDisabled,
+                                    ]}
+                                    onPress={() => toggleStaffPermissionDraft(permissionKey)}
+                                    disabled={staffPermissionSavedKeys === null || staffPermissionBusy !== null}
+                                  >
+                                    <Text style={[styles.toggleChipText, selected && styles.toggleChipTextActive]}>
+                                      {staffPermissionLabelByKey[permissionKey]}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                      <OwnerDetailGrid
+                        rows={[
+                          { label: "Saved Set", value: staffPermissionSavedKeys ? formatPermissionSummary(staffPermissionSavedKeys) : "load current permissions first" },
+                          { label: "Draft Set", value: formatPermissionSummary(staffPermissionSelectedKeys) },
+                          { label: "Will Grant", value: formatPermissionSummary(staffPermissionGrantDelta) },
+                          { label: "Will Revoke", value: formatPermissionSummary(staffPermissionRevokeDelta) },
+                        ]}
+                      />
+                      <TextInput
+                        value={staffPermissionExpiresAt}
+                        onChangeText={setStaffPermissionExpiresAt}
+                        placeholder="Expires at ISO date/time, optional"
+                        placeholderTextColor="#788196"
+                        style={styles.input}
+                        autoCapitalize="none"
+                      />
+                      <TextInput
+                        value={staffPermissionReason}
+                        onChangeText={setStaffPermissionReason}
+                        placeholder="Audit reason required"
+                        placeholderTextColor="#788196"
+                        style={styles.input}
+                      />
+                      <View style={styles.configListActions}>
+                        <TouchableOpacity
+                          style={[styles.orderBtn, (!staffPermissionDraftChanged || staffPermissionBusy !== null) && styles.configSaveBtnDisabled]}
+                          onPress={resetStaffPermissionDraft}
+                          disabled={!staffPermissionDraftChanged || staffPermissionBusy !== null}
+                        >
+                          <Text style={styles.orderBtnText}>Reset Draft</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.ownerPrimaryButton, !canSaveStaffPermissions && styles.configSaveBtnDisabled]}
+                          onPress={queueStaffPermissionSave}
+                          disabled={!canSaveStaffPermissions}
+                        >
+                          {staffPermissionBusy === "save" ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.ownerPrimaryButtonText}>Save Permissions</Text>}
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <OwnerDisabledReason reason="Scoped permission editing is Owner-only in the current backend. Admins can manage roles only when separately granted admin_grants or manage_moderators." />
+                  )}
                 </View>
-              )
-            ) : operatorTab === "roles" ? (
-              <View style={styles.configListRow}>
-                <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Staff-role visibility stays owner/operator only</Text>
-                <Text style={styles.configListBody}>
-                    This signed-in identity can access `/admin`, but staff-role roster visibility stays locked until Owner or scoped staff-management permission truth is present.
-                  </Text>
+
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Permission Templates Shortcut</Text>
+                    <OwnerStatusPill label={canManagePermissionTemplates ? "Connected" : "Not Connected"} tone={canManagePermissionTemplates ? "info" : "locked"} />
+                  </View>
+                  <Text style={styles.contentSignalBody}>Templates apply permission bundles only. They never create platform roles and are managed from the dedicated Permission Templates tab.</Text>
+                  <TouchableOpacity
+                    style={[styles.orderBtn, !canManagePermissionTemplates && styles.configSaveBtnDisabled]}
+                    onPress={() => setOperatorTab("permission-templates")}
+                    disabled={!canManagePermissionTemplates}
+                  >
+                    <Text style={styles.orderBtnText}>{canManagePermissionTemplates ? "Open Permission Templates" : "Template application not connected"}</Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
+
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Protected Owner Rules</Text>
+                    <OwnerStatusPill label="Fail Closed" tone="success" />
+                  </View>
+                  <OwnerDetailGrid
+                    rows={[
+                      { label: "Owner Records", value: "Protected; at least one active Owner must remain" },
+                      { label: "Owner Grants", value: "Dedicated bootstrap/protected flow only" },
+                      { label: "Admin Grants", value: "Owner or admin_grants; never self-grant" },
+                      { label: "Moderator Grants", value: "Owner or manage_moderators" },
+                      { label: "Moderator Boundary", value: "Moderators cannot grant roles or permissions" },
+                    ]}
+                  />
+                </View>
+
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Role Audit Timeline</Text>
+                    <OwnerStatusPill label={roleAuditLoading ? "Loading" : roleAuditEvents.length ? `${roleAuditEvents.length} rows` : "No Rows"} tone={roleAuditEvents.length ? "info" : "locked"} />
+                  </View>
+                  <OwnerFilterChips options={roleAuditFilterOptions} value={roleAuditFilter} onChange={setRoleAuditFilter} />
+                  {roleAuditLoading ? (
+                    <View style={styles.configLoadingRow}>
+                      <ActivityIndicator color="#fff" />
+                      <Text style={styles.configLoadingText}>Loading role audit timeline...</Text>
+                    </View>
+                  ) : roleAuditEvents.length ? (
+                    <View style={styles.ownerControlList}>
+                      {roleAuditEvents.map((entry) => (
+                        <OwnerControlRow
+                          key={`role-audit-${entry.auditKind}-${entry.id}`}
+                          message={`${entry.createdAt ? formatModerationTimestamp(entry.createdAt) : "Time unknown"} · Target ${maskOperatorIdentity(entry.targetEmail ?? entry.targetUserId ?? "unknown")}`}
+                          meta={entry.reason ? formatAuditDisplayText(entry.reason) : "Reason not returned"}
+                          statusLabel={entry.auditKind === "permission" ? formatModerationToken(entry.permissionKey) : formatPlatformRoleDisplayLabel(entry.role ?? "moderator")}
+                          title={formatModerationToken(entry.action)}
+                          tone={roleAuditTone(entry)}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <OwnerEmptyState
+                      body="Role history exists only when the backed staff audit feed returns rows for this filter. No synthetic proof rows are shown."
+                      title="No Role Audit Rows"
+                    />
+                  )}
+                </View>
+              </>
             ) : null}
 
             {operatorTab === "audit" ? (
@@ -11277,22 +11627,22 @@ export default function AdminStudioScreen() {
               <TextInput
                 value={permissionTemplateReason}
                 onChangeText={setPermissionTemplateReason}
-                placeholder={isOwnerStaff ? "Owner note optional" : "Reason required for Admin template action"}
+                placeholder="Audit reason required"
                 placeholderTextColor="#788196"
                 style={styles.input}
               />
               <View style={styles.ownerPanelActions}>
                 <TouchableOpacity
-                  style={[styles.ownerPrimaryButton, (permissionTemplateBusy !== null || !canManagePermissionTemplates) && styles.configSaveBtnDisabled]}
+                  style={[styles.ownerPrimaryButton, (permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6) && styles.configSaveBtnDisabled]}
                   onPress={() => void runPermissionTemplateAction("apply")}
-                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates}
+                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6}
                 >
                   <Text style={styles.ownerPrimaryButtonText}>{permissionTemplateBusy === "apply" ? "Applying..." : canManagePermissionTemplates ? "Apply Template" : "Locked"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.ownerSecondaryButton, (permissionTemplateBusy !== null || !canManagePermissionTemplates) && styles.configSaveBtnDisabled]}
+                  style={[styles.ownerSecondaryButton, (permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6) && styles.configSaveBtnDisabled]}
                   onPress={() => void runPermissionTemplateAction("revoke")}
-                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates}
+                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6}
                 >
                   <Text style={styles.ownerSecondaryButtonText}>{permissionTemplateBusy === "revoke" ? "Revoking..." : canManagePermissionTemplates ? "Revoke Template" : "Locked"}</Text>
                 </TouchableOpacity>
@@ -13242,6 +13592,57 @@ export default function AdminStudioScreen() {
         </>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={roleConfirm !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          if (!staffRoleBusy && !staffPermissionBusy) setRoleConfirm(null);
+        }}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmSheet}>
+            <Text style={styles.confirmKicker}>Roles & Permissions</Text>
+            <Text style={styles.confirmTitle}>{roleConfirm?.title ?? "Confirm Role Action"}</Text>
+            <Text style={styles.confirmBody}>
+              {roleConfirm?.body ?? "Confirm this backed role action before continuing."}
+            </Text>
+            <View style={styles.confirmMetaBox}>
+              <Text style={styles.confirmMetaText}>
+                {roleConfirm?.kind === "save_permissions"
+                  ? `Selected set: ${formatPermissionSummary(roleConfirm.selectedPermissions)}`
+                  : `Target role: ${roleConfirm ? formatPlatformRoleDisplayLabel(roleConfirm.role) : "Unknown"}`}
+              </Text>
+              <Text style={styles.confirmMetaText}>Audit reason is required and server-side role protection remains enforced.</Text>
+              <Text style={styles.confirmMetaText}>No room, LiveKit, Premium, Player, upload, chat, or payment behavior changes.</Text>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setRoleConfirm(null)}
+                disabled={staffRoleBusy !== null || staffPermissionBusy !== null}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  roleConfirm?.kind === "revoke_role" ? styles.dangerConfirmBtn : styles.saveBtn,
+                  (staffRoleBusy !== null || staffPermissionBusy !== null) && styles.configSaveBtnDisabled,
+                ]}
+                onPress={() => void applyRoleConfirmation()}
+                disabled={staffRoleBusy !== null || staffPermissionBusy !== null}
+              >
+                {staffRoleBusy !== null || staffPermissionBusy !== null ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveText}>{roleConfirm?.kind === "save_permissions" ? "Save Permissions" : "Remove Role"}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={contentConfirm !== null}

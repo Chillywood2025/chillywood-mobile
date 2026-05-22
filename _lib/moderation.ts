@@ -123,6 +123,33 @@ export type PlatformStaffPermissionActionResult = {
   status: "active" | "revoked";
 };
 
+export type PlatformStaffPermissionUpdateResult = {
+  email: string;
+  oldPermissions: PlatformStaffPermissionKey[];
+  newPermissions: PlatformStaffPermissionKey[];
+  grantedPermissions: PlatformStaffPermissionKey[];
+  revokedPermissions: PlatformStaffPermissionKey[];
+  unchangedPermissions: PlatformStaffPermissionKey[];
+  auditWritten: boolean;
+  updatedAt: string | null;
+};
+
+export type PlatformRoleAuditEvent = {
+  id: string;
+  auditKind: "role" | "permission";
+  action: string;
+  role: PlatformRole | null;
+  permissionKey: PlatformStaffPermissionKey | null;
+  actorEmail: string | null;
+  actorRole: string | null;
+  actorUserId: string | null;
+  targetEmail: string | null;
+  targetUserId: string | null;
+  reason: string | null;
+  createdAt: string | null;
+  metadata: Record<string, unknown>;
+};
+
 export type SafetyReportRecord = {
   id: number;
   reporterUserId: string;
@@ -784,6 +811,7 @@ export async function readMyPlatformRoleMemberships(): Promise<PlatformRoleMembe
 export async function readPlatformRoleRoster(options?: {
   limit?: number;
   includeRevoked?: boolean;
+  includePermissionGrants?: boolean;
 }): Promise<PlatformRoleRosterReadModel> {
   const limit = normalizePositiveLimit(options?.limit, 12, 50);
   let query = supabase
@@ -822,6 +850,55 @@ export async function readPlatformRoleRoster(options?: {
 
   const activeItems = items.filter((entry) => entry.status === "active");
 
+  if (options?.includePermissionGrants === true && items.length) {
+    const emails = Array.from(new Set(
+      items
+        .map((entry) => normalizeText(entry.email).toLowerCase())
+        .filter(Boolean),
+    ));
+
+    if (emails.length) {
+      const permissionClient = supabase as unknown as {
+        from: (table: string) => {
+          select: (columns: string) => {
+            eq: (column: string, value: unknown) => {
+              in: (column: string, values: string[]) => {
+                limit: (limit: number) => Promise<{ data: unknown[] | null; error: { message?: string } | null }>;
+              };
+            };
+          };
+        };
+      };
+
+      const { data: permissionRows, error: permissionError } = await permissionClient
+        .from("platform_staff_permission_grants")
+        .select("target_email,permission_key,status,expires_at")
+        .eq("status", "active")
+        .in("target_email", emails)
+        .limit(500);
+
+      if (!permissionError) {
+        const permissionMap = new Map<string, Set<PlatformStaffPermissionKey>>();
+        for (const row of permissionRows ?? []) {
+          if (!isPlainObject(row)) continue;
+          const expiresAt = normalizeText(row.expires_at);
+          if (expiresAt && Date.parse(expiresAt) <= Date.now()) continue;
+          const email = normalizeText(row.target_email).toLowerCase();
+          const permissionKey = normalizePlatformStaffPermissionKey(row.permission_key);
+          if (!email || !permissionKey) continue;
+          const existing = permissionMap.get(email) ?? new Set<PlatformStaffPermissionKey>();
+          existing.add(permissionKey);
+          permissionMap.set(email, existing);
+        }
+
+        for (const item of items) {
+          const email = normalizeText(item.email).toLowerCase();
+          item.permissionKeys = email ? Array.from(permissionMap.get(email) ?? []).sort() : [];
+        }
+      }
+    }
+  }
+
   return {
     generatedAt: new Date().toISOString(),
     items,
@@ -834,6 +911,15 @@ export async function readPlatformRoleRoster(options?: {
     },
   };
 }
+
+const parsePermissionKeyArray = (value: unknown): PlatformStaffPermissionKey[] => {
+  const values = Array.isArray(value) ? value : [];
+  return Array.from(new Set(
+    values
+      .map(normalizePlatformStaffPermissionKey)
+      .filter((entry): entry is PlatformStaffPermissionKey => !!entry),
+  )).sort();
+};
 
 const readStaffRoleActionResult = (value: unknown): PlatformStaffRoleActionResult => {
   const payload = isPlainObject(value) ? value : {};
@@ -949,6 +1035,112 @@ export async function revokePlatformStaffPermissionByEmail(input: {
 
   if (error) throw error;
   return readStaffPermissionActionResult(data);
+}
+
+export async function readPlatformStaffPermissionsByEmail(input: {
+  email: string;
+}): Promise<PlatformStaffPermissionKey[]> {
+  const email = normalizeText(input.email).toLowerCase();
+  if (!email) throw new Error("Enter a staff email.");
+
+  const rpc = supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  const { data, error } = await rpc("list_staff_scoped_permissions_by_email", {
+    p_target_email: email,
+  });
+
+  if (error) throw error;
+  return parsePermissionKeyArray(data);
+}
+
+const readStaffPermissionUpdateResult = (value: unknown): PlatformStaffPermissionUpdateResult => {
+  const payload = isPlainObject(value) ? value : {};
+  return {
+    email: normalizeText(payload.email).toLowerCase(),
+    oldPermissions: parsePermissionKeyArray(payload.oldPermissions ?? payload.old_permissions),
+    newPermissions: parsePermissionKeyArray(payload.newPermissions ?? payload.new_permissions),
+    grantedPermissions: parsePermissionKeyArray(payload.grantedPermissions ?? payload.granted_permissions),
+    revokedPermissions: parsePermissionKeyArray(payload.revokedPermissions ?? payload.revoked_permissions),
+    unchangedPermissions: parsePermissionKeyArray(payload.unchangedPermissions ?? payload.unchanged_permissions),
+    auditWritten: payload.auditWritten === true || payload.audit_written === true,
+    updatedAt: normalizeText(payload.updatedAt ?? payload.updated_at) || null,
+  };
+};
+
+export async function updatePlatformStaffPermissionsByEmail(input: {
+  email: string;
+  permissionKeys: readonly PlatformStaffPermissionKey[];
+  reason: string;
+  expiresAt?: string | null;
+}): Promise<PlatformStaffPermissionUpdateResult> {
+  const email = normalizeText(input.email).toLowerCase();
+  const reason = normalizeText(input.reason);
+  const permissionKeys = Array.from(new Set(
+    input.permissionKeys
+      .map(normalizePlatformStaffPermissionKey)
+      .filter((entry): entry is PlatformStaffPermissionKey => !!entry),
+  )).sort();
+
+  if (!email) throw new Error("Enter a staff email.");
+  if (reason.length < 6) throw new Error("Audit reason is required for permission changes.");
+
+  const rpc = supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  const { data, error } = await rpc("admin_update_platform_staff_permissions_by_email", {
+    p_expires_at: normalizeText(input.expiresAt) || null,
+    p_permission_keys: permissionKeys,
+    p_reason: reason,
+    p_target_email: email,
+  });
+
+  if (error) throw error;
+  return readStaffPermissionUpdateResult(data);
+}
+
+const readRoleAuditEvent = (value: unknown): PlatformRoleAuditEvent | null => {
+  if (!isPlainObject(value)) return null;
+  const id = normalizeText(value.id);
+  const auditKind = normalizeText(value.audit_kind) === "permission" ? "permission" : "role";
+  if (!id) return null;
+  return {
+    id,
+    auditKind,
+    action: normalizeText(value.action) || "unknown",
+    role: normalizePlatformRole(value.role),
+    permissionKey: normalizePlatformStaffPermissionKey(value.permission_key),
+    actorEmail: normalizeText(value.actor_email) || null,
+    actorRole: normalizeText(value.actor_role) || null,
+    actorUserId: normalizeText(value.actor_user_id) || null,
+    targetEmail: normalizeText(value.target_email).toLowerCase() || null,
+    targetUserId: normalizeText(value.target_user_id) || null,
+    reason: normalizeText(value.reason) || null,
+    createdAt: normalizeText(value.created_at) || null,
+    metadata: isPlainObject(value.metadata) ? value.metadata : {},
+  };
+};
+
+export async function listAdminRoleAuditEvents(options?: {
+  filter?: string;
+  limit?: number;
+}): Promise<PlatformRoleAuditEvent[]> {
+  const rpc = supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  const { data, error } = await rpc("list_admin_role_audit_events", {
+    p_filter: normalizeText(options?.filter) || "all",
+    p_limit: normalizePositiveLimit(options?.limit, 12, 50),
+  });
+
+  if (error) throw error;
+  const rows = Array.isArray(data) ? data : [];
+  return rows
+    .map(readRoleAuditEvent)
+    .filter((entry): entry is PlatformRoleAuditEvent => !!entry);
 }
 
 type SafetyReportDbRow = {
