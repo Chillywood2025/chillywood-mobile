@@ -2,6 +2,7 @@
 
 ## Scope
 - Adds protected Admin control tools on top of the owner superuser and scoped staff foundation.
+- Admin UI must follow `docs/APP_UI_UX_RULES.md`: compact command-center layout, real summary cards/counts, grouped actions, production states, exact disabled reasons, no raw debug primary UI, no dead buttons, and no fake proof/demo rows in production mode.
 - Does not change Live Stage, Watch-Party Live, Player, Chat/call UI, normal Premium gates, or owner invisibility.
 - Owner normal access remains unrestricted and is not app-level audited unless Owner manually activates Break Glass.
 
@@ -10,20 +11,22 @@
 - Permission Templates grant permission-only bundles and never create staff roles.
 - Temporary grants use `platform_staff_permission_grants.expires_at` as the server-side source of truth.
 - Break Glass is off by default, reason-required, and writes append-only Break Glass audit rows.
-- Legal Request Intake stores non-deletable intake records connected to Legal Evidence work.
+- The single top-level Legal tab contains Intake, Evidence, Holds, Requests, Exports, and Timeline/History sections where backed. Legal Request Intake stores non-deletable intake records connected to Legal Evidence work.
 - DMCA Case Management handles copyright notice intake, case detail, content actions, strikes, counter-notices, and functional case history.
-- Owner Security shows real status where available and unknown/manual where no safe backend proof exists.
+- Owner Security Center is Owner-only and backed by `owner_trusted_devices`, `security_audit_events`, temporary grant read/revoke paths, security audit timeline readouts, Live Ops flag readouts, and checklist proof. It must show unavailable/manual when a source cannot be proved, not fake zeroes.
 - Canary Checks store pass/fail/manual-required results; manual required is not success.
 - Safety Dashboard shows only real counts and unknown/manual for missing aggregations.
 
 ## Production Proof
-- `admin-owner-controls` is deployed on Supabase project `bmkkhihfbmsnnmcqkoly` as ACTIVE version 15.
+- `admin-owner-controls` is deployed on Supabase project `bmkkhihfbmsnnmcqkoly` as ACTIVE version 20. `admin-legal-evidence` is deployed as ACTIVE version 7.
 - The May 21, 2026 physical Android owner-device legal-readiness proof on `R5CR120QCBF` ran Admin Canary from the Admin Command Center and returned `33 pass`, `0 manual`, and `0 failed`.
 - The May 22, 2026 physical Android owner-device release proof on `R5CR120QCBF` returned `60 pass`, `0 manual_required`, and `0 failed` after the hosted public DMCA URL, public form intake, private attachment upload/access denial, uploader counter-notice self-service, email-intake mode, and content mutation matrix checks were added.
+- The May 22, 2026 physical Android owner-device Legal Intake / Legal Evidence release proof on `R5CR120QCBF` returned `65 pass`, `0 manual_required`, and `0 failed`. It proved one Legal top-level Admin tab with Legal Intake inside Legal; request list/create/open/status/timeline/evidence linkage; owner normal Legal Intake without a reason prompt; scoped Admin Legal Evidence preview/export/hold enforcement; ungranted Admin, moderator, regular viewer, and signed-out server-side denial where applicable; target-matrix coverage; and proof grant cleanup.
+- The May 22, 2026 Owner Security Center replacement is repo-side pending deploy/proof. It adds migration `202605220004_owner_security_center.sql`, new `admin-owner-controls` owner-security actions, a safe mobile device-context wrapper, and `guard:owner-security-center`. Production closeout still requires deploying the migration/function and proving owner/non-owner access, current-device trust/revoke, temporary grant revoke/bulk revoke audit rows, checklist honesty, and physical Android UI behavior.
 - The production proof harness creates or reuses clearly marked `liveops.proof+...` accounts through Supabase Admin/service-role tooling, signs them in server-side only, grants temporary proof roles/permissions only for the run, and verifies no active proof roles/grants remain afterward.
 - The canary proves owner normal no-audit behavior by comparing owner-sensitive app-level audit counts before and after normal canary use; owner actions are only app-level audited when Break Glass is active.
 - The canary proves admin self-grant denial through the real staff-permission RPC and moderator grant denial through the real role-management RPC.
-- The canary proves Legal Evidence restriction for ungranted users/admins and exact-grant access where applicable.
+- The canary proves Legal Intake and Legal Evidence restriction for ungranted users/admins and exact-grant access where applicable.
 - The canary proves Live Ops remains dry-run with real-action flags disabled through the ops health contract.
 - The canary proves Supabase hosted Auth redirect configuration through a server-side management-token secret; token values are never shown in mobile UI, docs, logs, or committed files.
 - The legal readiness portion proves the production policy bundle word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, Google Play deletion language, DMCA checklist, support email/path, and public-link-or-bundled fallback.
@@ -36,7 +39,8 @@
 - Audit Explorer and Canary require Owner or `audit_review` / `security_review`.
 - Permission Templates require Owner or `staff_permission_templates` / `admin_grants`; Admins cannot template-grant themselves.
 - Break Glass requires Owner or `emergency_break_glass`.
-- Legal Intake requires Owner or `legal_request_intake` / `legal_review`.
+- Legal Intake requires Owner or `legal_request_intake` / `legal_review` / `legal_ops`.
+- Legal Evidence preview/search requires Owner or `legal_review` / `evidence_preview` / `legal_ops`; export requires Owner or `evidence_export` / `legal_ops`; hold requires Owner or `legal_hold` / `legal_ops`.
 - DMCA Case Management requires Owner or Admin/operator with `dmca_review`, `copyright_review`, or `legal_review`.
 - Owner Security is Owner-only.
 
@@ -45,16 +49,19 @@
 - Moderator: `reports_review`, `content_moderation`
 - Senior Moderator: `reports_review`, `content_moderation`, `user_lookup`
 - Live Ops Operator: `live_ops`
-- DMCA Reviewer: `dmca_review`, `copyright_review`
-- Legal Reviewer: `legal_review`, `legal_request_intake`, `dmca_review`, `copyright_review`
-- Evidence Exporter: `legal_review`, `evidence_export`, `legal_request_intake`
+- DMCA Reviewer: `dmca_review`, `copyright_review`, `legal_review`
+- Legal Reviewer: `legal_review`, `evidence_preview`, `legal_request_intake`, `dmca_review`, `copyright_review`
+- Legal Operator: `legal_ops`, `legal_request_intake`, `evidence_preview`, `evidence_export`, `legal_hold`, `legal_review`
+- Evidence Exporter: `evidence_preview`, `evidence_export`, `legal_request_intake`
 - Creator Support: `creator_support`, `support_inbox`, `user_lookup`
 
 ## Safety Notes
 - The Edge Function keeps service-role access server-side.
 - No secrets are returned to the app.
 - Legal Intake has no delete action.
+- Legal request records, evidence records, exports, holds, and legal request timelines are functional case records. Normal Owner Legal work does not require Break Glass or owner-sensitive app-level audit rows.
 - DMCA case history, notices, content actions, counter-notices, and strike records are functional case records. Normal Owner DMCA work does not require Break Glass or owner-sensitive app-level audit rows.
+- Owner Security device trust rows, temporary grant state, security events, checklist proof, and emergency action history are functional security records. Normal Owner use does not require reason prompts; bulk temporary-grant revoke uses typed confirmation and writes a functional security event.
 - Production clients hide proof/demo DMCA cases marked `is_test_case`; dev clients may show them with a clear test badge.
 - Canary checks that need unavailable proof accounts, ops health contracts, or Supabase Management API access return manual required, not pass.
 - Owner normal functional records, such as active permission grants, may exist because the system needs them; they are not shown as app-level owner audit unless Break Glass is active.

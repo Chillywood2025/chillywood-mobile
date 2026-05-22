@@ -11,12 +11,15 @@ Repo control files are the source of truth for:
 - cross-cutting monetization doctrine
 - cross-cutting compliance and product-phase doctrine
 - content-action behavior
+- app-wide UI/UX doctrine
 
 If code, comments, older docs, screenshots, or stale assumptions conflict with these control files, the control files win until they are intentionally updated.
 
 If an older communication-specific assumption says standalone communication is disallowed or room-only, that older assumption is obsolete and the current Chi'lly Chat rule wins.
 
 If an older monetization, compliance, product-phase, or profile/channel-platform assumption conflicts with `PRODUCT_DOCTRINE.md`, `PRODUCT_DOCTRINE.md` wins unless `ROOM_BLUEPRINT.md` intentionally narrows the rule for a specific room.
+
+If an older UI or layout assumption conflicts with `docs/APP_UI_UX_RULES.md`, `docs/APP_UI_UX_RULES.md` wins unless a feature-specific control file intentionally sets a stricter surface rule.
 
 ## Canonical Routes
 - Party Room: `/watch-party/[partyId]`

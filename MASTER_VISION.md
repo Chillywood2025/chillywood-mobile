@@ -19,6 +19,8 @@ The correct stylized product name is:
 Chi'llywood's communication layer is also native to Chi'llywood.
 It must not be described or framed as another player brand, another messenger brand, or a third-party communication system.
 
+Chi'llywood's app-wide UI/UX doctrine lives in `docs/APP_UI_UX_RULES.md`. New surfaces should feel modern, premium, adaptive, native, and production-ready by default, with immersive social/live surfaces, media-forward creator/public surfaces, and compact command-center owner/admin surfaces.
+
 ## One-Platform Rule
 Chi'llywood is one product, not a bundle of unrelated mini-products.
 

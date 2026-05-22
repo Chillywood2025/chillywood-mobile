@@ -5,6 +5,8 @@
 
 It does not replace `MASTER_VISION.md` or `ARCHITECTURE_RULES.md`. It makes them usable for future implementation by answering a more practical question: what belongs in each major room, what does not, and how should those rooms mature without drifting into each other.
 
+App-wide visual and interaction law lives in `docs/APP_UI_UX_RULES.md`. This blueprint applies those rules to rooms and room-adjacent surfaces: immersive, premium, adaptive, social-first, and native-feeling by default.
+
 This blueprint exists to stop:
 - feature dumping into the nearest editable screen
 - route drift between Live, Party, Player, Profile, and Chi'lly Chat

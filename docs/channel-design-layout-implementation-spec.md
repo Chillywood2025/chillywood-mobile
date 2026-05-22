@@ -7,6 +7,8 @@ This document defines Chi'llywood's channel design / layout chapter.
 
 It is implementation doctrine, not UI code.
 
+It inherits the app-wide UI/UX law in `docs/APP_UI_UX_RULES.md`: public Channel and creator Studio work must use premium adaptive layouts, shelves/rails/grids where appropriate, production states, honest action availability, and no generic stacked-card fallback unless that is truly the right surface pattern.
+
 It exists to:
 - preserve current route truth while Chi'llywood deepens creator-controlled channel presentation
 - keep `/channel-studio` as the creator-side design/layout owner

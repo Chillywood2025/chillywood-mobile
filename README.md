@@ -7,6 +7,12 @@ Chi'llywood now supports two rollout environments:
 
 Sensitive flows still require signed-in accounts in both environments: watch-party rooms, communication rooms, monetization writes, channel settings, safety reports, support feedback, and admin.
 
+## App UI / UX Doctrine
+
+All new or materially changed app surfaces must follow [docs/APP_UI_UX_RULES.md](docs/APP_UI_UX_RULES.md). This is the app-wide default for routes, rooms, tabs, modals, sheets, panels, forms, admin tools, legal/support surfaces, and creator/public surfaces.
+
+In short: build modern premium mobile UI by default. Use adaptive grids, modular layouts, responsive panels, floating action surfaces, native sheets/popovers, real states, and honest action availability. Avoid generic stacked-card layouts, outdated admin-panel appearance on product surfaces, raw debug UI, dead buttons, fake proof, fake counts, and production-visible demo data.
+
 ## Runtime Config
 
 Set these environment variables before local testing or CI builds:

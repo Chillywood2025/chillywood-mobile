@@ -1,3 +1,7 @@
+import * as Application from "expo-application";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
 export type OwnerControlPermissionTemplate = {
@@ -102,13 +106,94 @@ export type OwnerControlCanaryRun = Record<string, unknown> & {
 
 export type OwnerControlSecurityStatus = {
   activeBreakGlassCount?: number | null;
+  activeTemporaryGrantsCount?: number | null;
+  auditEvents?: OwnerSecurityAuditEvent[];
+  checklist?: OwnerSecurityChecklistItem[];
+  currentDevice?: OwnerSecurityDevice | null;
+  devices?: OwnerSecurityDevice[];
   emergencyOwnerToolLock?: Record<string, unknown>;
   forceLogoutAllOwnerSessions?: Record<string, unknown>;
+  liveOpsFlags?: OwnerSecurityLiveOpsFlag[];
+  overview?: OwnerSecurityOverview;
   ownerCliChecklist?: string[];
   ownerSessions?: Record<string, unknown>;
   proofGrantCount?: number | null;
   proofRoleCount?: number | null;
   realLiveOpsFlags?: Record<string, unknown>;
+  temporaryGrants?: OwnerTemporaryGrant[];
+  warningChecklistCount?: number | null;
+};
+
+export type OwnerSecurityOverview = {
+  activeTemporaryGrantsCount?: number | null;
+  currentDeviceStatus?: string | null;
+  lastSecurityRefreshAt?: string | null;
+  openSecurityAlertsCount?: number | null;
+  ownerAccessStatus?: string | null;
+  recentHighRiskActionsCount?: number | null;
+};
+
+export type OwnerSecurityDevice = {
+  appVersion?: string | null;
+  buildVersion?: string | null;
+  createdAt?: string | null;
+  deviceLabel?: string | null;
+  id?: string | null;
+  isCurrentDevice?: boolean;
+  lastSeenAt?: string | null;
+  platform?: string | null;
+  revokedAt?: string | null;
+  trustedAt?: string | null;
+  trustStatus?: string | null;
+};
+
+export type OwnerTemporaryGrant = {
+  createdAt?: string | null;
+  createdBy?: string | null;
+  expiresAt?: string | null;
+  grantType?: string | null;
+  id?: string | null;
+  isProofGrant?: boolean;
+  reason?: string | null;
+  revokedAt?: string | null;
+  state?: string | null;
+  targetEmail?: string | null;
+  targetUserId?: string | null;
+};
+
+export type OwnerSecurityAuditEvent = {
+  actor?: string | null;
+  actorRole?: string | null;
+  createdAt?: string | null;
+  eventType?: string | null;
+  id?: string | null;
+  metadata?: Record<string, unknown>;
+  reason?: string | null;
+  severity?: "low" | "medium" | "high" | "critical" | string;
+  source?: string | null;
+  summary?: string | null;
+  target?: string | null;
+  targetType?: string | null;
+};
+
+export type OwnerSecurityLiveOpsFlag = {
+  details?: Record<string, unknown>;
+  key?: string | null;
+  lastCheckedAt?: string | null;
+  meaning?: string | null;
+  recommendedAction?: string | null;
+  status?: "healthy" | "warning" | "urgent" | "manual" | string;
+  title?: string | null;
+};
+
+export type OwnerSecurityChecklistItem = {
+  actionLabel?: string | null;
+  key?: string | null;
+  lastCheckedAt?: string | null;
+  proofSource?: string | null;
+  status?: "passed" | "warning" | "failed" | "manual" | string;
+  title?: string | null;
+  whatItMeans?: string | null;
 };
 
 export type OwnerControlSafetyDashboard = {
@@ -130,6 +215,28 @@ async function requestOwnerControls(action: string, body: Record<string, unknown
   });
   if (error) throw error;
   return toObject(data);
+}
+
+export function getOwnerSecurityDeviceContext() {
+  const expoConfig = Constants.expoConfig as { version?: string | null } | null;
+  const appVersion = Application.nativeApplicationVersion ?? expoConfig?.version ?? null;
+  const buildVersion = Application.nativeBuildVersion ?? null;
+  const platform = Platform.OS;
+  const deviceName = Device.deviceName ?? null;
+  const modelName = Device.modelName ?? Device.modelId ?? null;
+  const osName = Device.osName ?? platform;
+  const osVersion = Device.osVersion ?? null;
+  const deviceLabel = [deviceName, modelName, osName].filter(Boolean).join(" / ") || `${platform} device`;
+  return {
+    appVersion,
+    buildVersion,
+    deviceLabel,
+    deviceName,
+    modelName,
+    osName,
+    osVersion,
+    platform,
+  };
 }
 
 export async function listOwnerControlAudit(input: Record<string, unknown> = {}) {
@@ -207,11 +314,41 @@ export async function updateLegalRequest(input: Record<string, unknown>) {
 }
 
 export async function readOwnerSecurityStatus() {
-  const payload = await requestOwnerControls("security_status");
+  const payload = await requestOwnerControls("security_status", {
+    deviceContext: getOwnerSecurityDeviceContext(),
+  });
   return {
     safetyDashboard: toObject(payload.safetyDashboard) as OwnerControlSafetyDashboard,
     security: toObject(payload.security) as OwnerControlSecurityStatus,
   };
+}
+
+export async function trustCurrentOwnerDevice() {
+  return requestOwnerControls("trust_current_owner_device", {
+    deviceContext: getOwnerSecurityDeviceContext(),
+  });
+}
+
+export async function revokeOwnerDevice(deviceId: string) {
+  return requestOwnerControls("revoke_owner_device", { deviceId });
+}
+
+export async function revokeTemporaryOwnerGrant(grantId: string) {
+  return requestOwnerControls("revoke_temporary_owner_grant", { grantId });
+}
+
+export async function revokeAllTemporaryOwnerGrants(confirmation: string) {
+  return requestOwnerControls("revoke_all_temporary_owner_grants", { confirmation });
+}
+
+export async function listOwnerSecurityAuditEvents(filter = "all") {
+  const payload = await requestOwnerControls("list_security_audit_events", { filter });
+  return toArray(payload.events) as OwnerSecurityAuditEvent[];
+}
+
+export async function runOwnerSecurityChecklist() {
+  const payload = await requestOwnerControls("run_owner_security_checklist");
+  return toArray(payload.checklist) as OwnerSecurityChecklistItem[];
 }
 
 export async function runOwnerControlCanary() {

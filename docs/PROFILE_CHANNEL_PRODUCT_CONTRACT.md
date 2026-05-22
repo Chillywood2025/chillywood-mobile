@@ -2,6 +2,8 @@
 
 Date: 2026-05-06
 
+This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Channel work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.
+
 ## 1. Profile Purpose
 
 Profile is Chi'llywood's personal and social identity surface.
