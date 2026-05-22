@@ -5,6 +5,7 @@ export const DMCA_CASE_STATUSES = [
   "needs_more_info",
   "under_review",
   "rejected",
+  "rejected_no_action",
   "content_disabled",
   "uploader_notified",
   "counter_notice_received",
@@ -14,6 +15,7 @@ export const DMCA_CASE_STATUSES = [
   "court_action_notice_received",
   "repeat_infringer_review",
   "closed",
+  "preserved_evidence",
 ] as const;
 
 export const DMCA_CONTENT_TYPES = [
@@ -103,8 +105,10 @@ export type DmcaCase = {
   reporterAddress: string | null;
   reporterIsOwner: boolean;
   authorizedAgentName: string | null;
+  copyrightOwnerName: string | null;
   copyrightedWorkDescription: string;
   copyrightedWorkUrls: unknown[];
+  infringingMaterialDescription: string | null;
   contentType: DmcaContentType;
   contentId: string | null;
   contentUrl: string | null;
@@ -119,6 +123,9 @@ export type DmcaCase = {
   adminNotes: string | null;
   publicSafeSummary: string | null;
   activeStrikeCount: number;
+  isTestCase: boolean;
+  lastAction: string | null;
+  lastActionAt: string | null;
 };
 
 export type DmcaCounterNotice = {
@@ -162,7 +169,7 @@ export type DmcaStrike = {
   dmcaCaseId: string;
   contentType: string;
   contentId: string;
-  strikeStatus: string;
+  strikeStatus: "active" | "removed" | "disputed" | "resolved" | "expired" | string;
   severity: "standard" | "severe";
   reason: string;
   createdAt: string;
@@ -185,6 +192,7 @@ export type DmcaCaseDetail = {
   case: DmcaCase;
   counterNotices: DmcaCounterNotice[];
   contentActions: DmcaContentActionRecord[];
+  contentState: DmcaContentState | null;
   strikes: DmcaStrike[];
   auditLog: DmcaAuditLogEntry[];
 };
@@ -197,14 +205,44 @@ export type SubmitDmcaNoticeInput = {
   reporterAddress?: string;
   reporterIsOwner: boolean;
   authorizedAgentName?: string;
+  copyrightOwnerName?: string;
   copyrightedWorkDescription: string;
   copyrightedWorkUrls?: string[];
+  infringingMaterialDescription?: string;
   contentType: DmcaContentType;
   contentId?: string;
   contentUrl?: string;
   goodFaithStatement: boolean;
   accuracyPenaltyPerjuryStatement: boolean;
   electronicSignature: string;
+};
+
+export type AdminDmcaCreateCaseInput = SubmitDmcaNoticeInput & {
+  source: "admin_manual" | "admin_created" | "support_email_manual" | "manual_email" | "public_form" | "in_app_report";
+};
+
+export type DmcaContentState = {
+  found: boolean;
+  publicAvailability: string;
+  reason: string | null;
+  missingBackendPiece: string | null;
+  backend: string | null;
+  contentType: string | null;
+  contentId: string | null;
+  ownerUserId: string | null;
+  visibility: string | null;
+  moderationStatus: string | null;
+  moderationReason: string | null;
+  moderatedAt: string | null;
+  deletedAt: string | null;
+};
+
+export type DmcaCaseSummary = {
+  total: number;
+  open: number;
+  priority: number;
+  repeatInfringerReview: number;
+  byStatus: Record<DmcaCaseStatus, number>;
 };
 
 type DmcaRpcClient = {
@@ -227,6 +265,8 @@ const normalizeStatus = (value: unknown): DmcaCaseStatus => {
   const normalized = toLowerText(value);
   return DMCA_CASE_STATUSES.includes(normalized as DmcaCaseStatus) ? normalized as DmcaCaseStatus : "received";
 };
+const isUuidText = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 export const normalizeDmcaContentType = (value: unknown): DmcaContentType => {
   const normalized = toLowerText(value);
@@ -250,8 +290,10 @@ const parseDmcaCase = (row: any, activeStrikeCount = 0): DmcaCase => ({
   reporterAddress: toText(row.reporter_address) || null,
   reporterIsOwner: row.reporter_is_owner !== false,
   authorizedAgentName: toText(row.authorized_agent_name) || null,
+  copyrightOwnerName: toText(row.copyright_owner_name) || null,
   copyrightedWorkDescription: toText(row.copyrighted_work_description),
   copyrightedWorkUrls: toStringArray(row.copyrighted_work_urls),
+  infringingMaterialDescription: toText(row.allegedly_infringing_material_description) || null,
   contentType: normalizeDmcaContentType(row.allegedly_infringing_content_type),
   contentId: toText(row.allegedly_infringing_content_id) || null,
   contentUrl: toText(row.allegedly_infringing_url) || null,
@@ -266,6 +308,9 @@ const parseDmcaCase = (row: any, activeStrikeCount = 0): DmcaCase => ({
   adminNotes: toText(row.admin_notes) || null,
   publicSafeSummary: toText(row.public_safe_summary) || null,
   activeStrikeCount,
+  isTestCase: row.is_test_case === true,
+  lastAction: toText(row.last_action) || null,
+  lastActionAt: toDateText(row.last_action_at) || null,
 });
 
 const parseCounterNotice = (row: any): DmcaCounterNotice => ({
@@ -330,6 +375,26 @@ const parseAudit = (row: any): DmcaAuditLogEntry => ({
   createdAt: toDateText(row.created_at),
 });
 
+const parseContentState = (value: unknown): DmcaContentState | null => {
+  const row = parseJsonObject(value);
+  if (!row) return null;
+  return {
+    found: row.found === true,
+    publicAvailability: toText(row.publicAvailability ?? row.public_availability) || "unknown",
+    reason: toText(row.reason) || null,
+    missingBackendPiece: toText(row.missingBackendPiece ?? row.missing_backend_piece) || null,
+    backend: toText(row.backend) || null,
+    contentType: toText(row.contentType ?? row.content_type) || null,
+    contentId: toText(row.contentId ?? row.content_id) || null,
+    ownerUserId: toText(row.ownerUserId ?? row.owner_user_id) || null,
+    visibility: toText(row.visibility) || null,
+    moderationStatus: toText(row.moderationStatus ?? row.moderation_status) || null,
+    moderationReason: toText(row.moderationReason ?? row.moderation_reason) || null,
+    moderatedAt: toText(row.moderatedAt ?? row.moderated_at) || null,
+    deletedAt: toText(row.deletedAt ?? row.deleted_at) || null,
+  };
+};
+
 const assertText = (value: string | undefined, message: string) => {
   if (!toText(value)) throw new Error(message);
 };
@@ -361,8 +426,10 @@ export async function submitDmcaNotice(input: SubmitDmcaNoticeInput) {
       reporterAddress: toText(input.reporterAddress) || null,
       reporterIsOwner: input.reporterIsOwner,
       authorizedAgentName: toText(input.authorizedAgentName) || null,
+      copyrightOwnerName: toText(input.copyrightOwnerName) || null,
       copyrightedWorkDescription: toText(input.copyrightedWorkDescription),
       copyrightedWorkUrls: input.copyrightedWorkUrls ?? [],
+      infringingMaterialDescription: toText(input.infringingMaterialDescription) || null,
       contentType: normalizeDmcaContentType(input.contentType),
       contentId: toText(input.contentId) || null,
       contentUrl: toText(input.contentUrl) || null,
@@ -381,11 +448,45 @@ export async function submitDmcaNotice(input: SubmitDmcaNoticeInput) {
   };
 }
 
+export async function adminDmcaCreateCase(input: AdminDmcaCreateCaseInput) {
+  validateDmcaNoticeInput(input);
+  assertText(input.copyrightOwnerName, "Copyright owner name is required.");
+  assertText(input.infringingMaterialDescription, "Describe the allegedly infringing material.");
+
+  const { data, error } = await dmcaClient.rpc("admin_dmca_create_case", {
+    p_payload: {
+      claimantName: toText(input.reporterName),
+      claimantCompany: toText(input.reporterCompany) || null,
+      claimantEmail: toText(input.reporterEmail),
+      reporterPhone: toText(input.reporterPhone) || null,
+      reporterAddress: toText(input.reporterAddress) || null,
+      reporterIsOwner: input.reporterIsOwner,
+      authorizedAgentName: toText(input.authorizedAgentName) || null,
+      copyrightOwnerName: toText(input.copyrightOwnerName),
+      copyrightedWorkDescription: toText(input.copyrightedWorkDescription),
+      copyrightedWorkUrls: input.copyrightedWorkUrls ?? [],
+      infringingMaterialDescription: toText(input.infringingMaterialDescription),
+      contentType: normalizeDmcaContentType(input.contentType),
+      contentId: toText(input.contentId) || null,
+      contentUrl: toText(input.contentUrl) || null,
+      goodFaithStatement: input.goodFaithStatement,
+      accuracyPenaltyPerjuryStatement: input.accuracyPenaltyPerjuryStatement,
+      authorityStatement: input.accuracyPenaltyPerjuryStatement,
+      electronicSignature: toText(input.electronicSignature),
+    },
+    p_source: input.source,
+  });
+  if (error) throw error;
+  return parseDmcaCase(data);
+}
+
 export async function readAdminDmcaCases(options?: {
+  includeTestCases?: boolean;
   limit?: number;
+  search?: string;
   status?: DmcaCaseStatus | "all";
 }): Promise<DmcaCase[]> {
-  const limit = Math.max(1, Math.min(50, Math.floor(Number(options?.limit ?? 20))));
+  const limit = Math.max(1, Math.min(200, Math.floor(Number(options?.limit ?? 20))));
   let query = dmcaClient
     .from("dmca_cases")
     .select("*")
@@ -395,13 +496,34 @@ export async function readAdminDmcaCases(options?: {
   if (options?.status && options.status !== "all") {
     query = query.eq("status", options.status);
   }
+  if (options?.includeTestCases !== true && !__DEV__) {
+    query = query.eq("is_test_case", false);
+  }
+
+  const search = toText(options?.search);
+  if (search) {
+    const escapedSearch = search.replaceAll("%", "\\%").replaceAll("_", "\\_").replaceAll(",", " ");
+    const pattern = `%${escapedSearch}%`;
+    const clauses = [
+      `case_number.ilike.${pattern}`,
+      `allegedly_infringing_content_id.ilike.${pattern}`,
+      `allegedly_infringing_url.ilike.${pattern}`,
+      `reporter_email.ilike.${pattern}`,
+      `uploader_user_id.ilike.${pattern}`,
+      `status.ilike.${pattern}`,
+    ];
+    if (isUuidText(search)) clauses.push(`id.eq.${search}`);
+    query = query.or(clauses.join(","));
+  }
 
   const { data, error } = await query;
   if (error) throw error;
 
   const rows = data ?? [];
+  const caseIds = rows.map((row: any) => toText(row.id)).filter(Boolean);
   const uploaderIds = Array.from(new Set(rows.map((row: any) => toText(row.uploader_user_id)).filter(Boolean)));
   const activeStrikeCounts = new Map<string, number>();
+  const latestActions = new Map<string, { eventType: string; createdAt: string }>();
   if (uploaderIds.length) {
     const { data: strikes } = await dmcaClient
       .from("dmca_strikes")
@@ -415,8 +537,65 @@ export async function readAdminDmcaCases(options?: {
       activeStrikeCounts.set(userId, (activeStrikeCounts.get(userId) ?? 0) + 1);
     });
   }
+  if (caseIds.length) {
+    const { data: auditRows } = await dmcaClient
+      .from("dmca_audit_log")
+      .select("dmca_case_id,event_type,created_at")
+      .in("dmca_case_id", caseIds)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    (auditRows ?? []).forEach((entry: any) => {
+      const caseId = toText(entry.dmca_case_id);
+      if (!caseId || latestActions.has(caseId)) return;
+      latestActions.set(caseId, {
+        createdAt: toDateText(entry.created_at),
+        eventType: toText(entry.event_type),
+      });
+    });
+  }
 
-  return rows.map((row: any) => parseDmcaCase(row, activeStrikeCounts.get(toText(row.uploader_user_id)) ?? 0));
+  return rows.map((row: any) => {
+    const action = latestActions.get(toText(row.id));
+    return parseDmcaCase({
+      ...row,
+      last_action: action?.eventType ?? null,
+      last_action_at: action?.createdAt ?? null,
+    }, activeStrikeCounts.get(toText(row.uploader_user_id)) ?? 0);
+  });
+}
+
+export async function readAdminDmcaCaseSummary(): Promise<DmcaCaseSummary> {
+  const cases = await readAdminDmcaCases({ limit: 200, status: "all" });
+  const byStatus = Object.fromEntries(DMCA_CASE_STATUSES.map((status) => [status, 0])) as Record<DmcaCaseStatus, number>;
+  for (const dmcaCase of cases) {
+    byStatus[dmcaCase.status] = (byStatus[dmcaCase.status] ?? 0) + 1;
+  }
+  const openStatuses: DmcaCaseStatus[] = [
+    "received",
+    "needs_more_info",
+    "under_review",
+    "content_disabled",
+    "counter_notice_received",
+    "waiting_rightsholder_response",
+    "eligible_for_restore",
+    "repeat_infringer_review",
+    "preserved_evidence",
+  ];
+  const priorityStatuses: DmcaCaseStatus[] = [
+    "received",
+    "needs_more_info",
+    "counter_notice_received",
+    "eligible_for_restore",
+    "repeat_infringer_review",
+  ];
+
+  return {
+    total: cases.length,
+    open: cases.filter((dmcaCase) => openStatuses.includes(dmcaCase.status)).length,
+    priority: cases.filter((dmcaCase) => priorityStatuses.includes(dmcaCase.status) || dmcaCase.activeStrikeCount >= 3).length,
+    repeatInfringerReview: byStatus.repeat_infringer_review ?? 0,
+    byStatus,
+  };
 }
 
 export async function readAdminDmcaCaseDetail(caseId: string): Promise<DmcaCaseDetail> {
@@ -443,10 +622,21 @@ export async function readAdminDmcaCaseDetail(caseId: string): Promise<DmcaCaseD
     strike.userId === toText(caseRow.uploader_user_id) && strike.strikeStatus === "active"
   )).length;
 
+  const parsedCase = parseDmcaCase(caseRow, activeStrikeCount);
+  let contentState: DmcaContentState | null = null;
+  if (parsedCase.contentId) {
+    const { data: contentStateData } = await dmcaClient.rpc("admin_dmca_get_content_state", {
+      p_content_id: parsedCase.contentId,
+      p_content_type: parsedCase.contentType,
+    });
+    contentState = parseContentState(contentStateData);
+  }
+
   return {
-    case: parseDmcaCase(caseRow, activeStrikeCount),
+    case: parsedCase,
     counterNotices: (countersResult.data ?? []).map(parseCounterNotice),
     contentActions: (actionsResult.data ?? []).map(parseContentAction),
+    contentState,
     strikes,
     auditLog: (auditResult.data ?? []).map(parseAudit),
   };
@@ -526,6 +716,20 @@ export async function adminDmcaRemoveStrike(input: { strikeId: string; reason: s
   const { data, error } = await dmcaClient.rpc("admin_dmca_remove_strike", {
     p_strike_id: input.strikeId,
     p_removed_reason: input.reason,
+  });
+  if (error) throw error;
+  return parseStrike(data);
+}
+
+export async function adminDmcaUpdateStrikeStatus(input: {
+  strikeId: string;
+  status: "active" | "removed" | "disputed" | "resolved";
+  reason: string;
+}) {
+  const { data, error } = await dmcaClient.rpc("admin_dmca_update_strike_status", {
+    p_reason: input.reason,
+    p_status: input.status,
+    p_strike_id: input.strikeId,
   });
   if (error) throw error;
   return parseStrike(data);

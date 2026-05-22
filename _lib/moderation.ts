@@ -33,6 +33,8 @@ export type PlatformStaffPermissionKey =
   | "billing_support_read"
   | "creator_support"
   | "legal_review"
+  | "dmca_review"
+  | "copyright_review"
   | "evidence_export"
   | "emergency_break_glass"
   | "admin_grants"
@@ -272,6 +274,8 @@ const normalizePlatformStaffPermissionKey = (value: unknown): PlatformStaffPermi
     || normalized === "billing_support_read"
     || normalized === "creator_support"
     || normalized === "legal_review"
+    || normalized === "dmca_review"
+    || normalized === "copyright_review"
     || normalized === "evidence_export"
     || normalized === "emergency_break_glass"
     || normalized === "admin_grants"
@@ -582,6 +586,14 @@ export function canAccessLiveOpsTools(memberships: PlatformRoleMembership[]) {
 
 export function canAccessLegalEvidenceTools(memberships: PlatformRoleMembership[]) {
   return hasPlatformStaffPermission(memberships, ["legal_review", "evidence_export"]);
+}
+
+export function canAccessDmcaTools(memberships: PlatformRoleMembership[]) {
+  return hasPlatformRoleMembership(memberships, ["owner"])
+    || (
+      hasPlatformRoleMembership(memberships, ["operator"])
+      && hasPlatformStaffPermission(memberships, ["dmca_review", "copyright_review", "legal_review"])
+    );
 }
 
 export function canAccessAuditExplorerTools(memberships: PlatformRoleMembership[]) {

@@ -32,7 +32,8 @@ const JSON_HEADERS = {
 const PERMISSION_TEMPLATES: Record<string, { label: string; permissions: string[] }> = {
   creator_support: { label: "Creator Support", permissions: ["creator_support", "support_inbox", "user_lookup"] },
   evidence_exporter: { label: "Evidence Exporter", permissions: ["legal_review", "evidence_export", "legal_request_intake"] },
-  legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "legal_request_intake"] },
+  dmca_reviewer: { label: "DMCA Reviewer", permissions: ["dmca_review", "copyright_review", "legal_review"] },
+  legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "dmca_review", "copyright_review", "legal_request_intake"] },
   live_ops_operator: { label: "Live Ops Operator", permissions: ["live_ops"] },
   moderator: { label: "Moderator", permissions: ["reports_review", "content_moderation"] },
   senior_moderator: { label: "Senior Moderator", permissions: ["reports_review", "content_moderation", "user_lookup"] },
@@ -46,6 +47,8 @@ const CONTROL_PERMISSION_KEYS = [
   "billing_support_read",
   "content_moderation",
   "creator_support",
+  "copyright_review",
+  "dmca_review",
   "emergency_break_glass",
   "evidence_export",
   "legal_request_intake",
@@ -1283,6 +1286,380 @@ const legalPolicyCanaryResults = (supportEmail: string, privacyUrl: string, term
   return results;
 };
 
+const DMCA_CANARY_CONTENT_ID = "CANARY-DMCA-CONTENT-DO-NOT-MODERATE";
+
+const buildDmcaCanaryPayload = (label: string) => ({
+  accuracyPenaltyPerjuryStatement: true,
+  authorityStatement: true,
+  claimantCompany: "Chi'llwood Canary",
+  claimantEmail: "liveops.proof+dmca@chillywoodstream.com",
+  claimantName: "CANARY PROOF DMCA Reporter",
+  contentId: DMCA_CANARY_CONTENT_ID,
+  contentType: "other",
+  contentUrl: "/canary/dmca-proof-content",
+  copyrightOwnerName: "CANARY PROOF Copyright Owner",
+  copyrightedWorkDescription: `${label}: canary-only copyrighted work description.`,
+  copyrightedWorkUrls: ["https://example.invalid/canary-dmca-work"],
+  electronicSignature: "CANARY PROOF DMCA Reporter",
+  goodFaithStatement: true,
+  infringingMaterialDescription: `${label}: canary-only allegedly infringing material description.`,
+  reporterIsOwner: true,
+});
+
+const cleanupDmcaCanaryCase = async (adminClient: SupabaseClientLike, caseId: string) => {
+  if (!caseId) return "cleanup skipped; no DMCA canary case id";
+  const deletes = await Promise.all([
+    adminClient.from("dmca_audit_log").delete().eq("dmca_case_id", caseId),
+    adminClient.from("dmca_content_actions").delete().eq("dmca_case_id", caseId),
+    adminClient.from("dmca_strikes").delete().eq("dmca_case_id", caseId),
+    adminClient.from("dmca_counter_notices").delete().eq("dmca_case_id", caseId),
+  ]);
+  const caseDelete = await adminClient.from("dmca_cases").delete().eq("id", caseId);
+  const errors = [...deletes, caseDelete]
+    .map((result) => result.error)
+    .filter(Boolean)
+    .map((error: { message?: string }) => redactText(error.message, 220));
+  return errors.length
+    ? `cleanup failed: ${errors.join("; ")}`
+    : "cleanup passed; DMCA canary case and child records deleted";
+};
+
+const dmcaAdminCanaryResults = async (
+  adminClient: SupabaseClientLike,
+  grantedDmcaClient: SupabaseClientLike,
+  viewerClient: SupabaseClientLike,
+  grantedProof: { email: string; userId: string },
+  viewerProof: { userId: string },
+) => {
+  const results: JsonObject[] = [];
+  let caseId = "";
+  let caseNumber = "";
+  let strikeId = "";
+  let counterNoticeId = "";
+  let dmcaCleanupStatus = "not needed";
+
+  const tableNames = ["dmca_cases", "dmca_content_actions", "dmca_strikes", "dmca_counter_notices", "dmca_audit_log"] as const;
+  const tableChecks = await Promise.all(tableNames.map((table) =>
+    safeSupabaseCall(() => adminClient.from(table).select("id", { count: "exact", head: true }).limit(1))
+  ));
+  const tableErrors = tableChecks
+    .map((result, index) => result.error ? `${tableNames[index]}: ${redactText((result.error as { message?: string }).message, 180)}` : "")
+    .filter(Boolean);
+  results.push(canaryResult({
+    actor: "system",
+    actual: tableErrors.length ? `DMCA table proof failed: ${tableErrors.join("; ")}` : "DMCA case, action, strike, counter-notice, and history tables responded.",
+    details: { checked_tables: [...tableNames], errors: tableErrors },
+    expected: "DMCA cases table and child case-record tables exist.",
+    key: "dmca_cases_table_exists",
+    label: "DMCA cases tables exist",
+    section: "DMCA / Copyright",
+    status: tableErrors.length ? "fail" : "pass",
+    testedSurface: "tables: dmca_cases, dmca_content_actions, dmca_strikes, dmca_counter_notices, dmca_audit_log",
+  }));
+
+  const dmcaScopedGrant = await safeSupabaseCall(() => adminClient.from("platform_staff_permission_grants").insert({
+    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    granted_by: "admin-owner-controls-canary",
+    metadata: { canary_proof: true, cleanup_required: true, granted_actor_role: "system" },
+    permission_key: "dmca_review",
+    reason: "CANARY PROOF temporary DMCA scoped permission; revoke during canary cleanup.",
+    status: "active",
+    target_email: grantedProof.email,
+    target_user_id: grantedProof.userId,
+  }));
+  results.push(canaryResult({
+    actor: "system",
+    actual: dmcaScopedGrant.error ? "dmca_review scoped grant failed." : "dmca_review scoped permission key accepted.",
+    cleanupStatus: "pending proof cleanup",
+    details: { error: dmcaScopedGrant.error ? redactText((dmcaScopedGrant.error as { message?: string }).message, 240) : null },
+    expected: "dmca_review can be granted as a scoped Admin/Operator permission.",
+    key: "dmca_scoped_permission_key",
+    label: "DMCA scoped permission key accepted",
+    section: "DMCA / Copyright",
+    status: dmcaScopedGrant.error ? "fail" : "pass",
+    testedSurface: "table: platform_staff_permission_grants permission_key=dmca_review",
+  }));
+
+  const intake = await safeSupabaseCall(() => grantedDmcaClient.rpc("admin_dmca_create_case", {
+    p_payload: buildDmcaCanaryPayload("Formal notice intake canary"),
+    p_source: "admin_manual",
+  }));
+  const createdCase = isRecord(intake.data) ? intake.data : {};
+  caseId = toText(createdCase.id);
+  caseNumber = toText(createdCase.case_number);
+  results.push(canaryResult({
+    actor: "proof admin with legal_review/dmca_review",
+    actual: !intake.error && caseId ? `Formal DMCA notice intake created case ${caseNumber || caseId}.` : "Formal DMCA notice intake failed.",
+    cleanupStatus: "pending DMCA proof cleanup",
+    details: { case_created: !!caseId, error: intake.error ? redactText((intake.error as { message?: string }).message, 260) : null },
+    expected: "Formal notice intake RPC creates a real DMCA case.",
+    key: "dmca_formal_notice_intake",
+    label: "Formal notice intake works",
+    section: "DMCA / Copyright",
+    status: !intake.error && !!caseId ? "pass" : "fail",
+    testedSurface: "rpc: admin_dmca_create_case",
+  }));
+
+  if (caseId) {
+    const [caseDetail, auditDetail] = await Promise.all([
+      safeSupabaseCall(() => grantedDmcaClient.from("dmca_cases").select("*").eq("id", caseId).single()),
+      safeSupabaseCall(() => grantedDmcaClient.from("dmca_audit_log").select("id,event_type").eq("dmca_case_id", caseId).limit(20)),
+    ]);
+    const auditRows = Array.isArray(auditDetail.data) ? auditDetail.data as JsonObject[] : [];
+    results.push(canaryResult({
+      actor: "proof admin with legal_review/dmca_review",
+      actual: !caseDetail.error && isRecord(caseDetail.data) && auditRows.length > 0
+        ? "DMCA case detail and timeline rows loaded."
+        : "DMCA case detail or timeline could not be loaded.",
+      cleanupStatus: "pending DMCA proof cleanup",
+      details: {
+        audit_rows: auditRows.length,
+        case_loaded: isRecord(caseDetail.data),
+        error: caseDetail.error ? redactText((caseDetail.error as { message?: string }).message, 260) : null,
+      },
+      expected: "Opened DMCA case detail includes case row and history.",
+      key: "dmca_case_detail_opens",
+      label: "DMCA case detail opens",
+      section: "DMCA / Copyright",
+      status: !caseDetail.error && isRecord(caseDetail.data) && auditRows.length > 0 ? "pass" : "fail",
+      testedSurface: "tables: dmca_cases + dmca_audit_log through RLS",
+    }));
+
+    const contentAction = await safeSupabaseCall(() => grantedDmcaClient.rpc("admin_dmca_record_content_action", {
+      p_action: "preserved_evidence",
+      p_case_id: caseId,
+      p_content_id: DMCA_CANARY_CONTENT_ID,
+      p_content_type: "other",
+      p_reason: "CANARY PROOF preserved evidence only; no backed content mutation.",
+    }));
+    results.push(canaryResult({
+      actor: "proof admin with legal_review/dmca_review",
+      actual: contentAction.error ? "DMCA content action recording failed." : "DMCA preserved-evidence content action recorded without deleting content.",
+      cleanupStatus: "pending DMCA proof cleanup",
+      details: { error: contentAction.error ? redactText((contentAction.error as { message?: string }).message, 260) : null },
+      expected: "Content action recording creates a case record and timeline entry.",
+      key: "dmca_content_action_recording",
+      label: "DMCA content action recording works",
+      section: "DMCA / Copyright",
+      status: contentAction.error ? "fail" : "pass",
+      testedSurface: "rpc: admin_dmca_record_content_action(action=preserved_evidence)",
+    }));
+
+    const strikeAdd = await safeSupabaseCall(() => grantedDmcaClient.rpc("admin_dmca_add_strike", {
+      p_case_id: caseId,
+      p_channel_id: null,
+      p_content_id: DMCA_CANARY_CONTENT_ID,
+      p_content_type: "other",
+      p_reason: "CANARY PROOF valid takedown/preservation strike.",
+      p_severity: "standard",
+      p_user_id: viewerProof.userId,
+    }));
+    strikeId = toText((isRecord(strikeAdd.data) ? strikeAdd.data : {}).id);
+    const strikeDispute = strikeId
+      ? await safeSupabaseCall(() => grantedDmcaClient.rpc("admin_dmca_update_strike_status", {
+        p_reason: "CANARY PROOF counter-notice dispute.",
+        p_status: "disputed",
+        p_strike_id: strikeId,
+      }))
+      : { data: null, error: new Error("strike_id_missing") };
+    const strikeResolve = strikeId
+      ? await safeSupabaseCall(() => grantedDmcaClient.rpc("admin_dmca_update_strike_status", {
+        p_reason: "CANARY PROOF dispute resolved.",
+        p_status: "resolved",
+        p_strike_id: strikeId,
+      }))
+      : { data: null, error: new Error("strike_id_missing") };
+    const strikeOk = !strikeAdd.error && !strikeDispute.error && !strikeResolve.error;
+    results.push(canaryResult({
+      actor: "proof admin with legal_review/dmca_review",
+      actual: strikeOk ? "Copyright strike add, dispute, and resolve flow succeeded." : "Copyright strike flow failed.",
+      cleanupStatus: "pending DMCA proof cleanup",
+      details: {
+        add_error: strikeAdd.error ? redactText((strikeAdd.error as { message?: string }).message, 220) : null,
+        dispute_error: strikeDispute.error ? redactText((strikeDispute.error as { message?: string }).message, 220) : null,
+        resolve_error: strikeResolve.error ? redactText((strikeResolve.error as { message?: string }).message, 220) : null,
+      },
+      expected: "Strike add/remove/dispute backing RPC flow works.",
+      key: "dmca_strike_flow",
+      label: "DMCA strike add/dispute/resolve works",
+      section: "DMCA / Copyright",
+      status: strikeOk ? "pass" : "fail",
+      testedSurface: "rpcs: admin_dmca_add_strike + admin_dmca_update_strike_status",
+    }));
+
+    const counterNotice = await safeSupabaseCall(() => grantedDmcaClient.rpc("admin_dmca_record_counter_notice", {
+      p_case_id: caseId,
+      p_forwarded_to_claimant: false,
+      p_payload: {
+        electronicSignature: "CANARY PROOF Counter Submitter",
+        goodFaithMistakeStatement: true,
+        jurisdictionConsentStatement: true,
+        removedMaterialDescription: "CANARY PROOF removed material statement.",
+        removedMaterialUrlOrLocation: DMCA_CANARY_CONTENT_ID,
+        serviceAcceptanceStatement: true,
+        submitterEmail: "liveops.proof+counter@chillywoodstream.com",
+        submitterName: "CANARY PROOF Counter Submitter",
+        submitterUserId: viewerProof.userId,
+      },
+    }));
+    counterNoticeId = toText((isRecord(counterNotice.data) ? counterNotice.data : {}).id);
+    const counterForward = counterNoticeId
+      ? await safeSupabaseCall(() => grantedDmcaClient.rpc("admin_dmca_forward_counter_notice", {
+        p_counter_notice_id: counterNoticeId,
+        p_reason: "CANARY PROOF forwarding window.",
+      }))
+      : { data: null, error: new Error("counter_notice_id_missing") };
+    const counterEligible = counterNoticeId
+      ? await safeSupabaseCall(() => grantedDmcaClient.rpc("admin_dmca_mark_restore_eligible", {
+        p_case_id: caseId,
+        p_counter_notice_id: counterNoticeId,
+        p_reason: "CANARY PROOF response window eligibility.",
+      }))
+      : { data: null, error: new Error("counter_notice_id_missing") };
+    const counterOk = !counterNotice.error && !counterForward.error && !counterEligible.error;
+    results.push(canaryResult({
+      actor: "proof admin with legal_review/dmca_review",
+      actual: counterOk ? "Counter-notice record, forward, and restore-eligible flow succeeded." : "Counter-notice flow failed.",
+      cleanupStatus: "pending DMCA proof cleanup",
+      details: {
+        eligible_error: counterEligible.error ? redactText((counterEligible.error as { message?: string }).message, 220) : null,
+        forward_error: counterForward.error ? redactText((counterForward.error as { message?: string }).message, 220) : null,
+        record_error: counterNotice.error ? redactText((counterNotice.error as { message?: string }).message, 220) : null,
+      },
+      expected: "Counter-notice recording and response-window actions work.",
+      key: "dmca_counter_notice_recording",
+      label: "DMCA counter-notice flow works",
+      section: "DMCA / Copyright",
+      status: counterOk ? "pass" : "fail",
+      testedSurface: "rpcs: admin_dmca_record_counter_notice + forward + mark_restore_eligible",
+    }));
+
+    const searchPattern = `%${caseNumber || caseId}%`;
+    const filterSearch = await safeSupabaseCall(() => grantedDmcaClient
+      .from("dmca_cases")
+      .select("id,status,case_number,reporter_email,allegedly_infringing_content_id")
+      .or(`case_number.ilike.${searchPattern},id.eq.${caseId},reporter_email.ilike.%liveops.proof+dmca%,allegedly_infringing_content_id.ilike.%CANARY-DMCA%`)
+      .limit(10));
+    const filterRows = Array.isArray(filterSearch.data) ? filterSearch.data as JsonObject[] : [];
+    results.push(canaryResult({
+      actor: "proof admin with legal_review/dmca_review",
+      actual: !filterSearch.error && filterRows.some((row) => toText(row.id) === caseId)
+        ? "DMCA filter/search query returned the proof case."
+        : "DMCA filter/search query did not return the proof case.",
+      cleanupStatus: "pending DMCA proof cleanup",
+      details: { error: filterSearch.error ? redactText((filterSearch.error as { message?: string }).message, 260) : null, returned_rows: filterRows.length },
+      expected: "Search by case id/case number/reporter/content id works through backend filtering.",
+      key: "dmca_filters_search",
+      label: "DMCA filters and search work",
+      section: "DMCA / Copyright",
+      status: !filterSearch.error && filterRows.some((row) => toText(row.id) === caseId) ? "pass" : "fail",
+      testedSurface: "table: dmca_cases RLS search/filter select",
+    }));
+
+    const unauthorizedCreate = await safeSupabaseCall(() => viewerClient.rpc("admin_dmca_create_case", {
+      p_payload: buildDmcaCanaryPayload("Unauthorized viewer canary"),
+      p_source: "admin_manual",
+    }));
+    const unauthorizedRead = await safeSupabaseCall(() => viewerClient.from("dmca_cases").select("id").eq("id", caseId).limit(1));
+    const unauthorizedRows = Array.isArray(unauthorizedRead.data) ? unauthorizedRead.data as JsonObject[] : [];
+    const denied = !!unauthorizedCreate.error && unauthorizedRows.length === 0;
+    results.push(canaryResult({
+      actor: "proof viewer",
+      actual: denied ? "Regular viewer was denied by DMCA RPC and RLS." : "Regular viewer could access an Admin DMCA surface.",
+      cleanupStatus: "pending DMCA proof cleanup",
+      details: {
+        create_error: unauthorizedCreate.error ? redactText((unauthorizedCreate.error as { message?: string }).message, 240) : null,
+        read_rows: unauthorizedRows.length,
+      },
+      expected: "Unauthorized users are denied server-side.",
+      key: "dmca_unauthorized_denied",
+      label: "DMCA unauthorized users denied server-side",
+      section: "DMCA / Copyright",
+      status: denied ? "pass" : "fail",
+      testedSurface: "rpc/table: admin_dmca_create_case + dmca_cases RLS as viewer",
+    }));
+
+    const backedFlowOk = !intake.error && !contentAction.error && strikeOk && counterOk && !filterSearch.error && denied;
+    results.push(canaryResult({
+      actor: "system",
+      actual: backedFlowOk ? "All DMCA Admin visible workflow buttons are backed by working RPC/table flows in canary." : "One or more DMCA Admin workflow backing checks failed.",
+      cleanupStatus: "pending DMCA proof cleanup",
+      expected: "No visible DMCA Admin buttons are dead.",
+      key: "dmca_no_dead_buttons",
+      label: "DMCA no-dead-button backing checks",
+      section: "DMCA / Copyright",
+      status: backedFlowOk ? "pass" : "fail",
+      testedSurface: "aggregate DMCA workflow canary",
+    }));
+  }
+
+  dmcaCleanupStatus = await cleanupDmcaCanaryCase(adminClient, caseId);
+  for (const row of results) {
+    if (isRecord(row) && toText(row.cleanupStatus) === "pending DMCA proof cleanup") row.cleanupStatus = dmcaCleanupStatus;
+  }
+
+  const proofDmcaCases = await safeSupabaseCall(() => adminClient
+    .from("dmca_cases")
+    .select("id", { count: "exact", head: true })
+    .eq("is_test_case", false)
+    .or("reporter_email.ilike.%proof%,reporter_name.ilike.%proof%,reporter_name.ilike.%demo%,reporter_name.ilike.%canary%,reporter_email.ilike.%canary%"));
+  const proofCount = proofDmcaCases.count ?? 0;
+  results.push(canaryResult({
+    actor: "system",
+    actual: proofDmcaCases.error ? "DMCA proof/demo case visibility query failed." : proofCount === 0 ? "No unmarked proof/demo DMCA cases are visible after cleanup." : `${proofCount} proof/demo DMCA case rows remain unmarked.`,
+    cleanupStatus: dmcaCleanupStatus,
+    details: { error: proofDmcaCases.error ? redactText((proofDmcaCases.error as { message?: string }).message, 220) : null, proof_demo_case_count: proofCount },
+    expected: "Proof/demo cases are absent or explicitly marked test-only so production clients hide them.",
+    key: "dmca_no_demo_cases",
+    label: "DMCA no proof/demo cases visible",
+    section: "DMCA / Copyright",
+    status: proofDmcaCases.error ? "manual_required" : proofCount === 0 ? "pass" : "fail",
+    testedSurface: "table: dmca_cases proof/demo cleanup query",
+  }));
+
+  const publicDmcaUrl = readOptionalEnv("PUBLIC_DMCA_URL") ?? readOptionalEnv("PUBLIC_COPYRIGHT_REPORT_URL");
+  if (!publicDmcaUrl) {
+    results.push(canaryResult({
+      actor: "system",
+      actual: "PUBLIC_DMCA_URL/PUBLIC_COPYRIGHT_REPORT_URL is not configured; mobile Admin uses the bundled /copyright-report route and public web link needs deployment config.",
+      expected: "Public DMCA/legal link configured or clearly marked missing.",
+      key: "dmca_public_link_config",
+      label: "DMCA public form/legal link configured",
+      section: "DMCA / Copyright",
+      status: "manual_required",
+      testedSurface: "env: PUBLIC_DMCA_URL or PUBLIC_COPYRIGHT_REPORT_URL",
+    }));
+  } else {
+    try {
+      const publicLink = await fetchStatusWithTimeout(publicDmcaUrl);
+      results.push(canaryResult({
+        actor: "system",
+        actual: publicLink.ok ? "Public DMCA URL returned HTTP 2xx." : `Public DMCA URL returned HTTP ${publicLink.status}.`,
+        details: { http_status: publicLink.status },
+        expected: "Public DMCA/legal link is reachable.",
+        key: "dmca_public_link_config",
+        label: "DMCA public form/legal link configured",
+        section: "DMCA / Copyright",
+        status: publicLink.ok ? "pass" : "fail",
+        testedSurface: "GET PUBLIC_DMCA_URL/PUBLIC_COPYRIGHT_REPORT_URL",
+      }));
+    } catch (error) {
+      results.push(canaryResult({
+        actor: "system",
+        actual: `Public DMCA URL fetch failed: ${redactText(error instanceof Error ? error.message : error, 420)}`,
+        expected: "Public DMCA/legal link is reachable.",
+        key: "dmca_public_link_config",
+        label: "DMCA public form/legal link configured",
+        section: "DMCA / Copyright",
+        status: "fail",
+        testedSurface: "GET PUBLIC_DMCA_URL/PUBLIC_COPYRIGHT_REPORT_URL",
+      }));
+    }
+  }
+
+  return results;
+};
+
 const canaryRun = async (
   adminClient: SupabaseClientLike,
   anonClient: SupabaseClientLike,
@@ -1460,6 +1837,9 @@ const canaryRun = async (
       status: deniedOk && grantedPreview.ok ? "pass" : "fail",
       testedSurface: "function: admin-legal-evidence preview/export/hold",
     }));
+
+    const grantedDmcaClient = createTimedClient(supabaseUrl, anonKey, grantedAdmin.accessToken);
+    results.push(...await dmcaAdminCanaryResults(adminClient, grantedDmcaClient, viewerClient, grantedAdmin, viewer));
   } catch (error) {
     results.push(canaryResult({
       actor: "system",
