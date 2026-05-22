@@ -5961,45 +5961,60 @@ export default function AdminStudioScreen() {
       return;
     }
 
+    setAdminOpsNotice(null);
+    setPlatformRoleRosterLoading(canViewStaffRoles);
+    setRoleAuditLoading(canViewStaffRoles);
+    setAdminAuditLogLoading(canViewAudit);
+
+    const partialFailures: string[] = [];
+
     try {
-      setAdminOpsNotice(null);
-      setPlatformRoleRosterLoading(canViewStaffRoles);
-      setRoleAuditLoading(canViewStaffRoles);
-      setAdminAuditLogLoading(canViewAudit);
-
-      const [roleRosterResult, auditLogResult, roleAuditResult] = await Promise.all([
-        canViewStaffRoles
-          ? readPlatformRoleRoster({ limit: 16, includeRevoked: true, includePermissionGrants: isOwnerStaff })
-          : Promise.resolve(null),
-        canViewAudit ? readAdminAuditLog({ limit: 8 }) : Promise.resolve(null),
-        canViewStaffRoles ? listAdminRoleAuditEvents({ filter: roleAuditFilter, limit: 12 }) : Promise.resolve([]),
-      ]);
-
-      setPlatformRoleRoster(roleRosterResult?.items ?? []);
-      setPlatformRoleRosterSummary(roleRosterResult?.summary ?? null);
-      setPlatformRoleRosterGeneratedAt(roleRosterResult?.generatedAt ?? null);
-      setAdminAuditLog(auditLogResult?.items ?? []);
-      setAdminAuditLogSummary(auditLogResult?.summary ?? null);
-      setRoleAuditEvents(roleAuditResult ?? []);
+      if (canViewStaffRoles) {
+        const rosterResult = await readPlatformRoleRoster({
+          includePermissionGrants: isOwnerStaff,
+          includeRevoked: true,
+          limit: 16,
+        });
+        setPlatformRoleRoster(rosterResult.items);
+        setPlatformRoleRosterSummary(rosterResult.summary);
+        setPlatformRoleRosterGeneratedAt(rosterResult.generatedAt);
+      }
     } catch (err: any) {
-      if (canViewStaffRoles) {
-        setPlatformRoleRoster([]);
-        setPlatformRoleRosterSummary(null);
-        setPlatformRoleRosterGeneratedAt(null);
-        setRoleAuditEvents([]);
-      }
-      if (canViewAudit) {
-        setAdminAuditLog([]);
-        setAdminAuditLogSummary(null);
-      }
-      setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to load staff-role or audit visibility."));
+      setPlatformRoleRoster([]);
+      setPlatformRoleRosterSummary(null);
+      setPlatformRoleRosterGeneratedAt(null);
+      partialFailures.push(formatAdminOperationFailure(err, "Staff roster not connected."));
     } finally {
-      if (canViewStaffRoles) {
-        setPlatformRoleRosterLoading(false);
-        setRoleAuditLoading(false);
-      }
-      setAdminAuditLogLoading(false);
+      if (canViewStaffRoles) setPlatformRoleRosterLoading(false);
     }
+
+    try {
+      if (canViewAudit) {
+        const auditLogResult = await readAdminAuditLog({ limit: 8 });
+        setAdminAuditLog(auditLogResult.items);
+        setAdminAuditLogSummary(auditLogResult.summary);
+      }
+    } catch (err: any) {
+      setAdminAuditLog([]);
+      setAdminAuditLogSummary(null);
+      partialFailures.push(formatAdminOperationFailure(err, "Admin audit feed not connected."));
+    } finally {
+      if (canViewAudit) setAdminAuditLogLoading(false);
+    }
+
+    try {
+      if (canViewStaffRoles) {
+        const roleAuditResult = await listAdminRoleAuditEvents({ filter: roleAuditFilter, limit: 12 });
+        setRoleAuditEvents(roleAuditResult);
+      }
+    } catch (err: any) {
+      setRoleAuditEvents([]);
+      partialFailures.push(formatAdminOperationFailure(err, "Role audit timeline not connected."));
+    } finally {
+      if (canViewStaffRoles) setRoleAuditLoading(false);
+    }
+
+    setAdminOpsNotice(partialFailures.length ? partialFailures.join(" ") : null);
   }, [canManagePrivilegedWrites, canReviewSafetyReports, canViewStaffRoles, isOwnerStaff, roleAuditFilter]);
 
   const refreshStaffRoleState = useCallback(async () => {
