@@ -33,10 +33,47 @@ export type OwnerControlBreakGlassSession = Record<string, unknown> & {
 
 export type OwnerControlLegalRequest = Record<string, unknown> & {
   id?: string;
+  request_type?: string | null;
   requesting_agency?: string;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
   case_number?: string | null;
+  request_reason?: string | null;
+  target_user_id?: string | null;
+  target_content_id?: string | null;
+  target_thread_id?: string | null;
+  target_room_id?: string | null;
+  target_report_id?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
   status?: string;
+  due_at?: string | null;
+  notes?: string | null;
+  reviewed_summary?: string | null;
+  exported_summary?: string | null;
+  legal_hold_status?: string | null;
   created_at?: string;
+  updated_at?: string;
+  closed_at?: string | null;
+};
+
+export type OwnerControlLegalRequestEvent = Record<string, unknown> & {
+  id?: string;
+  legal_request_id?: string;
+  event_type?: string;
+  actor_email?: string | null;
+  actor_role?: string | null;
+  message?: string | null;
+  reason?: string | null;
+  created_at?: string;
+};
+
+export type OwnerControlLegalRequestDetail = {
+  events: OwnerControlLegalRequestEvent[];
+  evidenceRequests: Record<string, unknown>[];
+  holds: Record<string, unknown>[];
+  request: OwnerControlLegalRequest | null;
 };
 
 export type OwnerControlCanaryResult = {
@@ -149,6 +186,16 @@ export async function endBreakGlass(input: { reason?: string | null; sessionId?:
 export async function listLegalRequests(input: Record<string, unknown> = {}) {
   const payload = await requestOwnerControls("legal_request_list", input);
   return toArray(payload.requests) as OwnerControlLegalRequest[];
+}
+
+export async function readLegalRequestDetail(input: { id: string }) {
+  const payload = await requestOwnerControls("legal_request_detail", input);
+  return {
+    events: toArray(payload.events) as OwnerControlLegalRequestEvent[],
+    evidenceRequests: toArray(payload.evidenceRequests),
+    holds: toArray(payload.holds),
+    request: toObject(payload.request) as OwnerControlLegalRequest,
+  } satisfies OwnerControlLegalRequestDetail;
 }
 
 export async function createLegalRequest(input: Record<string, unknown>) {

@@ -33,9 +33,12 @@ export type PlatformStaffPermissionKey =
   | "billing_support_read"
   | "creator_support"
   | "legal_review"
+  | "evidence_preview"
   | "dmca_review"
   | "copyright_review"
   | "evidence_export"
+  | "legal_hold"
+  | "legal_ops"
   | "emergency_break_glass"
   | "admin_grants"
   | "manage_moderators"
@@ -274,9 +277,12 @@ const normalizePlatformStaffPermissionKey = (value: unknown): PlatformStaffPermi
     || normalized === "billing_support_read"
     || normalized === "creator_support"
     || normalized === "legal_review"
+    || normalized === "evidence_preview"
     || normalized === "dmca_review"
     || normalized === "copyright_review"
     || normalized === "evidence_export"
+    || normalized === "legal_hold"
+    || normalized === "legal_ops"
     || normalized === "emergency_break_glass"
     || normalized === "admin_grants"
     || normalized === "manage_moderators"
@@ -585,7 +591,11 @@ export function canAccessLiveOpsTools(memberships: PlatformRoleMembership[]) {
 }
 
 export function canAccessLegalEvidenceTools(memberships: PlatformRoleMembership[]) {
-  return hasPlatformStaffPermission(memberships, ["legal_review", "evidence_export"]);
+  return hasPlatformRoleMembership(memberships, ["owner"])
+    || (
+      hasPlatformRoleMembership(memberships, ["operator"])
+      && hasPlatformStaffPermission(memberships, ["legal_review", "evidence_preview", "evidence_export", "legal_hold", "legal_ops"])
+    );
 }
 
 export function canAccessDmcaTools(memberships: PlatformRoleMembership[]) {
@@ -609,7 +619,11 @@ export function canAccessBreakGlassTools(memberships: PlatformRoleMembership[]) 
 }
 
 export function canAccessLegalRequestIntakeTools(memberships: PlatformRoleMembership[]) {
-  return hasPlatformStaffPermission(memberships, ["legal_request_intake", "legal_review"]);
+  return hasPlatformRoleMembership(memberships, ["owner"])
+    || (
+      hasPlatformRoleMembership(memberships, ["operator"])
+      && hasPlatformStaffPermission(memberships, ["legal_request_intake", "legal_review", "legal_ops"])
+    );
 }
 
 const platformMembershipMatchesIdentity = (

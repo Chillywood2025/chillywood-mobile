@@ -31,9 +31,10 @@ const JSON_HEADERS = {
 
 const PERMISSION_TEMPLATES: Record<string, { label: string; permissions: string[] }> = {
   creator_support: { label: "Creator Support", permissions: ["creator_support", "support_inbox", "user_lookup"] },
-  evidence_exporter: { label: "Evidence Exporter", permissions: ["legal_review", "evidence_export", "legal_request_intake"] },
+  evidence_exporter: { label: "Evidence Exporter", permissions: ["evidence_preview", "evidence_export", "legal_request_intake"] },
   dmca_reviewer: { label: "DMCA Reviewer", permissions: ["dmca_review", "copyright_review", "legal_review"] },
-  legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "dmca_review", "copyright_review", "legal_request_intake"] },
+  legal_operator: { label: "Legal Operator", permissions: ["legal_ops", "legal_request_intake", "evidence_preview", "evidence_export", "legal_hold", "legal_review"] },
+  legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "evidence_preview", "dmca_review", "copyright_review", "legal_request_intake"] },
   live_ops_operator: { label: "Live Ops Operator", permissions: ["live_ops"] },
   moderator: { label: "Moderator", permissions: ["reports_review", "content_moderation"] },
   senior_moderator: { label: "Senior Moderator", permissions: ["reports_review", "content_moderation", "user_lookup"] },
@@ -50,8 +51,11 @@ const CONTROL_PERMISSION_KEYS = [
   "copyright_review",
   "dmca_review",
   "emergency_break_glass",
+  "evidence_preview",
   "evidence_export",
+  "legal_hold",
   "legal_request_intake",
+  "legal_ops",
   "legal_review",
   "live_ops",
   "manage_moderators",
@@ -122,6 +126,41 @@ const parseLimit = (value: unknown, fallback = 50, max = 200) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(1, Math.min(max, Math.trunc(parsed)));
+};
+
+const LEGAL_REQUEST_STATUSES = new Set([
+  "received",
+  "needs_more_info",
+  "under_review",
+  "preserved_legal_hold",
+  "evidence_prepared",
+  "exported",
+  "closed",
+  "rejected_no_action",
+]);
+
+const normalizeLegalRequestStatus = (value: unknown, fallback = "received") => {
+  const normalized = toText(value).toLowerCase();
+  const mapped = normalized === "open" ? "received"
+    : normalized === "reviewing" ? "under_review"
+      : normalized === "fulfilled" ? "exported"
+        : normalized === "rejected" ? "rejected_no_action"
+          : normalized;
+  return LEGAL_REQUEST_STATUSES.has(mapped) ? mapped : fallback;
+};
+
+const normalizeLegalRequestType = (value: unknown) => {
+  const normalized = toText(value).toLowerCase();
+  return [
+    "law_enforcement",
+    "civil_legal",
+    "preservation",
+    "court_order",
+    "subpoena",
+    "emergency",
+    "dmca_related",
+    "other",
+  ].includes(normalized) ? normalized : "law_enforcement";
 };
 
 const requireReason = (value: unknown, label = "reason") => {
@@ -608,29 +647,88 @@ const breakGlassEnd = async (adminClient: SupabaseClientLike, user: Authenticate
   return json(200, { ok: true, session: sanitizeObject(data) });
 };
 
+const writeLegalRequestEvent = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  input: {
+    eventType: string;
+    legalRequestId: string;
+    message: string;
+    metadata?: JsonObject;
+    reason: string;
+  },
+) => {
+  const { error } = await adminClient.from("legal_request_events").insert({
+    actor_email: user.email,
+    actor_role: user.role,
+    actor_user_id: user.id,
+    event_type: input.eventType,
+    legal_request_id: input.legalRequestId,
+    message: redactText(input.message, 500),
+    metadata: sanitizeObject({
+      ...(input.metadata ?? {}),
+      break_glass_active: !!user.activeBreakGlassSessionId,
+      break_glass_session_id: user.activeBreakGlassSessionId,
+    }),
+    reason: input.reason,
+  });
+  if (error) throw new Error(`Legal request event write failed: ${error.message}`);
+};
+
 const legalRequestList = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (!hasAnyPermission(user, ["legal_request_intake", "legal_review"])) return json(403, { error: "legal_request_intake_required" });
+  if (user.role === "moderator") return json(403, { error: "owner_or_approved_operator_required" });
+  if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops", "evidence_preview", "evidence_export", "legal_hold"])) return json(403, { error: "legal_permission_required" });
   const limit = parseLimit(payload.limit, 25, 100);
   let query = adminClient.from("legal_request_intake").select("*");
   const status = toText(payload.status);
   if (status && status !== "all") query = query.eq("status", status);
   const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
   if (error) throw new Error(`Legal intake list failed: ${error.message}`);
-  return json(200, { requests: ((data ?? []) as JsonObject[]).map(sanitizeObject) });
+  const rows = ((data ?? []) as JsonObject[])
+    .filter((row) => !isRecord(row.metadata) || row.metadata.canary_proof !== true);
+  return json(200, { requests: rows.map(sanitizeObject) });
+};
+
+const legalRequestDetail = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
+  if (user.role === "moderator") return json(403, { error: "owner_or_approved_operator_required" });
+  if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops", "evidence_preview", "evidence_export", "legal_hold"])) return json(403, { error: "legal_permission_required" });
+  const requestId = toText(payload.id ?? payload.requestId ?? payload.request_id);
+  if (!requestId) return json(400, { error: "legal_request_id_required" });
+  const request = await adminClient.from("legal_request_intake").select("*").eq("id", requestId).maybeSingle();
+  if (request.error) throw new Error(`Legal intake detail failed: ${request.error.message}`);
+  if (!request.data) return json(404, { error: "legal_request_not_found" });
+  const [events, evidenceRequests, holds] = await Promise.all([
+    adminClient.from("legal_request_events").select("*").eq("legal_request_id", requestId).order("created_at", { ascending: true }).limit(100),
+    adminClient.from("legal_evidence_requests").select("id,request_kind,status,target_type,target_id,export_hash,created_at,completed_at,requested_by_user_id,requested_by_email,search_scope,preview").eq("legal_request_id", requestId).order("created_at", { ascending: false }).limit(50),
+    adminClient.from("legal_holds").select("*").eq("legal_request_id", requestId).order("placed_at", { ascending: false }).limit(50),
+  ]);
+  const firstError = events.error || evidenceRequests.error || holds.error;
+  if (firstError) throw new Error(`Legal intake detail child read failed: ${firstError.message}`);
+  return json(200, {
+    events: ((events.data ?? []) as JsonObject[]).map(sanitizeObject),
+    evidenceRequests: ((evidenceRequests.data ?? []) as JsonObject[]).map(sanitizeObject),
+    holds: ((holds.data ?? []) as JsonObject[]).map(sanitizeObject),
+    request: sanitizeObject(request.data),
+  });
 };
 
 const legalRequestCreate = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (!hasAnyPermission(user, ["legal_request_intake", "legal_review"])) return json(403, { error: "legal_request_intake_required" });
+  if (user.role === "moderator") return json(403, { error: "owner_or_approved_operator_required" });
+  if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops"])) return json(403, { error: "legal_request_intake_required" });
   const reason = resolveAdminReason(user, payload.auditReason ?? payload.audit_reason ?? payload.requestReason ?? payload.request_reason, "Owner legal request intake record.");
   const requestingAgency = redactText(payload.requestingAgency ?? payload.requesting_agency, 180);
   const requestReason = redactText(payload.requestReason ?? payload.request_reason ?? reason, 1000);
   if (requestingAgency.length < 2) return json(400, { error: "requesting_agency_required" });
   if (requestReason.length < 6) return json(400, { error: "request_reason_required" });
+  const status = normalizeLegalRequestStatus(payload.status, "received");
   const { data, error } = await adminClient.from("legal_request_intake").insert({
     case_number: redactText(payload.caseNumber ?? payload.case_number, 180) || null,
+    contact_email: normalizeEmail(payload.contactEmail ?? payload.contact_email) || null,
     contact_name: redactText(payload.contactName ?? payload.contact_name, 180) || null,
+    contact_phone: redactText(payload.contactPhone ?? payload.contact_phone, 80) || null,
     date_from: toText(payload.dateFrom ?? payload.date_from) || null,
     date_to: toText(payload.dateTo ?? payload.date_to) || null,
+    due_at: toText(payload.dueAt ?? payload.due_at) || null,
     exported_summary: redactText(payload.exportedSummary ?? payload.exported_summary, 1000) || null,
     handled_by_email: user.email,
     handled_by_user_id: user.id,
@@ -638,11 +736,14 @@ const legalRequestCreate = async (adminClient: SupabaseClientLike, user: Authent
       break_glass_active: !!user.activeBreakGlassSessionId,
       break_glass_session_id: user.activeBreakGlassSessionId,
       created_actor_role: user.role,
+      canary_proof: payload.canaryProof === true || payload.canary_proof === true,
     },
+    notes: redactText(payload.notes, 1500) || null,
     request_reason: requestReason,
+    request_type: normalizeLegalRequestType(payload.requestType ?? payload.request_type),
     requesting_agency: requestingAgency,
     reviewed_summary: redactText(payload.reviewedSummary ?? payload.reviewed_summary, 1000) || null,
-    status: toText(payload.status) || "open",
+    status,
     target_content_id: redactText(payload.targetContentId ?? payload.target_content_id, 180) || null,
     target_report_id: redactText(payload.targetReportId ?? payload.target_report_id, 180) || null,
     target_room_id: redactText(payload.targetRoomId ?? payload.target_room_id, 180) || null,
@@ -650,20 +751,49 @@ const legalRequestCreate = async (adminClient: SupabaseClientLike, user: Authent
     target_user_id: redactText(payload.targetUserId ?? payload.target_user_id, 180) || null,
   }).select("*").single();
   if (error) throw new Error(`Legal intake create failed: ${error.message}`);
+  const legalRequestId = toText((data as JsonObject).id);
+  await writeLegalRequestEvent(adminClient, user, {
+    eventType: "request_created",
+    legalRequestId,
+    message: "Legal request created.",
+    metadata: { status },
+    reason,
+  });
+  if (
+    toText(payload.targetUserId ?? payload.target_user_id)
+    || toText(payload.targetContentId ?? payload.target_content_id)
+    || toText(payload.targetThreadId ?? payload.target_thread_id)
+    || toText(payload.targetRoomId ?? payload.target_room_id)
+    || toText(payload.targetReportId ?? payload.target_report_id)
+  ) {
+    await writeLegalRequestEvent(adminClient, user, {
+      eventType: "target_linked",
+      legalRequestId,
+      message: "Target identifiers linked.",
+      metadata: {
+        target_content_id: redactText(payload.targetContentId ?? payload.target_content_id, 180) || null,
+        target_report_id: redactText(payload.targetReportId ?? payload.target_report_id, 180) || null,
+        target_room_id: redactText(payload.targetRoomId ?? payload.target_room_id, 180) || null,
+        target_thread_id: redactText(payload.targetThreadId ?? payload.target_thread_id, 180) || null,
+        target_user_id: redactText(payload.targetUserId ?? payload.target_user_id, 180) || null,
+      },
+      reason,
+    });
+  }
 
   await writePlatformAudit(adminClient, user, {
     action: "legal_request_intake_create",
-    metadata: { legal_request_id: toText((data as JsonObject).id), status: toText((data as JsonObject).status) },
+    metadata: { legal_request_id: legalRequestId, status: toText((data as JsonObject).status) },
     reason,
-    targetId: toText((data as JsonObject).id),
+    targetId: legalRequestId,
     targetType: "legal_request_intake",
   });
   if (user.activeBreakGlassSessionId) {
     await writeBreakGlassAudit(adminClient, user, {
       action: user.role === "owner" ? "owner_action" : "admin_action",
-      metadata: { legal_request_id: toText((data as JsonObject).id) },
+      metadata: { legal_request_id: legalRequestId },
       reason,
-      targetId: toText((data as JsonObject).id),
+      targetId: legalRequestId,
       targetType: "legal_request_intake",
     });
   }
@@ -672,23 +802,43 @@ const legalRequestCreate = async (adminClient: SupabaseClientLike, user: Authent
 };
 
 const legalRequestUpdate = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (!hasAnyPermission(user, ["legal_request_intake", "legal_review"])) return json(403, { error: "legal_request_intake_required" });
+  if (user.role === "moderator") return json(403, { error: "owner_or_approved_operator_required" });
+  if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops"])) return json(403, { error: "legal_request_intake_required" });
   const requestId = toText(payload.id ?? payload.requestId ?? payload.request_id);
   if (!requestId) return json(400, { error: "legal_request_id_required" });
   const reason = resolveAdminReason(user, payload.auditReason ?? payload.audit_reason ?? payload.reason, "Owner updated legal request intake.");
+  const before = await adminClient.from("legal_request_intake").select("*").eq("id", requestId).maybeSingle();
+  if (before.error) throw new Error(`Legal intake lookup failed: ${before.error.message}`);
+  if (!before.data) return json(404, { error: "legal_request_not_found" });
   const patch: JsonObject = {
     handled_by_email: user.email,
     handled_by_user_id: user.id,
     updated_at: new Date().toISOString(),
   };
   for (const [inputKey, column] of [
-    ["status", "status"],
     ["reviewedSummary", "reviewed_summary"],
     ["reviewed_summary", "reviewed_summary"],
     ["exportedSummary", "exported_summary"],
     ["exported_summary", "exported_summary"],
+    ["notes", "notes"],
+    ["targetUserId", "target_user_id"],
+    ["target_user_id", "target_user_id"],
+    ["targetContentId", "target_content_id"],
+    ["target_content_id", "target_content_id"],
+    ["targetThreadId", "target_thread_id"],
+    ["target_thread_id", "target_thread_id"],
+    ["targetRoomId", "target_room_id"],
+    ["target_room_id", "target_room_id"],
+    ["targetReportId", "target_report_id"],
+    ["target_report_id", "target_report_id"],
   ]) {
-    if (payload[inputKey] !== undefined) patch[column] = redactText(payload[inputKey], 1000);
+    if (payload[inputKey] !== undefined) patch[column] = redactText(payload[inputKey], column === "notes" ? 1500 : 1000) || null;
+  }
+  if (payload.status !== undefined) {
+    const nextStatus = normalizeLegalRequestStatus(payload.status, toText((before.data as JsonObject).status) || "received");
+    patch.status = nextStatus;
+    if (nextStatus === "closed" || nextStatus === "rejected_no_action") patch.closed_at = new Date().toISOString();
+    if (toText((before.data as JsonObject).status) === "closed" && nextStatus !== "closed") patch.reopened_at = new Date().toISOString();
   }
   const { data, error } = await adminClient.from("legal_request_intake")
     .update(patch)
@@ -696,6 +846,52 @@ const legalRequestUpdate = async (adminClient: SupabaseClientLike, user: Authent
     .select("*")
     .single();
   if (error) throw new Error(`Legal intake update failed: ${error.message}`);
+  const nextStatus = toText((data as JsonObject).status);
+  const previousStatus = toText((before.data as JsonObject).status);
+  if (payload.status !== undefined && nextStatus !== previousStatus) {
+    await writeLegalRequestEvent(adminClient, user, {
+      eventType: nextStatus === "closed" || nextStatus === "rejected_no_action" ? "request_closed" : previousStatus === "closed" ? "request_reopened" : "status_changed",
+      legalRequestId: requestId,
+      message: `Status changed from ${previousStatus || "unknown"} to ${nextStatus}.`,
+      metadata: { next_status: nextStatus, previous_status: previousStatus },
+      reason,
+    });
+  }
+  if (payload.notes !== undefined && redactText(payload.notes, 1500)) {
+    await writeLegalRequestEvent(adminClient, user, {
+      eventType: "note_added",
+      legalRequestId: requestId,
+      message: "Internal note added.",
+      metadata: { note_length: redactText(payload.notes, 1500).length },
+      reason,
+    });
+  }
+  if (
+    payload.targetUserId !== undefined
+    || payload.target_user_id !== undefined
+    || payload.targetContentId !== undefined
+    || payload.target_content_id !== undefined
+    || payload.targetThreadId !== undefined
+    || payload.target_thread_id !== undefined
+    || payload.targetRoomId !== undefined
+    || payload.target_room_id !== undefined
+    || payload.targetReportId !== undefined
+    || payload.target_report_id !== undefined
+  ) {
+    await writeLegalRequestEvent(adminClient, user, {
+      eventType: "target_linked",
+      legalRequestId: requestId,
+      message: "Target identifiers updated.",
+      metadata: {
+        target_content_id: toText((data as JsonObject).target_content_id) || null,
+        target_report_id: toText((data as JsonObject).target_report_id) || null,
+        target_room_id: toText((data as JsonObject).target_room_id) || null,
+        target_thread_id: toText((data as JsonObject).target_thread_id) || null,
+        target_user_id: toText((data as JsonObject).target_user_id) || null,
+      },
+      reason,
+    });
+  }
   await writePlatformAudit(adminClient, user, {
     action: "legal_request_intake_update",
     metadata: { patch_keys: Object.keys(patch) },
@@ -791,7 +987,7 @@ const securityStatus = async (adminClient: SupabaseClientLike, user: Authenticat
     readCount(adminClient, "platform_break_glass_sessions", { status: "active" }),
     adminClient.from("platform_role_memberships").select("id", { count: "exact", head: true }).eq("status", "active").ilike("email", "liveops.proof+%"),
     adminClient.from("platform_staff_permission_grants").select("id", { count: "exact", head: true }).eq("status", "active").ilike("target_email", "liveops.proof+%"),
-    adminClient.from("legal_request_intake").select("id", { count: "exact", head: true }).in("status", ["open", "reviewing"]),
+    adminClient.from("legal_request_intake").select("id", { count: "exact", head: true }).in("status", ["received", "needs_more_info", "under_review", "preserved_legal_hold", "evidence_prepared"]),
     readCount(adminClient, "legal_holds", { status: "active" }),
     readCount(adminClient, "safety_reports"),
   ]);
@@ -1072,18 +1268,49 @@ const callLegalEvidence = async (
   anonKey: string,
   accessToken: string,
   action: string,
+  input: JsonObject = {},
 ) => {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 20000);
   try {
     const response = await fetch(`${supabaseUrl.replace(/\/$/, "")}/functions/v1/admin-legal-evidence`, {
       body: JSON.stringify({
-        action,
+        action: action === "hold" ? "place_hold" : action,
         dateFrom: "2026-01-01T00:00:00.000Z",
         dateTo: "2026-01-01T00:01:00.000Z",
         reason: "CANARY PROOF legal evidence permission check.",
         targetType: "date_range",
+        ...sanitizeObject(input),
       }),
+      headers: {
+        apikey: anonKey,
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      method: "POST",
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    return { ok: response.ok, payload: sanitizeObject(payload), status: response.status };
+  } catch (error) {
+    return { ok: false, payload: { error: redactText(error instanceof Error ? error.message : error) }, status: 0 };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const callOwnerControls = async (
+  supabaseUrl: string,
+  anonKey: string,
+  accessToken: string,
+  action: string,
+  input: JsonObject = {},
+) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`${supabaseUrl.replace(/\/$/, "")}/functions/v1/admin-owner-controls`, {
+      body: JSON.stringify({ ...sanitizeObject(input), action }),
       headers: {
         apikey: anonKey,
         authorization: `Bearer ${accessToken}`,
@@ -2008,6 +2235,43 @@ const canaryRun = async (
     }));
   }
 
+  if (user.role === "owner") {
+    const ownerLegalCreate = await legalRequestCreate(adminClient, user, {
+      canaryProof: true,
+      caseNumber: `CANARY-OWNER-LEGAL-${Date.now()}`,
+      requestReason: "CANARY PROOF owner normal Legal Intake functional case record.",
+      requestType: "other",
+      requestingAgency: "Canary Owner Legal Proof",
+      status: "received",
+    });
+    const ownerLegalPayload = await ownerLegalCreate.json().catch(() => ({}));
+    results.push(canaryResult({
+      actor: "owner",
+      actual: ownerLegalCreate.ok
+        ? "Owner normal Legal Intake create wrote a functional hidden case record without needing an app-audit reason prompt."
+        : `Owner normal Legal Intake create failed with HTTP ${ownerLegalCreate.status}.`,
+      cleanupStatus: "hidden canary legal request retained as metadata.canary_proof=true",
+      details: { request_id: toText((sanitizeObject(ownerLegalPayload).request as JsonObject | undefined)?.id), status: ownerLegalCreate.status },
+      expected: "Owner can use Legal Intake normally; functional case history exists, but owner-sensitive app audit rows are not required unless Break Glass is active.",
+      key: "legal_owner_normal_intake_no_prompt",
+      label: "Owner normal Legal Intake works without reason prompt",
+      section: "Legal / Evidence",
+      status: ownerLegalCreate.ok ? "pass" : "fail",
+      testedSurface: "function: admin-owner-controls legal_request_create as owner",
+    }));
+  } else {
+    results.push(canaryResult({
+      actor: "system",
+      actual: "Canary was not run by owner, so owner-normal Legal Intake runtime proof was not executed in this run.",
+      expected: "Owner-run canary proves owner normal Legal Intake does not require app-audit reason prompts.",
+      key: "legal_owner_normal_intake_no_prompt",
+      label: "Owner normal Legal Intake works without reason prompt",
+      section: "Legal / Evidence",
+      status: "manual_required",
+      testedSurface: "function: admin-owner-controls legal_request_create as owner",
+    }));
+  }
+
   try {
     const [viewer, adminProof, grantedAdmin, moderatorProof] = await Promise.all([
       ensureProofUser(adminClient, anonClient, PROOF_EMAILS.viewer, "viewer"),
@@ -2091,26 +2355,233 @@ const canaryRun = async (
     const deniedCalls = await Promise.all([
       callLegalEvidence(supabaseUrl, anonKey, viewer.accessToken, "preview"),
       callLegalEvidence(supabaseUrl, anonKey, viewer.accessToken, "export"),
-      callLegalEvidence(supabaseUrl, anonKey, viewer.accessToken, "hold"),
+      callLegalEvidence(supabaseUrl, anonKey, viewer.accessToken, "hold", { targetId: viewer.userId, targetType: "user_id" }),
       callLegalEvidence(supabaseUrl, anonKey, adminProof.accessToken, "preview"),
       callLegalEvidence(supabaseUrl, anonKey, adminProof.accessToken, "export"),
-      callLegalEvidence(supabaseUrl, anonKey, adminProof.accessToken, "hold"),
+      callLegalEvidence(supabaseUrl, anonKey, adminProof.accessToken, "hold", { targetId: viewer.userId, targetType: "user_id" }),
+      callLegalEvidence(supabaseUrl, anonKey, moderatorProof.accessToken, "preview"),
     ]);
     const grantedPreview = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "preview");
+    const exportBeforeGrant = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "export");
+    const holdBeforeGrant = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "hold", { targetId: viewer.userId, targetType: "user_id" });
+    await ensureProofPermission(adminClient, grantedAdmin, "evidence_export");
+    const grantedExport = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "export");
+    await ensureProofPermission(adminClient, grantedAdmin, "legal_hold");
+    const grantedHold = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "hold", { targetId: viewer.userId, targetType: "user_id" });
     const deniedOk = deniedCalls.every((call) => call.status === 401 || call.status === 403);
+    const scopedOk = grantedPreview.ok
+      && (exportBeforeGrant.status === 401 || exportBeforeGrant.status === 403)
+      && (holdBeforeGrant.status === 401 || holdBeforeGrant.status === 403)
+      && grantedExport.ok
+      && grantedHold.ok;
     results.push(canaryResult({
-      actor: "proof viewer, proof admin without grants, proof admin with legal_review",
-      actual: deniedOk && grantedPreview.ok
-        ? "Viewer/ungranted admin were denied; exact legal_review admin preview succeeded with auditable reason."
-        : `Legal Evidence proof mismatch: denied statuses ${deniedCalls.map((call) => call.status).join(", ")}, granted preview status ${grantedPreview.status}.`,
+      actor: "proof viewer, proof moderator, proof admin without grants, proof admin with scoped legal grants",
+      actual: deniedOk && scopedOk
+        ? "Viewer, moderator, and ungranted admin were denied; legal_review preview worked; export/hold required their exact scoped grants."
+        : `Legal Evidence proof mismatch: denied statuses ${deniedCalls.map((call) => call.status).join(", ")}, preview ${grantedPreview.status}, export before/after ${exportBeforeGrant.status}/${grantedExport.status}, hold before/after ${holdBeforeGrant.status}/${grantedHold.status}.`,
       cleanupStatus: "pending proof cleanup; legal audit proof retained append-only",
-      details: { denied_statuses: deniedCalls.map((call) => call.status), granted_preview_status: grantedPreview.status },
-      expected: "Legal Evidence denies viewer/ungranted admin and allows granted admin only with exact permission.",
+      details: {
+        denied_statuses: deniedCalls.map((call) => call.status),
+        export_after_grant_status: grantedExport.status,
+        export_before_grant_status: exportBeforeGrant.status,
+        granted_preview_status: grantedPreview.status,
+        hold_after_grant_status: grantedHold.status,
+        hold_before_grant_status: holdBeforeGrant.status,
+      },
+      expected: "Legal Evidence denies viewer/moderator/ungranted admin and requires exact preview/export/hold permission.",
       key: "legal_evidence_restricted",
       label: "Legal Evidence restricted",
       section: "Legal / Evidence",
-      status: deniedOk && grantedPreview.ok ? "pass" : "fail",
+      status: deniedOk && scopedOk ? "pass" : "fail",
       testedSurface: "function: admin-legal-evidence preview/export/hold",
+    }));
+
+    await ensureProofPermission(adminClient, grantedAdmin, "legal_request_intake");
+    const legalList = await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_list", { limit: 10 });
+    const legalCreate = await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_create", {
+      canaryProof: true,
+      caseNumber: `CANARY-LEGAL-${Date.now()}`,
+      contactEmail: "legal-canary-requester@example.invalid",
+      contactName: "Canary Legal Contact",
+      contactPhone: "+1-555-0100",
+      dateFrom: "2026-01-01T00:00:00.000Z",
+      dateTo: "2026-01-01T00:01:00.000Z",
+      dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      notes: "CANARY PROOF hidden legal request; production list excludes canary-proof records.",
+      requestReason: "CANARY PROOF legal intake create and detail workflow.",
+      requestType: "law_enforcement",
+      requestingAgency: "Canary Legal Agency",
+      status: "received",
+      targetUserId: viewer.userId,
+    });
+    const legalRequestId = toText((legalCreate.payload.request as JsonObject | undefined)?.id);
+    const legalDetail = legalRequestId
+      ? await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_detail", { id: legalRequestId })
+      : { ok: false, payload: {}, status: 0 };
+    const legalUpdate = legalRequestId
+      ? await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_update", {
+        id: legalRequestId,
+        notes: "CANARY PROOF status update and note.",
+        reason: "CANARY PROOF legal intake status update.",
+        status: "under_review",
+      })
+      : { ok: false, payload: {}, status: 0 };
+    const linkedPreview = legalRequestId
+      ? await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "preview", { legalRequestId, targetId: viewer.userId, targetType: "user_id" })
+      : { ok: false, payload: {}, status: 0 };
+    const linkedExport = legalRequestId
+      ? await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "export", { legalRequestId, targetId: viewer.userId, targetType: "user_id" })
+      : { ok: false, payload: {}, status: 0 };
+    const linkedHold = legalRequestId
+      ? await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "hold", { legalRequestId, targetId: viewer.userId, targetType: "user_id" })
+      : { ok: false, payload: {}, status: 0 };
+    const legalDetailAfter = legalRequestId
+      ? await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_detail", { id: legalRequestId })
+      : { ok: false, payload: {}, status: 0 };
+    const legalEvents = Array.isArray(legalDetailAfter.payload.events) ? legalDetailAfter.payload.events as JsonObject[] : [];
+    const legalEvidenceRows = Array.isArray(legalDetailAfter.payload.evidenceRequests) ? legalDetailAfter.payload.evidenceRequests as JsonObject[] : [];
+    const legalHoldRows = Array.isArray(legalDetailAfter.payload.holds) ? legalDetailAfter.payload.holds as JsonObject[] : [];
+    const legalIntakeOk = legalList.ok
+      && legalCreate.ok
+      && !!legalRequestId
+      && legalDetail.ok
+      && legalUpdate.ok
+      && linkedPreview.ok
+      && linkedExport.ok
+      && linkedHold.ok
+      && legalEvents.length >= 5
+      && legalEvidenceRows.length >= 2
+      && legalHoldRows.length >= 1;
+    results.push(canaryResult({
+      actor: "proof admin with legal_request_intake/evidence_export/legal_hold",
+      actual: legalIntakeOk
+        ? `Legal Intake list/create/open/status/timeline/evidence linkage passed for hidden proof request ${legalRequestId}.`
+        : `Legal Intake proof failed: list ${legalList.status}, create ${legalCreate.status}, detail ${legalDetail.status}, update ${legalUpdate.status}, preview/export/hold ${linkedPreview.status}/${linkedExport.status}/${linkedHold.status}, events ${legalEvents.length}.`,
+      cleanupStatus: "pending proof cleanup; hidden legal canary request retained as canary_proof",
+      details: {
+        detail_status: legalDetail.status,
+        evidence_rows: legalEvidenceRows.length,
+        event_count: legalEvents.length,
+        export_status: linkedExport.status,
+        hold_rows: legalHoldRows.length,
+        hold_status: linkedHold.status,
+        list_status: legalList.status,
+        preview_status: linkedPreview.status,
+        request_id: legalRequestId,
+        update_status: legalUpdate.status,
+      },
+      expected: "Legal Intake list loads, create works, detail opens, status updates, timeline records events, and evidence preview/export/hold link to the request.",
+      key: "legal_intake_workflow",
+      label: "Legal Intake workflow works",
+      section: "Legal / Evidence",
+      status: legalIntakeOk ? "pass" : "fail",
+      testedSurface: "function: admin-owner-controls legal_request_* + admin-legal-evidence linked actions",
+    }));
+
+    const legalUnauthorized = await Promise.all([
+      callOwnerControls(supabaseUrl, anonKey, viewer.accessToken, "legal_request_list", { limit: 1 }),
+      callOwnerControls(supabaseUrl, anonKey, adminProof.accessToken, "legal_request_list", { limit: 1 }),
+      callOwnerControls(supabaseUrl, anonKey, moderatorProof.accessToken, "legal_request_list", { limit: 1 }),
+    ]);
+    const legalUnauthorizedOk = legalUnauthorized.every((call) => call.status === 401 || call.status === 403);
+    results.push(canaryResult({
+      actor: "proof viewer, proof moderator, proof admin without grants",
+      actual: legalUnauthorizedOk
+        ? "Viewer, moderator, and ungranted admin were denied Legal Intake server-side."
+        : `Legal Intake denial mismatch: statuses ${legalUnauthorized.map((call) => call.status).join(", ")}.`,
+      cleanupStatus: "pending proof cleanup",
+      details: { denied_statuses: legalUnauthorized.map((call) => call.status) },
+      expected: "Unauthorized roles cannot list/open Legal Intake through the backend.",
+      key: "legal_intake_unauthorized_denied",
+      label: "Legal Intake unauthorized users denied",
+      section: "Legal / Evidence",
+      status: legalUnauthorizedOk ? "pass" : "fail",
+      testedSurface: "function: admin-owner-controls legal_request_list",
+    }));
+
+    const matrixInputs = [
+      ["user_id", viewer.userId],
+      ["profile_channel", viewer.userId],
+      ["creator_video", "00000000-0000-0000-0000-000000000000"],
+      ["profile_post", "00000000-0000-0000-0000-000000000000"],
+      ["comment", "00000000-0000-0000-0000-000000000000"],
+      ["social_attachment", "00000000-0000-0000-0000-000000000000"],
+      ["content_id", "00000000-0000-0000-0000-000000000000"],
+      ["chat_thread_id", "00000000-0000-0000-0000-000000000000"],
+      ["room_id", "canary-room-id"],
+      ["live_room", "canary-live-room-id"],
+      ["report_id", "00000000-0000-0000-0000-000000000000"],
+      ["dmca_case", "00000000-0000-0000-0000-000000000000"],
+      ["date_range", null],
+    ] as const;
+    const matrixResult = await callLegalEvidence(
+      supabaseUrl,
+      anonKey,
+      grantedAdmin.accessToken,
+      "preview_matrix",
+    );
+    const matrixPayload = isRecord(matrixResult.payload) ? matrixResult.payload : {};
+    const matrix = isRecord(matrixPayload.matrix) ? matrixPayload.matrix : {};
+    const matrixResults = matrixInputs.map(([targetType]) => {
+      const entry = isRecord(matrix[targetType]) ? matrix[targetType] : {};
+      const disabledReason = redactText(entry.disabledReason, 300);
+      const status = entry.status ?? matrixResult.status;
+      return {
+        disabledReason,
+        ok: matrixResult.ok && (entry.ok === true || disabledReason.length > 0),
+        status,
+      };
+    });
+    const matrixOk = matrixResults.every((entry) => entry.ok);
+    results.push(canaryResult({
+      actor: "proof admin with legal_review/evidence_preview",
+      actual: matrixOk
+        ? "Legal Evidence preview matrix passed for user/account, profile/channel, creator video, profile post, comments/replies, attachment, chat thread, room/live metadata, reports, DMCA case, and date range."
+        : `Legal Evidence matrix had failures: ${matrixResults.map((entry, index) => `${matrixInputs[index][0]}=${entry.status}`).join(", ")}.`,
+      cleanupStatus: "legal audit proof retained append-only",
+      details: Object.fromEntries(matrixInputs.map((entry, index) => [
+        entry[0],
+        matrixResults[index].disabledReason
+          ? `${matrixResults[index].status}: ${matrixResults[index].disabledReason}`
+          : matrixResults[index].status,
+      ])),
+      expected: "Every claimed Legal Evidence target type previews successfully or is disabled with an exact reason.",
+      key: "legal_evidence_target_matrix",
+      label: "Legal Evidence target matrix covered",
+      section: "Legal / Evidence",
+      status: matrixOk ? "pass" : "fail",
+      testedSurface: "function: admin-legal-evidence preview_matrix target coverage",
+    }));
+
+    const unmarkedLegalProofRows = await safeSupabaseCall(() => adminClient
+      .from("legal_request_intake")
+      .select("id,metadata")
+      .or("requesting_agency.ilike.%proof%,requesting_agency.ilike.%demo%,requesting_agency.ilike.%canary%,case_number.ilike.%CANARY%"));
+    const hiddenLegalProofRows = await safeSupabaseCall(() => adminClient
+      .from("legal_request_intake")
+      .select("id", { count: "exact", head: true })
+      .eq("metadata->>canary_proof", "true"));
+    const legalProofRows = Array.isArray(unmarkedLegalProofRows.data) ? unmarkedLegalProofRows.data as JsonObject[] : [];
+    const unmarkedCount = legalProofRows.filter((row) => !isRecord(row.metadata) || row.metadata.canary_proof !== true).length;
+    results.push(canaryResult({
+      actor: "system",
+      actual: unmarkedLegalProofRows.error
+        ? "Legal proof/demo visibility query failed."
+        : unmarkedCount === 0
+          ? "No unmarked proof/demo Legal Intake records are visible to production lists."
+          : `${unmarkedCount} unmarked proof/demo Legal Intake records matched proof/demo markers.`,
+      cleanupStatus: "hidden canary legal requests are metadata.canary_proof=true and excluded from production list action",
+      details: {
+        hidden_canary_count: hiddenLegalProofRows.count ?? null,
+        query_error: unmarkedLegalProofRows.error ? redactText((unmarkedLegalProofRows.error as { message?: string }).message, 220) : null,
+        unmarked_count: unmarkedCount,
+      },
+      expected: "Proof/demo legal cases are not visible in production mode unless marked test-only.",
+      key: "legal_no_demo_cases",
+      label: "Legal no proof/demo cases visible",
+      section: "Legal / Evidence",
+      status: unmarkedLegalProofRows.error ? "manual_required" : unmarkedCount === 0 ? "pass" : "fail",
+      testedSurface: "table/function: legal_request_intake canary marker + legal_request_list filter",
     }));
 
     const grantedDmcaClient = createTimedClient(supabaseUrl, anonKey, grantedAdmin.accessToken);
@@ -2412,6 +2883,7 @@ Deno.serve(async (req) => {
     if (action === "break_glass_end") return await breakGlassEnd(adminClient, auth.user, payload);
     if (action === "legal_request_create") return await legalRequestCreate(adminClient, auth.user, payload);
     if (action === "legal_request_update") return await legalRequestUpdate(adminClient, auth.user, payload);
+    if (action === "legal_request_detail") return await legalRequestDetail(adminClient, auth.user, payload);
     if (action === "legal_request_list") return await legalRequestList(adminClient, auth.user, payload);
     if (action === "security_status") return await securityStatus(adminClient, auth.user);
     if (action === "canary_run") return await canaryRun(adminClient, anonClient, auth.user, supabaseUrl, anonKey);

@@ -3,10 +3,17 @@ import { supabase } from "./supabase";
 export type LegalEvidenceAction = "preview" | "search" | "export" | "place_hold" | "release_hold";
 export type LegalEvidenceTargetType =
   | "user_id"
+  | "profile_channel"
+  | "creator_video"
+  | "profile_post"
+  | "comment"
+  | "social_attachment"
   | "content_id"
   | "room_id"
+  | "live_room"
   | "chat_thread_id"
   | "report_id"
+  | "dmca_case"
   | "date_range";
 
 export type LegalEvidenceRequestInput = {
@@ -17,6 +24,7 @@ export type LegalEvidenceRequestInput = {
   dateFrom?: string | null;
   dateTo?: string | null;
   holdId?: string | null;
+  legalRequestId?: string | null;
 };
 
 export type LegalEvidenceResult = {
@@ -37,6 +45,7 @@ export async function requestLegalEvidenceAction(input: LegalEvidenceRequestInpu
       dateFrom: input.dateFrom ?? null,
       dateTo: input.dateTo ?? null,
       holdId: input.holdId ?? null,
+      legalRequestId: input.legalRequestId ?? null,
       reason: input.reason,
       targetId: input.targetId ?? null,
       targetType: input.targetType ?? null,

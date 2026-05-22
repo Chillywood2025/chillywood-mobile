@@ -36,6 +36,7 @@ import {
   listOwnerControlCanaries,
   listPermissionTemplates,
   readBreakGlassStatus,
+  readLegalRequestDetail,
   readOwnerSecurityStatus,
   revokePermissionTemplate,
   runOwnerControlCanary,
@@ -44,6 +45,8 @@ import {
   type OwnerControlBreakGlassSession,
   type OwnerControlCanaryResult,
   type OwnerControlCanaryRun,
+  type OwnerControlLegalRequestDetail,
+  type OwnerControlLegalRequestEvent,
   type OwnerControlLegalRequest,
   type OwnerControlPermissionTemplate,
   type OwnerControlSafetyDashboard,
@@ -234,7 +237,6 @@ type OperatorTabKey =
   | "audit-explorer"
   | "permission-templates"
   | "break-glass"
-  | "legal-intake"
   | "owner-security"
   | "canary"
   | "safety-dashboard"
@@ -332,7 +334,6 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "audit-explorer", label: "Audit Explorer" },
   { key: "permission-templates", label: "Permission Templates" },
   { key: "break-glass", label: "Break Glass" },
-  { key: "legal-intake", label: "Legal Intake" },
   { key: "owner-security", label: "Owner Security" },
   { key: "canary", label: "Canary" },
   { key: "safety-dashboard", label: "Safety" },
@@ -354,11 +355,18 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "system", label: "System" },
 ];
 const legalEvidenceTargetOptions: readonly { key: LegalEvidenceTargetType; label: string }[] = [
-  { key: "user_id", label: "User ID" },
+  { key: "user_id", label: "User / Account" },
+  { key: "profile_channel", label: "Profile / Channel" },
+  { key: "creator_video", label: "Creator Video" },
+  { key: "profile_post", label: "Profile Post" },
+  { key: "comment", label: "Comment / Reply" },
+  { key: "social_attachment", label: "Attachment" },
   { key: "content_id", label: "Content ID" },
-  { key: "room_id", label: "Room ID" },
+  { key: "room_id", label: "Room" },
+  { key: "live_room", label: "Live Metadata" },
   { key: "chat_thread_id", label: "Chat Thread" },
   { key: "report_id", label: "Report ID" },
+  { key: "dmca_case", label: "DMCA Case" },
   { key: "date_range", label: "Date Range" },
 ];
 const staffPermissionOptions: readonly { key: PlatformStaffPermissionKey; label: string }[] = [
@@ -370,9 +378,12 @@ const staffPermissionOptions: readonly { key: PlatformStaffPermissionKey; label:
   { key: "billing_support_read", label: "Billing Support" },
   { key: "creator_support", label: "Creator Support" },
   { key: "legal_review", label: "Legal Review" },
+  { key: "evidence_preview", label: "Evidence Preview" },
   { key: "dmca_review", label: "DMCA Review" },
   { key: "copyright_review", label: "Copyright Review" },
   { key: "evidence_export", label: "Evidence Export" },
+  { key: "legal_hold", label: "Legal Hold" },
+  { key: "legal_ops", label: "Legal Ops" },
   { key: "emergency_break_glass", label: "Break Glass" },
   { key: "admin_grants", label: "Admin Grants" },
   { key: "manage_moderators", label: "Moderator Grants" },
@@ -989,6 +1000,49 @@ const formatAuditDisplayText = (value: unknown) => {
 type OwnerControlTone = "default" | "success" | "danger" | "manual" | "locked" | "info";
 type CanaryStatusFilter = "all" | "fail" | "manual_required" | "pass";
 type CanaryStatus = "pass" | "fail" | "manual_required";
+type LegalSubsection = "intake" | "evidence" | "holds" | "requests" | "exports" | "timeline";
+type LegalRequestStatusFilter =
+  | "all"
+  | "received"
+  | "needs_more_info"
+  | "under_review"
+  | "preserved_legal_hold"
+  | "evidence_prepared"
+  | "exported"
+  | "closed"
+  | "rejected_no_action";
+
+const legalSubsectionOptions: readonly { key: LegalSubsection; label: string }[] = [
+  { key: "intake", label: "Intake" },
+  { key: "evidence", label: "Evidence" },
+  { key: "holds", label: "Holds" },
+  { key: "requests", label: "Requests" },
+  { key: "exports", label: "Exports" },
+  { key: "timeline", label: "Timeline" },
+];
+
+const legalRequestStatusOptions: readonly { key: LegalRequestStatusFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "received", label: "Received" },
+  { key: "needs_more_info", label: "Needs More Info" },
+  { key: "under_review", label: "Under Review" },
+  { key: "preserved_legal_hold", label: "Preserved / Legal Hold" },
+  { key: "evidence_prepared", label: "Evidence Prepared" },
+  { key: "exported", label: "Exported" },
+  { key: "closed", label: "Closed" },
+  { key: "rejected_no_action", label: "Rejected / No Action" },
+];
+
+const legalRequestTypeOptions = [
+  "law_enforcement",
+  "civil_legal",
+  "preservation",
+  "court_order",
+  "subpoena",
+  "emergency",
+  "dmca_related",
+  "other",
+] as const;
 
 const canaryFilterOptions: readonly { key: CanaryStatusFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -1028,6 +1082,47 @@ const ownerStatusLabel = (status: unknown) => {
   if (normalized === "pass") return "Pass";
   if (normalized === "fail") return "Failed";
   return "Manual Required";
+};
+
+const formatLegalStatus = (value: unknown) => {
+  const status = String(value ?? "received");
+  const option = legalRequestStatusOptions.find((entry) => entry.key === status);
+  return option?.label ?? formatModerationToken(status);
+};
+
+const legalStatusTone = (status: unknown): OwnerControlTone => {
+  const normalized = String(status ?? "").toLowerCase();
+  if (normalized === "closed") return "locked";
+  if (normalized === "rejected_no_action") return "danger";
+  if (normalized === "exported" || normalized === "evidence_prepared") return "success";
+  if (normalized === "preserved_legal_hold" || normalized === "needs_more_info") return "manual";
+  return "info";
+};
+
+const legalRequestPrimaryTarget = (request: OwnerControlLegalRequest | null | undefined) => {
+  if (!request) return { id: "", label: "No target", targetType: "user_id" as LegalEvidenceTargetType };
+  const pairs: readonly [keyof OwnerControlLegalRequest, string, LegalEvidenceTargetType][] = [
+    ["target_user_id", "User", "user_id"],
+    ["target_content_id", "Content", "content_id"],
+    ["target_thread_id", "Thread", "chat_thread_id"],
+    ["target_room_id", "Room", "room_id"],
+    ["target_report_id", "Report", "report_id"],
+  ];
+  const match = pairs.find(([key]) => String(request[key] ?? "").trim());
+  if (!match) return { id: "", label: "No target", targetType: "user_id" as LegalEvidenceTargetType };
+  return {
+    id: String(request[match[0]] ?? "").trim(),
+    label: match[1],
+    targetType: match[2],
+  };
+};
+
+const summarizeLegalPreview = (value: Record<string, unknown> | null | undefined) => {
+  if (!value || !Object.keys(value).length) return "No evidence preview has been requested in this session.";
+  return Object.entries(value)
+    .filter(([key]) => !["generatedAt", "redaction", "targetId", "targetType"].includes(key))
+    .map(([key, entry]) => `${formatModerationToken(key)}: ${Array.isArray(entry) ? entry.length : entry && typeof entry === "object" ? Object.keys(entry).length : String(entry ?? "none")}`)
+    .join(" · ") || "Preview returned metadata with no matching rows.";
 };
 
 const ownerToneBadgeStyle = (tone: OwnerControlTone) => {
@@ -1550,7 +1645,10 @@ export default function AdminStudioScreen() {
   const [legalDateTo, setLegalDateTo] = useState("");
   const [legalBusy, setLegalBusy] = useState<"preview" | "export" | "hold" | null>(null);
   const [legalNotice, setLegalNotice] = useState<string | null>(null);
-  const [legalPreviewJson, setLegalPreviewJson] = useState("");
+  const [legalPreviewResult, setLegalPreviewResult] = useState<Record<string, unknown> | null>(null);
+  const [legalExportResult, setLegalExportResult] = useState<Record<string, unknown> | null>(null);
+  const [legalHoldResult, setLegalHoldResult] = useState<Record<string, unknown> | null>(null);
+  const [legalSubsection, setLegalSubsection] = useState<LegalSubsection>("intake");
   const [ownerControlNotice, setOwnerControlNotice] = useState<string | null>(null);
   const [ownerControlLoading, setOwnerControlLoading] = useState(false);
   const [auditExplorerRows, setAuditExplorerRows] = useState<OwnerControlAuditRow[]>([]);
@@ -1571,10 +1669,24 @@ export default function AdminStudioScreen() {
   const [breakGlassDuration, setBreakGlassDuration] = useState("1h");
   const [breakGlassBusy, setBreakGlassBusy] = useState<"activate" | "end" | null>(null);
   const [legalRequests, setLegalRequests] = useState<OwnerControlLegalRequest[]>([]);
+  const [selectedLegalRequestId, setSelectedLegalRequestId] = useState<string | null>(null);
+  const [selectedLegalRequestDetail, setSelectedLegalRequestDetail] = useState<OwnerControlLegalRequestDetail | null>(null);
+  const [legalRequestStatusFilter, setLegalRequestStatusFilter] = useState<LegalRequestStatusFilter>("all");
+  const [legalRequestSearch, setLegalRequestSearch] = useState("");
+  const [legalRequestStatusUpdate, setLegalRequestStatusUpdate] = useState<LegalRequestStatusFilter>("under_review");
+  const [legalRequestNote, setLegalRequestNote] = useState("");
+  const [legalRequestDetailBusy, setLegalRequestDetailBusy] = useState(false);
   const [legalRequestAgency, setLegalRequestAgency] = useState("");
   const [legalRequestContact, setLegalRequestContact] = useState("");
+  const [legalRequestContactEmail, setLegalRequestContactEmail] = useState("");
+  const [legalRequestContactPhone, setLegalRequestContactPhone] = useState("");
   const [legalRequestCaseNumber, setLegalRequestCaseNumber] = useState("");
+  const [legalRequestType, setLegalRequestType] = useState<typeof legalRequestTypeOptions[number]>("law_enforcement");
   const [legalRequestReason, setLegalRequestReason] = useState("");
+  const [legalRequestDateFrom, setLegalRequestDateFrom] = useState("");
+  const [legalRequestDateTo, setLegalRequestDateTo] = useState("");
+  const [legalRequestDueAt, setLegalRequestDueAt] = useState("");
+  const [legalRequestNotes, setLegalRequestNotes] = useState("");
   const [legalRequestTargetId, setLegalRequestTargetId] = useState("");
   const [legalRequestTargetType, setLegalRequestTargetType] = useState<"targetUserId" | "targetContentId" | "targetThreadId" | "targetRoomId" | "targetReportId">("targetUserId");
   const [legalRequestBusy, setLegalRequestBusy] = useState(false);
@@ -1651,12 +1763,11 @@ export default function AdminStudioScreen() {
       if (canAccessDmca) scopedTabs.push("dmca");
       if (canViewStaffRoles) scopedTabs.push("roles");
       if (canAccessLiveOps) scopedTabs.push("live-cost-guard", "live-ops-fix-center");
-      if (canAccessLegalEvidence) scopedTabs.push("legal");
+      if (canAccessLegalEvidence || canAccessLegalIntake) scopedTabs.push("legal");
       if (canAccessAuditExplorer) scopedTabs.push("audit-explorer");
       if (canAccessCanaryChecks) scopedTabs.push("canary");
       if (canManagePermissionTemplates) scopedTabs.push("permission-templates");
       if (canAccessBreakGlass) scopedTabs.push("break-glass");
-      if (canAccessLegalIntake) scopedTabs.push("legal-intake");
       if (canAccessOwnerSecurity) scopedTabs.push("owner-security", "safety-dashboard");
       return operatorTabs.filter((tab) => scopedTabs.includes(tab.key));
     },
@@ -1690,6 +1801,39 @@ export default function AdminStudioScreen() {
     },
     [canManageAdminStaff, canManageModeratorStaff],
   );
+  const legalRequestSummary = useMemo(() => {
+    const openStatuses = new Set(["received", "needs_more_info", "under_review", "preserved_legal_hold", "evidence_prepared"]);
+    return {
+      closed: legalRequests.filter((request) => String(request.status ?? "") === "closed").length,
+      evidencePrepared: legalRequests.filter((request) => ["evidence_prepared", "exported"].includes(String(request.status ?? ""))).length,
+      holds: legalRequests.filter((request) => String(request.legal_hold_status ?? "") === "active" || String(request.status ?? "") === "preserved_legal_hold").length,
+      open: legalRequests.filter((request) => openStatuses.has(String(request.status ?? "received"))).length,
+      underReview: legalRequests.filter((request) => String(request.status ?? "") === "under_review").length,
+    };
+  }, [legalRequests]);
+  const filteredLegalRequests = useMemo(() => {
+    const query = legalRequestSearch.trim().toLowerCase();
+    return legalRequests.filter((request) => {
+      const status = String(request.status ?? "received").toLowerCase();
+      if (legalRequestStatusFilter !== "all" && status !== legalRequestStatusFilter) return false;
+      if (!query) return true;
+      return [
+        request.id,
+        request.case_number,
+        request.requesting_agency,
+        request.contact_name,
+        request.contact_email,
+        request.target_user_id,
+        request.target_content_id,
+        request.target_thread_id,
+        request.target_room_id,
+        request.target_report_id,
+        status,
+      ].some((value) => String(value ?? "").toLowerCase().includes(query));
+    });
+  }, [legalRequestSearch, legalRequestStatusFilter, legalRequests]);
+  const selectedLegalRequest = selectedLegalRequestDetail?.request ?? legalRequests.find((request) => request.id === selectedLegalRequestId) ?? null;
+  const selectedLegalTarget = legalRequestPrimaryTarget(selectedLegalRequest);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Operator Center");
 
   useEffect(() => {
@@ -1763,6 +1907,16 @@ export default function AdminStudioScreen() {
       setBreakGlassActiveSessionId(null);
       setBreakGlassBusy(null);
       setLegalRequests([]);
+      setSelectedLegalRequestId(null);
+      setSelectedLegalRequestDetail(null);
+      setLegalRequestDetailBusy(false);
+      setLegalRequestStatusFilter("all");
+      setLegalRequestSearch("");
+      setLegalRequestNote("");
+      setLegalPreviewResult(null);
+      setLegalExportResult(null);
+      setLegalHoldResult(null);
+      setLegalSubsection("intake");
       setLegalRequestBusy(false);
       setOwnerSecurityStatus(null);
       setOwnerSafetyDashboard(null);
@@ -3502,6 +3656,16 @@ export default function AdminStudioScreen() {
     Alert.alert("Runbook", incident.runbookPath);
   }, []);
 
+  const refreshLegalRequestAfterEvidence = useCallback(async (requestId: string) => {
+    if (!requestId || (!canAccessLegalIntake && !canAccessLegalEvidence)) return;
+    const [requests, detail] = await Promise.all([
+      listLegalRequests({ limit: 100 }),
+      readLegalRequestDetail({ id: requestId }),
+    ]);
+    setLegalRequests(requests);
+    setSelectedLegalRequestDetail(detail);
+  }, [canAccessLegalEvidence, canAccessLegalIntake]);
+
   const runLegalEvidenceAction = useCallback(async (action: "preview" | "export" | "hold") => {
     if (!canAccessLegalEvidence || legalBusy) {
       setLegalNotice("Legal evidence actions require Owner or scoped legal_review/evidence_export permission.");
@@ -3518,6 +3682,10 @@ export default function AdminStudioScreen() {
       setLegalNotice("Enter a target id before using Legal Review.");
       return;
     }
+    if (action === "hold" && legalTargetType === "date_range") {
+      setLegalNotice("Legal hold disabled for date range: hold requires a concrete user, content, room, thread, report, DMCA case, or attachment target.");
+      return;
+    }
 
     try {
       setLegalBusy(action);
@@ -3526,12 +3694,14 @@ export default function AdminStudioScreen() {
         action: action === "hold" ? "place_hold" : action,
         dateFrom: legalDateFrom.trim() || null,
         dateTo: legalDateTo.trim() || null,
+        legalRequestId: selectedLegalRequestId,
         reason,
         targetId: legalTargetId.trim() || null,
         targetType: legalTargetType,
       });
-      const preview = result.preview && Object.keys(result.preview).length ? result.preview : result.exportRecord || result.hold;
-      setLegalPreviewJson(JSON.stringify(preview ?? {}, null, 2));
+      if (result.preview && Object.keys(result.preview).length) setLegalPreviewResult(result.preview);
+      if (result.exportRecord && Object.keys(result.exportRecord).length) setLegalExportResult(result.exportRecord);
+      if (result.hold && Object.keys(result.hold).length) setLegalHoldResult(result.hold);
       setLegalNotice(
         action === "export"
           ? (isOwnerStaff ? "Evidence export record created." : "Evidence export record created with an audit row.")
@@ -3539,6 +3709,9 @@ export default function AdminStudioScreen() {
             ? (isOwnerStaff ? "Legal hold placed." : "Legal hold placed with an audit row.")
             : (isOwnerStaff ? "Evidence preview created." : "Evidence preview created with an audit row."),
       );
+      if (selectedLegalRequestId) {
+        await refreshLegalRequestAfterEvidence(selectedLegalRequestId);
+      }
     } catch (err: any) {
       setLegalNotice(formatAdminOperationFailure(err, "Legal evidence action failed."));
     } finally {
@@ -3552,6 +3725,8 @@ export default function AdminStudioScreen() {
     legalReason,
     legalTargetId,
     legalTargetType,
+    refreshLegalRequestAfterEvidence,
+    selectedLegalRequestId,
     isOwnerStaff,
   ]);
 
@@ -3700,18 +3875,35 @@ export default function AdminStudioScreen() {
   }, [breakGlassActiveSessionId, breakGlassBusy, canAccessBreakGlass, loadBreakGlass, loadPlatformRoles]);
 
   const loadLegalIntake = useCallback(async () => {
-    if (!canAccessLegalIntake) return;
+    if (!canAccessLegalIntake && !canAccessLegalEvidence) return;
     try {
       setOwnerControlLoading(true);
       setOwnerControlNotice(null);
-      setLegalRequests(await listLegalRequests({ limit: 25 }));
+      setLegalRequests(await listLegalRequests({ limit: 100 }));
     } catch (err: any) {
       setLegalRequests([]);
       setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load legal request intake."));
     } finally {
       setOwnerControlLoading(false);
     }
-  }, [canAccessLegalIntake]);
+  }, [canAccessLegalEvidence, canAccessLegalIntake]);
+
+  const openLegalRequestDetail = useCallback(async (requestId: string) => {
+    if (!requestId || (!canAccessLegalIntake && !canAccessLegalEvidence)) return;
+    try {
+      setLegalRequestDetailBusy(true);
+      setOwnerControlNotice(null);
+      setSelectedLegalRequestId(requestId);
+      const detail = await readLegalRequestDetail({ id: requestId });
+      setSelectedLegalRequestDetail(detail);
+      setLegalRequestStatusUpdate((detail.request?.status as LegalRequestStatusFilter) || "under_review");
+      setLegalRequestNote("");
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to open legal request detail."));
+    } finally {
+      setLegalRequestDetailBusy(false);
+    }
+  }, [canAccessLegalEvidence, canAccessLegalIntake]);
 
   const runLegalIntakeCreate = useCallback(async () => {
     if (!canAccessLegalIntake || legalRequestBusy) return;
@@ -3730,15 +3922,28 @@ export default function AdminStudioScreen() {
       setOwnerControlNotice(null);
       await createLegalRequest({
         contactName: legalRequestContact.trim() || null,
+        contactEmail: legalRequestContactEmail.trim() || null,
+        contactPhone: legalRequestContactPhone.trim() || null,
         caseNumber: legalRequestCaseNumber.trim() || null,
+        dateFrom: legalRequestDateFrom.trim() || null,
+        dateTo: legalRequestDateTo.trim() || null,
+        dueAt: legalRequestDueAt.trim() || null,
+        notes: legalRequestNotes.trim() || null,
         requestReason: legalRequestReason.trim(),
+        requestType: legalRequestType,
         requestingAgency: legalRequestAgency.trim(),
         ...targetPatch,
       });
       setOwnerControlNotice("Legal request intake record created.");
       setLegalRequestAgency("");
       setLegalRequestContact("");
+      setLegalRequestContactEmail("");
+      setLegalRequestContactPhone("");
       setLegalRequestCaseNumber("");
+      setLegalRequestDateFrom("");
+      setLegalRequestDateTo("");
+      setLegalRequestDueAt("");
+      setLegalRequestNotes("");
       setLegalRequestReason("");
       setLegalRequestTargetId("");
       await loadLegalIntake();
@@ -3754,26 +3959,105 @@ export default function AdminStudioScreen() {
     legalRequestBusy,
     legalRequestCaseNumber,
     legalRequestContact,
+    legalRequestContactEmail,
+    legalRequestContactPhone,
+    legalRequestDateFrom,
+    legalRequestDateTo,
+    legalRequestDueAt,
+    legalRequestNotes,
     legalRequestReason,
     legalRequestTargetId,
     legalRequestTargetType,
+    legalRequestType,
     loadLegalIntake,
   ]);
 
-  const markLegalRequestReviewing = useCallback(async (requestId: string) => {
+  const updateSelectedLegalRequestStatus = useCallback(async (requestId: string, status: LegalRequestStatusFilter) => {
     if (!canAccessLegalIntake) return;
+    if (!requestId || status === "all") {
+      setOwnerControlNotice("Choose a legal request and status first.");
+      return;
+    }
     try {
       setOwnerControlNotice(null);
       await updateLegalRequest({
         id: requestId,
-        reason: isOwnerStaff ? null : "Admin marked legal intake reviewing.",
-        status: "reviewing",
+        reason: isOwnerStaff ? null : `Admin marked legal request ${formatLegalStatus(status)}.`,
+        status,
       });
       await loadLegalIntake();
+      await openLegalRequestDetail(requestId);
     } catch (err: any) {
       setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to update legal request intake."));
     }
-  }, [canAccessLegalIntake, isOwnerStaff, loadLegalIntake]);
+  }, [canAccessLegalIntake, isOwnerStaff, loadLegalIntake, openLegalRequestDetail]);
+
+  const addLegalRequestNote = useCallback(async () => {
+    const requestId = selectedLegalRequestId;
+    if (!canAccessLegalIntake || !requestId) return;
+    if (legalRequestNote.trim().length < 3) {
+      setOwnerControlNotice("Add a note before recording it.");
+      return;
+    }
+    try {
+      setOwnerControlNotice(null);
+      await updateLegalRequest({
+        id: requestId,
+        notes: legalRequestNote.trim(),
+        reason: isOwnerStaff ? null : "Admin added Legal Intake note.",
+      });
+      setLegalRequestNote("");
+      await loadLegalIntake();
+      await openLegalRequestDetail(requestId);
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to add legal request note."));
+    }
+  }, [canAccessLegalIntake, isOwnerStaff, legalRequestNote, loadLegalIntake, openLegalRequestDetail, selectedLegalRequestId]);
+
+  const linkLegalRequestToEvidence = useCallback((request: OwnerControlLegalRequest) => {
+    const target = legalRequestPrimaryTarget(request);
+    setSelectedLegalRequestId(String(request.id ?? ""));
+    setSelectedLegalRequestDetail((prev) => prev?.request?.id === request.id ? prev : null);
+    setLegalSubsection("evidence");
+    if (target.id) {
+      setLegalTargetType(target.targetType);
+      setLegalTargetId(target.id);
+    }
+    setLegalNotice(`Evidence actions will be linked to request ${formatCompactIdentifier(request.id)}.`);
+  }, []);
+
+  const applyLegalHoldForRequest = useCallback(async (request: OwnerControlLegalRequest) => {
+    if (!canAccessLegalEvidence || legalBusy) return;
+    const target = legalRequestPrimaryTarget(request);
+    if (!target.id) {
+      setLegalNotice("Legal hold disabled: this request has no concrete target id.");
+      return;
+    }
+    const reason = legalReason.trim();
+    if (!isOwnerStaff && reason.length < 6) {
+      setLegalNotice("Enter an audit reason before applying a legal hold.");
+      return;
+    }
+    try {
+      setLegalBusy("hold");
+      setLegalNotice(null);
+      const result = await requestLegalEvidenceAction({
+        action: "place_hold",
+        legalRequestId: String(request.id ?? ""),
+        reason,
+        targetId: target.id,
+        targetType: target.targetType,
+      });
+      setLegalHoldResult(result.hold);
+      setLegalNotice(isOwnerStaff ? "Legal hold placed." : "Legal hold placed with an audit row.");
+      await loadLegalIntake();
+      await openLegalRequestDetail(String(request.id ?? ""));
+    } catch (err: any) {
+      setLegalNotice(formatAdminOperationFailure(err, "Legal hold action failed."));
+    } finally {
+      setLegalBusy(null);
+    }
+  }, [canAccessLegalEvidence, isOwnerStaff, legalBusy, legalReason, loadLegalIntake, openLegalRequestDetail]);
 
   const loadOwnerSecurity = useCallback(async () => {
     if (!canAccessOwnerSecurity) return;
@@ -3852,7 +4136,7 @@ export default function AdminStudioScreen() {
     if (operatorTab === "audit-explorer" && canAccessAuditExplorer) void loadAuditExplorer();
     if (operatorTab === "permission-templates" && canManagePermissionTemplates) void loadPermissionTemplates();
     if (operatorTab === "break-glass" && canAccessBreakGlass) void loadBreakGlass();
-    if (operatorTab === "legal-intake" && canAccessLegalIntake) void loadLegalIntake();
+    if (operatorTab === "legal" && (canAccessLegalIntake || canAccessLegalEvidence)) void loadLegalIntake();
     if ((operatorTab === "owner-security" || operatorTab === "safety-dashboard") && canAccessOwnerSecurity) void loadOwnerSecurity();
     if (operatorTab === "canary" && canAccessCanaryChecks) void loadCanaries();
   }, [
@@ -3860,6 +4144,7 @@ export default function AdminStudioScreen() {
     canAccessAuditExplorer,
     canAccessBreakGlass,
     canAccessCanaryChecks,
+    canAccessLegalEvidence,
     canAccessLegalIntake,
     canAccessOwnerSecurity,
     canManagePermissionTemplates,
@@ -8097,31 +8382,119 @@ export default function AdminStudioScreen() {
 
         {operatorTab === "legal" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>LEGAL REVIEW</Text>
-              <Text style={styles.configTitle}>Evidence preview and export</Text>
-              <Text style={styles.configBody}>
-                Owner-only by default. Scoped legal_review/evidence_export access requires a reason and writes audit rows for every preview, export, and hold.
-              </Text>
+          <OwnerControlPanelHeader
+            actions={(
+              <TouchableOpacity
+                style={[styles.ownerPrimaryButton, (!canAccessLegalIntake || legalRequestBusy) && styles.configSaveBtnDisabled]}
+                onPress={() => {
+                  setLegalSubsection("intake");
+                  setOwnerControlNotice(null);
+                }}
+                disabled={!canAccessLegalIntake || legalRequestBusy}
+              >
+                <Text style={styles.ownerPrimaryButtonText}>Create Legal Request</Text>
+              </TouchableOpacity>
+            )}
+            badgeLabel={canAccessLegalEvidence || canAccessLegalIntake ? "Authorized" : "Locked"}
+            badgeTone={canAccessLegalEvidence || canAccessLegalIntake ? "success" : "locked"}
+            kicker="LEGAL"
+            subtitle="Owner access authorized. Approved admins require scoped legal permission and reason-based records."
+            title="Legal Intake and Evidence"
+          />
+
+          {ownerControlNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
             </View>
-            <View style={[styles.badge, canAccessLegalEvidence ? styles.badgeOn : styles.badgeOff]}>
-              <Text style={styles.badgeText}>{canAccessLegalEvidence ? "Authorized" : "Locked"}</Text>
-            </View>
-          </View>
+          ) : null}
 
           {legalNotice ? (
-            <View style={[styles.notice, styles.noticeWarn]}>
+            <View style={styles.notice}>
               <Text style={styles.noticeText}>{legalNotice}</Text>
             </View>
           ) : null}
 
+          <View style={styles.ownerMetricGrid}>
+            <OwnerMetricTile label="Open Requests" value={legalRequestSummary.open} tone={legalRequestSummary.open ? "manual" : "success"} />
+            <OwnerMetricTile label="Under Review" value={legalRequestSummary.underReview} tone={legalRequestSummary.underReview ? "info" : "default"} />
+            <OwnerMetricTile label="Evidence Prepared" value={legalRequestSummary.evidencePrepared} tone={legalRequestSummary.evidencePrepared ? "success" : "default"} />
+            <OwnerMetricTile label="Legal Holds Active" value={legalRequestSummary.holds} tone={legalRequestSummary.holds ? "manual" : "success"} />
+            <OwnerMetricTile label="Closed Requests" value={legalRequestSummary.closed} tone="locked" />
+          </View>
+
+          <View style={styles.toggleRowWrap}>
+            {legalSubsectionOptions.map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                style={[styles.toggleChip, legalSubsection === option.key && styles.toggleChipActive]}
+                onPress={() => setLegalSubsection(option.key)}
+              >
+                <Text style={[styles.toggleChipText, legalSubsection === option.key && styles.toggleChipTextActive]}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <View style={styles.configList}>
+            {legalSubsection === "intake" ? (
+            <View style={styles.ownerToolbarPanel}>
+              <Text style={styles.ownerSectionTitle}>Create request</Text>
+              <View style={styles.ownerInputGroup}>
+                <View style={styles.toggleRowWrap}>
+                  {legalRequestTypeOptions.map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[styles.toggleChip, legalRequestType === type && styles.toggleChipActive]}
+                      onPress={() => setLegalRequestType(type)}
+                    >
+                      <Text style={[styles.toggleChipText, legalRequestType === type && styles.toggleChipTextActive]}>{formatModerationToken(type)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput value={legalRequestAgency} onChangeText={setLegalRequestAgency} placeholder="Requesting agency" placeholderTextColor="#788196" style={styles.input} />
+                <TextInput value={legalRequestContact} onChangeText={setLegalRequestContact} placeholder="Officer/contact name" placeholderTextColor="#788196" style={styles.input} />
+                <TextInput value={legalRequestContactEmail} onChangeText={setLegalRequestContactEmail} placeholder="Contact email" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" keyboardType="email-address" />
+                <TextInput value={legalRequestContactPhone} onChangeText={setLegalRequestContactPhone} placeholder="Contact phone optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+                <TextInput value={legalRequestCaseNumber} onChangeText={setLegalRequestCaseNumber} placeholder="Case number" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+                <TextInput value={legalRequestReason} onChangeText={setLegalRequestReason} placeholder="Request reason / description" placeholderTextColor="#788196" style={[styles.input, styles.multiline]} multiline />
+                <View style={styles.toggleRowWrap}>
+                  {[
+                    ["targetUserId", "User"],
+                    ["targetContentId", "Content"],
+                    ["targetThreadId", "Thread"],
+                    ["targetRoomId", "Room"],
+                    ["targetReportId", "Report"],
+                  ].map(([key, label]) => (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.toggleChip, legalRequestTargetType === key && styles.toggleChipActive]}
+                      onPress={() => setLegalRequestTargetType(key as typeof legalRequestTargetType)}
+                    >
+                      <Text style={[styles.toggleChipText, legalRequestTargetType === key && styles.toggleChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput value={legalRequestTargetId} onChangeText={setLegalRequestTargetId} placeholder="Target id optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+                <TextInput value={legalRequestDateFrom} onChangeText={setLegalRequestDateFrom} placeholder="Date range from ISO optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+                <TextInput value={legalRequestDateTo} onChangeText={setLegalRequestDateTo} placeholder="Date range to ISO optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+                <TextInput value={legalRequestDueAt} onChangeText={setLegalRequestDueAt} placeholder="Due date ISO optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+                <TextInput value={legalRequestNotes} onChangeText={setLegalRequestNotes} placeholder="Internal notes optional" placeholderTextColor="#788196" style={[styles.input, styles.multiline]} multiline />
+                <TouchableOpacity
+                  style={[styles.ownerPrimaryButton, (legalRequestBusy || !canAccessLegalIntake) && styles.configSaveBtnDisabled]}
+                  onPress={() => void runLegalIntakeCreate()}
+                  disabled={legalRequestBusy || !canAccessLegalIntake}
+                >
+                  <Text style={styles.ownerPrimaryButtonText}>{legalRequestBusy ? "Creating..." : canAccessLegalIntake ? "Create Request" : "Disabled: legal_request_intake required"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            ) : null}
+
+            {legalSubsection === "evidence" ? (
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Evidence target</Text>
                 <Text style={styles.configListBody}>
-                  Search by safe IDs or date range. Preview defaults to metadata and timestamps so unrelated private data stays redacted where possible.
+                  Search by backed target type. Linked request: {selectedLegalRequest ? formatCompactIdentifier(selectedLegalRequest.id) : "none"}.
                 </Text>
               </View>
 
@@ -8181,40 +8554,180 @@ export default function AdminStudioScreen() {
 
               <View style={styles.configListActions}>
                 <TouchableOpacity
-                  style={[styles.orderBtn, legalBusy !== null && styles.configSaveBtnDisabled]}
+                  style={[styles.orderBtn, (legalBusy !== null || !canAccessLegalEvidence) && styles.configSaveBtnDisabled]}
                   onPress={() => void runLegalEvidenceAction("preview")}
-                  disabled={legalBusy !== null}
+                  disabled={legalBusy !== null || !canAccessLegalEvidence}
                 >
-                  <Text style={styles.orderBtnText}>{legalBusy === "preview" ? "Previewing..." : "Preview"}</Text>
+                  <Text style={styles.orderBtnText}>{legalBusy === "preview" ? "Previewing..." : "Preview Evidence"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.orderBtn, legalBusy !== null && styles.configSaveBtnDisabled]}
+                  style={[styles.orderBtn, (legalBusy !== null || !canAccessLegalEvidence) && styles.configSaveBtnDisabled]}
                   onPress={() => void runLegalEvidenceAction("export")}
-                  disabled={legalBusy !== null}
+                  disabled={legalBusy !== null || !canAccessLegalEvidence}
                 >
-                  <Text style={styles.orderBtnText}>{legalBusy === "export" ? "Exporting..." : "Export Record"}</Text>
+                  <Text style={styles.orderBtnText}>{legalBusy === "export" ? "Exporting..." : "Export Evidence"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.orderBtn, (legalBusy !== null || legalTargetType === "date_range") && styles.configSaveBtnDisabled]}
+                  style={[styles.orderBtn, (legalBusy !== null || legalTargetType === "date_range" || !canAccessLegalEvidence) && styles.configSaveBtnDisabled]}
                   onPress={() => void runLegalEvidenceAction("hold")}
-                  disabled={legalBusy !== null || legalTargetType === "date_range"}
+                  disabled={legalBusy !== null || legalTargetType === "date_range" || !canAccessLegalEvidence}
                 >
-                  <Text style={styles.orderBtnText}>{legalBusy === "hold" ? "Holding..." : "Place Hold"}</Text>
+                  <Text style={styles.orderBtnText}>{legalBusy === "hold" ? "Holding..." : legalTargetType === "date_range" ? "Disabled: target required" : "Apply Legal Hold"}</Text>
                 </TouchableOpacity>
               </View>
             </View>
+            ) : null}
 
+            {legalSubsection === "evidence" ? (
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Preview / audit result</Text>
+                <Text style={styles.configListTitle}>Evidence result</Text>
                 <Text style={styles.configListBody}>
                   Results come from the protected Edge Function. Service-role keys and legal tooling tokens are never shipped to the app.
                 </Text>
               </View>
               <View style={styles.configListRowSubtle}>
-                <Text style={styles.configListBody}>{legalPreviewJson || "No legal preview has been requested in this session."}</Text>
+                <Text style={styles.configListTitle}>Preview</Text>
+                <Text style={styles.configListBody}>{summarizeLegalPreview(legalPreviewResult)}</Text>
+                <Text style={styles.configListTitle}>Export</Text>
+                <Text style={styles.configListBody}>{legalExportResult?.id ? `Export ${formatCompactIdentifier(legalExportResult.id)} · ${formatAuditDisplayText(legalExportResult.status)}` : "No export record generated in this session."}</Text>
+                <Text style={styles.configListTitle}>Hold</Text>
+                <Text style={styles.configListBody}>{legalHoldResult?.id ? `Hold ${formatCompactIdentifier(legalHoldResult.id)} · ${formatAuditDisplayText(legalHoldResult.status)}` : "No hold placed in this session."}</Text>
               </View>
             </View>
+            ) : null}
+
+            {["intake", "requests"].includes(legalSubsection) ? (
+            <View style={styles.ownerToolbarPanel}>
+              <Text style={styles.ownerSectionTitle}>Requests</Text>
+              <TextInput value={legalRequestSearch} onChangeText={setLegalRequestSearch} placeholder="Search id, case number, agency, officer, target, status" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
+              <View style={styles.toggleRowWrap}>
+                {legalRequestStatusOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[styles.toggleChip, legalRequestStatusFilter === option.key && styles.toggleChipActive]}
+                    onPress={() => setLegalRequestStatusFilter(option.key)}
+                  >
+                    <Text style={[styles.toggleChipText, legalRequestStatusFilter === option.key && styles.toggleChipTextActive]}>{option.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {ownerControlLoading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading legal requests...</Text>
+                </View>
+              ) : filteredLegalRequests.length ? filteredLegalRequests.map((request) => (
+                <OwnerControlRow
+                  key={String(request.id)}
+                  expanded={selectedLegalRequestId === request.id}
+                  message={`${formatModerationToken(request.request_type || "legal_request")} · Case ${formatAuditDisplayText(request.case_number) || "not supplied"} · Target ${legalRequestPrimaryTarget(request).label} ${formatCompactIdentifier(legalRequestPrimaryTarget(request).id)}`}
+                  meta={request.created_at ? formatModerationTimestamp(String(request.created_at)) : "Time unknown"}
+                  statusLabel={formatLegalStatus(request.status)}
+                  title={formatAuditDisplayText(request.requesting_agency) || `Request ${formatCompactIdentifier(request.id)}`}
+                  tone={legalStatusTone(request.status)}
+                >
+                  <View style={styles.ownerPanelActions}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => void openLegalRequestDetail(String(request.id ?? ""))}>
+                      <Text style={styles.actionText}>{legalRequestDetailBusy && selectedLegalRequestId === request.id ? "Opening..." : "Open Request"}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => linkLegalRequestToEvidence(request)}>
+                      <Text style={styles.actionText}>Link Evidence</Text>
+                    </TouchableOpacity>
+                  </View>
+                </OwnerControlRow>
+              )) : (
+                <OwnerEmptyState
+                  body={legalRequestSearch.trim() || legalRequestStatusFilter !== "all" ? "No legal requests match the current search/filter." : "No legal requests have been created yet."}
+                  title={legalRequestSearch.trim() || legalRequestStatusFilter !== "all" ? "No Matching Requests" : "No Legal Requests"}
+                />
+              )}
+            </View>
+            ) : null}
+
+            {selectedLegalRequestDetail && (legalSubsection === "intake" || legalSubsection === "requests" || legalSubsection === "timeline") ? (
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Request detail</Text>
+                <Text style={styles.configListBody}>
+                  {formatAuditDisplayText(selectedLegalRequestDetail.request?.requesting_agency)} · {formatLegalStatus(selectedLegalRequestDetail.request?.status)} · {formatCompactIdentifier(selectedLegalRequestDetail.request?.id)}
+                </Text>
+              </View>
+              <View style={styles.configListRowSubtle}>
+                <Text style={styles.configListBody}>Contact: {formatAuditDisplayText(selectedLegalRequestDetail.request?.contact_name) || "not supplied"} · {formatAuditDisplayText(selectedLegalRequestDetail.request?.contact_email) || "email not supplied"}</Text>
+                <Text style={styles.configListBody}>Target: {selectedLegalTarget.label} {formatCompactIdentifier(selectedLegalTarget.id)}</Text>
+                <Text style={styles.configListBody}>Reviewed: {formatAuditDisplayText(selectedLegalRequestDetail.request?.reviewed_summary) || "none recorded"}</Text>
+                <Text style={styles.configListBody}>Exported: {formatAuditDisplayText(selectedLegalRequestDetail.request?.exported_summary) || "none recorded"}</Text>
+                <Text style={styles.configListBody}>Hold: {formatModerationToken(selectedLegalRequestDetail.request?.legal_hold_status || "none")}</Text>
+                <View style={styles.toggleRowWrap}>
+                  {legalRequestStatusOptions.filter((option) => option.key !== "all").map((option) => (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={[styles.toggleChip, legalRequestStatusUpdate === option.key && styles.toggleChipActive]}
+                      onPress={() => setLegalRequestStatusUpdate(option.key)}
+                    >
+                      <Text style={[styles.toggleChipText, legalRequestStatusUpdate === option.key && styles.toggleChipTextActive]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput value={legalRequestNote} onChangeText={setLegalRequestNote} placeholder="Internal note" placeholderTextColor="#788196" style={[styles.input, styles.multiline]} multiline />
+                <View style={styles.configListActions}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, !canAccessLegalIntake && styles.configSaveBtnDisabled]}
+                    disabled={!canAccessLegalIntake}
+                    onPress={() => void updateSelectedLegalRequestStatus(String(selectedLegalRequestDetail.request?.id ?? ""), legalRequestStatusUpdate)}
+                  >
+                    <Text style={styles.actionText}>{canAccessLegalIntake ? "Update Status" : "Disabled: legal_request_intake required"}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, (!canAccessLegalIntake || legalRequestNote.trim().length < 3) && styles.configSaveBtnDisabled]}
+                    disabled={!canAccessLegalIntake || legalRequestNote.trim().length < 3}
+                    onPress={() => void addLegalRequestNote()}
+                  >
+                    <Text style={styles.actionText}>{legalRequestNote.trim().length < 3 ? "Disabled: note required" : "Add Note"}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => linkLegalRequestToEvidence(selectedLegalRequestDetail.request!)}>
+                    <Text style={styles.actionText}>Preview Evidence</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, (!selectedLegalTarget.id || !canAccessLegalEvidence || legalBusy !== null) && styles.configSaveBtnDisabled]}
+                    disabled={!selectedLegalTarget.id || !canAccessLegalEvidence || legalBusy !== null}
+                    onPress={() => void applyLegalHoldForRequest(selectedLegalRequestDetail.request!)}
+                  >
+                    <Text style={styles.actionText}>{selectedLegalTarget.id ? (canAccessLegalEvidence ? "Apply Legal Hold" : "Disabled: legal_hold required") : "Disabled: target id required"}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+            ) : null}
+
+            {["timeline", "holds", "exports"].includes(legalSubsection) ? (
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>{legalSubsection === "timeline" ? "Timeline / History" : legalSubsection === "holds" ? "Legal Holds" : "Exports"}</Text>
+                <Text style={styles.configListBody}>Open a request from Intake or Requests to inspect linked legal records.</Text>
+              </View>
+              {selectedLegalRequestDetail ? (
+                <View style={styles.configListRowSubtle}>
+                  {legalSubsection === "timeline" ? (
+                    selectedLegalRequestDetail.events.length ? selectedLegalRequestDetail.events.map((event: OwnerControlLegalRequestEvent) => (
+                      <Text key={String(event.id)} style={styles.configListBody}>{`${formatModerationTimestamp(String(event.created_at ?? ""))} · ${formatModerationToken(event.event_type)} · ${formatAuditDisplayText(event.message) || "Event recorded"}`}</Text>
+                    )) : <Text style={styles.configListBody}>No timeline events recorded yet.</Text>
+                  ) : legalSubsection === "holds" ? (
+                    selectedLegalRequestDetail.holds.length ? selectedLegalRequestDetail.holds.map((hold) => (
+                      <Text key={String(hold.id)} style={styles.configListBody}>{`Hold ${formatCompactIdentifier(hold.id)} · ${formatModerationToken(hold.status)} · ${formatModerationToken(hold.target_type)} ${formatCompactIdentifier(hold.target_id)}`}</Text>
+                    )) : <Text style={styles.configListBody}>No legal holds linked to this request.</Text>
+                  ) : (
+                    selectedLegalRequestDetail.evidenceRequests.filter((row) => String(row.request_kind) === "export").length ? selectedLegalRequestDetail.evidenceRequests.filter((row) => String(row.request_kind) === "export").map((row) => (
+                      <Text key={String(row.id)} style={styles.configListBody}>{`Export ${formatCompactIdentifier(row.id)} · ${formatAuditDisplayText(row.export_hash) || "hash pending"} · ${formatModerationTimestamp(String(row.created_at ?? ""))}`}</Text>
+                    )) : <Text style={styles.configListBody}>No exports linked to this request.</Text>
+                  )}
+                </View>
+              ) : (
+                <OwnerEmptyState body="Open a Legal Intake request to view this section." title="No Request Open" />
+              )}
+            </View>
+            ) : null}
           </View>
         </View>
         ) : null}
@@ -8496,85 +9009,6 @@ export default function AdminStudioScreen() {
               />
             )) : (
               <OwnerEmptyState body="No recent Break Glass sessions loaded." title="Break Glass is quiet" />
-            )}
-          </View>
-        </View>
-        ) : null}
-
-        {operatorTab === "legal-intake" ? (
-        <View style={styles.configCard}>
-          <OwnerControlPanelHeader
-            badgeLabel={canAccessLegalIntake ? "Authorized" : "Locked"}
-            badgeTone={canAccessLegalIntake ? "success" : "locked"}
-            kicker="LEGAL INTAKE"
-            subtitle="Request intake links legal records to evidence review. This tool does not delete evidence."
-            title="Legal Request Intake"
-          />
-
-          {ownerControlNotice ? (
-            <View style={[styles.notice, styles.noticeWarn]}>
-              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.ownerToolbarPanel}>
-            <Text style={styles.ownerSectionTitle}>Create intake record</Text>
-            <View style={styles.ownerInputGroup}>
-              <TextInput value={legalRequestAgency} onChangeText={setLegalRequestAgency} placeholder="Requesting agency" placeholderTextColor="#788196" style={styles.input} />
-              <TextInput value={legalRequestContact} onChangeText={setLegalRequestContact} placeholder="Officer/contact name optional" placeholderTextColor="#788196" style={styles.input} />
-              <TextInput value={legalRequestCaseNumber} onChangeText={setLegalRequestCaseNumber} placeholder="Case number optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
-              <TextInput value={legalRequestReason} onChangeText={setLegalRequestReason} placeholder="Request reason" placeholderTextColor="#788196" style={styles.input} multiline />
-              <View style={styles.toggleRowWrap}>
-                {[
-                  ["targetUserId", "User"],
-                  ["targetContentId", "Content"],
-                  ["targetThreadId", "Thread"],
-                  ["targetRoomId", "Room"],
-                  ["targetReportId", "Report"],
-                ].map(([key, label]) => (
-                  <TouchableOpacity
-                    key={key}
-                    style={[styles.toggleChip, legalRequestTargetType === key && styles.toggleChipActive]}
-                    onPress={() => setLegalRequestTargetType(key as typeof legalRequestTargetType)}
-                  >
-                    <Text style={[styles.toggleChipText, legalRequestTargetType === key && styles.toggleChipTextActive]}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TextInput value={legalRequestTargetId} onChangeText={setLegalRequestTargetId} placeholder="Target id optional" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
-              <TouchableOpacity
-                style={[styles.ownerPrimaryButton, legalRequestBusy && styles.configSaveBtnDisabled]}
-                onPress={() => void runLegalIntakeCreate()}
-                disabled={legalRequestBusy || !canAccessLegalIntake}
-              >
-                <Text style={styles.ownerPrimaryButtonText}>{legalRequestBusy ? "Creating..." : "Create Intake"}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.ownerControlList}>
-            <Text style={styles.ownerSectionTitle}>Intake records</Text>
-            {legalRequests.length ? legalRequests.map((request) => (
-              <OwnerControlRow
-                key={String(request.id)}
-                expanded
-                message={`Case ${formatAuditDisplayText(request.case_number) || "not supplied"}`}
-                meta={request.created_at ? formatModerationTimestamp(String(request.created_at)) : "Time unknown"}
-                statusLabel={formatModerationToken(String(request.status ?? "open"))}
-                title={formatAuditDisplayText(request.requesting_agency) || "Unknown agency"}
-                tone={String(request.status ?? "").toLowerCase() === "closed" ? "locked" : "info"}
-              >
-                <View style={styles.ownerPanelActions}>
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => void markLegalRequestReviewing(String(request.id ?? ""))}>
-                    <Text style={styles.actionText}>Mark reviewing</Text>
-                  </TouchableOpacity>
-                </View>
-              </OwnerControlRow>
-            )) : (
-              <OwnerEmptyState
-                body={ownerControlLoading ? "Legal requests are loading." : "No legal request intake records loaded."}
-                title={ownerControlLoading ? "Loading Legal Intake" : "No legal requests"}
-              />
             )}
           </View>
         </View>
@@ -11203,6 +11637,11 @@ const styles = StyleSheet.create({
     minWidth: 96,
     padding: 12,
     gap: 8,
+  },
+  ownerMetricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
   },
   ownerMetricSuccess: {
     borderColor: "rgba(69,204,127,0.32)",

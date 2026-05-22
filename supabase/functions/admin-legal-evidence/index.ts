@@ -200,11 +200,14 @@ const authenticate = async (
   if (role !== "owner" && role !== "operator" && role !== "moderator") {
     return { error: json(403, { error: "staff_role_required" }) };
   }
+  if (role === "moderator") {
+    return { error: json(403, { error: "owner_or_approved_operator_required" }) };
+  }
 
   const permissions = await readActivePermissions(adminClient, userId, email);
   const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, email);
   const user = { activeBreakGlassSessionId, email, id: userId, permissions, role } as AuthenticatedUser;
-  if (!hasAnyPermission(user, ["legal_review", "evidence_export"])) {
+  if (!hasAnyPermission(user, ["legal_review", "evidence_preview", "evidence_export", "legal_hold", "legal_ops"])) {
     return { error: json(403, { error: "legal_permission_required" }) };
   }
   return { user };
@@ -257,6 +260,36 @@ const readTableRows = async (
   return ((data ?? []) as JsonObject[]).map(sanitizeObject);
 };
 
+const writeLegalRequestEvent = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  input: {
+    eventType: string;
+    legalRequestId?: string | null;
+    message: string;
+    metadata?: JsonObject;
+    reason: string;
+  },
+) => {
+  const legalRequestId = toText(input.legalRequestId);
+  if (!legalRequestId) return;
+  const { error } = await adminClient.from("legal_request_events").insert({
+    actor_email: user.email,
+    actor_role: user.role,
+    actor_user_id: user.id,
+    event_type: input.eventType,
+    legal_request_id: legalRequestId,
+    message: sanitizeText(input.message, 500),
+    metadata: sanitizeObject({
+      ...(input.metadata ?? {}),
+      break_glass_active: !!user.activeBreakGlassSessionId,
+      break_glass_session_id: user.activeBreakGlassSessionId,
+    }),
+    reason: input.reason,
+  });
+  if (error) throw new Error(`Legal request event write failed: ${error.message}`);
+};
+
 const buildPreview = async (adminClient: SupabaseClientLike, payload: JsonObject) => {
   const targetType = toText(payload.targetType).toLowerCase();
   const targetId = sanitizeText(payload.targetId, 180);
@@ -275,22 +308,61 @@ const buildPreview = async (adminClient: SupabaseClientLike, payload: JsonObject
     if (!targetId) throw new Error("legal_target_id_required");
     result.profile = await readTableRows(adminClient, "user_profiles", "user_id", targetId, "user_id,username,display_name,profile_visibility,updated_at");
     result.reports = await readTableRows(adminClient, "safety_reports", "target_id", targetId, "id,target_type,target_id,category,created_at");
+    result.creatorVideos = await readTableRows(adminClient, "videos", "owner_id", targetId, "id,owner_id,title,visibility,moderation_status,created_at,updated_at");
+    result.profilePosts = await readTableRows(adminClient, "profile_posts", "user_id", targetId, "id,user_id,visibility,moderation_status,created_at,updated_at");
+  } else if (targetType === "profile_channel") {
+    if (!targetId) throw new Error("legal_target_id_required");
+    result.profile = await readTableRows(adminClient, "user_profiles", "user_id", targetId, "user_id,username,display_name,profile_visibility,channel_role,updated_at");
+    result.profilePosts = await readTableRows(adminClient, "profile_posts", "user_id", targetId, "id,user_id,visibility,moderation_status,created_at,updated_at");
+  } else if (targetType === "creator_video") {
+    if (!targetId) throw new Error("legal_target_id_required");
+    result.videos = await readTableRows(adminClient, "videos", "id", targetId, "id,owner_id,title,visibility,moderation_status,created_at,updated_at");
+    result.comments = await readTableRows(adminClient, "creator_video_comments", "video_id", targetId, "id,video_id,user_id,moderation_status,parent_comment_id,created_at,updated_at,deleted_at");
+  } else if (targetType === "profile_post") {
+    if (!targetId) throw new Error("legal_target_id_required");
+    result.profilePosts = await readTableRows(adminClient, "profile_posts", "id", targetId, "id,user_id,visibility,moderation_status,created_at,updated_at,deleted_at");
+    result.comments = await readTableRows(adminClient, "profile_post_comments", "post_id", targetId, "id,post_id,user_id,moderation_status,parent_comment_id,created_at,updated_at,deleted_at");
+    result.attachments = await readTableRows(adminClient, "social_attachments", "surface_id", targetId, "id,surface_type,surface_id,owner_user_id,mime_type,size_bytes,moderation_status,created_at,updated_at,deleted_at");
+  } else if (targetType === "comment") {
+    if (!targetId) throw new Error("legal_target_id_required");
+    result.profilePostComments = await readTableRows(adminClient, "profile_post_comments", "id", targetId, "id,post_id,user_id,moderation_status,parent_comment_id,created_at,updated_at,deleted_at");
+    result.creatorVideoComments = await readTableRows(adminClient, "creator_video_comments", "id", targetId, "id,video_id,user_id,moderation_status,parent_comment_id,created_at,updated_at,deleted_at");
+    result.attachments = await readTableRows(adminClient, "social_attachments", "surface_id", targetId, "id,surface_type,surface_id,owner_user_id,mime_type,size_bytes,moderation_status,created_at,updated_at,deleted_at");
+  } else if (targetType === "social_attachment") {
+    if (!targetId) throw new Error("legal_target_id_required");
+    result.attachments = await readTableRows(adminClient, "social_attachments", "id", targetId, "id,surface_type,surface_id,owner_user_id,mime_type,size_bytes,moderation_status,created_at,updated_at,deleted_at");
   } else if (targetType === "content_id") {
     if (!targetId) throw new Error("legal_target_id_required");
     result.videos = await readTableRows(adminClient, "videos", "id", targetId, "id,owner_id,title,visibility,moderation_status,created_at,updated_at");
     result.profilePosts = await readTableRows(adminClient, "profile_posts", "id", targetId, "id,user_id,visibility,moderation_status,created_at,updated_at");
-  } else if (targetType === "room_id") {
+    result.profilePostComments = await readTableRows(adminClient, "profile_post_comments", "id", targetId, "id,post_id,user_id,moderation_status,parent_comment_id,created_at,updated_at,deleted_at");
+    result.creatorVideoComments = await readTableRows(adminClient, "creator_video_comments", "id", targetId, "id,video_id,user_id,moderation_status,parent_comment_id,created_at,updated_at,deleted_at");
+    result.attachments = await readTableRows(adminClient, "social_attachments", "id", targetId, "id,surface_type,surface_id,owner_user_id,mime_type,size_bytes,moderation_status,created_at,updated_at,deleted_at");
+  } else if (targetType === "room_id" || targetType === "live_room") {
     if (!targetId) throw new Error("legal_target_id_required");
     result.watchPartyRooms = await readTableRows(adminClient, "watch_party_rooms", "party_id", targetId, "party_id,host_user_id,room_type,is_active,created_at,updated_at");
     result.communicationRooms = await readTableRows(adminClient, "communication_rooms", "room_id", targetId, "room_id,host_user_id,status,created_at,updated_at,last_activity_at");
   } else if (targetType === "chat_thread_id") {
     if (!targetId) throw new Error("legal_target_id_required");
     result.thread = await readTableRows(adminClient, "chat_threads", "id", targetId, "id,created_by,thread_kind,created_at,updated_at,active_communication_room_id,active_call_type");
-    result.members = await readTableRows(adminClient, "chat_thread_members", "thread_id", targetId, "thread_id,user_id,joined_at,last_read_at");
-    result.messages = await readTableRows(adminClient, "chat_messages", "thread_id", targetId, "id,thread_id,sender_user_id,message_type,created_at,updated_at");
+    if (Array.isArray(result.thread) && result.thread.length > 0) {
+      result.members = await readTableRows(adminClient, "chat_thread_members", "thread_id", targetId, "thread_id,user_id,joined_at,last_read_at");
+      result.messages = await readTableRows(adminClient, "chat_messages", "thread_id", targetId, "id,thread_id,sender_user_id,message_type,created_at,updated_at");
+    } else {
+      result.members = [];
+      result.messages = [];
+      result.disabledReason = "No chat thread matched this target id; message preview is skipped until a backed thread id is selected.";
+    }
   } else if (targetType === "report_id") {
     if (!targetId) throw new Error("legal_target_id_required");
     result.report = await readTableRows(adminClient, "safety_reports", "id", targetId, "id,reporter_user_id,target_type,target_id,category,room_id,title_id,created_at");
+  } else if (targetType === "dmca_case") {
+    if (!targetId) throw new Error("legal_target_id_required");
+    result.dmcaCase = await readTableRows(adminClient, "dmca_cases", "id", targetId, "id,case_number,status,report_type,source,allegedly_infringing_content_type,allegedly_infringing_content_id,uploader_user_id,reporter_user_id,created_at,updated_at");
+    result.dmcaContentActions = await readTableRows(adminClient, "dmca_content_actions", "dmca_case_id", targetId, "id,dmca_case_id,content_type,content_id,action,status,created_at");
+    result.dmcaStrikes = await readTableRows(adminClient, "dmca_strikes", "dmca_case_id", targetId, "id,dmca_case_id,target_user_id,severity,status,created_at");
+    result.dmcaCounterNotices = await readTableRows(adminClient, "dmca_counter_notices", "dmca_case_id", targetId, "id,dmca_case_id,status,received_at,forwarded_at,response_deadline_at,created_at");
+    result.dmcaAttachments = await readTableRows(adminClient, "dmca_attachments", "dmca_case_id", targetId, "id,dmca_case_id,attachment_kind,file_name,mime_type,size_bytes,scan_status,retention_status,created_at");
   } else if (targetType === "date_range") {
     if (!dateFrom || !dateTo) throw new Error("legal_date_range_required");
     const fromIso = new Date(dateFrom).toISOString();
@@ -300,12 +372,58 @@ const buildPreview = async (adminClient: SupabaseClientLike, payload: JsonObject
       .select("id", { count: "exact", head: true })
       .gte("created_at", fromIso)
       .lte("created_at", toIso);
-    result.dateRange = { from: fromIso, safetyReportCount: reportCount ?? 0, to: toIso };
+    const { count: legalRequestCount } = await adminClient
+      .from("legal_request_intake")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", fromIso)
+      .lte("created_at", toIso);
+    result.dateRange = { from: fromIso, legalRequestCount: legalRequestCount ?? 0, safetyReportCount: reportCount ?? 0, to: toIso };
   } else {
     throw new Error("legal_target_type_unsupported");
   }
 
   return result;
+};
+
+const buildPreviewMatrix = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  basePayload: JsonObject,
+) => {
+  const emptyUuid = "00000000-0000-0000-0000-000000000000";
+  const inputs = [
+    { targetId: user.id, targetType: "user_id" },
+    { targetId: user.id, targetType: "profile_channel" },
+    { targetId: emptyUuid, targetType: "creator_video" },
+    { targetId: emptyUuid, targetType: "profile_post" },
+    { targetId: emptyUuid, targetType: "comment" },
+    { targetId: emptyUuid, targetType: "social_attachment" },
+    { targetId: emptyUuid, targetType: "content_id" },
+    { targetId: emptyUuid, targetType: "chat_thread_id" },
+    { targetId: "canary-room-id", targetType: "room_id" },
+    { targetId: "canary-live-room-id", targetType: "live_room" },
+    { targetId: emptyUuid, targetType: "report_id" },
+    { targetId: emptyUuid, targetType: "dmca_case" },
+    { dateFrom: "2026-01-01T00:00:00.000Z", dateTo: "2026-01-01T00:01:00.000Z", targetType: "date_range" },
+  ] as const;
+  const matrix: JsonObject = {};
+  for (const input of inputs) {
+    try {
+      const preview = await buildPreview(adminClient, { ...basePayload, ...input });
+      matrix[input.targetType] = {
+        ok: true,
+        resultKeys: Object.keys(preview),
+        status: 200,
+      };
+    } catch (error) {
+      matrix[input.targetType] = {
+        disabledReason: sanitizeText(error instanceof Error ? error.message : "unknown_matrix_error", 300),
+        ok: false,
+        status: "disabled_with_reason",
+      };
+    }
+  }
+  return matrix;
 };
 
 const sha256Hex = async (value: string) => {
@@ -331,11 +449,28 @@ Deno.serve(async (req) => {
     const payload = sanitizeObject(await req.json().catch(() => ({})));
     const action = toText(payload.action).toLowerCase() || "preview";
     const reason = resolveLegalReason(auth.user, payload.reason, "Owner normal legal evidence action.");
+    const legalRequestId = toText(payload.legalRequestId ?? payload.legal_request_id) || null;
+    const targetType = toText(payload.targetType).toLowerCase();
+    const targetId = sanitizeText(payload.targetId, 180) || null;
+
+    if (action === "preview_matrix") {
+      if (!hasAnyPermission(auth.user, ["legal_review", "evidence_preview", "legal_ops"])) return json(403, { error: "evidence_preview_required" });
+      const matrix = await buildPreviewMatrix(adminClient, auth.user, payload);
+      await writeAudit(adminClient, auth.user, {
+        action: "preview",
+        metadata: { targetTypes: Object.keys(matrix) },
+        reason,
+        targetId: null,
+        targetType: "matrix",
+      });
+      return json(200, { matrix, ok: true });
+    }
 
     if (action === "preview" || action === "search") {
-      if (!hasPermission(auth.user, "legal_review")) return json(403, { error: "legal_review_required" });
+      if (!hasAnyPermission(auth.user, ["legal_review", "evidence_preview", "legal_ops"])) return json(403, { error: "evidence_preview_required" });
       const preview = await buildPreview(adminClient, payload);
       const { data, error } = await adminClient.from("legal_evidence_requests").insert({
+        legal_request_id: legalRequestId,
         preview,
         reason,
         request_kind: action === "search" ? "search" : "preview",
@@ -343,6 +478,8 @@ Deno.serve(async (req) => {
         requested_by_user_id: auth.user.id,
         search_scope: sanitizeObject(payload),
         status: "previewed",
+        target_id: targetId,
+        target_type: targetType || null,
       }).select("id,created_at").single();
       if (error) throw new Error(`Legal preview write failed: ${error.message}`);
       const requestId = toText((data as JsonObject).id);
@@ -354,11 +491,18 @@ Deno.serve(async (req) => {
         targetId: toText(payload.targetId) || null,
         targetType: toText(payload.targetType) || null,
       });
+      await writeLegalRequestEvent(adminClient, auth.user, {
+        eventType: "evidence_previewed",
+        legalRequestId,
+        message: "Evidence previewed.",
+        metadata: { evidence_request_id: requestId, target_id: targetId, target_type: targetType },
+        reason,
+      });
       return json(200, { preview, request: sanitizeObject(data), ok: true });
     }
 
     if (action === "export") {
-      if (!hasPermission(auth.user, "evidence_export")) return json(403, { error: "evidence_export_required" });
+      if (!hasAnyPermission(auth.user, ["evidence_export", "legal_ops"])) return json(403, { error: "evidence_export_required" });
       const preview = await buildPreview(adminClient, payload);
       const manifest = {
         exportedAt: new Date().toISOString(),
@@ -373,6 +517,7 @@ Deno.serve(async (req) => {
         completed_at: new Date().toISOString(),
         export_hash: exportHash,
         export_manifest: manifest,
+        legal_request_id: legalRequestId,
         preview,
         reason,
         request_kind: "export",
@@ -380,6 +525,8 @@ Deno.serve(async (req) => {
         requested_by_user_id: auth.user.id,
         search_scope: sanitizeObject(payload),
         status: "exported",
+        target_id: targetId,
+        target_type: targetType || null,
       }).select("id,created_at,export_hash,status").single();
       if (error) throw new Error(`Legal export write failed: ${error.message}`);
       const requestId = toText((data as JsonObject).id);
@@ -391,15 +538,34 @@ Deno.serve(async (req) => {
         targetId: toText(payload.targetId) || null,
         targetType: toText(payload.targetType) || null,
       });
+      if (legalRequestId) {
+        await adminClient.from("legal_request_intake")
+          .update({
+            exported_summary: `Export record ${requestId} generated.`,
+            handled_by_email: auth.user.email,
+            handled_by_user_id: auth.user.id,
+            status: "exported",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", legalRequestId);
+      }
+      await writeLegalRequestEvent(adminClient, auth.user, {
+        eventType: "evidence_exported",
+        legalRequestId,
+        message: "Evidence export record generated.",
+        metadata: { evidence_request_id: requestId, export_hash: exportHash, target_id: targetId, target_type: targetType },
+        reason,
+      });
       return json(200, { export: sanitizeObject(data), ok: true });
     }
 
     if (action === "place_hold") {
-      if (!hasPermission(auth.user, "legal_review")) return json(403, { error: "legal_review_required" });
+      if (!hasAnyPermission(auth.user, ["legal_hold", "legal_ops"])) return json(403, { error: "legal_hold_required" });
       const targetType = sanitizeText(payload.targetType, 80);
       const targetId = sanitizeText(payload.targetId, 180);
       if (!targetType || !targetId) throw new Error("legal_hold_target_required");
       const { data, error } = await adminClient.from("legal_holds").insert({
+        legal_request_id: legalRequestId,
         metadata: sanitizeObject(payload.metadata),
         placed_by_email: auth.user.email,
         placed_by_user_id: auth.user.id,
@@ -415,6 +581,24 @@ Deno.serve(async (req) => {
         reason,
         targetId,
         targetType,
+      });
+      if (legalRequestId) {
+        await adminClient.from("legal_request_intake")
+          .update({
+            handled_by_email: auth.user.email,
+            handled_by_user_id: auth.user.id,
+            legal_hold_status: "active",
+            status: "preserved_legal_hold",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", legalRequestId);
+      }
+      await writeLegalRequestEvent(adminClient, auth.user, {
+        eventType: "legal_hold_applied",
+        legalRequestId,
+        message: "Legal hold applied.",
+        metadata: { hold_id: toText((data as JsonObject).id), target_id: targetId, target_type: targetType },
+        reason,
       });
       return json(200, { hold: sanitizeObject(data), ok: true });
     }
@@ -442,6 +626,24 @@ Deno.serve(async (req) => {
         reason,
         targetId: toText((data as JsonObject).target_id) || null,
         targetType: toText((data as JsonObject).target_type) || null,
+      });
+      const releasedLegalRequestId = legalRequestId || toText((data as JsonObject).legal_request_id) || null;
+      if (releasedLegalRequestId) {
+        await adminClient.from("legal_request_intake")
+          .update({
+            handled_by_email: auth.user.email,
+            handled_by_user_id: auth.user.id,
+            legal_hold_status: "released",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", releasedLegalRequestId);
+      }
+      await writeLegalRequestEvent(adminClient, auth.user, {
+        eventType: "legal_hold_released",
+        legalRequestId: releasedLegalRequestId,
+        message: "Legal hold released.",
+        metadata: { hold_id: holdId },
+        reason,
       });
       return json(200, { hold: sanitizeObject(data), ok: true });
     }
