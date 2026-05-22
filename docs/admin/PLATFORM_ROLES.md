@@ -1,6 +1,6 @@
 # Platform Owner/Admin/Moderator Roles
 
-Last updated: 2026-05-14
+Last updated: 2026-05-22
 
 Chi'llywood platform staff roles are backed by Supabase, not by client-only email checks.
 
@@ -18,6 +18,7 @@ The bootstrap path does not create fake auth users or passwords. The existing `h
 - Owner has full backed platform/Admin access and can add or remove Admins and Moderators.
 - Admin can access backed Admin tools allowed to Admins and can add or remove Moderators.
 - Admin cannot add Owners, remove Owners, add Admins, or remove Admins.
+- Admin DMCA/Copyright access is scoped: Owner always has access, but Admin/operator users need `dmca_review`, `copyright_review`, or `legal_review`.
 - Moderator can access backed moderation review tools only and cannot manage staff.
 - Regular users cannot access the Admin route or staff-management RPCs.
 

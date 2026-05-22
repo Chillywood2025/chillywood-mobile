@@ -1,6 +1,6 @@
 # Copyright / DMCA Policy
 
-Last updated: May 14, 2026
+Last updated: May 22, 2026
 
 > Repo launch note: Attorney review required before public launch. Chi'llywood's DMCA designated agent registration is recorded as complete from the provided registration details, but this policy still needs attorney review and ongoing operational compliance before any broader legal-compliance claim.
 
@@ -48,9 +48,13 @@ Chi'llywood may decline, request more information, or take limited action where 
 Operational status:
 
 - formal copyright notice intake is backed by a DMCA case record;
-- Admin owner/operator review can mark a notice under review, incomplete, rejected, disabled, restored, closed, or in repeat-infringer review;
+- public users may submit through the in-app `/copyright-report` route where available;
+- Admin manual intake is backed for owner/scoped operator entry from admin, support, public, manual, or email sources;
+- Admin owner/scoped operator review can mark a case received, needs-more-info, under-review, content-disabled, counter-notice-received, waiting-rightsholder-response, eligible-for-restore, repeat-infringer-review, closed, rejected-no-action, or preserved-evidence;
 - supported content actions can hide, disable, restore, preserve evidence, or record no action for creator videos, profile posts, profile-post comments, creator-video comments, and social attachments;
-- live backed/Admin proof has passed for safe profile-post and creator-video hide/restore, public visibility blocking/restoration, counter-notice deadlines, court-action restore blocking, strikes, repeat-infringer review, audit history, and RLS/private-data denial;
+- live backed/Admin proof has passed for safe profile-post and creator-video hide/restore, public visibility blocking/restoration, counter-notice deadlines, court-action restore blocking, strikes, repeat-infringer review, case history, RLS/private-data denial, and production Admin case-management workflows;
+- owner can always access Admin DMCA, while approved Admin/operator access requires `dmca_review`, `copyright_review`, or `legal_review`; moderators and regular users are denied server-side;
+- proof/demo/canary cases are marked test-only and hidden from production clients;
 - live rooms and channel-level takedowns still require a separate safe moderation action unless handled by support/legal outside this tool;
 - outbound email automation is not claimed; support/admin notices may be manual and recorded in the case history.
 
@@ -83,7 +87,7 @@ Strike approach:
 - severe or willful infringement may lead to immediate termination;
 - multiple valid notices may terminate upload privileges, creator privileges, monetization access, or the account.
 
-Admin can add or remove copyright strikes and open repeat-infringer review. Chi'llywood does not automatically terminate accounts from the strike table without admin/legal review.
+Admin can add, remove, dispute, or resolve copyright strikes and open repeat-infringer review. Chi'llywood does not automatically terminate accounts from the strike table without admin/legal review.
 
 ## 7. Misuse
 

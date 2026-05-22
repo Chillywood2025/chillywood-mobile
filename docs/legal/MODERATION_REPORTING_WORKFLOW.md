@@ -1,6 +1,6 @@
 # Moderation And Reporting Workflow
 
-Last updated: May 14, 2026
+Last updated: May 22, 2026
 
 > Repo launch note: Attorney review required before public launch. This workflow documents current and required operations; it does not claim a complete trust-and-safety organization exists.
 
@@ -92,9 +92,12 @@ Current admin tooling:
 - recent safety reports can be read by platform roles;
 - creator-video moderation status can be set to hidden, removed, or clean by owner/operator roles;
 - DMCA cases are backed by dedicated tables for formal notices, counter-notices, content actions, strikes, and audit history;
-- owner/operator Admin can list/detail DMCA cases, mark case statuses, record hide/disable/restore/no-action/evidence actions, add/remove strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view audit history;
+- Owner can always access Admin DMCA; approved Admin/operator access requires `dmca_review`, `copyright_review`, or `legal_review`; moderators and regular users are denied server-side;
+- Owner or scoped Admin/operator can list/detail DMCA cases, mark case statuses, record hide/disable/restore/rejected-no-action/preserved-evidence actions, add/remove/dispute/resolve strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view functional case history;
 - normal users cannot access Admin DMCA case details or private reporter/uploader contact fields through the DMCA tables;
 - live backed/Admin DMCA proof passed with disposable reporter/uploader/admin/viewer accounts and safe profile-post/comment/creator-video content, including invalid notice rejection, notice creation, Admin list/detail/status, content hide/restore, public hidden/restored visibility, strike/repeat-infringer review, rejected no-strike behavior, counter-notice deadlines, court-action restore blocking, RLS/private-data denial, generic report compatibility, and proof-content cleanup;
+- production Admin DMCA closeout proof on physical Android `R5CR120QCBF` returned `44 pass`, `1 manual_required`, and `0 failed`; the manual item is hosted public DMCA URL env configuration, not Admin case backing;
+- proof/demo/canary DMCA cases are marked test-only and hidden from production clients;
 - first-class open/resolved report workflow is not connected;
 - fraud runtime enforcement hooks are not connected;
 - payout holds are foundation-only unless a future release proves enforcement.

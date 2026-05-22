@@ -1,12 +1,14 @@
 # Copyright Takedown Workflow
 
-Last updated: May 14, 2026
+Last updated: May 22, 2026
 
 > Repo launch note: Attorney review required before public launch. DMCA designated agent registration is now recorded as complete from the provided registration details, but this workflow does not claim full legal compliance or replace attorney review.
 
 ## Current App Reality
 
-The app has a generic report sheet with a `Copyright` category, and that category now points users to the formal copyright notice route. A dedicated in-app copyright report route exists at `app/copyright-report.tsx` and submits required notice fields through the backed `submit_dmca_notice` RPC.
+The app has a generic report sheet with a `Copyright` category, and that category points users to the formal copyright notice route. A dedicated in-app copyright report route exists at `app/copyright-report.tsx` and submits required notice fields through the backed `submit_dmca_notice` RPC.
+
+Admin DMCA is now a production case-management surface, not a proof/debug panel. Owner can always access it. Approved Admin/operator users can access it only with scoped `dmca_review`, `copyright_review`, or `legal_review` permission. Moderators and regular users are denied by server-side RLS/RPC checks; there is no client-only security claim.
 
 Existing intake:
 
@@ -16,8 +18,11 @@ Existing intake:
 - DMCA case helper: `_lib/dmca.ts`
 - public copyright page: `app/copyright.tsx`
 - support route: `app/support.tsx`
-- admin report and DMCA readout/action panel: `app/admin.tsx`
+- admin report and DMCA case-management panel: `app/admin.tsx`
 - backed DMCA schema/RPC migration: `supabase/migrations/202605140001_dmca_operational_tooling.sql`
+- production Admin DMCA closeout migration: `supabase/migrations/202605210002_dmca_admin_production_closeout.sql`
+- production test/proof-case hygiene migration: `supabase/migrations/202605210003_dmca_test_case_hygiene.sql`
+- Admin DMCA canary checks: `supabase/functions/admin-owner-controls/index.ts`
 
 ## Required Copyright Report Form Fields
 
@@ -65,11 +70,13 @@ Support inbox receipt proof for `support@chillywoodstream.com` remains tracked s
 Implemented backed flow:
 
 1. `submit_dmca_notice(jsonb)` stores a formal notice as a `dmca_cases` row and returns only case id, case number, and status to the submitter.
-2. Owner/operator Admin can read the private case list/detail; normal users cannot read the full case table.
-3. Owner/operator Admin can mark a case under review, incomplete, rejected, uploader-notified, eligible for restore, repeat-infringer review, or closed.
-4. Owner/operator Admin can record hide/disable/restore/no-action/evidence actions through `admin_dmca_record_content_action`.
-5. Owner/operator Admin can add/remove copyright strikes and record counter-notices, forwarding, court action notices, restore eligibility, and audit history.
-6. Live end-to-end proof passed with disposable reporter/uploader/admin/viewer accounts and safe profile-post/comment/creator-video content: valid notice creation, invalid notice rejection, Admin list/detail/status actions, supported content hide/restore, public hidden/restored visibility, strike/repeat-infringer review, rejected no-strike behavior, counter-notice deadlines, court-action restore blocking, RLS denial for normal users, generic report compatibility, and proof-content cleanup.
+2. `admin_dmca_create_case(jsonb,text)` lets Owner or a scoped Admin/operator manually record formal notices from admin/manual/public/support/email sources.
+3. Owner or a scoped Admin/operator can read the private case list/detail; normal users cannot read the full case table.
+4. Admin DMCA supports Received, Needs More Info, Under Review, Content Disabled, Counter Notice Received, Waiting Rightsholder Response, Eligible For Restore, Repeat Infringer Review, Closed, Rejected No Action, and Preserved Evidence.
+5. Owner or a scoped Admin/operator can record hide/disable/restore/rejected-no-action/preserved-evidence actions through `admin_dmca_record_content_action`. The RPC never silently deletes content.
+6. Owner or a scoped Admin/operator can add, remove, dispute, and resolve copyright strikes. Valid takedown/evidence-preservation case states can add active strikes; rejected or incomplete notices should not.
+7. Owner or a scoped Admin/operator can record counter-notices, forwarding, court action notices, restore eligibility, and case history.
+8. Production proof passed from physical Android device `R5CR120QCBF`: DMCA tab open, real case list load, real case detail open, formal notice intake form open, content action recording, strike add/dispute/resolve, counter-notice record/forward/eligible flow, filters/search, proof-case test-only hygiene, and server-side denial for unauthorized users. The DMCA canary returned `44 pass`, `1 manual_required`, and `0 failed`.
 
 ## Emergency Disable / Removal
 
@@ -101,13 +108,13 @@ Escalate reports that appear false, retaliatory, automated, harassing, or design
 
 [ATTORNEY TO CONFIRM COUNTER-NOTICE TIMING AND JURISDICTION LANGUAGE]
 
-Current implementation supports Admin-recorded counter-notices received by Support/email. It stores submitter details, required statements, signature, forwarding time, 10-business-day restore-not-before date, 14-business-day restore-not-after date, court-action notice time, and status. Court-action notices now block both restore-eligible status and the restore content action. A direct uploader-facing counter-notice route is still pending.
+Current implementation supports Admin-recorded counter-notices received by Support/email. It stores submitter details, required statements, signature, forwarding time, 10-business-day restore-not-before date, 14-business-day restore-not-after date, court-action notice time, and status. Court-action notices block both restore-eligible status and the restore content action. A direct uploader-facing counter-notice route is still pending; the Admin UI states that uploader-facing submission is not implemented yet and admin recording is supported.
 
 ## Repeat Offender Review
 
 Review accounts with multiple valid copyright removals, severe willful infringement, stolen commercial media, ban evasion, or rights-holder abuse. Actions may include upload limits, channel restrictions, monetization hold, account suspension, or termination.
 
-Current implementation supports active/removed/disputed/expired strikes by user/channel/case/content and opens repeat-infringer review when Admin records a severe strike or the active strike count reaches the configured review threshold in the RPC. It does not automatically terminate accounts.
+Current implementation supports active/removed/disputed/resolved/expired strikes by user/channel/case/content and opens repeat-infringer review when Admin records a severe strike or the active strike count reaches the configured review threshold in the RPC. It does not automatically terminate accounts.
 
 ## Reporter And Uploader Privacy
 
@@ -117,11 +124,14 @@ Share only what is needed to process the claim, counter-notice, legal request, o
 
 [ATTORNEY / SUPPORT OWNER TO CONFIRM COPYRIGHT TURNAROUND TARGET]
 
-## Implementation Blockers
+## Remaining Manual / External Items
 
 - Live end-to-end backed/Admin DMCA proof with safe disposable reporter/uploader/admin/viewer accounts and supported content targets passed on May 14, 2026.
-- Support inbox receipt proof remains pending in launch readiness docs.
+- Production Admin DMCA case-management closeout proof passed on May 21/22, 2026 through the physical Android owner device and `admin-owner-controls` version 12.
+- Support inbox receipt proof for `support@chillywoodstream.com` is closed in launch readiness docs.
 - DMCA designated agent public contact and U.S. Copyright Office registration are recorded as complete from the provided registration details.
 - Uploader-facing counter-notice submission route is still pending; Admin-recorded counter-notices are implemented and proved.
-- Outbound email automation is still pending; notification templates/status recording are implemented for manual support/admin workflow and template coverage is proved.
+- Outbound email automation is still pending; notification templates/status recording are implemented for manual support/admin workflow and template coverage is proved. The Admin UI states: `Manual email intake enabled. Automated email ingestion not configured.`
+- Hosted public DMCA URL env configuration is still manual-required; the in-app `/copyright-report` route exists.
 - Live-room and channel-level DMCA disable/restore require a separate safe moderation action; this tool supports creator videos, profile posts, profile-post comments, creator-video comments, and social attachments.
+- Proof/demo/canary cases are marked `is_test_case` and hidden from production clients.

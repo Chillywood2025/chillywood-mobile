@@ -1,6 +1,6 @@
 # Legal Launch Checklist
 
-Last updated: May 21, 2026
+Last updated: May 22, 2026
 
 > Repo launch note: Attorney review required before public launch. This checklist is the status map for repo policy drafting and external legal/setup blockers.
 
@@ -35,7 +35,9 @@ Required creator acknowledgements now live with the same source:
 
 These are wired into Studio upload/publish and live/replay event save paths in `app/channel-settings.tsx`.
 
-May 21 production proof: `admin-owner-controls` ACTIVE version 10 ran Admin Canary from physical Android owner device `R5CR120QCBF` and returned `33 pass`, `0 manual`, and `0 failed`. Legal readiness checks passed for policy word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, prohibited ownership/no-license phrases, Google Play deletion language, DMCA checklist, support email/path, and public-link-or-bundled fallback.
+May 21 production legal proof: `admin-owner-controls` ACTIVE version 10 ran Admin Canary from physical Android owner device `R5CR120QCBF` and returned `33 pass`, `0 manual`, and `0 failed`. Legal readiness checks passed for policy word counts, creator license clause, upload acknowledgement, live/replay acknowledgement, prohibited ownership/no-license phrases, Google Play deletion language, DMCA checklist, support email/path, and public-link-or-bundled fallback.
+
+May 21/22 Admin DMCA closeout proof: `admin-owner-controls` ACTIVE version 12 ran the DMCA production readiness canary from physical Android owner device `R5CR120QCBF` and returned `44 pass`, `1 manual_required`, and `0 failed`. The manual-required item is hosted public DMCA URL env configuration; the in-app `/copyright-report` route exists and Admin DMCA case backing is live.
 
 Status key:
 
@@ -60,9 +62,9 @@ Status key:
 | Creator Monetization / Revenue Disclaimer | Full production draft pending attorney review / linked in app | `app/creator-monetization.tsx`; confirms uploads do not automatically create payment or revenue-share rights. |
 | DMCA agent public page/contact | Done / attorney review pending | Public copyright page now lists Chi'llywood's designated agent contact: Chi'llywood Copyright Agent / Chi'llywood, `support@chillywoodstream.com`, 9316 S Kimbark, Chicago, IL 60619, phone `3124879454`. |
 | Copyright Office DMCA agent registration | Done | User-provided registration truth records Chi'llywood DMCA registration number `DMCA-1072720`; public Copyright Office directory status was checked as active effective May 13, 2026. |
-| Copyright report flow | Implemented / live backed proof passed / attorney review pending | `app/copyright-report.tsx` collects formal notice fields and submits to `dmca_cases` through `submit_dmca_notice`; generic report sheet links copyright users to the formal route. Safe backed proof passed with invalid-notice rejection, case creation, Admin list/detail visibility, supported content hide/restore, and access denial for normal users. |
+| Copyright report flow | Implemented / live backed proof passed / attorney review pending | `app/copyright-report.tsx` collects formal notice fields and submits to `dmca_cases` through `submit_dmca_notice`; generic report sheet links copyright users to the formal route. Admin manual intake is backed by `admin_dmca_create_case`. Safe proof passed with invalid-notice rejection, case creation, Admin list/detail visibility, supported content hide/restore, filters/search, test-only proof-case hygiene, and access denial for normal users. |
 | Counter-notice workflow | Admin-recorded workflow implemented and proved / attorney review pending | Admin can record counter-notices received through Support, forwarding, 10-14 business-day windows, court action notices, restore eligibility, and court-action restore blocking; direct uploader-facing submission route remains pending. |
-| Repeat infringer policy | Implemented and live-proof passed for Admin tracking / attorney review pending | `dmca_strikes` tracks active/removed/disputed/expired strikes and can open repeat-infringer review; proof confirmed valid takedown strike creation, rejected notice no-strike behavior, Admin visibility, and no automatic termination. |
+| Repeat infringer policy | Implemented and live-proof passed for Admin tracking / attorney review pending | `dmca_strikes` tracks active/removed/disputed/resolved/expired strikes and can open repeat-infringer review; proof confirmed valid takedown strike creation, rejected notice no-strike behavior, strike dispute/resolve, Admin visibility, and no automatic termination. |
 | Account deletion in-app path | Linked in app / policy proof automated | Settings opens the full Account Deletion policy and support contact remains available. |
 | Account deletion web link | Public static route generated / Play acceptance pending | `https://chillywoodstream.com/account-deletion` remains the preferred public Google Play URL; Play Console acceptance remains external. |
 | Refund/subscription terms | Replaced by full Premium and Subscription Terms pending attorney review | Policy text lives in `legal/policies.mjs`; RevenueCat/Google Play proof remains external. |
@@ -70,7 +72,7 @@ Status key:
 | Fraud/forfeiture rules | Drafted pending attorney review | Fraud foundations exist; live enforcement not connected. |
 | Sponsor disclosure rules | Drafted pending attorney review | Sponsor money/checkout remains not active. |
 | Banned content policy | Drafted pending attorney review | Policy created. |
-| Moderation/reporting workflow | Drafted pending attorney review / partially implemented | Generic reporting/admin moderation foundation exists; dedicated DMCA Admin tooling now exists; general report lifecycle, outbound email automation, and fraud/sponsor enforcement remain pending. |
+| Moderation/reporting workflow | Drafted pending attorney review / partially implemented | Generic reporting/admin moderation foundation exists; dedicated production DMCA Admin case-management tooling exists; general report lifecycle, hosted public DMCA URL env config, outbound email automation, and fraud/sponsor enforcement remain pending. |
 
 ## Required External Blockers Before Public Launch
 
@@ -78,6 +80,7 @@ Status key:
 - final public URLs for Terms, Privacy, Account Deletion, Community Guidelines, Copyright/DMCA, Creator Rules, and Support as needed;
 - attorney review of the public DMCA designated agent/contact language and operational workflow;
 - keep operational DMCA proof evidence internal only; backed/Admin live proof passed with safe disposable reporter/uploader/admin/viewer accounts and no private report artifacts committed;
+- configure and prove hosted `PUBLIC_DMCA_URL` or `PUBLIC_COPYRIGHT_REPORT_URL` if a public web DMCA intake link is required outside the in-app `/copyright-report` route;
 - keep U.S. Copyright Office DMCA agent registration current, including renewals/updates if agent contact information changes;
 - support inbox receipt proof for `support@chillywoodstream.com` passed on May 13, 2026 by operator-confirmed destination-inbox receipt; no screenshots, raw headers, inbox exports, private contents, sender private details, credentials, tokens, or email secrets are committed;
 - domain email baseline DNS is proved: Cloudflare MX records remain present, SPF is `v=spf1 include:_spf.mx.cloudflare.net ~all`, and DMARC is `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`; DKIM remains pending until a real outbound mail provider for `@chillywoodstream.com` issues selector records;

@@ -20,13 +20,21 @@
 - This tool must never delete evidence, chat history, or user content.
 - Owner normal Legal Evidence use no longer requires a reason prompt and does not emit app-level owner audit rows unless Break Glass is active. Approved Admin legal/evidence use still requires exact grants, a reason, and audit.
 
+## DMCA / Copyright Admin
+- Owner can always access Admin DMCA.
+- Approved Admin/operator users require `dmca_review`, `copyright_review`, or `legal_review`.
+- Moderators and regular users are denied by server-side RLS/RPC checks.
+- DMCA case records, status history, notices, content actions, counter-notices, and copyright strikes are functional case records, not owner-sensitive app-level audit rows.
+- Owner normal DMCA work does not require a reason prompt unless Owner manually activates Break Glass.
+
 ## Owner/Admin Control Tools
 - `admin-owner-controls` adds Audit Explorer, permission templates, temporary grant presets, Break Glass, Legal Request Intake, Owner Security, Canary Checks, and a low-risk Safety Dashboard.
 - Audit Explorer hides normal owner actions unless `break_glass_active=true`.
 - Permission templates grant permissions only; staff roles remain in the existing Staff & Roles flow.
 - Canary checks must return pass/fail/manual-required and must not fake green status.
-- `admin-owner-controls` is deployed as ACTIVE version 10 on Supabase project `bmkkhihfbmsnnmcqkoly`.
+- `admin-owner-controls` is deployed as ACTIVE version 12 on Supabase project `bmkkhihfbmsnnmcqkoly`.
 - May 21, 2026 physical Android owner-device Admin Canary proof returned `33 pass`, `0 manual`, and `0 failed`, including owner public-profile/discovery hiding, owner normal no-audit preservation, admin self-grant denial, moderator grant denial, Legal Evidence restriction, Supabase redirect proof, and proof role/grant cleanup.
+- May 21/22, 2026 physical Android owner-device Admin DMCA proof returned `44 pass`, `1 manual_required`, and `0 failed`, including real case detail, formal manual intake, content action recording, strike dispute/resolve, counter-notice flow, filters/search, proof-case hygiene, and unauthorized server-side denial.
 
 ## Remaining Manual / External Proof
 - Attorney review remains required before public launch legal approval.
