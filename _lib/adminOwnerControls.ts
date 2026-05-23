@@ -145,6 +145,7 @@ export type OwnerSecurityDevice = {
   id?: string | null;
   isCurrentDevice?: boolean;
   lastSeenAt?: string | null;
+  networkProof?: OwnerSecurityNetworkProof | null;
   platform?: string | null;
   proofSource?: string | null;
   revokedAt?: string | null;
@@ -153,6 +154,24 @@ export type OwnerSecurityDevice = {
   trustedAt?: string | null;
   trustedBy?: string | null;
   trustStatus?: string | null;
+};
+
+export type OwnerSecurityNetworkProof = {
+  asnOrIsp?: string | null;
+  captureStatus?: string | null;
+  cityApprox?: string | null;
+  contextIdShort?: string | null;
+  country?: string | null;
+  createdAt?: string | null;
+  deviceHashShort?: string | null;
+  ipHashShort?: string | null;
+  maskedIp?: string | null;
+  proofSource?: string | null;
+  region?: string | null;
+  requestId?: string | null;
+  sessionIdHashShort?: string | null;
+  source?: string | null;
+  userAgentHashShort?: string | null;
 };
 
 export type OwnerTemporaryGrant = {

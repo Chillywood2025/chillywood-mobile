@@ -1027,6 +1027,49 @@ const ownerDeviceTrustStatus = (row: JsonObject | null | undefined) => {
   return "not_recorded";
 };
 
+const shortSecurityIdentifier = (value: unknown) => {
+  const text = toText(value);
+  if (!text) return null;
+  return text.length <= 18 ? text : `${text.slice(0, 12)}...${text.slice(-6)}`;
+};
+
+const normalizeSecurityContextSummary = (row: JsonObject | null | undefined) => {
+  if (!row) return null;
+  return {
+    asnOrIsp: toText(row.asnOrIsp) || null,
+    captureStatus: toText(row.captureStatus) || "unavailable",
+    cityApprox: toText(row.cityApprox) || null,
+    contextIdShort: shortSecurityIdentifier(row.id),
+    country: toText(row.country) || null,
+    createdAt: toText(row.createdAt) || null,
+    deviceHashShort: toText(row.deviceHashShort) || null,
+    ipHashShort: toText(row.ipHashShort) || null,
+    maskedIp: toText(row.maskedIp) || null,
+    proofSource: "rpc: get_security_request_context_summary",
+    region: toText(row.region) || null,
+    requestId: toText(row.requestId) || null,
+    sessionIdHashShort: toText(row.sessionIdHashShort) || null,
+    source: toText(row.source) || null,
+    userAgentHashShort: toText(row.userAgentHashShort) || null,
+  };
+};
+
+const readSecurityContextSummary = async (adminClient: SupabaseClientLike, contextId: unknown) => {
+  const id = toText(contextId);
+  if (!id) return null;
+  const { data, error } = await adminClient.rpc("get_security_request_context_summary", { p_context_id: id });
+  if (error) {
+    return {
+      captureStatus: "not_connected",
+      contextIdShort: shortSecurityIdentifier(id),
+      maskedIp: null,
+      proofSource: "rpc: get_security_request_context_summary",
+      source: null,
+    };
+  }
+  return normalizeSecurityContextSummary(data as JsonObject | null);
+};
+
 const normalizeOwnerDevice = (row: JsonObject, currentHash: string | null = null) => {
   const trustStatus = ownerDeviceTrustStatus(row);
   const fullHash = toText(row.device_fingerprint_hash);
@@ -1039,6 +1082,7 @@ const normalizeOwnerDevice = (row: JsonObject, currentHash: string | null = null
     id: toText(row.id),
     isCurrentDevice: !!currentHash && fullHash === currentHash,
     lastSeenAt: toText(row.last_seen_at) || null,
+    lastSecurityContextId: toText(row.last_security_context_id) || null,
     platform: toText(row.platform) || "unknown",
     proofSource: "table: owner_trusted_devices",
     revokedAt: toText(row.revoked_at) || null,
@@ -1047,6 +1091,17 @@ const normalizeOwnerDevice = (row: JsonObject, currentHash: string | null = null
     trustedAt: toText(row.trusted_at) || null,
     trustedBy: toText(row.trusted_by) || null,
     trustStatus,
+  };
+};
+
+const enrichOwnerDeviceNetworkProof = async (adminClient: SupabaseClientLike, device: JsonObject | null) => {
+  if (!device) return device;
+  const { lastSecurityContextId, ...safeDevice } = device;
+  const contextId = toText(lastSecurityContextId);
+  if (!contextId) return safeDevice;
+  return {
+    ...safeDevice,
+    networkProof: await readSecurityContextSummary(adminClient, contextId),
   };
 };
 
@@ -1156,9 +1211,10 @@ const listOwnerDevices = async (adminClient: SupabaseClientLike, user: Authentic
     .order("last_seen_at", { ascending: false })
     .limit(25);
   if (error) throw new Error(`Owner devices list failed: ${error.message}`);
-  return ((data ?? []) as JsonObject[])
+  const devices = ((data ?? []) as JsonObject[])
     .map((row) => normalizeOwnerDevice(row, currentHash))
     .sort((left, right) => Number(right.isCurrentDevice) - Number(left.isCurrentDevice));
+  return Promise.all(devices.map((device) => enrichOwnerDeviceNetworkProof(adminClient, device) as Promise<JsonObject>));
 };
 
 const isTemporaryGrantRow = (row: JsonObject) => {
@@ -1669,7 +1725,7 @@ const securityStatus = async (adminClient: SupabaseClientLike, user: Authenticat
 
   try {
     const deviceResult = await upsertCurrentOwnerDevice(adminClient, user, payload.deviceContext ?? payload.device_context ?? {});
-    currentDevice = deviceResult.currentDevice;
+    currentDevice = await enrichOwnerDeviceNetworkProof(adminClient, deviceResult.currentDevice) as JsonObject | null;
     fingerprintHash = deviceResult.fingerprintHash;
     sourceStates.currentDevice = ownerSecuritySourceState({
       checkedAt,

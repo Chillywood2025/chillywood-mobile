@@ -1546,6 +1546,22 @@ const formatDeviceMeta = (device: OwnerSecurityDevice) => {
   return `${platform} · ${deviceHash} · ${appVersion} · ${buildVersion}`;
 };
 
+const formatOwnerSecurityNetworkProof = (proof: OwnerSecurityDevice["networkProof"]) => {
+  if (!proof) return "No security context linked";
+  const masked = formatAuditDisplayText(proof.maskedIp) || ownerSecurityStatusLabel(proof.captureStatus);
+  const location = [proof.cityApprox, proof.region, proof.country].map(formatAuditDisplayText).filter(Boolean).join(", ");
+  const network = [masked, location, formatAuditDisplayText(proof.asnOrIsp)].filter(Boolean).join(" · ");
+  return network || ownerSecurityStatusLabel(proof.captureStatus);
+};
+
+const formatOwnerSecurityNetworkMeta = (proof: OwnerSecurityDevice["networkProof"]) => {
+  if (!proof) return "Network proof has not been linked to this device row.";
+  const source = formatAuditDisplayText(proof.source) || "source not connected";
+  const checked = proof.createdAt ? formatModerationTimestamp(proof.createdAt) : "time not connected";
+  const context = proof.contextIdShort ? `Context ${proof.contextIdShort}` : "context id hidden";
+  return `${ownerSecurityStatusLabel(proof.captureStatus)} · ${source} · ${checked} · ${context}`;
+};
+
 const formatLegalStatus = (value: unknown) => {
   const status = String(value ?? "received");
   const option = legalRequestStatusOptions.find((entry) => entry.key === status);
@@ -12318,6 +12334,11 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecurityMiniValue}>{ownerSecurityCurrentDevice?.deviceHashShort || "Not connected"}</Text>
                 <Text style={styles.ownerSecurityMiniMeta}>Short backend fingerprint only</Text>
               </View>
+              <View style={styles.ownerSecurityIdentityCell}>
+                <Text style={styles.ownerSecurityMiniLabel}>Network proof</Text>
+                <Text style={styles.ownerSecurityMiniValue}>{formatOwnerSecurityNetworkProof(ownerSecurityCurrentDevice?.networkProof)}</Text>
+                <Text style={styles.ownerSecurityMiniMeta}>{formatOwnerSecurityNetworkMeta(ownerSecurityCurrentDevice?.networkProof)}</Text>
+              </View>
             </View>
             <View style={styles.ownerSecurityActionRow}>
               {ownerSecurityCurrentDevice && ownerSecurityCurrentDevice.trustStatus !== "trusted" ? (
@@ -12378,6 +12399,9 @@ export default function AdminStudioScreen() {
                       <Text style={styles.ownerSecuritySectionBody}>{formatDeviceMeta(device)}</Text>
                       <Text style={styles.ownerSecurityMiniMeta}>
                         {`${device.createdAt ? `Recorded ${formatModerationTimestamp(device.createdAt)}` : "Recorded time not connected"} · ${device.lastSeenAt ? `Last seen ${formatModerationTimestamp(device.lastSeenAt)}` : "Last seen not connected"}`}
+                      </Text>
+                      <Text style={styles.ownerSecurityMiniMeta}>
+                        {`Network: ${formatOwnerSecurityNetworkProof(device.networkProof)} · ${formatOwnerSecurityNetworkMeta(device.networkProof)}`}
                       </Text>
                       {device.revokedAt ? (
                         <Text style={styles.ownerSecurityMiniMeta}>

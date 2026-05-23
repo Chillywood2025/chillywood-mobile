@@ -12,6 +12,8 @@ const migration = read("supabase/migrations/202605230002_security_request_contex
 const helper = read("supabase/functions/_shared/security-request-context.ts");
 const ownerControls = read("supabase/functions/admin-owner-controls/index.ts");
 const livekitToken = read("supabase/functions/livekit-token/index.ts");
+const adminUi = read("app/admin.tsx");
+const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
 
 [
   "create table if not exists public.\"security_request_context\"",
@@ -46,6 +48,8 @@ const livekitToken = read("supabase/functions/livekit-token/index.ts");
   "securityContextAuditMetadata",
   "owner_security_access_denied",
   "temporary_grant_revoked",
+  "networkProof",
+  "get_security_request_context_summary",
 ].forEach((needle) => {
   if (!ownerControls.includes(needle)) fail(`missing owner controls linkage: ${needle}`);
 });
@@ -63,6 +67,21 @@ const livekitToken = read("supabase/functions/livekit-token/index.ts");
 if (/livekit_token_request_audit[\s\S]{0,600}participantToken/i.test(livekitToken)) {
   fail("LiveKit token audit appears to write participantToken near audit insert");
 }
+
+[
+  "OwnerSecurityNetworkProof",
+  "networkProof?: OwnerSecurityNetworkProof | null",
+].forEach((needle) => {
+  if (!adminOwnerControlsClient.includes(needle)) fail(`missing owner security network proof client type: ${needle}`);
+});
+
+[
+  "formatOwnerSecurityNetworkProof",
+  "Network proof",
+  "No security context linked",
+].forEach((needle) => {
+  if (!adminUi.includes(needle)) fail(`missing Owner Security masked network proof UI marker: ${needle}`);
+});
 
 const walk = (dir, files = []) => {
   for (const entry of readdirSync(join(root, dir))) {
