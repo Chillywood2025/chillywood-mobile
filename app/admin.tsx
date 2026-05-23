@@ -60,6 +60,7 @@ import {
   type OwnerSecurityAuditEvent,
   type OwnerSecurityDevice,
   type OwnerSecurityLiveOpsFlag,
+  type OwnerSecurityNetworkProof,
   type OwnerTemporaryGrant,
 } from "../_lib/adminOwnerControls";
 import { FEATURE_FLAGS, type AppRuntimeControls } from "../_lib/featureFlags";
@@ -526,6 +527,17 @@ const auditOverviewCategoryLabels: Record<AuditOverviewCategoryFilter, string> =
   system: "System",
   unknown: "Unknown",
 };
+
+type AuditExplorerNetworkFilter = "all" | "with" | "missing";
+
+const auditExplorerNetworkFilterOptions: readonly {
+  key: AuditExplorerNetworkFilter;
+  label: string;
+}[] = [
+  { key: "all", label: "All Network" },
+  { key: "with", label: "Has Proof" },
+  { key: "missing", label: "Missing Proof" },
+];
 
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
 const operatorTabs: { key: OperatorTabKey; label: string }[] = [
@@ -1546,7 +1558,7 @@ const formatDeviceMeta = (device: OwnerSecurityDevice) => {
   return `${platform} · ${deviceHash} · ${appVersion} · ${buildVersion}`;
 };
 
-const formatOwnerSecurityNetworkProof = (proof: OwnerSecurityDevice["networkProof"]) => {
+const formatOwnerSecurityNetworkProof = (proof: OwnerSecurityNetworkProof | null | undefined) => {
   if (!proof) return "No security context linked";
   const masked = formatAuditDisplayText(proof.maskedIp) || ownerSecurityStatusLabel(proof.captureStatus);
   const location = [proof.cityApprox, proof.region, proof.country].map(formatAuditDisplayText).filter(Boolean).join(", ");
@@ -1554,7 +1566,7 @@ const formatOwnerSecurityNetworkProof = (proof: OwnerSecurityDevice["networkProo
   return network || ownerSecurityStatusLabel(proof.captureStatus);
 };
 
-const formatOwnerSecurityNetworkMeta = (proof: OwnerSecurityDevice["networkProof"]) => {
+const formatOwnerSecurityNetworkMeta = (proof: OwnerSecurityNetworkProof | null | undefined) => {
   if (!proof) return "Network proof has not been linked to this device row.";
   const source = formatAuditDisplayText(proof.source) || "source not connected";
   const checked = proof.createdAt ? formatModerationTimestamp(proof.createdAt) : "time not connected";
@@ -2578,6 +2590,8 @@ export default function AdminStudioScreen() {
   const [auditExplorerActionFilter, setAuditExplorerActionFilter] = useState("");
   const [auditExplorerTargetFilter, setAuditExplorerTargetFilter] = useState("");
   const [auditExplorerBreakGlassOnly, setAuditExplorerBreakGlassOnly] = useState(false);
+  const [auditExplorerNetworkFilter, setAuditExplorerNetworkFilter] =
+    useState<AuditExplorerNetworkFilter>("all");
   const [permissionTemplates, setPermissionTemplates] = useState<OwnerControlPermissionTemplate[]>([]);
   const [permissionTemplateKey, setPermissionTemplateKey] = useState("support_agent");
   const [permissionTemplateEmail, setPermissionTemplateEmail] = useState("");
@@ -5420,6 +5434,7 @@ export default function AdminStudioScreen() {
         actionType: auditExplorerActionFilter.trim() || undefined,
         breakGlassOnly: auditExplorerBreakGlassOnly,
         limit: 80,
+        securityContextFilter: auditExplorerNetworkFilter,
         targetId: auditExplorerTargetFilter.trim() || undefined,
       });
       setAuditExplorerRows(result.rows);
@@ -5429,7 +5444,7 @@ export default function AdminStudioScreen() {
     } finally {
       setOwnerControlLoading(false);
     }
-  }, [auditExplorerActionFilter, auditExplorerBreakGlassOnly, auditExplorerTargetFilter, canAccessAuditExplorer]);
+  }, [auditExplorerActionFilter, auditExplorerBreakGlassOnly, auditExplorerNetworkFilter, auditExplorerTargetFilter, canAccessAuditExplorer]);
 
   const loadPermissionTemplates = useCallback(async () => {
     if (!canManagePermissionTemplates) return;
@@ -11932,6 +11947,17 @@ export default function AdminStudioScreen() {
                 >
                   <Text style={[styles.toggleChipText, auditExplorerBreakGlassOnly && styles.toggleChipTextActive]}>Break Glass only</Text>
                 </TouchableOpacity>
+                {auditExplorerNetworkFilterOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[styles.toggleChip, auditExplorerNetworkFilter === option.key && styles.toggleChipActive]}
+                    onPress={() => setAuditExplorerNetworkFilter(option.key)}
+                  >
+                    <Text style={[styles.toggleChipText, auditExplorerNetworkFilter === option.key && styles.toggleChipTextActive]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
                 <TouchableOpacity
                   style={[styles.actionBtn, (ownerControlLoading || !canAccessAuditExplorer) && styles.configSaveBtnDisabled]}
                   onPress={() => void loadAuditExplorer()}
@@ -11967,6 +11993,10 @@ export default function AdminStudioScreen() {
                       { label: "Actor", value: row.actorEmail ? maskOperatorIdentity(row.actorEmail) : formatCompactIdentifier(row.actorUserId) },
                       { label: "Target", value: `${formatModerationToken(row.targetType)} ${formatCompactIdentifier(row.targetId)}` },
                       { label: "Permission", value: row.permissionKey ? formatModerationToken(row.permissionKey) : "not supplied" },
+                      { label: "Network Proof", value: formatOwnerSecurityNetworkProof(row.securityContext) },
+                      { label: "Network Status", value: row.securityContext ? formatOwnerSecurityNetworkMeta(row.securityContext) : ownerSecurityStatusLabel(row.securityContextStatus || "missing") },
+                      { label: "Context ID", value: row.securityContextIdShort || "not linked" },
+                      { label: "User Agent", value: row.securityContext?.userAgentHashShort || "not linked" },
                     ]}
                   />
                 </OwnerControlRow>

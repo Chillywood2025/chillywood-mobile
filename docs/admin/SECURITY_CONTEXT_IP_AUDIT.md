@@ -18,8 +18,9 @@ Implemented, Supabase-applied, and Edge-deployed in the first production slice:
 - `get_security_request_context_summary(uuid)` safe summary RPC for future Owner Security / Audit Explorer UI.
 - `admin-owner-controls` captures a backend request context once per action and attaches it to Owner Security audit, Owner device trust/revoke, temporary grant revoke, and platform audit writes from that Edge Function.
 - `admin-owner-controls` now enriches Owner Security current/trusted device rows with safe masked `networkProof` from `get_security_request_context_summary(uuid)` when `last_security_context_id` exists; the full security context id is not returned to the mobile UI.
+- Audit Explorer now receives safe masked network proof for authorized audit rows with `security_context_id`, can filter for rows with or without linked proof, and includes `livekit_token_request_audit` rows without exposing tokens.
 - `livekit-token` captures backend request context and writes token request audit rows for success/denied/error outcomes without changing room routing, grants, tokens, or Premium gates.
-- Remote proof confirmed migration `202605230002` is applied, `admin-owner-controls` is ACTIVE version `25`, `livekit-token` is ACTIVE version `63`, and anon select/insert against `security_request_context` returns `42501 permission denied`.
+- Remote proof confirmed migration `202605230002` is applied, `admin-owner-controls` is ACTIVE version `26`, `livekit-token` is ACTIVE version `63`, and anon select/insert against `security_request_context` returns `42501 permission denied`.
 
 Trusted IP capture is intentionally conservative:
 
@@ -27,6 +28,17 @@ Trusted IP capture is intentionally conservative:
 - Defaults are not trusted unless `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS=true` is explicitly set server-side. The linked project now explicitly sets `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS=false`.
 - `SECURITY_CONTEXT_HASH_PEPPER` is required before a real captured IP is hashed. The linked project now has this secret configured, but no trusted IP header is configured yet. Until the proxy/header chain is verified, context rows remain linked but marked `capture_status = unavailable` with `Not captured` masked proof.
 - Mobile payloads are never used as trusted IP/network source.
+
+## Proxy/Header Proof Status
+
+Current closeout result: trusted network proof is not verified yet, so real IP capture remains fail-closed.
+
+- The deployed request path for this slice is Supabase Edge Functions on project `bmkkhihfbmsnnmcqkoly`. There is no app-owned Cloudflare, Hetzner, or custom proxy in front of those function URLs in repo truth.
+- Supabase's edge gateway/proxy may inject request metadata, but this repo has not proved a specific authoritative IP header that cannot be spoofed or overwritten by the mobile client.
+- `SECURITY_CONTEXT_HASH_PEPPER` is configured, and `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS=false` is configured.
+- `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` is intentionally unset. Therefore `x-forwarded-for`, `x-real-ip`, `forwarded`, and `cf-connecting-ip` are not trusted by Chi'llywood code.
+- A proof request that attempted to send spoofed `x-forwarded-for`, `x-real-ip`, and `cf-connecting-ip` headers to `livekit-token` returned `403` before a normal token/audit read path. That is useful evidence that spoofed client headers are not an accepted proof path, but it is not enough to declare a trustworthy real IP source.
+- Until Supabase/platform documentation plus live owner/operator proof identifies a safe source, Owner Security and Audit Explorer must show `Network proof not verified` / `Not captured` style states rather than `Real IP verified`.
 
 ## Governing Decision
 
@@ -45,7 +57,7 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 | --- | --- | --- |
 | IP capture | `security_request_context` and shared Edge helper now exist. The hash pepper is configured, default trusted headers are disabled, and real IP capture still requires a proved trusted server header before any captured network proof is claimed. | Partially implemented / fail-closed |
 | IP hashing | `security_request_context.ip_hash` is populated by the helper with a peppered hash only when trusted IP capture is configured; legacy `platform_admin_audit_logs.ip_hash` and `dmca_cases.submitted_ip_hash` remain hash-only fields and are not the new source of truth. | Partially implemented |
-| Masked IP display | Owner Security now displays masked/current-device network proof from the safe summary path when linked context exists. Audit Explorer UI readout remains future work. | Partially implemented |
+| Masked IP display | Owner Security and Audit Explorer display masked/current-device/audit-row network proof from the safe summary path when linked context exists. The high-level Audit tab and public UI do not display network proof. | Partially implemented |
 | Raw IP storage | No raw `ip_address` column was found in app-owned migrations. | Already avoids raw IP |
 | User-agent hashing | `platform_admin_audit_logs.user_agent_hash` and `dmca_cases.submitted_user_agent_hash` exist. No shared writer was found. | Partially present / not wired |
 | Device hash/session tracking | Owner Security stores `owner_trusted_devices.device_fingerprint_hash`, app/build/platform metadata, trusted/revoked state, and last seen. The hash is derived from authenticated user plus client device/app context, not backend network context. | Partially safe |
@@ -70,15 +82,15 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 | System | Classification | Recommended action |
 | --- | --- | --- |
 | Auth/sign-in/sign-out/session refresh | Needs backend-only capture for app-owned high-risk events; Supabase Auth provider logs are outside repo truth | Do not store IP in profile/session UI. Capture security context only when an app-owned Edge/RPC security event is created. |
-| Owner Security | Partially safe | Attach `security_context_id` to device trust, device revoke, temporary grant revoke, failed owner access, and emergency-action events. Show masked network proof only. |
+| Owner Security | Partially implemented | Device trust, device revoke, temporary grant revoke, and Edge-written security/platform audit rows can attach `security_context_id`; failed owner access and emergency-action coverage remain path-specific follow-up. Show masked network proof only. |
 | Device trust | Partially safe | Keep device fingerprint hash. Add last security context reference for current-device proof and trusted-device ledger rows. |
 | Admin audit | Partially safe | Prefer `security_context_id` on future audit rows. Keep legacy `ip_hash`/`user_agent_hash` read-restricted or backfill only if needed. |
-| Audit Explorer | Needs masked UI only | Add owner/admin-scoped lookup by `security_context_id`; display masked IP/prefix, approximate region, ASN/ISP if available. No raw IP. |
+| Audit Explorer | Partially implemented | Owner/admin-scoped audit rows with `security_context_id` now include masked network proof from the safe summary path. No raw IP. Owner/operator live read proof remains pending until a usable owner/operator session is available in the proof shell. |
 | Roles/users/premium admin changes | Missing security_context_id | Attach context for role grant/revoke, scoped permission updates, premium overrides, and owner/admin sensitive user changes. |
-| Temporary grants | Missing security_context_id | Attach context on grant create, revoke, expire sweeps where a request actor exists. |
+| Temporary grants | Partially implemented | Owner Security temporary-grant revoke paths attach context where available; grant create and expiry sweeps remain follow-up where a request actor exists. |
 | Kill switches | Needs backend-only capture | Future kill switch/emergency lock writes must require trusted device where policy says so and attach context. Read-only UI needs no IP. |
 | Live Ops / Live Cost Guard | Partially safe | Attach context to operator-approved actions and high-risk attempts. Cost/event telemetry can stay source metadata without user IP. |
-| LiveKit token issuance | Missing security_context_id | Add backend token-request event table or audit row with context id for token requests, denials, and suspicious/new-network signals. Do not change room behavior in this lane. |
+| LiveKit token issuance | First slice implemented | `livekit_token_request_audit` records token request outcomes with `security_context_id` where capture is available. Real trusted-header proof and owner/operator live audit read proof remain pending. |
 | Watch-Party Live | Should not store IP in room tables | Attach context at token issuance, speaker approval/high-risk room actions, and room abuse reports only. |
 | Live Watch-Party | Should not store IP in room tables | Same as Watch-Party Live: context on token/security events, not membership/chat content rows. |
 | Uploads / creator videos | Missing security_context_id | Attach context to upload-url creation, publish/unpublish/delete, takedown, and private media access audit. Do not put raw IP on `videos`. |
@@ -182,7 +194,7 @@ Audit tab:
 
 Audit Explorer:
 
-- Allow search/filter by `security_context_id` after backend support exists.
+- Allow quick filtering for rows with or without linked security context.
 - Show masked network proof for authorized owner/admin/operator only.
 - Keep raw technical metadata collapsed and never expose raw IP by default.
 
@@ -259,7 +271,7 @@ Do not publish exact raw-IP retention durations until legal/product owners appro
 
 5. UI readouts:
    - Owner Security current device/network proof. Implemented for current/trusted device rows through `admin-owner-controls` safe summary enrichment.
-   - Audit Explorer masked security context details.
+   - Audit Explorer masked security context details. Implemented for protected `audit_list` rows with linked `security_context_id`, including LiveKit token request audit rows.
    - Fraud aggregate network/device pattern surfaces.
    - No raw IP in Audit overview or public UI.
 
@@ -290,12 +302,40 @@ Add proof:
 - Audit Explorer does not expose raw IP.
 - LiveKit token behavior and room routes are unchanged except for audited context linkage.
 
+## Closeout Proof Run
+
+The May 23, 2026 masked-readout closeout ran these repo and backend checks:
+
+- `npm run validate:runtime`
+- `npm run typecheck`
+- `npm run guard:admin-auth-safety`
+- `npm run guard:owner-security-center`
+- `npm run guard:refresh-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:security-request-context`
+- `npm run guard:security-context-proxy-proof`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `deno check supabase/functions/admin-owner-controls/index.ts`
+- `supabase db push --dry-run`
+- `supabase db lint --linked`
+- `git diff --check`
+
+Proof outcomes:
+
+- `admin-owner-controls` is deployed as ACTIVE version `26`; `livekit-token` remains ACTIVE version `63`.
+- The linked project has `SECURITY_CONTEXT_HASH_PEPPER` and `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS` configured. `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` is not configured.
+- Anon direct reads against `security_request_context` returned `42501`; anon summary RPC returned `security_context_admin_required`.
+- A spoofed client-header probe using `x-forwarded-for`, `x-real-ip`, and `cf-connecting-ip` against `livekit-token` returned `403` before token handling; this does not prove a trusted real-IP source, so real IP capture remains disabled.
+- Grep proof found no mobile/client trusted-IP submission markers and no public raw-IP/network display. The only client-side IP-hash marker is the protected admin helper type field, which the Admin UI guard prevents from rendering.
+- No Watch-Party Live route, Live Watch-Party route, LiveKit token behavior, Premium gate, payout/live-money behavior, public profile/channel behavior, upload behavior, comments, or chat behavior was changed in this closeout.
+
 ## Known Limitations After First Backend Slice
 
 - Real IP capture remains unavailable until server-side `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` is configured and proved against the actual proxy/header chain. `SECURITY_CONTEXT_HASH_PEPPER` is configured and default trusted headers are explicitly disabled.
 - Existing legacy `platform_admin_audit_logs.ip_hash` / `user_agent_hash` and DMCA submitted hash fields are not backfilled and remain secondary to `security_context_id`.
 - DMCA submitted hash fields exist but need backend-only trusted capture.
 - Reports, uploads, comments, chat abuse, payout, fraud, Live Ops, DMCA intake, and SQL-only role/permission RPC actions do not yet share a security context id.
-- Owner Security renders masked network proof for linked current/trusted device rows. Audit Explorer does not yet render masked network proof from `get_security_request_context_summary`.
-- Authorized owner/admin masked summary read proof remains pending because the only local credential available in this shell is non-staff/non-owner and correctly cannot read `livekit_token_request_audit` or security context summaries.
+- Owner Security and Audit Explorer render masked network proof for linked rows.
+- Authorized owner/admin masked summary read proof remains pending because the only local credential available in this shell is non-staff/non-owner and correctly cannot read `livekit_token_request_audit` or security context summaries. Non-staff proof returned `42501` for direct context table reads and `security_context_admin_required` for summary RPC reads.
 - Staff-but-not-owner failed owner-security denial proof remains a prior Owner Security follow-up if a safe scoped proof account is available.

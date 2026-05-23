@@ -10,6 +10,24 @@ export type OwnerControlPermissionTemplate = {
   permissions: string[];
 };
 
+export type OwnerSecurityNetworkProof = {
+  asnOrIsp?: string | null;
+  captureStatus?: string | null;
+  cityApprox?: string | null;
+  contextIdShort?: string | null;
+  country?: string | null;
+  createdAt?: string | null;
+  deviceHashShort?: string | null;
+  ipHashShort?: string | null;
+  maskedIp?: string | null;
+  proofSource?: string | null;
+  region?: string | null;
+  requestId?: string | null;
+  sessionIdHashShort?: string | null;
+  source?: string | null;
+  userAgentHashShort?: string | null;
+};
+
 export type OwnerControlAuditRow = {
   action: string;
   actorEmail: string | null;
@@ -22,6 +40,10 @@ export type OwnerControlAuditRow = {
   occurredAt: string | null;
   permissionKey: string | null;
   reason: string | null;
+  securityContext?: OwnerSecurityNetworkProof | null;
+  securityContextId?: string | null;
+  securityContextIdShort?: string | null;
+  securityContextStatus?: string | null;
   source: string;
   summary: string;
   targetId: string | null;
@@ -154,24 +176,6 @@ export type OwnerSecurityDevice = {
   trustedAt?: string | null;
   trustedBy?: string | null;
   trustStatus?: string | null;
-};
-
-export type OwnerSecurityNetworkProof = {
-  asnOrIsp?: string | null;
-  captureStatus?: string | null;
-  cityApprox?: string | null;
-  contextIdShort?: string | null;
-  country?: string | null;
-  createdAt?: string | null;
-  deviceHashShort?: string | null;
-  ipHashShort?: string | null;
-  maskedIp?: string | null;
-  proofSource?: string | null;
-  region?: string | null;
-  requestId?: string | null;
-  sessionIdHashShort?: string | null;
-  source?: string | null;
-  userAgentHashShort?: string | null;
 };
 
 export type OwnerTemporaryGrant = {

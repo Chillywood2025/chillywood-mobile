@@ -915,6 +915,7 @@ const normalizeAuditRow = (source: string, row: JsonObject) => {
   const metadata = sanitizeObject(row.metadata ?? row.result ?? {});
   const actorRole = toText(row.actor_role ?? row.requested_by_role ?? row.requested_by_actor_role);
   const breakGlassActive = metadata.break_glass_active === true || source === "break_glass";
+  const securityContextId = toText(row.security_context_id ?? metadata.security_context_id);
   return {
     action: toText(row.action ?? row.action_type ?? row.event_type ?? row.status ?? source),
     actorEmail: toText(row.actor_email ?? row.requested_by_email ?? row.handled_by_email) || null,
@@ -927,9 +928,12 @@ const normalizeAuditRow = (source: string, row: JsonObject) => {
     occurredAt: toText(row.created_at ?? row.granted_at ?? row.activated_at ?? row.updated_at) || null,
     permissionKey: toText(row.permission_key) || null,
     reason: redactText(row.reason ?? row.request_reason ?? "", 500) || null,
+    securityContextId: securityContextId || null,
+    securityContextIdShort: shortSecurityIdentifier(securityContextId),
+    securityContextStatus: securityContextId ? toText(metadata.security_context_capture_status) || "linked" : "missing",
     source,
     summary: redactText(row.error_message ?? row.requesting_agency ?? row.action ?? row.action_type ?? source, 240),
-    targetId: toText(row.target_id ?? row.target_user_id ?? row.target_email ?? row.incident_id ?? row.id) || null,
+    targetId: toText(row.target_id ?? row.target_user_id ?? row.target_email ?? row.incident_id ?? row.room_name_hash ?? row.app_room_id_hash ?? row.id) || null,
     targetType: toText(row.target_type ?? source) || source,
   };
 };
@@ -943,6 +947,7 @@ const auditList = async (adminClient: SupabaseClientLike, user: AuthenticatedUse
     { order: "created_at", source: "legal_evidence", table: "legal_evidence_audit_log" },
     { order: "created_at", source: "live_ops", table: "admin_live_ops_action_audit" },
     { order: "created_at", source: "platform_admin", table: "platform_admin_audit_logs" },
+    { order: "created_at", source: "livekit_token", table: "livekit_token_request_audit" },
     { order: "created_at", source: "legal_request", table: "legal_request_intake" },
     { order: "created_at", source: "canary", table: "admin_canary_runs" },
     { order: "created_at", source: "break_glass", table: "platform_break_glass_audit" },
@@ -959,6 +964,7 @@ const auditList = async (adminClient: SupabaseClientLike, user: AuthenticatedUse
   const actionType = toText(payload.actionType ?? payload.action_type).toLowerCase();
   const permissionKey = normalizePermission(payload.permissionKey ?? payload.permission_key);
   const sourceFilter = toText(payload.source).toLowerCase();
+  const securityContextFilter = toText(payload.securityContextFilter ?? payload.security_context_filter).toLowerCase();
   const breakGlassOnly = payload.breakGlassOnly === true || payload.break_glass_only === true;
   const dryRunFilter = payload.dryRun === true ? true : payload.dryRun === false ? false : null;
   const dateFrom = Date.parse(toText(payload.dateFrom ?? payload.date_from));
@@ -972,6 +978,8 @@ const auditList = async (adminClient: SupabaseClientLike, user: AuthenticatedUse
     .filter((row) => !actionType || toText(row.action).toLowerCase().includes(actionType))
     .filter((row) => !permissionKey || row.permissionKey === permissionKey || toText((row.metadata as JsonObject | undefined)?.permission_key) === permissionKey)
     .filter((row) => !sourceFilter || row.source === sourceFilter)
+    .filter((row) => securityContextFilter !== "with" || !!row.securityContextId)
+    .filter((row) => securityContextFilter !== "missing" || !row.securityContextId)
     .filter((row) => !breakGlassOnly || row.breakGlassActive === true)
     .filter((row) => dryRunFilter === null || row.dryRun === dryRunFilter)
     .filter((row) => !Number.isFinite(dateFrom) || Date.parse(toText(row.occurredAt)) >= dateFrom)
@@ -979,7 +987,17 @@ const auditList = async (adminClient: SupabaseClientLike, user: AuthenticatedUse
     .sort((left, right) => toText(right.occurredAt).localeCompare(toText(left.occurredAt)))
     .slice(0, limit);
 
-  return json(200, { rows: filtered, summary: { returned: filtered.length, scanned: rows.length } });
+  const enriched = await Promise.all(filtered.map(async (row) => {
+    if (!row.securityContextId) return row;
+    const securityContext = await readSecurityContextSummary(adminClient, row.securityContextId);
+    return {
+      ...row,
+      securityContext,
+      securityContextStatus: toText((securityContext as JsonObject | null)?.captureStatus) || row.securityContextStatus,
+    };
+  }));
+
+  return json(200, { rows: enriched, summary: { returned: enriched.length, scanned: rows.length } });
 };
 
 const readCount = async (adminClient: SupabaseClientLike, table: string, filters: Record<string, unknown> = {}) => {
