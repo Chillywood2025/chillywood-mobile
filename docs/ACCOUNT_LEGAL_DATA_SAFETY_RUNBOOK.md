@@ -100,6 +100,8 @@ What still needs legal/backend/manual work:
 
 This table is a preparation aid for manual Google Play Console entry. Use Google Play's current Data Safety form and third-party SDK disclosures before submission.
 
+Security/IP note: `docs/admin/SECURITY_CONTEXT_IP_AUDIT.md` records the current repo decision for network proof. Chi'llywood should treat IP/network request metadata as restricted security, fraud-prevention, abuse-prevention, account-protection, live-cost-protection, audit-integrity, payout/revenue-integrity, and legal-compliance evidence. The current repo avoids app-owned raw IP columns and has no public IP display. Future implementation should capture trusted request context only in backend/Edge code, store hashed/masked context through a restricted `security_request_context` path, keep raw IP unavailable to public UI, and set final retention durations only after legal/product approval.
+
 | Data category | Repo evidence | Collected? | Purpose | Shared with third parties/services? | Optional or required | Deletion request coverage | Play Console note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Account info: email, user id, sign-in identity | Supabase auth, `useSession`, Settings signed-in identity, RevenueCat identity sync | Yes | Account creation, login, access control, support, entitlement/account linking | Supabase; RevenueCat when billing is configured; Firebase identity for diagnostics/analytics helpers if enabled | Required for signed-in features | Covered by account deletion request, subject to retained records | Enter account info / identifiers as collected. Confirm exact Play labels manually. |

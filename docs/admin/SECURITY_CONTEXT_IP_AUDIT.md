@@ -1,0 +1,281 @@
+# Security Context And IP Address Audit
+
+Date: 2026-05-23
+
+Lane: Security Context and IP Address Audit
+
+Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. This is a planning/audit document only. It does not add IP columns, does not capture live IPs, and does not change runtime behavior.
+
+## Governing Decision
+
+IP and network proof belongs in a shared backend security evidence path, not scattered across product tables.
+
+- The mobile client must never supply trusted IP/network proof.
+- Edge Functions or trusted backend request context must be the source of truth.
+- Public UI must never show raw IP addresses.
+- Admin UI may show only masked network proof where the operator is authorized.
+- Raw IP should be avoided in v1 unless a legal/security decision explicitly requires restricted encrypted retention.
+- High-risk action tables should reference one `security_context_id` rather than duplicating IP fields.
+
+## Existing State
+
+| Capability | Repo truth | Current classification |
+| --- | --- | --- |
+| IP capture | No shared backend IP capture helper or `security_request_context` table exists. Edge Functions read auth/provider headers, but no trusted network extraction path was found. | Missing shared context |
+| IP hashing | `platform_admin_audit_logs` has `ip_hash`; `dmca_cases` has `submitted_ip_hash`. Search found no active writer populating these from trusted request context. | Partially present / not wired |
+| Masked IP display | No app/Admin UI display of masked IP/network proof was found. | Missing UI by design |
+| Raw IP storage | No raw `ip_address` column was found in app-owned migrations. | Already avoids raw IP |
+| User-agent hashing | `platform_admin_audit_logs.user_agent_hash` and `dmca_cases.submitted_user_agent_hash` exist. No shared writer was found. | Partially present / not wired |
+| Device hash/session tracking | Owner Security stores `owner_trusted_devices.device_fingerprint_hash`, app/build/platform metadata, trusted/revoked state, and last seen. The hash is derived from authenticated user plus client device/app context, not backend network context. | Partially safe |
+| Security context table | No `security_request_context` table exists. | Missing |
+| Admin audit events | `platform_admin_audit_logs` is append-only and backs Admin Audit overview. It has request metadata columns but currently exposes only safe audit read fields. | Partially safe |
+| Immutable audit events | Admin audit rows are append-only; Owner Security also has append-only `security_audit_events`. | Already safe for event integrity |
+| Failed access events | Owner Security writes `owner_security_access_denied` events for owner-only actions where backed. Staff-but-not-owner failure proof remains a separate prior gap. | Partially safe |
+| Owner device trust | `owner_trusted_devices` and Owner Security RPC paths are owner-only, backend written, and proof-backed. No network proof is attached. | Partially safe |
+| Temporary grant audit | Temporary scoped grants use `platform_staff_permission_grants.expires_at`; revoke paths write security audit. No network proof is attached. | Partially safe |
+| Live Ops security events | Live Ops Fix Center and Live Cost Guard have action/event/audit tables and service-role Edge writes where applicable. No network proof is attached. | Partially safe |
+| LiveKit token request events | `livekit-token` authenticates and enforces room/member/role truth, but no token-request audit/security-context table was found. | Missing context |
+| Payout/revenue security events | Payout/provider/fraud/revenue foundations write admin/audit rows and keep live money closed. No shared security context exists. | Partially safe |
+| Reports/moderation context | `safety_reports` and reports moderation audit exist. No security context id or trusted IP path was found. | Missing context |
+| DMCA context | DMCA cases include submitted hash columns, but public notice submission currently sends payload to RPC from the client and no trusted request-context writer was found. | Partially safe / needs backend-only capture |
+| Comments/replies context | Comment/reply tables and helpers do not store raw IP or security context. | Should not store IP on content rows |
+| Upload/media context | Creator video upload and media-storage helpers audit some private media access, but no request context is attached. | Missing context for high-risk media actions |
+| Chat abuse context | Chat messages and room messages do not store raw IP or security context. | Should not store IP on chat rows |
+| Fraud/suspicious activity | Fraud foundation tables and audit logs exist, but no shared network context or hash-pattern evidence table exists. | Partially safe |
+
+## Gap Map
+
+| System | Classification | Recommended action |
+| --- | --- | --- |
+| Auth/sign-in/sign-out/session refresh | Needs backend-only capture for app-owned high-risk events; Supabase Auth provider logs are outside repo truth | Do not store IP in profile/session UI. Capture security context only when an app-owned Edge/RPC security event is created. |
+| Owner Security | Partially safe | Attach `security_context_id` to device trust, device revoke, temporary grant revoke, failed owner access, and emergency-action events. Show masked network proof only. |
+| Device trust | Partially safe | Keep device fingerprint hash. Add last security context reference for current-device proof and trusted-device ledger rows. |
+| Admin audit | Partially safe | Prefer `security_context_id` on future audit rows. Keep legacy `ip_hash`/`user_agent_hash` read-restricted or backfill only if needed. |
+| Audit Explorer | Needs masked UI only | Add owner/admin-scoped lookup by `security_context_id`; display masked IP/prefix, approximate region, ASN/ISP if available. No raw IP. |
+| Roles/users/premium admin changes | Missing security_context_id | Attach context for role grant/revoke, scoped permission updates, premium overrides, and owner/admin sensitive user changes. |
+| Temporary grants | Missing security_context_id | Attach context on grant create, revoke, expire sweeps where a request actor exists. |
+| Kill switches | Needs backend-only capture | Future kill switch/emergency lock writes must require trusted device where policy says so and attach context. Read-only UI needs no IP. |
+| Live Ops / Live Cost Guard | Partially safe | Attach context to operator-approved actions and high-risk attempts. Cost/event telemetry can stay source metadata without user IP. |
+| LiveKit token issuance | Missing security_context_id | Add backend token-request event table or audit row with context id for token requests, denials, and suspicious/new-network signals. Do not change room behavior in this lane. |
+| Watch-Party Live | Should not store IP in room tables | Attach context at token issuance, speaker approval/high-risk room actions, and room abuse reports only. |
+| Live Watch-Party | Should not store IP in room tables | Same as Watch-Party Live: context on token/security events, not membership/chat content rows. |
+| Uploads / creator videos | Missing security_context_id | Attach context to upload-url creation, publish/unpublish/delete, takedown, and private media access audit. Do not put raw IP on `videos`. |
+| Comments / replies | Should not store IP | Keep public content rows free of IP. Attach context to report/abuse/moderation events if needed. |
+| Reports / moderation | Missing security_context_id | Report intake and admin report actions should create context from backend request and link to report/audit rows. |
+| Chat abuse surfaces | Should not store IP on messages | Attach context to abuse reports, block/escalation events, and future anti-spam backend actions. |
+| Payouts / revenue | Missing security_context_id | Attach context to payout preflight, provider account actions, release attempts, premium overrides, source imports, and fraud review actions. |
+| Fraud / suspicious activity | Partially safe | Use hashed context patterns and aggregate risk signals. Fraud UI should show pattern/risk summaries, not raw IP. |
+
+## Recommended Architecture
+
+Add one shared backend table in a later implementation lane:
+
+```sql
+create table public.security_request_context (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid,
+  session_id_hash text,
+  device_hash text,
+  ip_hash text not null,
+  ip_prefix_or_masked_ip text,
+  ip_address_encrypted_or_restricted text,
+  country text,
+  region text,
+  city_approx text,
+  asn_or_isp text,
+  user_agent_hash text,
+  request_id text,
+  source text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  retention_expires_at timestamptz
+);
+```
+
+Implementation notes:
+
+- Confirm the trusted Supabase/Edge request IP source before writing capture code. Candidate proxy headers like `x-forwarded-for`, `x-real-ip`, or `cf-connecting-ip` must be accepted only when supplied by trusted platform infrastructure, never from mobile payloads.
+- Hash normalized IP with a server-side pepper/secret that never leaves Edge/backend infrastructure.
+- Prefer not storing raw IP in v1. If raw IP is legally required, encrypt or restrict it behind service-role/owner-security RPCs and short retention.
+- Add RLS that denies anon and normal authenticated users. Writes should be service-role/backend only. Reads should go through safe RPCs returning masked fields only.
+- Add indexes on `(user_id, created_at desc)`, `(ip_hash, created_at desc)`, `(device_hash, created_at desc)`, and `retention_expires_at`.
+- Add a shared Edge helper, for example `supabase/functions/_shared/security-request-context.ts`, so each function uses identical parsing, normalization, hashing, masking, and failure behavior.
+
+Existing and future event tables should reference:
+
+```sql
+alter table public.platform_admin_audit_logs
+  add column if not exists security_context_id uuid references public.security_request_context(id);
+```
+
+Repeat that reference only on event/audit/security tables that need proof. Do not add raw IP columns to public content/profile/message tables.
+
+## Safe Capture Rules
+
+- Client never supplies trusted IP.
+- Backend captures request IP only from trusted request context/headers after infrastructure confirmation.
+- Normalize IPv4/IPv6 before hashing or masking.
+- Store `ip_hash` for correlation and `ip_prefix_or_masked_ip` for UI. Do not show full raw IP by default.
+- Store approximate country/region/city/ASN only when a trusted backend enrichment source exists and legal/privacy review approves it.
+- High-risk actions fail closed if policy requires security context and context capture fails.
+- Low-risk read-only actions may proceed with `security_context_id = null` and an explicit `context_unavailable` audit metadata flag if product policy allows.
+- Service-role secrets, hash peppers, provider secrets, and raw IP values must never enter React Native, docs, logs, screenshots, or committed artifacts.
+
+## Event Attachment Rules
+
+Attach `security_context_id` to these backed/future events as they are implemented:
+
+- `platform_admin_audit_logs`
+- `security_audit_events`
+- `owner_trusted_devices` current/trusted/revoked records
+- failed access/security denial events
+- temporary grant create/revoke/bulk-revoke events
+- role grant/revoke and scoped permission update audit
+- live ops events and operator-approved remediation attempts
+- live cost guard admin actions
+- LiveKit token request/denial events
+- live room creation/join/speaker approval/high-risk state events
+- upload-url, publish, unpublish, delete, private media access, and takedown audit events
+- safety report intake and admin report actions
+- DMCA notice/counter-notice intake and Admin DMCA actions
+- comment/reply/chat abuse report events
+- payout/provider/fraud/revenue/premium override/admin money-control events
+- kill switch, emergency lock, break-glass, and owner security actions
+
+Do not attach raw IP to public profile, public channel, `videos`, comments, chat messages, room messages, or room membership rows unless a later legal/security design explicitly reclassifies those rows as restricted evidence tables.
+
+## UI Rules
+
+Owner Security:
+
+- Show masked IP/network proof only.
+- Show approximate region/city and ASN/ISP only when backed.
+- Show risk state such as `Normal`, `New Network`, `Suspicious`, or `Unavailable`.
+- Never show raw full IP by default.
+- Keep emergency actions locked unless owner truth, trusted device, policy approval, reason, confirmation, and audit write all pass.
+
+Audit tab:
+
+- Keep high-level counts/status only.
+- Do not show raw IP.
+- If security context linkage is unavailable, label it explicitly instead of showing healthy/connected copy.
+
+Audit Explorer:
+
+- Allow search/filter by `security_context_id` after backend support exists.
+- Show masked network proof for authorized owner/admin/operator only.
+- Keep raw technical metadata collapsed and never expose raw IP by default.
+
+Fraud:
+
+- Use `ip_hash`, device hash, session hash, and context aggregation for patterns.
+- Show aggregate/pattern/risk summaries, not raw public display.
+
+Public UI:
+
+- No IP/network proof display.
+- No client-provided IP payload fields.
+
+## Retention Rules
+
+Retention durations require product/legal approval before implementation. The recommended categories are:
+
+| Data category | Suggested posture |
+| --- | --- |
+| Raw/restricted IP | Avoid in v1. If required, short retention, encrypted or service-role restricted, owner/security access only through audited backend paths. |
+| Hashed IP/security context | Longer security/fraud retention for correlation, subject to retention expiry and legal review. |
+| Immutable audit event | Long retention with masked/hash reference; do not duplicate raw IP in audit rows. |
+| Public content tables | No raw IP and no masked IP. Link abuse/security proof through restricted event tables only. |
+
+Add a retention cleanup job only after legal approves exact durations and preservation exceptions for legal holds, fraud, abuse, payouts, disputes, DMCA, and law-enforcement requests.
+
+## Privacy And Legal Documentation Rules
+
+Public/legal copy should say, after legal review, that Chi'llywood may collect IP/network and request metadata for:
+
+- security and account protection
+- fraud prevention
+- abuse prevention and moderation
+- live cost protection
+- audit integrity
+- payout/revenue/provider integrity
+- legal compliance and dispute handling
+
+The docs should also state:
+
+- Raw IP access is restricted.
+- Public UI never exposes IP/network proof.
+- Retention is limited and purpose-bound.
+- Access follows least privilege.
+- Some records may be preserved for legal, safety, fraud, billing, payout, moderation, DMCA, or dispute reasons.
+
+Do not publish exact raw-IP retention durations until legal/product owners approve them.
+
+## Implementation Phases
+
+1. Foundation migration:
+   - Add `security_request_context`.
+   - Enable RLS and deny anon/normal user reads.
+   - Add safe owner/admin RPCs that return masked fields only.
+   - Add nullable `security_context_id` to `platform_admin_audit_logs`, `security_audit_events`, `owner_trusted_devices`, role/permission audit, report audit, DMCA audit/cases where appropriate, media access audit, Live Ops audit, LiveKit token event table, and payout/fraud audit tables.
+
+2. Shared Edge helper:
+   - Add one request-context capture helper.
+   - Confirm trusted header precedence.
+   - Hash/mask IP with backend-only secret.
+   - Hash user agent.
+   - Return explicit unavailable states.
+
+3. Owner/admin high-risk actions:
+   - Wire Owner Security, role/permission mutations, temporary grants, break-glass, kill switches, Admin config saves, payout/fraud preflights, Live Ops actions, and private media access.
+   - Fail closed where policy marks context mandatory.
+   - Write immutable audit with `security_context_id`.
+
+4. Live/room/upload/report intake:
+   - Add LiveKit token request/denial audit with context.
+   - Add report intake context.
+   - Add upload-url/publish/delete context.
+   - Keep room/message/content rows free of raw IP.
+
+5. UI readouts:
+   - Owner Security current device/network proof.
+   - Audit Explorer masked security context details.
+   - Fraud aggregate network/device pattern surfaces.
+   - No raw IP in Audit overview or public UI.
+
+6. Retention/proof:
+   - Add retention cleanup only after approved durations.
+   - Add denial proofs, public UI grep proofs, no-client-IP payload proofs, and high-risk fail-closed tests.
+
+## Validation Expectations For The Implementation Lane
+
+Run:
+
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:admin-auth-safety`
+- `npm run guard:owner-security-center`
+- `npm run guard:refresh-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `git diff --check`
+
+Add proof:
+
+- Grep that raw IP is not displayed in public UI.
+- Grep that the mobile client does not submit trusted IP fields.
+- Non-owner/non-admin cannot read `security_request_context`.
+- High-risk actions fail closed when security context capture is required but unavailable.
+- Owner/Admin UI shows masked context only.
+- Audit Explorer does not expose raw IP.
+- LiveKit token behavior and room routes are unchanged except for audited context linkage.
+
+## Known Limitations After This Audit
+
+- No `security_request_context` table exists yet.
+- No shared Edge request-context helper exists yet.
+- Existing `ip_hash` and `user_agent_hash` fields are not wired to trusted capture.
+- DMCA submitted hash fields exist but need backend-only trusted capture.
+- LiveKit token requests are not independently audit-linked to request context.
+- Owner Security device trust is backed, but network proof is not attached.
+- Reports, uploads, comments, chat abuse, payout, fraud, and Live Ops actions do not yet share a security context id.
+- Staff-but-not-owner failed owner-security denial proof remains a prior Owner Security follow-up if a safe scoped proof account is available.
