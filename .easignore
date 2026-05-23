@@ -1,0 +1,34 @@
+# Dependencies and package manager output
+node_modules/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Local Expo/web output
+.expo/
+dist/
+web-build/
+
+# Local proof and generated artifacts
+artifacts/
+supabase/.temp/
+
+# Native build output, keep checked-in native source
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+ios/build/
+
+# Local machine/editor noise
+.DS_Store
+*.tsbuildinfo
+
+# Local-only env files and signing material
+.env*.local
+*.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
